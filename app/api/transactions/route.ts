@@ -3,6 +3,11 @@ import connectDB from '@/lib/mongodb';
 import Transaction from '@/models/Transaction';
 import Product from '@/models/Product';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { requireAuth } from '@/lib/auth';
+import { createAuditLog, AuditActions } from '@/lib/audit';
+import { validateAndSanitize, validateTransaction } from '@/lib/validation';
+import { generateReceiptNumber } from '@/lib/receipt';
+import { updateStock } from '@/lib/stock';
 
 export async function GET(request: NextRequest) {
   try {
@@ -44,6 +49,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
+    const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     
     if (!tenantId) {
@@ -51,7 +57,16 @@ export async function POST(request: NextRequest) {
     }
     
     const body = await request.json();
-    const { items, paymentMethod, cashReceived } = body;
+    const { data, errors } = validateAndSanitize(body, validateTransaction);
+
+    if (errors.length > 0) {
+      return NextResponse.json(
+        { success: false, errors },
+        { status: 400 }
+      );
+    }
+
+    const { items, paymentMethod, cashReceived, notes } = data;
 
     // Validate and process items
     const transactionItems = [];
@@ -80,10 +95,6 @@ export async function POST(request: NextRequest) {
         quantity: item.quantity,
         subtotal,
       });
-
-      // Update product stock
-      product.stock -= item.quantity;
-      await product.save();
     }
 
     // Calculate change for cash payments
@@ -95,6 +106,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Generate receipt number
+    const receiptNumber = await generateReceiptNumber(tenantId);
+
     const transaction = await Transaction.create({
       tenantId,
       items: transactionItems,
@@ -103,6 +117,36 @@ export async function POST(request: NextRequest) {
       cashReceived: paymentMethod === 'cash' ? cashReceived : undefined,
       change: paymentMethod === 'cash' ? change : undefined,
       status: 'completed',
+      userId: user.userId,
+      receiptNumber,
+      notes,
+    });
+
+    // Update stock movements with transaction ID (after transaction is created)
+    for (const item of items) {
+      await updateStock(
+        item.productId,
+        tenantId,
+        -item.quantity, // Negative for sale
+        'sale',
+        {
+          transactionId: transaction._id.toString(),
+          userId: user.userId,
+          reason: 'Transaction sale',
+        }
+      );
+    }
+
+    // Create audit log
+    await createAuditLog(request, {
+      action: AuditActions.TRANSACTION_CREATE,
+      entityType: 'transaction',
+      entityId: transaction._id.toString(),
+      changes: {
+        receiptNumber,
+        total,
+        itemsCount: transactionItems.length,
+      },
     });
 
     return NextResponse.json({ success: true, data: transaction }, { status: 201 });

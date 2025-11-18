@@ -15,7 +15,10 @@ export interface ITransaction extends Document {
   paymentMethod: 'cash' | 'card' | 'digital';
   cashReceived?: number;
   change?: number;
-  status: 'completed' | 'cancelled';
+  status: 'completed' | 'cancelled' | 'refunded';
+  userId?: mongoose.Types.ObjectId;
+  receiptNumber?: string;
+  notes?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -77,8 +80,23 @@ const TransactionSchema: Schema = new Schema(
     },
     status: {
       type: String,
-      enum: ['completed', 'cancelled'],
+      enum: ['completed', 'cancelled', 'refunded'],
       default: 'completed',
+    },
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      index: true,
+    },
+    receiptNumber: {
+      type: String,
+      unique: true,
+      sparse: true,
+      index: true,
+    },
+    notes: {
+      type: String,
+      trim: true,
     },
   },
   {

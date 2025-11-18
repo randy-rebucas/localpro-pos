@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
+import Category from '@/models/Category';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
-import { validateAndSanitize, validateProduct } from '@/lib/validation';
+import { validateAndSanitize, validateTenant } from '@/lib/validation';
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,35 +14,13 @@ export async function GET(request: NextRequest) {
     if (!tenantId) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
-    
-    const searchParams = request.nextUrl.searchParams;
-    const search = searchParams.get('search') || '';
-    const category = searchParams.get('category') || '';
-    const categoryId = searchParams.get('categoryId') || '';
 
-    const query: any = { tenantId };
-    if (search) {
-      query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
-        { sku: { $regex: search, $options: 'i' } },
-      ];
-    }
-    if (category) {
-      query.category = category;
-    }
-    if (categoryId) {
-      query.categoryId = categoryId;
-    }
-
-    const products = await Product.find(query)
-      .populate('categoryId', 'name')
-      .sort({ createdAt: -1 })
+    const categories = await Category.find({ tenantId, isActive: true })
+      .sort({ name: 1 })
       .lean();
-    
-    return NextResponse.json({ success: true, data: products });
+
+    return NextResponse.json({ success: true, data: categories });
   } catch (error: any) {
-    console.error('Error fetching products:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -56,9 +34,9 @@ export async function POST(request: NextRequest) {
     if (!tenantId) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
-    
+
     const body = await request.json();
-    const { data, errors } = validateAndSanitize(body, validateProduct);
+    const { data, errors } = validateAndSanitize(body, validateTenant);
 
     if (errors.length > 0) {
       return NextResponse.json(
@@ -67,24 +45,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const product = await Product.create({ ...data, tenantId });
+    const category = await Category.create({
+      ...data,
+      tenantId,
+    });
 
     await createAuditLog(request, {
       action: AuditActions.CREATE,
-      entityType: 'product',
-      entityId: product._id.toString(),
+      entityType: 'category',
+      entityId: category._id.toString(),
       changes: data,
     });
 
-    return NextResponse.json({ success: true, data: product }, { status: 201 });
+    return NextResponse.json({ success: true, data: category }, { status: 201 });
   } catch (error: any) {
     if (error.code === 11000) {
       return NextResponse.json(
-        { success: false, error: 'Product with this SKU already exists' },
+        { success: false, error: 'Category with this name already exists' },
         { status: 400 }
       );
     }
-    console.error('Error creating product:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 400 });
   }
 }

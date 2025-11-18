@@ -21,7 +21,8 @@
     "dashboard": "Panel",
     "pos": "TPV",
     "products": "Productos",
-    "transactions": "Transacciones"
+    "transactions": "Transacciones",
+    "settings": "Configuración"
   },
   "dashboard": {
     "title": "Panel",

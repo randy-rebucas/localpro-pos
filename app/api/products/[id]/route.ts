@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { requireAuth } from '@/lib/auth';
+import { createAuditLog, AuditActions } from '@/lib/audit';
+import { validateAndSanitize, validateProduct } from '@/lib/validation';
+import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -28,6 +32,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await connectDB();
+    await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
     
@@ -36,25 +41,58 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
     
     const body = await request.json();
+    const { data, errors } = validateAndSanitize(body, validateProduct);
+
+    if (errors.length > 0) {
+      return NextResponse.json(
+        { success: false, errors },
+        { status: 400 }
+      );
+    }
+
+    const oldProduct = await Product.findOne({ _id: id, tenantId }).lean();
+    if (!oldProduct) {
+      return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
+    }
+
     const product = await Product.findOneAndUpdate(
       { _id: id, tenantId },
-      body,
+      data,
       { new: true, runValidators: true }
     );
     
     if (!product) {
       return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
     }
+
+    // Track changes
+    const changes: Record<string, any> = {};
+    Object.keys(data).forEach(key => {
+      if (oldProduct[key as keyof typeof oldProduct] !== data[key]) {
+        changes[key] = {
+          old: oldProduct[key as keyof typeof oldProduct],
+          new: data[key],
+        };
+      }
+    });
+
+    await createAuditLog(request, {
+      action: AuditActions.UPDATE,
+      entityType: 'product',
+      entityId: id,
+      changes,
+    });
     
     return NextResponse.json({ success: true, data: product });
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+    return handleApiError(error);
   }
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await connectDB();
+    await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
     
@@ -67,10 +105,17 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     if (!product) {
       return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
     }
+
+    await createAuditLog(request, {
+      action: AuditActions.DELETE,
+      entityType: 'product',
+      entityId: id,
+      changes: { name: product.name },
+    });
     
     return NextResponse.json({ success: true, data: {} });
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return handleApiError(error);
   }
 }
 

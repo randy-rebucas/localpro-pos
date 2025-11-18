@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -12,6 +13,7 @@ export default function Navbar() {
   const lang = params?.lang as 'en' | 'es' || 'en';
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [dict, setDict] = useState<any>(null);
+  const { user, logout, isAuthenticated } = useAuth();
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -22,6 +24,7 @@ export default function Navbar() {
     { href: `/${tenant}/${lang}/pos`, key: 'pos' },
     { href: `/${tenant}/${lang}/products`, key: 'products' },
     { href: `/${tenant}/${lang}/transactions`, key: 'transactions' },
+    { href: `/${tenant}/${lang}/settings`, key: 'settings' },
   ];
 
   const switchLanguage = (newLang: 'en' | 'es') => {
@@ -65,15 +68,41 @@ export default function Navbar() {
             ))}
           </div>
           
-          {/* Desktop Actions - Hidden on mobile */}
-          <div className="hidden md:flex items-center gap-2">
-            <Link
-              href="/login"
-              className="px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
-            >
-              Switch Store
-            </Link>
-            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+                  {/* Desktop Actions - Hidden on mobile */}
+                  <div className="hidden md:flex items-center gap-2">
+                    {isAuthenticated && user ? (
+                      <>
+                        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-100">
+                          <div className="text-right">
+                            <div className="text-xs font-medium text-gray-700">{user.name}</div>
+                            <div className="text-xs text-gray-500 capitalize">{user.role}</div>
+                          </div>
+                          <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-semibold">
+                            {user.name.charAt(0).toUpperCase()}
+                          </div>
+                        </div>
+                        <button
+                          onClick={logout}
+                          className="px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                        >
+                          Logout
+                        </button>
+                      </>
+                    ) : (
+                      <Link
+                        href={`/${tenant}/${lang}/login`}
+                        className="px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                      >
+                        Login
+                      </Link>
+                    )}
+                    <Link
+                      href="/login"
+                      className="px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                    >
+                      Switch Store
+                    </Link>
+                    <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
               <button
                 onClick={() => switchLanguage('en')}
                 className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
@@ -177,6 +206,38 @@ export default function Navbar() {
                   Español
                 </button>
               </div>
+              {isAuthenticated && user ? (
+                <>
+                  <div className="px-4 py-3 bg-gray-50 rounded-xl mb-2">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold">
+                        {user.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-sm font-medium text-gray-900">{user.name}</div>
+                        <div className="text-xs text-gray-500 capitalize">{user.role}</div>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      logout();
+                      setMobileMenuOpen(false);
+                    }}
+                    className="block w-full px-4 py-3.5 text-center text-base font-medium text-red-700 bg-red-50 hover:bg-red-100 active:bg-red-200 rounded-xl transition-colors"
+                  >
+                    Logout
+                  </button>
+                </>
+              ) : (
+                <Link
+                  href={`/${tenant}/${lang}/login`}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block w-full px-4 py-3.5 text-center text-base font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 active:bg-blue-200 rounded-xl transition-colors"
+                >
+                  Login
+                </Link>
+              )}
               <Link
                 href="/login"
                 onClick={() => setMobileMenuOpen(false)}

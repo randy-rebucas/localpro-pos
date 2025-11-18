@@ -21,7 +21,8 @@
     "dashboard": "Dashboard",
     "pos": "POS",
     "products": "Products",
-    "transactions": "Transactions"
+    "transactions": "Transactions",
+    "settings": "Settings"
   },
   "dashboard": {
     "title": "Dashboard",

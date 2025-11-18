@@ -8,6 +8,7 @@ export interface IProduct extends Document {
   stock: number;
   sku?: string;
   category?: string;
+  categoryId?: mongoose.Types.ObjectId;
   image?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -48,6 +49,11 @@ const ProductSchema: Schema = new Schema(
     category: {
       type: String,
       trim: true,
+    },
+    categoryId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Category',
+      index: true,
     },
     image: {
       type: String,

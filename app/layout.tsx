@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { AuthProvider } from "@/contexts/AuthContext";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -30,14 +31,16 @@ export default function RootLayout({
 }>) {
   // Don't set lang here - let the nested [lang] layout handle it
   // Using suppressHydrationWarning to prevent mismatch during client navigation
-  return (
-    <html suppressHydrationWarning>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-        suppressHydrationWarning
-      >
-        {children}
-      </body>
-    </html>
-  );
+          return (
+            <html suppressHydrationWarning>
+              <body
+                className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+                suppressHydrationWarning
+              >
+                <AuthProvider>
+                  {children}
+                </AuthProvider>
+              </body>
+            </html>
+          );
 }

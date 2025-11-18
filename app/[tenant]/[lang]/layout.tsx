@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "../../globals.css";
 import LangSetter from "@/components/LangSetter";
 import { getTenantBySlug } from "@/lib/tenant";
+import ProtectedLayout from "./layout-protected";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -37,7 +38,7 @@ export default async function RootLayout({
   params,
 }: Readonly<{
   children: React.ReactNode;
-  params: Promise<{ tenant: string; lang: 'en' | 'es' }>;
+  params: Promise<{ tenant: string; lang: string }>;
 }>) {
   const { tenant: tenantSlug, lang } = await params;
   
@@ -52,7 +53,9 @@ export default async function RootLayout({
   return (
     <>
       <LangSetter lang={validLang} />
-      {children}
+      <ProtectedLayout>
+        {children}
+      </ProtectedLayout>
     </>
   );
 }

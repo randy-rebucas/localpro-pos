@@ -4,6 +4,7 @@
  */
 import mongoose from 'mongoose';
 import Tenant from '../models/Tenant';
+import { getDefaultTenantSettings } from '../lib/currency';
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/pos-system';
 
@@ -20,16 +21,12 @@ async function createDefaultTenant() {
       return;
     }
 
-    // Create default tenant
+    // Create default tenant with comprehensive settings
+    const defaultSettings = getDefaultTenantSettings();
     const tenant = await Tenant.create({
       slug: 'default',
       name: 'Default Store',
-      settings: {
-        currency: 'USD',
-        timezone: 'UTC',
-        language: 'en',
-        primaryColor: '#2563eb',
-      },
+      settings: defaultSettings,
       isActive: true,
     });
 

@@ -1,0 +1,150 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useRouter, useParams } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
+import Link from 'next/link';
+
+export default function LoginPage() {
+  const router = useRouter();
+  const params = useParams();
+  const tenant = (params?.tenant as string) || 'default';
+  const lang = (params?.lang as 'en' | 'es') || 'en';
+  const { login, isAuthenticated, loading: authLoading } = useAuth();
+  
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loggingIn, setLoggingIn] = useState(false);
+
+  useEffect(() => {
+    if (isAuthenticated && !authLoading) {
+      router.push(`/${tenant}/${lang}`);
+    }
+  }, [isAuthenticated, authLoading, router, tenant, lang]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoggingIn(true);
+
+    if (!email || !password) {
+      setError('Please enter both email and password');
+      setLoggingIn(false);
+      return;
+    }
+
+    const result = await login(email, password, tenant);
+    
+    if (result.success) {
+      router.push(`/${tenant}/${lang}`);
+    } else {
+      setError(result.error || 'Login failed. Please check your credentials.');
+      setLoggingIn(false);
+    }
+  };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isAuthenticated) {
+    return null; // Will redirect
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center px-4 py-12">
+      <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-6 sm:p-8 animate-fade-in">
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-full mb-4">
+            <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+          </div>
+          <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">Sign In</h1>
+          <p className="text-gray-600 text-sm sm:text-base">Enter your credentials to access the POS system</p>
+        </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border-2 border-red-200 rounded-lg text-red-700 text-sm flex items-center gap-2 animate-fade-in">
+            <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>{error}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+              Email Address
+            </label>
+            <input
+              type="email"
+              id="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all text-base"
+              placeholder="admin@example.com"
+              autoComplete="email"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+              Password
+            </label>
+            <input
+              type="password"
+              id="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all text-base"
+              placeholder="Enter your password"
+              autoComplete="current-password"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loggingIn}
+            className="w-full bg-blue-600 text-white py-3.5 rounded-xl font-semibold hover:bg-blue-700 active:bg-blue-800 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-base shadow-md hover:shadow-lg flex items-center justify-center gap-2"
+          >
+            {loggingIn ? (
+              <>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                <span>Signing in...</span>
+              </>
+            ) : (
+              <>
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+                </svg>
+                <span>Sign In</span>
+              </>
+            )}
+          </button>
+        </form>
+
+        <div className="mt-6 pt-6 border-t border-gray-200 text-center">
+          <Link
+            href="/login"
+            className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+          >
+            Switch to different store
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
