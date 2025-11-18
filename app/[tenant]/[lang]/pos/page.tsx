@@ -1,0 +1,474 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import Navbar from '@/components/Navbar';
+import { useParams } from 'next/navigation';
+import { getDictionaryClient } from '../dictionaries-client';
+
+interface Product {
+  _id: string;
+  name: string;
+  price: number;
+  stock: number;
+  sku?: string;
+  category?: string;
+}
+
+interface CartItem {
+  productId: string;
+  name: string;
+  price: number;
+  quantity: number;
+  stock: number;
+}
+
+export default function POSPage() {
+  const params = useParams();
+  const tenant = params.tenant as string;
+  const lang = params.lang as 'en' | 'es';
+  const [products, setProducts] = useState<Product[]>([]);
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'digital'>('cash');
+  const [cashReceived, setCashReceived] = useState('');
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [dict, setDict] = useState<any>(null);
+
+  useEffect(() => {
+    getDictionaryClient(lang).then(setDict);
+  }, [lang]);
+
+  useEffect(() => {
+    fetchProducts();
+  }, [search, tenant]);
+
+  const fetchProducts = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch(`/api/products?search=${encodeURIComponent(search)}&tenant=${tenant}`);
+      const data = await res.json();
+      if (data.success) {
+        setProducts(data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching products:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addToCart = (product: Product) => {
+    if (!dict) return;
+    if (product.stock === 0) {
+      alert(dict.pos.outOfStock);
+      return;
+    }
+
+    const existingItem = cart.find((item) => item.productId === product._id);
+    if (existingItem) {
+      if (existingItem.quantity >= product.stock) {
+        alert(dict.pos.insufficientStock);
+        return;
+      }
+      setCart(
+        cart.map((item) =>
+          item.productId === product._id
+            ? { ...item, quantity: item.quantity + 1 }
+            : item
+        )
+      );
+    } else {
+      setCart([
+        ...cart,
+        {
+          productId: product._id,
+          name: product.name,
+          price: product.price,
+          quantity: 1,
+          stock: product.stock,
+        },
+      ]);
+    }
+  };
+
+  const updateQuantity = (productId: string, quantity: number) => {
+    if (!dict) return;
+    if (quantity <= 0) {
+      removeFromCart(productId);
+      return;
+    }
+    const item = cart.find((item) => item.productId === productId);
+    if (item && quantity > item.stock) {
+      alert(dict.pos.insufficientStock);
+      return;
+    }
+    setCart(
+      cart.map((item) =>
+        item.productId === productId ? { ...item, quantity } : item
+      )
+    );
+  };
+
+  const removeFromCart = (productId: string) => {
+    setCart(cart.filter((item) => item.productId !== productId));
+  };
+
+  const getTotal = () => {
+    return cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  };
+
+  const handleCheckout = () => {
+    if (!dict) return;
+    if (cart.length === 0) {
+      alert(dict.pos.cartEmptyAlert);
+      return;
+    }
+    setShowPaymentModal(true);
+  };
+
+  const processPayment = async () => {
+    if (!dict) return;
+    if (paymentMethod === 'cash') {
+      const cash = parseFloat(cashReceived);
+      const total = getTotal();
+      if (isNaN(cash) || cash < total) {
+        alert(dict.pos.insufficientCash);
+        return;
+      }
+    }
+
+    setProcessing(true);
+    try {
+      const res = await fetch(`/api/transactions?tenant=${tenant}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: cart.map((item) => ({
+            productId: item.productId,
+            quantity: item.quantity,
+          })),
+          paymentMethod,
+          cashReceived: paymentMethod === 'cash' ? parseFloat(cashReceived) : undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        alert(`${dict.pos.transactionCompleted} $${getTotal().toFixed(2)}`);
+        setCart([]);
+        setShowPaymentModal(false);
+        setCashReceived('');
+        setPaymentMethod('cash');
+        fetchProducts();
+      } else {
+        alert(data.error || 'Failed to process transaction');
+      }
+    } catch (error) {
+      console.error('Error processing transaction:', error);
+      alert('Failed to process transaction');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const clearCart = () => {
+    if (!dict) return;
+    if (confirm(dict.pos.clearCartConfirm)) {
+      setCart([]);
+    }
+  };
+
+  if (!dict) {
+    return <div className="text-center py-12">{dict?.common.loading || 'Loading...'}</div>;
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <Navbar />
+      {/* Mobile-first: Stack everything vertically, then side-by-side on large screens */}
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 xl:px-8 py-3 sm:py-4 lg:py-6">
+        {/* Mobile: Cart first (sticky at top), then products below */}
+        {/* Desktop: Products left, Cart right */}
+        <div className="flex flex-col lg:grid lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
+          {/* Cart Section - Mobile: First, Desktop: Right */}
+          <div className="lg:col-span-1 order-1 lg:order-2">
+            <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-5 lg:p-6 lg:sticky lg:top-20 border-2 border-gray-100">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2">
+                  <svg className="w-6 h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                  {dict.pos.cart}
+                  {cart.length > 0 && (
+                    <span className="ml-2 px-2 py-0.5 bg-blue-600 text-white text-xs font-bold rounded-full">
+                      {cart.length}
+                    </span>
+                  )}
+                </h2>
+                {cart.length > 0 && (
+                  <button
+                    onClick={clearCart}
+                    className="text-sm font-medium text-red-600 hover:text-red-800 px-2 py-1.5 rounded-lg hover:bg-red-50 active:bg-red-100 transition-colors"
+                  >
+                    {dict.common.clear}
+                  </button>
+                )}
+              </div>
+
+              {cart.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  <svg className="mx-auto h-12 w-12 text-gray-300 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                  <p className="text-base">{dict.pos.cartEmpty}</p>
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-3 mb-4 max-h-[50vh] sm:max-h-96 overflow-y-auto -mx-2 px-2">
+                    {cart.map((item) => (
+                      <div key={item.productId} className="border-b border-gray-200 pb-3 last:border-0">
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="font-semibold text-gray-900 text-base truncate">{item.name}</div>
+                            <div className="text-sm text-gray-500 mt-0.5">
+                              ${item.price.toFixed(2)} {dict.pos.each}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => removeFromCart(item.productId)}
+                            className="ml-2 p-1.5 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg active:bg-red-100 transition-colors flex-shrink-0"
+                            aria-label="Remove item"
+                          >
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                        <div className="flex items-center justify-between mt-3 gap-3">
+                          <div className="flex items-center border-2 border-gray-200 rounded-xl overflow-hidden">
+                            <button
+                              type="button"
+                              onClick={() => updateQuantity(item.productId, item.quantity - 1)}
+                              className="px-4 py-2.5 hover:bg-gray-100 active:bg-gray-200 font-bold text-lg transition-colors"
+                              aria-label="Decrease quantity"
+                            >
+                              −
+                            </button>
+                            <span className="px-4 py-2.5 min-w-[3.5rem] text-center font-semibold text-base bg-gray-50">
+                              {item.quantity}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => updateQuantity(item.productId, item.quantity + 1)}
+                              className="px-4 py-2.5 hover:bg-gray-100 active:bg-gray-200 font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                              disabled={item.quantity >= item.stock}
+                              aria-label="Increase quantity"
+                            >
+                              +
+                            </button>
+                          </div>
+                          <div className="font-bold text-gray-900 text-lg">
+                            ${(item.price * item.quantity).toFixed(2)}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="border-t-2 border-gray-200 pt-4 mt-4">
+                    <div className="flex justify-between items-center mb-4">
+                      <span className="text-lg sm:text-xl font-bold text-gray-900">{dict.common.total}:</span>
+                      <span className="text-2xl sm:text-3xl font-bold text-blue-600">
+                        ${getTotal().toFixed(2)}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCheckout}
+                      disabled={processing}
+                      className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 active:bg-blue-800 transition-all duration-200 text-lg shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {processing ? (
+                        <>
+                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                          <span>Processing...</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          {dict.pos.checkout}
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+          
+          {/* Products Section - Mobile: Second, Desktop: Left */}
+          <div className="lg:col-span-2 order-2 lg:order-1">
+            <div className="mb-4 sm:mb-6">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-4">{dict.pos.title}</h1>
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder={dict.pos.searchPlaceholder}
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full px-4 py-4 pl-12 text-base border-2 border-gray-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-md transition-all"
+                />
+                <svg className="absolute left-4 top-1/2 transform -translate-y-1/2 w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+                {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                  <div key={i} className="bg-white rounded-2xl shadow-md p-4 animate-pulse">
+                    <div className="h-5 bg-gray-200 rounded-lg w-3/4 mb-2"></div>
+                    <div className="h-4 bg-gray-200 rounded-lg w-1/2 mb-3"></div>
+                    <div className="h-6 bg-gray-200 rounded-lg w-1/3"></div>
+                  </div>
+                ))}
+              </div>
+            ) : products.length === 0 ? (
+              <div className="text-center py-16 bg-white rounded-2xl shadow-md">
+                <svg className="mx-auto h-16 w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                </svg>
+                <p className="text-gray-500 text-lg">{dict.common.noResults}</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+                {products.map((product) => (
+                  <button
+                    key={product._id}
+                    type="button"
+                    disabled={product.stock === 0}
+                    className={`bg-white rounded-2xl shadow-md p-4 sm:p-5 text-left transition-all duration-200 ${
+                      product.stock > 0
+                        ? 'active:scale-[0.96] hover:shadow-xl hover:-translate-y-0.5'
+                        : 'opacity-50 cursor-not-allowed'
+                    }`}
+                    onClick={() => product.stock > 0 && addToCart(product)}
+                  >
+                    <div className="font-bold text-base sm:text-lg text-gray-900 mb-2 line-clamp-2 min-h-[3rem]">
+                      {product.name}
+                    </div>
+                    <div className="text-xs sm:text-sm text-gray-500 mb-3 line-clamp-1">
+                      {product.category || dict.pos.uncategorized}
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <span className="text-xl sm:text-2xl font-bold text-blue-600">
+                        ${product.price.toFixed(2)}
+                      </span>
+                      <span
+                        className={`text-xs font-bold px-3 py-1.5 rounded-full whitespace-nowrap text-center ${
+                          product.stock > 10
+                            ? 'bg-green-100 text-green-800'
+                            : product.stock > 0
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}
+                      >
+                        {product.stock} {dict.pos.inStock}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Payment Modal */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl sm:text-2xl font-bold mb-4">{dict.pos.payment}</h2>
+            <div className="mb-4">
+              <div className="text-lg font-semibold mb-4">
+                {dict.common.total}: ${getTotal().toFixed(2)}
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {dict.pos.paymentMethod}
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(['cash', 'card', 'digital'] as const).map((method) => (
+                      <button
+                        key={method}
+                        type="button"
+                        onClick={() => {
+                          setPaymentMethod(method);
+                          if (method !== 'cash') setCashReceived('');
+                        }}
+                        className={`px-3 sm:px-4 py-2.5 sm:py-2 rounded-md border font-medium text-sm sm:text-base transition-colors ${
+                          paymentMethod === method
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 active:bg-gray-100'
+                        }`}
+                      >
+                        {dict.pos[method]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {paymentMethod === 'cash' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {dict.pos.cashReceived}
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={cashReceived}
+                      onChange={(e) => setCashReceived(e.target.value)}
+                      className="w-full px-3 py-2.5 text-base border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                      placeholder="0.00"
+                    />
+                    {cashReceived && parseFloat(cashReceived) >= getTotal() && (
+                      <div className="mt-2 text-sm text-green-600">
+                        {dict.pos.change}: ${(parseFloat(cashReceived) - getTotal()).toFixed(2)}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-2 mt-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPaymentModal(false);
+                  setCashReceived('');
+                }}
+                className="w-full sm:w-auto px-4 py-2.5 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 active:bg-gray-100 font-medium"
+              >
+                {dict.common.cancel}
+              </button>
+              <button
+                type="button"
+                onClick={processPayment}
+                disabled={processing || (paymentMethod === 'cash' && (!cashReceived || parseFloat(cashReceived) < getTotal()))}
+                className="w-full sm:w-auto px-4 py-2.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+              >
+                {processing ? dict.pos.processing : dict.pos.completePayment}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
