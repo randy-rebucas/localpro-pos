@@ -38,7 +38,21 @@ class QRReaderService {
 
       this.stream = await navigator.mediaDevices.getUserMedia(constraints);
       videoElement.srcObject = this.stream;
-      await videoElement.play();
+      
+      try {
+        await videoElement.play();
+      } catch (playError: any) {
+        // Handle AbortError gracefully - this happens when navigation occurs
+        // while play() is pending, which is expected behavior
+        if (playError.name === 'AbortError' || playError.name === 'NotAllowedError') {
+          // Clean up resources if play was interrupted
+          this.stream.getTracks().forEach(track => track.stop());
+          this.stream = null;
+          videoElement.srcObject = null;
+          return false;
+        }
+        throw playError; // Re-throw other errors
+      }
 
       // Start scanning for QR codes
       this.scanInterval = setInterval(() => {
@@ -48,6 +62,14 @@ class QRReaderService {
       return true;
     } catch (error) {
       console.error('Failed to start QR scanning:', error);
+      // Ensure cleanup on error
+      if (this.stream) {
+        this.stream.getTracks().forEach(track => track.stop());
+        this.stream = null;
+      }
+      if (videoElement) {
+        videoElement.srcObject = null;
+      }
       return false;
     }
   }
@@ -58,14 +80,20 @@ class QRReaderService {
       this.scanInterval = null;
     }
 
+    if (this.videoElement) {
+      try {
+        // Pause the video element before cleanup to prevent AbortError
+        this.videoElement.pause();
+        this.videoElement.srcObject = null;
+      } catch (error) {
+        // Ignore errors during cleanup (e.g., if element is already removed)
+      }
+      this.videoElement = null;
+    }
+
     if (this.stream) {
       this.stream.getTracks().forEach(track => track.stop());
       this.stream = null;
-    }
-
-    if (this.videoElement) {
-      this.videoElement.srcObject = null;
-      this.videoElement = null;
     }
 
     this.listeners = [];

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Tenant from '@/models/Tenant';
+import User from '@/models/User';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getDefaultTenantSettings } from '@/lib/currency';
@@ -77,6 +78,32 @@ export async function POST(request: NextRequest) {
 
     const tenant = await Tenant.create(tenantData);
 
+    // Automatically create admin user for the tenant
+    const adminEmail = `admin@${tenant.slug}.local`;
+    const adminPassword = `Admin${tenant.slug}123!`;
+    
+    try {
+      const adminUser = await User.create({
+        email: adminEmail,
+        password: adminPassword,
+        name: 'Administrator',
+        role: 'admin',
+        tenantId: tenant._id,
+        isActive: true,
+      });
+
+      await createAuditLog(request, {
+        tenantId: tenant._id,
+        action: AuditActions.CREATE,
+        entityType: 'user',
+        entityId: adminUser._id.toString(),
+        changes: { email: adminUser.email, role: adminUser.role },
+      });
+    } catch (userError: any) {
+      // Log error but don't fail tenant creation if user creation fails
+      console.error('Failed to create admin user:', userError.message);
+    }
+
     await createAuditLog(request, {
       tenantId: tenant._id,
       action: AuditActions.CREATE,
@@ -85,7 +112,15 @@ export async function POST(request: NextRequest) {
       changes: { slug: tenant.slug, name: tenant.name },
     });
 
-    return NextResponse.json({ success: true, data: tenant }, { status: 201 });
+    return NextResponse.json({ 
+      success: true, 
+      data: tenant,
+      adminUser: {
+        email: adminEmail,
+        password: adminPassword,
+        note: 'Admin user created automatically. Please change the password after first login.'
+      }
+    }, { status: 201 });
   } catch (error: any) {
     if (error.code === 11000) {
       const field = Object.keys(error.keyPattern)[0];

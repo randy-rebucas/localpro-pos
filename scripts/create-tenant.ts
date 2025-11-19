@@ -33,6 +33,7 @@ dotenv.config({ path: resolve(process.cwd(), '.env') });
 
 import mongoose from 'mongoose';
 import Tenant from '../models/Tenant';
+import User from '../models/User';
 import { getDefaultTenantSettings } from '../lib/currency';
 import * as readline from 'readline';
 
@@ -242,6 +243,24 @@ async function createTenant(input: TenantInput) {
 
     const tenant = await Tenant.create(tenantData);
 
+    // Automatically create admin user for the tenant
+    const adminEmail = `admin@${tenant.slug}.local`;
+    const adminPassword = `Admin${tenant.slug}123!`;
+    let adminUser = null;
+    
+    try {
+      adminUser = await User.create({
+        email: adminEmail,
+        password: adminPassword,
+        name: 'Administrator',
+        role: 'admin',
+        tenantId: tenant._id,
+        isActive: true,
+      });
+    } catch (userError: any) {
+      console.log('\n⚠️  Warning: Failed to create admin user:', userError.message);
+    }
+
     console.log('\n✅ Tenant created successfully!\n');
     console.log('Tenant Details:');
     console.log('─────────────────────────────────────────────────');
@@ -256,9 +275,24 @@ async function createTenant(input: TenantInput) {
     console.log(`  Active:      ${tenant.isActive ? 'Yes' : 'No'}`);
     console.log(`  Created:     ${tenant.createdAt}`);
     console.log('─────────────────────────────────────────────────\n');
+    
+    if (adminUser) {
+      console.log('✅ Admin User Created:');
+      console.log('─────────────────────────────────────────────────');
+      console.log(`  Email:       ${adminEmail}`);
+      console.log(`  Password:    ${adminPassword}`);
+      console.log(`  Role:        admin`);
+      console.log('─────────────────────────────────────────────────\n');
+      console.log('⚠️  IMPORTANT: Please change the admin password after first login!\n');
+    }
+    
     console.log('Next steps:');
     console.log(`  1. Access your tenant at: http://localhost:3000/${tenant.slug}/${tenant.settings.language}`);
-    console.log(`  2. Create an admin user: npx tsx scripts/create-admin-user.ts ${tenant.slug} <email> <password> "<name>"`);
+    if (adminUser) {
+      console.log(`  2. Login with admin credentials above`);
+    } else {
+      console.log(`  2. Create an admin user: npx tsx scripts/create-admin-user.ts ${tenant.slug} <email> <password> "<name>"`);
+    }
     console.log(`  3. Configure settings at: http://localhost:3000/${tenant.slug}/${tenant.settings.language}/settings\n`);
 
     await mongoose.disconnect();

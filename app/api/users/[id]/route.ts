@@ -171,8 +171,8 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
     }
 
-    // Soft delete - set isActive to false
-    await User.findByIdAndUpdate(id, { isActive: false });
+    // Hard delete - actually remove the user from the database
+    await User.findOneAndDelete({ _id: id, tenantId });
 
     await createAuditLog(request, {
       tenantId,

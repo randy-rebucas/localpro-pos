@@ -38,15 +38,41 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find user with password field - ensure we get a Mongoose document, not a plain object
+    // First check if user exists in any tenant (to provide better error message)
+    const userInAnyTenant = await User.findOne({ email: email.toLowerCase(), isActive: true })
+      .select('tenantId');
+    
+    // Find user with password field in the requested tenant - ensure we get a Mongoose document, not a plain object
     const user = await User.findOne({ email: email.toLowerCase(), tenantId: tenant._id })
       .select('+password');
 
     if (!user || !user.isActive) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid credentials' },
-        { status: 401 }
-      );
+      // Provide more specific error message
+      if (userInAnyTenant) {
+        // User exists but not in this tenant
+        await createAuditLog(request, {
+          tenantId: tenant._id,
+          action: AuditActions.LOGIN,
+          entityType: 'user',
+          metadata: { success: false, reason: 'user_not_in_tenant', email: email.toLowerCase() },
+        });
+        return NextResponse.json(
+          { success: false, error: 'This account does not have access to this store. Please log in to the correct store or contact your administrator.' },
+          { status: 403 }
+        );
+      } else {
+        // User doesn't exist at all
+        await createAuditLog(request, {
+          tenantId: tenant._id,
+          action: AuditActions.LOGIN,
+          entityType: 'user',
+          metadata: { success: false, reason: 'user_not_found', email: email.toLowerCase() },
+        });
+        return NextResponse.json(
+          { success: false, error: 'Invalid credentials' },
+          { status: 401 }
+        );
+      }
     }
 
     // Check if password exists and is a string
