@@ -123,5 +123,8 @@ export const AuditActions = {
   TRANSACTION_REFUND: 'transaction.refund',
   STOCK_ADJUST: 'stock.adjust',
   STOCK_PURCHASE: 'stock.purchase',
+  DISCOUNT_CREATE: 'discount.create',
+  DISCOUNT_UPDATE: 'discount.update',
+  DISCOUNT_DELETE: 'discount.delete',
 } as const;
 

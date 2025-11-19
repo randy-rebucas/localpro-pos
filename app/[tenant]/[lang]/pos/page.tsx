@@ -48,6 +48,15 @@ export default function POSPage() {
   const { isOnline } = useNetworkStatus(tenant);
   const { settings } = useTenantSettings();
   const [showQRScanner, setShowQRScanner] = useState(false);
+  const [promoCode, setPromoCode] = useState('');
+  const [appliedDiscount, setAppliedDiscount] = useState<{ code: string; amount: number; name?: string } | null>(null);
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [refundTransactionId, setRefundTransactionId] = useState('');
+  const [refundTransaction, setRefundTransaction] = useState<any>(null);
+  const [refundItems, setRefundItems] = useState<Record<string, number>>({});
+  const [refundReason, setRefundReason] = useState('');
+  const [refundNotes, setRefundNotes] = useState('');
+  const [processingRefund, setProcessingRefund] = useState(false);
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -216,8 +225,125 @@ export default function POSPage() {
     setCart(cart.filter((item) => item.productId !== productId));
   };
 
-  const getTotal = () => {
+  const getSubtotal = () => {
     return cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  };
+
+  const getTotal = () => {
+    const subtotal = getSubtotal();
+    const discount = appliedDiscount?.amount || 0;
+    return Math.max(0, subtotal - discount);
+  };
+
+  const applyDiscount = async () => {
+    if (!dict || !promoCode.trim()) return;
+
+    try {
+      const subtotal = getSubtotal();
+      const res = await fetch(`/api/discounts/validate?tenant=${tenant}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: promoCode, subtotal }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setAppliedDiscount({
+          code: data.data.code,
+          amount: data.data.discountAmount,
+          name: data.data.name,
+        });
+        setPromoCode('');
+      } else {
+        alert(data.error || dict.pos.invalidDiscountCode);
+      }
+    } catch (error) {
+      console.error('Error applying discount:', error);
+      alert(dict.pos.invalidDiscountCode);
+    }
+  };
+
+  const removeDiscount = () => {
+    setAppliedDiscount(null);
+    setPromoCode('');
+  };
+
+  const lookupTransaction = async () => {
+    if (!dict || !refundTransactionId.trim()) return;
+
+    try {
+      const res = await fetch(`/api/transactions/${refundTransactionId}?tenant=${tenant}`);
+      const data = await res.json();
+
+      if (data.success) {
+        const transaction = data.data;
+        if (transaction.status === 'refunded') {
+          alert('This transaction has already been refunded');
+          return;
+        }
+        if (transaction.status !== 'completed') {
+          alert('Only completed transactions can be refunded');
+          return;
+        }
+        setRefundTransaction(transaction);
+        // Initialize refund items with all items at full quantity
+        const items: Record<string, number> = {};
+        transaction.items.forEach((item: any) => {
+          items[item.product.toString()] = item.quantity;
+        });
+        setRefundItems(items);
+      } else {
+        alert(data.error || dict.pos.noTransactionFound);
+      }
+    } catch (error) {
+      console.error('Error looking up transaction:', error);
+      alert(dict.pos.noTransactionFound);
+    }
+  };
+
+  const processRefund = async () => {
+    if (!dict || !refundTransaction) return;
+
+    const selectedItems = Object.entries(refundItems)
+      .filter(([_, qty]) => qty > 0)
+      .map(([productId, quantity]) => ({ productId, quantity }));
+
+    if (selectedItems.length === 0) {
+      alert(dict.pos.selectAtLeastOneItem);
+      return;
+    }
+
+    setProcessingRefund(true);
+    try {
+      const res = await fetch(`/api/transactions/${refundTransaction._id}/refund?tenant=${tenant}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: selectedItems,
+          reason: refundReason,
+          notes: refundNotes,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        alert(dict.pos.refundSuccess);
+        setShowRefundModal(false);
+        setRefundTransaction(null);
+        setRefundTransactionId('');
+        setRefundItems({});
+        setRefundReason('');
+        setRefundNotes('');
+        fetchProducts();
+      } else {
+        alert(data.error || dict.pos.refundError);
+      }
+    } catch (error) {
+      console.error('Error processing refund:', error);
+      alert(dict.pos.refundError);
+    } finally {
+      setProcessingRefund(false);
+    }
   };
 
   const handleCheckout = () => {
@@ -255,11 +381,12 @@ export default function POSPage() {
               })),
               paymentMethod,
               cashReceived: paymentMethod === 'cash' ? parseFloat(cashReceived) : undefined,
+              discountCode: appliedDiscount?.code,
             }),
           });
 
           const data = await res.json();
-          if (data.success) {
+            if (data.success) {
             const transaction = data.data;
             const totalFormatted = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(getTotal());
             
@@ -278,6 +405,8 @@ export default function POSPage() {
             setShowPaymentModal(false);
             setCashReceived('');
             setPaymentMethod('cash');
+            setAppliedDiscount(null);
+            setPromoCode('');
             fetchProducts();
             return;
           } else {
@@ -299,6 +428,7 @@ export default function POSPage() {
         })),
         paymentMethod,
         cashReceived: paymentMethod === 'cash' ? parseFloat(cashReceived) : undefined,
+        discountCode: appliedDiscount?.code,
       });
 
       // Update local product stock (optimistic update)
@@ -317,6 +447,8 @@ export default function POSPage() {
       const totalFormatted = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(getTotal());
       
       // Create transaction object for receipt printing (offline)
+      const subtotal = getSubtotal();
+      const discountAmount = appliedDiscount?.amount || 0;
       const offlineTransaction = {
         receiptNumber: `OFF-${Date.now()}`,
         date: new Date().toLocaleString(),
@@ -326,7 +458,9 @@ export default function POSPage() {
           price: item.price,
           subtotal: item.price * item.quantity,
         })),
-        subtotal: getTotal(),
+        subtotal,
+        discountCode: appliedDiscount?.code,
+        discountAmount: discountAmount > 0 ? discountAmount : undefined,
         total: getTotal(),
         paymentMethod,
         cashReceived: paymentMethod === 'cash' ? parseFloat(cashReceived) : undefined,
@@ -352,6 +486,8 @@ export default function POSPage() {
       setShowPaymentModal(false);
       setCashReceived('');
       setPaymentMethod('cash');
+      setAppliedDiscount(null);
+      setPromoCode('');
       
       // Refresh products if online
       if (isOnline) {
@@ -386,8 +522,10 @@ export default function POSPage() {
       date: transaction.date || new Date(transaction.createdAt || Date.now()).toLocaleString(),
       items: transaction.items || [],
       subtotal: transaction.subtotal || transaction.total,
+      discountCode: transaction.discountCode,
+      discountAmount: transaction.discountAmount,
       tax: settings.taxEnabled && settings.taxRate ? 
-        (transaction.subtotal || transaction.total) * (settings.taxRate / 100) : 
+        ((transaction.subtotal || transaction.total) - (transaction.discountAmount || 0)) * (settings.taxRate / 100) : 
         undefined,
       total: transaction.total,
       paymentMethod: transaction.paymentMethod,
@@ -512,8 +650,64 @@ export default function POSPage() {
                     ))}
                   </div>
 
+                  {/* Discount Section */}
+                  <div className="border-t border-gray-200 pt-4 mt-4">
+                    {!appliedDiscount ? (
+                      <div className="flex gap-2 mb-4">
+                        <input
+                          type="text"
+                          placeholder={dict.pos.promoCode}
+                          value={promoCode}
+                          onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                          onKeyPress={(e) => e.key === 'Enter' && applyDiscount()}
+                          className="flex-1 px-3 py-2 text-sm border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={applyDiscount}
+                          disabled={!promoCode.trim()}
+                          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition-colors"
+                        >
+                          {dict.pos.applyDiscount}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <div className="text-sm font-semibold text-green-800">{dict.pos.discountApplied}</div>
+                            <div className="text-xs text-green-600">{appliedDiscount.code} {appliedDiscount.name && `- ${appliedDiscount.name}`}</div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={removeDiscount}
+                            className="text-red-600 hover:text-red-800 text-sm font-medium"
+                          >
+                            {dict.pos.removeDiscount}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="border-t border-gray-200 pt-5 mt-5">
-                    <div className="flex justify-between items-center mb-5">
+                    <div className="space-y-2 mb-4">
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-gray-600">{dict.pos.subtotal}:</span>
+                        <span className="font-semibold text-gray-900">
+                          <Currency amount={getSubtotal()} />
+                        </span>
+                      </div>
+                      {appliedDiscount && (
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-gray-600">{dict.pos.discount}:</span>
+                          <span className="font-semibold text-green-600">
+                            -<Currency amount={appliedDiscount.amount} />
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex justify-between items-center mb-5 pt-2 border-t border-gray-200">
                       <span className="text-lg sm:text-xl font-bold text-gray-900">{dict.common.total}:</span>
                       <span className="text-2xl sm:text-3xl font-bold text-blue-600">
                         <Currency amount={getTotal()} />
@@ -569,6 +763,15 @@ export default function POSPage() {
                 >
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => setShowRefundModal(true)}
+                  className="px-4 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors shadow-sm"
+                  title={dict.pos.refunds}
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
                   </svg>
                 </button>
               </div>
@@ -757,6 +960,177 @@ export default function POSPage() {
                 {processing ? dict.pos.processing : dict.pos.completePayment}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Refund Modal */}
+      {showRefundModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-md p-5 sm:p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-5">{dict.pos.refundTransaction}</h2>
+            
+            {!refundTransaction ? (
+              <div>
+                <div className="mb-5">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {dict.pos.transactionId} / {dict.pos.receiptNumber}
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={refundTransactionId}
+                      onChange={(e) => setRefundTransactionId(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && lookupTransaction()}
+                      className="flex-1 px-4 py-3 text-base border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder={dict.pos.transactionId}
+                    />
+                    <button
+                      type="button"
+                      onClick={lookupTransaction}
+                      disabled={!refundTransactionId.trim()}
+                      className="px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+                    >
+                      {dict.pos.lookupTransaction}
+                    </button>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowRefundModal(false);
+                      setRefundTransactionId('');
+                    }}
+                    className="px-4 py-2.5 border-2 border-gray-200 rounded-xl text-gray-700 hover:bg-gray-50 font-medium transition-colors shadow-sm"
+                  >
+                    {dict.common.cancel}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div className="mb-5 p-4 bg-gray-50 rounded-lg">
+                  <div className="text-sm text-gray-600 mb-1">{dict.pos.receiptNumber}</div>
+                  <div className="font-semibold text-lg">{refundTransaction.receiptNumber || refundTransaction._id}</div>
+                  <div className="text-sm text-gray-600 mt-2">
+                    {new Date(refundTransaction.createdAt).toLocaleString()}
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    {dict.common.total}: <Currency amount={refundTransaction.total} />
+                  </div>
+                </div>
+
+                <div className="mb-5">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {dict.pos.selectItemsToRefund}
+                  </label>
+                  <div className="space-y-3 max-h-64 overflow-y-auto border border-gray-200 rounded-lg p-3">
+                    {refundTransaction.items.map((item: any) => {
+                      const productId = item.product.toString();
+                      const maxQty = item.quantity;
+                      const currentQty = refundItems[productId] || 0;
+                      
+                      return (
+                        <div key={productId} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded">
+                          <div className="flex-1">
+                            <div className="font-medium text-gray-900">{item.name}</div>
+                            <div className="text-sm text-gray-500">
+                              {dict.pos.each}: <Currency amount={item.price} /> × {maxQty} {dict.common.items}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setRefundItems({ ...refundItems, [productId]: Math.max(0, currentQty - 1) })}
+                              className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100"
+                            >
+                              −
+                            </button>
+                            <input
+                              type="number"
+                              min="0"
+                              max={maxQty}
+                              value={currentQty}
+                              onChange={(e) => {
+                                const val = Math.max(0, Math.min(maxQty, parseInt(e.target.value) || 0));
+                                setRefundItems({ ...refundItems, [productId]: val });
+                              }}
+                              className="w-16 px-2 py-1 text-center border border-gray-300 rounded"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setRefundItems({ ...refundItems, [productId]: Math.min(maxQty, currentQty + 1) })}
+                              className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100"
+                            >
+                              +
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setRefundItems({ ...refundItems, [productId]: maxQty })}
+                              className="ml-2 px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                            >
+                              {dict.pos.fullRefund}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="mb-5">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {dict.pos.refundReason}
+                  </label>
+                  <input
+                    type="text"
+                    value={refundReason}
+                    onChange={(e) => setRefundReason(e.target.value)}
+                    className="w-full px-4 py-3 text-base border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Reason for refund"
+                  />
+                </div>
+
+                <div className="mb-5">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {dict.pos.refundNotes}
+                  </label>
+                  <textarea
+                    value={refundNotes}
+                    onChange={(e) => setRefundNotes(e.target.value)}
+                    rows={3}
+                    className="w-full px-4 py-3 text-base border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Additional notes"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowRefundModal(false);
+                      setRefundTransaction(null);
+                      setRefundTransactionId('');
+                      setRefundItems({});
+                      setRefundReason('');
+                      setRefundNotes('');
+                    }}
+                    className="px-4 py-2.5 border-2 border-gray-200 rounded-xl text-gray-700 hover:bg-gray-50 font-medium transition-colors shadow-sm"
+                  >
+                    {dict.common.cancel}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={processRefund}
+                    disabled={processingRefund || Object.values(refundItems).every(qty => qty === 0)}
+                    className="px-4 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors shadow-md hover:shadow-lg"
+                  >
+                    {processingRefund ? dict.pos.processing : dict.pos.processRefund}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

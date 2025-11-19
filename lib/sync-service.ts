@@ -43,6 +43,7 @@ class SyncService {
             items: transaction.items,
             paymentMethod: transaction.paymentMethod,
             cashReceived: transaction.cashReceived,
+            discountCode: transaction.discountCode,
           }),
         });
 

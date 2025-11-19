@@ -11,7 +11,10 @@ export interface ITransactionItem {
 export interface ITransaction extends Document {
   tenantId: mongoose.Types.ObjectId;
   items: ITransactionItem[];
-  total: number;
+  subtotal: number; // Total before discount
+  discountCode?: string;
+  discountAmount?: number;
+  total: number; // Total after discount
   paymentMethod: 'cash' | 'card' | 'digital';
   cashReceived?: number;
   change?: number;
@@ -59,6 +62,20 @@ const TransactionSchema: Schema = new Schema(
     items: {
       type: [TransactionItemSchema],
       required: true,
+    },
+    subtotal: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+    discountCode: {
+      type: String,
+      trim: true,
+      uppercase: true,
+    },
+    discountAmount: {
+      type: Number,
+      min: 0,
     },
     total: {
       type: Number,

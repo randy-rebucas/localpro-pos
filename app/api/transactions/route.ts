@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Transaction from '@/models/Transaction';
 import Product from '@/models/Product';
+import Discount from '@/models/Discount';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -66,11 +67,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { items, paymentMethod, cashReceived, notes } = data;
+    const { items, paymentMethod, cashReceived, notes, discountCode } = data;
 
     // Validate and process items
     const transactionItems = [];
-    let total = 0;
+    let subtotal = 0;
 
     for (const item of items) {
       const product = await Product.findOne({ _id: item.productId, tenantId });
@@ -85,17 +86,83 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const subtotal = product.price * item.quantity;
-      total += subtotal;
+      const itemSubtotal = product.price * item.quantity;
+      subtotal += itemSubtotal;
 
       transactionItems.push({
         product: product._id,
         name: product.name,
         price: product.price,
         quantity: item.quantity,
-        subtotal,
+        subtotal: itemSubtotal,
       });
     }
+
+    // Apply discount if provided
+    let discountAmount = 0;
+    let appliedDiscountCode: string | undefined;
+    
+    if (discountCode) {
+      const discount = await Discount.findOne({
+        tenantId,
+        code: discountCode.toUpperCase(),
+        isActive: true,
+      });
+
+      if (!discount) {
+        return NextResponse.json(
+          { success: false, error: 'Invalid or inactive discount code' },
+          { status: 400 }
+        );
+      }
+
+      // Check validity dates
+      const now = new Date();
+      if (now < discount.validFrom || now > discount.validUntil) {
+        return NextResponse.json(
+          { success: false, error: 'Discount code is not valid at this time' },
+          { status: 400 }
+        );
+      }
+
+      // Check usage limit
+      if (discount.usageLimit && discount.usageCount >= discount.usageLimit) {
+        return NextResponse.json(
+          { success: false, error: 'Discount code has reached its usage limit' },
+          { status: 400 }
+        );
+      }
+
+      // Check minimum purchase amount
+      if (discount.minPurchaseAmount && subtotal < discount.minPurchaseAmount) {
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: `Minimum purchase amount of ${discount.minPurchaseAmount} required` 
+          },
+          { status: 400 }
+        );
+      }
+
+      // Calculate discount amount
+      if (discount.type === 'percentage') {
+        discountAmount = (subtotal * discount.value) / 100;
+        if (discount.maxDiscountAmount) {
+          discountAmount = Math.min(discountAmount, discount.maxDiscountAmount);
+        }
+      } else {
+        discountAmount = Math.min(discount.value, subtotal);
+      }
+
+      appliedDiscountCode = discount.code;
+
+      // Increment usage count
+      discount.usageCount += 1;
+      await discount.save();
+    }
+
+    // Calculate final total
+    const total = Math.max(0, subtotal - discountAmount);
 
     // Calculate change for cash payments
     let change = 0;
@@ -112,6 +179,9 @@ export async function POST(request: NextRequest) {
     const transaction = await Transaction.create({
       tenantId,
       items: transactionItems,
+      subtotal,
+      discountCode: appliedDiscountCode,
+      discountAmount: discountAmount > 0 ? discountAmount : undefined,
       total,
       paymentMethod,
       cashReceived: paymentMethod === 'cash' ? cashReceived : undefined,

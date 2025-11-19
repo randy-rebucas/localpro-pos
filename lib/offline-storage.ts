@@ -15,6 +15,7 @@ interface OfflineTransaction {
   }>;
   paymentMethod: 'cash' | 'card' | 'digital';
   cashReceived?: number;
+  discountCode?: string;
   timestamp: number;
   synced: boolean;
   syncError?: string;

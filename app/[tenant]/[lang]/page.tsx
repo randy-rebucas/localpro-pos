@@ -1,12 +1,25 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
 import Navbar from '@/components/Navbar';
 import Currency from '@/components/Currency';
 import PageTitle from '@/components/PageTitle';
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from './dictionaries-client';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+
+// Dynamically import chart to avoid SSR issues with Recharts
+const SalesChart = dynamic(() => import('@/components/SalesChart'), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-64 sm:h-80 lg:h-96 flex items-center justify-center">
+      <div className="text-center">
+        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <p className="mt-4 text-gray-600">Loading chart...</p>
+      </div>
+    </div>
+  ),
+});
 
 interface ChartDataPoint {
   date: string;
@@ -44,8 +57,31 @@ export default function Dashboard() {
       setLoading(true);
       const res = await fetch(`/api/transactions/stats?period=${period}&tenant=${tenant}`);
       const data = await res.json();
-      if (data.success) {
-        setStats(data.data);
+      if (data.success && data.data) {
+        console.log('[Dashboard] Raw API response:', data.data);
+        console.log('[Dashboard] Chart data from API:', data.data.chartData);
+        
+        // Ensure chartData is properly formatted with numeric values
+        const processedChartData = (data.data.chartData || []).map((item: any) => {
+          const salesValue = typeof item.sales === 'number' ? item.sales : parseFloat(String(item.sales)) || 0;
+          const transactionsValue = typeof item.transactions === 'number' ? item.transactions : parseInt(String(item.transactions)) || 0;
+          return {
+            date: item.date || '',
+            sales: salesValue,
+            transactions: transactionsValue,
+          };
+        });
+        
+        console.log('[Dashboard] Processed chart data:', processedChartData);
+        
+        const processedData = {
+          ...data.data,
+          chartData: processedChartData,
+        };
+        
+        setStats(processedData);
+      } else {
+        console.error('[Dashboard] API response not successful:', data);
       }
     } catch (error) {
       console.error('Error fetching stats:', error);
@@ -153,61 +189,23 @@ export default function Dashboard() {
           </div>
         ) : null}
 
-        {stats && stats.chartData && stats.chartData.length > 0 && (
+        {stats && (
           <div className="bg-white rounded-xl shadow-md p-5 sm:p-6 lg:p-8 mb-6 sm:mb-8 animate-fade-in">
             <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-5 sm:mb-6">
               {dict.dashboard.salesTrend || 'Sales Trend'}
             </h2>
-            <div className="w-full h-64 sm:h-80 lg:h-96">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={stats.chartData}
-                  margin={{
-                    top: 5,
-                    right: 30,
-                    left: 20,
-                    bottom: 5,
-                  }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis 
-                    dataKey="date" 
-                    stroke="#6b7280"
-                    style={{ fontSize: '12px' }}
-                    angle={-45}
-                    textAnchor="end"
-                    height={60}
-                  />
-                  <YAxis 
-                    stroke="#6b7280"
-                    style={{ fontSize: '12px' }}
-                    tickFormatter={(value) => `$${value.toFixed(0)}`}
-                  />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: '#fff', 
-                      border: '1px solid #e5e7eb',
-                      borderRadius: '8px',
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                    }}
-                    formatter={(value: number) => {
-                      return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-                    }}
-                    labelFormatter={(label) => `${dict.dashboard.date || 'Date'}: ${label}`}
-                  />
-                  <Legend />
-                  <Line 
-                    type="monotone" 
-                    dataKey="sales" 
-                    stroke="#2563eb" 
-                    strokeWidth={2}
-                    dot={{ fill: '#2563eb', r: 4 }}
-                    activeDot={{ r: 6 }}
-                    name={dict.dashboard.totalSales || 'Total Sales'}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+            {stats.chartData && stats.chartData.length > 0 ? (
+              <SalesChart data={stats.chartData} dict={dict} />
+            ) : (
+              <div className="w-full h-64 sm:h-80 lg:h-96 flex items-center justify-center">
+                <div className="text-center">
+                  <svg className="mx-auto h-16 w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                  <p className="text-gray-500 text-lg">{dict.dashboard?.noChartData || 'No sales data available for the selected period'}</p>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
