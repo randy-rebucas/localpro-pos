@@ -77,7 +77,18 @@
     "inStock": "en stock",
     "deleteConfirm": "¿Está seguro de que desea eliminar este producto?",
     "deleteError": "Error al eliminar producto",
-    "saveError": "Error al guardar producto"
+    "saveError": "Error al guardar producto",
+    "refill": {
+      "title": "Reabastecer Stock",
+      "quantity": "Cantidad a Agregar",
+      "notes": "Notas",
+      "notesPlaceholder": "Agregar notas sobre este reabastecimiento...",
+      "newStock": "Nuevo Stock",
+      "submit": "Reabastecer Stock",
+      "invalidQuantity": "Por favor ingrese una cantidad válida",
+      "productNotFound": "Producto no encontrado",
+      "error": "Error al reabastecer stock"
+    }
   },
   "transactions": {
     "title": "Transacciones",

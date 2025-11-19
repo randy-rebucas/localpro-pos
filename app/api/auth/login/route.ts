@@ -4,6 +4,7 @@ import User from '@/models/User';
 import { generateToken } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateEmail } from '@/lib/validation';
+import bcrypt from 'bcryptjs';
 
 export async function POST(request: NextRequest) {
   try {
@@ -37,10 +38,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find user
+    // Find user with password field - ensure we get a Mongoose document, not a plain object
     const user = await User.findOne({ email: email.toLowerCase(), tenantId: tenant._id })
-      .select('+password')
-      .lean();
+      .select('+password');
 
     if (!user || !user.isActive) {
       return NextResponse.json(
@@ -49,18 +49,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify password
-    const userDoc = await User.findById(user._id);
-    if (!userDoc) {
+    // Check if password exists and is a string
+    if (!user.password || typeof user.password !== 'string') {
+      console.error('User password is missing or invalid for user:', user._id, 'Password type:', typeof user.password);
       return NextResponse.json(
         { success: false, error: 'Invalid credentials' },
         { status: 401 }
       );
     }
 
-    const isPasswordValid = await userDoc.comparePassword(password);
+    // Verify password using bcrypt directly (not the method to avoid 'this' context issues)
+    let isPasswordValid = false;
+    try {
+      isPasswordValid = await bcrypt.compare(password, user.password);
+    } catch (bcryptError: any) {
+      console.error('Bcrypt comparison error:', bcryptError);
+      return NextResponse.json(
+        { success: false, error: 'Invalid credentials' },
+        { status: 401 }
+      );
+    }
+    
     if (!isPasswordValid) {
       await createAuditLog(request, {
+        tenantId: tenant._id,
         action: AuditActions.LOGIN,
         entityType: 'user',
         entityId: user._id.toString(),
@@ -85,6 +97,7 @@ export async function POST(request: NextRequest) {
 
     // Create audit log
     await createAuditLog(request, {
+      tenantId: tenant._id,
       action: AuditActions.LOGIN,
       entityType: 'user',
       entityId: user._id.toString(),

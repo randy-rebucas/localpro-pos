@@ -23,6 +23,14 @@
  *   npm run tenant:create  (runs in interactive mode)
  */
 
+import dotenv from 'dotenv';
+import { resolve } from 'path';
+
+// Load .env.local file (Next.js convention)
+dotenv.config({ path: resolve(process.cwd(), '.env.local') });
+// Also try .env as fallback
+dotenv.config({ path: resolve(process.cwd(), '.env') });
+
 import mongoose from 'mongoose';
 import Tenant from '../models/Tenant';
 import { getDefaultTenantSettings } from '../lib/currency';

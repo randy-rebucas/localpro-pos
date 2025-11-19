@@ -2,6 +2,14 @@
  * Script to create an admin user for a tenant
  * Usage: npx tsx scripts/create-admin-user.ts <tenant-slug> <email> <password> <name>
  */
+import dotenv from 'dotenv';
+import { resolve } from 'path';
+
+// Load .env.local file (Next.js convention)
+dotenv.config({ path: resolve(process.cwd(), '.env.local') });
+// Also try .env as fallback
+dotenv.config({ path: resolve(process.cwd(), '.env') });
+
 import mongoose from 'mongoose';
 import User from '../models/User';
 import Tenant from '../models/Tenant';

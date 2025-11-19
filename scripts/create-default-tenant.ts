@@ -2,12 +2,20 @@
  * Script to create a default tenant
  * Run with: npx tsx scripts/create-default-tenant.ts
  */
+import dotenv from 'dotenv';
+import { resolve } from 'path';
+
+// Load .env.local file (Next.js convention)
+dotenv.config({ path: resolve(process.cwd(), '.env.local') });
+// Also try .env as fallback
+dotenv.config({ path: resolve(process.cwd(), '.env') });
+
 import mongoose from 'mongoose';
 import Tenant from '../models/Tenant';
 import { getDefaultTenantSettings } from '../lib/currency';
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/pos-system';
-
+console.log(MONGODB_URI);
 async function createDefaultTenant() {
   try {
     await mongoose.connect(MONGODB_URI);

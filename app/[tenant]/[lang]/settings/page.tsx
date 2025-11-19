@@ -6,6 +6,7 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '../dictionaries-client';
 import { ITenantSettings } from '@/models/Tenant';
+import { detectLocation, getCurrencySymbolForCode } from '@/lib/location-detection';
 
 export default function SettingsPage() {
   const params = useParams();
@@ -16,11 +17,58 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState<ITenantSettings | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [detecting, setDetecting] = useState(false);
+  const [detectedInfo, setDetectedInfo] = useState<string | null>(null);
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
     fetchSettings();
   }, [lang, tenant]);
+
+  const autoDetectLocation = async () => {
+    try {
+      setDetecting(true);
+      const detected = await detectLocation();
+      
+      if (!settings) return;
+      
+      // Update settings with detected values
+      const newSettings = JSON.parse(JSON.stringify(settings));
+      newSettings.timezone = detected.timezone;
+      newSettings.currency = detected.currency;
+      newSettings.currencySymbol = getCurrencySymbolForCode(detected.currency);
+      newSettings.currencyPosition = detected.currencyPosition;
+      newSettings.dateFormat = detected.dateFormat;
+      newSettings.timeFormat = detected.timeFormat;
+      newSettings.numberFormat = detected.numberFormat;
+      
+      setSettings(newSettings);
+      setDetectedInfo(`Detected: ${detected.locale} (${detected.country || 'Unknown'}) - ${detected.currency} - ${detected.timezone}`);
+      
+      // Clear message after 5 seconds
+      setTimeout(() => setDetectedInfo(null), 5000);
+    } catch (error) {
+      console.error('Error detecting location:', error);
+      setMessage({ type: 'error', text: 'Failed to detect location. Please set manually.' });
+    } finally {
+      setDetecting(false);
+    }
+  };
+
+  // Auto-detect location on first load if settings are default
+  useEffect(() => {
+    if (settings && !loading && !detecting) {
+      // Check if settings are using defaults (likely first time setup)
+      const isDefault = settings.timezone === 'UTC' && 
+                       settings.currency === 'USD' && 
+                       settings.dateFormat === 'MM/DD/YYYY';
+      
+      if (isDefault) {
+        autoDetectLocation();
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings, loading]);
 
   const fetchSettings = async () => {
     try {
@@ -102,6 +150,10 @@ export default function SettingsPage() {
     }
   };
 
+  const handleDetectLocation = async () => {
+    await autoDetectLocation();
+  };
+
   const updateSetting = (path: string, value: any) => {
     if (!settings) return;
     
@@ -180,7 +232,38 @@ export default function SettingsPage() {
         <div className="bg-white rounded-xl shadow-md p-6 space-y-8">
           {/* Currency & Localization */}
           <section>
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Currency & Localization</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Currency & Localization</h2>
+              <button
+                onClick={handleDetectLocation}
+                disabled={detecting}
+                className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {detecting ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                    <span>Detecting...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>Auto-Detect Location</span>
+                  </>
+                )}
+              </button>
+            </div>
+            {detectedInfo && (
+              <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800">
+                <div className="flex items-center gap-2">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>{detectedInfo}</span>
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -189,7 +272,15 @@ export default function SettingsPage() {
                 <input
                   type="text"
                   value={settings.currency || 'USD'}
-                  onChange={(e) => updateSetting('currency', e.target.value.toUpperCase())}
+                  onChange={(e) => {
+                    const newCurrency = e.target.value.toUpperCase();
+                    updateSetting('currency', newCurrency);
+                    // Auto-update currency symbol when currency changes
+                    const symbol = getCurrencySymbolForCode(newCurrency);
+                    if (symbol !== newCurrency) {
+                      updateSetting('currencySymbol', symbol);
+                    }
+                  }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
                   placeholder="USD"
                   maxLength={3}
@@ -199,13 +290,25 @@ export default function SettingsPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Currency Symbol
                 </label>
-                <input
-                  type="text"
-                  value={settings.currencySymbol || ''}
-                  onChange={(e) => updateSetting('currencySymbol', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-                  placeholder="$"
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={settings.currencySymbol || getCurrencySymbolForCode(settings.currency || 'USD')}
+                    onChange={(e) => updateSetting('currencySymbol', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                    placeholder="$"
+                  />
+                  {!settings.currencySymbol && (
+                    <button
+                      type="button"
+                      onClick={() => updateSetting('currencySymbol', getCurrencySymbolForCode(settings.currency || 'USD'))}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-blue-600 hover:text-blue-700"
+                      title="Auto-fill symbol"
+                    >
+                      Auto
+                    </button>
+                  )}
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -230,7 +333,24 @@ export default function SettingsPage() {
                   onChange={(e) => updateSetting('timezone', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
                   placeholder="America/New_York"
+                  list="timezone-suggestions"
                 />
+                <datalist id="timezone-suggestions">
+                  <option value="America/New_York">Eastern Time (US)</option>
+                  <option value="America/Chicago">Central Time (US)</option>
+                  <option value="America/Denver">Mountain Time (US)</option>
+                  <option value="America/Los_Angeles">Pacific Time (US)</option>
+                  <option value="Europe/London">London (UK)</option>
+                  <option value="Europe/Paris">Paris (France)</option>
+                  <option value="Europe/Berlin">Berlin (Germany)</option>
+                  <option value="Asia/Tokyo">Tokyo (Japan)</option>
+                  <option value="Asia/Shanghai">Shanghai (China)</option>
+                  <option value="Australia/Sydney">Sydney (Australia)</option>
+                  <option value="UTC">UTC</option>
+                </datalist>
+                <p className="mt-1 text-xs text-gray-500">
+                  Detected: {Intl.DateTimeFormat().resolvedOptions().timeZone}
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">

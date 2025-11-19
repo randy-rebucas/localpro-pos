@@ -2,6 +2,7 @@
 
 import { usePathname } from 'next/navigation';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import { TenantSettingsProvider } from '@/contexts/TenantSettingsContext';
 
 /**
  * This component protects all routes except login
@@ -14,15 +15,23 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
 
   // Don't protect the login page
   if (isLoginPage) {
-    return <>{children}</>;
+    return <TenantSettingsProvider>{children}</TenantSettingsProvider>;
   }
 
   // Settings page requires admin/manager role
   if (isSettingsPage) {
-    return <ProtectedRoute requiredRoles={['admin', 'manager']}>{children}</ProtectedRoute>;
+    return (
+      <TenantSettingsProvider>
+        <ProtectedRoute requiredRoles={['admin', 'manager']}>{children}</ProtectedRoute>
+      </TenantSettingsProvider>
+    );
   }
 
   // Protect all other routes (require authentication only)
-  return <ProtectedRoute>{children}</ProtectedRoute>;
+  return (
+    <TenantSettingsProvider>
+      <ProtectedRoute>{children}</ProtectedRoute>
+    </TenantSettingsProvider>
+  );
 }
 

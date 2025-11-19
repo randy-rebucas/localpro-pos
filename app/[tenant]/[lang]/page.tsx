@@ -2,14 +2,24 @@
 
 import { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
+import Currency from '@/components/Currency';
+import PageTitle from '@/components/PageTitle';
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from './dictionaries-client';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+
+interface ChartDataPoint {
+  date: string;
+  sales: number;
+  transactions: number;
+}
 
 interface Stats {
   totalSales: number;
   totalTransactions: number;
   averageTransaction: number;
   paymentMethods: Array<{ _id: string; total: number; count: number }>;
+  chartData: ChartDataPoint[];
 }
 
 export default function Dashboard() {
@@ -57,26 +67,26 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <PageTitle />
       <Navbar />
-      {/* Mobile-first: Start with mobile padding, increase for larger screens */}
-      <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 xl:px-8 py-4 sm:py-6 lg:py-8">
-        {/* Mobile-optimized header */}
-        <div className="mb-4 sm:mb-6 lg:mb-8">
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-3 sm:mb-4 lg:mb-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        <div className="mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-4 sm:mb-6">
             {dict.dashboard.title}
           </h1>
           {/* Period buttons - Full width on mobile, inline on desktop */}
-          <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:gap-3">
+          <div className="flex flex-wrap gap-2 sm:gap-3">
             {(['today', 'week', 'month', 'all'] as const).map((p) => (
               <button
                 key={p}
                 type="button"
                 onClick={() => setPeriod(p)}
-                className={`px-4 py-3 sm:px-5 sm:py-2.5 rounded-xl text-base sm:text-sm lg:text-base font-semibold transition-all duration-200 active:scale-95 ${
+                className={`px-4 py-2.5 sm:px-5 rounded-xl text-sm sm:text-base font-semibold transition-all duration-200 ${
                   period === p
-                    ? 'bg-blue-600 text-white shadow-lg'
-                    : 'bg-white text-gray-700 border-2 border-gray-200 active:bg-gray-50 shadow-sm'
+                    ? 'text-white shadow-md'
+                    : 'bg-white text-gray-700 border-2 border-gray-200 hover:bg-gray-50 shadow-sm'
                 }`}
+                style={period === p ? { backgroundColor: 'var(--primary-color, #2563eb)' } : {}}
               >
                 {dict.dashboard.periods[p]}
               </button>
@@ -85,18 +95,18 @@ export default function Dashboard() {
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mb-4 sm:mb-6 lg:mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="bg-white rounded-2xl shadow-md p-5 sm:p-6 animate-pulse">
+              <div key={i} className="bg-white rounded-xl shadow-md p-5 sm:p-6 animate-pulse">
                 <div className="h-4 bg-gray-200 rounded-lg w-24 mb-4"></div>
                 <div className="h-10 bg-gray-200 rounded-lg w-32"></div>
               </div>
             ))}
           </div>
         ) : stats ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mb-4 sm:mb-6 lg:mb-8">
-            <div className="bg-white rounded-2xl shadow-md p-5 sm:p-6 active:scale-[0.98] transition-transform">
-              <div className="flex items-center justify-between mb-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+            <div className="bg-white rounded-xl shadow-md p-5 sm:p-6 card-hover animate-fade-in">
+              <div className="flex items-center justify-between mb-4">
                 <h3 className="text-xs sm:text-sm font-semibold text-gray-500 uppercase tracking-wide">
                   {dict.dashboard.totalSales}
                 </h3>
@@ -107,50 +117,112 @@ export default function Dashboard() {
                 </div>
               </div>
               <p className="text-3xl sm:text-4xl lg:text-5xl font-bold text-gray-900">
-                ${stats.totalSales.toFixed(2)}
+                <Currency amount={stats.totalSales} />
               </p>
             </div>
-            <div className="bg-white rounded-xl shadow-md p-6 card-hover animate-fade-in">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide">
+            <div className="bg-white rounded-xl shadow-md p-5 sm:p-6 card-hover animate-fade-in">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xs sm:text-sm font-semibold text-gray-500 uppercase tracking-wide">
                   {dict.dashboard.totalTransactions}
                 </h3>
-                <svg className="w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <svg className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                </div>
               </div>
-              <p className="mt-3 text-3xl sm:text-4xl font-bold text-gray-900">
+              <p className="text-3xl sm:text-4xl lg:text-5xl font-bold text-gray-900">
                 {stats.totalTransactions}
               </p>
             </div>
-            <div className="bg-white rounded-xl shadow-md p-6 card-hover animate-fade-in sm:col-span-2 md:col-span-1">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide">
+            <div className="bg-white rounded-xl shadow-md p-5 sm:p-6 card-hover animate-fade-in sm:col-span-2 lg:col-span-1">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xs sm:text-sm font-semibold text-gray-500 uppercase tracking-wide">
                   {dict.dashboard.averageTransaction}
                 </h3>
-                <svg className="w-5 h-5 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                </svg>
+                <div className="p-2 bg-purple-100 rounded-lg">
+                  <svg className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                  </svg>
+                </div>
               </div>
-              <p className="mt-3 text-3xl sm:text-4xl font-bold text-gray-900">
-                ${stats.averageTransaction.toFixed(2)}
+              <p className="text-3xl sm:text-4xl lg:text-5xl font-bold text-gray-900">
+                <Currency amount={stats.averageTransaction} />
               </p>
             </div>
           </div>
         ) : null}
 
+        {stats && stats.chartData && stats.chartData.length > 0 && (
+          <div className="bg-white rounded-xl shadow-md p-5 sm:p-6 lg:p-8 mb-6 sm:mb-8 animate-fade-in">
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-5 sm:mb-6">
+              {dict.dashboard.salesTrend || 'Sales Trend'}
+            </h2>
+            <div className="w-full h-64 sm:h-80 lg:h-96">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={stats.chartData}
+                  margin={{
+                    top: 5,
+                    right: 30,
+                    left: 20,
+                    bottom: 5,
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis 
+                    dataKey="date" 
+                    stroke="#6b7280"
+                    style={{ fontSize: '12px' }}
+                    angle={-45}
+                    textAnchor="end"
+                    height={60}
+                  />
+                  <YAxis 
+                    stroke="#6b7280"
+                    style={{ fontSize: '12px' }}
+                    tickFormatter={(value) => `$${value.toFixed(0)}`}
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: '#fff', 
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                    }}
+                    formatter={(value: number) => {
+                      return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                    }}
+                    labelFormatter={(label) => `${dict.dashboard.date || 'Date'}: ${label}`}
+                  />
+                  <Legend />
+                  <Line 
+                    type="monotone" 
+                    dataKey="sales" 
+                    stroke="#2563eb" 
+                    strokeWidth={2}
+                    dot={{ fill: '#2563eb', r: 4 }}
+                    activeDot={{ r: 6 }}
+                    name={dict.dashboard.totalSales || 'Total Sales'}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
+
         {stats && stats.paymentMethods.length > 0 && (
-          <div className="bg-white rounded-xl shadow-md p-6 sm:p-8 animate-fade-in">
-            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6">{dict.dashboard.paymentMethods}</h2>
+          <div className="bg-white rounded-xl shadow-md p-5 sm:p-6 lg:p-8 animate-fade-in">
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-5 sm:mb-6">{dict.dashboard.paymentMethods}</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
               {stats.paymentMethods.map((method, index) => (
                 <div 
                   key={method._id} 
-                  className="border-2 border-gray-100 rounded-xl p-5 card-hover transition-all"
+                  className="bg-gray-50 border border-gray-200 rounded-xl p-5 card-hover transition-all"
                   style={{ animationDelay: `${index * 0.1}s` }}
                 >
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide capitalize">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xs sm:text-sm font-semibold text-gray-700 uppercase tracking-wide capitalize">
                       {method._id}
                     </h3>
                     <div className={`w-3 h-3 rounded-full ${
@@ -159,8 +231,8 @@ export default function Dashboard() {
                       'bg-purple-500'
                     }`}></div>
                   </div>
-                  <p className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">
-                    ${method.total.toFixed(2)}
+                  <p className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
+                    <Currency amount={method.total} />
                   </p>
                   <p className="text-sm text-gray-500">
                     {method.count} {dict.dashboard.transactions}

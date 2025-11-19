@@ -64,11 +64,69 @@ export async function GET(request: NextRequest) {
       },
     ]);
 
+    // Time-series data for chart
+    let timeSeriesGroup: any;
+    let dateFormat: string;
+    
+    if (period === 'today') {
+      // Group by hour for today
+      timeSeriesGroup = {
+        $hour: '$createdAt'
+      };
+      dateFormat = 'hour';
+    } else if (period === 'week' || period === 'month') {
+      // Group by day for week/month
+      timeSeriesGroup = {
+        year: { $year: '$createdAt' },
+        month: { $month: '$createdAt' },
+        day: { $dayOfMonth: '$createdAt' }
+      };
+      dateFormat = 'day';
+    } else {
+      // Group by day for all time
+      timeSeriesGroup = {
+        year: { $year: '$createdAt' },
+        month: { $month: '$createdAt' },
+        day: { $dayOfMonth: '$createdAt' }
+      };
+      dateFormat = 'day';
+    }
+
+    const timeSeriesData = await Transaction.aggregate([
+      { $match: matchQuery },
+      {
+        $group: {
+          _id: timeSeriesGroup,
+          sales: { $sum: '$total' },
+          transactions: { $sum: 1 },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
+
+    // Format time-series data for chart
+    const chartData = timeSeriesData.map((item) => {
+      let label: string;
+      if (dateFormat === 'hour') {
+        const hour = item._id;
+        label = `${hour}:00`;
+      } else {
+        const { year, month, day } = item._id;
+        label = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      }
+      return {
+        date: label,
+        sales: item.sales,
+        transactions: item.transactions,
+      };
+    });
+
     const result = {
       totalSales: stats[0]?.totalSales || 0,
       totalTransactions: stats[0]?.totalTransactions || 0,
       averageTransaction: stats[0]?.averageTransaction || 0,
       paymentMethods: paymentMethodStats,
+      chartData,
     };
 
     return NextResponse.json({ success: true, data: result });
