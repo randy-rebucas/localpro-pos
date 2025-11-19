@@ -9,6 +9,10 @@ import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '../dictionaries-client';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { getOfflineStorage } from '@/lib/offline-storage';
+import BarcodeScanner from '@/components/BarcodeScanner';
+import QRCodeScanner from '@/components/QRCodeScanner';
+import { hardwareService } from '@/lib/hardware';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 
 interface Product {
   _id: string;
@@ -41,10 +45,58 @@ export default function POSPage() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [dict, setDict] = useState<any>(null);
   const { isOnline } = useNetworkStatus(tenant);
+  const { settings } = useTenantSettings();
+  const [showQRScanner, setShowQRScanner] = useState(false);
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
   }, [lang]);
+
+  // Initialize hardware services
+  useEffect(() => {
+    if (settings) {
+      // Load hardware config from localStorage (per-tenant)
+      const hardwareConfigKey = `hardware_config_${tenant}`;
+      const savedConfig = localStorage.getItem(hardwareConfigKey);
+      if (savedConfig) {
+        try {
+          const config = JSON.parse(savedConfig);
+          hardwareService.setConfig(config);
+        } catch (error) {
+          console.error('Failed to load hardware config:', error);
+        }
+      }
+    }
+  }, [settings, tenant]);
+
+  // Handle barcode scanning
+  const handleBarcodeScan = useCallback((barcode: string) => {
+    // Try to find product by SKU or barcode
+    const product = products.find(
+      p => p.sku === barcode || p._id === barcode
+    );
+    if (product && product.stock > 0) {
+      addToCart(product);
+    } else {
+      if (dict) {
+        alert(dict.pos.productNotFound || 'Product not found');
+      }
+    }
+  }, [products, dict, addToCart]);
+
+  // Handle QR code scan
+  const handleQRScan = useCallback((data: string) => {
+    // QR codes might contain product IDs, URLs, or other data
+    // Try to parse as product ID first
+    const product = products.find(p => p._id === data);
+    if (product && product.stock > 0) {
+      addToCart(product);
+      setShowQRScanner(false);
+    } else {
+      // Could be a URL or other data - handle accordingly
+      console.log('QR Code scanned:', data);
+    }
+  }, [products]);
 
   const loadCachedProducts = useCallback(async () => {
     try {
@@ -206,7 +258,19 @@ export default function POSPage() {
 
           const data = await res.json();
           if (data.success) {
+            const transaction = data.data;
             const totalFormatted = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(getTotal());
+            
+            // Print receipt if configured
+            if (settings) {
+              await printReceipt(transaction);
+              
+              // Open cash drawer if cash payment
+              if (paymentMethod === 'cash') {
+                await hardwareService.openCashDrawer();
+              }
+            }
+            
             alert(`${dict.pos.transactionCompleted} ${totalFormatted}`);
             setCart([]);
             setShowPaymentModal(false);
@@ -249,6 +313,34 @@ export default function POSPage() {
       }
 
       const totalFormatted = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(getTotal());
+      
+      // Create transaction object for receipt printing (offline)
+      const offlineTransaction = {
+        receiptNumber: `OFF-${Date.now()}`,
+        date: new Date().toLocaleString(),
+        items: cart.map(item => ({
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price,
+          subtotal: item.price * item.quantity,
+        })),
+        subtotal: getTotal(),
+        total: getTotal(),
+        paymentMethod,
+        cashReceived: paymentMethod === 'cash' ? parseFloat(cashReceived) : undefined,
+        change: paymentMethod === 'cash' ? parseFloat(cashReceived) - getTotal() : undefined,
+      };
+      
+      // Print receipt if configured (even for offline transactions)
+      if (settings) {
+        await printReceipt(offlineTransaction as any);
+        
+        // Open cash drawer if cash payment
+        if (paymentMethod === 'cash') {
+          await hardwareService.openCashDrawer();
+        }
+      }
+      
       const message = isOnline 
         ? `${dict.pos.transactionCompleted} ${totalFormatted}`
         : `${dict.pos.transactionSavedOffline || 'Transaction saved offline'} ${totalFormatted}. ${dict.pos.willSyncWhenOnline || 'Will sync when connection is restored.'}`;
@@ -278,6 +370,37 @@ export default function POSPage() {
     }
   };
 
+  // Print receipt helper
+  const printReceipt = async (transaction: any) => {
+    if (!settings) return;
+
+    const receiptData = {
+      storeName: settings.companyName,
+      address: settings.address ? 
+        `${settings.address.street || ''}, ${settings.address.city || ''}, ${settings.address.state || ''} ${settings.address.zipCode || ''}`.trim() : 
+        undefined,
+      phone: settings.phone,
+      receiptNumber: transaction.receiptNumber || transaction._id?.slice(-8) || 'N/A',
+      date: transaction.date || new Date(transaction.createdAt || Date.now()).toLocaleString(),
+      items: transaction.items || [],
+      subtotal: transaction.subtotal || transaction.total,
+      tax: settings.taxEnabled && settings.taxRate ? 
+        (transaction.subtotal || transaction.total) * (settings.taxRate / 100) : 
+        undefined,
+      total: transaction.total,
+      paymentMethod: transaction.paymentMethod,
+      cashReceived: transaction.cashReceived,
+      change: transaction.change,
+      footer: settings.receiptFooter,
+    };
+
+    try {
+      await hardwareService.printReceipt(receiptData);
+    } catch (error) {
+      console.error('Failed to print receipt:', error);
+    }
+  };
+
   if (!dict) {
     return <div className="text-center py-12">{dict?.common.loading || 'Loading...'}</div>;
   }
@@ -286,6 +409,14 @@ export default function POSPage() {
     <div className="min-h-screen bg-gray-50">
       <PageTitle />
       <OfflineIndicator />
+      <BarcodeScanner onScan={handleBarcodeScan} enabled={true} />
+      {showQRScanner && (
+        <QRCodeScanner 
+          onScan={handleQRScan} 
+          onClose={() => setShowQRScanner(false)}
+          enabled={true}
+        />
+      )}
       <Navbar />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         {/* Mobile: Cart first (sticky at top), then products below */}
@@ -413,17 +544,28 @@ export default function POSPage() {
           <div className="lg:col-span-2 order-2 lg:order-1">
             <div className="mb-6 sm:mb-8">
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-4 sm:mb-6">{dict.pos.title}</h1>
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder={dict.pos.searchPlaceholder}
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="w-full px-4 py-3 pl-11 text-base border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all"
-                />
-                <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    placeholder={dict.pos.searchPlaceholder}
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="w-full px-4 py-3 pl-11 text-base border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all"
+                  />
+                  <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+                <button
+                  onClick={() => setShowQRScanner(true)}
+                  className="px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors shadow-sm"
+                  title="Scan QR Code"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                  </svg>
+                </button>
               </div>
             </div>
 

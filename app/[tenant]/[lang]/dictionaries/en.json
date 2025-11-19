@@ -64,7 +64,8 @@
     "each": "each",
     "transactionSavedOffline": "Transaction saved offline! Total:",
     "willSyncWhenOnline": "Will sync when connection is restored.",
-    "transactionError": "Failed to process transaction"
+    "transactionError": "Failed to process transaction",
+    "productNotFound": "Product not found"
   },
   "products": {
     "title": "Products",

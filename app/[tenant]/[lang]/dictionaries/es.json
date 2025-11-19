@@ -64,7 +64,8 @@
     "each": "cada uno",
     "transactionSavedOffline": "¡Transacción guardada sin conexión! Total:",
     "willSyncWhenOnline": "Se sincronizará cuando se restaure la conexión.",
-    "transactionError": "Error al procesar la transacción"
+    "transactionError": "Error al procesar la transacción",
+    "productNotFound": "Producto no encontrado"
   },
   "products": {
     "title": "Productos",
