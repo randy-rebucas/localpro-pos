@@ -2,158 +2,24 @@
 
 import { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
-import ProtectedRoute from '@/components/ProtectedRoute';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { getDictionaryClient } from '../dictionaries-client';
-import { useAuth } from '@/contexts/AuthContext';
-import QRCodeDisplay from '@/components/QRCodeDisplay';
-
-interface User {
-  _id: string;
-  email: string;
-  name: string;
-  role: 'owner' | 'admin' | 'manager' | 'cashier' | 'viewer';
-  isActive: boolean;
-  createdAt: string;
-  lastLogin?: string;
-  hasPIN?: boolean;
-  qrToken?: string;
-}
-
-interface Tenant {
-  _id: string;
-  slug: string;
-  name: string;
-  domain?: string;
-  subdomain?: string;
-  isActive: boolean;
-  createdAt: string;
-  settings: {
-    currency: string;
-    language: 'en' | 'es';
-    email?: string;
-    phone?: string;
-    companyName?: string;
-  };
-}
+import Link from 'next/link';
 
 export default function AdminPage() {
   const params = useParams();
+  const router = useRouter();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const [dict, setDict] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'users' | 'tenants'>('users');
-  const [users, setUsers] = useState<User[]>([]);
-  const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [showUserModal, setShowUserModal] = useState(false);
-  const [showTenantModal, setShowTenantModal] = useState(false);
-  const [showPINModal, setShowPINModal] = useState(false);
-  const [showQRModal, setShowQRModal] = useState(false);
-  const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
-  const { user: currentUser } = useAuth();
 
   useEffect(() => {
-    getDictionaryClient(lang).then(setDict);
-    fetchUsers();
-    fetchTenants();
-  }, [lang, tenant]);
-
-  const fetchUsers = async () => {
-    try {
-      const res = await fetch('/api/users', { credentials: 'include' });
-      const data = await res.json();
-      if (data.success) setUsers(data.data);
-    } catch (error) {
-      console.error('Error fetching users:', error);
-    } finally {
+    getDictionaryClient(lang).then((d) => {
+      setDict(d);
       setLoading(false);
-    }
-  };
-
-  const fetchTenants = async () => {
-    try {
-      const res = await fetch('/api/tenants', { credentials: 'include' });
-      const data = await res.json();
-      if (data.success) setTenants(data.data);
-    } catch (error) {
-      console.error('Error fetching tenants:', error);
-    }
-  };
-
-  const handleDeleteUser = async (userId: string) => {
-    if (!confirm('Are you sure you want to delete this user?')) return;
-    try {
-      const res = await fetch(`/api/users/${userId}`, { method: 'DELETE', credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
-        setMessage({ type: 'success', text: 'User deleted successfully' });
-        fetchUsers();
-      } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to delete user' });
-      }
-    } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to delete user' });
-    }
-  };
-
-  const handleDeleteTenant = async (tenantSlug: string) => {
-    if (!confirm('Are you sure you want to delete this tenant?')) return;
-    try {
-      const res = await fetch(`/api/tenants/${tenantSlug}`, { method: 'DELETE', credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
-        setMessage({ type: 'success', text: 'Tenant deleted successfully' });
-        fetchTenants();
-      } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to delete tenant' });
-      }
-    } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to delete tenant' });
-    }
-  };
-
-  const handleToggleUserStatus = async (user: User) => {
-    try {
-      const res = await fetch(`/api/users/${user._id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ isActive: !user.isActive }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setMessage({ type: 'success', text: `User ${!user.isActive ? 'activated' : 'deactivated'} successfully` });
-        fetchUsers();
-      } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to update user' });
-      }
-    } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to update user' });
-    }
-  };
-
-  const handleToggleTenantStatus = async (tenant: Tenant) => {
-    try {
-      const res = await fetch(`/api/tenants/${tenant.slug}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ isActive: !tenant.isActive }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setMessage({ type: 'success', text: `Tenant ${!tenant.isActive ? 'activated' : 'deactivated'} successfully` });
-        fetchTenants();
-      } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to update tenant' });
-      }
-    } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to update tenant' });
-    }
-  };
+    });
+  }, [lang]);
 
   if (!dict || loading) {
     return (
@@ -166,902 +32,102 @@ export default function AdminPage() {
     );
   }
 
-  return (
-    <ProtectedRoute requiredRoles={['owner', 'admin', 'manager']}>
-      <div className="min-h-screen bg-gray-50">
-        <Navbar />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-          <div className="mb-6 sm:mb-8">
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
-              {dict.admin?.title || 'Admin Management'}
-            </h1>
-            <p className="text-gray-600">{dict.admin?.subtitle || 'Manage users, tenants, and system settings'}</p>
-          </div>
-
-          {message && (
-            <div className={`mb-6 p-4 rounded-lg ${message.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
-              {message.text}
-            </div>
-          )}
-
-          <div className="bg-white rounded-xl shadow-md mb-6">
-            <div className="border-b border-gray-200">
-              <nav className="flex -mb-px">
-                <button
-                  onClick={() => setActiveTab('users')}
-                  className={`px-6 py-4 text-sm font-medium border-b-2 ${
-                    activeTab === 'users'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  {dict.admin?.users || 'Users'}
-                </button>
-                <button
-                  onClick={() => setActiveTab('tenants')}
-                  className={`px-6 py-4 text-sm font-medium border-b-2 ${
-                    activeTab === 'tenants'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  {dict.admin?.tenants || 'Tenants'}
-                </button>
-              </nav>
-            </div>
-          </div>
-
-          {activeTab === 'users' && (
-            <div className="bg-white rounded-xl shadow-md p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-bold text-gray-900">{dict.admin?.users || 'Users'}</h2>
-                <button
-                  onClick={() => {
-                    setEditingUser(null);
-                    setShowUserModal(true);
-                  }}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
-                >
-                  {dict.common?.add || 'Add'} {dict.admin?.user || 'User'}
-                </button>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.name || 'Name'}</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.email || 'Email'}</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.role || 'Role'}</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.status || 'Status'}</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">PIN/QR</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.actions || 'Actions'}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {users.map((user) => (
-                      <tr key={user._id}>
-                        <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{user.name}</td>
-                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{user.email}</td>
-                        <td className="px-4 py-4 whitespace-nowrap">
-                          <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 capitalize">
-                            {user.role}
-                          </span>
-                        </td>
-                        <td className="px-4 py-4 whitespace-nowrap">
-                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${user.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                            {user.isActive ? (dict.admin?.active || 'Active') : (dict.admin?.inactive || 'Inactive')}
-                          </span>
-                        </td>
-                        <td className="px-4 py-4 whitespace-nowrap text-sm">
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => {
-                                setEditingUser(user);
-                                setShowPINModal(true);
-                              }}
-                              className="text-purple-600 hover:text-purple-900 text-xs"
-                              title="Manage PIN"
-                            >
-                              PIN
-                            </button>
-                            <button
-                              onClick={() => {
-                                setEditingUser(user);
-                                setShowQRModal(true);
-                              }}
-                              className="text-indigo-600 hover:text-indigo-900 text-xs"
-                              title="View QR Code"
-                            >
-                              QR
-                            </button>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => {
-                                setEditingUser(user);
-                                setShowUserModal(true);
-                              }}
-                              className="text-blue-600 hover:text-blue-900"
-                            >
-                              {dict.common?.edit || 'Edit'}
-                            </button>
-                            <button
-                              onClick={() => handleToggleUserStatus(user)}
-                              className={user.isActive ? 'text-orange-600 hover:text-orange-900' : 'text-green-600 hover:text-green-900'}
-                            >
-                              {user.isActive ? (dict.admin?.deactivate || 'Deactivate') : (dict.admin?.activate || 'Activate')}
-                            </button>
-                            {currentUser?._id !== user._id && (
-                              <button
-                                onClick={() => handleDeleteUser(user._id)}
-                                className="text-red-600 hover:text-red-900"
-                              >
-                                {dict.common?.delete || 'Delete'}
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {users.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">{dict.common?.noResults || 'No users found'}</div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'tenants' && (
-            <div className="bg-white rounded-xl shadow-md p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-bold text-gray-900">{dict.admin?.tenants || 'Tenants'}</h2>
-                <button
-                  onClick={() => {
-                    setEditingTenant(null);
-                    setShowTenantModal(true);
-                  }}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
-                >
-                  {dict.common?.add || 'Add'} {dict.admin?.tenant || 'Tenant'}
-                </button>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.name || 'Name'}</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.slug || 'Slug'}</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.currency || 'Currency'}</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.status || 'Status'}</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.actions || 'Actions'}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {tenants.map((tenantItem) => (
-                      <tr key={tenantItem._id}>
-                        <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{tenantItem.name}</td>
-                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{tenantItem.slug}</td>
-                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{tenantItem.settings.currency}</td>
-                        <td className="px-4 py-4 whitespace-nowrap">
-                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${tenantItem.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                            {tenantItem.isActive ? (dict.admin?.active || 'Active') : (dict.admin?.inactive || 'Inactive')}
-                          </span>
-                        </td>
-                        <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => {
-                                setEditingTenant(tenantItem);
-                                setShowTenantModal(true);
-                              }}
-                              className="text-blue-600 hover:text-blue-900"
-                            >
-                              {dict.common?.edit || 'Edit'}
-                            </button>
-                            <button
-                              onClick={() => handleToggleTenantStatus(tenantItem)}
-                              className={tenantItem.isActive ? 'text-orange-600 hover:text-orange-900' : 'text-green-600 hover:text-green-900'}
-                            >
-                              {tenantItem.isActive ? (dict.admin?.deactivate || 'Deactivate') : (dict.admin?.activate || 'Activate')}
-                            </button>
-                            <button
-                              onClick={() => handleDeleteTenant(tenantItem.slug)}
-                              className="text-red-600 hover:text-red-900"
-                            >
-                              {dict.common?.delete || 'Delete'}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {tenants.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">{dict.common?.noResults || 'No tenants found'}</div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {showUserModal && (
-            <UserModal
-              user={editingUser}
-              onClose={() => {
-                setShowUserModal(false);
-                setEditingUser(null);
-              }}
-              onSave={() => {
-                fetchUsers();
-                setShowUserModal(false);
-                setEditingUser(null);
-              }}
-              dict={dict}
-            />
-          )}
-
-          {showTenantModal && (
-            <TenantModal
-              tenant={editingTenant}
-              onClose={() => {
-                setShowTenantModal(false);
-                setEditingTenant(null);
-              }}
-              onSave={() => {
-                fetchTenants();
-                setShowTenantModal(false);
-                setEditingTenant(null);
-              }}
-              dict={dict}
-            />
-          )}
-
-          {showPINModal && editingUser && (
-            <PINModal
-              user={editingUser}
-              onClose={() => {
-                setShowPINModal(false);
-                setEditingUser(null);
-              }}
-              onSave={() => {
-                fetchUsers();
-                setShowPINModal(false);
-                setEditingUser(null);
-              }}
-              dict={dict}
-            />
-          )}
-
-          {showQRModal && editingUser && (
-            <QRModal
-              user={editingUser}
-              onClose={() => {
-                setShowQRModal(false);
-                setEditingUser(null);
-              }}
-              onRegenerate={() => {
-                fetchUsers();
-              }}
-              dict={dict}
-            />
-          )}
-        </div>
-      </div>
-    </ProtectedRoute>
-  );
-}
-
-function UserModal({
-  user,
-  onClose,
-  onSave,
-  dict,
-}: {
-  user: User | null;
-  onClose: () => void;
-  onSave: () => void;
-  dict: any;
-}) {
-  const [formData, setFormData] = useState({
-    email: user?.email || '',
-    name: user?.name || '',
-    password: '',
-    role: user?.role || 'cashier',
-  });
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setSaving(true);
-    try {
-      const url = user ? `/api/users/${user._id}` : '/api/users';
-      const method = user ? 'PUT' : 'POST';
-      const body: any = {
-        email: formData.email,
-        name: formData.name,
-        role: formData.role,
-      };
-      if (!user || formData.password) {
-        body.password = formData.password;
-      }
-
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(body),
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        onSave();
-      } else {
-        setError(data.error || 'Failed to save user');
-      }
-    } catch (error) {
-      setError('Failed to save user');
-    } finally {
-      setSaving(false);
-    }
-  };
+  const adminCards = [
+    {
+      title: dict.admin?.users || 'Users',
+      description: dict.admin?.usersDescription || 'Manage system users, roles, and permissions',
+      href: `/${tenant}/${lang}/admin/users`,
+      icon: (
+        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+        </svg>
+      ),
+      color: 'blue',
+    },
+    {
+      title: dict.admin?.tenants || 'Tenants',
+      description: dict.admin?.tenantsDescription || 'Manage multi-tenant organizations and settings',
+      href: `/${tenant}/${lang}/admin/tenants`,
+      icon: (
+        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+        </svg>
+      ),
+      color: 'green',
+    },
+    {
+      title: dict.admin?.branches || 'Branches',
+      description: dict.admin?.branchesDescription || 'Manage store branches and locations',
+      href: `/${tenant}/${lang}/admin/branches`,
+      icon: (
+        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+      ),
+      color: 'orange',
+    },
+    {
+      title: dict.admin?.categories || 'Categories',
+      description: dict.admin?.categoriesDescription || 'Manage product categories',
+      href: `/${tenant}/${lang}/admin/categories`,
+      icon: (
+        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+        </svg>
+      ),
+      color: 'indigo',
+    },
+    {
+      title: dict.admin?.auditLogs || 'Audit Logs',
+      description: dict.admin?.auditLogsDescription || 'View system activity, changes, and user actions',
+      href: `/${tenant}/${lang}/admin/audit-logs`,
+      icon: (
+        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+      ),
+      color: 'purple',
+    },
+  ];
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">
-            {user ? (dict.admin?.editUser || 'Edit User') : (dict.admin?.addUser || 'Add User')}
-          </h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.email || 'Email'}
-              </label>
-              <input
-                type="email"
-                required
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.name || 'Name'}
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.password || 'Password'} {user && '(leave blank to keep current)'}
-              </label>
-              <input
-                type="password"
-                required={!user}
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.role || 'Role'}
-              </label>
-              <select
-                value={formData.role}
-                onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="viewer">Viewer</option>
-                <option value="cashier">Cashier</option>
-                <option value="manager">Manager</option>
-                <option value="admin">Admin</option>
-                <option value="owner">Owner</option>
-              </select>
-            </div>
-            {error && (
-              <div className="bg-red-50 text-red-800 border border-red-200 rounded-lg p-3">
-                {error}
-              </div>
-            )}
-            <div className="flex gap-3 justify-end pt-4">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-              >
-                {dict.common?.cancel || 'Cancel'}
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-              >
-                {saving ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
-              </button>
-            </div>
-          </form>
+    <div className="min-h-screen bg-gray-50">
+      <Navbar />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        <div className="mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
+            {dict.admin?.title || 'Admin Management'}
+          </h1>
+          <p className="text-gray-600">{dict.admin?.subtitle || 'Manage users, tenants, and system settings'}</p>
         </div>
-      </div>
-    </div>
-  );
-}
 
-function PINModal({
-  user,
-  onClose,
-  onSave,
-  dict,
-}: {
-  user: User;
-  onClose: () => void;
-  onSave: () => void;
-  dict: any;
-}) {
-  const [pin, setPin] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [removing, setRemoving] = useState(false);
-
-  const handleSetPIN = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    
-    if (!pin || !/^\d{4,8}$/.test(pin)) {
-      setError('PIN must be 4-8 digits');
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const res = await fetch(`/api/users/${user._id}/pin`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ pin }),
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        onSave();
-      } else {
-        setError(data.error || 'Failed to set PIN');
-      }
-    } catch (error) {
-      setError('Failed to set PIN');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleRemovePIN = async () => {
-    if (!confirm('Are you sure you want to remove the PIN for this user?')) return;
-    
-    setRemoving(true);
-    setError('');
-    try {
-      const res = await fetch(`/api/users/${user._id}/pin`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        onSave();
-      } else {
-        setError(data.error || 'Failed to remove PIN');
-      }
-    } catch (error) {
-      setError('Failed to remove PIN');
-    } finally {
-      setRemoving(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
-        <div className="p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">
-            Manage PIN for {user.name}
-          </h2>
-          <form onSubmit={handleSetPIN} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                PIN (4-8 digits)
-              </label>
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]{4,8}"
-                maxLength={8}
-                value={pin}
-                onChange={(e) => {
-                  const value = e.target.value.replace(/\D/g, '');
-                  if (value.length <= 8) setPin(value);
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-center text-2xl font-mono tracking-widest"
-                placeholder="0000"
-                required
-              />
-            </div>
-            {error && (
-              <div className="bg-red-50 text-red-800 border border-red-200 rounded-lg p-3">
-                {error}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {adminCards.map((card, index) => (
+            <Link
+              key={index}
+              href={card.href}
+              className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow duration-200 border border-gray-200 hover:border-blue-300"
+            >
+              <div className={`inline-flex p-3 rounded-lg mb-4 ${
+                card.color === 'blue' ? 'bg-blue-100 text-blue-600' :
+                card.color === 'green' ? 'bg-green-100 text-green-600' :
+                card.color === 'orange' ? 'bg-orange-100 text-orange-600' :
+                card.color === 'indigo' ? 'bg-indigo-100 text-indigo-600' :
+                'bg-purple-100 text-purple-600'
+              }`}>
+                {card.icon}
               </div>
-            )}
-            <div className="flex gap-3 justify-end pt-4">
-              <button
-                type="button"
-                onClick={handleRemovePIN}
-                disabled={removing}
-                className="px-4 py-2 border border-red-300 text-red-700 rounded-lg hover:bg-red-50 disabled:opacity-50"
-              >
-                {removing ? 'Removing...' : 'Remove PIN'}
-              </button>
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-              >
-                {dict.common?.cancel || 'Cancel'}
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-              >
-                {saving ? 'Saving...' : 'Set PIN'}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function QRModal({
-  user,
-  onClose,
-  onRegenerate,
-  dict,
-}: {
-  user: User;
-  onClose: () => void;
-  onRegenerate: () => void;
-  dict: any;
-}) {
-  const [qrData, setQrData] = useState<{ qrToken: string; name: string; email: string } | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [regenerating, setRegenerating] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    fetchQRCode();
-  }, [user._id]);
-
-  const fetchQRCode = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const res = await fetch(`/api/users/${user._id}/qr-code`, {
-        credentials: 'include',
-      });
-      const data = await res.json();
-      if (data.success) {
-        setQrData(data.data);
-      } else {
-        setError(data.error || 'Failed to load QR code');
-      }
-    } catch (error) {
-      setError('Failed to load QR code');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRegenerate = async () => {
-    if (!confirm('Are you sure you want to regenerate the QR code? The old QR code will no longer work.')) return;
-    
-    setRegenerating(true);
-    setError('');
-    try {
-      const res = await fetch(`/api/users/${user._id}/qr-code`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-      const data = await res.json();
-      if (data.success) {
-        setQrData({ ...qrData!, qrToken: data.data.qrToken });
-        onRegenerate();
-      } else {
-        setError(data.error || 'Failed to regenerate QR code');
-      }
-    } catch (error) {
-      setError('Failed to regenerate QR code');
-    } finally {
-      setRegenerating(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-xl p-6">
-          <div className="text-center">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <p className="mt-4 text-gray-600">Loading QR code...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
-        <div className="p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">
-            QR Code for {user.name}
-          </h2>
-          {error && (
-            <div className="bg-red-50 text-red-800 border border-red-200 rounded-lg p-3 mb-4">
-              {error}
-            </div>
-          )}
-          {qrData && (
-            <div className="space-y-4">
-              <div className="flex justify-center p-4 bg-gray-50 rounded-lg">
-                <QRCodeDisplay qrToken={qrData.qrToken} name={qrData.name} />
+              <h2 className="text-xl font-bold text-gray-900 mb-2">{card.title}</h2>
+              <p className="text-gray-600 text-sm">{card.description}</p>
+              <div className="mt-4 flex items-center text-blue-600 font-medium text-sm">
+                <span>{dict.common?.view || 'View'} {card.title}</span>
+                <svg className="w-4 h-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
               </div>
-              <div className="flex gap-3 justify-end pt-4">
-                <button
-                  onClick={handleRegenerate}
-                  disabled={regenerating}
-                  className="px-4 py-2 border border-orange-300 text-orange-700 rounded-lg hover:bg-orange-50 disabled:opacity-50"
-                >
-                  {regenerating ? 'Regenerating...' : 'Regenerate QR Code'}
-                </button>
-                <button
-                  onClick={onClose}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                  {dict.common?.close || 'Close'}
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function TenantModal({
-  tenant,
-  onClose,
-  onSave,
-  dict,
-}: {
-  tenant: Tenant | null;
-  onClose: () => void;
-  onSave: () => void;
-  dict: any;
-}) {
-  const [formData, setFormData] = useState({
-    slug: tenant?.slug || '',
-    name: tenant?.name || '',
-    domain: tenant?.domain || '',
-    subdomain: tenant?.subdomain || '',
-    currency: tenant?.settings.currency || 'USD',
-    language: tenant?.settings.language || 'en',
-    email: tenant?.settings.email || '',
-    phone: tenant?.settings.phone || '',
-    companyName: tenant?.settings.companyName || '',
-  });
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setSaving(true);
-    try {
-      const url = tenant ? `/api/tenants/${tenant.slug}` : '/api/tenants';
-      const method = tenant ? 'PUT' : 'POST';
-      const body: any = {
-        name: formData.name,
-        currency: formData.currency,
-        language: formData.language,
-      };
-      if (!tenant) {
-        body.slug = formData.slug;
-      }
-      if (formData.domain) body.domain = formData.domain;
-      if (formData.subdomain) body.subdomain = formData.subdomain;
-      if (formData.email) body.email = formData.email;
-      if (formData.phone) body.phone = formData.phone;
-      if (formData.companyName) body.companyName = formData.companyName;
-
-      if (tenant) {
-        body.settings = {
-          currency: formData.currency,
-          language: formData.language,
-          email: formData.email || undefined,
-          phone: formData.phone || undefined,
-          companyName: formData.companyName || undefined,
-        };
-      }
-
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(body),
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        onSave();
-      } else {
-        setError(data.error || 'Failed to save tenant');
-      }
-    } catch (error) {
-      setError('Failed to save tenant');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">
-            {tenant ? (dict.admin?.editTenant || 'Edit Tenant') : (dict.admin?.addTenant || 'Add Tenant')}
-          </h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {!tenant && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.slug || 'Slug'} (lowercase, numbers, hyphens only)
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.slug}
-                  onChange={(e) => setFormData({ ...formData, slug: e.target.value.toLowerCase() })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-                  pattern="[a-z0-9-]+"
-                />
-              </div>
-            )}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.name || 'Name'}
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.domain || 'Domain'} (optional)
-              </label>
-              <input
-                type="text"
-                value={formData.domain}
-                onChange={(e) => setFormData({ ...formData, domain: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.subdomain || 'Subdomain'} (optional)
-              </label>
-              <input
-                type="text"
-                value={formData.subdomain}
-                onChange={(e) => setFormData({ ...formData, subdomain: e.target.value.toLowerCase() })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.currency || 'Currency'}
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.currency}
-                onChange={(e) => setFormData({ ...formData, currency: e.target.value.toUpperCase() })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-                maxLength={3}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.language || 'Language'}
-              </label>
-              <select
-                value={formData.language}
-                onChange={(e) => setFormData({ ...formData, language: e.target.value as 'en' | 'es' })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="en">English</option>
-                <option value="es">Español</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.email || 'Email'} (optional)
-              </label>
-              <input
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.phone || 'Phone'} (optional)
-              </label>
-              <input
-                type="tel"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.companyName || 'Company Name'} (optional)
-              </label>
-              <input
-                type="text"
-                value={formData.companyName}
-                onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            {error && (
-              <div className="bg-red-50 text-red-800 border border-red-200 rounded-lg p-3">
-                {error}
-              </div>
-            )}
-            <div className="flex gap-3 justify-end pt-4">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-              >
-                {dict.common?.cancel || 'Cancel'}
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-              >
-                {saving ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
-              </button>
-            </div>
-          </form>
+            </Link>
+          ))}
         </div>
       </div>
     </div>
