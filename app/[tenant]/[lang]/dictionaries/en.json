@@ -61,7 +61,10 @@
     "digital": "Digital",
     "stock": "Stock",
     "uncategorized": "Uncategorized",
-    "each": "each"
+    "each": "each",
+    "transactionSavedOffline": "Transaction saved offline! Total:",
+    "willSyncWhenOnline": "Will sync when connection is restored.",
+    "transactionError": "Failed to process transaction"
   },
   "products": {
     "title": "Products",

@@ -1,11 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Navbar from '@/components/Navbar';
 import Currency from '@/components/Currency';
 import PageTitle from '@/components/PageTitle';
+import OfflineIndicator from '@/components/OfflineIndicator';
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '../dictionaries-client';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+import { getOfflineStorage } from '@/lib/offline-storage';
 
 interface Product {
   _id: string;
@@ -37,29 +40,71 @@ export default function POSPage() {
   const [cashReceived, setCashReceived] = useState('');
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [dict, setDict] = useState<any>(null);
+  const { isOnline } = useNetworkStatus(tenant);
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
   }, [lang]);
 
-  useEffect(() => {
-    fetchProducts();
+  const loadCachedProducts = useCallback(async () => {
+    try {
+      const storage = await getOfflineStorage();
+      const cached = await storage.getCachedProducts(tenant);
+      if (cached.length > 0) {
+        // Filter by search if provided
+        let filtered = cached;
+        if (search) {
+          const searchLower = search.toLowerCase();
+          filtered = cached.filter(
+            p =>
+              p.name.toLowerCase().includes(searchLower) ||
+              p.sku?.toLowerCase().includes(searchLower) ||
+              p.category?.toLowerCase().includes(searchLower)
+          );
+        }
+        setProducts(filtered);
+      }
+    } catch (error) {
+      console.error('Error loading cached products:', error);
+    }
   }, [search, tenant]);
 
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/products?search=${encodeURIComponent(search)}&tenant=${tenant}`);
-      const data = await res.json();
-      if (data.success) {
-        setProducts(data.data);
+      
+      if (isOnline) {
+        // Try to fetch from server
+        try {
+          const res = await fetch(`/api/products?search=${encodeURIComponent(search)}&tenant=${tenant}`);
+          const data = await res.json();
+          if (data.success) {
+            setProducts(data.data);
+            // Cache products for offline use
+            const storage = await getOfflineStorage();
+            await storage.cacheProducts(data.data, tenant);
+          }
+        } catch (error) {
+          console.error('Error fetching products from server:', error);
+          // Fall back to cached products
+          await loadCachedProducts();
+        }
+      } else {
+        // Load from cache when offline
+        await loadCachedProducts();
       }
     } catch (error) {
       console.error('Error fetching products:', error);
+      // Try to load from cache as fallback
+      await loadCachedProducts();
     } finally {
       setLoading(false);
     }
-  };
+  }, [search, tenant, isOnline, loadCachedProducts]);
+
+  useEffect(() => {
+    fetchProducts();
+  }, [fetchProducts]);
 
   const addToCart = (product: Product) => {
     if (!dict) return;
@@ -143,35 +188,84 @@ export default function POSPage() {
 
     setProcessing(true);
     try {
-      const res = await fetch(`/api/transactions?tenant=${tenant}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          items: cart.map((item) => ({
-            productId: item.productId,
-            quantity: item.quantity,
-          })),
-          paymentMethod,
-          cashReceived: paymentMethod === 'cash' ? parseFloat(cashReceived) : undefined,
-        }),
+      if (isOnline) {
+        // Try to process online
+        try {
+          const res = await fetch(`/api/transactions?tenant=${tenant}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              items: cart.map((item) => ({
+                productId: item.productId,
+                quantity: item.quantity,
+              })),
+              paymentMethod,
+              cashReceived: paymentMethod === 'cash' ? parseFloat(cashReceived) : undefined,
+            }),
+          });
+
+          const data = await res.json();
+          if (data.success) {
+            const totalFormatted = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(getTotal());
+            alert(`${dict.pos.transactionCompleted} ${totalFormatted}`);
+            setCart([]);
+            setShowPaymentModal(false);
+            setCashReceived('');
+            setPaymentMethod('cash');
+            fetchProducts();
+            return;
+          } else {
+            throw new Error(data.error || 'Failed to process transaction');
+          }
+        } catch (error) {
+          // If online request fails, fall through to offline save
+          console.error('Online transaction failed, saving offline:', error);
+        }
+      }
+
+      // Save to offline storage
+      const storage = await getOfflineStorage();
+      await storage.saveTransaction({
+        tenant,
+        items: cart.map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+        })),
+        paymentMethod,
+        cashReceived: paymentMethod === 'cash' ? parseFloat(cashReceived) : undefined,
       });
 
-      const data = await res.json();
-      if (data.success) {
-        // Note: Alert doesn't support React components, so we format manually
-        const totalFormatted = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(getTotal());
-        alert(`${dict.pos.transactionCompleted} ${totalFormatted}`);
-        setCart([]);
-        setShowPaymentModal(false);
-        setCashReceived('');
-        setPaymentMethod('cash');
+      // Update local product stock (optimistic update)
+      for (const item of cart) {
+        const product = products.find(p => p._id === item.productId);
+        if (product) {
+          const newStock = product.stock - item.quantity;
+          setProducts(products.map(p => 
+            p._id === item.productId ? { ...p, stock: Math.max(0, newStock) } : p
+          ));
+          // Update cache
+          await storage.updateProductStock(item.productId, newStock, tenant);
+        }
+      }
+
+      const totalFormatted = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(getTotal());
+      const message = isOnline 
+        ? `${dict.pos.transactionCompleted} ${totalFormatted}`
+        : `${dict.pos.transactionSavedOffline || 'Transaction saved offline'} ${totalFormatted}. ${dict.pos.willSyncWhenOnline || 'Will sync when connection is restored.'}`;
+      
+      alert(message);
+      setCart([]);
+      setShowPaymentModal(false);
+      setCashReceived('');
+      setPaymentMethod('cash');
+      
+      // Refresh products if online
+      if (isOnline) {
         fetchProducts();
-      } else {
-        alert(data.error || 'Failed to process transaction');
       }
     } catch (error) {
       console.error('Error processing transaction:', error);
-      alert('Failed to process transaction');
+      alert(dict.pos.transactionError || 'Failed to process transaction');
     } finally {
       setProcessing(false);
     }
@@ -191,6 +285,7 @@ export default function POSPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <PageTitle />
+      <OfflineIndicator />
       <Navbar />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         {/* Mobile: Cart first (sticky at top), then products below */}

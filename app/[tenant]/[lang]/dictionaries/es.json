@@ -61,7 +61,10 @@
     "digital": "Digital",
     "stock": "Stock",
     "uncategorized": "Sin categoría",
-    "each": "cada uno"
+    "each": "cada uno",
+    "transactionSavedOffline": "¡Transacción guardada sin conexión! Total:",
+    "willSyncWhenOnline": "Se sincronizará cuando se restaure la conexión.",
+    "transactionError": "Error al procesar la transacción"
   },
   "products": {
     "title": "Productos",
