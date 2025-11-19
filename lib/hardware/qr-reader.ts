@@ -3,6 +3,8 @@
  * Supports camera-based QR code scanning
  */
 
+import jsQR from 'jsqr';
+
 export interface QRReaderConfig {
   enabled: boolean;
   cameraId?: string;
@@ -98,13 +100,13 @@ class QRReaderService {
   }
 
   private async decodeQRCode(imageData: ImageData): Promise<string | null> {
-    // This is a placeholder - in production, use a library like jsQR:
-    // import jsQR from 'jsqr';
-    // const code = jsQR(imageData.data, imageData.width, imageData.height);
-    // return code ? code.data : null;
-
-    // For now, return null - actual implementation would use jsQR or similar
-    return null;
+    try {
+      const code = jsQR(imageData.data, imageData.width, imageData.height);
+      return code ? code.data : null;
+    } catch (error) {
+      // Silently fail - scanning is continuous
+      return null;
+    }
   }
 
   private notifyListeners(data: string): void {

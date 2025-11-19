@@ -203,7 +203,8 @@
     "shortage": "Shortage",
     "overage": "Overage",
     "status": "Status",
-    "noCashDrawerReports": "No cash drawer reports found"
+    "noCashDrawerReports": "No cash drawer reports found",
+    "noData": "No data available for the selected period"
   }
 }
 
