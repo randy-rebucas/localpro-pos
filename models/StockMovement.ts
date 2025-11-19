@@ -3,6 +3,12 @@ import mongoose, { Schema, Document, Model } from 'mongoose';
 export interface IStockMovement extends Document {
   productId: mongoose.Types.ObjectId;
   tenantId: mongoose.Types.ObjectId;
+  branchId?: mongoose.Types.ObjectId; // Branch-specific stock movement
+  variation?: {
+    size?: string;
+    color?: string;
+    type?: string;
+  }; // Variation-specific stock movement
   type: 'sale' | 'purchase' | 'adjustment' | 'return' | 'damage' | 'transfer';
   quantity: number;
   previousStock: number;
@@ -27,6 +33,16 @@ const StockMovementSchema: Schema = new Schema(
       ref: 'Tenant',
       required: [true, 'Tenant is required'],
       index: true,
+    },
+    branchId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Branch',
+      index: true,
+    },
+    variation: {
+      size: String,
+      color: String,
+      type: String,
     },
     type: {
       type: String,
@@ -70,6 +86,7 @@ const StockMovementSchema: Schema = new Schema(
 
 // Indexes for efficient queries
 StockMovementSchema.index({ tenantId: 1, productId: 1, createdAt: -1 });
+StockMovementSchema.index({ tenantId: 1, branchId: 1, productId: 1, createdAt: -1 });
 StockMovementSchema.index({ tenantId: 1, type: 1, createdAt: -1 });
 StockMovementSchema.index({ transactionId: 1 });
 

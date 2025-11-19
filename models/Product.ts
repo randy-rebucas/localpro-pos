@@ -1,15 +1,36 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 
+export interface IProductVariation {
+  size?: string;
+  color?: string;
+  type?: string;
+  sku?: string;
+  price?: number; // Override base price if needed
+  stock?: number; // Variation-specific stock
+}
+
+export interface IBranchStock {
+  branchId: mongoose.Types.ObjectId;
+  stock: number;
+}
+
 export interface IProduct extends Document {
   tenantId: mongoose.Types.ObjectId;
   name: string;
   description?: string;
   price: number;
-  stock: number;
+  stock: number; // Master stock (used when no branches/variations)
   sku?: string;
   category?: string;
   categoryId?: mongoose.Types.ObjectId;
   image?: string;
+  // New fields for inventory management
+  productType: 'regular' | 'bundle' | 'service';
+  hasVariations: boolean;
+  variations?: IProductVariation[];
+  branchStock?: IBranchStock[]; // Branch-specific stock levels
+  trackInventory: boolean; // Whether to track inventory for this product
+  lowStockThreshold?: number; // Product-specific threshold (overrides tenant default)
   createdAt: Date;
   updatedAt: Date;
 }
@@ -58,6 +79,52 @@ const ProductSchema: Schema = new Schema(
     image: {
       type: String,
     },
+    // New fields for inventory management
+    productType: {
+      type: String,
+      enum: ['regular', 'bundle', 'service'],
+      default: 'regular',
+    },
+    hasVariations: {
+      type: Boolean,
+      default: false,
+    },
+    variations: [{
+      size: String,
+      color: String,
+      type: String,
+      sku: String,
+      price: {
+        type: Number,
+        min: 0,
+      },
+      stock: {
+        type: Number,
+        min: 0,
+        default: 0,
+      },
+    }],
+    branchStock: [{
+      branchId: {
+        type: Schema.Types.ObjectId,
+        ref: 'Branch',
+        required: true,
+      },
+      stock: {
+        type: Number,
+        required: true,
+        min: 0,
+        default: 0,
+      },
+    }],
+    trackInventory: {
+      type: Boolean,
+      default: true,
+    },
+    lowStockThreshold: {
+      type: Number,
+      min: 0,
+    },
   },
   {
     timestamps: true,
@@ -66,6 +133,9 @@ const ProductSchema: Schema = new Schema(
 
 // Compound index for tenant-scoped unique SKU
 ProductSchema.index({ tenantId: 1, sku: 1 }, { unique: true, sparse: true });
+// Index for product type and inventory tracking
+ProductSchema.index({ tenantId: 1, productType: 1, trackInventory: 1 });
+ProductSchema.index({ tenantId: 1, hasVariations: 1 });
 
 const Product: Model<IProduct> = mongoose.models.Product || mongoose.model<IProduct>('Product', ProductSchema);
 

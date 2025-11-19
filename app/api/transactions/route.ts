@@ -8,7 +8,9 @@ import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateAndSanitize, validateTransaction } from '@/lib/validation';
 import { generateReceiptNumber } from '@/lib/receipt';
-import { updateStock } from '@/lib/stock';
+import { updateStock, updateBundleStock, getProductStock } from '@/lib/stock';
+import ProductBundle from '@/models/ProductBundle';
+import StockMovement from '@/models/StockMovement';
 
 export async function GET(request: NextRequest) {
   try {
@@ -67,35 +69,106 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { items, paymentMethod, cashReceived, notes, discountCode } = data;
+    const { items, paymentMethod, cashReceived, notes, discountCode, branchId } = data;
 
     // Validate and process items
     const transactionItems = [];
     let subtotal = 0;
 
     for (const item of items) {
-      const product = await Product.findOne({ _id: item.productId, tenantId });
-      if (!product) {
-        return NextResponse.json({ success: false, error: `Product ${item.productId} not found` }, { status: 404 });
+      const { productId, quantity, variation, bundleId } = item;
+
+      // Handle bundles
+      if (bundleId) {
+        const bundle = await ProductBundle.findOne({ _id: bundleId, tenantId, isActive: true });
+        if (!bundle) {
+          return NextResponse.json({ success: false, error: `Bundle ${bundleId} not found` }, { status: 404 });
+        }
+
+        // Check stock for all bundle items
+        for (const bundleItem of bundle.items) {
+          const availableStock = await getProductStock(
+            bundleItem.productId.toString(),
+            tenantId,
+            {
+              branchId,
+              variation: bundleItem.variation,
+            }
+          );
+
+          const requiredStock = bundleItem.quantity * quantity;
+          if (availableStock < requiredStock) {
+            return NextResponse.json(
+              {
+                success: false,
+                error: `Insufficient stock for bundle item ${bundleItem.productName}. Available: ${availableStock}, Required: ${requiredStock}`,
+              },
+              { status: 400 }
+            );
+          }
+        }
+
+        const itemSubtotal = bundle.price * quantity;
+        subtotal += itemSubtotal;
+
+        transactionItems.push({
+          product: bundle._id,
+          name: bundle.name,
+          price: bundle.price,
+          quantity: quantity,
+          subtotal: itemSubtotal,
+          bundleId: bundle._id,
+        });
       }
+      // Handle regular products
+      else {
+        const product = await Product.findOne({ _id: productId, tenantId });
+        if (!product) {
+          return NextResponse.json({ success: false, error: `Product ${productId} not found` }, { status: 404 });
+        }
 
-      if (product.stock < item.quantity) {
-        return NextResponse.json(
-          { success: false, error: `Insufficient stock for ${product.name}. Available: ${product.stock}` },
-          { status: 400 }
-        );
+        // Check stock (considering variations and branches)
+        const availableStock = await getProductStock(productId, tenantId, {
+          branchId,
+          variation,
+        });
+
+        if (availableStock < quantity) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: `Insufficient stock for ${product.name}. Available: ${availableStock}, Requested: ${quantity}`,
+            },
+            { status: 400 }
+          );
+        }
+
+        // Get price (variation price override or base price)
+        let itemPrice = product.price;
+        if (variation && product.hasVariations && product.variations) {
+          const variationData = product.variations.find((v) => {
+            const matchSize = !variation.size || v.size === variation.size;
+            const matchColor = !variation.color || v.color === variation.color;
+            const matchType = !variation.type || v.type === variation.type;
+            return matchSize && matchColor && matchType;
+          });
+          if (variationData && variationData.price) {
+            itemPrice = variationData.price;
+          }
+        }
+
+        const itemSubtotal = itemPrice * quantity;
+        subtotal += itemSubtotal;
+
+        transactionItems.push({
+          product: product._id,
+          name: product.name,
+          price: itemPrice,
+          quantity: quantity,
+          subtotal: itemSubtotal,
+          variation: variation,
+        });
       }
-
-      const itemSubtotal = product.price * item.quantity;
-      subtotal += itemSubtotal;
-
-      transactionItems.push({
-        product: product._id,
-        name: product.name,
-        price: product.price,
-        quantity: item.quantity,
-        subtotal: itemSubtotal,
-      });
     }
 
     // Apply discount if provided
@@ -173,9 +246,60 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Update stock BEFORE creating transaction (critical - must succeed)
+    // Use the original items array to get productId and quantity
+    for (const item of items) {
+      const { productId, quantity, variation, bundleId } = item;
+
+      // Skip if no productId (shouldn't happen, but safety check)
+      if (!productId && !bundleId) {
+        console.warn('Skipping stock update: missing productId and bundleId', item);
+        continue;
+      }
+
+      try {
+        if (bundleId) {
+          // Update stock for all items in bundle
+          await updateBundleStock(
+            bundleId,
+            tenantId,
+            -quantity, // Negative for sale
+            'sale',
+            {
+              userId: user.userId,
+              branchId,
+              reason: 'Transaction sale - bundle',
+            }
+          );
+        } else if (productId) {
+          // Update stock for regular product
+          console.log(`Updating stock for product ${productId}, quantity: -${quantity}`);
+          await updateStock(
+            productId,
+            tenantId,
+            -quantity, // Negative for sale
+            'sale',
+            {
+              userId: user.userId,
+              branchId,
+              variation,
+              reason: 'Transaction sale',
+            }
+          );
+          console.log(`Stock update completed for product ${productId}`);
+        }
+      } catch (error: any) {
+        // Stock update is critical - fail the entire transaction
+        console.error(`CRITICAL: Error updating stock for item ${productId || bundleId}:`, error.message || error);
+        console.error('Full error:', error);
+        throw new Error(`Failed to update stock for ${productId || bundleId}: ${error.message || error}`);
+      }
+    }
+
     // Generate receipt number
     const receiptNumber = await generateReceiptNumber(tenantId);
 
+    // Create transaction after stock is successfully updated
     const transaction = await Transaction.create({
       tenantId,
       items: transactionItems,
@@ -192,19 +316,24 @@ export async function POST(request: NextRequest) {
       notes,
     });
 
-    // Update stock movements with transaction ID (after transaction is created)
+    // Update stock movements with transaction ID (now that transaction exists)
     for (const item of items) {
-      await updateStock(
-        item.productId,
-        tenantId,
-        -item.quantity, // Negative for sale
-        'sale',
-        {
-          transactionId: transaction._id.toString(),
-          userId: user.userId,
-          reason: 'Transaction sale',
-        }
-      );
+      const { productId, bundleId } = item;
+      if (productId || bundleId) {
+        // Update the stock movement records with transaction ID
+        await StockMovement.updateMany(
+          {
+            productId: productId || undefined,
+            tenantId,
+            reason: productId ? 'Transaction sale' : 'Transaction sale - bundle',
+            transactionId: { $exists: false }, // Only update if no transaction ID yet
+          },
+          {
+            $set: { transactionId: transaction._id },
+          },
+          { limit: 1 } // Only update the most recent one
+        );
+      }
     }
 
     // Create audit log
