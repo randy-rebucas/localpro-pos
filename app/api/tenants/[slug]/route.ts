@@ -88,6 +88,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     await createAuditLog(request, {
+      tenantId: tenant._id,
       action: AuditActions.UPDATE,
       entityType: 'tenant',
       entityId: tenant._id.toString(),
@@ -128,6 +129,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     await Tenant.findOneAndUpdate({ slug }, { isActive: false });
 
     await createAuditLog(request, {
+      tenantId: tenant._id,
       action: AuditActions.DELETE,
       entityType: 'tenant',
       entityId: tenant._id.toString(),

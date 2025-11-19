@@ -321,7 +321,7 @@ export async function POST(request: NextRequest) {
       const { productId, bundleId } = item;
       if (productId || bundleId) {
         // Update the stock movement records with transaction ID
-        await StockMovement.updateMany(
+        await StockMovement.updateOne(
           {
             productId: productId || undefined,
             tenantId,
@@ -330,14 +330,14 @@ export async function POST(request: NextRequest) {
           },
           {
             $set: { transactionId: transaction._id },
-          },
-          { limit: 1 } // Only update the most recent one
+          }
         );
       }
     }
 
     // Create audit log
     await createAuditLog(request, {
+      tenantId,
       action: AuditActions.TRANSACTION_CREATE,
       entityType: 'transaction',
       entityId: transaction._id.toString(),

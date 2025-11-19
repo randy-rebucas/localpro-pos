@@ -130,6 +130,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     await createAuditLog(request, {
+      tenantId,
       action: AuditActions.UPDATE,
       entityType: 'user',
       entityId: id,
@@ -174,6 +175,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     await User.findByIdAndUpdate(id, { isActive: false });
 
     await createAuditLog(request, {
+      tenantId,
       action: AuditActions.DELETE,
       entityType: 'user',
       entityId: id,

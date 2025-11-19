@@ -70,6 +70,7 @@ export async function POST(request: NextRequest) {
     const product = await Product.create({ ...data, tenantId });
 
     await createAuditLog(request, {
+      tenantId,
       action: AuditActions.CREATE,
       entityType: 'product',
       entityId: product._id.toString(),

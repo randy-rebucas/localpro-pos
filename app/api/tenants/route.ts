@@ -78,6 +78,7 @@ export async function POST(request: NextRequest) {
     const tenant = await Tenant.create(tenantData);
 
     await createAuditLog(request, {
+      tenantId: tenant._id,
       action: AuditActions.CREATE,
       entityType: 'tenant',
       entityId: tenant._id.toString(),

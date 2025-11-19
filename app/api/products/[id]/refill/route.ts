@@ -59,6 +59,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     
     // Create audit log
     await createAuditLog(request, {
+      tenantId,
       action: AuditActions.UPDATE,
       entityType: 'product',
       entityId: id,

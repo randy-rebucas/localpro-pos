@@ -113,6 +113,7 @@ export async function POST(request: NextRequest) {
     });
 
     await createAuditLog(request, {
+      tenantId,
       action: AuditActions.DISCOUNT_CREATE,
       entityType: 'discount',
       entityId: discount._id.toString(),

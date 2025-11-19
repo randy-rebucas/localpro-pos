@@ -60,7 +60,7 @@ const dateFormatMap: Record<string, 'MM/DD/YYYY' | 'DD/MM/YYYY' | 'YYYY-MM-DD'> 
   'ko-KR': 'YYYY-MM-DD',
   'zh-CN': 'YYYY-MM-DD',
   'sv-SE': 'YYYY-MM-DD',
-  'no-NO': 'DD.MM.YYYY',
+  'no-NO': 'DD/MM/YYYY',
   'da-DK': 'DD/MM/YYYY',
 };
 

@@ -61,7 +61,10 @@ export default function InventoryPage() {
       <Navbar />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6">
-          <PageTitle title="Inventory Management" />
+          <PageTitle />
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-4">
+            Inventory Management
+          </h1>
           <div className="mt-4 flex items-center justify-between">
             <div className="flex items-center gap-4">
               <label className="text-sm font-medium text-gray-700">

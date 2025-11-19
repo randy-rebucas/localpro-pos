@@ -46,10 +46,11 @@ export async function getProductStock(
 
   // If product has variations, check variation stock
   if (product.hasVariations && options.variation && product.variations) {
+    const variationOption = options.variation;
     const variation = product.variations.find((v) => {
-      const matchSize = !options.variation.size || v.size === options.variation.size;
-      const matchColor = !options.variation.color || v.color === options.variation.color;
-      const matchType = !options.variation.type || v.type === options.variation.type;
+      const matchSize = !variationOption.size || v.size === variationOption.size;
+      const matchColor = !variationOption.color || v.color === variationOption.color;
+      const matchType = !variationOption.type || v.type === variationOption.type;
       return matchSize && matchColor && matchType;
     });
 

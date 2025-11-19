@@ -254,7 +254,7 @@ export default function HardwareSettings({
                   checked={config.cashDrawer?.connectedToPrinter || false}
                   onChange={(e) => updateConfig({
                     cashDrawer: {
-                      ...config.cashDrawer,
+                      enabled: config.cashDrawer?.enabled ?? false,
                       connectedToPrinter: e.target.checked,
                     },
                   })}
@@ -326,7 +326,7 @@ export default function HardwareSettings({
                   value={config.qrReader?.cameraId || ''}
                   onChange={(e) => updateConfig({
                     qrReader: {
-                      ...config.qrReader,
+                      enabled: config.qrReader?.enabled ?? false,
                       cameraId: e.target.value,
                     },
                   })}

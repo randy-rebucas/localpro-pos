@@ -69,6 +69,7 @@ export async function PUT(
     await branch.save();
 
     await createAuditLog(request, {
+      tenantId,
       action: AuditActions.UPDATE,
       entityType: 'branch',
       entityId: branch._id.toString(),
@@ -112,6 +113,7 @@ export async function DELETE(
     await branch.save();
 
     await createAuditLog(request, {
+      tenantId,
       action: AuditActions.DELETE,
       entityType: 'branch',
       entityId: branch._id.toString(),

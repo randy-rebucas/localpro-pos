@@ -69,6 +69,7 @@ export async function PUT(
     await bundle.save();
 
     await createAuditLog(request, {
+      tenantId,
       action: AuditActions.UPDATE,
       entityType: 'bundle',
       entityId: bundle._id.toString(),
@@ -112,6 +113,7 @@ export async function DELETE(
     await bundle.save();
 
     await createAuditLog(request, {
+      tenantId,
       action: AuditActions.DELETE,
       entityType: 'bundle',
       entityId: bundle._id.toString(),

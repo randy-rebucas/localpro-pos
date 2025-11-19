@@ -52,6 +52,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     await discount.save();
 
     await createAuditLog(request, {
+      tenantId,
       action: AuditActions.DISCOUNT_UPDATE,
       entityType: 'discount',
       entityId: id,
@@ -83,6 +84,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     await discount.deleteOne();
 
     await createAuditLog(request, {
+      tenantId,
       action: AuditActions.DISCOUNT_DELETE,
       entityType: 'discount',
       entityId: id,

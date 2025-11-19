@@ -131,6 +131,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     await createAuditLog(request, {
+      tenantId,
       action: AuditActions.TRANSACTION_REFUND,
       entityType: 'transaction',
       entityId: id,

@@ -3,6 +3,11 @@
  * Supports ESC/POS printers via WebUSB, Serial API, or network printing
  */
 
+// Web API types (available in browsers that support these APIs)
+// Using any for browser APIs that may not have complete type definitions
+type USBDevice = any;
+type SerialPort = any;
+
 export interface PrinterConfig {
   type: 'usb' | 'serial' | 'network' | 'browser';
   name?: string;
@@ -84,14 +89,14 @@ class ReceiptPrinterService {
   }
 
   private async sendData(data: Uint8Array): Promise<void> {
-    if (!this.device) {
+    if (!this.device || !this.config) {
       throw new Error('Printer not connected');
     }
 
-    if (this.device instanceof USBDevice) {
-      await this.device.transferOut(1, data);
-    } else if (this.device instanceof SerialPort) {
-      const writer = this.device.writable.getWriter();
+    if (this.config.type === 'usb') {
+      await (this.device as USBDevice).transferOut(1, data);
+    } else if (this.config.type === 'serial') {
+      const writer = (this.device as SerialPort).writable.getWriter();
       await writer.write(data);
       writer.releaseLock();
     }
@@ -245,9 +250,10 @@ class ReceiptPrinterService {
 
     try {
       // Send ESC/POS commands via HTTP POST to printer
+      const commands = await this.buildEscPosCommands(data);
       const response = await fetch(`http://${this.config.ipAddress}:${this.config.portNumber || 9100}`, {
         method: 'POST',
-        body: await this.buildEscPosCommands(data),
+        body: commands as unknown as BodyInit,
         headers: {
           'Content-Type': 'application/octet-stream',
         },

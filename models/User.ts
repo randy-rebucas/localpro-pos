@@ -101,7 +101,8 @@ UserSchema.pre('save', async function (next) {
   
   // Generate QR token if not exists
   if (this.isNew && !this.qrToken) {
-    this.qrToken = this._id.toString() + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 15);
+    const id = (this._id as mongoose.Types.ObjectId).toString();
+    this.qrToken = id + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 15);
   }
   
   next();

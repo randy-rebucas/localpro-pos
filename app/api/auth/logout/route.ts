@@ -8,6 +8,7 @@ export async function POST(request: NextRequest) {
     
     if (user) {
       await createAuditLog(request, {
+        tenantId: user.tenantId,
         action: AuditActions.LOGOUT,
         entityType: 'user',
         entityId: user.userId,

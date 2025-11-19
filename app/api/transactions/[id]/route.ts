@@ -75,6 +75,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       }
 
       await createAuditLog(request, {
+        tenantId,
         action: body.status === 'refunded' ? AuditActions.TRANSACTION_REFUND : AuditActions.TRANSACTION_CANCEL,
         entityType: 'transaction',
         entityId: id,
