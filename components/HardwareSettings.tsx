@@ -6,12 +6,20 @@ import { useParams } from 'next/navigation';
 
 interface HardwareSettingsProps {
   onClose?: () => void;
+  hideSaveButton?: boolean;
+  config?: HardwareConfig;
+  onChange?: (config: HardwareConfig) => void;
 }
 
-export default function HardwareSettings({ onClose }: HardwareSettingsProps) {
+export default function HardwareSettings({ 
+  onClose, 
+  hideSaveButton = false,
+  config: externalConfig,
+  onChange
+}: HardwareSettingsProps) {
   const params = useParams();
   const tenant = params.tenant as string;
-  const [config, setConfig] = useState<HardwareConfig>({});
+  const [internalConfig, setInternalConfig] = useState<HardwareConfig>({});
   const [loading, setLoading] = useState(false);
   const [devices, setDevices] = useState<{
     printers: Array<{ name: string; type: string }>;
@@ -19,8 +27,15 @@ export default function HardwareSettings({ onClose }: HardwareSettingsProps) {
   }>({ printers: [], cameras: [] });
   const [testing, setTesting] = useState<string | null>(null);
 
+  // Use external config if provided, otherwise use internal state
+  const config = externalConfig !== undefined ? externalConfig : internalConfig;
+  const setConfig = onChange || setInternalConfig;
+
   useEffect(() => {
-    loadConfig();
+    if (externalConfig === undefined) {
+      // Only load from localStorage if not controlled by parent
+      loadConfig();
+    }
     detectDevices();
   }, [tenant]);
 
@@ -30,7 +45,7 @@ export default function HardwareSettings({ onClose }: HardwareSettingsProps) {
     if (savedConfig) {
       try {
         const parsed = JSON.parse(savedConfig);
-        setConfig(parsed);
+        setInternalConfig(parsed);
         hardwareService.setConfig(parsed);
       } catch (error) {
         console.error('Failed to load hardware config:', error);
@@ -52,6 +67,13 @@ export default function HardwareSettings({ onClose }: HardwareSettingsProps) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const updateConfig = (updates: Partial<HardwareConfig>) => {
+    const newConfig = { ...config, ...updates };
+    setConfig(newConfig);
+    // Also update hardware service immediately for testing
+    hardwareService.setConfig(newConfig);
   };
 
   const detectDevices = async () => {
@@ -118,7 +140,7 @@ export default function HardwareSettings({ onClose }: HardwareSettingsProps) {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-md p-6 max-w-4xl mx-auto">
+    <div className="bg-white rounded-xl shadow-md p-6">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-gray-900">Hardware Settings</h2>
         {onClose && (
@@ -144,8 +166,7 @@ export default function HardwareSettings({ onClose }: HardwareSettingsProps) {
               </label>
               <select
                 value={config.printer?.type || 'browser'}
-                onChange={(e) => setConfig({
-                  ...config,
+                onChange={(e) => updateConfig({
                   printer: {
                     ...config.printer,
                     type: e.target.value as any,
@@ -169,8 +190,7 @@ export default function HardwareSettings({ onClose }: HardwareSettingsProps) {
                   <input
                     type="text"
                     value={config.printer?.ipAddress || ''}
-                    onChange={(e) => setConfig({
-                      ...config,
+                    onChange={(e) => updateConfig({
                       printer: {
                         ...config.printer,
                         ipAddress: e.target.value,
@@ -187,8 +207,7 @@ export default function HardwareSettings({ onClose }: HardwareSettingsProps) {
                   <input
                     type="number"
                     value={config.printer?.portNumber || 9100}
-                    onChange={(e) => setConfig({
-                      ...config,
+                    onChange={(e) => updateConfig({
                       printer: {
                         ...config.printer,
                         portNumber: parseInt(e.target.value),
@@ -218,8 +237,7 @@ export default function HardwareSettings({ onClose }: HardwareSettingsProps) {
               <input
                 type="checkbox"
                 checked={config.cashDrawer?.enabled || false}
-                onChange={(e) => setConfig({
-                  ...config,
+                onChange={(e) => updateConfig({
                   cashDrawer: {
                     enabled: e.target.checked,
                     connectedToPrinter: config.cashDrawer?.connectedToPrinter || false,
@@ -234,8 +252,7 @@ export default function HardwareSettings({ onClose }: HardwareSettingsProps) {
                 <input
                   type="checkbox"
                   checked={config.cashDrawer?.connectedToPrinter || false}
-                  onChange={(e) => setConfig({
-                    ...config,
+                  onChange={(e) => updateConfig({
                     cashDrawer: {
                       ...config.cashDrawer,
                       connectedToPrinter: e.target.checked,
@@ -266,8 +283,7 @@ export default function HardwareSettings({ onClose }: HardwareSettingsProps) {
               <input
                 type="checkbox"
                 checked={config.barcodeScanner?.enabled || false}
-                onChange={(e) => setConfig({
-                  ...config,
+                onChange={(e) => updateConfig({
                   barcodeScanner: {
                     type: 'keyboard',
                     enabled: e.target.checked,
@@ -291,8 +307,7 @@ export default function HardwareSettings({ onClose }: HardwareSettingsProps) {
               <input
                 type="checkbox"
                 checked={config.qrReader?.enabled || false}
-                onChange={(e) => setConfig({
-                  ...config,
+                onChange={(e) => updateConfig({
                   qrReader: {
                     enabled: e.target.checked,
                     cameraId: config.qrReader?.cameraId,
@@ -309,8 +324,7 @@ export default function HardwareSettings({ onClose }: HardwareSettingsProps) {
                 </label>
                 <select
                   value={config.qrReader?.cameraId || ''}
-                  onChange={(e) => setConfig({
-                    ...config,
+                  onChange={(e) => updateConfig({
                     qrReader: {
                       ...config.qrReader,
                       cameraId: e.target.value,
@@ -338,8 +352,7 @@ export default function HardwareSettings({ onClose }: HardwareSettingsProps) {
               <input
                 type="checkbox"
                 checked={config.touchscreen?.enabled || false}
-                onChange={(e) => setConfig({
-                  ...config,
+                onChange={(e) => updateConfig({
                   touchscreen: {
                     enabled: e.target.checked,
                   },
@@ -357,23 +370,25 @@ export default function HardwareSettings({ onClose }: HardwareSettingsProps) {
         </div>
       </div>
 
-      <div className="flex justify-end gap-4 mt-6">
-        {onClose && (
+      {!hideSaveButton && (
+        <div className="flex justify-end gap-4 mt-6">
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+          )}
           <button
-            onClick={onClose}
-            className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+            onClick={saveConfig}
+            disabled={loading}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
           >
-            Cancel
+            {loading ? 'Saving...' : 'Save Settings'}
           </button>
-        )}
-        <button
-          onClick={saveConfig}
-          disabled={loading}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-        >
-          {loading ? 'Saving...' : 'Save Settings'}
-        </button>
-      </div>
+        </div>
+      )}
     </div>
   );
 }

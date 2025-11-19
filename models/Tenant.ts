@@ -65,6 +65,30 @@ export interface ITenantSettings {
   enableDiscounts?: boolean;
   enableLoyaltyProgram?: boolean;
   enableCustomerManagement?: boolean;
+  
+  // Hardware Configuration
+  hardwareConfig?: {
+    printer?: {
+      type: 'browser' | 'usb' | 'serial' | 'network';
+      ipAddress?: string;
+      portNumber?: number;
+    };
+    barcodeScanner?: {
+      type: 'keyboard';
+      enabled: boolean;
+    };
+    qrReader?: {
+      enabled: boolean;
+      cameraId?: string;
+    };
+    cashDrawer?: {
+      enabled: boolean;
+      connectedToPrinter: boolean;
+    };
+    touchscreen?: {
+      enabled: boolean;
+    };
+  };
 }
 
 export interface ITenant extends Document {
@@ -253,6 +277,36 @@ const TenantSchema: Schema = new Schema(
       enableCustomerManagement: {
         type: Boolean,
         default: false,
+      },
+      
+      // Hardware Configuration
+      hardwareConfig: {
+        printer: {
+          type: {
+            type: String,
+            enum: ['browser', 'usb', 'serial', 'network'],
+          },
+          ipAddress: String,
+          portNumber: Number,
+        },
+        barcodeScanner: {
+          type: {
+            type: String,
+            enum: ['keyboard'],
+          },
+          enabled: Boolean,
+        },
+        qrReader: {
+          enabled: Boolean,
+          cameraId: String,
+        },
+        cashDrawer: {
+          enabled: Boolean,
+          connectedToPrinter: Boolean,
+        },
+        touchscreen: {
+          enabled: Boolean,
+        },
       },
     },
     isActive: {

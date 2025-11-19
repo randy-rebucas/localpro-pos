@@ -117,6 +117,21 @@
     "change": "Cambio",
     "previous": "Anterior",
     "next": "Siguiente"
+  },
+  "settings": {
+    "title": "Configuración de Tienda",
+    "subtitle": "Configure las preferencias y marca de su tienda",
+    "tabs": {
+      "general": "General",
+      "branding": "Marca",
+      "contact": "Contacto",
+      "hardware": "Hardware"
+    },
+    "save": "Guardar Configuración",
+    "saving": "Guardando...",
+    "saved": "¡Configuración guardada exitosamente!",
+    "error": "Error al guardar configuración",
+    "loading": "Cargando configuración..."
   }
 }
 

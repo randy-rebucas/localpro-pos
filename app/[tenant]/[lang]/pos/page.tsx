@@ -11,6 +11,7 @@ import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { getOfflineStorage } from '@/lib/offline-storage';
 import BarcodeScanner from '@/components/BarcodeScanner';
 import QRCodeScanner from '@/components/QRCodeScanner';
+import HardwareStatusChecker from '@/components/HardwareStatus';
 import { hardwareService } from '@/lib/hardware';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 
@@ -69,6 +70,41 @@ export default function POSPage() {
     }
   }, [settings, tenant]);
 
+  // Add to cart function
+  const addToCart = useCallback((product: Product) => {
+    if (!dict) return;
+    if (product.stock === 0) {
+      alert(dict.pos.outOfStock);
+      return;
+    }
+
+    setCart((prevCart) => {
+      const existingItem = prevCart.find((item) => item.productId === product._id);
+      if (existingItem) {
+        if (existingItem.quantity >= product.stock) {
+          alert(dict.pos.insufficientStock);
+          return prevCart;
+        }
+        return prevCart.map((item) =>
+          item.productId === product._id
+            ? { ...item, quantity: item.quantity + 1 }
+            : item
+        );
+      } else {
+        return [
+          ...prevCart,
+          {
+            productId: product._id,
+            name: product.name,
+            price: product.price,
+            quantity: 1,
+            stock: product.stock,
+          },
+        ];
+      }
+    });
+  }, [dict]);
+
   // Handle barcode scanning
   const handleBarcodeScan = useCallback((barcode: string) => {
     // Try to find product by SKU or barcode
@@ -96,7 +132,7 @@ export default function POSPage() {
       // Could be a URL or other data - handle accordingly
       console.log('QR Code scanned:', data);
     }
-  }, [products]);
+  }, [products, addToCart]);
 
   const loadCachedProducts = useCallback(async () => {
     try {
@@ -157,40 +193,6 @@ export default function POSPage() {
   useEffect(() => {
     fetchProducts();
   }, [fetchProducts]);
-
-  const addToCart = (product: Product) => {
-    if (!dict) return;
-    if (product.stock === 0) {
-      alert(dict.pos.outOfStock);
-      return;
-    }
-
-    const existingItem = cart.find((item) => item.productId === product._id);
-    if (existingItem) {
-      if (existingItem.quantity >= product.stock) {
-        alert(dict.pos.insufficientStock);
-        return;
-      }
-      setCart(
-        cart.map((item) =>
-          item.productId === product._id
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
-        )
-      );
-    } else {
-      setCart([
-        ...cart,
-        {
-          productId: product._id,
-          name: product.name,
-          price: product.price,
-          quantity: 1,
-          stock: product.stock,
-        },
-      ]);
-    }
-  };
 
   const updateQuantity = (productId: string, quantity: number) => {
     if (!dict) return;
@@ -418,6 +420,9 @@ export default function POSPage() {
         />
       )}
       <Navbar />
+      <div className="fixed bottom-4 right-4 z-40">
+        <HardwareStatusChecker compact={true} autoRefresh={true} />
+      </div>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         {/* Mobile: Cart first (sticky at top), then products below */}
         {/* Desktop: Products left, Cart right */}

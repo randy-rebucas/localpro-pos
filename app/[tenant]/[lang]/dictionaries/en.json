@@ -117,6 +117,21 @@
     "change": "Change",
     "previous": "Previous",
     "next": "Next"
+  },
+  "settings": {
+    "title": "Store Settings",
+    "subtitle": "Configure your store preferences and branding",
+    "tabs": {
+      "general": "General",
+      "branding": "Branding",
+      "contact": "Contact",
+      "hardware": "Hardware"
+    },
+    "save": "Save Settings",
+    "saving": "Saving...",
+    "saved": "Settings saved successfully!",
+    "error": "Failed to save settings",
+    "loading": "Loading settings..."
   }
 }
 
