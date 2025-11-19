@@ -81,7 +81,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
     
     if (role !== undefined) {
-      if (!['admin', 'manager', 'cashier', 'viewer'].includes(role)) {
+      if (!['owner', 'admin', 'manager', 'cashier', 'viewer'].includes(role)) {
         return NextResponse.json(
           { success: false, error: 'Invalid role' },
           { status: 400 }

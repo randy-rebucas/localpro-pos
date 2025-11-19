@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (role && !['admin', 'manager', 'cashier', 'viewer'].includes(role)) {
+    if (role && !['owner', 'admin', 'manager', 'cashier', 'viewer'].includes(role)) {
       return NextResponse.json(
         { success: false, error: 'Invalid role' },
         { status: 400 }

@@ -79,6 +79,7 @@ export function hasRole(userRole: string, requiredRoles: string[]): boolean {
     cashier: 2,
     manager: 3,
     admin: 4,
+    owner: 5,
   };
 
   const userLevel = roleHierarchy[userRole] || 0;

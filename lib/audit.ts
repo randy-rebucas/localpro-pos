@@ -126,5 +126,7 @@ export const AuditActions = {
   DISCOUNT_CREATE: 'discount.create',
   DISCOUNT_UPDATE: 'discount.update',
   DISCOUNT_DELETE: 'discount.delete',
+  ATTENDANCE_CLOCK_IN: 'attendance.clock_in',
+  ATTENDANCE_CLOCK_OUT: 'attendance.clock_out',
 } as const;
 

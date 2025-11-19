@@ -6,15 +6,18 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '../dictionaries-client';
 import { useAuth } from '@/contexts/AuthContext';
+import QRCodeDisplay from '@/components/QRCodeDisplay';
 
 interface User {
   _id: string;
   email: string;
   name: string;
-  role: 'admin' | 'manager' | 'cashier' | 'viewer';
+  role: 'owner' | 'admin' | 'manager' | 'cashier' | 'viewer';
   isActive: boolean;
   createdAt: string;
   lastLogin?: string;
+  hasPIN?: boolean;
+  qrToken?: string;
 }
 
 interface Tenant {
@@ -46,6 +49,8 @@ export default function AdminPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showUserModal, setShowUserModal] = useState(false);
   const [showTenantModal, setShowTenantModal] = useState(false);
+  const [showPINModal, setShowPINModal] = useState(false);
+  const [showQRModal, setShowQRModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
   const { user: currentUser } = useAuth();
@@ -162,7 +167,7 @@ export default function AdminPage() {
   }
 
   return (
-    <ProtectedRoute requiredRoles={['admin']}>
+    <ProtectedRoute requiredRoles={['owner', 'admin', 'manager']}>
       <div className="min-h-screen bg-gray-50">
         <Navbar />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
@@ -228,6 +233,7 @@ export default function AdminPage() {
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.email || 'Email'}</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.role || 'Role'}</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.status || 'Status'}</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">PIN/QR</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.actions || 'Actions'}</th>
                     </tr>
                   </thead>
@@ -245,6 +251,30 @@ export default function AdminPage() {
                           <span className={`px-2 py-1 text-xs font-semibold rounded-full ${user.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                             {user.isActive ? (dict.admin?.active || 'Active') : (dict.admin?.inactive || 'Inactive')}
                           </span>
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap text-sm">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => {
+                                setEditingUser(user);
+                                setShowPINModal(true);
+                              }}
+                              className="text-purple-600 hover:text-purple-900 text-xs"
+                              title="Manage PIN"
+                            >
+                              PIN
+                            </button>
+                            <button
+                              onClick={() => {
+                                setEditingUser(user);
+                                setShowQRModal(true);
+                              }}
+                              className="text-indigo-600 hover:text-indigo-900 text-xs"
+                              title="View QR Code"
+                            >
+                              QR
+                            </button>
+                          </div>
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
                           <div className="flex gap-2">
@@ -387,6 +417,36 @@ export default function AdminPage() {
               dict={dict}
             />
           )}
+
+          {showPINModal && editingUser && (
+            <PINModal
+              user={editingUser}
+              onClose={() => {
+                setShowPINModal(false);
+                setEditingUser(null);
+              }}
+              onSave={() => {
+                fetchUsers();
+                setShowPINModal(false);
+                setEditingUser(null);
+              }}
+              dict={dict}
+            />
+          )}
+
+          {showQRModal && editingUser && (
+            <QRModal
+              user={editingUser}
+              onClose={() => {
+                setShowQRModal(false);
+                setEditingUser(null);
+              }}
+              onRegenerate={() => {
+                fetchUsers();
+              }}
+              dict={dict}
+            />
+          )}
         </div>
       </div>
     </ProtectedRoute>
@@ -506,6 +566,7 @@ function UserModal({
                 <option value="cashier">Cashier</option>
                 <option value="manager">Manager</option>
                 <option value="admin">Admin</option>
+                <option value="owner">Owner</option>
               </select>
             </div>
             {error && (
@@ -530,6 +591,257 @@ function UserModal({
               </button>
             </div>
           </form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PINModal({
+  user,
+  onClose,
+  onSave,
+  dict,
+}: {
+  user: User;
+  onClose: () => void;
+  onSave: () => void;
+  dict: any;
+}) {
+  const [pin, setPin] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [removing, setRemoving] = useState(false);
+
+  const handleSetPIN = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    
+    if (!pin || !/^\d{4,8}$/.test(pin)) {
+      setError('PIN must be 4-8 digits');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/users/${user._id}/pin`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ pin }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        onSave();
+      } else {
+        setError(data.error || 'Failed to set PIN');
+      }
+    } catch (error) {
+      setError('Failed to set PIN');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRemovePIN = async () => {
+    if (!confirm('Are you sure you want to remove the PIN for this user?')) return;
+    
+    setRemoving(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/users/${user._id}/pin`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        onSave();
+      } else {
+        setError(data.error || 'Failed to remove PIN');
+      }
+    } catch (error) {
+      setError('Failed to remove PIN');
+    } finally {
+      setRemoving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
+        <div className="p-6">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">
+            Manage PIN for {user.name}
+          </h2>
+          <form onSubmit={handleSetPIN} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                PIN (4-8 digits)
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]{4,8}"
+                maxLength={8}
+                value={pin}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\D/g, '');
+                  if (value.length <= 8) setPin(value);
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-center text-2xl font-mono tracking-widest"
+                placeholder="0000"
+                required
+              />
+            </div>
+            {error && (
+              <div className="bg-red-50 text-red-800 border border-red-200 rounded-lg p-3">
+                {error}
+              </div>
+            )}
+            <div className="flex gap-3 justify-end pt-4">
+              <button
+                type="button"
+                onClick={handleRemovePIN}
+                disabled={removing}
+                className="px-4 py-2 border border-red-300 text-red-700 rounded-lg hover:bg-red-50 disabled:opacity-50"
+              >
+                {removing ? 'Removing...' : 'Remove PIN'}
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+              >
+                {dict.common?.cancel || 'Cancel'}
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                {saving ? 'Saving...' : 'Set PIN'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function QRModal({
+  user,
+  onClose,
+  onRegenerate,
+  dict,
+}: {
+  user: User;
+  onClose: () => void;
+  onRegenerate: () => void;
+  dict: any;
+}) {
+  const [qrData, setQrData] = useState<{ qrToken: string; name: string; email: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [regenerating, setRegenerating] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    fetchQRCode();
+  }, [user._id]);
+
+  const fetchQRCode = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/users/${user._id}/qr-code`, {
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (data.success) {
+        setQrData(data.data);
+      } else {
+        setError(data.error || 'Failed to load QR code');
+      }
+    } catch (error) {
+      setError('Failed to load QR code');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRegenerate = async () => {
+    if (!confirm('Are you sure you want to regenerate the QR code? The old QR code will no longer work.')) return;
+    
+    setRegenerating(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/users/${user._id}/qr-code`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (data.success) {
+        setQrData({ ...qrData!, qrToken: data.data.qrToken });
+        onRegenerate();
+      } else {
+        setError(data.error || 'Failed to regenerate QR code');
+      }
+    } catch (error) {
+      setError('Failed to regenerate QR code');
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl shadow-xl p-6">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <p className="mt-4 text-gray-600">Loading QR code...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
+        <div className="p-6">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">
+            QR Code for {user.name}
+          </h2>
+          {error && (
+            <div className="bg-red-50 text-red-800 border border-red-200 rounded-lg p-3 mb-4">
+              {error}
+            </div>
+          )}
+          {qrData && (
+            <div className="space-y-4">
+              <div className="flex justify-center p-4 bg-gray-50 rounded-lg">
+                <QRCodeDisplay qrToken={qrData.qrToken} name={qrData.name} />
+              </div>
+              <div className="flex gap-3 justify-end pt-4">
+                <button
+                  onClick={handleRegenerate}
+                  disabled={regenerating}
+                  className="px-4 py-2 border border-orange-300 text-orange-700 rounded-lg hover:bg-orange-50 disabled:opacity-50"
+                >
+                  {regenerating ? 'Regenerating...' : 'Regenerate QR Code'}
+                </button>
+                <button
+                  onClick={onClose}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  {dict.common?.close || 'Close'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -755,4 +1067,3 @@ function TenantModal({
     </div>
   );
 }
-

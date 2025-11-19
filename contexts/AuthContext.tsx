@@ -7,13 +7,15 @@ interface User {
   _id: string;
   email: string;
   name: string;
-  role: 'admin' | 'manager' | 'cashier' | 'viewer';
+  role: 'owner' | 'admin' | 'manager' | 'cashier' | 'viewer';
 }
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string, tenantSlug: string) => Promise<{ success: boolean; error?: string }>;
+  loginPIN: (pin: string, tenantSlug: string) => Promise<{ success: boolean; error?: string }>;
+  loginQR: (qrToken: string, tenantSlug: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
   hasRole: (roles: string[]) => boolean;
@@ -89,6 +91,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const loginPIN = async (pin: string, tenantSlug: string) => {
+    try {
+      const res = await fetch('/api/auth/login-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ pin, tenantSlug }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.data?.user) {
+        setUser(data.data.user);
+        return { success: true };
+      } else {
+        return { success: false, error: data.error || 'Login failed' };
+      }
+    } catch (error: any) {
+      return { success: false, error: error.message || 'Login failed' };
+    }
+  };
+
+  const loginQR = async (qrToken: string, tenantSlug: string) => {
+    try {
+      const res = await fetch('/api/auth/login-qr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ qrToken, tenantSlug }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.data?.user) {
+        setUser(data.data.user);
+        return { success: true };
+      } else {
+        return { success: false, error: data.error || 'Login failed' };
+      }
+    } catch (error: any) {
+      return { success: false, error: error.message || 'Login failed' };
+    }
+  };
+
   const hasRole = (roles: string[]): boolean => {
     if (!user) return false;
     const roleHierarchy: Record<string, number> = {
@@ -96,6 +140,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       cashier: 2,
       manager: 3,
       admin: 4,
+      owner: 5,
     };
     const userLevel = roleHierarchy[user.role] || 0;
     return roles.some(role => roleHierarchy[role] <= userLevel);
@@ -107,6 +152,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         loading,
         login,
+        loginPIN,
+        loginQR,
         logout,
         isAuthenticated: !!user,
         hasRole,

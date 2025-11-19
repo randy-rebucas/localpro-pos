@@ -1,6 +1,8 @@
 'use client';
 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { formatCurrency, formatNumber, getCurrencySymbol, getDefaultTenantSettings } from '@/lib/currency';
 
 interface ChartDataPoint {
   date: string;
@@ -14,6 +16,9 @@ interface SalesChartProps {
 }
 
 export default function SalesChart({ data, dict }: SalesChartProps) {
+  const { settings } = useTenantSettings();
+  const tenantSettings = settings || getDefaultTenantSettings();
+  
   console.log('[SalesChart] Received data:', data);
   
   // Validate and ensure data is properly formatted
@@ -28,6 +33,23 @@ export default function SalesChart({ data, dict }: SalesChartProps) {
   }).filter((item) => item.sales >= 0 && item.transactions >= 0); // Ensure valid numeric values
 
   console.log('[SalesChart] Processed chart data:', chartData);
+
+  // Helper function to format currency for Y-axis (shorter format without decimals for readability)
+  const formatYAxisValue = (value: number) => {
+    // Round to whole number for Y-axis readability
+    const rounded = Math.round(value);
+    // Format number with no decimals for Y-axis
+    const numberFormat = {
+      ...tenantSettings.numberFormat,
+      decimalPlaces: 0,
+    };
+    const formatted = formatNumber(rounded, numberFormat);
+    const symbol = tenantSettings.currencySymbol || getCurrencySymbol(tenantSettings.currency);
+    if (tenantSettings.currencyPosition === 'after') {
+      return `${formatted} ${symbol}`;
+    }
+    return `${symbol}${formatted}`;
+  };
 
   if (!chartData || chartData.length === 0) {
     return (
@@ -66,7 +88,7 @@ export default function SalesChart({ data, dict }: SalesChartProps) {
           <YAxis 
             stroke="#6b7280"
             style={{ fontSize: '12px' }}
-            tickFormatter={(value) => `$${value.toFixed(0)}`}
+            tickFormatter={(value) => formatYAxisValue(value)}
           />
           <Tooltip 
             contentStyle={{ 
@@ -77,7 +99,7 @@ export default function SalesChart({ data, dict }: SalesChartProps) {
             }}
             formatter={(value: any) => {
               const numValue = typeof value === 'number' ? value : parseFloat(String(value));
-              return `$${numValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+              return formatCurrency(numValue, tenantSettings);
             }}
             labelFormatter={(label) => `${dict.dashboard?.date || 'Date'}: ${label}`}
           />
