@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
-    const category = searchParams.get('category');
+    const name = searchParams.get('name');
 
     const query: any = { tenantId };
     
@@ -28,8 +28,8 @@ export async function GET(request: NextRequest) {
       if (endDate) query.date.$lte = new Date(endDate);
     }
 
-    if (category) {
-      query.category = category;
+    if (name) {
+      query.name = name;
     }
 
     const expenses = await Expense.find(query)
@@ -55,24 +55,47 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { category, description, amount, date, paymentMethod, receipt, notes } = body;
+    const { name, description, amount, date, paymentMethod, receipt, notes } = body;
 
-    if (!category || !description || amount === undefined) {
+    // Validate required fields
+    if (!name || !name.trim()) {
       return NextResponse.json(
-        { success: false, error: 'Category, description, and amount are required' },
+        { success: false, error: 'Name of expense is required' },
+        { status: 400 }
+      );
+    }
+
+    if (!description || !description.trim()) {
+      return NextResponse.json(
+        { success: false, error: 'Description is required' },
+        { status: 400 }
+      );
+    }
+
+    if (amount === undefined || amount === null || amount === '') {
+      return NextResponse.json(
+        { success: false, error: 'Amount is required' },
+        { status: 400 }
+      );
+    }
+
+    const amountValue = parseFloat(amount);
+    if (isNaN(amountValue) || amountValue < 0) {
+      return NextResponse.json(
+        { success: false, error: 'Amount must be a valid positive number' },
         { status: 400 }
       );
     }
 
     const expense = await Expense.create({
       tenantId,
-      category,
-      description,
-      amount: parseFloat(amount),
+      name: name.trim(),
+      description: description.trim(),
+      amount: amountValue,
       date: date ? new Date(date) : new Date(),
       paymentMethod: paymentMethod || 'cash',
-      receipt,
-      notes,
+      receipt: receipt?.trim() || undefined,
+      notes: notes?.trim() || undefined,
       userId: user.userId,
     });
 
@@ -81,7 +104,7 @@ export async function POST(request: NextRequest) {
       action: AuditActions.CREATE,
       entityType: 'expense',
       entityId: expense._id.toString(),
-      changes: { category, description, amount },
+      changes: { name, description, amount },
     });
 
     return NextResponse.json({ success: true, data: expense }, { status: 201 });

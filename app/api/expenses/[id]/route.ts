@@ -53,11 +53,11 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { category, description, amount, date, paymentMethod, receipt, notes } = body;
+    const { name, description, amount, date, paymentMethod, receipt, notes } = body;
 
     const oldData = expense.toObject();
 
-    if (category) expense.category = category;
+    if (name) expense.name = name;
     if (description) expense.description = description;
     if (amount !== undefined) expense.amount = parseFloat(amount);
     if (date) expense.date = new Date(date);
@@ -109,7 +109,7 @@ export async function DELETE(
       action: AuditActions.DELETE,
       entityType: 'expense',
       entityId: expense._id.toString(),
-      changes: { category: expense.category, description: expense.description, amount: expense.amount },
+      changes: { name: expense.name, description: expense.description, amount: expense.amount },
     });
 
     return NextResponse.json({ success: true, message: 'Expense deleted successfully' });

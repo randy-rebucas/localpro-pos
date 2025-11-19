@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Transaction from '@/models/Transaction';
+import Expense from '@/models/Expense';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import mongoose from 'mongoose';
 
@@ -145,10 +146,29 @@ export async function GET(request: NextRequest) {
 
     console.log(`[Stats API] Formatted chart data:`, chartData);
 
+    // Get expense statistics for the same period
+    const expenseQuery: any = {
+      tenantId: tenantObjectId,
+      date: { $gte: startDate, $lte: endDate },
+    };
+    
+    const expenseStats = await Expense.aggregate([
+      { $match: expenseQuery },
+      {
+        $group: {
+          _id: null,
+          totalExpenses: { $sum: '$amount' },
+          expenseCount: { $sum: 1 },
+        },
+      },
+    ]);
+
     const result = {
       totalSales: stats[0]?.totalSales || 0,
       totalTransactions: stats[0]?.totalTransactions || 0,
       averageTransaction: stats[0]?.averageTransaction || 0,
+      totalExpenses: expenseStats[0]?.totalExpenses || 0,
+      expenseCount: expenseStats[0]?.expenseCount || 0,
       paymentMethods: paymentMethodStats,
       chartData,
     };

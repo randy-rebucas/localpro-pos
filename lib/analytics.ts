@@ -304,8 +304,10 @@ export async function getProfitLossSummary(
   
   const expenseByCategory = new Map<string, number>();
   expenses.forEach(expense => {
-    const existing = expenseByCategory.get(expense.category) || 0;
-    expenseByCategory.set(expense.category, existing + expense.amount);
+    // Use expense name as category since Expense model doesn't have a category field
+    const category = expense.name || 'Other';
+    const existing = expenseByCategory.get(category) || 0;
+    expenseByCategory.set(category, existing + expense.amount);
   });
 
   const expensesData = {

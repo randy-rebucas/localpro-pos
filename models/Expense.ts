@@ -2,7 +2,7 @@ import mongoose, { Schema, Document, Model } from 'mongoose';
 
 export interface IExpense extends Document {
   tenantId: mongoose.Types.ObjectId;
-  category: string;
+  name: string;
   description: string;
   amount: number;
   date: Date;
@@ -22,9 +22,9 @@ const ExpenseSchema: Schema = new Schema(
       required: [true, 'Tenant ID is required'],
       index: true,
     },
-    category: {
+    name: {
       type: String,
-      required: [true, 'Category is required'],
+      required: [true, 'Name is required'],
       trim: true,
     },
     description: {
@@ -70,7 +70,7 @@ const ExpenseSchema: Schema = new Schema(
 
 // Indexes for efficient queries
 ExpenseSchema.index({ tenantId: 1, date: -1 });
-ExpenseSchema.index({ tenantId: 1, category: 1 });
+ExpenseSchema.index({ tenantId: 1, name: 1 });
 
 const Expense: Model<IExpense> = mongoose.models.Expense || mongoose.model<IExpense>('Expense', ExpenseSchema);
 

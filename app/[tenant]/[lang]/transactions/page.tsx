@@ -27,15 +27,33 @@ interface Transaction {
   createdAt: string;
 }
 
+interface Expense {
+  _id: string;
+  name: string;
+  description: string;
+  amount: number;
+  date: string;
+  paymentMethod: 'cash' | 'card' | 'digital' | 'other';
+  receipt?: string;
+  notes?: string;
+  userId?: string | { name: string; email: string };
+  createdAt: string;
+}
+
+type ViewType = 'all' | 'transactions' | 'expenses';
+
 export default function TransactionsPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
+  const [viewType, setViewType] = useState<ViewType>('all');
   const [dict, setDict] = useState<any>(null);
 
   useEffect(() => {
@@ -44,11 +62,11 @@ export default function TransactionsPage() {
 
   useEffect(() => {
     fetchTransactions();
-  }, [page, tenant]);
+    fetchExpenses();
+  }, [page, tenant, viewType]);
 
   const fetchTransactions = async () => {
     try {
-      setLoading(true);
       const res = await fetch(`/api/transactions?page=${page}&limit=20&tenant=${tenant}`);
       const data = await res.json();
       if (data.success) {
@@ -57,6 +75,18 @@ export default function TransactionsPage() {
       }
     } catch (error) {
       console.error('Error fetching transactions:', error);
+    }
+  };
+
+  const fetchExpenses = async () => {
+    try {
+      const res = await fetch(`/api/expenses?tenant=${tenant}`, { credentials: 'include' });
+      const data = await res.json();
+      if (data.success) {
+        setExpenses(data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching expenses:', error);
     } finally {
       setLoading(false);
     }
@@ -172,12 +202,48 @@ export default function TransactionsPage() {
     return <div className="text-center py-12">Loading...</div>;
   }
 
+  // Combine and sort transactions and expenses by date
+  const allItems = [
+    ...transactions.map(t => ({ type: 'transaction' as const, data: t, date: t.createdAt })),
+    ...expenses.map(e => ({ type: 'expense' as const, data: e, date: e.date || e.createdAt })),
+  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  const filteredItems = viewType === 'all' 
+    ? allItems 
+    : viewType === 'transactions' 
+    ? allItems.filter(item => item.type === 'transaction')
+    : allItems.filter(item => item.type === 'expense');
+
   return (
     <div className="min-h-screen bg-gray-50">
       <PageTitle />
       <Navbar />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-6 sm:mb-8">{dict.transactions.title}</h1>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 sm:mb-8 gap-4">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">{dict.transactions.title}</h1>
+          {/* View Type Toggle */}
+          <div className="flex gap-2 bg-white rounded-xl p-1 shadow-md border border-gray-200">
+            {(['all', 'transactions', 'expenses'] as ViewType[]).map((view) => (
+              <button
+                key={view}
+                type="button"
+                onClick={() => setViewType(view)}
+                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
+                  viewType === view
+                    ? 'text-white shadow-md'
+                    : 'text-gray-700 hover:bg-gray-50'
+                }`}
+                style={viewType === view ? { backgroundColor: 'var(--primary-color, #2563eb)' } : {}}
+              >
+                {view === 'all' 
+                  ? (dict.transactions?.all || 'All')
+                  : view === 'transactions'
+                  ? (dict.transactions?.transactions || 'Transactions')
+                  : (dict.transactions?.expenses || 'Expenses')}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {loading ? (
           <div className="bg-white rounded-xl shadow-md overflow-hidden">
@@ -199,27 +265,34 @@ export default function TransactionsPage() {
               ))}
             </div>
           </div>
-        ) : transactions.length === 0 ? (
+        ) : filteredItems.length === 0 ? (
           <div className="text-center py-16 bg-white rounded-xl shadow-md">
             <svg className="mx-auto h-16 w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
             </svg>
-            <p className="text-gray-500 text-lg">{dict.transactions.noTransactions}</p>
+            <p className="text-gray-500 text-lg">
+              {viewType === 'expenses' 
+                ? (dict.transactions?.noExpenses || 'No expenses found')
+                : dict.transactions.noTransactions}
+            </p>
           </div>
         ) : (
           <div className="bg-white rounded-xl shadow-md overflow-hidden">
             {/* Desktop Table Header */}
             <div className="hidden md:grid md:grid-cols-12 gap-4 px-6 py-4 bg-gray-50 border-b border-gray-200 text-sm font-semibold text-gray-700">
               <div className="col-span-2">{dict.transactions.date}</div>
-              <div className="col-span-2">{dict.transactions.items}</div>
+              <div className="col-span-2">{viewType === 'expenses' ? (dict.transactions?.name || 'Name') : dict.transactions.items}</div>
               <div className="col-span-2 text-right">{dict.common.total}</div>
               <div className="col-span-2">{dict.transactions.payment}</div>
-              <div className="col-span-2">{dict.transactions.status}</div>
+              <div className="col-span-2">{viewType === 'expenses' ? (dict.transactions?.type || 'Type') : dict.transactions.status}</div>
               <div className="col-span-2 text-right">{dict.common.actions}</div>
             </div>
-            {/* Transaction List */}
+            {/* Transaction/Expense List */}
             <div className="divide-y divide-gray-200">
-              {transactions.map((transaction) => (
+              {filteredItems.map((item) => {
+                if (item.type === 'transaction') {
+                  const transaction = item.data as Transaction;
+                  return (
                 <div
                   key={transaction._id}
                   className="group relative px-4 sm:px-6 py-4 hover:bg-gray-50 transition-colors overflow-hidden"
@@ -253,11 +326,12 @@ export default function TransactionsPage() {
                       <div className="text-sm text-gray-900">
                         {transaction.items.length} {transaction.items.length === 1 ? dict.transactions.item : dict.transactions.items}
                         <button
-                          onClick={() =>
+                          onClick={() => {
                             setSelectedTransaction(
                               selectedTransaction?._id === transaction._id ? null : transaction
-                            )
-                          }
+                            );
+                            setSelectedExpense(null);
+                          }}
                           className="ml-2 text-blue-600 hover:text-blue-800 text-xs font-medium"
                         >
                           {selectedTransaction?._id === transaction._id ? dict.transactions.hide : dict.transactions.view}
@@ -305,7 +379,69 @@ export default function TransactionsPage() {
                     <div className="col-span-2 hidden md:block"></div>
                   </div>
                 </div>
-              ))}
+                  );
+                } else {
+                  const expense = item.data as Expense;
+                  return (
+                    <div
+                      key={expense._id}
+                      className="group relative px-4 sm:px-6 py-4 hover:bg-gray-50 transition-colors overflow-hidden border-l-4 border-red-500"
+                    >
+                      <div className="flex flex-col md:grid md:grid-cols-12 gap-4 items-center">
+                        {/* Date */}
+                        <div className="col-span-2 w-full md:w-auto">
+                          <div className="text-sm text-gray-500 md:hidden mb-1">{dict.transactions.date}</div>
+                          <div className="text-sm text-gray-600">
+                            <FormattedDate date={expense.date || expense.createdAt} includeTime={true} />
+                          </div>
+                        </div>
+                        {/* Name */}
+                        <div className="col-span-2 w-full md:w-auto">
+                          <div className="text-sm text-gray-500 md:hidden mb-1">{dict.transactions?.name || 'Name'}</div>
+                          <div className="text-sm text-gray-900 font-medium">{expense.name}</div>
+                          {expense.description && (
+                            <div className="text-xs text-gray-500 mt-1">{expense.description}</div>
+                          )}
+                          <button
+                            onClick={() => {
+                              setSelectedExpense(
+                                selectedExpense?._id === expense._id ? null : expense
+                              );
+                              setSelectedTransaction(null);
+                            }}
+                            className="mt-1 text-red-600 hover:text-red-800 text-xs font-medium"
+                          >
+                            {selectedExpense?._id === expense._id ? dict.transactions.hide : dict.transactions.view}
+                          </button>
+                        </div>
+                        {/* Amount */}
+                        <div className="col-span-2 w-full md:w-auto text-left md:text-right">
+                          <div className="text-sm text-gray-500 md:hidden mb-1">{dict.common.total}</div>
+                          <div className="font-bold text-red-600 text-lg">
+                            <Currency amount={expense.amount} />
+                          </div>
+                        </div>
+                        {/* Payment Method */}
+                        <div className="col-span-2 w-full md:w-auto">
+                          <div className="text-sm text-gray-500 md:hidden mb-1">{dict.transactions.payment}</div>
+                          <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800 capitalize w-fit">
+                            {dict.pos?.[expense.paymentMethod] || expense.paymentMethod}
+                          </span>
+                        </div>
+                        {/* Type */}
+                        <div className="col-span-2 w-full md:w-auto">
+                          <div className="text-sm text-gray-500 md:hidden mb-1">{dict.transactions?.type || 'Type'}</div>
+                          <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-orange-100 text-orange-800">
+                            {dict.transactions?.expense || 'Expense'}
+                          </span>
+                        </div>
+                        {/* Actions column */}
+                        <div className="col-span-2 hidden md:block"></div>
+                      </div>
+                    </div>
+                  );
+                }
+              })}
             </div>
           </div>
         )}
@@ -334,6 +470,45 @@ export default function TransactionsPage() {
                 <span className="text-lg font-bold text-gray-900">{dict.common.total}:</span>
                 <span className="text-xl font-bold text-blue-600">
                   <Currency amount={selectedTransaction.total} />
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Expense Details */}
+        {selectedExpense && (
+          <div className="mt-6 bg-white rounded-xl shadow-md p-5 sm:p-6 border-l-4 border-red-500">
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-5">
+              {dict.transactions?.expenseDetails || 'Expense Details'} - <FormattedDate date={selectedExpense.date || selectedExpense.createdAt} includeTime={true} />
+            </h2>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center border-b border-gray-200 pb-3">
+                <span className="text-sm font-medium text-gray-500">{dict.transactions?.name || 'Name'}:</span>
+                <span className="text-sm font-semibold text-gray-900">{selectedExpense.name}</span>
+              </div>
+              {selectedExpense.description && (
+                <div className="flex justify-between items-start border-b border-gray-200 pb-3">
+                  <span className="text-sm font-medium text-gray-500">{dict.transactions?.description || 'Description'}:</span>
+                  <span className="text-sm text-gray-900 text-right">{selectedExpense.description}</span>
+                </div>
+              )}
+              <div className="flex justify-between items-center border-b border-gray-200 pb-3">
+                <span className="text-sm font-medium text-gray-500">{dict.transactions.payment}:</span>
+                <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800 capitalize">
+                  {dict.pos?.[selectedExpense.paymentMethod] || selectedExpense.paymentMethod}
+                </span>
+              </div>
+              {selectedExpense.notes && (
+                <div className="flex justify-between items-start border-b border-gray-200 pb-3">
+                  <span className="text-sm font-medium text-gray-500">{dict.transactions?.notes || 'Notes'}:</span>
+                  <span className="text-sm text-gray-900 text-right">{selectedExpense.notes}</span>
+                </div>
+              )}
+              <div className="flex justify-between items-center pt-3">
+                <span className="text-lg font-bold text-gray-900">{dict.common.total}:</span>
+                <span className="text-xl font-bold text-red-600">
+                  <Currency amount={selectedExpense.amount} />
                 </span>
               </div>
             </div>

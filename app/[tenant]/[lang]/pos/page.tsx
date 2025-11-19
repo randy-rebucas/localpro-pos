@@ -57,6 +57,12 @@ export default function POSPage() {
   const [refundReason, setRefundReason] = useState('');
   const [refundNotes, setRefundNotes] = useState('');
   const [processingRefund, setProcessingRefund] = useState(false);
+  const [showSavedCartsModal, setShowSavedCartsModal] = useState(false);
+  const [savedCarts, setSavedCarts] = useState<any[]>([]);
+  const [loadingSavedCarts, setLoadingSavedCarts] = useState(false);
+  const [savingCart, setSavingCart] = useState(false);
+  const [showSaveCartModal, setShowSaveCartModal] = useState(false);
+  const [cartName, setCartName] = useState('');
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -505,6 +511,134 @@ export default function POSPage() {
     if (!dict) return;
     if (confirm(dict.pos.clearCartConfirm)) {
       setCart([]);
+      setAppliedDiscount(null);
+      setPromoCode('');
+    }
+  };
+
+  const saveCart = async () => {
+    if (!dict || cart.length === 0) return;
+    if (!cartName.trim()) {
+      alert(dict.pos?.cartNameRequired || 'Please enter a name for this cart');
+      return;
+    }
+
+    try {
+      setSavingCart(true);
+      const subtotal = getSubtotal();
+      const total = getTotal();
+
+      const res = await fetch('/api/saved-carts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          name: cartName.trim(),
+          items: cart,
+          subtotal,
+          discountCode: appliedDiscount?.code,
+          discountAmount: appliedDiscount?.amount,
+          total,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        alert(dict.pos?.cartSaved || 'Cart saved successfully');
+        setShowSaveCartModal(false);
+        setCartName('');
+        loadSavedCarts();
+      } else {
+        alert(data.error || dict.pos?.saveCartError || 'Failed to save cart');
+      }
+    } catch (error) {
+      console.error('Error saving cart:', error);
+      alert(dict.pos?.saveCartError || 'Failed to save cart');
+    } finally {
+      setSavingCart(false);
+    }
+  };
+
+  const loadSavedCarts = async () => {
+    try {
+      setLoadingSavedCarts(true);
+      const res = await fetch('/api/saved-carts', {
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSavedCarts(data.data);
+      }
+    } catch (error) {
+      console.error('Error loading saved carts:', error);
+    } finally {
+      setLoadingSavedCarts(false);
+    }
+  };
+
+  const loadCart = async (savedCart: any) => {
+    if (!dict) return;
+    
+    if (cart.length > 0) {
+      if (!confirm(dict.pos?.loadCartConfirm || 'Loading a saved cart will replace your current cart. Continue?')) {
+        return;
+      }
+    }
+
+    try {
+      // Restore cart items
+      const restoredCart = savedCart.items.map((item: any) => ({
+        productId: item.productId.toString(),
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+        stock: item.stock,
+      }));
+
+      setCart(restoredCart);
+      
+      // Restore discount if applicable
+      if (savedCart.discountCode && savedCart.discountAmount) {
+        setAppliedDiscount({
+          code: savedCart.discountCode,
+          amount: savedCart.discountAmount,
+        });
+      } else {
+        setAppliedDiscount(null);
+      }
+      
+      setPromoCode('');
+      setShowSavedCartsModal(false);
+      
+      // Refresh products to get current stock
+      fetchProducts();
+    } catch (error) {
+      console.error('Error loading cart:', error);
+      alert(dict.pos?.loadCartError || 'Failed to load cart');
+    }
+  };
+
+  const deleteSavedCart = async (cartId: string) => {
+    if (!dict) return;
+    if (!confirm(dict.pos?.deleteCartConfirm || 'Are you sure you want to delete this saved cart?')) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/saved-carts/${cartId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        loadSavedCarts();
+      } else {
+        alert(data.error || dict.pos?.deleteCartError || 'Failed to delete cart');
+      }
+    } catch (error) {
+      console.error('Error deleting cart:', error);
+      alert(dict.pos?.deleteCartError || 'Failed to delete cart');
     }
   };
 
@@ -580,14 +714,41 @@ export default function POSPage() {
                     </span>
                   )}
                 </h2>
-                {cart.length > 0 && (
+                <div className="flex items-center gap-2">
+                  {cart.length > 0 && (
+                    <>
+                      <button
+                        onClick={() => setShowSaveCartModal(true)}
+                        className="text-sm font-medium text-green-600 hover:text-green-800 px-2 py-1.5 rounded-lg hover:bg-green-50 transition-colors flex items-center gap-1"
+                        title={dict.pos?.saveCart || 'Save Cart'}
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                        </svg>
+                        {dict.pos?.save || 'Save'}
+                      </button>
+                      <button
+                        onClick={clearCart}
+                        className="text-sm font-medium text-red-600 hover:text-red-800 px-2 py-1.5 rounded-lg hover:bg-red-50 transition-colors"
+                      >
+                        {dict.common.clear}
+                      </button>
+                    </>
+                  )}
                   <button
-                    onClick={clearCart}
-                    className="text-sm font-medium text-red-600 hover:text-red-800 px-2 py-1.5 rounded-lg hover:bg-red-50 transition-colors"
+                    onClick={() => {
+                      setShowSavedCartsModal(true);
+                      loadSavedCarts();
+                    }}
+                    className="text-sm font-medium text-blue-600 hover:text-blue-800 px-2 py-1.5 rounded-lg hover:bg-blue-50 transition-colors flex items-center gap-1"
+                    title={dict.pos?.loadCart || 'Load Saved Cart'}
                   >
-                    {dict.common.clear}
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    </svg>
+                    {dict.pos?.load || 'Load'}
                   </button>
-                )}
+                </div>
               </div>
 
               {cart.length === 0 ? (
@@ -1129,6 +1290,143 @@ export default function POSPage() {
                     {processingRefund ? dict.pos.processing : dict.pos.processRefund}
                   </button>
                 </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Save Cart Modal */}
+      {showSaveCartModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-md p-5 sm:p-6 w-full max-w-md">
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-5">
+              {dict.pos?.saveCart || 'Save Cart'}
+            </h2>
+            <div className="mb-5">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                {dict.pos?.cartName || 'Cart Name'}
+              </label>
+              <input
+                type="text"
+                value={cartName}
+                onChange={(e) => setCartName(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && saveCart()}
+                className="w-full px-4 py-3 text-base border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder={dict.pos?.cartNamePlaceholder || 'Enter a name for this cart'}
+                autoFocus
+              />
+              <p className="text-sm text-gray-500 mt-2">
+                {dict.pos?.cartNameHint || 'This cart will be saved for later processing'}
+              </p>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSaveCartModal(false);
+                  setCartName('');
+                }}
+                className="px-4 py-2.5 border-2 border-gray-200 rounded-xl text-gray-700 hover:bg-gray-50 font-medium transition-colors shadow-sm"
+              >
+                {dict.common.cancel}
+              </button>
+              <button
+                type="button"
+                onClick={saveCart}
+                disabled={savingCart || !cartName.trim()}
+                className="px-4 py-2.5 bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors shadow-md hover:shadow-lg"
+              >
+                {savingCart ? (dict.common.saving || 'Saving...') : (dict.common.save || 'Save')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Load Saved Carts Modal */}
+      {showSavedCartsModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-md p-5 sm:p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-5">
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
+                {dict.pos?.savedCarts || 'Saved Carts'}
+              </h2>
+              <button
+                onClick={() => setShowSavedCartsModal(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {loadingSavedCarts ? (
+              <div className="text-center py-12">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <p className="mt-4 text-gray-600">{dict.common.loading || 'Loading...'}</p>
+              </div>
+            ) : savedCarts.length === 0 ? (
+              <div className="text-center py-12">
+                <svg className="mx-auto h-16 w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+                <p className="text-gray-500 text-lg">{dict.pos?.noSavedCarts || 'No saved carts found'}</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {savedCarts.map((savedCart) => (
+                  <div
+                    key={savedCart._id}
+                    className="border-2 border-gray-200 rounded-xl p-4 hover:border-blue-500 transition-colors"
+                  >
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-gray-900 text-lg mb-1">{savedCart.name}</h3>
+                        <p className="text-sm text-gray-500">
+                          {new Date(savedCart.createdAt).toLocaleString(lang === 'es' ? 'es-ES' : 'en-US', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </p>
+                        <p className="text-sm text-gray-600 mt-2">
+                          {savedCart.items.length} {savedCart.items.length === 1 ? (dict.pos?.item || 'item') : (dict.pos?.items || 'items')}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-bold text-lg text-blue-600 mb-2">
+                          <Currency amount={savedCart.total} />
+                        </div>
+                        {savedCart.discountCode && (
+                          <div className="text-xs text-green-600">
+                            {dict.pos?.discount || 'Discount'}: {savedCart.discountCode}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => loadCart(savedCart)}
+                        className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
+                      >
+                        {dict.pos?.loadCart || 'Load Cart'}
+                      </button>
+                      <button
+                        onClick={() => deleteSavedCart(savedCart._id)}
+                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition-colors"
+                        title={dict.pos?.deleteCart || 'Delete Cart'}
+                      >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>

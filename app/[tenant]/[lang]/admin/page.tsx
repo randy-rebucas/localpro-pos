@@ -79,6 +79,72 @@ export default function AdminPage() {
       color: 'indigo',
     },
     {
+      title: dict.admin?.products || 'Products',
+      description: dict.admin?.productsDescription || 'Manage products, variations, and bundles',
+      href: `/${tenant}/${lang}/admin/products`,
+      icon: (
+        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+        </svg>
+      ),
+      color: 'teal',
+    },
+    {
+      title: dict.admin?.discounts || 'Discounts',
+      description: dict.admin?.discountsDescription || 'Manage discount codes and promotions',
+      href: `/${tenant}/${lang}/admin/discounts`,
+      icon: (
+        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      ),
+      color: 'yellow',
+    },
+    {
+      title: dict.admin?.transactions || 'Transactions',
+      description: dict.admin?.transactionsDescription || 'View and manage all sales transactions',
+      href: `/${tenant}/${lang}/admin/transactions`,
+      icon: (
+        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+        </svg>
+      ),
+      color: 'cyan',
+    },
+    {
+      title: dict.admin?.stockMovements || 'Stock Movements',
+      description: dict.admin?.stockMovementsDescription || 'Track all inventory changes and movements',
+      href: `/${tenant}/${lang}/admin/stock-movements`,
+      icon: (
+        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+        </svg>
+      ),
+      color: 'pink',
+    },
+    {
+      title: dict.admin?.cashDrawer || 'Cash Drawer',
+      description: dict.admin?.cashDrawerDescription || 'Manage and monitor cash drawer operations',
+      href: `/${tenant}/${lang}/admin/cash-drawer`,
+      icon: (
+        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+        </svg>
+      ),
+      color: 'emerald',
+    },
+    {
+      title: dict.admin?.expenses || 'Expenses',
+      description: dict.admin?.expensesDescription || 'Manage and track business expenses',
+      href: `/${tenant}/${lang}/admin/expenses`,
+      icon: (
+        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+        </svg>
+      ),
+      color: 'red',
+    },
+    {
       title: dict.admin?.auditLogs || 'Audit Logs',
       description: dict.admin?.auditLogsDescription || 'View system activity, changes, and user actions',
       href: `/${tenant}/${lang}/admin/audit-logs`,
@@ -114,6 +180,12 @@ export default function AdminPage() {
                 card.color === 'green' ? 'bg-green-100 text-green-600' :
                 card.color === 'orange' ? 'bg-orange-100 text-orange-600' :
                 card.color === 'indigo' ? 'bg-indigo-100 text-indigo-600' :
+                card.color === 'red' ? 'bg-red-100 text-red-600' :
+                card.color === 'teal' ? 'bg-teal-100 text-teal-600' :
+                card.color === 'yellow' ? 'bg-yellow-100 text-yellow-600' :
+                card.color === 'cyan' ? 'bg-cyan-100 text-cyan-600' :
+                card.color === 'pink' ? 'bg-pink-100 text-pink-600' :
+                card.color === 'emerald' ? 'bg-emerald-100 text-emerald-600' :
                 'bg-purple-100 text-purple-600'
               }`}>
                 {card.icon}

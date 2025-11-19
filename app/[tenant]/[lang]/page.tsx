@@ -31,6 +31,8 @@ interface Stats {
   totalSales: number;
   totalTransactions: number;
   averageTransaction: number;
+  totalExpenses: number;
+  expenseCount: number;
   paymentMethods: Array<{ _id: string; total: number; count: number }>;
   chartData: ChartDataPoint[];
 }
@@ -131,8 +133,8 @@ export default function Dashboard() {
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
-            {[1, 2, 3].map((i) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
+            {[1, 2, 3, 4].map((i) => (
               <div key={i} className="bg-white rounded-xl shadow-md p-5 sm:p-6 animate-pulse">
                 <div className="h-4 bg-gray-200 rounded-lg w-24 mb-4"></div>
                 <div className="h-10 bg-gray-200 rounded-lg w-32"></div>
@@ -140,7 +142,7 @@ export default function Dashboard() {
             ))}
           </div>
         ) : stats ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
             <div className="bg-white rounded-xl shadow-md p-5 sm:p-6 card-hover animate-fade-in">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-xs sm:text-sm font-semibold text-gray-500 uppercase tracking-wide">
@@ -171,7 +173,7 @@ export default function Dashboard() {
                 {stats.totalTransactions}
               </p>
             </div>
-            <div className="bg-white rounded-xl shadow-md p-5 sm:p-6 card-hover animate-fade-in sm:col-span-2 lg:col-span-1">
+            <div className="bg-white rounded-xl shadow-md p-5 sm:p-6 card-hover animate-fade-in">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-xs sm:text-sm font-semibold text-gray-500 uppercase tracking-wide">
                   {dict.dashboard.averageTransaction}
@@ -185,6 +187,26 @@ export default function Dashboard() {
               <p className="text-3xl sm:text-4xl lg:text-5xl font-bold text-gray-900">
                 <Currency amount={stats.averageTransaction} />
               </p>
+            </div>
+            <div className="bg-white rounded-xl shadow-md p-5 sm:p-6 card-hover animate-fade-in">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xs sm:text-sm font-semibold text-gray-500 uppercase tracking-wide">
+                  {dict.dashboard?.totalExpenses || 'Total Expenses'}
+                </h3>
+                <div className="p-2 bg-red-100 rounded-lg">
+                  <svg className="w-5 h-5 sm:w-6 sm:h-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                </div>
+              </div>
+              <p className="text-3xl sm:text-4xl lg:text-5xl font-bold text-gray-900">
+                <Currency amount={stats.totalExpenses || 0} />
+              </p>
+              {stats.expenseCount > 0 && (
+                <p className="text-sm text-gray-500 mt-2">
+                  {stats.expenseCount} {stats.expenseCount === 1 ? (dict.dashboard?.expense || 'expense') : (dict.dashboard?.expenses || 'expenses')}
+                </p>
+              )}
             </div>
           </div>
         ) : null}
