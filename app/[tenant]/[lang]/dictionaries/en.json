@@ -22,6 +22,7 @@
     "pos": "POS",
     "products": "Products",
     "transactions": "Transactions",
+    "reports": "Reports",
     "settings": "Settings"
   },
   "dashboard": {
@@ -132,6 +133,53 @@
     "saved": "Settings saved successfully!",
     "error": "Failed to save settings",
     "loading": "Loading settings..."
+  },
+  "reports": {
+    "title": "Reports & Analytics",
+    "subtitle": "View detailed reports and analytics for your business",
+    "tabs": {
+      "sales": "Sales",
+      "products": "Products",
+      "vat": "VAT",
+      "profit-loss": "Profit & Loss",
+      "cash-drawer": "Cash Drawer"
+    },
+    "startDate": "Start Date",
+    "endDate": "End Date",
+    "period": "Period",
+    "daily": "Daily",
+    "weekly": "Weekly",
+    "monthly": "Monthly",
+    "totalSales": "Total Sales",
+    "totalTransactions": "Total Transactions",
+    "averageTransaction": "Average Transaction",
+    "salesByDay": "Sales by Day",
+    "sales": "Sales",
+    "paymentMethods": "Payment Methods",
+    "topProducts": "Top Products",
+    "rank": "Rank",
+    "quantitySold": "Quantity Sold",
+    "totalRevenue": "Total Revenue",
+    "averagePrice": "Average Price",
+    "vatSales": "VAT Sales",
+    "nonVatSales": "Non-VAT Sales",
+    "vatAmount": "VAT Amount",
+    "vatRate": "VAT Rate",
+    "vatBreakdown": "VAT Breakdown",
+    "totalExpenses": "Total Expenses",
+    "netProfit": "Net Profit",
+    "profitMargin": "Profit Margin",
+    "revenueByPaymentMethod": "Revenue by Payment Method",
+    "expensesByCategory": "Expenses by Category",
+    "openingTime": "Opening Time",
+    "closingTime": "Closing Time",
+    "openingAmount": "Opening Amount",
+    "expectedAmount": "Expected Amount",
+    "closingAmount": "Closing Amount",
+    "shortage": "Shortage",
+    "overage": "Overage",
+    "status": "Status",
+    "noCashDrawerReports": "No cash drawer reports found"
   }
 }
 

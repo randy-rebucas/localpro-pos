@@ -50,6 +50,7 @@ export default function Navbar() {
     { href: `/${tenant}/${lang}/pos`, key: 'pos' },
     { href: `/${tenant}/${lang}/products`, key: 'products' },
     { href: `/${tenant}/${lang}/transactions`, key: 'transactions' },
+    { href: `/${tenant}/${lang}/reports`, key: 'reports' },
   ];
 
   const switchLanguage = (newLang: 'en' | 'es') => {

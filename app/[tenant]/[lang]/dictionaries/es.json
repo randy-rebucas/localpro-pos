@@ -22,6 +22,7 @@
     "pos": "TPV",
     "products": "Productos",
     "transactions": "Transacciones",
+    "reports": "Informes",
     "settings": "Configuración"
   },
   "dashboard": {
@@ -132,6 +133,53 @@
     "saved": "¡Configuración guardada exitosamente!",
     "error": "Error al guardar configuración",
     "loading": "Cargando configuración..."
+  },
+  "reports": {
+    "title": "Informes y Análisis",
+    "subtitle": "Ver informes detallados y análisis para su negocio",
+    "tabs": {
+      "sales": "Ventas",
+      "products": "Productos",
+      "vat": "IVA",
+      "profit-loss": "Ganancias y Pérdidas",
+      "cash-drawer": "Cajón de Efectivo"
+    },
+    "startDate": "Fecha de Inicio",
+    "endDate": "Fecha de Fin",
+    "period": "Período",
+    "daily": "Diario",
+    "weekly": "Semanal",
+    "monthly": "Mensual",
+    "totalSales": "Ventas Totales",
+    "totalTransactions": "Transacciones Totales",
+    "averageTransaction": "Transacción Promedio",
+    "salesByDay": "Ventas por Día",
+    "sales": "Ventas",
+    "paymentMethods": "Métodos de Pago",
+    "topProducts": "Productos Principales",
+    "rank": "Rango",
+    "quantitySold": "Cantidad Vendida",
+    "totalRevenue": "Ingresos Totales",
+    "averagePrice": "Precio Promedio",
+    "vatSales": "Ventas con IVA",
+    "nonVatSales": "Ventas sin IVA",
+    "vatAmount": "Monto de IVA",
+    "vatRate": "Tasa de IVA",
+    "vatBreakdown": "Desglose de IVA",
+    "totalExpenses": "Gastos Totales",
+    "netProfit": "Ganancia Neta",
+    "profitMargin": "Margen de Ganancia",
+    "revenueByPaymentMethod": "Ingresos por Método de Pago",
+    "expensesByCategory": "Gastos por Categoría",
+    "openingTime": "Hora de Apertura",
+    "closingTime": "Hora de Cierre",
+    "openingAmount": "Monto de Apertura",
+    "expectedAmount": "Monto Esperado",
+    "closingAmount": "Monto de Cierre",
+    "shortage": "Faltante",
+    "overage": "Excedente",
+    "status": "Estado",
+    "noCashDrawerReports": "No se encontraron informes de cajón de efectivo"
   }
 }
 
