@@ -94,14 +94,14 @@ export default function StockRefillModal({ product, onClose, onSuccess, lang = '
         
         <div className="mb-4 p-3 bg-gray-50 rounded-lg">
           <div className="text-sm text-gray-600 mb-1">
-            {dict.products.name || 'Product'}
+            {dict?.products?.name || 'Product'}
           </div>
           <div className="font-semibold text-gray-900">{product.name}</div>
           {product.sku && (
             <div className="text-xs text-gray-500 mt-1">SKU: {product.sku}</div>
           )}
           <div className="text-sm text-gray-600 mt-2">
-            {dict.products.stock || 'Current Stock'}: <span className="font-semibold">{product.stock}</span>
+            {dict?.products?.currentStock || dict?.products?.stock || 'Current Stock'}: <span className="font-semibold">{product.stock}</span>
           </div>
         </div>
 

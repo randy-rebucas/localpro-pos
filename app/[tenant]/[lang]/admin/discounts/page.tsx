@@ -55,18 +55,19 @@ export default function DiscountsPage() {
   };
 
   const handleDeleteDiscount = async (discountId: string) => {
-    if (!confirm('Are you sure you want to delete this discount?')) return;
+    if (!dict) return;
+    if (!confirm(dict.admin?.deleteConfirm || 'Are you sure you want to delete this discount?')) return;
     try {
       const res = await fetch(`/api/discounts/${discountId}`, { method: 'DELETE', credentials: 'include' });
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: 'Discount deleted successfully' });
+        setMessage({ type: 'success', text: dict.admin?.deleteSuccess || 'Discount deleted successfully' });
         fetchDiscounts();
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to delete discount' });
+        setMessage({ type: 'error', text: data.error || dict.admin?.deleteError || 'Failed to delete discount' });
       }
     } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to delete discount' });
+      setMessage({ type: 'error', text: dict.admin?.deleteError || 'Failed to delete discount' });
     }
   };
 
@@ -80,13 +81,13 @@ export default function DiscountsPage() {
       });
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: `Discount ${!discount.isActive ? 'activated' : 'deactivated'} successfully` });
+        setMessage({ type: 'success', text: `${dict.admin?.discount || 'Discount'} ${!discount.isActive ? (dict.admin?.activated || 'activated') : (dict.admin?.deactivated || 'deactivated')} ${dict.admin?.successfully || 'successfully'}` });
         fetchDiscounts();
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to update discount' });
+        setMessage({ type: 'error', text: data.error || dict.admin?.updateError || 'Failed to update discount' });
       }
     } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to update discount' });
+      setMessage({ type: 'error', text: dict.admin?.updateError || 'Failed to update discount' });
     }
   };
 
@@ -102,7 +103,7 @@ export default function DiscountsPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
     );
@@ -152,12 +153,12 @@ export default function DiscountsPage() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Code</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.code || 'Code'}</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.name || 'Name'}</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.type || 'Type'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Value</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Valid Period</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Usage</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.value || 'Value'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.validPeriod || 'Valid Period'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.usage || 'Usage'}</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.status || 'Status'}</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.actions || 'Actions'}</th>
                 </tr>
@@ -189,7 +190,7 @@ export default function DiscountsPage() {
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
                         <div>{new Date(discount.validFrom).toLocaleDateString()}</div>
-                        <div className="text-xs">to {new Date(discount.validUntil).toLocaleDateString()}</div>
+                        <div className="text-xs">{dict.admin?.to || 'to'} {new Date(discount.validUntil).toLocaleDateString()}</div>
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
                         {discount.usageCount} / {discount.usageLimit || '∞'}
@@ -200,7 +201,7 @@ export default function DiscountsPage() {
                           !discount.isActive ? 'bg-red-100 text-red-800' : 
                           'bg-yellow-100 text-yellow-800'
                         }`}>
-                          {isValid ? 'Valid' : !discount.isActive ? 'Inactive' : 'Expired'}
+                          {isValid ? (dict.admin?.valid || 'Valid') : !discount.isActive ? (dict.admin?.inactive || 'Inactive') : (dict.admin?.expired || 'Expired')}
                         </span>
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
@@ -319,10 +320,10 @@ function DiscountModal({
       if (data.success) {
         onSave();
       } else {
-        setError(data.error || 'Failed to save discount');
+        setError(data.error || dict.admin?.saveError || 'Failed to save discount');
       }
     } catch (error) {
-      setError('Failed to save discount');
+      setError(dict.admin?.saveError || 'Failed to save discount');
     } finally {
       setSaving(false);
     }
@@ -339,7 +340,7 @@ function DiscountModal({
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Code *
+                  {dict.admin?.code || 'Code'} *
                 </label>
                 <input
                   type="text"
@@ -359,8 +360,8 @@ function DiscountModal({
                   onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="percentage">Percentage</option>
-                  <option value="fixed">Fixed Amount</option>
+                  <option value="percentage">{dict.admin?.percentage || 'Percentage'}</option>
+                  <option value="fixed">{dict.admin?.fixed || 'Fixed Amount'}</option>
                 </select>
               </div>
             </div>
@@ -389,7 +390,7 @@ function DiscountModal({
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Value * {formData.type === 'percentage' ? '(%)' : `(${settings?.currency || 'USD'})`}
+                  {dict.admin?.value || 'Value'} * {formData.type === 'percentage' ? '(%)' : `(${settings?.currency || 'USD'})`}
                 </label>
                 <input
                   type="number"
@@ -404,7 +405,7 @@ function DiscountModal({
               {formData.type === 'percentage' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Max Discount Amount ($)
+                    {dict.admin?.maxDiscount || 'Max Discount Amount'} ({settings?.currencySymbol || '$'})
                   </label>
                   <input
                     type="number"
@@ -420,7 +421,7 @@ function DiscountModal({
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Min Purchase Amount ($)
+                    {dict.admin?.minPurchase || 'Min Purchase Amount'} ({settings?.currencySymbol || '$'})
                 </label>
                 <input
                   type="number"
@@ -433,7 +434,7 @@ function DiscountModal({
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Usage Limit
+                  {dict.admin?.usageLimit || 'Usage Limit'}
                 </label>
                 <input
                   type="number"
@@ -441,14 +442,14 @@ function DiscountModal({
                   value={formData.usageLimit}
                   onChange={(e) => setFormData({ ...formData, usageLimit: parseInt(e.target.value) || 0 })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-                  placeholder="Unlimited if 0"
+                  placeholder={dict.admin?.unlimited || 'Unlimited if 0'}
                 />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Valid From *
+                  {dict.admin?.validFrom || 'Valid From'} *
                 </label>
                 <input
                   type="date"
@@ -460,7 +461,7 @@ function DiscountModal({
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Valid Until *
+                  {dict.admin?.validUntil || 'Valid Until'} *
                 </label>
                 <input
                   type="date"

@@ -284,11 +284,11 @@ export default function POSPage() {
       if (data.success) {
         const transaction = data.data;
         if (transaction.status === 'refunded') {
-          alert('This transaction has already been refunded');
+          alert(dict.pos.alreadyRefunded || 'This transaction has already been refunded');
           return;
         }
         if (transaction.status !== 'completed') {
-          alert('Only completed transactions can be refunded');
+          alert(dict.pos.onlyCompletedRefundable || 'Only completed transactions can be refunded');
           return;
         }
         setRefundTransaction(transaction);
@@ -676,7 +676,7 @@ export default function POSPage() {
   };
 
   if (!dict) {
-    return <div className="text-center py-12">{dict?.common.loading || 'Loading...'}</div>;
+    return <div className="text-center py-12">{dict?.common?.loading || 'Loading...'}</div>;
   }
 
   return (
@@ -725,7 +725,7 @@ export default function POSPage() {
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
                         </svg>
-                        {dict.pos?.save || 'Save'}
+                        {dict?.common?.save || 'Save'}
                       </button>
                       <button
                         onClick={clearCart}
@@ -746,7 +746,7 @@ export default function POSPage() {
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                     </svg>
-                    {dict.pos?.load || 'Load'}
+                    {dict?.pos?.loadCart || 'Load'}
                   </button>
                 </div>
               </div>

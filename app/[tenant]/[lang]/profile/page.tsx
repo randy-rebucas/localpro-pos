@@ -97,13 +97,13 @@ export default function ProfilePage() {
     setMessage(null);
 
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      setMessage({ type: 'error', text: 'New passwords do not match' });
+      setMessage({ type: 'error', text: dict?.profile?.passwordsNotMatch || 'New passwords do not match' });
       setSaving(false);
       return;
     }
 
     if (passwordData.newPassword.length < 8) {
-      setMessage({ type: 'error', text: 'Password must be at least 8 characters long' });
+      setMessage({ type: 'error', text: dict?.profile?.passwordTooShort || 'Password must be at least 8 characters long' });
       setSaving(false);
       return;
     }
@@ -145,13 +145,13 @@ export default function ProfilePage() {
     setMessage(null);
 
     if (pinData.newPin !== pinData.confirmPin) {
-      setMessage({ type: 'error', text: 'New PINs do not match' });
+      setMessage({ type: 'error', text: dict?.profile?.pinsNotMatch || 'New PINs do not match' });
       setSaving(false);
       return;
     }
 
     if (!/^\d{4,8}$/.test(pinData.newPin)) {
-      setMessage({ type: 'error', text: 'PIN must be 4-8 digits' });
+      setMessage({ type: 'error', text: dict?.profile?.pinInvalid || 'PIN must be 4-8 digits' });
       setSaving(false);
       return;
     }
