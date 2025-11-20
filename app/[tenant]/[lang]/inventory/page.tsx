@@ -53,7 +53,7 @@ export default function InventoryPage() {
   };
 
   if (!dict) {
-    return <div>Loading...</div>;
+    return <div>{dict?.common?.loading || 'Loading...'}</div>;
   }
 
   return (
@@ -63,19 +63,19 @@ export default function InventoryPage() {
         <div className="mb-6">
           <PageTitle />
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-4">
-            Inventory Management
+            {dict?.inventory?.title || 'Inventory Management'}
           </h1>
           <div className="mt-4 flex items-center justify-between">
             <div className="flex items-center gap-4">
               <label className="text-sm font-medium text-gray-700">
-                Branch:
+                {dict?.inventory?.branch || 'Branch'}:
               </label>
               <select
                 value={selectedBranch}
                 onChange={(e) => setSelectedBranch(e.target.value)}
                 className="block w-48 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
               >
-                <option value="">All Branches</option>
+                <option value="">{dict?.inventory?.allBranches || 'All Branches'}</option>
                 {branches.map((branch) => (
                   <option key={branch._id} value={branch._id}>
                     {branch.name} {branch.code && `(${branch.code})`}
@@ -105,55 +105,55 @@ export default function InventoryPage() {
 
         <div className="mt-8 bg-white rounded-lg shadow p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            Inventory Features
+            {dict?.inventory?.features || 'Inventory Features'}
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="p-4 border border-gray-200 rounded-lg">
               <h3 className="font-medium text-gray-900 mb-2">
-                ✓ Real-time Stock Tracking
+                ✓ {dict?.inventory?.realtimeTracking || 'Real-time Stock Tracking'}
               </h3>
               <p className="text-sm text-gray-600">
-                Monitor stock levels in real-time across all branches
+                {dict?.inventory?.realtimeTrackingDesc || 'Monitor stock levels in real-time across all branches'}
               </p>
             </div>
             <div className="p-4 border border-gray-200 rounded-lg">
               <h3 className="font-medium text-gray-900 mb-2">
-                ✓ Low Stock Alerts
+                ✓ {dict?.inventory?.lowStockAlerts || 'Low Stock Alerts'}
               </h3>
               <p className="text-sm text-gray-600">
-                Get notified when products fall below threshold
+                {dict?.inventory?.lowStockAlertsDesc || 'Get notified when products fall below threshold'}
               </p>
             </div>
             <div className="p-4 border border-gray-200 rounded-lg">
               <h3 className="font-medium text-gray-900 mb-2">
-                ✓ Auto-decrement on Sale
+                ✓ {dict?.inventory?.autoDecrement || 'Auto-decrement on Sale'}
               </h3>
               <p className="text-sm text-gray-600">
-                Stock automatically decreases when items are sold
+                {dict?.inventory?.autoDecrementDesc || 'Stock automatically decreases when items are sold'}
               </p>
             </div>
             <div className="p-4 border border-gray-200 rounded-lg">
               <h3 className="font-medium text-gray-900 mb-2">
-                ✓ Multi-branch Monitoring
+                ✓ {dict?.inventory?.multiBranch || 'Multi-branch Monitoring'}
               </h3>
               <p className="text-sm text-gray-600">
-                Track inventory across multiple locations
+                {dict?.inventory?.multiBranchDesc || 'Track inventory across multiple locations'}
               </p>
             </div>
             <div className="p-4 border border-gray-200 rounded-lg">
               <h3 className="font-medium text-gray-900 mb-2">
-                ✓ Item Variations
+                ✓ {dict?.inventory?.itemVariations || 'Item Variations'}
               </h3>
               <p className="text-sm text-gray-600">
-                Support for size, color, and type variations
+                {dict?.inventory?.itemVariationsDesc || 'Support for size, color, and type variations'}
               </p>
             </div>
             <div className="p-4 border border-gray-200 rounded-lg">
               <h3 className="font-medium text-gray-900 mb-2">
-                ✓ Bundled Products
+                ✓ {dict?.inventory?.bundledProducts || 'Bundled Products'}
               </h3>
               <p className="text-sm text-gray-600">
-                Create service + materials packages
+                {dict?.inventory?.bundledProductsDesc || 'Create service + materials packages'}
               </p>
             </div>
           </div>

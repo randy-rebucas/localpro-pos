@@ -255,7 +255,7 @@ export default function ReportsPage() {
   };
 
   if (!dict) {
-    return <div className="text-center py-12">{dict?.common.loading || 'Loading...'}</div>;
+    return <div className="text-center py-12">{dict?.common?.loading || 'Loading...'}</div>;
   }
 
   return (
@@ -341,7 +341,7 @@ export default function ReportsPage() {
               {loading ? (
                 <div className="flex items-center justify-center py-12">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                  <span className="ml-3 text-gray-600">{dict.common.loading || 'Loading...'}</span>
+                  <span className="ml-3 text-gray-600">{dict?.common?.loading || 'Loading...'}</span>
                 </div>
               ) : (
                 <>
@@ -365,7 +365,7 @@ export default function ReportsPage() {
                         <svg className="mx-auto h-16 w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                         </svg>
-                        <p className="text-gray-500 text-lg">{dict.reports?.noData || 'No product performance data available for the selected period'}</p>
+                        <p className="text-gray-500 text-lg">{dict?.reports?.noData || 'No product performance data available for the selected period'}</p>
                       </div>
                     )
                   )}

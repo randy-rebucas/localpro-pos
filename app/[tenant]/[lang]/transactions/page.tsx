@@ -114,7 +114,7 @@ export default function TransactionsPage() {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Receipt</title>
+          <title>${dict.pos.receipt || 'Receipt'}</title>
           <style>
             body {
               font-family: 'Courier New', monospace;
@@ -148,8 +148,8 @@ export default function TransactionsPage() {
         </head>
         <body>
           <div class="header">
-            <h2>POS SYSTEM</h2>
-            <p>Receipt #${transaction._id.slice(-8)}</p>
+            <h2>${dict.pos.receiptTitle || 'POS SYSTEM'}</h2>
+            <p>${dict.pos.receiptNumber || 'Receipt'} #${transaction._id.slice(-8)}</p>
             <p>${formatDateForReceipt(transaction.createdAt)}</p>
           </div>
           ${transaction.items
@@ -187,7 +187,7 @@ export default function TransactionsPage() {
               : ''}
           </div>
           <div class="footer">
-            <p>Thank you for your business!</p>
+            <p>${dict.pos.thankYou || 'Thank you for your business!'}</p>
           </div>
         </body>
       </html>
@@ -199,7 +199,7 @@ export default function TransactionsPage() {
   };
 
   if (!dict) {
-    return <div className="text-center py-12">Loading...</div>;
+    return <div className="text-center py-12">{dict?.common?.loading || 'Loading...'}</div>;
   }
 
   // Combine and sort transactions and expenses by date

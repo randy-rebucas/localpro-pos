@@ -67,7 +67,7 @@ export default function SettingsPage() {
       setTimeout(() => setDetectedInfo(null), 5000);
     } catch (error) {
       console.error('Error detecting location:', error);
-      setMessage({ type: 'error', text: 'Failed to detect location. Please set manually.' });
+      setMessage({ type: 'error', text: dict?.settings?.failedToDetect || 'Failed to detect location. Please set manually.' });
     } finally {
       setDetecting(false);
     }
@@ -156,7 +156,7 @@ export default function SettingsPage() {
         setSettings(data.data);
       } else {
         if (res.status === 401 || res.status === 403) {
-          setMessage({ type: 'error', text: 'Unauthorized. Please login with admin or manager account to save settings.' });
+          setMessage({ type: 'error', text: dict?.settings?.unauthorized || 'Unauthorized. Please login with admin or manager account to save settings.' });
         } else {
           setMessage({ type: 'error', text: data.error || 'Failed to save settings' });
         }
@@ -209,7 +209,7 @@ export default function SettingsPage() {
         <Navbar />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
           <div className="bg-red-50 border-2 border-red-200 rounded-xl shadow-md p-5 sm:p-6">
-            <h2 className="text-xl font-bold text-red-800 mb-2">Failed to Load Settings</h2>
+            <h2 className="text-xl font-bold text-red-800 mb-2">{dict?.settings?.failedToLoad || 'Failed to Load Settings'}</h2>
             <p className="text-red-700 mb-4">
               {message?.text || 'Unable to load tenant settings. Please check your connection and try again.'}
             </p>
@@ -217,7 +217,7 @@ export default function SettingsPage() {
               onClick={fetchSettings}
               className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 font-medium transition-colors shadow-sm hover:shadow-md"
             >
-              Retry
+              {dict?.settings?.retry || 'Retry'}
             </button>
           </div>
         </div>
@@ -322,14 +322,14 @@ export default function SettingsPage() {
                       {detecting ? (
                         <>
                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                          <span>Detecting...</span>
+                          <span>{dict?.settings?.detecting || 'Detecting...'}</span>
                         </>
                       ) : (
                         <>
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
-                          <span>Auto-Detect Location</span>
+                          <span>{dict?.settings?.detectLocation || 'Auto-Detect Location'}</span>
                         </>
                       )}
                     </button>
