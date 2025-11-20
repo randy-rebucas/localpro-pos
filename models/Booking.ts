@@ -106,12 +106,12 @@ BookingSchema.index({ tenantId: 1, staffId: 1, startTime: 1 });
 BookingSchema.index({ startTime: 1, endTime: 1 }); // For conflict detection
 
 // Virtual to check if booking is in the past
-BookingSchema.virtual('isPast').get(function() {
+BookingSchema.virtual('isPast').get(function(this: IBooking) {
   return this.endTime < new Date();
 });
 
 // Virtual to check if booking is today
-BookingSchema.virtual('isToday').get(function() {
+BookingSchema.virtual('isToday').get(function(this: IBooking) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const bookingDate = new Date(this.startTime);
@@ -120,7 +120,7 @@ BookingSchema.virtual('isToday').get(function() {
 });
 
 // Pre-save middleware to calculate endTime if not provided
-BookingSchema.pre('save', async function(next) {
+BookingSchema.pre('save', async function(this: IBooking, next) {
   if (this.isModified('startTime') || this.isModified('duration')) {
     if (this.startTime && this.duration && !this.endTime) {
       this.endTime = new Date(this.startTime.getTime() + this.duration * 60000);
@@ -131,8 +131,8 @@ BookingSchema.pre('save', async function(next) {
   if (this.isModified('staffId') && this.staffId) {
     try {
       const User = mongoose.model('User');
-      const staff = await User.findById(this.staffId).select('name').lean();
-      if (staff) {
+      const staff = await User.findById(this.staffId).select('name').lean() as { name: string } | null;
+      if (staff && staff.name) {
         this.staffName = staff.name;
       }
     } catch (error) {

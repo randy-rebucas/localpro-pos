@@ -35,6 +35,10 @@ interface User {
   email: string;
 }
 
+type BookingUpdate = Omit<Partial<Booking>, 'staffId'> & {
+  staffId?: string;
+};
+
 export default function BookingsPage() {
   const params = useParams();
   const tenant = params.tenant as string;
@@ -155,7 +159,7 @@ export default function BookingsPage() {
     }
   };
 
-  const handleUpdateBooking = async (id: string, updates: Partial<Booking>) => {
+  const handleUpdateBooking = async (id: string, updates: BookingUpdate) => {
     try {
       const token = document.cookie
         .split('; ')

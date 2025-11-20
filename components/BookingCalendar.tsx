@@ -8,15 +8,22 @@ interface Booking {
   customerEmail?: string;
   customerPhone?: string;
   serviceName: string;
+  serviceDescription?: string;
   startTime: string;
   endTime: string;
+  duration: number;
   status: 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'no-show';
   staffId?: {
     _id: string;
     name: string;
+    email: string;
   };
   staffName?: string;
   notes?: string;
+  reminderSent?: boolean;
+  confirmationSent?: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface BookingCalendarProps {
