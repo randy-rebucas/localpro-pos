@@ -46,18 +46,26 @@ export default function Navbar() {
     }
   }, [userMenuOpen]);
 
-  const navItems = [
+  // Base navigation items available to all authenticated users
+  const baseNavItems = [
     { href: `/${tenant}/${lang}`, key: 'dashboard' },
     { href: `/${tenant}/${lang}/pos`, key: 'pos' },
     { href: `/${tenant}/${lang}/products`, key: 'products' },
+    { href: `/${tenant}/${lang}/inventory`, key: 'inventory' },
     { href: `/${tenant}/${lang}/transactions`, key: 'transactions' },
     { href: `/${tenant}/${lang}/reports`, key: 'reports' },
   ];
 
-  const switchLanguage = (newLang: 'en' | 'es') => {
-    const currentPath = pathname.replace(`/${tenant}/${lang}`, '') || '/';
-    router.push(`/${tenant}/${newLang}${currentPath}`);
-  };
+  // Conditional navigation items based on feature flags
+  const conditionalNavItems = [];
+  
+  // Add Bookings if the feature is enabled
+  if (settings?.enableBookingScheduling) {
+    conditionalNavItems.push({ href: `/${tenant}/${lang}/admin/bookings`, key: 'bookings' });
+  }
+
+  // Combine all navigation items
+  const navItems = [...baseNavItems, ...conditionalNavItems];
 
   const handleLogout = async () => {
     await logout();
@@ -113,7 +121,7 @@ export default function Navbar() {
                     }`}
                     style={isActive ? { backgroundColor: primaryColor } : {}}
                   >
-                    {dict.nav[item.key]}
+                    {dict?.nav?.[item.key] || item.key.charAt(0).toUpperCase() + item.key.slice(1)}
                   </Link>
                 );
               })}
@@ -122,34 +130,6 @@ export default function Navbar() {
           
           {/* Right Side Actions - Desktop */}
           <div className="hidden lg:flex lg:items-center lg:space-x-4 lg:ml-auto">
-            {/* Language Selector */}
-            <div className="flex items-center space-x-1 bg-gray-100 rounded-lg p-1">
-              <button
-                onClick={() => switchLanguage('en')}
-                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all duration-200 ${
-                  lang === 'en'
-                    ? 'bg-white shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-                style={lang === 'en' ? { color: primaryColor } : {}}
-                aria-label="Switch to English"
-              >
-                EN
-              </button>
-              <button
-                onClick={() => switchLanguage('es')}
-                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all duration-200 ${
-                  lang === 'es'
-                    ? 'bg-white shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-                style={lang === 'es' ? { color: primaryColor } : {}}
-                aria-label="Switch to Spanish"
-              >
-                ES
-              </button>
-            </div>
-
             {/* User Section with Dropdown */}
             {isAuthenticated && user ? (
               <div className="relative" data-user-menu>
@@ -333,7 +313,7 @@ export default function Navbar() {
                       : 'text-gray-700 hover:bg-gray-50'
                   }`}
                 >
-                  {dict.nav[item.key]}
+                  {dict?.nav?.[item.key] || item.key.charAt(0).toUpperCase() + item.key.slice(1)}
                 </Link>
               );
             })}
@@ -446,40 +426,6 @@ export default function Navbar() {
                 </Link>
               </div>
             )}
-            
-            {/* Language Selector - Mobile */}
-            <div className="px-4 pt-2">
-              <div className="flex items-center space-x-2 bg-gray-100 rounded-lg p-1">
-                <button
-                  onClick={() => {
-                    switchLanguage('en');
-                    setMobileMenuOpen(false);
-                  }}
-                  className={`flex-1 px-4 py-2.5 rounded-md text-sm font-semibold transition-all ${
-                    lang === 'en'
-                      ? 'bg-white shadow-sm'
-                      : 'text-gray-600'
-                  }`}
-                  style={lang === 'en' ? { color: primaryColor } : {}}
-                >
-                  English
-                </button>
-                <button
-                  onClick={() => {
-                    switchLanguage('es');
-                    setMobileMenuOpen(false);
-                  }}
-                  className={`flex-1 px-4 py-2.5 rounded-md text-sm font-semibold transition-all ${
-                    lang === 'es'
-                      ? 'bg-white shadow-sm'
-                      : 'text-gray-600'
-                  }`}
-                  style={lang === 'es' ? { color: primaryColor } : {}}
-                >
-                  Español
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       )}

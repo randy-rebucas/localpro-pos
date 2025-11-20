@@ -146,6 +146,7 @@ export function getDefaultTenantSettings(): ITenantSettings {
     enableDiscounts: false,
     enableLoyaltyProgram: false,
     enableCustomerManagement: false,
+    enableBookingScheduling: false,
   };
 }
 

@@ -65,6 +65,7 @@ export interface ITenantSettings {
   enableDiscounts?: boolean;
   enableLoyaltyProgram?: boolean;
   enableCustomerManagement?: boolean;
+  enableBookingScheduling?: boolean;
   
   // Hardware Configuration
   hardwareConfig?: {
@@ -275,6 +276,10 @@ const TenantSchema: Schema = new Schema(
         default: false,
       },
       enableCustomerManagement: {
+        type: Boolean,
+        default: false,
+      },
+      enableBookingScheduling: {
         type: Boolean,
         default: false,
       },
