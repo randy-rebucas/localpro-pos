@@ -155,6 +155,17 @@ export default function AdminPage() {
       ),
       color: 'purple',
     },
+    {
+      title: dict.admin?.bookings || 'Bookings',
+      description: dict.admin?.bookingsDescription || 'Manage appointments, scheduling, and bookings',
+      href: `/${tenant}/${lang}/admin/bookings`,
+      icon: (
+        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      ),
+      color: 'violet',
+    },
   ];
 
   return (
@@ -186,6 +197,7 @@ export default function AdminPage() {
                 card.color === 'cyan' ? 'bg-cyan-100 text-cyan-600' :
                 card.color === 'pink' ? 'bg-pink-100 text-pink-600' :
                 card.color === 'emerald' ? 'bg-emerald-100 text-emerald-600' :
+                card.color === 'violet' ? 'bg-violet-100 text-violet-600' :
                 'bg-purple-100 text-purple-600'
               }`}>
                 {card.icon}

@@ -15,15 +15,26 @@
     "previous": "Previous",
     "total": "Total",
     "actions": "Actions",
-    "noResults": "No results found"
+    "noResults": "No results found",
+    "view": "View",
+    "type": "Type",
+    "switchStore": "Switch Store",
+    "logout": "Logout",
+    "login": "Login"
   },
   "nav": {
     "dashboard": "Dashboard",
     "pos": "POS",
     "products": "Products",
+    "inventory": "Inventory",
     "transactions": "Transactions",
     "reports": "Reports",
-    "settings": "Settings"
+    "bookings": "Bookings",
+    "settings": "Settings",
+    "profile": "Profile",
+    "admin": "Admin",
+    "switchStore": "Switch Store",
+    "logout": "Logout"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -160,7 +171,6 @@
     "page": "Page",
     "of": "of",
     "item": "item",
-    "items": "items",
     "cash": "Cash",
     "change": "Change",
     "previous": "Previous",
@@ -176,21 +186,7 @@
     "description": "Description",
     "notes": "Notes"
   },
-  "settings": {
-    "title": "Store Settings",
-    "subtitle": "Configure your store preferences and branding",
-    "tabs": {
-      "general": "General",
-      "branding": "Branding",
-      "contact": "Contact",
-      "hardware": "Hardware"
-    },
-    "save": "Save Settings",
-    "saving": "Saving...",
-    "saved": "Settings saved successfully!",
-    "error": "Failed to save settings",
-    "loading": "Loading settings..."
-  },
+  
   "reports": {
     "title": "Reports & Analytics",
     "subtitle": "View detailed reports and analytics for your business",
@@ -260,18 +256,7 @@
     "invalidQR": "Invalid QR code",
     "enterBoth": "Please enter both email and password"
   },
-  "nav": {
-    "dashboard": "Dashboard",
-    "pos": "POS",
-    "products": "Products",
-    "transactions": "Transactions",
-    "reports": "Reports",
-    "settings": "Settings",
-    "profile": "Profile",
-    "admin": "Admin",
-    "switchStore": "Switch Store",
-    "logout": "Logout"
-  },
+  
   "inventory": {
     "title": "Inventory Management",
     "branch": "Branch",
@@ -396,29 +381,6 @@
     "deactivate": "Deactivate",
     "successfully": "successfully",
     "to": "to"
-  },
-  "common": {
-    "loading": "Loading...",
-    "save": "Save",
-    "cancel": "Cancel",
-    "edit": "Edit",
-    "delete": "Delete",
-    "add": "Add",
-    "search": "Search",
-    "clear": "Clear",
-    "print": "Print",
-    "close": "Close",
-    "back": "Back",
-    "next": "Next",
-    "previous": "Previous",
-    "total": "Total",
-    "actions": "Actions",
-    "noResults": "No results found",
-    "view": "View",
-    "type": "Type",
-    "switchStore": "Switch Store",
-    "logout": "Logout",
-    "login": "Login"
   }
 }
 

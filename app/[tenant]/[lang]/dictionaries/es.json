@@ -15,15 +15,26 @@
     "previous": "Anterior",
     "total": "Total",
     "actions": "Acciones",
-    "noResults": "No se encontraron resultados"
+    "noResults": "No se encontraron resultados",
+    "view": "Ver",
+    "type": "Tipo",
+    "switchStore": "Cambiar Tienda",
+    "logout": "Cerrar Sesión",
+    "login": "Iniciar Sesión"
   },
   "nav": {
     "dashboard": "Panel",
     "pos": "TPV",
     "products": "Productos",
+    "inventory": "Inventario",
     "transactions": "Transacciones",
     "reports": "Informes",
-    "settings": "Configuración"
+    "bookings": "Reservas",
+    "settings": "Configuración",
+    "profile": "Perfil",
+    "admin": "Administración",
+    "switchStore": "Cambiar Tienda",
+    "logout": "Cerrar Sesión"
   },
   "dashboard": {
     "title": "Panel",
@@ -160,7 +171,6 @@
     "page": "Página",
     "of": "de",
     "item": "artículo",
-    "items": "artículos",
     "cash": "Efectivo",
     "change": "Cambio",
     "previous": "Anterior",
@@ -183,13 +193,21 @@
       "general": "General",
       "branding": "Marca",
       "contact": "Contacto",
-      "hardware": "Hardware"
+      "hardware": "Hardware",
+      "reset": "Restablecer Datos"
     },
     "save": "Guardar Configuración",
     "saving": "Guardando...",
     "saved": "¡Configuración guardada exitosamente!",
     "error": "Error al guardar configuración",
-    "loading": "Cargando configuración..."
+    "loading": "Cargando configuración...",
+    "failedToLoad": "Error al Cargar Configuración",
+    "retry": "Reintentar",
+    "unauthorized": "No autorizado. Por favor inicie sesión con una cuenta de administrador o gerente para guardar la configuración.",
+    "detectLocation": "Detectar Ubicación",
+    "detecting": "Detectando...",
+    "detected": "Detectado",
+    "failedToDetect": "Error al detectar la ubicación. Por favor configure manualmente."
   },
   "reports": {
     "title": "Informes y Análisis",
@@ -260,18 +278,6 @@
     "invalidQR": "Código QR inválido",
     "enterBoth": "Por favor ingrese tanto el correo electrónico como la contraseña"
   },
-  "nav": {
-    "dashboard": "Panel",
-    "pos": "TPV",
-    "products": "Productos",
-    "transactions": "Transacciones",
-    "reports": "Informes",
-    "settings": "Configuración",
-    "profile": "Perfil",
-    "admin": "Administrador",
-    "switchStore": "Cambiar Tienda",
-    "logout": "Cerrar Sesión"
-  },
   "inventory": {
     "title": "Gestión de Inventario",
     "branch": "Sucursal",
@@ -311,29 +317,6 @@
     "confirmPIN": "Confirmar PIN",
     "qrCode": "Código QR",
     "qrCodeDescription": "Escanee este código QR para iniciar sesión rápidamente"
-  },
-  "settings": {
-    "title": "Configuración de Tienda",
-    "subtitle": "Configure las preferencias y marca de su tienda",
-    "tabs": {
-      "general": "General",
-      "branding": "Marca",
-      "contact": "Contacto",
-      "hardware": "Hardware",
-      "reset": "Restablecer Datos"
-    },
-    "save": "Guardar Configuración",
-    "saving": "Guardando...",
-    "saved": "¡Configuración guardada exitosamente!",
-    "error": "Error al guardar configuración",
-    "loading": "Cargando configuración...",
-    "failedToLoad": "Error al Cargar Configuración",
-    "retry": "Reintentar",
-    "unauthorized": "No autorizado. Por favor inicie sesión con una cuenta de administrador o gerente para guardar la configuración.",
-    "detectLocation": "Detectar Ubicación",
-    "detecting": "Detectando...",
-    "detected": "Detectado",
-    "failedToDetect": "Error al detectar la ubicación. Por favor configure manualmente."
   },
   "admin": {
     "title": "Gestión de Administración",
@@ -396,29 +379,6 @@
     "deactivate": "Desactivar",
     "successfully": "exitosamente",
     "to": "a"
-  },
-  "common": {
-    "loading": "Cargando...",
-    "save": "Guardar",
-    "cancel": "Cancelar",
-    "edit": "Editar",
-    "delete": "Eliminar",
-    "add": "Agregar",
-    "search": "Buscar",
-    "clear": "Limpiar",
-    "print": "Imprimir",
-    "close": "Cerrar",
-    "back": "Atrás",
-    "next": "Siguiente",
-    "previous": "Anterior",
-    "total": "Total",
-    "actions": "Acciones",
-    "noResults": "No se encontraron resultados",
-    "view": "Ver",
-    "type": "Tipo",
-    "switchStore": "Cambiar Tienda",
-    "logout": "Cerrar Sesión",
-    "login": "Iniciar Sesión"
   }
 }
 
