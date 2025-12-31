@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { detectLocation } from '@/lib/location-detection';
 
 export default function SignupPage() {
   const router = useRouter();
@@ -25,6 +26,34 @@ export default function SignupPage() {
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
   const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
+  const [phonePlaceholder, setPhonePlaceholder] = useState('+1 (555) 123-4567');
+  const [detectingLocation, setDetectingLocation] = useState(true);
+
+  // Detect location on component mount
+  useEffect(() => {
+    const detectUserLocation = async () => {
+      try {
+        const detected = await detectLocation();
+        if (detected) {
+          setFormData(prev => ({
+            ...prev,
+            currency: detected.currency,
+            language: detected.language,
+          }));
+          if (detected.phoneFormat) {
+            setPhonePlaceholder(detected.phoneFormat.placeholder);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to detect location:', err);
+        // Keep defaults if detection fails
+      } finally {
+        setDetectingLocation(false);
+      }
+    };
+
+    detectUserLocation();
+  }, []);
 
   const validatePassword = (password: string) => {
     const errors: string[] = [];
@@ -276,6 +305,7 @@ export default function SignupPage() {
                   value={formData.currency}
                   onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
                   className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all"
+                  disabled={detectingLocation}
                 >
                   <option value="USD">USD - US Dollar</option>
                   <option value="EUR">EUR - Euro</option>
@@ -283,7 +313,21 @@ export default function SignupPage() {
                   <option value="CAD">CAD - Canadian Dollar</option>
                   <option value="AUD">AUD - Australian Dollar</option>
                   <option value="MXN">MXN - Mexican Peso</option>
+                  <option value="PHP">PHP - Philippine Peso</option>
+                  <option value="JPY">JPY - Japanese Yen</option>
+                  <option value="CNY">CNY - Chinese Yuan</option>
+                  <option value="INR">INR - Indian Rupee</option>
+                  <option value="SGD">SGD - Singapore Dollar</option>
+                  <option value="HKD">HKD - Hong Kong Dollar</option>
+                  <option value="THB">THB - Thai Baht</option>
+                  <option value="IDR">IDR - Indonesian Rupiah</option>
+                  <option value="MYR">MYR - Malaysian Ringgit</option>
+                  <option value="BRL">BRL - Brazilian Real</option>
+                  <option value="ZAR">ZAR - South African Rand</option>
                 </select>
+                {detectingLocation && (
+                  <p className="mt-1 text-xs text-gray-500">Detecting your location...</p>
+                )}
               </div>
 
               <div>
@@ -313,7 +357,7 @@ export default function SignupPage() {
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all"
-                  placeholder="+1 (555) 123-4567"
+                  placeholder={phonePlaceholder}
                 />
               </div>
 

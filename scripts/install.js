@@ -62,6 +62,81 @@ function generateJWTSecret() {
   return crypto.randomBytes(32).toString('hex');
 }
 
+// Reset admin users for a tenant
+async function resetAdminUsers(tenantSlug = 'default') {
+  try {
+    logInfo(`Resetting admin users for tenant: ${tenantSlug}...`);
+    
+    // Create a temporary reset script
+    const resetScriptPath = path.join(process.cwd(), 'scripts', 'reset-admin-users.ts');
+    const resetScriptContent = `import dotenv from 'dotenv';
+import { resolve } from 'path';
+
+dotenv.config({ path: resolve(process.cwd(), '.env.local') });
+dotenv.config({ path: resolve(process.cwd(), '.env') });
+
+import mongoose from 'mongoose';
+import User from '../models/User';
+import Tenant from '../models/Tenant';
+
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/pos-system';
+const tenantSlug = process.argv[2] || 'default';
+
+async function resetAdminUsers() {
+  try {
+    await mongoose.connect(MONGODB_URI);
+    console.log('Connected to MongoDB');
+    
+    const tenant = await Tenant.findOne({ slug: tenantSlug });
+    if (!tenant) {
+      console.log('Tenant "' + tenantSlug + '" not found');
+      await mongoose.disconnect();
+      process.exit(0);
+    }
+    
+    const result = await User.deleteMany({ 
+      tenantId: tenant._id, 
+      role: { $in: ['admin', 'owner'] } 
+    });
+    
+    console.log('Deleted ' + result.deletedCount + ' admin user(s) for tenant "' + tenantSlug + '"');
+    await mongoose.disconnect();
+  } catch (error: any) {
+    console.error('Error resetting admin users:', error.message);
+    process.exit(1);
+  }
+}
+
+resetAdminUsers();
+`;
+    
+    fs.writeFileSync(resetScriptPath, resetScriptContent);
+    
+    try {
+      execSync(`npx tsx scripts/reset-admin-users.ts ${tenantSlug}`, { 
+        stdio: 'inherit',
+        cwd: process.cwd()
+      });
+      logSuccess(`Admin users reset for tenant: ${tenantSlug}`);
+    } catch (error) {
+      logWarning(`Failed to reset admin users: ${error.message}`);
+      logInfo('Continuing with installation...');
+    } finally {
+      // Clean up temporary script
+      if (fs.existsSync(resetScriptPath)) {
+        try {
+          fs.unlinkSync(resetScriptPath);
+        } catch (cleanupError) {
+          // Ignore cleanup errors
+        }
+      }
+    }
+  } catch (error) {
+    logWarning(`Failed to reset admin users: ${error.message}`);
+    logInfo('Continuing with installation...');
+  }
+}
+
 // Main installation function
 async function install() {
   console.log('');
@@ -218,11 +293,59 @@ DEFAULT_TENANT_SLUG=default
     const skipSetup = process.argv.includes('--skip-db');
     
     if (!skipSetup) {
-      logInfo('To create default tenant, run:');
-      logInfo('  npx tsx scripts/create-default-tenant.ts', 'yellow');
-      logInfo('');
-      logInfo('To create admin user, run:');
-      logInfo('  npx tsx scripts/create-admin-user.ts <tenant-slug> <email> <password> <name>', 'yellow');
+      // Check if user wants to create tenant and admin interactively
+      const createTenant = process.argv.includes('--create-tenant') || process.argv.includes('--create-admin');
+      const createAdmin = process.argv.includes('--create-admin');
+      
+      if (createTenant || createAdmin) {
+        // Create default tenant first
+        logInfo('Creating default tenant...');
+        try {
+          execSync('npx tsx scripts/create-default-tenant.ts', { stdio: 'inherit' });
+          logSuccess('Default tenant created');
+        } catch (error) {
+          logWarning('Failed to create default tenant (may already exist)');
+        }
+        
+        if (createAdmin) {
+          // Reset admin users before creating new one (default behavior, can be skipped with --no-reset)
+          const skipReset = process.argv.includes('--no-reset');
+          if (!skipReset) {
+            await resetAdminUsers('default');
+          } else {
+            logInfo('Skipping admin user reset (--no-reset flag)');
+          }
+          
+          // Get admin user details from command line or use defaults
+          const tenantSlug = process.argv.find(arg => arg.startsWith('--tenant='))?.split('=')[1] || 'default';
+          const adminEmail = process.argv.find(arg => arg.startsWith('--email='))?.split('=')[1] || 'admin@example.com';
+          const adminPassword = process.argv.find(arg => arg.startsWith('--password='))?.split('=')[1] || 'Admin123!';
+          const adminName = process.argv.find(arg => arg.startsWith('--name='))?.split('=')[1] || 'Administrator';
+          
+          logInfo('Creating admin user...');
+          try {
+            execSync(`npx tsx scripts/create-admin-user.ts ${tenantSlug} ${adminEmail} ${adminPassword} "${adminName}"`, { 
+              stdio: 'inherit' 
+            });
+            logSuccess('Admin user created successfully');
+          } catch (error) {
+            logWarning('Failed to create admin user');
+          }
+        }
+      } else {
+        logInfo('To create default tenant, run:');
+        logInfo('  npx tsx scripts/create-default-tenant.ts', 'yellow');
+        logInfo('');
+        logInfo('To create admin user (with automatic reset), run:');
+        logInfo('  node scripts/install.js --create-admin --email=admin@example.com --password=Admin123!', 'yellow');
+        logInfo('  (Use --no-reset to skip reset)');
+        logInfo('');
+        logInfo('Or manually create admin user:');
+        logInfo('  npx tsx scripts/create-admin-user.ts <tenant-slug> <email> <password> <name>', 'yellow');
+        logInfo('');
+        logInfo('Or use flags to create tenant and admin automatically:');
+        logInfo('  node scripts/install.js --create-tenant --create-admin --email=admin@example.com --password=Admin123!', 'yellow');
+      }
     } else {
       logInfo('Skipping database setup (--skip-db flag)');
     }
@@ -236,7 +359,9 @@ DEFAULT_TENANT_SLUG=default
     log('Next steps:', 'bright');
     logInfo('1. Update .env.local with your MongoDB connection string');
     logInfo('2. Create default tenant: npx tsx scripts/create-default-tenant.ts');
-    logInfo('3. Create admin user: npx tsx scripts/create-admin-user.ts default admin@example.com password "Admin"');
+    logInfo('3. Create admin user (automatically resets existing admins):');
+    logInfo('   node scripts/install.js --create-admin --email=admin@example.com --password=Admin123!');
+    logInfo('   Or manually: npx tsx scripts/create-admin-user.ts default admin@example.com password "Admin"');
     logInfo('4. Start development server: npm run dev');
     console.log('');
 

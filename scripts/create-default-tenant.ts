@@ -30,34 +30,49 @@ async function createDefaultTenant() {
       return;
     }
 
-    // Create default tenant with comprehensive settings
+    // Get default settings and customize (following tenant signup route pattern)
     const defaultSettings = getDefaultTenantSettings();
-    const tenant = await Tenant.create({
+    const settings = {
+      ...defaultSettings,
+      currency: defaultSettings.currency || 'USD',
+      language: (defaultSettings.language || 'en') as 'en' | 'es',
+      companyName: 'Default Store',
+      email: 'admin@default.local',
+      phone: '+1-555-0000',
+    };
+
+    // Create tenant first (following tenant signup route hierarchy)
+    const tenantData: any = {
       slug: 'default',
       name: 'Default Store',
-      settings: defaultSettings,
+      settings,
       isActive: true,
-    });
+    };
 
-    // Automatically create admin user for the default tenant
+    const tenant = await Tenant.create(tenantData);
+
+    // Create admin user for the tenant (after tenant is created)
     const adminEmail = 'admin@default.local';
     const adminPassword = 'Admindefault123!';
+    const adminName = 'Administrator';
     
     try {
       const adminUser = await User.create({
-        email: adminEmail,
+        email: adminEmail.toLowerCase(),
         password: adminPassword,
-        name: 'Administrator',
+        name: adminName,
         role: 'admin',
         tenantId: tenant._id,
         isActive: true,
       });
       
       console.log('Default tenant created:', tenant);
-      console.log('\n✅ Admin User Created:');
+      console.log('\n✅ Admin User Created for Default Store:');
       console.log(`  Email:       ${adminEmail}`);
       console.log(`  Password:    ${adminPassword}`);
       console.log(`  Role:        admin`);
+      console.log(`  Tenant:      ${tenant.name} (${tenant.slug})`);
+      console.log(`  Tenant ID:   ${tenant._id}`);
       console.log('\n⚠️  IMPORTANT: Please change the admin password after first login!');
     } catch (userError: any) {
       console.log('Default tenant created:', tenant);

@@ -10,7 +10,8 @@
     "install:full": "node scripts/install.js",
     "setup": "node scripts/install.js",
     "tenant:create": "tsx scripts/create-tenant.ts",
-    "tenant:default": "tsx scripts/create-default-tenant.ts"
+    "tenant:default": "tsx scripts/create-default-tenant.ts",
+    "reset:collections": "tsx scripts/reset-collections.ts"
   },
   "dependencies": {
     "@formatjs/intl-localematcher": "^0.6.2",
@@ -22,7 +23,7 @@
     "jsqr": "^1.4.0",
     "mongoose": "^8.20.0",
     "negotiator": "^1.0.0",
-    "next": "16.0.3",
+    "next": "^16.1.1",
     "qrcode.react": "^4.2.0",
     "react": "19.2.0",
     "react-dom": "19.2.0",
@@ -34,6 +35,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "baseline-browser-mapping": "^2.9.11",
     "eslint": "^9",
     "eslint-config-next": "16.0.3",
     "tailwindcss": "^4",

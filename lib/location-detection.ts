@@ -17,6 +17,11 @@ export interface DetectedLocation {
   };
   country?: string;
   language: 'en' | 'es';
+  phoneFormat?: {
+    placeholder: string;
+    countryCode: string;
+    pattern?: string;
+  };
 }
 
 /**
@@ -75,6 +80,42 @@ const timeFormatMap: Record<string, '12h' | '24h'> = {
   'pt-BR': '24h', 'pt-PT': '24h', 'nl-NL': '24h',
   'ja-JP': '24h', 'ko-KR': '24h', 'zh-CN': '24h',
   'sv-SE': '24h', 'no-NO': '24h', 'da-DK': '24h',
+};
+
+/**
+ * Phone number format by country code
+ * Format: { placeholder, countryCode, pattern }
+ */
+const phoneFormatMap: Record<string, { placeholder: string; countryCode: string; pattern?: string }> = {
+  US: { placeholder: '+1 (555) 123-4567', countryCode: '+1', pattern: '^\\+1\\s?\\(?\\d{3}\\)?\\s?\\d{3}-?\\d{4}$' },
+  CA: { placeholder: '+1 (555) 123-4567', countryCode: '+1', pattern: '^\\+1\\s?\\(?\\d{3}\\)?\\s?\\d{3}-?\\d{4}$' },
+  MX: { placeholder: '+52 55 1234 5678', countryCode: '+52', pattern: '^\\+52\\s?\\d{2}\\s?\\d{4}\\s?\\d{4}$' },
+  BR: { placeholder: '+55 (11) 91234-5678', countryCode: '+55', pattern: '^\\+55\\s?\\(?\\d{2}\\)?\\s?\\d{4,5}-?\\d{4}$' },
+  GB: { placeholder: '+44 20 1234 5678', countryCode: '+44', pattern: '^\\+44\\s?\\d{2}\\s?\\d{4}\\s?\\d{4}$' },
+  FR: { placeholder: '+33 1 23 45 67 89', countryCode: '+33', pattern: '^\\+33\\s?\\d{1}\\s?\\d{2}\\s?\\d{2}\\s?\\d{2}\\s?\\d{2}$' },
+  DE: { placeholder: '+49 30 12345678', countryCode: '+49', pattern: '^\\+49\\s?\\d{2,4}\\s?\\d{6,8}$' },
+  IT: { placeholder: '+39 06 1234 5678', countryCode: '+39', pattern: '^\\+39\\s?\\d{2}\\s?\\d{4}\\s?\\d{4}$' },
+  ES: { placeholder: '+34 912 34 56 78', countryCode: '+34', pattern: '^\\+34\\s?\\d{3}\\s?\\d{2}\\s?\\d{2}\\s?\\d{2}$' },
+  AU: { placeholder: '+61 2 1234 5678', countryCode: '+61', pattern: '^\\+61\\s?\\d{1}\\s?\\d{4}\\s?\\d{4}$' },
+  NZ: { placeholder: '+64 9 123 4567', countryCode: '+64', pattern: '^\\+64\\s?\\d{1}\\s?\\d{3}\\s?\\d{4}$' },
+  JP: { placeholder: '+81 3-1234-5678', countryCode: '+81', pattern: '^\\+81\\s?\\d{1,2}-?\\d{4}-?\\d{4}$' },
+  CN: { placeholder: '+86 138 0013 8000', countryCode: '+86', pattern: '^\\+86\\s?\\d{3}\\s?\\d{4}\\s?\\d{4}$' },
+  KR: { placeholder: '+82 2-1234-5678', countryCode: '+82', pattern: '^\\+82\\s?\\d{1,2}-?\\d{4}-?\\d{4}$' },
+  IN: { placeholder: '+91 98765 43210', countryCode: '+91', pattern: '^\\+91\\s?\\d{5}\\s?\\d{5}$' },
+  SG: { placeholder: '+65 6123 4567', countryCode: '+65', pattern: '^\\+65\\s?\\d{4}\\s?\\d{4}$' },
+  HK: { placeholder: '+852 1234 5678', countryCode: '+852', pattern: '^\\+852\\s?\\d{4}\\s?\\d{4}$' },
+  TH: { placeholder: '+66 2 123 4567', countryCode: '+66', pattern: '^\\+66\\s?\\d{1,2}\\s?\\d{3}\\s?\\d{4}$' },
+  PH: { placeholder: '+63 912 345 6789', countryCode: '+63', pattern: '^\\+63\\s?\\d{3}\\s?\\d{3}\\s?\\d{4}$' },
+  ID: { placeholder: '+62 812-3456-7890', countryCode: '+62', pattern: '^\\+62\\s?\\d{3}-?\\d{4}-?\\d{4}$' },
+  MY: { placeholder: '+60 12-345 6789', countryCode: '+60', pattern: '^\\+60\\s?\\d{2}-?\\d{3}\\s?\\d{4}$' },
+  VN: { placeholder: '+84 91 234 5678', countryCode: '+84', pattern: '^\\+84\\s?\\d{2}\\s?\\d{3}\\s?\\d{4}$' },
+  ZA: { placeholder: '+27 11 123 4567', countryCode: '+27', pattern: '^\\+27\\s?\\d{2}\\s?\\d{3}\\s?\\d{4}$' },
+  TR: { placeholder: '+90 212 123 4567', countryCode: '+90', pattern: '^\\+90\\s?\\d{3}\\s?\\d{3}\\s?\\d{4}$' },
+  RU: { placeholder: '+7 495 123-45-67', countryCode: '+7', pattern: '^\\+7\\s?\\d{3}\\s?\\d{3}-?\\d{2}-?\\d{2}$' },
+  AR: { placeholder: '+54 11 1234-5678', countryCode: '+54', pattern: '^\\+54\\s?\\d{2}\\s?\\d{4}-?\\d{4}$' },
+  CL: { placeholder: '+56 2 2345 6789', countryCode: '+56', pattern: '^\\+56\\s?\\d{1}\\s?\\d{4}\\s?\\d{4}$' },
+  CO: { placeholder: '+57 1 234 5678', countryCode: '+57', pattern: '^\\+57\\s?\\d{1}\\s?\\d{3}\\s?\\d{4}$' },
+  PE: { placeholder: '+51 1 234 5678', countryCode: '+51', pattern: '^\\+51\\s?\\d{1}\\s?\\d{3}\\s?\\d{4}$' },
 };
 
 /**
@@ -152,6 +193,9 @@ export async function detectLocation(): Promise<DetectedLocation> {
     }
   }
   
+  // Get phone format from country code
+  const phoneFormat = countryCode ? phoneFormatMap[countryCode] : undefined;
+
   return {
     timezone,
     locale,
@@ -166,6 +210,7 @@ export async function detectLocation(): Promise<DetectedLocation> {
     },
     country: countryCode,
     language,
+    phoneFormat,
   };
 }
 
