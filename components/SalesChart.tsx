@@ -93,9 +93,9 @@ export default function SalesChart({ data, dict }: SalesChartProps) {
           <Tooltip 
             contentStyle={{ 
               backgroundColor: '#fff', 
-              border: '1px solid #e5e7eb',
-              borderRadius: '8px',
-              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+              border: '1px solid #d1d5db',
+              borderRadius: '0px',
+              boxShadow: 'none'
             }}
             formatter={(value: any) => {
               const numValue = typeof value === 'number' ? value : parseFloat(String(value));

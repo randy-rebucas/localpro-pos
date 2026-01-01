@@ -79,7 +79,7 @@ export default function PINInput({ length = 4, onComplete, disabled = false, err
             disabled={disabled}
             className={`
               w-12 h-12 sm:w-14 sm:h-14 text-center text-2xl font-bold
-              border-2 rounded-lg
+              border-2
               focus:ring-2 focus:ring-blue-500 focus:border-blue-500
               transition-all
               ${error ? 'border-red-500 bg-red-50' : 'border-gray-300 bg-white'}

@@ -140,7 +140,7 @@ export default function HardwareSettings({
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-md p-6">
+    <div className="bg-white border border-gray-300 p-6">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-gray-900">Hardware Settings</h2>
         {onClose && (
@@ -172,7 +172,7 @@ export default function HardwareSettings({
                     type: e.target.value as any,
                   } as PrinterConfig,
                 })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
               >
                 <option value="browser">Browser Print</option>
                 <option value="usb">USB Printer</option>
@@ -197,7 +197,7 @@ export default function HardwareSettings({
                       } as PrinterConfig,
                     })}
                     placeholder="192.168.1.100"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                   />
                 </div>
                 <div>
@@ -213,7 +213,7 @@ export default function HardwareSettings({
                         portNumber: parseInt(e.target.value),
                       } as PrinterConfig,
                     })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                   />
                 </div>
               </>
@@ -222,7 +222,7 @@ export default function HardwareSettings({
             <button
               onClick={testPrinter}
               disabled={testing === 'printer'}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
             >
               {testing === 'printer' ? 'Testing...' : 'Test Print'}
             </button>
@@ -267,7 +267,7 @@ export default function HardwareSettings({
               <button
                 onClick={testCashDrawer}
                 disabled={testing === 'drawer'}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
               >
                 {testing === 'drawer' ? 'Testing...' : 'Test Cash Drawer'}
               </button>
@@ -330,7 +330,7 @@ export default function HardwareSettings({
                       cameraId: e.target.value,
                     },
                   })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                 >
                   <option value="">Default Camera</option>
                   {devices.cameras.map((camera) => (
@@ -375,7 +375,7 @@ export default function HardwareSettings({
           {onClose && (
             <button
               onClick={onClose}
-              className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+              className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
             >
               Cancel
             </button>
@@ -383,7 +383,7 @@ export default function HardwareSettings({
           <button
             onClick={saveConfig}
             disabled={loading}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
           >
             {loading ? 'Saving...' : 'Save Settings'}
           </button>

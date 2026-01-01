@@ -130,24 +130,24 @@ export default function AttendanceClock() {
   const clockInTime = session?.clockIn ? new Date(session.clockIn) : null;
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 border-2 border-gray-200">
+    <div className="bg-white border-2 border-gray-300 p-6">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-bold text-gray-900">Attendance</h2>
         {isClockedIn && (
-          <span className="px-3 py-1 bg-green-100 text-green-800 text-sm font-semibold rounded-full">
+          <span className="px-3 py-1 bg-green-100 text-green-800 text-sm font-semibold border border-green-300">
             Clocked In
           </span>
         )}
       </div>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border-2 border-red-200 rounded-lg text-red-700 text-sm">
+        <div className="mb-4 p-3 bg-red-50 border-2 border-red-300 text-red-700 text-sm">
           {error}
         </div>
       )}
 
       {isClockedIn && clockInTime && (
-        <div className="mb-4 p-4 bg-blue-50 rounded-lg">
+        <div className="mb-4 p-4 bg-blue-50 border border-blue-300">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium text-gray-700">Clocked in at:</span>
             <span className="text-sm font-semibold text-gray-900">
@@ -173,7 +173,7 @@ export default function AttendanceClock() {
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Add any notes about your shift..."
-            className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+            className="w-full px-3 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none bg-white"
             rows={2}
             disabled={loading}
           />
@@ -183,11 +183,11 @@ export default function AttendanceClock() {
           <button
             onClick={handleClockIn}
             disabled={loading}
-            className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 active:bg-green-800 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="w-full bg-green-600 text-white py-3 font-semibold hover:bg-green-700 active:bg-green-800 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 border border-green-700"
           >
             {loading ? (
               <>
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                <div className="animate-spin h-5 w-5 border-b-2 border-white"></div>
                 <span>Clocking in...</span>
               </>
             ) : (
@@ -203,11 +203,11 @@ export default function AttendanceClock() {
           <button
             onClick={handleClockOut}
             disabled={loading}
-            className="w-full bg-red-600 text-white py-3 rounded-lg font-semibold hover:bg-red-700 active:bg-red-800 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="w-full bg-red-600 text-white py-3 font-semibold hover:bg-red-700 active:bg-red-800 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 border border-red-700"
           >
             {loading ? (
               <>
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                <div className="animate-spin h-5 w-5 border-b-2 border-white"></div>
                 <span>Clocking out...</span>
               </>
             ) : (

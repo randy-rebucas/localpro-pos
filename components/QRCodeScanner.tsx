@@ -40,7 +40,7 @@ export default function QRCodeScanner({ onScan, onClose, enabled = true }: QRCod
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+      <div className="bg-white border border-gray-300 p-6 max-w-md w-full mx-4">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-bold">Scan QR Code</h2>
           {onClose && (
@@ -61,12 +61,12 @@ export default function QRCodeScanner({ onScan, onClose, enabled = true }: QRCod
           <div className="relative">
             <video
               ref={videoRef}
-              className="w-full rounded-lg"
+              className="w-full border border-gray-300"
               autoPlay
               playsInline
               muted
             />
-            <div className="absolute inset-0 border-4 border-blue-500 rounded-lg pointer-events-none">
+            <div className="absolute inset-0 border-4 border-blue-500 pointer-events-none">
               <div className="absolute top-2 left-2 w-8 h-8 border-t-4 border-l-4 border-blue-500"></div>
               <div className="absolute top-2 right-2 w-8 h-8 border-t-4 border-r-4 border-blue-500"></div>
               <div className="absolute bottom-2 left-2 w-8 h-8 border-b-4 border-l-4 border-blue-500"></div>

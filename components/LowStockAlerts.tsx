@@ -59,12 +59,12 @@ export default function LowStockAlerts({
 
   if (loading && alerts.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow p-4">
+      <div className="bg-white border border-gray-300 p-4">
         <div className="animate-pulse">
-          <div className="h-4 bg-gray-200 rounded w-1/4 mb-4"></div>
+          <div className="h-4 bg-gray-200 w-1/4 mb-4"></div>
           <div className="space-y-2">
-            <div className="h-3 bg-gray-200 rounded"></div>
-            <div className="h-3 bg-gray-200 rounded"></div>
+            <div className="h-3 bg-gray-200"></div>
+            <div className="h-3 bg-gray-200"></div>
           </div>
         </div>
       </div>
@@ -73,7 +73,7 @@ export default function LowStockAlerts({
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+      <div className="bg-red-50 border border-red-300 p-4">
         <p className="text-red-800 text-sm">{error}</p>
         <button
           onClick={fetchAlerts}
@@ -87,7 +87,7 @@ export default function LowStockAlerts({
 
   if (alerts.length === 0) {
     return (
-      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+      <div className="bg-green-50 border border-green-300 p-4">
         <p className="text-green-800 text-sm font-medium">
           ✓ All products are well stocked
         </p>
@@ -96,13 +96,13 @@ export default function LowStockAlerts({
   }
 
   return (
-    <div className="bg-white rounded-lg shadow">
+    <div className="bg-white border border-gray-300">
       <div className="p-4 border-b border-gray-200">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold text-gray-900">
             Low Stock Alerts
           </h3>
-          <span className="bg-red-100 text-red-800 text-xs font-semibold px-2.5 py-0.5 rounded-full">
+          <span className="bg-red-100 text-red-800 text-xs font-semibold px-2.5 py-0.5 border border-red-300">
             {alerts.length}
           </span>
         </div>
@@ -127,7 +127,7 @@ export default function LowStockAlerts({
               </div>
               <div className="ml-4 flex-shrink-0 text-right">
                 <div
-                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                  className={`inline-flex items-center px-2.5 py-0.5 border border-gray-300 text-xs font-semibold ${
                     alert.currentStock === 0
                       ? 'bg-red-100 text-red-800'
                       : 'bg-yellow-100 text-yellow-800'

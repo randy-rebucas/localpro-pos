@@ -101,7 +101,7 @@ export default function RealTimeStockTracker({
   return (
     <div className="flex items-center gap-2 text-xs">
       <div
-        className={`w-2 h-2 rounded-full ${
+        className={`w-2 h-2 border border-gray-300 ${
           connected ? 'bg-green-500 animate-pulse' : 'bg-red-500'
         }`}
         title={connected ? 'Connected' : 'Disconnected'}

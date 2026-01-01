@@ -19,7 +19,7 @@ export default function QRCodeDisplay({ qrToken, name, onRegenerate }: QRCodeDis
   };
 
   return (
-    <div className="flex flex-col items-center space-y-4 p-6 bg-white border-2 border-gray-200">
+    <div className="flex flex-col items-center space-y-4 p-6 bg-white border-2 border-gray-300">
       {name && (
         <div className="text-center">
           <h3 className="text-lg font-semibold text-gray-900">{name}</h3>
@@ -39,7 +39,7 @@ export default function QRCodeDisplay({ qrToken, name, onRegenerate }: QRCodeDis
       <div className="w-full space-y-2">
         <button
           onClick={copyToClipboard}
-          className="w-full px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+          className="w-full px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors border border-blue-300"
         >
           {copied ? '✓ Copied!' : 'Copy Token'}
         </button>
@@ -47,7 +47,7 @@ export default function QRCodeDisplay({ qrToken, name, onRegenerate }: QRCodeDis
         {onRegenerate && (
           <button
             onClick={onRegenerate}
-            className="w-full px-4 py-2 text-sm font-medium text-gray-600 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+            className="w-full px-4 py-2 text-sm font-medium text-gray-600 bg-gray-50 hover:bg-gray-100 transition-colors border border-gray-300"
           >
             Regenerate QR Code
           </button>

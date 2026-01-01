@@ -42,7 +42,7 @@ export default function OfflineIndicator() {
       {isOnline && isSyncing && (
         <div className="bg-blue-500 text-white px-4 py-2 text-center text-sm font-medium">
           <div className="flex items-center justify-center gap-2">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+            <div className="animate-spin h-4 w-4 border-b-2 border-white"></div>
             <span>Syncing offline transactions...</span>
           </div>
         </div>

@@ -126,10 +126,10 @@ export default function HardwareStatusChecker({
     return (
       <div className="flex items-center gap-2">
         {loading ? (
-          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+          <div className="animate-spin h-4 w-4 border-b-2 border-blue-600"></div>
         ) : status ? (
           <>
-            <div className={`px-2 py-1 rounded text-xs font-medium ${getOverallStatusColor()}`}>
+            <div className={`px-2 py-1 border border-gray-300 text-xs font-medium ${getOverallStatusColor()}`}>
               {status.overallStatus === 'all-connected' ? 'All Connected' :
                status.overallStatus === 'partial' ? 'Partial' : 'Not Configured'}
             </div>
@@ -150,9 +150,9 @@ export default function HardwareStatusChecker({
 
   if (loading && !status) {
     return (
-      <div className={`bg-white rounded-xl shadow-md ${sidebar ? 'p-4' : 'p-6'}`}>
+      <div className={`bg-white border border-gray-300 ${sidebar ? 'p-4' : 'p-6'}`}>
         <div className={`flex items-center justify-center ${sidebar ? 'py-4' : 'py-8'}`}>
-          <div className={`animate-spin rounded-full border-b-2 border-blue-600 ${sidebar ? 'h-6 w-6' : 'h-8 w-8'}`}></div>
+          <div className={`animate-spin border-b-2 border-blue-600 ${sidebar ? 'h-6 w-6' : 'h-8 w-8'}`}></div>
           {!sidebar && <span className="ml-3 text-gray-600">Checking hardware status...</span>}
         </div>
       </div>
@@ -161,7 +161,7 @@ export default function HardwareStatusChecker({
 
   if (!status) {
     return (
-      <div className={`bg-white rounded-xl shadow-md ${sidebar ? 'p-4' : 'p-6'}`}>
+      <div className={`bg-white border border-gray-300 ${sidebar ? 'p-4' : 'p-6'}`}>
         <p className={`text-gray-600 ${sidebar ? 'text-sm' : ''}`}>
           {sidebar ? 'Unable to check status' : 'Unable to check hardware status'}
         </p>
@@ -171,7 +171,7 @@ export default function HardwareStatusChecker({
 
   if (sidebar) {
     return (
-      <div className="bg-white rounded-xl shadow-md p-4">
+      <div className="bg-white border border-gray-300 p-4">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-bold text-gray-900">Status</h3>
           <button
@@ -187,7 +187,7 @@ export default function HardwareStatusChecker({
         </div>
 
         <div className="mb-3">
-          <div className={`px-2 py-1 rounded text-xs font-medium text-center ${getOverallStatusColor()}`}>
+          <div className={`px-2 py-1 border border-gray-300 text-xs font-medium text-center ${getOverallStatusColor()}`}>
             {status.overallStatus === 'all-connected' ? 'All Connected' :
              status.overallStatus === 'partial' ? 'Partial' : 'Not Configured'}
           </div>
@@ -197,7 +197,7 @@ export default function HardwareStatusChecker({
           {status.devices.map((device, index) => (
             <div
               key={index}
-              className={`border rounded-lg p-2.5 ${getStatusColor(device)}`}
+              className={`border border-gray-300 p-2.5 ${getStatusColor(device)}`}
             >
               <div className="flex items-center gap-2">
                 <div className="flex-shrink-0">
@@ -207,7 +207,7 @@ export default function HardwareStatusChecker({
                   <div className="flex items-center gap-1.5 mb-0.5">
                     <h4 className="text-sm font-semibold text-gray-900 truncate">{device.name}</h4>
                   </div>
-                  <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                  <span className={`px-1.5 py-0.5 border border-gray-300 text-xs font-medium ${
                     device.status === 'connected' || device.status === 'available'
                       ? 'bg-green-100 text-green-800'
                       : device.status === 'disconnected'
@@ -234,7 +234,7 @@ export default function HardwareStatusChecker({
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-md p-6">
+    <div className="bg-white border border-gray-300 p-6">
       <div className="flex justify-between items-center mb-6">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Hardware Status</h2>
@@ -243,7 +243,7 @@ export default function HardwareStatusChecker({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <div className={`px-3 py-1 rounded-full text-sm font-medium ${getOverallStatusColor()}`}>
+          <div className={`px-3 py-1 border border-gray-300 text-sm font-medium ${getOverallStatusColor()}`}>
             {status.overallStatus === 'all-connected' ? 'All Connected' :
              status.overallStatus === 'partial' ? 'Partial Connection' : 'Not Configured'}
           </div>
@@ -264,7 +264,7 @@ export default function HardwareStatusChecker({
         {status.devices.map((device, index) => (
           <div
             key={index}
-            className={`border rounded-lg p-4 ${getStatusColor(device)}`}
+            className={`border border-gray-300 p-4 ${getStatusColor(device)}`}
           >
             <div className="flex items-start justify-between">
               <div className="flex items-start gap-3 flex-1">
@@ -272,7 +272,7 @@ export default function HardwareStatusChecker({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <h3 className="font-semibold text-gray-900">{device.name}</h3>
-                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                    <span className={`px-2 py-0.5 border border-gray-300 text-xs font-medium ${
                       device.status === 'connected' || device.status === 'available'
                         ? 'bg-green-100 text-green-800'
                         : device.status === 'disconnected'
@@ -295,7 +295,7 @@ export default function HardwareStatusChecker({
                     <button
                       onClick={() => testDevice(device.type)}
                       disabled={testing === device.type || device.status === 'not-configured'}
-                      className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-3 py-1.5 text-sm bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed border border-blue-700"
                     >
                       {testing === device.type ? 'Testing...' : 'Test'}
                     </button>

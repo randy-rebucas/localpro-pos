@@ -91,7 +91,7 @@ export default function StockRefillModal({ product, onClose, onSuccess, lang = '
       onClick={onClose}
     >
       <div 
-        className="absolute inset-y-0 right-0 w-full max-w-md bg-white shadow-xl flex flex-col animate-slide-in-right"
+        className="absolute inset-y-0 right-0 w-full max-w-md bg-white border-l border-gray-300 flex flex-col animate-slide-in-right"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between p-5 sm:p-6 border-b border-gray-200">
@@ -108,7 +108,7 @@ export default function StockRefillModal({ product, onClose, onSuccess, lang = '
           </button>
         </div>
         <div className="flex-1 overflow-y-auto p-5 sm:p-6">
-        <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+        <div className="mb-4 p-3 bg-gray-50 border border-gray-300">
           <div className="text-sm text-gray-600 mb-1">
             {dict?.products?.name || 'Product'}
           </div>
@@ -133,7 +133,7 @@ export default function StockRefillModal({ product, onClose, onSuccess, lang = '
               required
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
-              className="w-full px-3 py-2.5 text-base border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2.5 text-base border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               placeholder="0"
               autoFocus
             />
@@ -153,14 +153,14 @@ export default function StockRefillModal({ product, onClose, onSuccess, lang = '
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="w-full px-3 py-2.5 text-base border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2.5 text-base border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               rows={3}
               placeholder={dict.products.refill?.notesPlaceholder || 'Add any notes about this refill...'}
             />
           </div>
 
           {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm">
+            <div className="p-3 bg-red-50 border border-red-300 text-red-700 text-sm">
               {error}
             </div>
           )}
@@ -170,14 +170,14 @@ export default function StockRefillModal({ product, onClose, onSuccess, lang = '
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="w-full sm:w-auto px-4 py-2.5 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 active:bg-gray-100 font-medium disabled:opacity-50"
+              className="w-full sm:w-auto px-4 py-2.5 border border-gray-300 text-gray-700 hover:bg-gray-50 active:bg-gray-100 font-medium disabled:opacity-50 bg-white"
             >
               {dict.common.cancel}
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="w-full sm:w-auto px-4 py-2.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+              className="w-full sm:w-auto px-4 py-2.5 bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed font-medium border border-blue-700"
             >
               {loading ? (dict.common.loading || 'Loading...') : (dict.products.refill?.submit || 'Refill Stock')}
             </button>

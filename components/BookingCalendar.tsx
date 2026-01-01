@@ -117,12 +117,12 @@ export default function BookingCalendar({
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
+    <div className="bg-white border border-gray-300 p-6">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <button
             onClick={() => navigateMonth('prev')}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-gray-100 transition-colors border border-gray-300 bg-white"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -133,7 +133,7 @@ export default function BookingCalendar({
           </h2>
           <button
             onClick={() => navigateMonth('next')}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-gray-100 transition-colors border border-gray-300 bg-white"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -141,7 +141,7 @@ export default function BookingCalendar({
           </button>
           <button
             onClick={() => setCurrentDate(new Date())}
-            className="ml-4 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="ml-4 px-4 py-2 text-sm bg-blue-600 text-white hover:bg-blue-700 transition-colors border border-blue-700"
           >
             Today
           </button>
@@ -149,24 +149,24 @@ export default function BookingCalendar({
         <div className="flex gap-2">
           <button
             onClick={() => setView('month')}
-            className={`px-4 py-2 text-sm rounded-lg transition-colors ${
-              view === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            className={`px-4 py-2 text-sm border border-gray-300 transition-colors ${
+              view === 'month' ? 'bg-blue-600 text-white border-blue-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
             Month
           </button>
           <button
             onClick={() => setView('week')}
-            className={`px-4 py-2 text-sm rounded-lg transition-colors ${
-              view === 'week' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            className={`px-4 py-2 text-sm border border-gray-300 transition-colors ${
+              view === 'week' ? 'bg-blue-600 text-white border-blue-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
             Week
           </button>
           <button
             onClick={() => setView('day')}
-            className={`px-4 py-2 text-sm rounded-lg transition-colors ${
-              view === 'day' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            className={`px-4 py-2 text-sm border border-gray-300 transition-colors ${
+              view === 'day' ? 'bg-blue-600 text-white border-blue-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
             Day
@@ -197,7 +197,7 @@ export default function BookingCalendar({
                     onDateSelect(date);
                   }
                 }}
-                className={`min-h-[100px] p-2 border rounded-lg cursor-pointer transition-colors ${
+                className={`min-h-[100px] p-2 border border-gray-300 cursor-pointer transition-colors ${
                   !date ? 'bg-gray-50' :
                   isToday ? 'bg-blue-50 border-blue-300' :
                   isSelected ? 'bg-blue-100 border-blue-400' :
@@ -221,7 +221,7 @@ export default function BookingCalendar({
                               onBookingSelect(booking);
                             }
                           }}
-                          className={`text-xs p-1 rounded border ${getStatusColor(booking.status)} truncate`}
+                          className={`text-xs p-1 border ${getStatusColor(booking.status)} truncate`}
                           title={`${formatTime(booking.startTime)} - ${booking.customerName}: ${booking.serviceName}`}
                         >
                           {formatTime(booking.startTime)} {booking.customerName}
@@ -257,19 +257,19 @@ export default function BookingCalendar({
       <div className="mt-6 pt-6 border-t border-gray-200">
         <div className="flex flex-wrap gap-4 text-sm">
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-green-100 border border-green-300 rounded"></div>
+            <div className="w-4 h-4 bg-green-100 border border-green-300"></div>
             <span>Confirmed</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-yellow-100 border border-yellow-300 rounded"></div>
+            <div className="w-4 h-4 bg-yellow-100 border border-yellow-300"></div>
             <span>Pending</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-blue-100 border border-blue-300 rounded"></div>
+            <div className="w-4 h-4 bg-blue-100 border border-blue-300"></div>
             <span>Completed</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-red-100 border border-red-300 rounded"></div>
+            <div className="w-4 h-4 bg-red-100 border border-red-300"></div>
             <span>Cancelled</span>
           </div>
         </div>
