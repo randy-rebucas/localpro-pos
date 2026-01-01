@@ -13,6 +13,9 @@ import Branch from '@/models/Branch';
 import CashDrawerSession from '@/models/CashDrawerSession';
 import ProductBundle from '@/models/ProductBundle';
 import Attendance from '@/models/Attendance';
+import Booking from '@/models/Booking';
+import SavedCart from '@/models/SavedCart';
+import AuditLog from '@/models/AuditLog';
 import mongoose from 'mongoose';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
@@ -28,6 +31,9 @@ const COLLECTION_MODELS: Record<string, any> = {
   cashDrawerSessions: CashDrawerSession,
   productBundles: ProductBundle,
   attendance: Attendance,
+  bookings: Booking,
+  savedCarts: SavedCart,
+  auditLogs: AuditLog,
 };
 
 // Backup endpoint - GET

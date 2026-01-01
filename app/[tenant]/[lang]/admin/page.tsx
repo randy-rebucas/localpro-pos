@@ -199,6 +199,105 @@ export default function AdminPage() {
       color: 'rose',
     },
     {
+      title: dict.admin?.backupReset || 'Backup & Reset',
+      description: dict.admin?.backupResetDescription || 'Backup and reset collection data',
+      href: `/${tenant}/${lang}/admin/backup-reset`,
+      icon: (
+        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+        </svg>
+      ),
+      color: 'red',
+    },
+    {
+      title: dict.admin?.featureFlags || 'Feature Flags',
+      description: dict.admin?.featureFlagsDescription || 'Enable or disable system-wide features',
+      href: `/${tenant}/${lang}/admin/feature-flags`,
+      icon: (
+        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+        </svg>
+      ),
+      color: 'blue',
+    },
+    {
+      title: dict.admin?.hardwareSettings || 'Hardware Settings',
+      description: dict.admin?.hardwareSettingsDescription || 'Configure printers, scanners, and hardware devices',
+      href: `/${tenant}/${lang}/admin/hardware`,
+      icon: (
+        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+        </svg>
+      ),
+      color: 'gray',
+    },
+    {
+      title: dict.admin?.taxRules || 'Tax Rules',
+      description: dict.admin?.taxRulesDescription || 'Configure multiple tax rates and regional rules',
+      href: `/${tenant}/${lang}/admin/tax-rules`,
+      icon: (
+        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+      ),
+      color: 'indigo',
+    },
+    {
+      title: dict.admin?.businessHours || 'Business Hours',
+      description: dict.admin?.businessHoursDescription || 'Configure weekly schedule and special hours',
+      href: `/${tenant}/${lang}/admin/business-hours`,
+      icon: (
+        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      ),
+      color: 'orange',
+    },
+    {
+      title: dict.admin?.holidays || 'Holidays',
+      description: dict.admin?.holidaysDescription || 'Manage holiday calendar and business closures',
+      href: `/${tenant}/${lang}/admin/holidays`,
+      icon: (
+        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      ),
+      color: 'yellow',
+    },
+    {
+      title: dict.admin?.multiCurrency || 'Multi-Currency',
+      description: dict.admin?.multiCurrencyDescription || 'Manage exchange rates and API settings',
+      href: `/${tenant}/${lang}/admin/multi-currency`,
+      icon: (
+        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      ),
+      color: 'green',
+    },
+    {
+      title: dict.admin?.notificationTemplates || 'Notification Templates',
+      description: dict.admin?.notificationTemplatesDescription || 'Customize email and SMS templates',
+      href: `/${tenant}/${lang}/admin/notification-templates`,
+      icon: (
+        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+        </svg>
+      ),
+      color: 'purple',
+    },
+    {
+      title: dict.admin?.advancedBranding || 'Advanced Branding',
+      description: dict.admin?.advancedBrandingDescription || 'Customize fonts, themes, and CSS',
+      href: `/${tenant}/${lang}/admin/advanced-branding`,
+      icon: (
+        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+        </svg>
+      ),
+      color: 'pink',
+    },
+    {
       title: dict.admin?.reports || 'Reports',
       description: dict.admin?.reportsDescription || 'View detailed reports and analytics',
       href: `/${tenant}/${lang}/reports`,
@@ -250,6 +349,7 @@ export default function AdminPage() {
                 card.color === 'amber' ? 'bg-amber-100 text-amber-600' :
                 card.color === 'rose' ? 'bg-rose-100 text-rose-600' :
                 card.color === 'slate' ? 'bg-slate-100 text-slate-600' :
+                card.color === 'gray' ? 'bg-gray-100 text-gray-600' :
                 'bg-purple-100 text-purple-600'
               }`}>
                 {card.icon}

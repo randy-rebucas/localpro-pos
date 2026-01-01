@@ -20,23 +20,35 @@ export interface PrinterConfig {
 
 export interface ReceiptData {
   storeName?: string;
+  logo?: string;
   address?: string;
   phone?: string;
+  email?: string;
+  website?: string;
   receiptNumber: string;
   date: string;
+  time?: string;
   items: Array<{
     name: string;
     quantity: number;
     price: number;
     subtotal: number;
+    sku?: string;
   }>;
   subtotal: number;
+  discount?: number;
   tax?: number;
+  taxLabel?: string;
   total: number;
   paymentMethod: string;
   cashReceived?: number;
   change?: number;
   footer?: string;
+  header?: string;
+  customerName?: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  template?: string; // Template HTML to use
 }
 
 class ReceiptPrinterService {
@@ -317,6 +329,19 @@ class ReceiptPrinterService {
   }
 
   private generateReceiptHTML(data: ReceiptData): string {
+    // If custom template is provided, use it
+    if (data.template) {
+      try {
+        // Import template rendering function dynamically to avoid circular dependencies
+        const { renderReceiptTemplate } = require('@/lib/receipt-templates');
+        return renderReceiptTemplate(data.template, data);
+      } catch (error) {
+        console.error('Error rendering receipt template:', error);
+        // Fall through to default template
+      }
+    }
+
+    // Default template
     return `
       <!DOCTYPE html>
       <html>
@@ -343,10 +368,13 @@ class ReceiptPrinterService {
         <body>
           <div class="header">
             ${data.storeName ? `<h2>${data.storeName}</h2>` : ''}
+            ${data.logo ? `<img src="${data.logo}" alt="Logo" style="max-width: 100px; max-height: 60px;" />` : ''}
             <p>Receipt #${data.receiptNumber}</p>
-            <p>${data.date}</p>
+            <p>${data.date}${data.time ? ` ${data.time}` : ''}</p>
             ${data.address ? `<p>${data.address}</p>` : ''}
             ${data.phone ? `<p>${data.phone}</p>` : ''}
+            ${data.email ? `<p>${data.email}</p>` : ''}
+            ${data.header ? `<p>${data.header}</p>` : ''}
           </div>
           ${data.items.map(item => `
             <div class="item">
@@ -362,9 +390,15 @@ class ReceiptPrinterService {
               <div>Subtotal:</div>
               <div>$${data.subtotal.toFixed(2)}</div>
             </div>
+            ${data.discount ? `
+              <div class="item">
+                <div>Discount:</div>
+                <div>-$${data.discount.toFixed(2)}</div>
+              </div>
+            ` : ''}
             ${data.tax ? `
               <div class="item">
-                <div>Tax:</div>
+                <div>${data.taxLabel || 'Tax'}:</div>
                 <div>$${data.tax.toFixed(2)}</div>
               </div>
             ` : ''}
