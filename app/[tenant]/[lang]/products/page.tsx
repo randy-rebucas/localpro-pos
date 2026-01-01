@@ -10,6 +10,8 @@ import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '../dictionaries-client';
 import { showToast } from '@/lib/toast';
 import { useConfirm } from '@/lib/confirm';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { supportsFeature } from '@/lib/business-type-helpers';
 
 interface Product {
   _id: string;
@@ -38,6 +40,8 @@ export default function ProductsPage() {
   const [dict, setDict] = useState<any>(null);
   const [displayMode, setDisplayMode] = useState<'grid' | 'list'>('grid');
   const { confirm, Dialog: ConfirmDialog } = useConfirm();
+  const { settings } = useTenantSettings();
+  const inventoryEnabled = supportsFeature(settings ?? undefined, 'inventory');
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -332,36 +336,40 @@ export default function ProductsPage() {
                       </div>
                     </div>
 
-                    {/* Stock */}
-                    <div className="text-right">
-                      <div className="text-xs text-gray-500 mb-1">{dict.products.stock}</div>
-                      <span
-                        className={`inline-block text-xs font-semibold px-3 py-1.5 rounded border ${
-                          product.stock > 10
-                            ? 'bg-green-100 text-green-800 border-green-300'
-                            : product.stock > 0
-                            ? 'bg-yellow-100 text-yellow-800 border-yellow-300'
-                            : 'bg-red-100 text-red-800 border-red-300'
-                        }`}
-                      >
-                        {product.stock} {dict.products.inStock}
-                      </span>
-                    </div>
+                    {/* Stock - Only show if inventory is enabled */}
+                    {inventoryEnabled && (
+                      <div className="text-right">
+                        <div className="text-xs text-gray-500 mb-1">{dict.products.stock}</div>
+                        <span
+                          className={`inline-block text-xs font-semibold px-3 py-1.5 rounded border ${
+                            product.stock > 10
+                              ? 'bg-green-100 text-green-800 border-green-300'
+                              : product.stock > 0
+                              ? 'bg-yellow-100 text-yellow-800 border-yellow-300'
+                              : 'bg-red-100 text-red-800 border-red-300'
+                          }`}
+                        >
+                          {product.stock} {dict.products.inStock}
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Actions */}
                   <div className="flex gap-2 actions-touch-visible transition-opacity duration-200">
-                      <button
-                        onClick={() => handleRefill(product)}
-                        className="flex-1 px-4 py-2.5 bg-green-600 text-white hover:bg-green-700 active:bg-green-800 transition-all duration-200 border border-green-700 flex items-center justify-center gap-2 touch-manipulation min-h-[44px] text-sm font-medium"
-                        title={dict.products.refill?.title || 'Refill Stock'}
-                        aria-label={dict.products.refill?.title || 'Refill Stock'}
-                      >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
-                        <span className="hidden sm:inline">{dict.products.refill?.title || 'Refill'}</span>
-                      </button>
+                      {inventoryEnabled && (
+                        <button
+                          onClick={() => handleRefill(product)}
+                          className="flex-1 px-4 py-2.5 bg-green-600 text-white hover:bg-green-700 active:bg-green-800 transition-all duration-200 border border-green-700 flex items-center justify-center gap-2 touch-manipulation min-h-[44px] text-sm font-medium"
+                          title={dict.products.refill?.title || 'Refill Stock'}
+                          aria-label={dict.products.refill?.title || 'Refill Stock'}
+                        >
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                          </svg>
+                          <span className="hidden sm:inline">{dict.products.refill?.title || 'Refill'}</span>
+                        </button>
+                      )}
                       <button
                         onClick={() => handleEdit(product)}
                         className="flex-1 px-4 py-2.5 bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 transition-all duration-200 border border-blue-700 flex items-center justify-center gap-2 touch-manipulation min-h-[44px] text-sm font-medium"
@@ -449,34 +457,38 @@ export default function ProductsPage() {
                       </div>
                     </div>
 
-                    {/* Stock */}
-                    <div className="text-right">
-                      <div className="text-xs text-gray-500 mb-1 hidden sm:block">{dict.products.stock}</div>
-                      <span
-                        className={`inline-block text-xs font-semibold px-3 py-1.5 rounded border ${
-                          product.stock > 10
-                            ? 'bg-green-100 text-green-800 border-green-300'
-                            : product.stock > 0
-                            ? 'bg-yellow-100 text-yellow-800 border-yellow-300'
-                            : 'bg-red-100 text-red-800 border-red-300'
-                        }`}
-                      >
-                        {product.stock} {dict.products.inStock}
-                      </span>
-                    </div>
+                    {/* Stock - Only show if inventory is enabled */}
+                    {inventoryEnabled && (
+                      <div className="text-right">
+                        <div className="text-xs text-gray-500 mb-1 hidden sm:block">{dict.products.stock}</div>
+                        <span
+                          className={`inline-block text-xs font-semibold px-3 py-1.5 rounded border ${
+                            product.stock > 10
+                              ? 'bg-green-100 text-green-800 border-green-300'
+                              : product.stock > 0
+                              ? 'bg-yellow-100 text-yellow-800 border-yellow-300'
+                              : 'bg-red-100 text-red-800 border-red-300'
+                          }`}
+                        >
+                          {product.stock} {dict.products.inStock}
+                        </span>
+                      </div>
+                    )}
 
                     {/* Actions */}
                     <div className="flex gap-2 actions-touch-visible transition-opacity duration-200">
-                        <button
-                          onClick={() => handleRefill(product)}
-                          className="px-3 py-2 bg-green-600 text-white hover:bg-green-700 active:bg-green-800 transition-all duration-200 border border-green-700 flex items-center justify-center touch-manipulation min-h-[44px] sm:min-h-0"
-                          title={dict.products.refill?.title || 'Refill Stock'}
-                          aria-label={dict.products.refill?.title || 'Refill Stock'}
-                        >
-                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                          </svg>
-                        </button>
+                        {inventoryEnabled && (
+                          <button
+                            onClick={() => handleRefill(product)}
+                            className="px-3 py-2 bg-green-600 text-white hover:bg-green-700 active:bg-green-800 transition-all duration-200 border border-green-700 flex items-center justify-center touch-manipulation min-h-[44px] sm:min-h-0"
+                            title={dict.products.refill?.title || 'Refill Stock'}
+                            aria-label={dict.products.refill?.title || 'Refill Stock'}
+                          >
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
+                          </button>
+                        )}
                         <button
                           onClick={() => handleEdit(product)}
                           className="px-3 py-2 bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 transition-all duration-200 border border-blue-700 flex items-center justify-center touch-manipulation min-h-[44px] sm:min-h-0"

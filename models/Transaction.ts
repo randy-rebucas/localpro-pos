@@ -10,11 +10,13 @@ export interface ITransactionItem {
 
 export interface ITransaction extends Document {
   tenantId: mongoose.Types.ObjectId;
+  branchId?: mongoose.Types.ObjectId; // Branch/location reference
   items: ITransactionItem[];
   subtotal: number; // Total before discount
   discountCode?: string;
   discountAmount?: number;
-  total: number; // Total after discount
+  taxAmount?: number; // Calculated tax amount
+  total: number; // Total after discount and tax
   paymentMethod: 'cash' | 'card' | 'digital';
   cashReceived?: number;
   change?: number;
@@ -59,6 +61,11 @@ const TransactionSchema: Schema = new Schema(
       required: [true, 'Tenant ID is required'],
       index: true,
     },
+    branchId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Branch',
+      index: true,
+    },
     items: {
       type: [TransactionItemSchema],
       required: true,
@@ -76,6 +83,11 @@ const TransactionSchema: Schema = new Schema(
     discountAmount: {
       type: Number,
       min: 0,
+    },
+    taxAmount: {
+      type: Number,
+      min: 0,
+      default: 0,
     },
     total: {
       type: Number,

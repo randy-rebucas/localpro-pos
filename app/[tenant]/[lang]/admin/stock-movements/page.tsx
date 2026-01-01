@@ -5,6 +5,10 @@ import Navbar from '@/components/Navbar';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { supportsFeature } from '@/lib/business-type-helpers';
+import { getBusinessTypeConfig } from '@/lib/business-types';
+import { getBusinessType } from '@/lib/business-type-helpers';
 
 interface StockMovement {
   _id: string;
@@ -41,6 +45,9 @@ export default function StockMovementsPage() {
     productId: '',
   });
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const { settings } = useTenantSettings();
+  const inventoryEnabled = supportsFeature(settings ?? undefined, 'inventory');
+  const businessTypeConfig = settings ? getBusinessTypeConfig(getBusinessType(settings)) : null;
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -123,7 +130,30 @@ export default function StockMovementsPage() {
           </div>
         )}
 
-        <div className="bg-white border border-gray-300 p-6">
+        {!inventoryEnabled && (
+          <div className="mb-6 p-4 bg-yellow-50 border-2 border-yellow-300 text-yellow-800">
+            <div className="flex items-start gap-3">
+              <svg className="w-6 h-6 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <div>
+                <h3 className="text-lg font-semibold text-yellow-900 mb-2">
+                  Stock Movements Not Available
+                </h3>
+                <p className="text-yellow-800">
+                  Stock movements tracking is not available for {businessTypeConfig?.name || 'your business type'}. 
+                  This feature requires inventory management to be enabled.
+                </p>
+                <p className="text-sm text-yellow-700 mt-2">
+                  If you need stock tracking, please enable inventory management in Settings.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {inventoryEnabled && (
+          <div className="bg-white border border-gray-300 p-6">
           <div className="mb-4 flex gap-4">
             <select
               value={filters.type}
@@ -232,7 +262,8 @@ export default function StockMovementsPage() {
               </button>
             </div>
           )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

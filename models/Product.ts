@@ -33,6 +33,36 @@ export interface IProduct extends Document {
   allowOutOfStockSales?: boolean; // Whether to allow sales when out of stock
   lowStockThreshold?: number; // Product-specific threshold (overrides tenant default)
   pinned?: boolean; // Whether the product is pinned to the top
+  
+  // Industry-specific fields (optional, used based on business type)
+  // Restaurant/Food Service
+  modifiers?: Array<{
+    name: string;
+    options: Array<{
+      name: string;
+      price: number;
+    }>;
+    required: boolean;
+  }>;
+  allergens?: string[]; // e.g., ['gluten', 'dairy', 'nuts']
+  nutritionInfo?: {
+    calories?: number;
+    protein?: number;
+    carbs?: number;
+    fat?: number;
+  };
+  
+  // Laundry Service
+  serviceType?: 'wash' | 'dry-clean' | 'press' | 'repair' | 'other';
+  weightBased?: boolean; // If true, price is per unit weight
+  pickupDelivery?: boolean; // If service includes pickup/delivery
+  estimatedDuration?: number; // Estimated service duration in minutes
+  
+  // Service Business
+  serviceDuration?: number; // Service duration in minutes
+  staffRequired?: number; // Number of staff members required
+  equipmentRequired?: string[]; // List of required equipment
+  
   createdAt: Date;
   updatedAt: Date;
 }
@@ -136,6 +166,60 @@ const ProductSchema: Schema = new Schema(
       default: false,
       index: true,
     },
+    
+    // Industry-specific fields
+    // Restaurant/Food Service
+    modifiers: [{
+      name: String,
+      options: [{
+        name: String,
+        price: {
+          type: Number,
+          default: 0,
+        },
+      }],
+      required: {
+        type: Boolean,
+        default: false,
+      },
+    }],
+    allergens: [String],
+    nutritionInfo: {
+      calories: Number,
+      protein: Number,
+      carbs: Number,
+      fat: Number,
+    },
+    
+    // Laundry Service
+    serviceType: {
+      type: String,
+      enum: ['wash', 'dry-clean', 'press', 'repair', 'other'],
+    },
+    weightBased: {
+      type: Boolean,
+      default: false,
+    },
+    pickupDelivery: {
+      type: Boolean,
+      default: false,
+    },
+    estimatedDuration: {
+      type: Number,
+      min: 0,
+    },
+    
+    // Service Business
+    serviceDuration: {
+      type: Number,
+      min: 0,
+    },
+    staffRequired: {
+      type: Number,
+      min: 0,
+      default: 1,
+    },
+    equipmentRequired: [String],
   },
   {
     timestamps: true,

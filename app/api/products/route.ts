@@ -6,6 +6,8 @@ import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateAndSanitize, validateProduct } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { getTenantSettingsById } from '@/lib/tenant';
+import { validateProductForBusiness, getDefaultProductSettings } from '@/lib/business-type-helpers';
 
 export async function GET(request: NextRequest) {
   try {
@@ -67,6 +69,30 @@ export async function POST(request: NextRequest) {
         { success: false, errors },
         { status: 400 }
       );
+    }
+
+    // Get tenant settings for business type validation
+    const tenantSettings = await getTenantSettingsById(tenantId);
+    if (tenantSettings) {
+      // Validate product against business type
+      const businessValidation = validateProductForBusiness(data, tenantSettings);
+      if (!businessValidation.valid) {
+        return NextResponse.json(
+          {
+            success: false,
+            errors: businessValidation.errors.map(error => ({
+              field: 'businessType',
+              message: error,
+              code: 'businessTypeValidation',
+            })),
+          },
+          { status: 400 }
+        );
+      }
+
+      // Apply default product settings based on business type
+      const defaultSettings = getDefaultProductSettings(tenantSettings);
+      Object.assign(data, defaultSettings, data); // Defaults first, then user data
     }
 
     const product = await Product.create({ ...data, tenantId });

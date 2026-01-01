@@ -13,6 +13,7 @@ import ProductBundle from '@/models/ProductBundle';
 import StockMovement from '@/models/StockMovement';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { getTenantSettingsById } from '@/lib/tenant';
+import { calculateTax } from '@/lib/tax-calculation';
 
 export async function GET(request: NextRequest) {
   try {
@@ -205,7 +206,6 @@ export async function POST(request: NextRequest) {
           price: itemPrice,
           quantity: quantity,
           subtotal: itemSubtotal,
-          variation: variation,
         });
       }
     }
@@ -274,8 +274,42 @@ export async function POST(request: NextRequest) {
       await discount.save();
     }
 
-    // Calculate final total
-    const total = Math.max(0, subtotal - discountAmount);
+    // Calculate subtotal after discount
+    const subtotalAfterDiscount = Math.max(0, subtotal - discountAmount);
+
+    // Prepare items for tax calculation
+    const taxItems = [];
+    for (const item of transactionItems) {
+      const originalItem = items.find((i: typeof items[0]) => i.productId === item.product.toString());
+      if (originalItem?.bundleId) {
+        const bundle = await ProductBundle.findById(originalItem.bundleId).lean();
+        taxItems.push({
+          productId: originalItem.bundleId,
+          productType: 'bundle' as const,
+          categoryId: bundle?.categoryId?.toString(),
+        });
+      } else {
+        const product = await Product.findById(item.product).lean();
+        taxItems.push({
+          productId: item.product.toString(),
+          productType: product?.productType || 'regular',
+          categoryId: product?.categoryId?.toString(),
+        });
+      }
+    }
+
+    // Calculate tax
+    const taxCalculation = await calculateTax(
+      tenantId,
+      subtotalAfterDiscount,
+      taxItems,
+      tenantSettings ?? undefined
+    );
+
+    const taxAmount = taxCalculation.taxAmount;
+
+    // Calculate final total (subtotal after discount + tax)
+    const total = subtotalAfterDiscount + taxAmount;
 
     // Calculate change for cash payments
     let change = 0;
@@ -344,10 +378,12 @@ export async function POST(request: NextRequest) {
     // Create transaction after stock is successfully updated
     const transaction = await Transaction.create({
       tenantId,
+      branchId: branchId || undefined,
       items: transactionItems,
       subtotal,
       discountCode: appliedDiscountCode,
       discountAmount: discountAmount > 0 ? discountAmount : undefined,
+      taxAmount: taxAmount > 0 ? taxAmount : undefined,
       total,
       paymentMethod,
       cashReceived: paymentMethod === 'cash' ? cashReceived : undefined,

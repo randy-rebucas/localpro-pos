@@ -24,11 +24,30 @@ export default function SettingsPage() {
   const [detecting, setDetecting] = useState(false);
   const [detectedInfo, setDetectedInfo] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'general' | 'branding' | 'contact' | 'receipt' | 'business' | 'notifications' | 'multiCurrency'>('general');
+  const [businessTypes, setBusinessTypes] = useState<any[]>([]);
+  const [loadingBusinessTypes, setLoadingBusinessTypes] = useState(true);
+  const [businessTypeWarning, setBusinessTypeWarning] = useState<string | null>(null);
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
     fetchSettings();
+    loadBusinessTypes();
   }, [lang, tenant]);
+
+  const loadBusinessTypes = async () => {
+    try {
+      setLoadingBusinessTypes(true);
+      const res = await fetch('/api/business-types');
+      const data = await res.json();
+      if (data.success) {
+        setBusinessTypes(data.data);
+      }
+    } catch (err) {
+      console.error('Failed to load business types:', err);
+    } finally {
+      setLoadingBusinessTypes(false);
+    }
+  };
 
 
   const autoDetectLocation = async () => {
@@ -239,6 +258,16 @@ export default function SettingsPage() {
     }
     
     current[keys[keys.length - 1]] = value;
+    
+    // If business type is being changed, show warning
+    if (path === 'businessType' && value !== settings.businessType) {
+      setBusinessTypeWarning(
+        `Changing business type to "${value}" will automatically configure features. This may enable or disable certain features based on the business type.`
+      );
+    } else if (path !== 'businessType') {
+      setBusinessTypeWarning(null);
+    }
+    
     setSettings(newSettings);
   };
 
@@ -1019,51 +1048,201 @@ export default function SettingsPage() {
             {activeTab === 'business' && (
               <section>
                 <h2 className="text-xl font-bold text-gray-900 mb-5">{dict?.settings?.businessInformation || 'Business Information'}</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Business Type
-                    </label>
-                    <select
-                      value={settings.businessType || ''}
-                      onChange={(e) => updateSetting('businessType', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
-                    >
-                      <option value="">Select business type</option>
-                      <option value="Retail">Retail</option>
-                      <option value="Restaurant">Restaurant</option>
-                      <option value="Service">Service</option>
-                      <option value="Salon">Salon</option>
-                      <option value="Repair">Repair/Technician</option>
-                      <option value="Contractor">Contractor</option>
-                      <option value="Rental">Rental</option>
-                      <option value="Other">Other</option>
-                    </select>
+                
+                {businessTypeWarning && (
+                  <div className="mb-6 p-4 bg-yellow-50 border-2 border-yellow-300 text-yellow-800 text-sm">
+                    <div className="flex items-start gap-2">
+                      <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      <div>
+                        <strong>Note:</strong> {businessTypeWarning}
+                      </div>
+                    </div>
                   </div>
+                )}
+
+                <div className="space-y-6">
+                  {/* Business Type Selection */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Tax ID / EIN
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Business Type <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      type="text"
-                      value={settings.taxId || ''}
-                      onChange={(e) => updateSetting('taxId', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
-                      placeholder="12-3456789"
-                    />
+                    {loadingBusinessTypes ? (
+                      <div className="w-full px-4 py-3 border-2 border-gray-300 bg-gray-50 flex items-center gap-2">
+                        <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent animate-spin"></div>
+                        <span className="text-sm text-gray-600">Loading business types...</span>
+                      </div>
+                    ) : (
+                      <>
+                        <select
+                          value={settings.businessType || 'general'}
+                          onChange={(e) => updateSetting('businessType', e.target.value)}
+                          className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                        >
+                          {businessTypes.map((type) => (
+                            <option key={type.type} value={type.type}>
+                              {type.name}
+                            </option>
+                          ))}
+                        </select>
+                        {settings.businessType && !loadingBusinessTypes && (
+                          <div className="mt-3 p-4 bg-blue-50 border-2 border-blue-200">
+                            <p className="text-sm text-blue-900 font-medium mb-2">
+                              {businessTypes.find((t) => t.type === settings.businessType)?.name || 'Business Type'}
+                            </p>
+                            <p className="text-xs text-blue-700 mb-3">
+                              {businessTypes.find((t) => t.type === settings.businessType)?.description || ''}
+                            </p>
+                            <div className="mt-3 pt-3 border-t border-blue-300">
+                              <p className="text-xs font-medium text-blue-900 mb-2">Default Features:</p>
+                              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                {businessTypes.find((t) => t.type === settings.businessType)?.defaultFeatures && Object.entries(
+                                  businessTypes.find((t) => t.type === settings.businessType)?.defaultFeatures || {}
+                                ).map(([feature, enabled]) => (
+                                  <div key={feature} className="flex items-center gap-2">
+                                    <svg
+                                      className={`w-4 h-4 ${enabled ? 'text-green-600' : 'text-gray-400'}`}
+                                      fill="none"
+                                      viewBox="0 0 24 24"
+                                      stroke="currentColor"
+                                    >
+                                      {enabled ? (
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                      ) : (
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                      )}
+                                    </svg>
+                                    <span className={`text-xs ${enabled ? 'text-green-700' : 'text-gray-500'}`}>
+                                      {feature.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Registration Number
-                    </label>
-                    <input
-                      type="text"
-                      value={settings.registrationNumber || ''}
-                      onChange={(e) => updateSetting('registrationNumber', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
-                      placeholder={dict?.settings?.registrationNumberPlaceholder || 'Business registration number'}
-                    />
+
+                  {/* Business Details */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Tax ID / EIN
+                      </label>
+                      <input
+                        type="text"
+                        value={settings.taxId || ''}
+                        onChange={(e) => updateSetting('taxId', e.target.value)}
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                        placeholder="12-3456789"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Registration Number
+                      </label>
+                      <input
+                        type="text"
+                        value={settings.registrationNumber || ''}
+                        onChange={(e) => updateSetting('registrationNumber', e.target.value)}
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                        placeholder={dict?.settings?.registrationNumberPlaceholder || 'Business registration number'}
+                      />
+                    </div>
                   </div>
+
+                  {/* Feature Flags Section */}
+                  {settings.businessType && (
+                    <div className="mt-6 pt-6 border-t-2 border-gray-200">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Feature Configuration</h3>
+                      <p className="text-sm text-gray-600 mb-4">
+                        These features are automatically configured based on your business type. You can override them if needed.
+                      </p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
+                          <input
+                            type="checkbox"
+                            id="enableInventory"
+                            checked={settings.enableInventory !== false}
+                            onChange={(e) => updateSetting('enableInventory', e.target.checked)}
+                            className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
+                          />
+                          <label htmlFor="enableInventory" className="ml-3 flex-1">
+                            <div className="text-sm font-medium text-gray-900">Inventory Management</div>
+                            <div className="text-xs text-gray-500 mt-1">Track product stock levels</div>
+                          </label>
+                        </div>
+                        <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
+                          <input
+                            type="checkbox"
+                            id="enableCategories"
+                            checked={settings.enableCategories !== false}
+                            onChange={(e) => updateSetting('enableCategories', e.target.checked)}
+                            className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
+                          />
+                          <label htmlFor="enableCategories" className="ml-3 flex-1">
+                            <div className="text-sm font-medium text-gray-900">Categories</div>
+                            <div className="text-xs text-gray-500 mt-1">Organize products by categories</div>
+                          </label>
+                        </div>
+                        <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
+                          <input
+                            type="checkbox"
+                            id="enableDiscounts"
+                            checked={settings.enableDiscounts || false}
+                            onChange={(e) => updateSetting('enableDiscounts', e.target.checked)}
+                            className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
+                          />
+                          <label htmlFor="enableDiscounts" className="ml-3 flex-1">
+                            <div className="text-sm font-medium text-gray-900">Discounts & Promotions</div>
+                            <div className="text-xs text-gray-500 mt-1">Create discount codes and promotions</div>
+                          </label>
+                        </div>
+                        <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
+                          <input
+                            type="checkbox"
+                            id="enableLoyaltyProgram"
+                            checked={settings.enableLoyaltyProgram || false}
+                            onChange={(e) => updateSetting('enableLoyaltyProgram', e.target.checked)}
+                            className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
+                          />
+                          <label htmlFor="enableLoyaltyProgram" className="ml-3 flex-1">
+                            <div className="text-sm font-medium text-gray-900">Loyalty Program</div>
+                            <div className="text-xs text-gray-500 mt-1">Customer loyalty and rewards</div>
+                          </label>
+                        </div>
+                        <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
+                          <input
+                            type="checkbox"
+                            id="enableCustomerManagement"
+                            checked={settings.enableCustomerManagement || false}
+                            onChange={(e) => updateSetting('enableCustomerManagement', e.target.checked)}
+                            className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
+                          />
+                          <label htmlFor="enableCustomerManagement" className="ml-3 flex-1">
+                            <div className="text-sm font-medium text-gray-900">Customer Management</div>
+                            <div className="text-xs text-gray-500 mt-1">Manage customer profiles and history</div>
+                          </label>
+                        </div>
+                        <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
+                          <input
+                            type="checkbox"
+                            id="enableBookingScheduling"
+                            checked={settings.enableBookingScheduling || false}
+                            onChange={(e) => updateSetting('enableBookingScheduling', e.target.checked)}
+                            className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
+                          />
+                          <label htmlFor="enableBookingScheduling" className="ml-3 flex-1">
+                            <div className="text-sm font-medium text-gray-900">Booking & Scheduling</div>
+                            <div className="text-xs text-gray-500 mt-1">Appointment and service scheduling</div>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </section>
             )}
