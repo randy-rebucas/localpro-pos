@@ -168,6 +168,77 @@ export async function sendBookingReminder(data: BookingNotificationData): Promis
 }
 
 /**
+ * Send attendance notification email
+ */
+export interface AttendanceNotificationData {
+  userName: string;
+  userEmail: string;
+  type: 'late_arrival' | 'missing_clock_out';
+  clockInTime: Date | string;
+  hoursSinceClockIn?: number;
+  minutesLate?: number;
+  expectedTime?: Date | string;
+  message: string;
+}
+
+export async function sendAttendanceNotification(data: AttendanceNotificationData): Promise<boolean> {
+  try {
+    const clockInDate = new Date(data.clockInTime).toLocaleDateString();
+    const clockInTime = new Date(data.clockInTime).toLocaleTimeString();
+    
+    let subject = '';
+    let emailBody = '';
+    
+    if (data.type === 'late_arrival') {
+      subject = `Late Arrival Alert: ${data.userName}`;
+      emailBody = `
+Hello ${data.userName},
+
+This is an automated notification regarding your attendance.
+
+You clocked in late on ${clockInDate} at ${clockInTime}.
+${data.minutesLate ? `You were ${data.minutesLate} minutes late.` : ''}
+${data.expectedTime ? `Expected time: ${new Date(data.expectedTime).toLocaleTimeString()}` : ''}
+
+${data.message}
+
+Please ensure you arrive on time for your scheduled shifts.
+
+Best regards,
+Attendance Management System
+      `.trim();
+    } else if (data.type === 'missing_clock_out') {
+      subject = `Missing Clock-Out Alert: ${data.userName}`;
+      emailBody = `
+Hello ${data.userName},
+
+This is an automated notification regarding your attendance.
+
+You clocked in on ${clockInDate} at ${clockInTime} but have not yet clocked out.
+${data.hoursSinceClockIn ? `You have been clocked in for ${data.hoursSinceClockIn.toFixed(1)} hours.` : ''}
+
+${data.message}
+
+Please remember to clock out at the end of your shift.
+
+Best regards,
+Attendance Management System
+      `.trim();
+    }
+
+    return await sendEmail({
+      to: data.userEmail,
+      subject,
+      message: emailBody,
+      type: 'email',
+    });
+  } catch (error) {
+    console.error('Failed to send attendance notification:', error);
+    return false;
+  }
+}
+
+/**
  * Send booking cancellation notification
  */
 export async function sendBookingCancellation(data: BookingNotificationData): Promise<{ email: boolean; sms: boolean }> {

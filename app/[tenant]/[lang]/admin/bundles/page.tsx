@@ -5,7 +5,21 @@ import Navbar from '@/components/Navbar';
 import { useParams, useRouter } from 'next/navigation';
 import { getDictionaryClient } from '../../dictionaries-client';
 import Currency from '@/components/Currency';
-import { arrayToCSV, downloadCSV } from '@/lib/export';
+import { arrayToCSV, downloadCSV, downloadExcel, downloadPDF } from '@/lib/export';
+import dynamic from 'next/dynamic';
+
+// Dynamically import charts to avoid SSR issues
+const BundlePerformanceCharts = dynamic(() => import('@/components/BundlePerformanceCharts'), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-64 flex items-center justify-center">
+      <div className="text-center">
+        <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+        <p className="mt-4 text-gray-600">Loading charts...</p>
+      </div>
+    </div>
+  ),
+});
 
 interface BundleItem {
   productId: string | { _id: string; name: string; price: number; stock: number };
@@ -272,7 +286,7 @@ export default function BundlesPage() {
     setSelectedBundles(newSelected);
   };
 
-  const handleExport = () => {
+  const handleExport = (format: 'csv' | 'excel' | 'pdf' = 'csv') => {
     const headers = [
       'Name',
       'SKU',
@@ -295,9 +309,16 @@ export default function BundlesPage() {
       'Created At': new Date(bundle.createdAt).toLocaleString(),
     }));
 
-    const csv = arrayToCSV(exportData, headers);
-    const filename = `bundles_export_${new Date().toISOString().split('T')[0]}.csv`;
-    downloadCSV(csv, filename);
+    const baseFilename = `bundles_export_${new Date().toISOString().split('T')[0]}`;
+    
+    if (format === 'csv') {
+      const csv = arrayToCSV(exportData, headers);
+      downloadCSV(csv, `${baseFilename}.csv`);
+    } else if (format === 'excel') {
+      downloadExcel(exportData, headers, baseFilename);
+    } else if (format === 'pdf') {
+      downloadPDF(exportData, headers, baseFilename, dict.admin?.bundles || 'Bundles');
+    }
   };
 
   const clearFilters = () => {
@@ -423,6 +444,11 @@ export default function BundlesPage() {
                     </div>
                   </div>
 
+                  {/* Bundle Performance Charts */}
+                  {analytics.analytics && analytics.analytics.length > 0 && (
+                    <BundlePerformanceCharts analytics={analytics.analytics} dict={dict} />
+                  )}
+
                   {/* Analytics Table */}
                   <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
@@ -491,12 +517,34 @@ export default function BundlesPage() {
               >
                 {dict.admin?.advancedFilters || 'Advanced Filters'}
               </button>
-              <button
-                onClick={handleExport}
-                className="px-4 py-2 border border-gray-300 hover:bg-gray-50 bg-white"
-              >
-                {dict.admin?.export || 'Export CSV'}
-              </button>
+              <div className="relative group">
+                <button
+                  onClick={() => handleExport('csv')}
+                  className="px-4 py-2 border border-gray-300 hover:bg-gray-50 bg-white"
+                >
+                  {dict.admin?.export || 'Export'} ▼
+                </button>
+                <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-300 shadow-lg hidden group-hover:block z-10">
+                  <button
+                    onClick={() => handleExport('csv')}
+                    className="block w-full text-left px-4 py-2 hover:bg-gray-100 text-sm"
+                  >
+                    {dict.admin?.exportCSV || 'Export CSV'}
+                  </button>
+                  <button
+                    onClick={() => handleExport('excel')}
+                    className="block w-full text-left px-4 py-2 hover:bg-gray-100 text-sm"
+                  >
+                    {dict.admin?.exportExcel || 'Export Excel'}
+                  </button>
+                  <button
+                    onClick={() => handleExport('pdf')}
+                    className="block w-full text-left px-4 py-2 hover:bg-gray-100 text-sm"
+                  >
+                    {dict.admin?.exportPDF || 'Export PDF'}
+                  </button>
+                </div>
+              </div>
               <button
                 onClick={() => {
                   setEditingBundle(null);

@@ -646,7 +646,39 @@ npm start
 
 See [PRODUCTION_README.md](./PRODUCTION_README.md) for detailed production deployment instructions.
 
-## 📚 Additional Documentation
+## 📚 Documentation
+
+### Complete Documentation Index
+
+**📱 [Mobile API Documentation](./docs/mobile/)** - Complete mobile integration guide
+- [Quick Start](./docs/mobile/quick-start.md) - Get started in 10 minutes
+- [Authentication](./docs/mobile/authentication.md) - Mobile authentication
+- [API Client Setup](./docs/mobile/api-client-setup.md) - Platform-specific setup
+- [Feature APIs](./docs/mobile/features/) - All feature endpoints
+- [API Reference](./docs/mobile/reference/) - Complete reference
+- [Examples](./docs/mobile/examples/) - Code examples
+- [Troubleshooting](./docs/mobile/troubleshooting/) - Common issues
+
+**🌐 [Web Application Documentation](./docs/web/)** - Complete web app guide
+- [Overview](./docs/web/README.md) - Web application features
+- [Authentication](./docs/web/authentication/) - Login and user management
+- [Products](./docs/web/products/) - Product management
+- [Transactions & POS](./docs/web/transactions/) - Point of Sale system
+- [Inventory](./docs/web/inventory/) - Stock management
+- [All Features](./docs/web/) - Complete feature list
+
+**📖 [Documentation Index](./docs/INDEX.md)** - Complete documentation index
+**📋 [Documentation Structure](./docs/DOCUMENTATION_STRUCTURE.md)** - Documentation organization
+
+### Legacy Documentation (Still Available)
+
+- **[Mobile API Quick Start](./docs/MOBILE_API_QUICK_START.md)** - Legacy quick start
+- **[Mobile API Reference](./docs/MOBILE_API_REFERENCE.md)** - Legacy API reference
+- **[Mobile API Examples](./docs/MOBILE_API_EXAMPLES.md)** - Legacy examples
+- **[Mobile API Troubleshooting](./docs/MOBILE_API_TROUBLESHOOTING.md)** - Legacy troubleshooting
+- **[Full Mobile Integration Guide](./MOBILE_API_INTEGRATION.md)** - Comprehensive guide
+
+### System Documentation
 
 - [PRODUCTION_README.md](./PRODUCTION_README.md) - Production deployment guide
 - [MULTI_TENANT.md](./MULTI_TENANT.md) - Multi-tenant architecture details

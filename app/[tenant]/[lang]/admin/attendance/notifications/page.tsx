@@ -30,11 +30,70 @@ export default function AttendanceNotificationsPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [expectedStartTime, setExpectedStartTime] = useState('09:00');
   const [maxHours, setMaxHours] = useState('12');
+  const [sending, setSending] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
+    loadDefaultSettings();
     fetchNotifications();
   }, [lang, tenant]);
+
+  const loadDefaultSettings = async () => {
+    try {
+      const res = await fetch(`/api/tenants/${tenant}/settings`);
+      const data = await res.json();
+      if (data.success && data.data.attendanceNotifications) {
+        const attSettings = data.data.attendanceNotifications;
+        if (attSettings.expectedStartTime) {
+          setExpectedStartTime(attSettings.expectedStartTime);
+        }
+        if (attSettings.maxHoursWithoutClockOut) {
+          setMaxHours(String(attSettings.maxHoursWithoutClockOut));
+        }
+      }
+    } catch (error) {
+      console.error('Error loading default settings:', error);
+      // Continue with defaults if loading fails
+    }
+  };
+
+  const handleSaveDefaultSettings = async () => {
+    setSavingSettings(true);
+    try {
+      const res = await fetch(`/api/tenants/${tenant}/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          settings: {
+            attendanceNotifications: {
+              enabled: true,
+              expectedStartTime,
+              maxHoursWithoutClockOut: parseFloat(maxHours),
+            },
+          },
+        }),
+      });
+      
+      const data = await res.json();
+      if (data.success) {
+        setMessage({ 
+          type: 'success', 
+          text: dict.admin?.settingsSaved || 'Settings saved as default' 
+        });
+        // Clear message after 3 seconds
+        setTimeout(() => setMessage(null), 3000);
+      } else {
+        setMessage({ type: 'error', text: data.error || dict.admin?.failedToSaveSettings || 'Failed to save settings' });
+      }
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      setMessage({ type: 'error', text: dict.admin?.failedToSaveSettings || 'Failed to save settings' });
+    } finally {
+      setSavingSettings(false);
+    }
+  };
 
   const fetchNotifications = async () => {
     setLoading(true);
@@ -57,6 +116,52 @@ export default function AttendanceNotificationsPage() {
       setMessage({ type: 'error', text: 'Failed to fetch notifications' });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSendEmails = async () => {
+    if (notifications.length === 0) {
+      setMessage({ type: 'error', text: dict.admin?.noNotificationsToSend || 'No notifications to send' });
+      return;
+    }
+
+    const notificationsWithEmail = notifications.filter(n => n.userEmail);
+    if (notificationsWithEmail.length === 0) {
+      setMessage({ type: 'error', text: dict.admin?.noEmailsToSend || 'No email addresses found for notifications' });
+      return;
+    }
+
+    if (!confirm(dict.admin?.confirmSendEmails?.replace('{count}', notificationsWithEmail.length.toString()) || `Send emails to ${notificationsWithEmail.length} recipient(s)?`)) {
+      return;
+    }
+
+    setSending(true);
+    try {
+      const params = new URLSearchParams();
+      params.append('expectedStartTime', expectedStartTime);
+      params.append('maxHoursWithoutClockOut', maxHours);
+
+      const res = await fetch(`/api/attendance/notifications?${params}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ notifications: notificationsWithEmail }),
+      });
+      
+      const data = await res.json();
+      if (data.success) {
+        setMessage({ 
+          type: 'success', 
+          text: data.message || dict.admin?.emailsSentSuccessfully || 'Emails sent successfully' 
+        });
+      } else {
+        setMessage({ type: 'error', text: data.error || dict.admin?.failedToSendEmails || 'Failed to send emails' });
+      }
+    } catch (error) {
+      console.error('Error sending emails:', error);
+      setMessage({ type: 'error', text: dict.admin?.failedToSendEmails || 'Failed to send emails' });
+    } finally {
+      setSending(false);
     }
   };
 
@@ -126,10 +231,17 @@ export default function AttendanceNotificationsPage() {
                 className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               />
             </div>
-            <div className="flex items-end">
+            <div className="flex items-end gap-2">
+              <button
+                onClick={handleSaveDefaultSettings}
+                disabled={savingSettings}
+                className="px-4 py-2 border border-gray-300 hover:bg-gray-50 bg-white font-medium disabled:bg-gray-100 disabled:cursor-not-allowed"
+              >
+                {savingSettings ? (dict.common?.saving || 'Saving...') : (dict.admin?.saveAsDefault || 'Save as Default')}
+              </button>
               <button
                 onClick={fetchNotifications}
-                className="w-full px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
+                className="flex-1 px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
               >
                 {dict.common?.search || 'Refresh'}
               </button>
@@ -139,19 +251,40 @@ export default function AttendanceNotificationsPage() {
 
         {/* Summary */}
         {summary && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div className="bg-white border border-gray-300 p-6">
-              <div className="text-sm text-gray-600 mb-1">{dict.admin?.totalNotifications || 'Total Notifications'}</div>
-              <div className="text-2xl font-bold text-gray-900">{summary.total}</div>
+          <div className="mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+              <div className="bg-white border border-gray-300 p-6">
+                <div className="text-sm text-gray-600 mb-1">{dict.admin?.totalNotifications || 'Total Notifications'}</div>
+                <div className="text-2xl font-bold text-gray-900">{summary.total}</div>
+              </div>
+              <div className="bg-red-50 border border-red-200 p-6">
+                <div className="text-sm text-red-600 mb-1">{dict.admin?.missingClockOut || 'Missing Clock Out'}</div>
+                <div className="text-2xl font-bold text-red-900">{summary.missingClockOut}</div>
+              </div>
+              <div className="bg-yellow-50 border border-yellow-200 p-6">
+                <div className="text-sm text-yellow-600 mb-1">{dict.admin?.lateArrivals || 'Late Arrivals'}</div>
+                <div className="text-2xl font-bold text-yellow-900">{summary.lateArrivals}</div>
+              </div>
             </div>
-            <div className="bg-red-50 border border-red-200 p-6">
-              <div className="text-sm text-red-600 mb-1">{dict.admin?.missingClockOut || 'Missing Clock Out'}</div>
-              <div className="text-2xl font-bold text-red-900">{summary.missingClockOut}</div>
-            </div>
-            <div className="bg-yellow-50 border border-yellow-200 p-6">
-              <div className="text-sm text-yellow-600 mb-1">{dict.admin?.lateArrivals || 'Late Arrivals'}</div>
-              <div className="text-2xl font-bold text-yellow-900">{summary.lateArrivals}</div>
-            </div>
+            {notifications.length > 0 && (
+              <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-blue-900">
+                    {dict.admin?.sendEmailNotifications || 'Send email notifications to employees'}
+                  </p>
+                  <p className="text-xs text-blue-700 mt-1">
+                    {notifications.filter(n => n.userEmail).length} {dict.admin?.recipientsWithEmail || 'recipients with email addresses'}
+                  </p>
+                </div>
+                <button
+                  onClick={handleSendEmails}
+                  disabled={sending || notifications.filter(n => n.userEmail).length === 0}
+                  className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {sending ? (dict.common?.sending || 'Sending...') : (dict.admin?.sendEmails || 'Send Emails')}
+                </button>
+              </div>
+            )}
           </div>
         )}
 

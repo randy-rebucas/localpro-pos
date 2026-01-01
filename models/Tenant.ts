@@ -58,6 +58,11 @@ export interface ITenantSettings {
   lowStockAlert?: boolean;
   emailNotifications?: boolean;
   smsNotifications?: boolean;
+  attendanceNotifications?: {
+    enabled?: boolean;
+    expectedStartTime?: string;
+    maxHoursWithoutClockOut?: number;
+  };
   
   // Feature Flags
   enableInventory?: boolean;
@@ -256,6 +261,22 @@ const TenantSchema: Schema = new Schema(
       smsNotifications: {
         type: Boolean,
         default: false,
+      },
+      attendanceNotifications: {
+        enabled: {
+          type: Boolean,
+          default: true,
+        },
+        expectedStartTime: {
+          type: String,
+          default: '09:00', // HH:MM format
+        },
+        maxHoursWithoutClockOut: {
+          type: Number,
+          default: 12,
+          min: 1,
+          max: 24,
+        },
       },
       
       // Feature Flags

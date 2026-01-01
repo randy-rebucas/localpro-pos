@@ -17,9 +17,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
+    // Get tenant settings for notification defaults
+    const Tenant = (await import('@/models/Tenant')).default;
+    const tenant = await Tenant.findById(tenantId).select('settings').lean();
+    
     const searchParams = request.nextUrl.searchParams;
-    const expectedStartTime = searchParams.get('expectedStartTime') || '09:00'; // Default 9 AM
-    const maxHoursWithoutClockOut = parseFloat(searchParams.get('maxHoursWithoutClockOut') || '12'); // Default 12 hours
+    const attendanceSettings = tenant?.settings?.attendanceNotifications || {};
+    const expectedStartTime = searchParams.get('expectedStartTime') || attendanceSettings.expectedStartTime || '09:00'; // Default 9 AM
+    const maxHoursWithoutClockOut = parseFloat(
+      searchParams.get('maxHoursWithoutClockOut') || 
+      String(attendanceSettings.maxHoursWithoutClockOut || 12)
+    ); // Default 12 hours
 
     // Get all active sessions (clocked in but not out)
     const activeSessions = await Attendance.find({
@@ -122,29 +130,74 @@ export async function POST(request: NextRequest) {
   try {
     await connectDB();
     const tenantId = await getTenantIdFromRequest(request);
-
+    
     if (!tenantId) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
-
+    
     const body = await request.json();
-    const { notificationIds } = body;
-
-    if (!notificationIds || !Array.isArray(notificationIds)) {
+    const { notifications } = body; // Array of notification objects
+    
+    if (!notifications || !Array.isArray(notifications) || notifications.length === 0) {
       return NextResponse.json(
-        { success: false, error: 'Notification IDs array is required' },
+        { success: false, error: 'Notifications array is required' },
         { status: 400 }
       );
     }
-
-    // Get notifications (would typically fetch from GET endpoint or database)
-    // For now, we'll send based on notification IDs provided
-    // In a real implementation, you'd store notifications and retrieve them
-
+    
+    const searchParams = request.nextUrl.searchParams;
+    const expectedStartTime = searchParams.get('expectedStartTime') || '09:00';
+    const maxHoursWithoutClockOut = parseFloat(searchParams.get('maxHoursWithoutClockOut') || '12');
+    
+    // Import the sendAttendanceNotification function
+    const { sendAttendanceNotification } = await import('@/lib/notifications');
+    
+    const results = {
+      sent: 0,
+      failed: 0,
+      errors: [] as string[],
+    };
+    
+    // Send email for each notification that has an email address
+    for (const notification of notifications) {
+      if (notification.userEmail) {
+        try {
+          const sent = await sendAttendanceNotification({
+            userName: notification.userName,
+            userEmail: notification.userEmail,
+            type: notification.type,
+            clockInTime: notification.clockInTime,
+            hoursSinceClockIn: notification.hoursSinceClockIn ? parseFloat(notification.hoursSinceClockIn) : undefined,
+            minutesLate: notification.minutesLate,
+            expectedTime: notification.expectedTime,
+            message: notification.message,
+          });
+          
+          if (sent) {
+            results.sent++;
+          } else {
+            results.failed++;
+            results.errors.push(`Failed to send email to ${notification.userEmail}`);
+          }
+        } catch (error: any) {
+          results.failed++;
+          results.errors.push(`Error sending to ${notification.userEmail}: ${error.message}`);
+        }
+      } else {
+        results.failed++;
+        results.errors.push(`No email address for ${notification.userName}`);
+      }
+    }
+    
     return NextResponse.json({
       success: true,
-      message: 'Notifications sent successfully',
-      sentCount: notificationIds.length,
+      message: `Sent ${results.sent} email(s) successfully${results.failed > 0 ? `, ${results.failed} failed` : ''}`,
+      results: {
+        sent: results.sent,
+        failed: results.failed,
+        total: notifications.length,
+        errors: results.errors.length > 0 ? results.errors : undefined,
+      },
     });
   } catch (error: any) {
     console.error('Error sending attendance notifications:', error);

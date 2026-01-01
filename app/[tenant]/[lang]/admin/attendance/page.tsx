@@ -4,7 +4,21 @@ import React, { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import { useParams, useRouter } from 'next/navigation';
 import { getDictionaryClient } from '../../dictionaries-client';
-import { arrayToCSV, downloadCSV } from '@/lib/export';
+import { arrayToCSV, downloadCSV, downloadExcel, downloadPDF } from '@/lib/export';
+import dynamic from 'next/dynamic';
+
+// Dynamically import charts to avoid SSR issues
+const AttendanceTrendsCharts = dynamic(() => import('@/components/AttendanceTrendsCharts'), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-64 flex items-center justify-center">
+      <div className="text-center">
+        <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+        <p className="mt-4 text-gray-600">Loading charts...</p>
+      </div>
+    </div>
+  ),
+});
 
 interface Attendance {
   _id: string;
@@ -134,7 +148,7 @@ export default function AttendancePage() {
     return attendances.reduce((total, att) => total + (att.totalHours || 0), 0);
   };
 
-  const handleExport = () => {
+  const handleExport = (format: 'csv' | 'excel' | 'pdf' = 'csv') => {
     const headers = [
       'Employee',
       'Clock In',
@@ -167,9 +181,16 @@ export default function AttendancePage() {
       };
     });
 
-    const csv = arrayToCSV(exportData, headers);
-    const filename = `attendance_export_${startDate || 'all'}_to_${endDate || 'today'}.csv`;
-    downloadCSV(csv, filename);
+    const baseFilename = `attendance_export_${startDate || 'all'}_to_${endDate || 'today'}`;
+    
+    if (format === 'csv') {
+      const csv = arrayToCSV(exportData, headers);
+      downloadCSV(csv, `${baseFilename}.csv`);
+    } else if (format === 'excel') {
+      downloadExcel(exportData, headers, baseFilename);
+    } else if (format === 'pdf') {
+      downloadPDF(exportData, headers, baseFilename, dict.admin?.attendance || 'Attendance Records');
+    }
   };
 
   if (!dict) {
@@ -300,12 +321,34 @@ export default function AttendancePage() {
               />
             </div>
             <div className="flex items-end gap-2">
-              <button
-                onClick={handleExport}
-                className="px-4 py-2 border border-gray-300 hover:bg-gray-50 bg-white font-medium"
-              >
-                {dict.admin?.export || 'Export CSV'}
-              </button>
+              <div className="relative group">
+                <button
+                  onClick={() => handleExport('csv')}
+                  className="px-4 py-2 border border-gray-300 hover:bg-gray-50 bg-white font-medium"
+                >
+                  {dict.admin?.export || 'Export'} ▼
+                </button>
+                <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-300 shadow-lg hidden group-hover:block z-10">
+                  <button
+                    onClick={() => handleExport('csv')}
+                    className="block w-full text-left px-4 py-2 hover:bg-gray-100 text-sm"
+                  >
+                    {dict.admin?.exportCSV || 'Export CSV'}
+                  </button>
+                  <button
+                    onClick={() => handleExport('excel')}
+                    className="block w-full text-left px-4 py-2 hover:bg-gray-100 text-sm"
+                  >
+                    {dict.admin?.exportExcel || 'Export Excel'}
+                  </button>
+                  <button
+                    onClick={() => handleExport('pdf')}
+                    className="block w-full text-left px-4 py-2 hover:bg-gray-100 text-sm"
+                  >
+                    {dict.admin?.exportPDF || 'Export PDF'}
+                  </button>
+                </div>
+              </div>
               <button
                 onClick={fetchAttendances}
                 className="w-full px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
@@ -333,6 +376,16 @@ export default function AttendancePage() {
             </div>
           </div>
         </div>
+
+        {/* Attendance Trends Charts */}
+        {attendances.length > 0 && (
+          <div className="bg-white border border-gray-300 p-6 mb-6">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">
+              {dict.admin?.attendanceTrends || 'Attendance Trends'}
+            </h2>
+            <AttendanceTrendsCharts attendances={attendances} dict={dict} />
+          </div>
+        )}
 
         {/* Attendance Table */}
         <div className="bg-white border border-gray-300 p-6">
