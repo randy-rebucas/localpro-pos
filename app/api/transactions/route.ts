@@ -85,26 +85,36 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ success: false, error: `Bundle ${bundleId} not found` }, { status: 404 });
         }
 
-        // Check stock for all bundle items
+        // Check stock for all bundle items - but respect allowOutOfStockSales and trackInventory
         for (const bundleItem of bundle.items) {
-          const availableStock = await getProductStock(
-            bundleItem.productId.toString(),
-            tenantId,
-            {
-              branchId,
-              variation: bundleItem.variation,
-            }
-          );
+          const bundleProduct = await Product.findOne({ _id: bundleItem.productId, tenantId });
+          if (!bundleProduct) {
+            continue; // Skip if product not found (shouldn't happen, but safety check)
+          }
 
-          const requiredStock = bundleItem.quantity * quantity;
-          if (availableStock < requiredStock) {
-            return NextResponse.json(
+          const trackInventory = bundleProduct.trackInventory !== false; // Default to true if not set
+          const allowOutOfStockSales = bundleProduct.allowOutOfStockSales === true;
+
+          if (trackInventory && !allowOutOfStockSales) {
+            const availableStock = await getProductStock(
+              bundleItem.productId.toString(),
+              tenantId,
               {
-                success: false,
-                error: `Insufficient stock for bundle item ${bundleItem.productName}. Available: ${availableStock}, Required: ${requiredStock}`,
-              },
-              { status: 400 }
+                branchId,
+                variation: bundleItem.variation,
+              }
             );
+
+            const requiredStock = bundleItem.quantity * quantity;
+            if (availableStock < requiredStock) {
+              return NextResponse.json(
+                {
+                  success: false,
+                  error: `Insufficient stock for bundle item ${bundleItem.productName}. Available: ${availableStock}, Required: ${requiredStock}`,
+                },
+                { status: 400 }
+              );
+            }
           }
         }
 
@@ -127,20 +137,25 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ success: false, error: `Product ${productId} not found` }, { status: 404 });
         }
 
-        // Check stock (considering variations and branches)
-        const availableStock = await getProductStock(productId, tenantId, {
-          branchId,
-          variation,
-        });
+        // Check stock (considering variations and branches) - but respect allowOutOfStockSales and trackInventory
+        const trackInventory = product.trackInventory !== false; // Default to true if not set
+        const allowOutOfStockSales = product.allowOutOfStockSales === true;
+        
+        if (trackInventory && !allowOutOfStockSales) {
+          const availableStock = await getProductStock(productId, tenantId, {
+            branchId,
+            variation,
+          });
 
-        if (availableStock < quantity) {
-          return NextResponse.json(
-            {
-              success: false,
-              error: `Insufficient stock for ${product.name}. Available: ${availableStock}, Requested: ${quantity}`,
-            },
-            { status: 400 }
-          );
+          if (availableStock < quantity) {
+            return NextResponse.json(
+              {
+                success: false,
+                error: `Insufficient stock for ${product.name}. Available: ${availableStock}, Requested: ${quantity}`,
+              },
+              { status: 400 }
+            );
+          }
         }
 
         // Get price (variation price override or base price)

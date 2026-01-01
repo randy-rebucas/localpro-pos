@@ -242,12 +242,30 @@ class OfflineStorage {
 
 // Singleton instance
 let storageInstance: OfflineStorage | null = null;
+let initPromise: Promise<void> | null = null;
 
 export async function getOfflineStorage(): Promise<OfflineStorage> {
+  // If no instance exists, create one and start initialization
   if (!storageInstance) {
     storageInstance = new OfflineStorage();
-    await storageInstance.init();
+    initPromise = storageInstance.init().catch((error) => {
+      // Clear on failure to allow retry on next call
+      initPromise = null;
+      storageInstance = null;
+      throw error;
+    });
   }
+  
+  // Always wait for initialization to complete (handles concurrent calls)
+  if (initPromise) {
+    await initPromise;
+  }
+  
+  // At this point, instance should be initialized
+  if (!storageInstance) {
+    throw new Error('Failed to initialize offline storage');
+  }
+  
   return storageInstance;
 }
 

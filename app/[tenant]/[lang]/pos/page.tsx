@@ -135,7 +135,7 @@ export default function POSPage() {
     const product = products.find(
       p => p.sku === barcode || p._id === barcode
     );
-    if (product && product.stock > 0) {
+    if (product && (product.stock > 0 || product.allowOutOfStockSales)) {
       addToCart(product);
     } else {
       if (dict) {
@@ -149,7 +149,7 @@ export default function POSPage() {
     // QR codes might contain product IDs, URLs, or other data
     // Try to parse as product ID first
     const product = products.find(p => p._id === data);
-    if (product && product.stock > 0) {
+    if (product && (product.stock > 0 || product.allowOutOfStockSales)) {
       addToCart(product);
       setShowQRScanner(false);
     } else {
@@ -1053,7 +1053,7 @@ export default function POSPage() {
                   <div
                     key={product._id}
                     className={`bg-white rounded-xl shadow-md p-5 hover:shadow-lg transition-all duration-200 relative ${
-                      product.stock === 0 ? 'opacity-60' : ''
+                      product.stock === 0 && !product.allowOutOfStockSales ? 'opacity-60' : ''
                     }`}
                   >
                     <div className="flex flex-col h-full">
