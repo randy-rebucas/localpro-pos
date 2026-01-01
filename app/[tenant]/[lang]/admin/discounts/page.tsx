@@ -46,9 +46,15 @@ export default function DiscountsPage() {
     try {
       const res = await fetch('/api/discounts', { credentials: 'include' });
       const data = await res.json();
-      if (data.success) setDiscounts(data.data);
+      if (data.success) {
+        setDiscounts(data.data);
+        setMessage(null);
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Failed to fetch discounts' });
+      }
     } catch (error) {
       console.error('Error fetching discounts:', error);
+      setMessage({ type: 'error', text: 'Failed to fetch discounts' });
     } finally {
       setLoading(false);
     }
@@ -330,7 +336,7 @@ function DiscountModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white border border-gray-300 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">

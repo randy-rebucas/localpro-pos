@@ -4,7 +4,7 @@ import Category from '@/models/Category';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
-import { validateAndSanitize, validateTenant } from '@/lib/validation';
+import { validateAndSanitize, validateCategory } from '@/lib/validation';
 
 export async function GET(
   request: NextRequest,
@@ -51,7 +51,7 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { data, errors } = validateAndSanitize(body, validateTenant);
+    const { data, errors } = validateAndSanitize(body, validateCategory);
 
     if (errors.length > 0) {
       return NextResponse.json(

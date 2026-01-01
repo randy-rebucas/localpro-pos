@@ -39,6 +39,7 @@ export default function StockMovementsPage() {
     type: '',
     productId: '',
   });
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -56,9 +57,13 @@ export default function StockMovementsPage() {
       if (data.success) {
         setMovements(data.data);
         setTotalPages(data.pagination?.pages || 1);
+        setMessage(null);
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Failed to fetch stock movements' });
       }
     } catch (error) {
       console.error('Error fetching stock movements:', error);
+      setMessage({ type: 'error', text: 'Failed to fetch stock movements' });
     } finally {
       setLoading(false);
     }
@@ -107,6 +112,12 @@ export default function StockMovementsPage() {
             </button>
           </div>
         </div>
+
+        {message && (
+          <div className={`mb-6 p-4 border ${message.type === 'success' ? 'bg-green-50 text-green-800 border-green-300' : 'bg-red-50 text-red-800 border-red-300'}`}>
+            {message.text}
+          </div>
+        )}
 
         <div className="bg-white border border-gray-300 p-6">
           <div className="mb-4 flex gap-4">

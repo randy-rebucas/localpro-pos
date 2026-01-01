@@ -53,6 +53,7 @@ export default function BookingsPage() {
   const [staff, setStaff] = useState<User[]>([]);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterStaff, setFilterStaff] = useState<string>('all');
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -97,10 +98,19 @@ export default function BookingsPage() {
 
       if (response.ok) {
         const data = await response.json();
-        setBookings(data.data || []);
+        if (data.success) {
+          setBookings(data.data || []);
+          setMessage(null);
+        } else {
+          setMessage({ type: 'error', text: data.error || 'Failed to fetch bookings' });
+        }
+      } else {
+        const data = await response.json();
+        setMessage({ type: 'error', text: data.error || 'Failed to fetch bookings' });
       }
     } catch (error) {
       console.error('Failed to fetch bookings:', error);
+      setMessage({ type: 'error', text: 'Failed to fetch bookings' });
     } finally {
       setLoading(false);
     }
@@ -121,7 +131,14 @@ export default function BookingsPage() {
 
       if (response.ok) {
         const data = await response.json();
-        setStaff(data.data || []);
+        if (data.success) {
+          setStaff(data.data || []);
+        } else {
+          console.error('Failed to fetch staff:', data.error);
+        }
+      } else {
+        const data = await response.json();
+        console.error('Failed to fetch staff:', data.error);
       }
     } catch (error) {
       console.error('Failed to fetch staff:', error);
@@ -146,16 +163,22 @@ export default function BookingsPage() {
       });
 
       if (response.ok) {
-        await fetchBookings();
-        setShowCreateModal(false);
-        resetForm();
+        const data = await response.json();
+        if (data.success) {
+          setMessage({ type: 'success', text: 'Booking created successfully' });
+          await fetchBookings();
+          setShowCreateModal(false);
+          resetForm();
+        } else {
+          setMessage({ type: 'error', text: data.error || 'Failed to create booking' });
+        }
       } else {
         const error = await response.json();
-        alert(error.error || 'Failed to create booking');
+        setMessage({ type: 'error', text: error.error || 'Failed to create booking' });
       }
     } catch (error) {
       console.error('Failed to create booking:', error);
-      alert('Failed to create booking');
+      setMessage({ type: 'error', text: 'Failed to create booking' });
     }
   };
 
@@ -176,16 +199,22 @@ export default function BookingsPage() {
       });
 
       if (response.ok) {
-        await fetchBookings();
-        setShowModal(false);
-        setSelectedBooking(null);
+        const data = await response.json();
+        if (data.success) {
+          setMessage({ type: 'success', text: 'Booking updated successfully' });
+          await fetchBookings();
+          setShowModal(false);
+          setSelectedBooking(null);
+        } else {
+          setMessage({ type: 'error', text: data.error || 'Failed to update booking' });
+        }
       } else {
         const error = await response.json();
-        alert(error.error || 'Failed to update booking');
+        setMessage({ type: 'error', text: error.error || 'Failed to update booking' });
       }
     } catch (error) {
       console.error('Failed to update booking:', error);
-      alert('Failed to update booking');
+      setMessage({ type: 'error', text: 'Failed to update booking' });
     }
   };
 
@@ -208,16 +237,22 @@ export default function BookingsPage() {
       });
 
       if (response.ok) {
-        await fetchBookings();
-        setShowModal(false);
-        setSelectedBooking(null);
+        const data = await response.json();
+        if (data.success) {
+          setMessage({ type: 'success', text: 'Booking deleted successfully' });
+          await fetchBookings();
+          setShowModal(false);
+          setSelectedBooking(null);
+        } else {
+          setMessage({ type: 'error', text: data.error || 'Failed to delete booking' });
+        }
       } else {
         const error = await response.json();
-        alert(error.error || 'Failed to delete booking');
+        setMessage({ type: 'error', text: error.error || 'Failed to delete booking' });
       }
     } catch (error) {
       console.error('Failed to delete booking:', error);
-      alert('Failed to delete booking');
+      setMessage({ type: 'error', text: 'Failed to delete booking' });
     }
   };
 
@@ -236,14 +271,19 @@ export default function BookingsPage() {
       });
 
       if (response.ok) {
-        alert('Reminder sent successfully');
+        const data = await response.json();
+        if (data.success) {
+          setMessage({ type: 'success', text: 'Reminder sent successfully' });
+        } else {
+          setMessage({ type: 'error', text: data.error || 'Failed to send reminder' });
+        }
       } else {
         const error = await response.json();
-        alert(error.error || 'Failed to send reminder');
+        setMessage({ type: 'error', text: error.error || 'Failed to send reminder' });
       }
     } catch (error) {
       console.error('Failed to send reminder:', error);
-      alert('Failed to send reminder');
+      setMessage({ type: 'error', text: 'Failed to send reminder' });
     }
   };
 
@@ -323,6 +363,12 @@ export default function BookingsPage() {
             New Booking
           </button>
         </div>
+
+        {message && (
+          <div className={`mb-6 p-4 border ${message.type === 'success' ? 'bg-green-50 text-green-800 border-green-300' : 'bg-red-50 text-red-800 border-red-300'}`}>
+            {message.text}
+          </div>
+        )}
 
         {/* Filters */}
         <div className="mb-6 flex gap-4">
@@ -470,7 +516,7 @@ export default function BookingsPage() {
 
       {/* Booking Detail Modal */}
       {showModal && selectedBooking && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white border border-gray-300 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900">Booking Details</h3>
@@ -575,7 +621,7 @@ export default function BookingsPage() {
 
       {/* Create Booking Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white border border-gray-300 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900">Create New Booking</h3>

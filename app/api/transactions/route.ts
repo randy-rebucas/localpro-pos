@@ -30,13 +30,14 @@ export async function GET(request: NextRequest) {
       .sort({ createdAt: -1 })
       .limit(limit)
       .skip(skip)
-      .populate('items.product', 'name');
+      .populate('items.product', 'name')
+      .lean();
 
     const total = await Transaction.countDocuments({ tenantId });
 
     return NextResponse.json({
       success: true,
-      data: transactions,
+      data: transactions || [],
       pagination: {
         total,
         page,

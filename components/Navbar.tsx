@@ -66,15 +66,11 @@ export default function Navbar() {
     { href: `/${tenant}/${lang}/inventory`, key: 'inventory' },
     { href: `/${tenant}/${lang}/transactions`, key: 'transactions' },
     { href: `/${tenant}/${lang}/reports`, key: 'reports' },
+    { href: `/${tenant}/${lang}/admin/bookings`, key: 'bookings' },
   ];
 
   // Conditional navigation items based on feature flags
   const conditionalNavItems = [];
-  
-  // Add Bookings if the feature is enabled
-  if (settings?.enableBookingScheduling) {
-    conditionalNavItems.push({ href: `/${tenant}/${lang}/admin/bookings`, key: 'bookings' });
-  }
 
   // Combine all navigation items
   const navItems = [...baseNavItems, ...conditionalNavItems];

@@ -32,6 +32,7 @@ export default function CashDrawerPage() {
   const [loading, setLoading] = useState(true);
   const [selectedSession, setSelectedSession] = useState<CashDrawerSession | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('');
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const { settings } = useTenantSettings();
 
   useEffect(() => {
@@ -46,9 +47,15 @@ export default function CashDrawerPage() {
       
       const res = await fetch(url, { credentials: 'include' });
       const data = await res.json();
-      if (data.success) setSessions(data.data);
+      if (data.success) {
+        setSessions(data.data);
+        setMessage(null);
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Failed to fetch cash drawer sessions' });
+      }
     } catch (error) {
       console.error('Error fetching cash drawer sessions:', error);
+      setMessage({ type: 'error', text: 'Failed to fetch cash drawer sessions' });
     } finally {
       setLoading(false);
     }
@@ -85,6 +92,12 @@ export default function CashDrawerPage() {
             </button>
           </div>
         </div>
+
+        {message && (
+          <div className={`mb-6 p-4 border ${message.type === 'success' ? 'bg-green-50 text-green-800 border-green-300' : 'bg-red-50 text-red-800 border-red-300'}`}>
+            {message.text}
+          </div>
+        )}
 
         <div className="bg-white border border-gray-300 p-6">
           <div className="mb-4">
@@ -198,7 +211,7 @@ function CashDrawerDetailModal({
   const userEmail = typeof session.userId === 'object' ? session.userId.email : '';
   
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white border border-gray-300 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <div className="flex justify-between items-center mb-4">

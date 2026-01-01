@@ -140,6 +140,25 @@ export function validateTenant(data: any): ValidationError[] {
 }
 
 /**
+ * Validate category data
+ */
+export function validateCategory(data: any): ValidationError[] {
+  const errors: ValidationError[] = [];
+
+  if (!data.name || data.name.trim().length === 0) {
+    errors.push({ field: 'name', message: 'Category name is required' });
+  }
+  if (data.name && data.name.length > 200) {
+    errors.push({ field: 'name', message: 'Category name must be less than 200 characters' });
+  }
+  if (data.description && data.description.length > 1000) {
+    errors.push({ field: 'description', message: 'Description must be less than 1000 characters' });
+  }
+
+  return errors;
+}
+
+/**
  * Sanitize string input
  */
 export function sanitizeString(input: string): string {

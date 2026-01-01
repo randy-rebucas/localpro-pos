@@ -41,51 +41,20 @@ export default function TenantsPage() {
 
   const fetchTenants = async () => {
     try {
-      const res = await fetch('/api/tenants', { credentials: 'include' });
+      // Fetch current tenant only (tenant-level admin)
+      const res = await fetch(`/api/tenants/${tenant}`, { credentials: 'include' });
       const data = await res.json();
-      if (data.success) setTenants(data.data);
+      if (data.success) {
+        // Set as single-item array for consistency with existing UI
+        setTenants([data.data]);
+      }
     } catch (error) {
-      console.error('Error fetching tenants:', error);
+      console.error('Error fetching tenant:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDeleteTenant = async (tenantSlug: string) => {
-    if (!confirm('Are you sure you want to delete this tenant?')) return;
-    try {
-      const res = await fetch(`/api/tenants/${tenantSlug}`, { method: 'DELETE', credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
-        setMessage({ type: 'success', text: 'Tenant deleted successfully' });
-        fetchTenants();
-      } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to delete tenant' });
-      }
-    } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to delete tenant' });
-    }
-  };
-
-  const handleToggleTenantStatus = async (tenant: Tenant) => {
-    try {
-      const res = await fetch(`/api/tenants/${tenant.slug}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ isActive: !tenant.isActive }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setMessage({ type: 'success', text: `Tenant ${!tenant.isActive ? 'activated' : 'deactivated'} successfully` });
-        fetchTenants();
-      } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to update tenant' });
-      }
-    } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to update tenant' });
-    }
-  };
 
   if (!dict || loading) {
     return (
@@ -108,7 +77,7 @@ export default function TenantsPage() {
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
                 {dict.admin?.tenants || 'Tenants'}
               </h1>
-              <p className="text-gray-600">{dict.admin?.tenantsSubtitle || 'Manage multi-tenant organizations'}</p>
+              <p className="text-gray-600">{dict.admin?.tenantsSubtitle || 'View and manage your organization settings'}</p>
             </div>
             <button
               onClick={() => router.push(`/${tenant}/${lang}/admin`)}
@@ -127,16 +96,18 @@ export default function TenantsPage() {
 
         <div className="bg-white border border-gray-300 p-6">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold text-gray-900">{dict.admin?.tenants || 'Tenants'}</h2>
-            <button
-              onClick={() => {
-                setEditingTenant(null);
-                setShowTenantModal(true);
-              }}
-              className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
-            >
-              {dict.common?.add || 'Add'} {dict.admin?.tenant || 'Tenant'}
-            </button>
+            <h2 className="text-xl font-bold text-gray-900">{dict.admin?.tenantInfo || 'Tenant Information'}</h2>
+            {tenants.length > 0 && (
+              <button
+                onClick={() => {
+                  setEditingTenant(tenants[0]);
+                  setShowTenantModal(true);
+                }}
+                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
+              >
+                {dict.common?.edit || 'Edit'} {dict.admin?.settings || 'Settings'}
+              </button>
+            )}
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -161,36 +132,22 @@ export default function TenantsPage() {
                       </span>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            setEditingTenant(tenantItem);
-                            setShowTenantModal(true);
-                          }}
-                          className="text-blue-600 hover:text-blue-900"
-                        >
-                          {dict.common?.edit || 'Edit'}
-                        </button>
-                        <button
-                          onClick={() => handleToggleTenantStatus(tenantItem)}
-                          className={tenantItem.isActive ? 'text-orange-600 hover:text-orange-900' : 'text-green-600 hover:text-green-900'}
-                        >
-                          {tenantItem.isActive ? (dict.admin?.deactivate || 'Deactivate') : (dict.admin?.activate || 'Activate')}
-                        </button>
-                        <button
-                          onClick={() => handleDeleteTenant(tenantItem.slug)}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          {dict.common?.delete || 'Delete'}
-                        </button>
-                      </div>
+                      <button
+                        onClick={() => {
+                          setEditingTenant(tenantItem);
+                          setShowTenantModal(true);
+                        }}
+                        className="text-blue-600 hover:text-blue-900"
+                      >
+                        {dict.common?.edit || 'Edit'}
+                      </button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
             {tenants.length === 0 && (
-              <div className="text-center py-8 text-gray-500">{dict.common?.noResults || 'No tenants found'}</div>
+              <div className="text-center py-8 text-gray-500">{dict.common?.noData || 'No tenant information available'}</div>
             )}
           </div>
         </div>
@@ -245,31 +202,25 @@ function TenantModal({
     setError('');
     setSaving(true);
     try {
-      const url = tenant ? `/api/tenants/${tenant.slug}` : '/api/tenants';
-      const method = tenant ? 'PUT' : 'POST';
+      // Tenant-level: only allow editing current tenant
+      if (!tenant) {
+        setError('Cannot edit: tenant information not available');
+        return;
+      }
+      const url = `/api/tenants/${tenant.slug}`;
+      const method = 'PUT';
       const body: any = {
         name: formData.name,
-        currency: formData.currency,
-        language: formData.language,
-      };
-      if (!tenant) {
-        body.slug = formData.slug;
-      }
-      if (formData.domain) body.domain = formData.domain;
-      if (formData.subdomain) body.subdomain = formData.subdomain;
-      if (formData.email) body.email = formData.email;
-      if (formData.phone) body.phone = formData.phone;
-      if (formData.companyName) body.companyName = formData.companyName;
-
-      if (tenant) {
-        body.settings = {
+        settings: {
           currency: formData.currency,
           language: formData.language,
           email: formData.email || undefined,
           phone: formData.phone || undefined,
           companyName: formData.companyName || undefined,
-        };
-      }
+        },
+      };
+      if (formData.domain) body.domain = formData.domain;
+      if (formData.subdomain) body.subdomain = formData.subdomain;
 
       const res = await fetch(url, {
         method,
@@ -292,28 +243,13 @@ function TenantModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white border border-gray-300 max-w-md w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
             {tenant ? (dict.admin?.editTenant || 'Edit Tenant') : (dict.admin?.addTenant || 'Add Tenant')}
           </h2>
           <form onSubmit={handleSubmit} className="space-y-4">
-            {!tenant && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.slug || 'Slug'} (lowercase, numbers, hyphens only)
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.slug}
-                  onChange={(e) => setFormData({ ...formData, slug: e.target.value.toLowerCase() })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
-                  pattern="[a-z0-9-]+"
-                />
-              </div>
-            )}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 {dict.admin?.name || 'Name'}
