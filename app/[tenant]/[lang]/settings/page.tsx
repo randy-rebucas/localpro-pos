@@ -371,7 +371,7 @@ export default function SettingsPage() {
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
-                Notification Templates
+                {dict?.settings?.tabs?.notificationTemplates || 'Notification Templates'}
               </button>
               <button
                 onClick={() => setActiveTab('multiCurrency')}
@@ -381,7 +381,7 @@ export default function SettingsPage() {
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
-                Multi-Currency
+                {dict?.settings?.tabs?.multiCurrency || 'Multi-Currency'}
               </button>
             </nav>
           </div>
@@ -394,7 +394,7 @@ export default function SettingsPage() {
                 {/* Currency & Localization */}
                 <section>
                   <div className="flex items-center justify-between mb-5">
-                    <h2 className="text-xl font-bold text-gray-900">Currency & Localization</h2>
+                    <h2 className="text-xl font-bold text-gray-900">{dict?.settings?.currencyLocalization || 'Currency & Localization'}</h2>
                     <button
                       onClick={handleDetectLocation}
                       disabled={detecting}
@@ -635,7 +635,7 @@ export default function SettingsPage() {
 
                 {/* Tax Settings */}
                 <section>
-                  <h2 className="text-xl font-bold text-gray-900 mb-5">Tax Settings</h2>
+                  <h2 className="text-xl font-bold text-gray-900 mb-5">{dict?.settings?.taxSettings || 'Tax Settings'}</h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="flex items-center">
                       <input
@@ -688,7 +688,7 @@ export default function SettingsPage() {
             {activeTab === 'branding' && (
               <section className="space-y-8">
                 <div>
-                  <h2 className="text-xl font-bold text-gray-900 mb-5">Basic Branding</h2>
+                  <h2 className="text-xl font-bold text-gray-900 mb-5">{dict?.settings?.basicBranding || 'Basic Branding'}</h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -830,7 +830,7 @@ export default function SettingsPage() {
 
                 {/* Advanced Branding Section */}
                 <div className="pt-8 mt-8 border-t-2 border-gray-200">
-                  <h2 className="text-xl font-bold text-gray-900 mb-5">Advanced Branding</h2>
+                  <h2 className="text-xl font-bold text-gray-900 mb-5">{dict?.settings?.advancedBranding || 'Advanced Branding'}</h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -987,7 +987,7 @@ export default function SettingsPage() {
             {/* Contact Tab */}
             {activeTab === 'contact' && (
               <section>
-                <h2 className="text-xl font-bold text-gray-900 mb-5">Contact Information</h2>
+                <h2 className="text-xl font-bold text-gray-900 mb-5">{dict?.settings?.contactInformation || 'Contact Information'}</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
@@ -1069,7 +1069,7 @@ export default function SettingsPage() {
             {/* Receipt Tab */}
             {activeTab === 'receipt' && (
               <section>
-                <h2 className="text-xl font-bold text-gray-900 mb-5">Receipt & Invoice Settings</h2>
+                <h2 className="text-xl font-bold text-gray-900 mb-5">{dict?.settings?.receiptInvoiceSettings || 'Receipt & Invoice Settings'}</h2>
                 <div className="space-y-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1166,7 +1166,7 @@ export default function SettingsPage() {
             {/* Business Tab */}
             {activeTab === 'business' && (
               <section>
-                <h2 className="text-xl font-bold text-gray-900 mb-5">Business Information</h2>
+                <h2 className="text-xl font-bold text-gray-900 mb-5">{dict?.settings?.businessInformation || 'Business Information'}</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1219,13 +1219,13 @@ export default function SettingsPage() {
             {/* Notifications Tab */}
             {activeTab === 'notifications' && (
               <section>
-                <h2 className="text-xl font-bold text-gray-900 mb-5">Notification Settings</h2>
+                <h2 className="text-xl font-bold text-gray-900 mb-5">{dict?.settings?.notificationSettings || 'Notification Settings'}</h2>
                 <p className="text-sm text-gray-600 mb-6">
-                  Configure notification preferences and alert thresholds
+                  {dict?.settings?.configureNotificationPreferences || 'Configure notification preferences and alert thresholds'}
                 </p>
                 <div className="space-y-6">
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Stock Alerts</h3>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">{dict?.settings?.stockAlerts || 'Stock Alerts'}</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1252,7 +1252,7 @@ export default function SettingsPage() {
                         />
                         <label htmlFor="lowStockAlert" className="ml-3 flex-1">
                           <div className="text-sm font-medium text-gray-900">
-                            Enable Low Stock Alerts
+                            {dict?.settings?.enableLowStockAlerts || 'Enable Low Stock Alerts'}
                           </div>
                           <div className="text-xs text-gray-500 mt-1">
                             Get notified when products fall below threshold
@@ -1262,7 +1262,7 @@ export default function SettingsPage() {
                     </div>
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Notification Channels</h3>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">{dict?.settings?.notificationChannels || 'Notification Channels'}</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
                         <input
@@ -1308,9 +1308,9 @@ export default function SettingsPage() {
             {activeTab === 'notificationTemplates' && (
               <section>
                 <div className="mb-6">
-                  <h2 className="text-xl font-bold text-gray-900 mb-2">Notification Templates</h2>
+                  <h2 className="text-xl font-bold text-gray-900 mb-2">{dict?.settings?.notificationTemplates || 'Notification Templates'}</h2>
                   <p className="text-sm text-gray-600">
-                    Customize email and SMS templates for bookings, alerts, and notifications
+                    {dict?.settings?.notificationTemplatesSubtitle || 'Customize email and SMS templates for bookings, alerts, and notifications'}
                   </p>
                 </div>
                 <NotificationTemplatesManager
@@ -1327,9 +1327,9 @@ export default function SettingsPage() {
             {activeTab === 'multiCurrency' && (
               <section>
                 <div className="mb-6">
-                  <h2 className="text-xl font-bold text-gray-900 mb-2">Multi-Currency Settings</h2>
+                  <h2 className="text-xl font-bold text-gray-900 mb-2">{dict?.settings?.multiCurrencySettings || 'Multi-Currency Settings'}</h2>
                   <p className="text-sm text-gray-600">
-                    Configure multiple currency display and exchange rates
+                    {dict?.settings?.multiCurrencySettingsSubtitle || 'Configure multiple currency display and exchange rates'}
                   </p>
                 </div>
                 <MultiCurrencySettings

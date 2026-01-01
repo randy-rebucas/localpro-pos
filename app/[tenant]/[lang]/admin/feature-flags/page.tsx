@@ -84,19 +84,19 @@ export default function FeatureFlagsPage() {
 
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: dict?.settings?.saved || 'Feature flags saved successfully!' });
+        setMessage({ type: 'success', text: dict?.admin?.featureFlagsSavedSuccess || 'Feature flags saved successfully!' });
         setSettings(data.data);
         setTimeout(() => setMessage(null), 3000);
       } else {
         if (res.status === 401 || res.status === 403) {
           setMessage({ type: 'error', text: dict?.settings?.unauthorized || 'Unauthorized. Please login with admin account.' });
         } else {
-          setMessage({ type: 'error', text: data.error || 'Failed to save feature flags' });
+          setMessage({ type: 'error', text: data.error || dict?.admin?.failedToSaveFeatureFlags || 'Failed to save feature flags' });
         }
       }
     } catch (error) {
       console.error('Error saving feature flags:', error);
-      setMessage({ type: 'error', text: 'Failed to save feature flags. Please check your connection.' });
+      setMessage({ type: 'error', text: dict?.admin?.failedToSaveFeatureFlagsConnection || 'Failed to save feature flags. Please check your connection.' });
     } finally {
       setSaving(false);
     }
@@ -147,13 +147,13 @@ export default function FeatureFlagsPage() {
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
-            Back to Admin
+            {dict?.admin?.backToAdmin || 'Back to Admin'}
           </Link>
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
-            Feature Flags
+            {dict?.admin?.featureFlags || 'Feature Flags'}
           </h1>
           <p className="text-gray-600">
-            Enable or disable system-wide features. Changes affect the entire application.
+            {dict?.admin?.featureFlagsSubtitle || 'Enable or disable system-wide features. Changes affect the entire application.'}
           </p>
         </div>
 
@@ -170,8 +170,8 @@ export default function FeatureFlagsPage() {
         )}
 
         <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8">
-          <section>
-            <h2 className="text-xl font-bold text-gray-900 mb-5">System Features</h2>
+                <section>
+                  <h2 className="text-xl font-bold text-gray-900 mb-5">{dict?.admin?.systemFeatures || 'System Features'}</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
                 <input
@@ -183,10 +183,10 @@ export default function FeatureFlagsPage() {
                 />
                 <label htmlFor="enableInventory" className="ml-3 flex-1">
                   <div className="text-sm font-medium text-gray-900">
-                    Enable Inventory Management
+                    {dict?.admin?.enableInventoryManagement || 'Enable Inventory Management'}
                   </div>
                   <div className="text-xs text-gray-500 mt-1">
-                    Enable real-time stock tracking and inventory management
+                    {dict?.admin?.enableInventoryManagementDesc || 'Enable real-time stock tracking and inventory management'}
                   </div>
                 </label>
               </div>
@@ -200,10 +200,10 @@ export default function FeatureFlagsPage() {
                 />
                 <label htmlFor="enableCategories" className="ml-3 flex-1">
                   <div className="text-sm font-medium text-gray-900">
-                    Enable Categories
+                    {dict?.admin?.enableCategories || 'Enable Categories'}
                   </div>
                   <div className="text-xs text-gray-500 mt-1">
-                    Enable product categorization and organization
+                    {dict?.admin?.enableCategoriesDesc || 'Enable product categorization and organization'}
                   </div>
                 </label>
               </div>
@@ -217,10 +217,10 @@ export default function FeatureFlagsPage() {
                 />
                 <label htmlFor="enableDiscounts" className="ml-3 flex-1">
                   <div className="text-sm font-medium text-gray-900">
-                    Enable Discounts
+                    {dict?.admin?.enableDiscounts || 'Enable Discounts'}
                   </div>
                   <div className="text-xs text-gray-500 mt-1">
-                    Enable discount codes and promotional pricing
+                    {dict?.admin?.enableDiscountsDesc || 'Enable discount codes and promotional pricing'}
                   </div>
                 </label>
               </div>
@@ -234,10 +234,10 @@ export default function FeatureFlagsPage() {
                 />
                 <label htmlFor="enableLoyaltyProgram" className="ml-3 flex-1">
                   <div className="text-sm font-medium text-gray-900">
-                    Enable Loyalty Program
+                    {dict?.admin?.enableLoyaltyProgram || 'Enable Loyalty Program'}
                   </div>
                   <div className="text-xs text-gray-500 mt-1">
-                    Enable customer loyalty points and rewards system
+                    {dict?.admin?.enableLoyaltyProgramDesc || 'Enable customer loyalty points and rewards system'}
                   </div>
                 </label>
               </div>
@@ -251,10 +251,10 @@ export default function FeatureFlagsPage() {
                 />
                 <label htmlFor="enableCustomerManagement" className="ml-3 flex-1">
                   <div className="text-sm font-medium text-gray-900">
-                    Enable Customer Management
+                    {dict?.admin?.enableCustomerManagement || 'Enable Customer Management'}
                   </div>
                   <div className="text-xs text-gray-500 mt-1">
-                    Enable customer profiles and history tracking
+                    {dict?.admin?.enableCustomerManagementDesc || 'Enable customer profiles and history tracking'}
                   </div>
                 </label>
               </div>
@@ -268,10 +268,10 @@ export default function FeatureFlagsPage() {
                 />
                 <label htmlFor="enableBookingScheduling" className="ml-3 flex-1">
                   <div className="text-sm font-medium text-gray-900">
-                    Enable Booking & Scheduling
+                    {dict?.admin?.enableBookingScheduling || 'Enable Booking & Scheduling'}
                   </div>
                   <div className="text-xs text-gray-500 mt-1">
-                    Enable appointment booking and scheduling features for salons, cleaners, and service businesses
+                    {dict?.admin?.enableBookingSchedulingDesc || 'Enable appointment booking and scheduling features for salons, cleaners, and service businesses'}
                   </div>
                 </label>
               </div>
@@ -295,7 +295,7 @@ export default function FeatureFlagsPage() {
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
-                  <span>{dict?.settings?.save || 'Save Feature Flags'}</span>
+                  <span>{dict?.admin?.saveFeatureFlags || 'Save Feature Flags'}</span>
                 </>
               )}
             </button>

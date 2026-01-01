@@ -210,8 +210,8 @@ export default function AdminPage() {
       color: 'red',
     },
     {
-      title: 'Feature Flags',
-      description: 'Enable or disable system-wide features',
+      title: dict.admin?.featureFlags || 'Feature Flags',
+      description: dict.admin?.featureFlagsDescription || 'Enable or disable system-wide features',
       href: `/${tenant}/${lang}/admin/feature-flags`,
       icon: (
         <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -221,8 +221,8 @@ export default function AdminPage() {
       color: 'blue',
     },
     {
-      title: 'Hardware Settings',
-      description: 'Configure printers, scanners, and hardware devices',
+      title: dict.admin?.hardwareSettings || 'Hardware Settings',
+      description: dict.admin?.hardwareSettingsDescription || 'Configure printers, scanners, and hardware devices',
       href: `/${tenant}/${lang}/admin/hardware`,
       icon: (
         <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -232,8 +232,8 @@ export default function AdminPage() {
       color: 'gray',
     },
     {
-      title: 'Tax Rules',
-      description: 'Configure multiple tax rates and regional rules',
+      title: dict.admin?.taxRules || 'Tax Rules',
+      description: dict.admin?.taxRulesDescription || 'Configure multiple tax rates and regional rules',
       href: `/${tenant}/${lang}/admin/tax-rules`,
       icon: (
         <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -243,8 +243,8 @@ export default function AdminPage() {
       color: 'indigo',
     },
     {
-      title: 'Business Hours',
-      description: 'Configure weekly schedule and special hours',
+      title: dict.admin?.businessHours || 'Business Hours',
+      description: dict.admin?.businessHoursDescription || 'Configure weekly schedule and special hours',
       href: `/${tenant}/${lang}/admin/business-hours`,
       icon: (
         <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -254,8 +254,8 @@ export default function AdminPage() {
       color: 'orange',
     },
     {
-      title: 'Holidays',
-      description: 'Manage holiday calendar and business closures',
+      title: dict.admin?.holidays || 'Holidays',
+      description: dict.admin?.holidaysDescription || 'Manage holiday calendar and business closures',
       href: `/${tenant}/${lang}/admin/holidays`,
       icon: (
         <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
