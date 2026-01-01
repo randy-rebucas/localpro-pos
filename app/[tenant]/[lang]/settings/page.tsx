@@ -4,12 +4,12 @@ import { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { getDictionaryClient } from '../dictionaries-client';
 import { ITenantSettings } from '@/models/Tenant';
 import { detectLocation, getCurrencySymbolForCode } from '@/lib/location-detection';
-import MultiCurrencySettings from '@/components/settings/MultiCurrencySettings';
+import MultiCurrencyDisplaySettings from '@/components/settings/MultiCurrencyDisplaySettings';
 import ReceiptTemplatesManager from '@/components/settings/ReceiptTemplatesManager';
-import NotificationTemplatesManager from '@/components/settings/NotificationTemplatesManager';
 
 export default function SettingsPage() {
   const params = useParams();
@@ -23,7 +23,7 @@ export default function SettingsPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [detecting, setDetecting] = useState(false);
   const [detectedInfo, setDetectedInfo] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'general' | 'branding' | 'contact' | 'receipt' | 'business' | 'notifications' | 'notificationTemplates' | 'multiCurrency'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'branding' | 'contact' | 'receipt' | 'business' | 'notifications' | 'multiCurrency'>('general');
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -362,16 +362,6 @@ export default function SettingsPage() {
                 }`}
               >
                 {dict?.settings?.tabs?.notifications || 'Notifications'}
-              </button>
-              <button
-                onClick={() => setActiveTab('notificationTemplates')}
-                className={`px-6 py-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                  activeTab === 'notificationTemplates'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                {dict?.settings?.tabs?.notificationTemplates || 'Notification Templates'}
               </button>
               <button
                 onClick={() => setActiveTab('multiCurrency')}
@@ -828,157 +818,19 @@ export default function SettingsPage() {
                 </div>
                 </div>
 
-                {/* Advanced Branding Section */}
+                {/* Advanced Branding Section - Moved to Admin */}
                 <div className="pt-8 mt-8 border-t-2 border-gray-200">
-                  <h2 className="text-xl font-bold text-gray-900 mb-5">{dict?.settings?.advancedBranding || 'Advanced Branding'}</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Font Source
-                      </label>
-                      <select
-                        value={settings.advancedBranding?.fontSource || 'system'}
-                        onChange={(e) => {
-                          const fontSource = e.target.value as 'google' | 'custom' | 'system';
-                          updateSetting('advancedBranding', {
-                            ...settings.advancedBranding,
-                            fontSource,
-                          });
-                        }}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
-                      >
-                        <option value="system">System Font</option>
-                        <option value="google">Google Font</option>
-                        <option value="custom">Custom Font</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Font Family Name
-                      </label>
-                      <input
-                        type="text"
-                        value={settings.advancedBranding?.fontFamily || ''}
-                        onChange={(e) => updateSetting('advancedBranding', {
-                          ...settings.advancedBranding,
-                          fontFamily: e.target.value,
-                        })}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
-                        placeholder="e.g., Roboto, Inter, Arial"
-                      />
-                    </div>
-                    {settings.advancedBranding?.fontSource === 'google' && (
-                      <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Google Font URL
-                        </label>
-                        <input
-                          type="url"
-                          value={settings.advancedBranding?.googleFontUrl || ''}
-                          onChange={(e) => updateSetting('advancedBranding', {
-                            ...settings.advancedBranding,
-                            googleFontUrl: e.target.value,
-                          })}
-                          className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
-                          placeholder="https://fonts.googleapis.com/css2?family=Roboto"
-                        />
-                      </div>
-                    )}
-                    {settings.advancedBranding?.fontSource === 'custom' && (
-                      <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Custom Font URL
-                        </label>
-                        <input
-                          type="url"
-                          value={settings.advancedBranding?.customFontUrl || ''}
-                          onChange={(e) => updateSetting('advancedBranding', {
-                            ...settings.advancedBranding,
-                            customFontUrl: e.target.value,
-                          })}
-                          className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
-                          placeholder="https://example.com/fonts/custom-font.woff2"
-                        />
-                      </div>
-                    )}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Theme
-                      </label>
-                      <select
-                        value={settings.advancedBranding?.theme || 'light'}
-                        onChange={(e) => updateSetting('advancedBranding', {
-                          ...settings.advancedBranding,
-                          theme: e.target.value as 'light' | 'dark' | 'auto' | 'custom',
-                        })}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
-                      >
-                        <option value="light">Light</option>
-                        <option value="dark">Dark</option>
-                        <option value="auto">Auto (System)</option>
-                        <option value="custom">Custom</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Border Radius
-                      </label>
-                      <select
-                        value={settings.advancedBranding?.borderRadius || 'md'}
-                        onChange={(e) => updateSetting('advancedBranding', {
-                          ...settings.advancedBranding,
-                          borderRadius: e.target.value as 'none' | 'sm' | 'md' | 'lg' | 'xl' | 'custom',
-                        })}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
-                      >
-                        <option value="none">None</option>
-                        <option value="sm">Small</option>
-                        <option value="md">Medium</option>
-                        <option value="lg">Large</option>
-                        <option value="xl">Extra Large</option>
-                        <option value="custom">Custom</option>
-                      </select>
-                    </div>
-                    {settings.advancedBranding?.borderRadius === 'custom' && (
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Custom Border Radius
-                        </label>
-                        <input
-                          type="text"
-                          value={settings.advancedBranding?.customBorderRadius || ''}
-                          onChange={(e) => updateSetting('advancedBranding', {
-                            ...settings.advancedBranding,
-                            customBorderRadius: e.target.value,
-                          })}
-                          className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
-                          placeholder="e.g., 8px, 0.5rem, 12px 8px"
-                        />
-                      </div>
-                    )}
-                    {settings.advancedBranding?.theme === 'custom' && (
-                      <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Custom CSS
-                        </label>
-                        <textarea
-                          value={settings.advancedBranding?.customTheme?.css || ''}
-                          onChange={(e) => updateSetting('advancedBranding', {
-                            ...settings.advancedBranding,
-                            customTheme: {
-                              ...settings.advancedBranding?.customTheme,
-                              css: e.target.value,
-                            },
-                          })}
-                          rows={6}
-                          className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white font-mono text-sm"
-                          placeholder=":root { --primary-color: #2563eb; }"
-                        />
-                        <p className="mt-2 text-xs text-gray-500">
-                          Add custom CSS variables or styles. Use CSS variables for better theme integration.
-                        </p>
-                      </div>
-                    )}
+                  <div className="p-4 bg-blue-50 border border-blue-200 rounded">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">{dict?.settings?.advancedBranding || 'Advanced Branding'}</h3>
+                    <p className="text-sm text-blue-800 mb-3">
+                      Advanced branding features (custom fonts, themes, CSS) have been moved to Admin → Advanced Branding for better access control.
+                    </p>
+                    <Link
+                      href={`/${tenant}/${lang}/admin/advanced-branding`}
+                      className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+                    >
+                      {dict?.admin?.advancedBranding || 'Advanced Branding'} →
+                    </Link>
                   </div>
                 </div>
               </section>
@@ -1224,6 +1076,17 @@ export default function SettingsPage() {
                   {dict?.settings?.configureNotificationPreferences || 'Configure notification preferences and alert thresholds'}
                 </p>
                 <div className="space-y-6">
+                  <div className="p-4 bg-blue-50 border border-blue-200 rounded">
+                    <p className="text-sm text-blue-800 mb-2">
+                      <strong>Note:</strong> Notification template customization has been moved to Admin → Notification Templates for better access control.
+                    </p>
+                    <Link
+                      href={`/${tenant}/${lang}/admin/notification-templates`}
+                      className="text-sm text-blue-600 hover:text-blue-700 font-medium underline"
+                    >
+                      Customize Templates →
+                    </Link>
+                  </div>
                   <div>
                     <h3 className="text-lg font-semibold text-gray-900 mb-3">{dict?.settings?.stockAlerts || 'Stock Alerts'}</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1304,24 +1167,6 @@ export default function SettingsPage() {
               </section>
             )}
 
-            {/* Notification Templates Tab */}
-            {activeTab === 'notificationTemplates' && (
-              <section>
-                <div className="mb-6">
-                  <h2 className="text-xl font-bold text-gray-900 mb-2">{dict?.settings?.notificationTemplates || 'Notification Templates'}</h2>
-                  <p className="text-sm text-gray-600">
-                    {dict?.settings?.notificationTemplatesSubtitle || 'Customize email and SMS templates for bookings, alerts, and notifications'}
-                  </p>
-                </div>
-                <NotificationTemplatesManager
-                  settings={settings}
-                  tenant={tenant}
-                  onUpdate={(updates) => {
-                    setSettings({ ...settings, ...updates });
-                  }}
-                />
-              </section>
-            )}
 
             {/* Multi-Currency Tab */}
             {activeTab === 'multiCurrency' && (
@@ -1329,12 +1174,13 @@ export default function SettingsPage() {
                 <div className="mb-6">
                   <h2 className="text-xl font-bold text-gray-900 mb-2">{dict?.settings?.multiCurrencySettings || 'Multi-Currency Settings'}</h2>
                   <p className="text-sm text-gray-600">
-                    {dict?.settings?.multiCurrencySettingsSubtitle || 'Configure multiple currency display and exchange rates'}
+                    {dict?.settings?.multiCurrencySettingsSubtitle || 'Configure which currencies to display'}
                   </p>
                 </div>
-                <MultiCurrencySettings
+                <MultiCurrencyDisplaySettings
                   settings={settings}
                   tenant={tenant}
+                  lang={lang}
                   onUpdate={(updates) => {
                     setSettings({ ...settings, ...updates });
                   }}
