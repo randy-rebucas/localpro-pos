@@ -3,18 +3,12 @@
 import { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import ProtectedRoute from '@/components/ProtectedRoute';
-import HardwareStatusChecker from '@/components/HardwareStatus';
-import HardwareSettings from '@/components/HardwareSettings';
 import { useParams, useRouter } from 'next/navigation';
 import { getDictionaryClient } from '../dictionaries-client';
 import { ITenantSettings } from '@/models/Tenant';
 import { detectLocation, getCurrencySymbolForCode } from '@/lib/location-detection';
-import { hardwareService } from '@/lib/hardware';
 import MultiCurrencySettings from '@/components/settings/MultiCurrencySettings';
 import ReceiptTemplatesManager from '@/components/settings/ReceiptTemplatesManager';
-import TaxRulesManager from '@/components/settings/TaxRulesManager';
-import BusinessHoursManager from '@/components/settings/BusinessHoursManager';
-import HolidaysManager from '@/components/settings/HolidaysManager';
 import NotificationTemplatesManager from '@/components/settings/NotificationTemplatesManager';
 
 export default function SettingsPage() {
@@ -29,19 +23,13 @@ export default function SettingsPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [detecting, setDetecting] = useState(false);
   const [detectedInfo, setDetectedInfo] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'general' | 'branding' | 'contact' | 'receipt' | 'business' | 'notifications' | 'notificationTemplates' | 'hardware' | 'multiCurrency' | 'taxRules' | 'businessHours' | 'holidays'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'branding' | 'contact' | 'receipt' | 'business' | 'notifications' | 'notificationTemplates' | 'multiCurrency'>('general');
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
     fetchSettings();
   }, [lang, tenant]);
 
-  // Sync hardware config to hardware service when settings change
-  useEffect(() => {
-    if (settings?.hardwareConfig) {
-      hardwareService.setConfig(settings.hardwareConfig);
-    }
-  }, [settings?.hardwareConfig]);
 
   const autoDetectLocation = async () => {
     try {
@@ -386,16 +374,6 @@ export default function SettingsPage() {
                 Notification Templates
               </button>
               <button
-                onClick={() => setActiveTab('hardware')}
-                className={`px-6 py-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                  activeTab === 'hardware'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                {dict?.settings?.tabs?.hardware || 'Hardware'}
-              </button>
-              <button
                 onClick={() => setActiveTab('multiCurrency')}
                 className={`px-6 py-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
                   activeTab === 'multiCurrency'
@@ -404,36 +382,6 @@ export default function SettingsPage() {
                 }`}
               >
                 Multi-Currency
-              </button>
-              <button
-                onClick={() => setActiveTab('taxRules')}
-                className={`px-6 py-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                  activeTab === 'taxRules'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Tax Rules
-              </button>
-              <button
-                onClick={() => setActiveTab('businessHours')}
-                className={`px-6 py-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                  activeTab === 'businessHours'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Business Hours
-              </button>
-              <button
-                onClick={() => setActiveTab('holidays')}
-                className={`px-6 py-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                  activeTab === 'holidays'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Holidays
               </button>
             </nav>
           </div>
@@ -681,115 +629,6 @@ export default function SettingsPage() {
                         onChange={(e) => updateSetting('numberFormat.decimalPlaces', parseInt(e.target.value) || 2)}
                         className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                       />
-                    </div>
-                  </div>
-                </section>
-
-                {/* Feature Flags */}
-                <section>
-                  <h2 className="text-xl font-bold text-gray-900 mb-5">Feature Flags</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
-                      <input
-                        type="checkbox"
-                        id="enableInventory"
-                        checked={settings.enableInventory !== false}
-                        onChange={(e) => updateSetting('enableInventory', e.target.checked)}
-                        className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
-                      />
-                      <label htmlFor="enableInventory" className="ml-3 flex-1">
-                        <div className="text-sm font-medium text-gray-900">
-                          Enable Inventory Management
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          Enable real-time stock tracking and inventory management
-                        </div>
-                      </label>
-                    </div>
-                    <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
-                      <input
-                        type="checkbox"
-                        id="enableCategories"
-                        checked={settings.enableCategories !== false}
-                        onChange={(e) => updateSetting('enableCategories', e.target.checked)}
-                        className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
-                      />
-                      <label htmlFor="enableCategories" className="ml-3 flex-1">
-                        <div className="text-sm font-medium text-gray-900">
-                          Enable Categories
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          Enable product categorization and organization
-                        </div>
-                      </label>
-                    </div>
-                    <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
-                      <input
-                        type="checkbox"
-                        id="enableDiscounts"
-                        checked={settings.enableDiscounts || false}
-                        onChange={(e) => updateSetting('enableDiscounts', e.target.checked)}
-                        className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
-                      />
-                      <label htmlFor="enableDiscounts" className="ml-3 flex-1">
-                        <div className="text-sm font-medium text-gray-900">
-                          Enable Discounts
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          Enable discount codes and promotional pricing
-                        </div>
-                      </label>
-                    </div>
-                    <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
-                      <input
-                        type="checkbox"
-                        id="enableLoyaltyProgram"
-                        checked={settings.enableLoyaltyProgram || false}
-                        onChange={(e) => updateSetting('enableLoyaltyProgram', e.target.checked)}
-                        className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
-                      />
-                      <label htmlFor="enableLoyaltyProgram" className="ml-3 flex-1">
-                        <div className="text-sm font-medium text-gray-900">
-                          Enable Loyalty Program
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          Enable customer loyalty points and rewards system
-                        </div>
-                      </label>
-                    </div>
-                    <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
-                      <input
-                        type="checkbox"
-                        id="enableCustomerManagement"
-                        checked={settings.enableCustomerManagement || false}
-                        onChange={(e) => updateSetting('enableCustomerManagement', e.target.checked)}
-                        className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
-                      />
-                      <label htmlFor="enableCustomerManagement" className="ml-3 flex-1">
-                        <div className="text-sm font-medium text-gray-900">
-                          Enable Customer Management
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          Enable customer profiles and history tracking
-                        </div>
-                      </label>
-                    </div>
-                    <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
-                      <input
-                        type="checkbox"
-                        id="enableBookingScheduling"
-                        checked={settings.enableBookingScheduling || false}
-                        onChange={(e) => updateSetting('enableBookingScheduling', e.target.checked)}
-                        className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
-                      />
-                      <label htmlFor="enableBookingScheduling" className="ml-3 flex-1">
-                        <div className="text-sm font-medium text-gray-900">
-                          Enable Booking & Scheduling
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          Enable appointment booking and scheduling features for salons, cleaners, and service businesses
-                        </div>
-                      </label>
                     </div>
                   </div>
                 </section>
@@ -1484,22 +1323,6 @@ export default function SettingsPage() {
               </section>
             )}
 
-            {/* Hardware Tab */}
-            {activeTab === 'hardware' && (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2">
-                  <HardwareSettings 
-                    hideSaveButton={true}
-                    config={settings.hardwareConfig}
-                    onChange={(hardwareConfig) => updateSetting('hardwareConfig', hardwareConfig)}
-                  />
-                </div>
-                <div className="lg:col-span-1">
-                  <HardwareStatusChecker showActions={false} autoRefresh={true} sidebar={true} />
-                </div>
-              </div>
-            )}
-
             {/* Multi-Currency Tab */}
             {activeTab === 'multiCurrency' && (
               <section>
@@ -1510,63 +1333,6 @@ export default function SettingsPage() {
                   </p>
                 </div>
                 <MultiCurrencySettings
-                  settings={settings}
-                  tenant={tenant}
-                  onUpdate={(updates) => {
-                    setSettings({ ...settings, ...updates });
-                  }}
-                />
-              </section>
-            )}
-
-            {/* Tax Rules Tab */}
-            {activeTab === 'taxRules' && (
-              <section>
-                <div className="mb-6">
-                  <h2 className="text-xl font-bold text-gray-900 mb-2">Tax Rules</h2>
-                  <p className="text-sm text-gray-600">
-                    Configure multiple tax rates based on region, product type, or category
-                  </p>
-                </div>
-                <TaxRulesManager
-                  settings={settings}
-                  tenant={tenant}
-                  onUpdate={(updates) => {
-                    setSettings({ ...settings, ...updates });
-                  }}
-                />
-              </section>
-            )}
-
-            {/* Business Hours Tab */}
-            {activeTab === 'businessHours' && (
-              <section>
-                <div className="mb-6">
-                  <h2 className="text-xl font-bold text-gray-900 mb-2">Business Hours</h2>
-                  <p className="text-sm text-gray-600">
-                    Configure weekly schedule and special hours
-                  </p>
-                </div>
-                <BusinessHoursManager
-                  settings={settings}
-                  tenant={tenant}
-                  onUpdate={(updates) => {
-                    setSettings({ ...settings, ...updates });
-                  }}
-                />
-              </section>
-            )}
-
-            {/* Holidays Tab */}
-            {activeTab === 'holidays' && (
-              <section>
-                <div className="mb-6">
-                  <h2 className="text-xl font-bold text-gray-900 mb-2">Holiday Calendar</h2>
-                  <p className="text-sm text-gray-600">
-                    Manage holidays and recurring holidays
-                  </p>
-                </div>
-                <HolidaysManager
                   settings={settings}
                   tenant={tenant}
                   onUpdate={(updates) => {

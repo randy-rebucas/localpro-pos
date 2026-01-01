@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import { useParams } from 'next/navigation';
+import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 
 export default function BackupResetPage() {
@@ -43,6 +44,15 @@ export default function BackupResetPage() {
       <Navbar />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         <div className="mb-6 sm:mb-8">
+          <Link
+            href={`/${tenant}/${lang}/admin`}
+            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium mb-4 transition-colors"
+          >
+            <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Back to Admin
+          </Link>
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
             Collection Backup & Reset
           </h1>

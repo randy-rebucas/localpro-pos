@@ -80,7 +80,7 @@ export interface ITenantSettings {
       portNumber?: number;
     };
     barcodeScanner?: {
-      type: 'keyboard';
+      type: 'keyboard' | 'camera' | 'usb';
       enabled: boolean;
     };
     qrReader?: {

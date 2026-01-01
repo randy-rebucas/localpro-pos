@@ -210,6 +210,61 @@ export default function AdminPage() {
       color: 'red',
     },
     {
+      title: 'Feature Flags',
+      description: 'Enable or disable system-wide features',
+      href: `/${tenant}/${lang}/admin/feature-flags`,
+      icon: (
+        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+        </svg>
+      ),
+      color: 'blue',
+    },
+    {
+      title: 'Hardware Settings',
+      description: 'Configure printers, scanners, and hardware devices',
+      href: `/${tenant}/${lang}/admin/hardware`,
+      icon: (
+        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+        </svg>
+      ),
+      color: 'gray',
+    },
+    {
+      title: 'Tax Rules',
+      description: 'Configure multiple tax rates and regional rules',
+      href: `/${tenant}/${lang}/admin/tax-rules`,
+      icon: (
+        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+      ),
+      color: 'indigo',
+    },
+    {
+      title: 'Business Hours',
+      description: 'Configure weekly schedule and special hours',
+      href: `/${tenant}/${lang}/admin/business-hours`,
+      icon: (
+        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      ),
+      color: 'orange',
+    },
+    {
+      title: 'Holidays',
+      description: 'Manage holiday calendar and business closures',
+      href: `/${tenant}/${lang}/admin/holidays`,
+      icon: (
+        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      ),
+      color: 'yellow',
+    },
+    {
       title: dict.admin?.reports || 'Reports',
       description: dict.admin?.reportsDescription || 'View detailed reports and analytics',
       href: `/${tenant}/${lang}/reports`,
@@ -261,6 +316,7 @@ export default function AdminPage() {
                 card.color === 'amber' ? 'bg-amber-100 text-amber-600' :
                 card.color === 'rose' ? 'bg-rose-100 text-rose-600' :
                 card.color === 'slate' ? 'bg-slate-100 text-slate-600' :
+                card.color === 'gray' ? 'bg-gray-100 text-gray-600' :
                 'bg-purple-100 text-purple-600'
               }`}>
                 {card.icon}
