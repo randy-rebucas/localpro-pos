@@ -291,7 +291,6 @@ export async function POST(request: NextRequest) {
           const product = await Product.findOne({ _id: productId, tenantId });
           if (product && product.trackInventory !== false) {
             // Update stock for regular product (only if tracking inventory)
-            console.log(`Updating stock for product ${productId}, quantity: -${quantity}`);
             await updateStock(
               productId,
               tenantId,
@@ -304,9 +303,6 @@ export async function POST(request: NextRequest) {
                 reason: 'Transaction sale',
               }
             );
-            console.log(`Stock update completed for product ${productId}`);
-          } else {
-            console.log(`Skipping stock update for product ${productId}: trackInventory is false`);
           }
         }
       } catch (error: any) {

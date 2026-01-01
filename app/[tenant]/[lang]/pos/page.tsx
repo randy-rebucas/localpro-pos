@@ -152,9 +152,6 @@ export default function POSPage() {
     if (product && (product.stock > 0 || product.allowOutOfStockSales)) {
       addToCart(product);
       setShowQRScanner(false);
-    } else {
-      // Could be a URL or other data - handle accordingly
-      console.log('QR Code scanned:', data);
     }
   }, [products, addToCart]);
 

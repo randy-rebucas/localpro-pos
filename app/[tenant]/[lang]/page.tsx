@@ -60,9 +60,6 @@ export default function Dashboard() {
       const res = await fetch(`/api/transactions/stats?period=${period}&tenant=${tenant}`);
       const data = await res.json();
       if (data.success && data.data) {
-        console.log('[Dashboard] Raw API response:', data.data);
-        console.log('[Dashboard] Chart data from API:', data.data.chartData);
-        
         // Ensure chartData is properly formatted with numeric values
         const processedChartData = (data.data.chartData || []).map((item: any) => {
           const salesValue = typeof item.sales === 'number' ? item.sales : parseFloat(String(item.sales)) || 0;
@@ -74,16 +71,12 @@ export default function Dashboard() {
           };
         });
         
-        console.log('[Dashboard] Processed chart data:', processedChartData);
-        
         const processedData = {
           ...data.data,
           chartData: processedChartData,
         };
         
         setStats(processedData);
-      } else {
-        console.error('[Dashboard] API response not successful:', data);
       }
     } catch (error) {
       console.error('Error fetching stats:', error);
@@ -97,7 +90,7 @@ export default function Dashboard() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+          <p className="mt-4 text-gray-600">Loading...</p>
         </div>
       </div>
     );

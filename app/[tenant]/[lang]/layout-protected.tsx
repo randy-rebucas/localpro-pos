@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { TenantSettingsProvider } from '@/contexts/TenantSettingsContext';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 /**
  * This component protects all routes except login
@@ -15,23 +16,31 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
 
   // Don't protect the login page
   if (isLoginPage) {
-    return <TenantSettingsProvider>{children}</TenantSettingsProvider>;
+    return (
+      <ErrorBoundary>
+        <TenantSettingsProvider>{children}</TenantSettingsProvider>
+      </ErrorBoundary>
+    );
   }
 
   // Settings page requires admin/manager role
   if (isSettingsPage) {
     return (
-      <TenantSettingsProvider>
-        <ProtectedRoute requiredRoles={['admin', 'manager']}>{children}</ProtectedRoute>
-      </TenantSettingsProvider>
+      <ErrorBoundary>
+        <TenantSettingsProvider>
+          <ProtectedRoute requiredRoles={['admin', 'manager']}>{children}</ProtectedRoute>
+        </TenantSettingsProvider>
+      </ErrorBoundary>
     );
   }
 
   // Protect all other routes (require authentication only)
   return (
-    <TenantSettingsProvider>
-      <ProtectedRoute>{children}</ProtectedRoute>
-    </TenantSettingsProvider>
+    <ErrorBoundary>
+      <TenantSettingsProvider>
+        <ProtectedRoute>{children}</ProtectedRoute>
+      </TenantSettingsProvider>
+    </ErrorBoundary>
   );
 }
 

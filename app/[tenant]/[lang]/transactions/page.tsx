@@ -213,7 +213,14 @@ export default function TransactionsPage() {
   };
 
   if (!dict) {
-    return <div className="text-center py-12">{dict?.common?.loading || 'Loading...'}</div>;
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
   }
 
   // Combine and sort transactions and expenses by date

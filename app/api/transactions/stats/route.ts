@@ -16,7 +16,6 @@ export async function GET(request: NextRequest) {
     
     // Convert tenantId string to ObjectId for proper querying
     const tenantObjectId = new mongoose.Types.ObjectId(tenantId);
-    console.log(`[Stats API] Using tenant ID: ${tenantId} (ObjectId: ${tenantObjectId})`);
     
     const searchParams = request.nextUrl.searchParams;
     const period = searchParams.get('period') || 'today'; // today, week, month, all
@@ -41,20 +40,11 @@ export async function GET(request: NextRequest) {
         startDate = new Date(0);
     }
 
-    // First, let's check all transactions for this tenant to debug
-    const allTransactionsCount = await Transaction.countDocuments({ tenantId: tenantObjectId });
-    const completedTransactionsCount = await Transaction.countDocuments({ tenantId: tenantObjectId, status: 'completed' });
-    console.log(`[Stats API] Total transactions for tenant: ${allTransactionsCount}, Completed: ${completedTransactionsCount}`);
-
     const matchQuery: any = {
       tenantId: tenantObjectId,
       status: 'completed',
       createdAt: { $gte: startDate, $lte: endDate },
     };
-    
-    // Also check transactions without date filter to see if date is the issue
-    const transactionsWithoutDateFilter = await Transaction.countDocuments({ tenantId: tenantObjectId, status: 'completed' });
-    console.log(`[Stats API] Completed transactions without date filter: ${transactionsWithoutDateFilter}`);
 
     const stats = await Transaction.aggregate([
       { $match: matchQuery },
@@ -107,10 +97,6 @@ export async function GET(request: NextRequest) {
       dateFormat = 'day';
     }
 
-    // Debug: Check if there are any transactions matching the query
-    const transactionCount = await Transaction.countDocuments(matchQuery);
-    console.log(`[Stats API] Found ${transactionCount} transactions for tenant ${tenantId}, period: ${period}, date range: ${startDate.toISOString()} to ${endDate.toISOString()}`);
-
     const timeSeriesData = await Transaction.aggregate([
       { $match: matchQuery },
       {
@@ -122,8 +108,6 @@ export async function GET(request: NextRequest) {
       },
       { $sort: { _id: 1 } },
     ]);
-
-    console.log(`[Stats API] Time series data points: ${timeSeriesData.length}`, timeSeriesData);
 
     // Format time-series data for chart
     const chartData = timeSeriesData.map((item) => {
@@ -143,8 +127,6 @@ export async function GET(request: NextRequest) {
         transactions: transactionsValue,
       };
     });
-
-    console.log(`[Stats API] Formatted chart data:`, chartData);
 
     // Get expense statistics for the same period
     const expenseQuery: any = {
