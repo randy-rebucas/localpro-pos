@@ -4,24 +4,26 @@ import User from '@/models/User';
 import { generateToken } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import bcrypt from 'bcryptjs';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
     const body = await request.json();
     const { pin, tenantSlug } = body;
+    const t = await getValidationTranslatorFromRequest(request);
 
     // Validation
     if (!pin) {
       return NextResponse.json(
-        { success: false, error: 'PIN is required' },
+        { success: false, error: t('validation.pinRequired', 'PIN is required') },
         { status: 400 }
       );
     }
 
     if (!/^\d{4,8}$/.test(pin)) {
       return NextResponse.json(
-        { success: false, error: 'PIN must be 4-8 digits' },
+        { success: false, error: t('validation.pinFormat', 'PIN must be 4-8 digits') },
         { status: 400 }
       );
     }
@@ -32,7 +34,7 @@ export async function POST(request: NextRequest) {
     
     if (!tenant) {
       return NextResponse.json(
-        { success: false, error: 'Tenant not found or inactive' },
+        { success: false, error: t('validation.tenantNotFoundOrInactive', 'Tenant not found or inactive') },
         { status: 404 }
       );
     }
@@ -49,7 +51,7 @@ export async function POST(request: NextRequest) {
         metadata: { success: false, reason: 'no_users', method: 'pin' },
       });
       return NextResponse.json(
-        { success: false, error: 'Invalid PIN' },
+        { success: false, error: t('validation.invalidPin', 'Invalid PIN') },
         { status: 401 }
       );
     }
@@ -74,7 +76,7 @@ export async function POST(request: NextRequest) {
         metadata: { success: false, reason: 'invalid_pin', method: 'pin' },
       });
       return NextResponse.json(
-        { success: false, error: 'Invalid PIN' },
+        { success: false, error: t('validation.invalidPin', 'Invalid PIN') },
         { status: 401 }
       );
     }
@@ -124,7 +126,7 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('PIN login error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Login failed' },
+      { success: false, error: error.message || t('validation.loginFailed', 'Login failed') },
       { status: 500 }
     );
   }

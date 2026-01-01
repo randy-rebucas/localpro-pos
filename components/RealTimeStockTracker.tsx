@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
+import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
 
 interface StockUpdate {
   type: string;
@@ -35,9 +36,15 @@ export default function RealTimeStockTracker({
 }: RealTimeStockTrackerProps) {
   const params = useParams();
   const tenant = params.tenant as string;
+  const lang = (params?.lang as 'en' | 'es') || 'en';
+  const [dict, setDict] = useState<any>(null);
   const [connected, setConnected] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
+
+  useEffect(() => {
+    getDictionaryClient(lang).then(setDict);
+  }, [lang]);
 
   useEffect(() => {
     if (!tenant) return;
@@ -104,14 +111,14 @@ export default function RealTimeStockTracker({
         className={`w-2 h-2 border border-gray-300 ${
           connected ? 'bg-green-500 animate-pulse' : 'bg-red-500'
         }`}
-        title={connected ? 'Connected' : 'Disconnected'}
+        title={connected ? (dict?.components?.realtimeStockTracker?.connected || 'Connected') : (dict?.components?.realtimeStockTracker?.disconnected || 'Disconnected')}
       />
       <span className="text-gray-500">
-        {connected ? 'Live' : 'Offline'}
+        {connected ? (dict?.components?.realtimeStockTracker?.live || 'Live') : (dict?.components?.realtimeStockTracker?.offline || 'Offline')}
       </span>
       {lastUpdate && (
         <span className="text-gray-400">
-          • Updated {lastUpdate.toLocaleTimeString()}
+          • {(dict?.components?.realtimeStockTracker?.updated || 'Updated {time}').replace('{time}', lastUpdate.toLocaleTimeString())}
         </span>
       )}
     </div>

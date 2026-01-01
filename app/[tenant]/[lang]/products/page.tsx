@@ -139,7 +139,7 @@ export default function ProductsPage() {
   };
 
   if (!dict) {
-    return <div className="text-center py-12">Loading...</div>;
+    return <div className="text-center py-12">{dict?.common?.loading || 'Loading...'}</div>;
   }
 
   return (
@@ -182,13 +182,13 @@ export default function ProductsPage() {
                   ? 'border-blue-600 bg-blue-50 text-blue-700'
                   : 'border-gray-300 text-gray-700 hover:bg-gray-100 hover:border-blue-500'
               }`}
-              title="Grid View"
-              aria-label="Grid View"
+              title={dict?.common?.gridView || 'Grid View'}
+              aria-label={dict?.common?.gridView || 'Grid View'}
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
               </svg>
-              <span className="hidden sm:inline">Grid</span>
+              <span className="hidden sm:inline">{dict?.common?.gridView || 'Grid'}</span>
             </button>
             <button
               onClick={() => setDisplayMode('list')}
@@ -197,8 +197,8 @@ export default function ProductsPage() {
                   ? 'border-blue-600 bg-blue-50 text-blue-700'
                   : 'border-gray-300 text-gray-700 hover:bg-gray-100 hover:border-blue-500'
               }`}
-              title="List View"
-              aria-label="List View"
+              title={dict?.common?.listView || 'List View'}
+              aria-label={dict?.common?.listView || 'List View'}
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />

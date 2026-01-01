@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useParams } from 'next/navigation';
+import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
 
 interface Booking {
   _id: string;
@@ -39,8 +41,15 @@ export default function BookingCalendar({
   onBookingSelect,
   selectedDate,
 }: BookingCalendarProps) {
+  const params = useParams();
+  const lang = (params?.lang as 'en' | 'es') || 'en';
+  const [dict, setDict] = useState<any>(null);
   const [currentDate, setCurrentDate] = useState(selectedDate || new Date());
   const [view, setView] = useState<'month' | 'week' | 'day'>('month');
+
+  useEffect(() => {
+    getDictionaryClient(lang).then(setDict);
+  }, [lang]);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -143,7 +152,7 @@ export default function BookingCalendar({
             onClick={() => setCurrentDate(new Date())}
             className="ml-4 px-4 py-2 text-sm bg-blue-600 text-white hover:bg-blue-700 transition-colors border border-blue-700"
           >
-            Today
+            {dict?.components?.bookingCalendar?.today || 'Today'}
           </button>
         </div>
         <div className="flex gap-2">
@@ -153,7 +162,7 @@ export default function BookingCalendar({
               view === 'month' ? 'bg-blue-600 text-white border-blue-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
-            Month
+            {dict?.components?.bookingCalendar?.month || 'Month'}
           </button>
           <button
             onClick={() => setView('week')}
@@ -161,7 +170,7 @@ export default function BookingCalendar({
               view === 'week' ? 'bg-blue-600 text-white border-blue-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
-            Week
+            {dict?.components?.bookingCalendar?.week || 'Week'}
           </button>
           <button
             onClick={() => setView('day')}
@@ -169,7 +178,7 @@ export default function BookingCalendar({
               view === 'day' ? 'bg-blue-600 text-white border-blue-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
-            Day
+            {dict?.components?.bookingCalendar?.day || 'Day'}
           </button>
         </div>
       </div>
@@ -229,7 +238,7 @@ export default function BookingCalendar({
                       ))}
                       {dayBookings.length > 3 && (
                         <div className="text-xs text-gray-500 font-medium">
-                          +{dayBookings.length - 3} more
+                          {(dict?.components?.bookingCalendar?.more || '+{count} more').replace('{count}', (dayBookings.length - 3).toString())}
                         </div>
                       )}
                     </div>
@@ -243,13 +252,13 @@ export default function BookingCalendar({
 
       {view === 'week' && (
         <div className="space-y-4">
-          <p className="text-gray-600">Week view coming soon...</p>
+          <p className="text-gray-600">{dict?.components?.bookingCalendar?.weekViewComingSoon || 'Week view coming soon...'}</p>
         </div>
       )}
 
       {view === 'day' && (
         <div className="space-y-4">
-          <p className="text-gray-600">Day view coming soon...</p>
+          <p className="text-gray-600">{dict?.components?.bookingCalendar?.dayViewComingSoon || 'Day view coming soon...'}</p>
         </div>
       )}
 
@@ -258,19 +267,19 @@ export default function BookingCalendar({
         <div className="flex flex-wrap gap-4 text-sm">
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 bg-green-100 border border-green-300"></div>
-            <span>Confirmed</span>
+            <span>{dict?.components?.bookingCalendar?.confirmed || 'Confirmed'}</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 bg-yellow-100 border border-yellow-300"></div>
-            <span>Pending</span>
+            <span>{dict?.components?.bookingCalendar?.pending || 'Pending'}</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 bg-blue-100 border border-blue-300"></div>
-            <span>Completed</span>
+            <span>{dict?.components?.bookingCalendar?.completed || 'Completed'}</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 bg-red-100 border border-red-300"></div>
-            <span>Cancelled</span>
+            <span>{dict?.components?.bookingCalendar?.cancelled || 'Cancelled'}</span>
           </div>
         </div>
       </div>

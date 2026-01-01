@@ -61,7 +61,7 @@ export default function TenantsPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
     );
@@ -204,7 +204,7 @@ function TenantModal({
     try {
       // Tenant-level: only allow editing current tenant
       if (!tenant) {
-        setError('Cannot edit: tenant information not available');
+        setError(dict?.admin?.cannotEditTenant || 'Cannot edit: tenant information not available');
         return;
       }
       const url = `/api/tenants/${tenant.slug}`;
@@ -233,10 +233,10 @@ function TenantModal({
       if (data.success) {
         onSave();
       } else {
-        setError(data.error || 'Failed to save tenant');
+        setError(data.error || dict?.admin?.failedToSaveTenant || 'Failed to save tenant');
       }
     } catch (error) {
-      setError('Failed to save tenant');
+      setError(dict?.admin?.failedToSaveTenant || 'Failed to save tenant');
     } finally {
       setSaving(false);
     }

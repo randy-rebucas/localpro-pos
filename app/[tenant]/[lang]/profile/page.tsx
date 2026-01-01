@@ -52,7 +52,7 @@ export default function ProfilePage() {
           email: data.data.email || '',
         });
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to load profile' });
+        setMessage({ type: 'error', text: data.error || dict?.common?.failedToLoadProfile || 'Failed to load profile' });
       }
     } catch (error) {
       console.error('Error fetching profile:', error);
@@ -81,11 +81,11 @@ export default function ProfilePage() {
         // Update auth context if needed
         window.location.reload(); // Refresh to update user in context
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to update profile' });
+        setMessage({ type: 'error', text: data.error || dict?.common?.failedToUpdateProfile || 'Failed to update profile' });
       }
     } catch (error) {
       console.error('Error updating profile:', error);
-      setMessage({ type: 'error', text: 'Failed to update profile. Please check your connection.' });
+      setMessage({ type: 'error', text: dict?.common?.failedToUpdateProfile || 'Failed to update profile. Please check your connection.' });
     } finally {
       setSaving(false);
     }
@@ -129,11 +129,11 @@ export default function ProfilePage() {
         });
         setShowPasswordSection(false);
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to update password' });
+        setMessage({ type: 'error', text: data.error || dict?.common?.failedToUpdatePassword || 'Failed to update password' });
       }
     } catch (error) {
       console.error('Error updating password:', error);
-      setMessage({ type: 'error', text: 'Failed to update password. Please check your connection.' });
+      setMessage({ type: 'error', text: dict?.common?.failedToUpdatePassword || 'Failed to update password. Please check your connection.' });
     } finally {
       setSaving(false);
     }
@@ -179,11 +179,11 @@ export default function ProfilePage() {
         // Refresh profile to get updated hasPin status
         await fetchProfile();
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to update PIN' });
+        setMessage({ type: 'error', text: data.error || dict?.common?.failedToUpdatePIN || 'Failed to update PIN' });
       }
     } catch (error) {
       console.error('Error updating PIN:', error);
-      setMessage({ type: 'error', text: 'Failed to update PIN. Please check your connection.' });
+      setMessage({ type: 'error', text: dict?.common?.failedToUpdatePIN || 'Failed to update PIN. Please check your connection.' });
     } finally {
       setSaving(false);
     }
@@ -201,11 +201,11 @@ export default function ProfilePage() {
         setMessage({ type: 'success', text: dict?.profile?.qrRegenerated || 'QR code regenerated successfully!' });
         await fetchProfile();
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to regenerate QR code' });
+        setMessage({ type: 'error', text: data.error || dict?.common?.failedToRegenerateQR || 'Failed to regenerate QR code' });
       }
     } catch (error) {
       console.error('Error regenerating QR code:', error);
-      setMessage({ type: 'error', text: 'Failed to regenerate QR code. Please check your connection.' });
+      setMessage({ type: 'error', text: dict?.common?.failedToRegenerateQR || 'Failed to regenerate QR code. Please check your connection.' });
     }
   };
 
@@ -427,7 +427,7 @@ export default function ProfilePage() {
                   onClick={() => setShowPinSection(!showPinSection)}
                   className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors border border-blue-300"
                 >
-                  {showPinSection ? 'Cancel' : (profileInfo?.hasPin ? 'Change PIN' : 'Set PIN')}
+                  {showPinSection ? (dict?.common?.cancel || 'Cancel') : (profileInfo?.hasPin ? (dict?.profile?.changePIN || 'Change PIN') : (dict?.profile?.setPIN || 'Set PIN'))}
                 </button>
               </div>
 

@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb';
 import Attendance from '@/models/Attendance';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 /**
  * GET - Get attendance records for current user or all users (if manager+)
@@ -52,8 +53,9 @@ export async function GET(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('Get attendance error:', error);
+    const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to get attendance' },
+      { success: false, error: error.message || t('validation.failedToGetAttendance', 'Failed to get attendance') },
       { status: error.message === 'Unauthorized' ? 401 : 500 }
     );
   }
@@ -70,9 +72,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { action, notes, location } = body; // action: 'clock-in' | 'clock-out'
 
+    const t = await getValidationTranslatorFromRequest(request);
     if (!action || !['clock-in', 'clock-out'].includes(action)) {
       return NextResponse.json(
-        { success: false, error: 'Action must be "clock-in" or "clock-out"' },
+        { success: false, error: t('validation.attendanceActionRequired', 'Action must be "clock-in" or "clock-out"') },
         { status: 400 }
       );
     }
@@ -87,7 +90,7 @@ export async function POST(request: NextRequest) {
 
       if (activeSession) {
         return NextResponse.json(
-          { success: false, error: 'You are already clocked in. Please clock out first.' },
+          { success: false, error: t('validation.alreadyClockedIn', 'You are already clocked in. Please clock out first.') },
           { status: 400 }
         );
       }
@@ -123,7 +126,7 @@ export async function POST(request: NextRequest) {
 
       if (!activeSession) {
         return NextResponse.json(
-          { success: false, error: 'No active session found. Please clock in first.' },
+          { success: false, error: t('validation.noActiveSession', 'No active session found. Please clock in first.') },
           { status: 400 }
         );
       }
@@ -150,8 +153,9 @@ export async function POST(request: NextRequest) {
     }
   } catch (error: any) {
     console.error('Attendance error:', error);
+    const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to process attendance' },
+      { success: false, error: error.message || t('validation.failedToProcessAttendance', 'Failed to process attendance') },
       { status: error.message === 'Unauthorized' ? 401 : 500 }
     );
   }

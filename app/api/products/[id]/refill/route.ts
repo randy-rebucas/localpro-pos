@@ -5,6 +5,7 @@ import { requireAuth } from '@/lib/auth';
 import { updateStock } from '@/lib/stock';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -12,9 +13,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
+    const t = await getValidationTranslatorFromRequest(request);
     
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
     
     const body = await request.json();
@@ -22,7 +24,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     
     if (!quantity || quantity <= 0) {
       return NextResponse.json(
-        { success: false, error: 'Quantity must be greater than 0' },
+        { success: false, error: t('validation.quantityGreaterThanZero', 'Quantity must be greater than 0') },
         { status: 400 }
       );
     }
@@ -32,7 +34,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const productBefore = await Product.findOne({ _id: id, tenantId });
     
     if (!productBefore) {
-      return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.productNotFound', 'Product not found') }, { status: 404 });
     }
     
     const previousStock = productBefore.stock;
@@ -54,7 +56,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const product = await Product.findOne({ _id: id, tenantId });
     
     if (!product) {
-      return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.productNotFound', 'Product not found') }, { status: 404 });
     }
     
     // Create audit log

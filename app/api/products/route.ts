@@ -5,6 +5,7 @@ import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateAndSanitize, validateProduct } from '@/lib/validation';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function GET(request: NextRequest) {
   try {
@@ -58,7 +59,8 @@ export async function POST(request: NextRequest) {
     }
     
     const body = await request.json();
-    const { data, errors } = validateAndSanitize(body, validateProduct);
+    const t = await getValidationTranslatorFromRequest(request);
+    const { data, errors } = validateAndSanitize(body, validateProduct, t);
 
     if (errors.length > 0) {
       return NextResponse.json(

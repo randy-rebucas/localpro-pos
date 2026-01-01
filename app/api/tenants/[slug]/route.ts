@@ -4,15 +4,17 @@ import Tenant from '@/models/Tenant';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
     await connectDB();
     const { slug } = await params;
+    const t = await getValidationTranslatorFromRequest(request);
     const tenant = await Tenant.findOne({ slug }).lean();
     
     if (!tenant) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
     
     return NextResponse.json({ success: true, data: tenant });
@@ -26,13 +28,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     await connectDB();
     await requireRole(request, ['admin']);
     const { slug } = await params;
+    const t = await getValidationTranslatorFromRequest(request);
     
     const body = await request.json();
     const { name, domain, subdomain, isActive, settings } = body;
 
     const oldTenant = await Tenant.findOne({ slug }).lean();
     if (!oldTenant) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
     const updateData: any = {};
@@ -40,7 +43,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (name !== undefined) {
       if (!name.trim()) {
         return NextResponse.json(
-          { success: false, error: 'Name is required' },
+          { success: false, error: t('validation.nameRequired', 'Name is required') },
           { status: 400 }
         );
       }
@@ -97,10 +100,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     
     return NextResponse.json({ success: true, data: tenant });
   } catch (error: any) {
+    const t = await getValidationTranslatorFromRequest(request);
     if (error.code === 11000) {
       const field = Object.keys(error.keyPattern)[0];
       return NextResponse.json(
-        { success: false, error: `${field} already exists` },
+        { success: false, error: t('validation.fieldAlreadyExists', '{field} already exists', field).replace('{field}', field) },
         { status: 400 }
       );
     }
@@ -119,10 +123,11 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     await connectDB();
     await requireRole(request, ['admin']);
     const { slug } = await params;
+    const t = await getValidationTranslatorFromRequest(request);
     
     const tenant = await Tenant.findOne({ slug }).lean();
     if (!tenant) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
     // Soft delete - set isActive to false

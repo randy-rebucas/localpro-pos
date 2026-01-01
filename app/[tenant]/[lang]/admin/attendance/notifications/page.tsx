@@ -109,11 +109,11 @@ export default function AttendanceNotificationsPage() {
         setSummary(data.data.summary || null);
         setMessage(null);
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to fetch notifications' });
+        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchNotifications || 'Failed to fetch notifications' });
       }
     } catch (error) {
       console.error('Error fetching notifications:', error);
-      setMessage({ type: 'error', text: 'Failed to fetch notifications' });
+      setMessage({ type: 'error', text: dict?.common?.failedToFetchNotifications || 'Failed to fetch notifications' });
     } finally {
       setLoading(false);
     }

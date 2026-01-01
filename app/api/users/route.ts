@@ -5,6 +5,7 @@ import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateEmail, validatePassword } from '@/lib/validation';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function GET(request: NextRequest) {
   try {
@@ -46,22 +47,25 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { email, password, name, role } = body;
 
+    // Get translation function
+    const t = await getValidationTranslatorFromRequest(request);
+
     // Validation
     if (!email || !password || !name) {
       return NextResponse.json(
-        { success: false, error: 'Email, password, and name are required' },
+        { success: false, error: t('validation.userFieldsRequired', 'Email, password, and name are required') },
         { status: 400 }
       );
     }
 
     if (!validateEmail(email)) {
       return NextResponse.json(
-        { success: false, error: 'Invalid email format' },
+        { success: false, error: t('validation.invalidEmailFormat', 'Invalid email format') },
         { status: 400 }
       );
     }
 
-    const passwordValidation = validatePassword(password);
+    const passwordValidation = validatePassword(password, t);
     if (!passwordValidation.valid) {
       return NextResponse.json(
         { success: false, error: 'Password validation failed', errors: passwordValidation.errors },
@@ -71,7 +75,7 @@ export async function POST(request: NextRequest) {
 
     if (role && !['owner', 'admin', 'manager', 'cashier', 'viewer'].includes(role)) {
       return NextResponse.json(
-        { success: false, error: 'Invalid role' },
+        { success: false, error: t('validation.invalidRole', 'Invalid role') },
         { status: 400 }
       );
     }
@@ -99,7 +103,7 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     if (error.code === 11000) {
       return NextResponse.json(
-        { success: false, error: 'User with this email already exists' },
+        { success: false, error: t('validation.emailExists', 'User with this email already exists') },
         { status: 400 }
       );
     }

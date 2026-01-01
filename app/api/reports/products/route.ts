@@ -6,15 +6,17 @@ import { getProductPerformance } from '@/lib/analytics';
 import Product from '@/models/Product'; // Ensure Product model is registered
 import Transaction from '@/models/Transaction'; // Ensure Transaction model is registered
 import mongoose from 'mongoose';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
     await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
+    const t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
     // Ensure models are registered by checking mongoose.models

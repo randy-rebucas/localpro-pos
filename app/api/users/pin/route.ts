@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 import { requireAuth } from '@/lib/auth';
 import { isPinDuplicate } from '@/lib/pin-validation';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 /**
  * PUT - Update current user's PIN
@@ -11,20 +12,21 @@ export async function PUT(request: NextRequest) {
   try {
     const user = await requireAuth(request);
     await connectDB();
+    const t = await getValidationTranslatorFromRequest(request);
 
     const body = await request.json();
     const { pin } = body;
 
     if (!pin) {
       return NextResponse.json(
-        { success: false, error: 'PIN is required' },
+        { success: false, error: t('validation.pinRequired', 'PIN is required') },
         { status: 400 }
       );
     }
 
     if (!/^\d{4,8}$/.test(pin)) {
       return NextResponse.json(
-        { success: false, error: 'PIN must be 4-8 digits' },
+        { success: false, error: t('validation.pinFormat', 'PIN must be 4-8 digits') },
         { status: 400 }
       );
     }
@@ -33,7 +35,7 @@ export async function PUT(request: NextRequest) {
     const userDoc = await User.findById(user.userId).select('tenantId').lean();
     if (!userDoc) {
       return NextResponse.json(
-        { success: false, error: 'User not found' },
+        { success: false, error: t('validation.userNotFound', 'User not found') },
         { status: 404 }
       );
     }
@@ -42,7 +44,7 @@ export async function PUT(request: NextRequest) {
     const pinExists = await isPinDuplicate(userDoc.tenantId, pin, user.userId);
     if (pinExists) {
       return NextResponse.json(
-        { success: false, error: 'This PIN is already in use by another user in your organization' },
+        { success: false, error: t('validation.pinInUse', 'This PIN is already in use by another user in your organization') },
         { status: 400 }
       );
     }
@@ -58,7 +60,7 @@ export async function PUT(request: NextRequest) {
   } catch (error: any) {
     console.error('Update PIN error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to update PIN' },
+      { success: false, error: error.message || t('validation.failedToUpdatePin', 'Failed to update PIN') },
       { status: error.message === 'Unauthorized' ? 401 : 500 }
     );
   }
@@ -81,7 +83,7 @@ export async function DELETE(request: NextRequest) {
   } catch (error: any) {
     console.error('Delete PIN error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to remove PIN' },
+      { success: false, error: error.message || t('validation.failedToRemovePin', 'Failed to remove PIN') },
       { status: error.message === 'Unauthorized' ? 401 : 500 }
     );
   }

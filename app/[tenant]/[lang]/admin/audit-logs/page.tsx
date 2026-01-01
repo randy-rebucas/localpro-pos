@@ -98,11 +98,11 @@ export default function AuditLogsPage() {
         setAuditLogs(data.data);
         setAuditPagination(data.pagination);
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to fetch audit logs' });
+        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchAuditLogs || 'Failed to fetch audit logs' });
       }
     } catch (error) {
       console.error('Error fetching audit logs:', error);
-      setMessage({ type: 'error', text: 'Failed to fetch audit logs' });
+      setMessage({ type: 'error', text: dict?.common?.failedToFetchAuditLogs || 'Failed to fetch audit logs' });
     } finally {
       setAuditLoading(false);
     }
@@ -122,7 +122,7 @@ export default function AuditLogsPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
     );

@@ -4,6 +4,7 @@ import SavedCart from '@/models/SavedCart';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import mongoose from 'mongoose';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function GET(request: NextRequest) {
   try {
@@ -36,9 +37,10 @@ export async function POST(request: NextRequest) {
     await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
+    const t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
     const body = await request.json();
@@ -47,14 +49,14 @@ export async function POST(request: NextRequest) {
     // Validate required fields
     if (!name || !name.trim()) {
       return NextResponse.json(
-        { success: false, error: 'Cart name is required' },
+        { success: false, error: t('validation.cartNameRequired', 'Cart name is required') },
         { status: 400 }
       );
     }
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json(
-        { success: false, error: 'Cart must contain at least one item' },
+        { success: false, error: t('validation.cartItemsRequired', 'Cart must contain at least one item') },
         { status: 400 }
       );
     }
@@ -63,7 +65,7 @@ export async function POST(request: NextRequest) {
     for (const item of items) {
       if (!item.productId || !item.name || item.price === undefined || !item.quantity || item.stock === undefined) {
         return NextResponse.json(
-          { success: false, error: 'Invalid cart item data' },
+          { success: false, error: t('validation.invalidCartItem', 'Invalid cart item data') },
           { status: 400 }
         );
       }

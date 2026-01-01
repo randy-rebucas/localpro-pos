@@ -4,14 +4,16 @@ import ProductBundle from '@/models/ProductBundle';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
     const tenantId = await getTenantIdFromRequest(request);
+    const t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
     const searchParams = request.nextUrl.searchParams;
@@ -70,9 +72,10 @@ export async function POST(request: NextRequest) {
     await connectDB();
     await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
+    const t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
     const body = await request.json();
@@ -80,7 +83,7 @@ export async function POST(request: NextRequest) {
 
     if (!name || !price || !items || items.length === 0) {
       return NextResponse.json(
-        { success: false, error: 'Name, price, and at least one item are required' },
+        { success: false, error: t('validation.bundleFieldsRequired', 'Name, price, and at least one item are required') },
         { status: 400 }
       );
     }
@@ -108,9 +111,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, data: bundle }, { status: 201 });
   } catch (error: any) {
+    const t = await getValidationTranslatorFromRequest(request);
     if (error.code === 11000) {
       return NextResponse.json(
-        { success: false, error: 'Bundle with this SKU already exists' },
+        { success: false, error: t('validation.bundleSkuExists', 'Bundle with this SKU already exists') },
         { status: 400 }
       );
     }

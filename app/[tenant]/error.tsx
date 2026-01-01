@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
 
 export default function TenantError({
   error,
@@ -10,8 +11,11 @@ export default function TenantError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const [dict, setDict] = useState<any>(null);
+
   useEffect(() => {
     console.error('Tenant error:', error);
+    getDictionaryClient('en').then(setDict);
   }, [error]);
 
   return (
@@ -32,22 +36,22 @@ export default function TenantError({
             />
           </svg>
         </div>
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Error Loading Store</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">{dict?.common?.errorLoadingStore || 'Error Loading Store'}</h1>
         <p className="text-gray-600 mb-6">
-          {error.message || 'An error occurred while loading the store information.'}
+          {error.message || dict?.common?.errorLoadingStoreMessage || 'An error occurred while loading the store information.'}
         </p>
         <div className="space-y-3">
           <button
             onClick={reset}
             className="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 font-medium transition-colors"
           >
-            Try Again
+            {dict?.common?.tryAgain || 'Try Again'}
           </button>
           <Link
             href="/default/en"
             className="block w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-200 font-medium transition-colors"
           >
-            Go to Default Store
+            {dict?.common?.goToDefaultStore || 'Go to Default Store'}
           </Link>
         </div>
       </div>

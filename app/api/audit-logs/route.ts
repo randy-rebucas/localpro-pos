@@ -3,16 +3,20 @@ import connectDB from '@/lib/mongodb';
 import AuditLog from '@/models/AuditLog';
 import { requireAuth } from '@/lib/auth';
 import User from '@/models/User';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function GET(request: NextRequest) {
   try {
     const user = await requireAuth(request);
     await connectDB();
 
+    // Get translation function
+    const t = await getValidationTranslatorFromRequest(request);
+
     // Only admin and owner can view audit logs
     if (user.role !== 'admin' && user.role !== 'owner') {
       return NextResponse.json(
-        { success: false, error: 'Forbidden: Admin access required' },
+        { success: false, error: t('validation.forbiddenAdminAccess', 'Forbidden: Admin access required') },
         { status: 403 }
       );
     }
@@ -77,8 +81,9 @@ export async function GET(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('Get audit logs error:', error);
+    const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to fetch audit logs' },
+      { success: false, error: error.message || t('validation.failedToFetchAuditLogs', 'Failed to fetch audit logs') },
       { status: error.message === 'Unauthorized' ? 401 : 500 }
     );
   }

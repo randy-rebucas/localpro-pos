@@ -734,7 +734,7 @@ export default function POSPage() {
         setProducts(prev => prev.map(p => 
           p._id === productId ? { ...p, pinned: currentPinned } : p
         ));
-        alert(data.error || 'Failed to toggle pin status');
+        alert(data.error || dict?.common?.failedToTogglePin || 'Failed to toggle pin status');
       }
     } catch (error) {
       // Revert optimistic update on error
@@ -742,7 +742,7 @@ export default function POSPage() {
         p._id === productId ? { ...p, pinned: currentPinned } : p
       ));
       console.error('Error toggling pin:', error);
-      alert('Failed to toggle pin status');
+      alert(dict?.common?.failedToTogglePin || 'Failed to toggle pin status');
     }
   };
 
@@ -879,7 +879,7 @@ export default function POSPage() {
                           <button
                             onClick={() => removeFromCart(item.productId)}
                             className="p-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors flex-shrink-0"
-                            aria-label="Remove item"
+                            aria-label={dict?.pos?.removeItem || 'Remove item'}
                           >
                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -892,7 +892,7 @@ export default function POSPage() {
                               type="button"
                               onClick={() => updateQuantity(item.productId, item.quantity - 1)}
                               className="px-3 py-2 hover:bg-gray-100 active:bg-gray-200 font-bold text-lg transition-colors"
-                              aria-label="Decrease quantity"
+                              aria-label={dict?.pos?.decreaseQuantity || 'Decrease quantity'}
                             >
                               −
                             </button>
@@ -909,7 +909,7 @@ export default function POSPage() {
                                 const trackInventory = product?.trackInventory !== false;
                                 return trackInventory && !canSellOutOfStock && item.quantity >= item.stock;
                               })()}
-                              aria-label="Increase quantity"
+                              aria-label={dict?.pos?.increaseQuantity || 'Increase quantity'}
                             >
                               +
                             </button>
@@ -1456,7 +1456,7 @@ export default function POSPage() {
                     value={refundReason}
                     onChange={(e) => setRefundReason(e.target.value)}
                     className="w-full px-4 py-3 text-base border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Reason for refund"
+                    placeholder={dict?.pos?.refundReasonPlaceholder || 'Reason for refund'}
                   />
                 </div>
 
@@ -1469,7 +1469,7 @@ export default function POSPage() {
                     onChange={(e) => setRefundNotes(e.target.value)}
                     rows={3}
                     className="w-full px-4 py-3 text-base border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Additional notes"
+                    placeholder={dict?.pos?.refundNotesPlaceholder || 'Additional notes'}
                   />
                 </div>
 

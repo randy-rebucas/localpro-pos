@@ -14,6 +14,7 @@ import CashDrawerSession from '@/models/CashDrawerSession';
 import ProductBundle from '@/models/ProductBundle';
 import Attendance from '@/models/Attendance';
 import mongoose from 'mongoose';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 // Map collection names to their models
 const COLLECTION_MODELS: Record<string, any> = {
@@ -38,11 +39,12 @@ export async function GET(
     await connectDB();
     await requireRole(request, ['admin']);
     const { slug } = await params;
+    const t = await getValidationTranslatorFromRequest(request);
     
     const tenant = await Tenant.findOne({ slug, isActive: true });
     if (!tenant) {
       return NextResponse.json(
-        { success: false, error: 'Tenant not found' },
+        { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
         { status: 404 }
       );
     }
@@ -110,8 +112,9 @@ export async function GET(
       );
     }
     console.error('Error creating backup:', error);
+    const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to create backup' },
+      { success: false, error: error.message || t('validation.failedToCreateBackup', 'Failed to create backup') },
       { status: 500 }
     );
   }
@@ -127,9 +130,10 @@ export async function POST(
     const { slug } = await params;
     
     const tenant = await Tenant.findOne({ slug, isActive: true });
+    const t = await getValidationTranslatorFromRequest(request);
     if (!tenant) {
       return NextResponse.json(
-        { success: false, error: 'Tenant not found' },
+        { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
         { status: 404 }
       );
     }
@@ -139,7 +143,7 @@ export async function POST(
 
     if (!Array.isArray(collections) || collections.length === 0) {
       return NextResponse.json(
-        { success: false, error: 'Collections array is required' },
+        { success: false, error: t('validation.collectionsArrayRequired', 'Collections array is required') },
         { status: 400 }
       );
     }
@@ -191,8 +195,9 @@ export async function POST(
       );
     }
     console.error('Error resetting collections:', error);
+    const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to reset collections' },
+      { success: false, error: error.message || t('validation.failedToResetCollections', 'Failed to reset collections') },
       { status: 500 }
     );
   }
@@ -209,9 +214,10 @@ export async function PUT(
     const { slug } = await params;
     
     const tenant = await Tenant.findOne({ slug, isActive: true });
+    const t = await getValidationTranslatorFromRequest(request);
     if (!tenant) {
       return NextResponse.json(
-        { success: false, error: 'Tenant not found' },
+        { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
         { status: 404 }
       );
     }
@@ -221,7 +227,7 @@ export async function PUT(
 
     if (!backupData || !backupData.collections) {
       return NextResponse.json(
-        { success: false, error: 'Invalid backup data format' },
+        { success: false, error: t('validation.invalidBackupDataFormat', 'Invalid backup data format') },
         { status: 400 }
       );
     }
@@ -305,8 +311,9 @@ export async function PUT(
       );
     }
     console.error('Error restoring backup:', error);
+    const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to restore backup' },
+      { success: false, error: error.message || t('validation.failedToRestoreBackup', 'Failed to restore backup') },
       { status: 500 }
     );
   }

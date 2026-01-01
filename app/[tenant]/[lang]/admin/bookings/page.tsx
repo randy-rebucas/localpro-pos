@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import BookingCalendar from '@/components/BookingCalendar';
+import { getDictionaryClient } from '../../dictionaries-client';
 
 interface Booking {
   _id: string;
@@ -43,6 +44,7 @@ export default function BookingsPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
+  const [dict, setDict] = useState<any>(null);
 
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,6 +70,10 @@ export default function BookingsPage() {
     notes: '',
     status: 'pending' as Booking['status'],
   });
+
+  useEffect(() => {
+    getDictionaryClient(lang).then(setDict);
+  }, [lang]);
 
   useEffect(() => {
     fetchBookings();
@@ -102,15 +108,15 @@ export default function BookingsPage() {
           setBookings(data.data || []);
           setMessage(null);
         } else {
-          setMessage({ type: 'error', text: data.error || 'Failed to fetch bookings' });
+          setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchBookings || 'Failed to fetch bookings' });
         }
       } else {
         const data = await response.json();
-        setMessage({ type: 'error', text: data.error || 'Failed to fetch bookings' });
+        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchBookings || 'Failed to fetch bookings' });
       }
     } catch (error) {
       console.error('Failed to fetch bookings:', error);
-      setMessage({ type: 'error', text: 'Failed to fetch bookings' });
+      setMessage({ type: 'error', text: dict?.common?.failedToFetchBookings || 'Failed to fetch bookings' });
     } finally {
       setLoading(false);
     }
@@ -165,20 +171,20 @@ export default function BookingsPage() {
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          setMessage({ type: 'success', text: 'Booking created successfully' });
+          setMessage({ type: 'success', text: dict?.common?.bookingCreatedSuccess || 'Booking created successfully' });
           await fetchBookings();
           setShowCreateModal(false);
           resetForm();
         } else {
-          setMessage({ type: 'error', text: data.error || 'Failed to create booking' });
+          setMessage({ type: 'error', text: data.error || dict?.common?.failedToCreateBooking || 'Failed to create booking' });
         }
       } else {
         const error = await response.json();
-        setMessage({ type: 'error', text: error.error || 'Failed to create booking' });
+        setMessage({ type: 'error', text: error.error || dict?.common?.failedToCreateBooking || 'Failed to create booking' });
       }
     } catch (error) {
       console.error('Failed to create booking:', error);
-      setMessage({ type: 'error', text: 'Failed to create booking' });
+      setMessage({ type: 'error', text: dict?.common?.failedToCreateBooking || 'Failed to create booking' });
     }
   };
 
@@ -201,25 +207,26 @@ export default function BookingsPage() {
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          setMessage({ type: 'success', text: 'Booking updated successfully' });
+          setMessage({ type: 'success', text: dict?.common?.bookingUpdatedSuccess || 'Booking updated successfully' });
           await fetchBookings();
           setShowModal(false);
           setSelectedBooking(null);
         } else {
-          setMessage({ type: 'error', text: data.error || 'Failed to update booking' });
+          setMessage({ type: 'error', text: data.error || dict?.common?.failedToUpdateBooking || 'Failed to update booking' });
         }
       } else {
         const error = await response.json();
-        setMessage({ type: 'error', text: error.error || 'Failed to update booking' });
+        setMessage({ type: 'error', text: error.error || dict?.common?.failedToUpdateBooking || 'Failed to update booking' });
       }
     } catch (error) {
       console.error('Failed to update booking:', error);
-      setMessage({ type: 'error', text: 'Failed to update booking' });
+      setMessage({ type: 'error', text: dict?.common?.failedToUpdateBooking || 'Failed to update booking' });
     }
   };
 
   const handleDeleteBooking = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this booking?')) {
+    if (!dict) return;
+    if (!confirm(dict.common?.deleteBookingConfirm || 'Are you sure you want to delete this booking?')) {
       return;
     }
 
@@ -239,20 +246,20 @@ export default function BookingsPage() {
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          setMessage({ type: 'success', text: 'Booking deleted successfully' });
+          setMessage({ type: 'success', text: dict?.common?.bookingDeletedSuccess || 'Booking deleted successfully' });
           await fetchBookings();
           setShowModal(false);
           setSelectedBooking(null);
         } else {
-          setMessage({ type: 'error', text: data.error || 'Failed to delete booking' });
+          setMessage({ type: 'error', text: data.error || dict?.common?.failedToDeleteBooking || 'Failed to delete booking' });
         }
       } else {
         const error = await response.json();
-        setMessage({ type: 'error', text: error.error || 'Failed to delete booking' });
+        setMessage({ type: 'error', text: error.error || dict?.common?.failedToDeleteBooking || 'Failed to delete booking' });
       }
     } catch (error) {
       console.error('Failed to delete booking:', error);
-      setMessage({ type: 'error', text: 'Failed to delete booking' });
+      setMessage({ type: 'error', text: dict?.common?.failedToDeleteBooking || 'Failed to delete booking' });
     }
   };
 
@@ -273,17 +280,17 @@ export default function BookingsPage() {
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          setMessage({ type: 'success', text: 'Reminder sent successfully' });
+          setMessage({ type: 'success', text: dict?.common?.reminderSentSuccess || 'Reminder sent successfully' });
         } else {
-          setMessage({ type: 'error', text: data.error || 'Failed to send reminder' });
+          setMessage({ type: 'error', text: data.error || dict?.common?.failedToSendReminder || 'Failed to send reminder' });
         }
       } else {
         const error = await response.json();
-        setMessage({ type: 'error', text: error.error || 'Failed to send reminder' });
+        setMessage({ type: 'error', text: error.error || dict?.common?.failedToSendReminder || 'Failed to send reminder' });
       }
     } catch (error) {
       console.error('Failed to send reminder:', error);
-      setMessage({ type: 'error', text: 'Failed to send reminder' });
+      setMessage({ type: 'error', text: dict?.common?.failedToSendReminder || 'Failed to send reminder' });
     }
   };
 

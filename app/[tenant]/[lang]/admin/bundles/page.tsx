@@ -15,7 +15,7 @@ const BundlePerformanceCharts = dynamic(() => import('@/components/BundlePerform
     <div className="w-full h-64 flex items-center justify-center">
       <div className="text-center">
         <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-        <p className="mt-4 text-gray-600">Loading charts...</p>
+        <p className="mt-4 text-gray-600">{'Loading chart...'}</p>
       </div>
     </div>
   ),
@@ -117,11 +117,11 @@ export default function BundlesPage() {
       if (data.success) {
         setAnalytics(data.data);
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to fetch analytics' });
+        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchAnalytics || 'Failed to fetch analytics' });
       }
     } catch (error) {
       console.error('Error fetching analytics:', error);
-      setMessage({ type: 'error', text: 'Failed to fetch analytics' });
+      setMessage({ type: 'error', text: dict?.common?.failedToFetchAnalytics || 'Failed to fetch analytics' });
     } finally {
       setAnalyticsLoading(false);
     }
@@ -150,11 +150,11 @@ export default function BundlesPage() {
         setBundles(data.data);
         setMessage(null);
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to fetch bundles' });
+        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchBundles || 'Failed to fetch bundles' });
       }
     } catch (error) {
       console.error('Error fetching bundles:', error);
-      setMessage({ type: 'error', text: 'Failed to fetch bundles' });
+      setMessage({ type: 'error', text: dict?.common?.failedToFetchBundles || 'Failed to fetch bundles' });
     } finally {
       setLoading(false);
     }
@@ -225,23 +225,24 @@ export default function BundlesPage() {
       });
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: `Bundle ${!bundle.isActive ? 'activated' : 'deactivated'} successfully` });
+        setMessage({ type: 'success', text: `Bundle ${!bundle.isActive ? (dict?.admin?.activated || 'activated') : (dict?.admin?.deactivated || 'deactivated')} ${dict?.admin?.successfully || 'successfully'}` });
         fetchBundles();
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to update bundle' });
+        setMessage({ type: 'error', text: data.error || dict?.common?.failedToUpdateBundle || 'Failed to update bundle' });
       }
     } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to update bundle' });
+      setMessage({ type: 'error', text: dict?.common?.failedToUpdateBundle || 'Failed to update bundle' });
     }
   };
 
   const handleBulkOperation = async (action: 'activate' | 'deactivate') => {
     if (selectedBundles.size === 0) {
-      setMessage({ type: 'error', text: 'Please select at least one bundle' });
+      setMessage({ type: 'error', text: dict?.common?.selectAtLeastOneBundle || 'Please select at least one bundle' });
       return;
     }
 
-    if (!confirm(`Are you sure you want to ${action} ${selectedBundles.size} bundle(s)?`)) {
+    const confirmText = dict?.common?.bulkActionBundleConfirm?.replace('{action}', action).replace('{count}', selectedBundles.size.toString()) || `Are you sure you want to ${action} ${selectedBundles.size} bundle(s)?`;
+    if (!confirm(confirmText)) {
       return;
     }
 

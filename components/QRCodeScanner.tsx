@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useParams } from 'next/navigation';
 import { hardwareService } from '@/lib/hardware';
+import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
 
 interface QRCodeScannerProps {
   onScan: (data: string) => void;
@@ -10,9 +12,16 @@ interface QRCodeScannerProps {
 }
 
 export default function QRCodeScanner({ onScan, onClose, enabled = true }: QRCodeScannerProps) {
+  const params = useParams();
+  const lang = (params?.lang as 'en' | 'es') || 'en';
+  const [dict, setDict] = useState<any>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getDictionaryClient(lang).then(setDict);
+  }, [lang]);
 
   useEffect(() => {
     if (!enabled || !videoRef.current) return;
@@ -23,7 +32,7 @@ export default function QRCodeScanner({ onScan, onClose, enabled = true }: QRCod
         setError(null);
         await hardwareService.startQRScanning(videoRef.current!, onScan);
       } catch (err: any) {
-        setError(err.message || 'Failed to start QR scanner');
+        setError(err.message || dict?.common?.failedToStartQRScanner || 'Failed to start QR scanner');
         setIsScanning(false);
       }
     };
@@ -42,7 +51,7 @@ export default function QRCodeScanner({ onScan, onClose, enabled = true }: QRCod
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
       <div className="bg-white border border-gray-300 p-6 max-w-md w-full mx-4">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold">Scan QR Code</h2>
+          <h2 className="text-xl font-bold">{dict?.common?.scanQRCode || dict?.login?.scanQRCode || 'Scan QR Code'}</h2>
           {onClose && (
             <button
               onClick={onClose}
@@ -76,7 +85,7 @@ export default function QRCodeScanner({ onScan, onClose, enabled = true }: QRCod
         )}
 
         <p className="text-sm text-gray-600 mt-4 text-center">
-          Position the QR code within the frame
+          {dict?.common?.positionQRCode || 'Position the QR code within the frame'}
         </p>
       </div>
     </div>

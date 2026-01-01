@@ -131,11 +131,11 @@ export default function SettingsPage() {
         };
         setSettings(defaultSettings);
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to load settings' });
+        setMessage({ type: 'error', text: data.error || dict?.settings?.failedToLoad || 'Failed to load settings' });
       }
     } catch (error) {
       console.error('Error fetching settings:', error);
-      setMessage({ type: 'error', text: 'Failed to load settings. Please check your connection.' });
+      setMessage({ type: 'error', text: dict?.common?.failedToLoadSettings || 'Failed to load settings. Please check your connection.' });
       setLoading(false);
     } finally {
       setLoading(false);
@@ -170,7 +170,7 @@ export default function SettingsPage() {
       }
     } catch (error) {
       console.error('Error saving settings:', error);
-      setMessage({ type: 'error', text: 'Failed to save settings. Please check your connection.' });
+      setMessage({ type: 'error', text: dict?.common?.failedToSaveSettings || 'Failed to save settings. Please check your connection.' });
     } finally {
       setSaving(false);
     }
@@ -258,7 +258,7 @@ export default function SettingsPage() {
         <div className="bg-white border border-gray-300 overflow-hidden">
           {/* Tabs */}
           <div className="border-b border-gray-200">
-            <nav className="flex overflow-x-auto" aria-label="Tabs">
+            <nav className="flex overflow-x-auto" aria-label={dict?.common?.tabs || 'Tabs'}>
               <button
                 onClick={() => setActiveTab('general')}
                 className={`px-6 py-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
@@ -399,7 +399,7 @@ export default function SettingsPage() {
                           }
                         }}
                         className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
-                        placeholder="USD"
+                        placeholder={dict?.settings?.currencyPlaceholder || 'USD'}
                         maxLength={3}
                       />
                     </div>
@@ -420,7 +420,7 @@ export default function SettingsPage() {
                             type="button"
                             onClick={() => updateSetting('currencySymbol', getCurrencySymbolForCode(settings.currency || 'USD'))}
                             className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-blue-600 hover:text-blue-700 font-medium"
-                            title="Auto-fill symbol"
+                            title={dict?.common?.autoFillSymbol || 'Auto-fill symbol'}
                           >
                             Auto
                           </button>
@@ -449,7 +449,7 @@ export default function SettingsPage() {
                         value={settings.timezone || 'UTC'}
                         onChange={(e) => updateSetting('timezone', e.target.value)}
                         className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
-                        placeholder="America/New_York"
+                        placeholder={dict?.settings?.timezonePlaceholder || 'America/New_York'}
                         list="timezone-suggestions"
                       />
                       <datalist id="timezone-suggestions">
@@ -531,7 +531,7 @@ export default function SettingsPage() {
                             }
                           } catch (error) {
                             console.error('Error saving language:', error);
-                            setMessage({ type: 'error', text: 'Failed to save language setting' });
+                            setMessage({ type: 'error', text: dict?.common?.failedToSaveLanguageSetting || 'Failed to save language setting' });
                           } finally {
                             setSaving(false);
                           }
@@ -739,7 +739,7 @@ export default function SettingsPage() {
                             value={settings.taxLabel || 'Tax'}
                             onChange={(e) => updateSetting('taxLabel', e.target.value)}
                             className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
-                            placeholder="VAT, GST, Sales Tax"
+                            placeholder={dict?.settings?.taxNamePlaceholder || 'VAT, GST, Sales Tax'}
                           />
                         </div>
                       </>
@@ -989,7 +989,7 @@ export default function SettingsPage() {
                       onChange={(e) => updateSetting('receiptHeader', e.target.value)}
                       rows={3}
                       className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
-                      placeholder="Custom header text to appear at the top of receipts"
+                      placeholder={dict?.settings?.receiptHeaderPlaceholder || 'Custom header text to appear at the top of receipts'}
                     />
                   </div>
                   <div>
@@ -1001,7 +1001,7 @@ export default function SettingsPage() {
                       onChange={(e) => updateSetting('receiptFooter', e.target.value)}
                       rows={3}
                       className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
-                      placeholder="Custom footer text to appear at the bottom of receipts"
+                      placeholder={dict?.settings?.receiptFooterPlaceholder || 'Custom footer text to appear at the bottom of receipts'}
                     />
                   </div>
                   <div>
@@ -1107,7 +1107,7 @@ export default function SettingsPage() {
                       value={settings.registrationNumber || ''}
                       onChange={(e) => updateSetting('registrationNumber', e.target.value)}
                       className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
-                      placeholder="Business registration number"
+                      placeholder={dict?.settings?.registrationNumberPlaceholder || 'Business registration number'}
                     />
                   </div>
                 </div>
@@ -1236,7 +1236,7 @@ export default function SettingsPage() {
                     <button
                       onClick={async () => {
                         if (selectedCollections.length === 0) {
-                          setMessage({ type: 'error', text: 'Please select at least one collection to backup.' });
+                          setMessage({ type: 'error', text: dict?.common?.selectAtLeastOneCollection || 'Please select at least one collection to backup.' });
                           return;
                         }
 
@@ -1255,9 +1255,9 @@ export default function SettingsPage() {
                           if (!res.ok) {
                             const data = await res.json();
                             if (res.status === 401 || res.status === 403) {
-                              setMessage({ type: 'error', text: 'Unauthorized. Only admins can backup collections.' });
+                              setMessage({ type: 'error', text: dict?.common?.unauthorizedBackup || 'Unauthorized. Only admins can backup collections.' });
                             } else {
-                              setMessage({ type: 'error', text: data.error || 'Failed to create backup' });
+                              setMessage({ type: 'error', text: data.error || dict?.common?.failedToCreateBackup || 'Failed to create backup' });
                             }
                             return;
                           }
@@ -1276,7 +1276,7 @@ export default function SettingsPage() {
                           setMessage({ type: 'success', text: `Backup created successfully for ${selectedCollections.length} collection(s)` });
                         } catch (error) {
                           console.error('Error creating backup:', error);
-                          setMessage({ type: 'error', text: 'Failed to create backup. Please check your connection.' });
+                          setMessage({ type: 'error', text: dict?.common?.failedToCreateBackup || 'Failed to create backup. Please check your connection.' });
                         } finally {
                           setBackingUp(false);
                         }
@@ -1365,13 +1365,14 @@ export default function SettingsPage() {
                     <button
                       onClick={async () => {
                         if (!restoreFile) {
-                          setMessage({ type: 'error', text: 'Please select a backup file to restore.' });
+                          setMessage({ type: 'error', text: dict?.common?.selectBackupFile || 'Please select a backup file to restore.' });
                           return;
                         }
 
                         const clearExisting = (document.getElementById('clearExisting') as HTMLInputElement)?.checked || false;
 
                         if (clearExisting && !confirm(
+                          dict?.common?.clearExistingDataConfirm || 
                           'Are you sure you want to clear existing data before restoring?\n\n' +
                           'This will delete all current data in the collections being restored!'
                         )) {
@@ -1388,12 +1389,12 @@ export default function SettingsPage() {
                           try {
                             backupData = JSON.parse(fileContent);
                           } catch (e) {
-                            setMessage({ type: 'error', text: 'Invalid backup file format. Please select a valid JSON backup file.' });
+                            setMessage({ type: 'error', text: dict?.common?.invalidBackupFormat || 'Invalid backup file format. Please select a valid JSON backup file.' });
                             return;
                           }
 
                           if (!backupData.collections) {
-                            setMessage({ type: 'error', text: 'Invalid backup file. Missing collections data.' });
+                            setMessage({ type: 'error', text: dict?.common?.invalidBackupFile || 'Invalid backup file. Missing collections data.' });
                             return;
                           }
 
@@ -1416,14 +1417,14 @@ export default function SettingsPage() {
                             if (fileInput) fileInput.value = '';
                           } else {
                             if (res.status === 401 || res.status === 403) {
-                              setMessage({ type: 'error', text: 'Unauthorized. Only admins can restore collections.' });
+                              setMessage({ type: 'error', text: dict?.common?.unauthorizedRestore || 'Unauthorized. Only admins can restore collections.' });
                             } else {
-                              setMessage({ type: 'error', text: data.error || 'Failed to restore backup' });
+                              setMessage({ type: 'error', text: data.error || dict?.common?.failedToRestoreBackup || 'Failed to restore backup' });
                             }
                           }
                         } catch (error) {
                           console.error('Error restoring backup:', error);
-                          setMessage({ type: 'error', text: 'Failed to restore backup. Please check your connection.' });
+                          setMessage({ type: 'error', text: dict?.common?.failedToRestoreBackup || 'Failed to restore backup. Please check your connection.' });
                         } finally {
                           setRestoring(false);
                         }
@@ -1514,15 +1515,17 @@ export default function SettingsPage() {
                     <button
                       onClick={async () => {
                         if (selectedCollections.length === 0) {
-                          setMessage({ type: 'error', text: 'Please select at least one collection to reset.' });
+                          setMessage({ type: 'error', text: dict?.common?.selectAtLeastOneCollectionReset || 'Please select at least one collection to reset.' });
                           return;
                         }
 
-                        if (!confirm(
+                        const resetConfirmText = dict?.common?.resetCollectionsConfirm
+                          ?.replace('{count}', selectedCollections.length.toString())
+                          ?.replace('{collections}', selectedCollections.join(', ')) ||
                           `Are you sure you want to reset ${selectedCollections.length} collection(s)?\n\n` +
                           `Selected: ${selectedCollections.join(', ')}\n\n` +
-                          `This action cannot be undone!`
-                        )) {
+                          `This action cannot be undone!`;
+                        if (!confirm(resetConfirmText)) {
                           return;
                         }
 
@@ -1547,14 +1550,14 @@ export default function SettingsPage() {
                             setSelectedCollections([]);
                           } else {
                             if (res.status === 401 || res.status === 403) {
-                              setMessage({ type: 'error', text: 'Unauthorized. Only admins can reset collections.' });
+                              setMessage({ type: 'error', text: dict?.common?.unauthorizedReset || 'Unauthorized. Only admins can reset collections.' });
                             } else {
-                              setMessage({ type: 'error', text: data.error || 'Failed to reset collections' });
+                              setMessage({ type: 'error', text: data.error || dict?.common?.failedToResetCollections || 'Failed to reset collections' });
                             }
                           }
                         } catch (error) {
                           console.error('Error resetting collections:', error);
-                          setMessage({ type: 'error', text: 'Failed to reset collections. Please check your connection.' });
+                          setMessage({ type: 'error', text: dict?.common?.failedToResetCollections || 'Failed to reset collections. Please check your connection.' });
                         } finally {
                           setResetting(false);
                         }

@@ -4,6 +4,7 @@ import Branch from '@/models/Branch';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function GET(
   request: NextRequest,
@@ -14,9 +15,10 @@ export async function GET(
     await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
+    const t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
     const branch = await Branch.findOne({ _id: id, tenantId })
@@ -24,7 +26,7 @@ export async function GET(
       .lean();
 
     if (!branch) {
-      return NextResponse.json({ success: false, error: 'Branch not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.branchNotFound', 'Branch not found') }, { status: 404 });
     }
 
     return NextResponse.json({ success: true, data: branch });
@@ -78,9 +80,10 @@ export async function PUT(
 
     return NextResponse.json({ success: true, data: branch });
   } catch (error: any) {
+    const t = await getValidationTranslatorFromRequest(request);
     if (error.code === 11000) {
       return NextResponse.json(
-        { success: false, error: 'Branch with this code already exists' },
+        { success: false, error: t('validation.branchCodeExists', 'Branch with this code already exists') },
         { status: 400 }
       );
     }
@@ -98,14 +101,15 @@ export async function DELETE(
     await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
+    const t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
     const branch = await Branch.findOne({ _id: id, tenantId });
     if (!branch) {
-      return NextResponse.json({ success: false, error: 'Branch not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.branchNotFound', 'Branch not found') }, { status: 404 });
     }
 
     // Soft delete - set isActive to false
@@ -120,7 +124,7 @@ export async function DELETE(
       changes: { name: branch.name },
     });
 
-    return NextResponse.json({ success: true, message: 'Branch deactivated' });
+    return NextResponse.json({ success: true, message: t('validation.branchDeactivated', 'Branch deactivated') });
   } catch (error: any) {
     console.error('Error deleting branch:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });

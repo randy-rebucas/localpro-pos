@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { hardwareService, HardwareConfig, PrinterConfig } from '@/lib/hardware';
 import { useParams } from 'next/navigation';
+import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
 
 interface HardwareSettingsProps {
   onClose?: () => void;
@@ -19,6 +20,8 @@ export default function HardwareSettings({
 }: HardwareSettingsProps) {
   const params = useParams();
   const tenant = params.tenant as string;
+  const lang = (params?.lang as 'en' | 'es') || 'en';
+  const [dict, setDict] = useState<any>(null);
   const [internalConfig, setInternalConfig] = useState<HardwareConfig>({});
   const [loading, setLoading] = useState(false);
   const [devices, setDevices] = useState<{
@@ -26,6 +29,10 @@ export default function HardwareSettings({
     cameras: Array<{ deviceId: string; label: string }>;
   }>({ printers: [], cameras: [] });
   const [testing, setTesting] = useState<string | null>(null);
+
+  useEffect(() => {
+    getDictionaryClient(lang).then(setDict);
+  }, [lang]);
 
   // Use external config if provided, otherwise use internal state
   const config = externalConfig !== undefined ? externalConfig : internalConfig;
@@ -59,11 +66,11 @@ export default function HardwareSettings({
       const hardwareConfigKey = `hardware_config_${tenant}`;
       localStorage.setItem(hardwareConfigKey, JSON.stringify(config));
       await hardwareService.setConfig(config);
-      alert('Hardware settings saved successfully!');
+      alert(dict?.common?.hardwareSettingsSaved || 'Hardware settings saved successfully!');
       if (onClose) onClose();
     } catch (error) {
       console.error('Failed to save hardware config:', error);
-      alert('Failed to save hardware settings');
+      alert(dict?.common?.failedToSaveHardwareSettings || 'Failed to save hardware settings');
     } finally {
       setLoading(false);
     }
@@ -87,7 +94,7 @@ export default function HardwareSettings({
 
   const testPrinter = async () => {
     if (!config.printer) {
-      alert('Please configure a printer first');
+      alert(dict?.common?.configurePrinterFirst || 'Please configure a printer first');
       return;
     }
 
@@ -110,13 +117,13 @@ export default function HardwareSettings({
 
       const success = await hardwareService.printReceipt(testReceipt);
       if (success) {
-        alert('Test receipt sent successfully!');
+        alert(dict?.common?.testReceiptSent || 'Test receipt sent successfully!');
       } else {
-        alert('Failed to print test receipt');
+        alert(dict?.common?.failedToPrintTestReceipt || 'Failed to print test receipt');
       }
     } catch (error) {
       console.error('Print test error:', error);
-      alert('Failed to print test receipt');
+      alert(dict?.common?.failedToPrintTestReceipt || 'Failed to print test receipt');
     } finally {
       setTesting(null);
     }
@@ -127,13 +134,13 @@ export default function HardwareSettings({
     try {
       const success = await hardwareService.openCashDrawer();
       if (success) {
-        alert('Cash drawer opened!');
+        alert(dict?.common?.cashDrawerOpened || 'Cash drawer opened!');
       } else {
-        alert('Failed to open cash drawer. Make sure it is connected to the printer.');
+        alert(dict?.common?.failedToOpenCashDrawer || 'Failed to open cash drawer. Make sure it is connected to the printer.');
       }
     } catch (error) {
       console.error('Cash drawer test error:', error);
-      alert('Failed to open cash drawer');
+      alert(dict?.common?.failedToOpenCashDrawerShort || 'Failed to open cash drawer');
     } finally {
       setTesting(null);
     }
@@ -142,7 +149,7 @@ export default function HardwareSettings({
   return (
     <div className="bg-white border border-gray-300 p-6">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Hardware Settings</h2>
+        <h2 className="text-2xl font-bold text-gray-900">{dict?.components?.hardwareSettings?.title || 'Hardware Settings'}</h2>
         {onClose && (
           <button
             onClick={onClose}
@@ -158,11 +165,11 @@ export default function HardwareSettings({
       <div className="space-y-6">
         {/* Receipt Printer */}
         <div className="border-b border-gray-200 pb-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Receipt Printer</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">{dict?.components?.hardwareSettings?.receiptPrinter || 'Receipt Printer'}</h3>
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Printer Type
+                {dict?.components?.hardwareSettings?.printerType || 'Printer Type'}
               </label>
               <select
                 value={config.printer?.type || 'browser'}
@@ -174,10 +181,10 @@ export default function HardwareSettings({
                 })}
                 className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
               >
-                <option value="browser">Browser Print</option>
-                <option value="usb">USB Printer</option>
-                <option value="serial">Serial Printer</option>
-                <option value="network">Network Printer</option>
+                <option value="browser">{dict?.components?.hardwareSettings?.browserPrint || 'Browser Print'}</option>
+                <option value="usb">{dict?.components?.hardwareSettings?.usbPrinter || 'USB Printer'}</option>
+                <option value="serial">{dict?.components?.hardwareSettings?.serialPrinter || 'Serial Printer'}</option>
+                <option value="network">{dict?.components?.hardwareSettings?.networkPrinter || 'Network Printer'}</option>
               </select>
             </div>
 
@@ -185,7 +192,7 @@ export default function HardwareSettings({
               <>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    IP Address
+                    {dict?.components?.hardwareSettings?.ipAddress || 'IP Address'}
                   </label>
                   <input
                     type="text"
@@ -202,7 +209,7 @@ export default function HardwareSettings({
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Port
+                    {dict?.components?.hardwareSettings?.port || 'Port'}
                   </label>
                   <input
                     type="number"
@@ -224,14 +231,14 @@ export default function HardwareSettings({
               disabled={testing === 'printer'}
               className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
             >
-              {testing === 'printer' ? 'Testing...' : 'Test Print'}
+              {testing === 'printer' ? (dict?.components?.hardwareSettings?.testing || 'Testing...') : (dict?.components?.hardwareSettings?.testPrint || 'Test Print')}
             </button>
           </div>
         </div>
 
         {/* Cash Drawer */}
         <div className="border-b border-gray-200 pb-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Cash Drawer</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">{dict?.components?.hardwareSettings?.cashDrawer || 'Cash Drawer'}</h3>
           <div className="space-y-4">
             <label className="flex items-center">
               <input
@@ -245,7 +252,7 @@ export default function HardwareSettings({
                 })}
                 className="mr-2"
               />
-              <span className="text-sm text-gray-700">Enable Cash Drawer</span>
+              <span className="text-sm text-gray-700">{dict?.components?.hardwareSettings?.enableCashDrawer || 'Enable Cash Drawer'}</span>
             </label>
             {config.cashDrawer?.enabled && (
               <label className="flex items-center">
@@ -260,7 +267,7 @@ export default function HardwareSettings({
                   })}
                   className="mr-2"
                 />
-                <span className="text-sm text-gray-700">Connected to Printer</span>
+                <span className="text-sm text-gray-700">{dict?.components?.hardwareSettings?.connectedToPrinter || 'Connected to Printer'}</span>
               </label>
             )}
             {config.cashDrawer?.enabled && (
@@ -269,7 +276,7 @@ export default function HardwareSettings({
                 disabled={testing === 'drawer'}
                 className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
               >
-                {testing === 'drawer' ? 'Testing...' : 'Test Cash Drawer'}
+                {testing === 'drawer' ? (dict?.components?.hardwareSettings?.testing || 'Testing...') : (dict?.components?.hardwareSettings?.testCashDrawer || 'Test Cash Drawer')}
               </button>
             )}
           </div>
@@ -277,7 +284,7 @@ export default function HardwareSettings({
 
         {/* Barcode Scanner */}
         <div className="border-b border-gray-200 pb-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Barcode Scanner</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">{dict?.components?.hardwareSettings?.barcodeScanner || 'Barcode Scanner'}</h3>
           <div className="space-y-4">
             <label className="flex items-center">
               <input
@@ -291,17 +298,17 @@ export default function HardwareSettings({
                 })}
                 className="mr-2"
               />
-              <span className="text-sm text-gray-700">Enable Barcode Scanner (Keyboard Input)</span>
+              <span className="text-sm text-gray-700">{dict?.components?.hardwareSettings?.enableBarcodeScanner || 'Enable Barcode Scanner (Keyboard Input)'}</span>
             </label>
             <p className="text-xs text-gray-500">
-              Most USB barcode scanners work as keyboard input. Just scan a barcode to add products to cart.
+              {dict?.components?.hardwareSettings?.barcodeScannerHint || 'Most USB barcode scanners work as keyboard input. Just scan a barcode to add products to cart.'}
             </p>
           </div>
         </div>
 
         {/* QR Code Reader */}
         <div className="border-b border-gray-200 pb-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">QR Code Reader</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">{dict?.components?.hardwareSettings?.qrCodeReader || 'QR Code Reader'}</h3>
           <div className="space-y-4">
             <label className="flex items-center">
               <input
@@ -315,12 +322,12 @@ export default function HardwareSettings({
                 })}
                 className="mr-2"
               />
-              <span className="text-sm text-gray-700">Enable QR Code Reader</span>
+              <span className="text-sm text-gray-700">{dict?.components?.hardwareSettings?.enableQRCodeReader || 'Enable QR Code Reader'}</span>
             </label>
             {config.qrReader?.enabled && devices.cameras.length > 0 && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Camera
+                  {dict?.components?.hardwareSettings?.camera || 'Camera'}
                 </label>
                 <select
                   value={config.qrReader?.cameraId || ''}
@@ -332,7 +339,7 @@ export default function HardwareSettings({
                   })}
                   className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                 >
-                  <option value="">Default Camera</option>
+                  <option value="">{dict?.components?.hardwareSettings?.defaultCamera || 'Default Camera'}</option>
                   {devices.cameras.map((camera) => (
                     <option key={camera.deviceId} value={camera.deviceId}>
                       {camera.label}
@@ -346,7 +353,7 @@ export default function HardwareSettings({
 
         {/* Touchscreen */}
         <div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Touchscreen Display</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">{dict?.components?.hardwareSettings?.touchscreenDisplay || 'Touchscreen Display'}</h3>
           <div className="space-y-4">
             <label className="flex items-center">
               <input
@@ -359,12 +366,12 @@ export default function HardwareSettings({
                 })}
                 className="mr-2"
               />
-              <span className="text-sm text-gray-700">Enable Touchscreen Optimizations</span>
+              <span className="text-sm text-gray-700">{dict?.components?.hardwareSettings?.enableTouchscreenOptimizations || 'Enable Touchscreen Optimizations'}</span>
             </label>
             <p className="text-xs text-gray-500">
               {hardwareService.isTouchscreen() 
-                ? 'Touchscreen detected. Optimizations will be applied.'
-                : 'No touchscreen detected. This device may not support touch input.'}
+                ? (dict?.components?.hardwareSettings?.touchscreenDetected || 'Touchscreen detected. Optimizations will be applied.')
+                : (dict?.components?.hardwareSettings?.noTouchscreenDetected || 'No touchscreen detected. This device may not support touch input.')}
             </p>
           </div>
         </div>
@@ -377,7 +384,7 @@ export default function HardwareSettings({
               onClick={onClose}
               className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
             >
-              Cancel
+              {dict?.common?.cancel || 'Cancel'}
             </button>
           )}
           <button
@@ -385,7 +392,7 @@ export default function HardwareSettings({
             disabled={loading}
             className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
           >
-            {loading ? 'Saving...' : 'Save Settings'}
+            {loading ? (dict?.components?.hardwareSettings?.saving || 'Saving...') : (dict?.components?.hardwareSettings?.saveSettings || 'Save Settings')}
           </button>
         </div>
       )}

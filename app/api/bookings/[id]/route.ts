@@ -6,6 +6,7 @@ import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireRole, getCurrentUser } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { sendBookingConfirmation, sendBookingCancellation, sendBookingReminder } from '@/lib/notifications';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 /**
  * GET - Get a single booking by ID
@@ -17,9 +18,10 @@ export async function GET(
   try {
     await connectDB();
     const user = await getCurrentUser(request);
+    const t = await getValidationTranslatorFromRequest(request);
     if (!user) {
       return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
+        { success: false, error: t('validation.unauthorized', 'Unauthorized') },
         { status: 401 }
       );
     }
@@ -27,7 +29,7 @@ export async function GET(
     const tenantId = await getTenantIdFromRequest(request);
     if (!tenantId) {
       return NextResponse.json(
-        { success: false, error: 'Tenant not found' },
+        { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
         { status: 404 }
       );
     }
@@ -39,7 +41,7 @@ export async function GET(
 
     if (!booking) {
       return NextResponse.json(
-        { success: false, error: 'Booking not found' },
+        { success: false, error: t('validation.bookingNotFound', 'Booking not found') },
         { status: 404 }
       );
     }
@@ -47,8 +49,9 @@ export async function GET(
     return NextResponse.json({ success: true, data: booking });
   } catch (error: any) {
     console.error('Get booking error:', error);
+    const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to fetch booking' },
+      { success: false, error: error.message || t('validation.failedToFetchBooking', 'Failed to fetch booking') },
       { status: 500 }
     );
   }
@@ -64,9 +67,10 @@ export async function PUT(
   try {
     await connectDB();
     const user = await getCurrentUser(request);
+    const t = await getValidationTranslatorFromRequest(request);
     if (!user) {
       return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
+        { success: false, error: t('validation.unauthorized', 'Unauthorized') },
         { status: 401 }
       );
     }
@@ -76,7 +80,7 @@ export async function PUT(
     
     if (!tenantId) {
       return NextResponse.json(
-        { success: false, error: 'Tenant not found' },
+        { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
         { status: 404 }
       );
     }
@@ -86,7 +90,7 @@ export async function PUT(
 
     if (!existingBooking) {
       return NextResponse.json(
-        { success: false, error: 'Booking not found' },
+        { success: false, error: t('validation.bookingNotFound', 'Booking not found') },
         { status: 404 }
       );
     }
@@ -146,7 +150,7 @@ export async function PUT(
           return NextResponse.json(
             {
               success: false,
-              error: 'Staff member already has a booking at this time',
+              error: t('validation.staffBookingConflict', 'Staff member already has a booking at this time'),
               conflicts: staffConflicts,
             },
             { status: 409 }
@@ -160,7 +164,7 @@ export async function PUT(
       const staff = await User.findOne({ _id: staffId, tenantId, isActive: true });
       if (!staff) {
         return NextResponse.json(
-          { success: false, error: 'Staff member not found or inactive' },
+          { success: false, error: t('validation.staffNotFound', 'Staff member not found or inactive') },
           { status: 404 }
         );
       }
@@ -232,8 +236,9 @@ export async function PUT(
     return NextResponse.json({ success: true, data: updatedBooking });
   } catch (error: any) {
     console.error('Update booking error:', error);
+    const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to update booking' },
+      { success: false, error: error.message || t('validation.failedToUpdateBooking', 'Failed to update booking') },
       { status: 500 }
     );
   }
@@ -249,9 +254,10 @@ export async function DELETE(
   try {
     await connectDB();
     const user = await getCurrentUser(request);
+    const t = await getValidationTranslatorFromRequest(request);
     if (!user) {
       return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
+        { success: false, error: t('validation.unauthorized', 'Unauthorized') },
         { status: 401 }
       );
     }
@@ -261,7 +267,7 @@ export async function DELETE(
     
     if (!tenantId) {
       return NextResponse.json(
-        { success: false, error: 'Tenant not found' },
+        { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
         { status: 404 }
       );
     }
@@ -271,7 +277,7 @@ export async function DELETE(
 
     if (!booking) {
       return NextResponse.json(
-        { success: false, error: 'Booking not found' },
+        { success: false, error: t('validation.bookingNotFound', 'Booking not found') },
         { status: 404 }
       );
     }
@@ -305,11 +311,12 @@ export async function DELETE(
       changes: { customerName: booking.customerName, serviceName: booking.serviceName },
     });
 
-    return NextResponse.json({ success: true, message: 'Booking deleted successfully' });
+    return NextResponse.json({ success: true, message: t('validation.bookingDeleted', 'Booking deleted successfully') });
   } catch (error: any) {
     console.error('Delete booking error:', error);
+    const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to delete booking' },
+      { success: false, error: error.message || t('validation.failedToDeleteBooking', 'Failed to delete booking') },
       { status: 500 }
     );
   }

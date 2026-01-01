@@ -61,11 +61,11 @@ export default function BranchesPage() {
         setBranches(data.data);
         setMessage(null);
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to fetch branches' });
+        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchBranches || 'Failed to fetch branches' });
       }
     } catch (error) {
       console.error('Error fetching branches:', error);
-      setMessage({ type: 'error', text: 'Failed to fetch branches' });
+      setMessage({ type: 'error', text: dict?.common?.failedToFetchBranches || 'Failed to fetch branches' });
     } finally {
       setLoading(false);
     }
@@ -86,18 +86,19 @@ export default function BranchesPage() {
   };
 
   const handleDeleteBranch = async (branchId: string) => {
-    if (!confirm('Are you sure you want to deactivate this branch?')) return;
+    if (!dict) return;
+    if (!confirm(dict.common?.deactivateBranchConfirm || dict.admin?.deactivateBranchConfirm || 'Are you sure you want to deactivate this branch?')) return;
     try {
       const res = await fetch(`/api/branches/${branchId}`, { method: 'DELETE', credentials: 'include' });
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: 'Branch deactivated successfully' });
+        setMessage({ type: 'success', text: dict?.common?.branchDeactivatedSuccess || 'Branch deactivated successfully' });
         fetchBranches();
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to deactivate branch' });
+        setMessage({ type: 'error', text: data.error || dict?.common?.failedToDeactivateBranch || 'Failed to deactivate branch' });
       }
     } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to deactivate branch' });
+      setMessage({ type: 'error', text: dict?.common?.failedToDeactivateBranch || 'Failed to deactivate branch' });
     }
   };
 
@@ -111,13 +112,13 @@ export default function BranchesPage() {
       });
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: `Branch ${!branch.isActive ? 'activated' : 'deactivated'} successfully` });
+        setMessage({ type: 'success', text: `Branch ${!branch.isActive ? (dict?.admin?.activated || 'activated') : (dict?.admin?.deactivated || 'deactivated')} ${dict?.admin?.successfully || 'successfully'}` });
         fetchBranches();
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to update branch' });
+        setMessage({ type: 'error', text: data.error || dict?.common?.failedToUpdateBranch || 'Failed to update branch' });
       }
     } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to update branch' });
+      setMessage({ type: 'error', text: dict?.common?.failedToUpdateBranch || 'Failed to update branch' });
     }
   };
 
@@ -126,7 +127,7 @@ export default function BranchesPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
     );
@@ -358,7 +359,7 @@ function BranchModal({
                   value={formData.code}
                   onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
-                  placeholder="BR001"
+                  placeholder={dict?.admin?.branchCodePlaceholder || 'BR001'}
                 />
               </div>
             </div>
@@ -372,35 +373,35 @@ function BranchModal({
                   value={formData.address.street}
                   onChange={(e) => setFormData({ ...formData, address: { ...formData.address, street: e.target.value } })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
-                  placeholder="Street"
+                  placeholder={dict?.admin?.streetPlaceholder || 'Street'}
                 />
                 <input
                   type="text"
                   value={formData.address.city}
                   onChange={(e) => setFormData({ ...formData, address: { ...formData.address, city: e.target.value } })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
-                  placeholder="City"
+                  placeholder={dict?.admin?.cityPlaceholder || 'City'}
                 />
                 <input
                   type="text"
                   value={formData.address.state}
                   onChange={(e) => setFormData({ ...formData, address: { ...formData.address, state: e.target.value } })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
-                  placeholder="State"
+                  placeholder={dict?.admin?.statePlaceholder || 'State'}
                 />
                 <input
                   type="text"
                   value={formData.address.zipCode}
                   onChange={(e) => setFormData({ ...formData, address: { ...formData.address, zipCode: e.target.value } })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
-                  placeholder="ZIP Code"
+                  placeholder={dict?.admin?.zipPlaceholder || 'ZIP Code'}
                 />
                 <input
                   type="text"
                   value={formData.address.country}
                   onChange={(e) => setFormData({ ...formData, address: { ...formData.address, country: e.target.value } })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
-                  placeholder="Country"
+                  placeholder={dict?.admin?.countryPlaceholder || 'Country'}
                 />
               </div>
             </div>

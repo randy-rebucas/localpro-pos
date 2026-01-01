@@ -4,6 +4,7 @@ import Booking from '@/models/Booking';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireRole, getCurrentUser } from '@/lib/auth';
 import { sendBookingReminder } from '@/lib/notifications';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 /**
  * POST - Send reminders for upcoming bookings
@@ -15,9 +16,10 @@ export async function POST(request: NextRequest) {
   try {
     await connectDB();
     const user = await getCurrentUser(request);
+    const t = await getValidationTranslatorFromRequest(request);
     if (!user) {
       return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
+        { success: false, error: t('validation.unauthorized', 'Unauthorized') },
         { status: 401 }
       );
     }
@@ -29,7 +31,7 @@ export async function POST(request: NextRequest) {
     
     if (!tenantId) {
       return NextResponse.json(
-        { success: false, error: 'Tenant not found' },
+        { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
         { status: 404 }
       );
     }
@@ -101,8 +103,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('Send reminders error:', error);
+    const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to send reminders' },
+      { success: false, error: error.message || t('validation.failedToSendReminders', 'Failed to send reminders') },
       { status: 500 }
     );
   }

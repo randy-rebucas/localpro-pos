@@ -3,17 +3,19 @@ import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 import { generateToken } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
     const body = await request.json();
     const { qrToken, tenantSlug } = body;
+    const t = await getValidationTranslatorFromRequest(request);
 
     // Validation
     if (!qrToken) {
       return NextResponse.json(
-        { success: false, error: 'QR token is required' },
+        { success: false, error: t('validation.qrTokenRequired', 'QR token is required') },
         { status: 400 }
       );
     }
@@ -24,7 +26,7 @@ export async function POST(request: NextRequest) {
     
     if (!tenant) {
       return NextResponse.json(
-        { success: false, error: 'Tenant not found or inactive' },
+        { success: false, error: t('validation.tenantNotFoundOrInactive', 'Tenant not found or inactive') },
         { status: 404 }
       );
     }
@@ -44,7 +46,7 @@ export async function POST(request: NextRequest) {
         metadata: { success: false, reason: 'invalid_qr_token', method: 'qr' },
       });
       return NextResponse.json(
-        { success: false, error: 'Invalid QR code' },
+        { success: false, error: t('validation.invalidQrCode', 'Invalid QR code') },
         { status: 401 }
       );
     }
@@ -94,7 +96,7 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('QR login error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Login failed' },
+      { success: false, error: error.message || t('validation.loginFailed', 'Login failed') },
       { status: 500 }
     );
   }

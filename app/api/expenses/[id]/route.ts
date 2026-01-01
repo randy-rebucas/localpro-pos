@@ -4,6 +4,7 @@ import Expense from '@/models/Expense';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function GET(
   request: NextRequest,
@@ -14,9 +15,10 @@ export async function GET(
     await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
+    const t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
     const expense = await Expense.findOne({ _id: id, tenantId })
@@ -24,7 +26,7 @@ export async function GET(
       .lean();
 
     if (!expense) {
-      return NextResponse.json({ success: false, error: 'Expense not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.expenseNotFound', 'Expense not found') }, { status: 404 });
     }
 
     return NextResponse.json({ success: true, data: expense });
@@ -91,14 +93,15 @@ export async function DELETE(
     await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
+    const t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
     const expense = await Expense.findOne({ _id: id, tenantId });
     if (!expense) {
-      return NextResponse.json({ success: false, error: 'Expense not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.expenseNotFound', 'Expense not found') }, { status: 404 });
     }
 
     const oldData = expense.toObject();
@@ -112,7 +115,7 @@ export async function DELETE(
       changes: { name: expense.name, description: expense.description, amount: expense.amount },
     });
 
-    return NextResponse.json({ success: true, message: 'Expense deleted successfully' });
+    return NextResponse.json({ success: true, message: t('validation.expenseDeleted', 'Expense deleted successfully') });
   } catch (error: any) {
     console.error('Error deleting expense:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });

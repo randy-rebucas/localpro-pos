@@ -66,11 +66,11 @@ export default function ExpensesPage() {
   // Validate date range
   const handleDateFilterChange = (field: 'startDate' | 'endDate', value: string) => {
     if (field === 'endDate' && filters.startDate && value && new Date(filters.startDate) > new Date(value)) {
-      setMessage({ type: 'error', text: 'End date must be after start date' });
+      setMessage({ type: 'error', text: dict?.common?.endDateAfterStartDate || 'End date must be after start date' });
       return;
     }
     if (field === 'startDate' && filters.endDate && value && new Date(value) > new Date(filters.endDate)) {
-      setMessage({ type: 'error', text: 'Start date must be before end date' });
+      setMessage({ type: 'error', text: dict?.common?.startDateBeforeEndDate || 'Start date must be before end date' });
       return;
     }
     setFilters({ ...filters, [field]: value });
@@ -93,11 +93,11 @@ export default function ExpensesPage() {
         setExpenseNames(uniqueNames);
         setMessage(null);
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to fetch expenses' });
+        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchExpenses || 'Failed to fetch expenses' });
       }
     } catch (error) {
       console.error('Error fetching expenses:', error);
-      setMessage({ type: 'error', text: 'Failed to fetch expenses' });
+      setMessage({ type: 'error', text: dict?.common?.failedToFetchExpenses || 'Failed to fetch expenses' });
     } finally {
       setLoading(false);
     }
@@ -106,19 +106,20 @@ export default function ExpensesPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const handleDeleteExpense = async (expenseId: string) => {
-    if (!confirm('Are you sure you want to delete this expense?')) return;
+    if (!dict) return;
+    if (!confirm(dict.common?.deleteExpenseConfirm || dict.admin?.deleteExpenseConfirm || 'Are you sure you want to delete this expense?')) return;
     setDeletingId(expenseId);
     try {
       const res = await fetch(`/api/expenses/${expenseId}`, { method: 'DELETE', credentials: 'include' });
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: data.message || 'Expense deleted successfully' });
+        setMessage({ type: 'success', text: data.message || dict?.admin?.expenseDeletedSuccess || 'Expense deleted successfully' });
         fetchExpenses();
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to delete expense' });
+        setMessage({ type: 'error', text: data.error || dict?.admin?.failedToDeleteExpense || 'Failed to delete expense' });
       }
     } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to delete expense' });
+      setMessage({ type: 'error', text: dict?.admin?.failedToDeleteExpense || 'Failed to delete expense' });
     } finally {
       setDeletingId(null);
     }
@@ -131,7 +132,7 @@ export default function ExpensesPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
     );
@@ -336,7 +337,7 @@ export default function ExpensesPage() {
               fetchExpenses();
               setShowExpenseModal(false);
               setEditingExpense(null);
-              setMessage({ type: 'success', text: editingExpense ? 'Expense updated successfully' : 'Expense created successfully' });
+              setMessage({ type: 'success', text: editingExpense ? (dict?.common?.expenseUpdatedSuccess || 'Expense updated successfully') : (dict?.common?.expenseCreatedSuccess || 'Expense created successfully') });
             }}
             dict={dict}
           />
@@ -515,7 +516,7 @@ function ExpenseModal({
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   rows={2}
-                  placeholder="Enter expense description"
+                  placeholder={dict?.admin?.expenseDescriptionPlaceholder || 'Enter expense description'}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                 />
             </div>
@@ -557,7 +558,7 @@ function ExpenseModal({
                 type="text"
                 value={formData.receipt}
                 onChange={(e) => setFormData({ ...formData, receipt: e.target.value })}
-                placeholder="Receipt URL or reference"
+                placeholder={dict?.admin?.receiptURLPlaceholder || 'Receipt URL or reference'}
                 className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               />
             </div>

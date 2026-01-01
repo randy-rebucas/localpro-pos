@@ -11,6 +11,7 @@ import { generateReceiptNumber } from '@/lib/receipt';
 import { updateStock, updateBundleStock, getProductStock } from '@/lib/stock';
 import ProductBundle from '@/models/ProductBundle';
 import StockMovement from '@/models/StockMovement';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function GET(request: NextRequest) {
   try {
@@ -61,7 +62,8 @@ export async function POST(request: NextRequest) {
     }
     
     const body = await request.json();
-    const { data, errors } = validateAndSanitize(body, validateTransaction);
+    const t = await getValidationTranslatorFromRequest(request);
+    const { data, errors } = validateAndSanitize(body, validateTransaction, t);
 
     if (errors.length > 0) {
       return NextResponse.json(
@@ -83,7 +85,7 @@ export async function POST(request: NextRequest) {
       if (bundleId) {
         const bundle = await ProductBundle.findOne({ _id: bundleId, tenantId, isActive: true });
         if (!bundle) {
-          return NextResponse.json({ success: false, error: `Bundle ${bundleId} not found` }, { status: 404 });
+          return NextResponse.json({ success: false, error: t('validation.bundleNotFound', 'Bundle {bundleId} not found').replace('{bundleId}', bundleId) }, { status: 404 });
         }
 
         // Check stock for all bundle items - but respect allowOutOfStockSales and trackInventory
@@ -111,7 +113,10 @@ export async function POST(request: NextRequest) {
               return NextResponse.json(
                 {
                   success: false,
-                  error: `Insufficient stock for bundle item ${bundleItem.productName}. Available: ${availableStock}, Required: ${requiredStock}`,
+                  error: t('validation.insufficientStockBundle', 'Insufficient stock for bundle item {productName}. Available: {available}, Required: {required}', bundleItem.productName, availableStock, requiredStock)
+                    .replace('{productName}', bundleItem.productName)
+                    .replace('{available}', availableStock.toString())
+                    .replace('{required}', requiredStock.toString()),
                 },
                 { status: 400 }
               );
@@ -135,7 +140,7 @@ export async function POST(request: NextRequest) {
       else {
         const product = await Product.findOne({ _id: productId, tenantId });
         if (!product) {
-          return NextResponse.json({ success: false, error: `Product ${productId} not found` }, { status: 404 });
+          return NextResponse.json({ success: false, error: t('validation.productNotFoundInTransaction', 'Product {productId} not found', productId).replace('{productId}', productId) }, { status: 404 });
         }
 
         // Check stock (considering variations and branches) - but respect allowOutOfStockSales and trackInventory
@@ -152,7 +157,10 @@ export async function POST(request: NextRequest) {
             return NextResponse.json(
               {
                 success: false,
-                error: `Insufficient stock for ${product.name}. Available: ${availableStock}, Requested: ${quantity}`,
+                error: t('validation.insufficientStockProduct', 'Insufficient stock for {productName}. Available: {available}, Requested: {requested}', product.name, availableStock, quantity)
+                  .replace('{productName}', product.name)
+                  .replace('{available}', availableStock.toString())
+                  .replace('{requested}', quantity.toString()),
               },
               { status: 400 }
             );
@@ -200,7 +208,7 @@ export async function POST(request: NextRequest) {
 
       if (!discount) {
         return NextResponse.json(
-          { success: false, error: 'Invalid or inactive discount code' },
+          { success: false, error: t('validation.invalidDiscountCode', 'Invalid or inactive discount code') },
           { status: 400 }
         );
       }
@@ -209,7 +217,7 @@ export async function POST(request: NextRequest) {
       const now = new Date();
       if (now < discount.validFrom || now > discount.validUntil) {
         return NextResponse.json(
-          { success: false, error: 'Discount code is not valid at this time' },
+          { success: false, error: t('validation.discountCodeNotValid', 'Discount code is not valid at this time') },
           { status: 400 }
         );
       }
@@ -217,7 +225,7 @@ export async function POST(request: NextRequest) {
       // Check usage limit
       if (discount.usageLimit && discount.usageCount >= discount.usageLimit) {
         return NextResponse.json(
-          { success: false, error: 'Discount code has reached its usage limit' },
+          { success: false, error: t('validation.discountCodeUsageLimit', 'Discount code has reached its usage limit') },
           { status: 400 }
         );
       }
@@ -227,7 +235,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           { 
             success: false, 
-            error: `Minimum purchase amount of ${discount.minPurchaseAmount} required` 
+            error: t('validation.minimumPurchaseAmount', 'Minimum purchase amount of {amount} required', discount.minPurchaseAmount).replace('{amount}', discount.minPurchaseAmount.toString())
           },
           { status: 400 }
         );
@@ -258,7 +266,7 @@ export async function POST(request: NextRequest) {
     if (paymentMethod === 'cash' && cashReceived) {
       change = cashReceived - total;
       if (change < 0) {
-        return NextResponse.json({ success: false, error: 'Insufficient cash received' }, { status: 400 });
+        return NextResponse.json({ success: false, error: t('validation.insufficientCashReceived', 'Insufficient cash received') }, { status: 400 });
       }
     }
 

@@ -319,7 +319,7 @@ export default function ReportsPage() {
           {/* Tabs */}
           <div className="bg-white border border-gray-300 overflow-hidden mb-6">
             <div className="border-b border-gray-200">
-              <nav className="flex overflow-x-auto" aria-label="Tabs">
+              <nav className="flex overflow-x-auto" aria-label={dict?.common?.tabs || 'Tabs'}>
                 {(['sales', 'products', 'vat', 'profit-loss', 'cash-drawer'] as const).map((tab) => (
                   <button
                     key={tab}

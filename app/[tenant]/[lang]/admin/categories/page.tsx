@@ -38,29 +38,30 @@ export default function CategoriesPage() {
         setCategories(data.data);
         setMessage(null);
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to fetch categories' });
+        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchCategories || 'Failed to fetch categories' });
       }
     } catch (error) {
       console.error('Error fetching categories:', error);
-      setMessage({ type: 'error', text: 'Failed to fetch categories' });
+      setMessage({ type: 'error', text: dict?.common?.failedToFetchCategories || 'Failed to fetch categories' });
     } finally {
       setLoading(false);
     }
   };
 
   const handleDeleteCategory = async (categoryId: string) => {
-    if (!confirm('Are you sure you want to delete this category?')) return;
+    if (!dict) return;
+    if (!confirm(dict.common?.deleteCategoryConfirm || dict.admin?.deleteCategoryConfirm || 'Are you sure you want to delete this category?')) return;
     try {
       const res = await fetch(`/api/categories/${categoryId}`, { method: 'DELETE', credentials: 'include' });
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: 'Category deleted successfully' });
+        setMessage({ type: 'success', text: dict?.common?.categoryDeletedSuccess || 'Category deleted successfully' });
         fetchCategories();
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to delete category' });
+        setMessage({ type: 'error', text: data.error || dict?.common?.failedToDeleteCategory || 'Failed to delete category' });
       }
     } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to delete category' });
+      setMessage({ type: 'error', text: dict?.common?.failedToDeleteCategory || 'Failed to delete category' });
     }
   };
 
@@ -74,13 +75,13 @@ export default function CategoriesPage() {
       });
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: `Category ${!category.isActive ? 'activated' : 'deactivated'} successfully` });
+        setMessage({ type: 'success', text: `Category ${!category.isActive ? (dict?.admin?.activated || 'activated') : (dict?.admin?.deactivated || 'deactivated')} ${dict?.admin?.successfully || 'successfully'}` });
         fetchCategories();
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to update category' });
+        setMessage({ type: 'error', text: data.error || dict?.common?.failedToUpdateCategory || 'Failed to update category' });
       }
     } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to update category' });
+      setMessage({ type: 'error', text: dict?.common?.failedToUpdateCategory || 'Failed to update category' });
     }
   };
 
@@ -89,7 +90,7 @@ export default function CategoriesPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
     );

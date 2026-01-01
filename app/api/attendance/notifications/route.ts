@@ -4,6 +4,7 @@ import Attendance from '@/models/Attendance';
 import User from '@/models/User';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { sendEmail } from '@/lib/notifications';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 /**
  * Get attendance notifications - late arrivals, missing clock-outs
@@ -12,9 +13,10 @@ export async function GET(request: NextRequest) {
   try {
     await connectDB();
     const tenantId = await getTenantIdFromRequest(request);
+    const t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
     // Get tenant settings for notification defaults
@@ -130,9 +132,10 @@ export async function POST(request: NextRequest) {
   try {
     await connectDB();
     const tenantId = await getTenantIdFromRequest(request);
+    const t = await getValidationTranslatorFromRequest(request);
     
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
     
     const body = await request.json();
@@ -140,7 +143,7 @@ export async function POST(request: NextRequest) {
     
     if (!notifications || !Array.isArray(notifications) || notifications.length === 0) {
       return NextResponse.json(
-        { success: false, error: 'Notifications array is required' },
+        { success: false, error: t('validation.notificationsArrayRequired', 'Notifications array is required') },
         { status: 400 }
       );
     }

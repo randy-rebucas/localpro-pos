@@ -6,6 +6,7 @@ import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth, requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { updateStock } from '@/lib/stock';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -13,9 +14,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
+    const t = await getValidationTranslatorFromRequest(request);
     
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
     
     const transaction = await Transaction.findOne({ _id: id, tenantId })
@@ -24,13 +26,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       .lean();
     
     if (!transaction) {
-      return NextResponse.json({ success: false, error: 'Transaction not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.transactionNotFound', 'Transaction not found') }, { status: 404 });
     }
     
     return NextResponse.json({ success: true, data: transaction });
   } catch (error: any) {
+    const t = await getValidationTranslatorFromRequest(request);
     if (error.message === 'Unauthorized') {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ success: false, error: t('validation.unauthorized', 'Unauthorized') }, { status: 401 });
     }
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -43,14 +46,15 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
     const body = await request.json();
+    const t = await getValidationTranslatorFromRequest(request);
     
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
     const transaction = await Transaction.findOne({ _id: id, tenantId });
     if (!transaction) {
-      return NextResponse.json({ success: false, error: 'Transaction not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.transactionNotFound', 'Transaction not found') }, { status: 404 });
     }
 
     // Only allow status updates

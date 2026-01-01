@@ -4,6 +4,7 @@ import Discount from '@/models/Discount';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -11,14 +12,15 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     await requireRole(request, ['admin', 'manager']);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
+    const t = await getValidationTranslatorFromRequest(request);
     
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
     const discount = await Discount.findOne({ _id: id, tenantId });
     if (!discount) {
-      return NextResponse.json({ success: false, error: 'Discount not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.discountNotFound', 'Discount not found') }, { status: 404 });
     }
 
     const body = await request.json();
@@ -29,13 +31,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (body.value !== undefined) {
       if (discount.type === 'percentage' && (body.value < 0 || body.value > 100)) {
         return NextResponse.json(
-          { success: false, error: 'Percentage discount must be between 0 and 100' },
+          { success: false, error: t('validation.percentageDiscountRange', 'Percentage discount must be between 0 and 100') },
           { status: 400 }
         );
       }
       if (discount.type === 'fixed' && body.value < 0) {
         return NextResponse.json(
-          { success: false, error: 'Fixed discount must be positive' },
+          { success: false, error: t('validation.fixedDiscountPositive', 'Fixed discount must be positive') },
           { status: 400 }
         );
       }
@@ -71,14 +73,15 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     await requireRole(request, ['admin', 'manager']);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
+    const t = await getValidationTranslatorFromRequest(request);
     
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
     const discount = await Discount.findOne({ _id: id, tenantId });
     if (!discount) {
-      return NextResponse.json({ success: false, error: 'Discount not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.discountNotFound', 'Discount not found') }, { status: 404 });
     }
 
     await discount.deleteOne();

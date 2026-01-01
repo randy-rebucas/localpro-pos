@@ -5,6 +5,7 @@ import User from '@/models/User';
 import { validateEmail, validatePassword } from '@/lib/validation';
 import { isPinDuplicate } from '@/lib/pin-validation';
 import { createAuditLog, AuditActions } from '@/lib/audit';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 /**
  * GET - Get current user's profile
@@ -70,6 +71,9 @@ export async function PUT(request: NextRequest) {
     const body = await request.json();
     const { email, password, name, currentPassword, pin, currentPin } = body;
 
+    // Get translation function
+    const t = await getValidationTranslatorFromRequest(request);
+
     const oldUser = await User.findById(currentUser.userId).lean();
     if (!oldUser || !oldUser.isActive) {
       return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
@@ -81,7 +85,7 @@ export async function PUT(request: NextRequest) {
     if (email !== undefined && email !== oldUser.email) {
       if (!validateEmail(email)) {
         return NextResponse.json(
-          { success: false, error: 'Invalid email format' },
+          { success: false, error: t('validation.invalidEmailFormat', 'Invalid email format') },
           { status: 400 }
         );
       }
@@ -91,7 +95,7 @@ export async function PUT(request: NextRequest) {
     if (name !== undefined && name !== oldUser.name) {
       if (!name.trim()) {
         return NextResponse.json(
-          { success: false, error: 'Name is required' },
+          { success: false, error: t('validation.nameRequired', 'Name is required') },
           { status: 400 }
         );
       }
@@ -102,7 +106,7 @@ export async function PUT(request: NextRequest) {
     if (password !== undefined && password) {
       if (!currentPassword) {
         return NextResponse.json(
-          { success: false, error: 'Current password is required to change password' },
+          { success: false, error: t('validation.currentPasswordRequired', 'Current password is required to change password') },
           { status: 400 }
         );
       }
@@ -116,12 +120,12 @@ export async function PUT(request: NextRequest) {
       const isPasswordValid = await userDoc.comparePassword(currentPassword);
       if (!isPasswordValid) {
         return NextResponse.json(
-          { success: false, error: 'Current password is incorrect' },
+          { success: false, error: t('validation.currentPasswordIncorrect', 'Current password is incorrect') },
           { status: 400 }
         );
       }
 
-      const passwordValidation = validatePassword(password);
+      const passwordValidation = validatePassword(password, t);
       if (!passwordValidation.valid) {
         return NextResponse.json(
           { success: false, error: 'Password validation failed', errors: passwordValidation.errors },
@@ -179,7 +183,7 @@ export async function PUT(request: NextRequest) {
 
     if (Object.keys(updateData).length === 0) {
       return NextResponse.json(
-        { success: false, error: 'No changes provided' },
+        { success: false, error: t('validation.noChanges', 'No changes provided') },
         { status: 400 }
       );
     }
@@ -235,7 +239,7 @@ export async function PUT(request: NextRequest) {
   } catch (error: any) {
     if (error.code === 11000) {
       return NextResponse.json(
-        { success: false, error: 'User with this email already exists' },
+        { success: false, error: t('validation.emailExists', 'User with this email already exists') },
         { status: 400 }
       );
     }

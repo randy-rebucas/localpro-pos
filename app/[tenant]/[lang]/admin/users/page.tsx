@@ -47,29 +47,30 @@ export default function UsersPage() {
         setUsers(data.data);
         setMessage(null);
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to fetch users' });
+        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchUsers || 'Failed to fetch users' });
       }
     } catch (error) {
       console.error('Error fetching users:', error);
-      setMessage({ type: 'error', text: 'Failed to fetch users' });
+      setMessage({ type: 'error', text: dict?.common?.failedToFetchUsers || 'Failed to fetch users' });
     } finally {
       setLoading(false);
     }
   };
 
   const handleDeleteUser = async (userId: string) => {
-    if (!confirm('Are you sure you want to delete this user?')) return;
+    if (!dict) return;
+    if (!confirm(dict.common?.deleteUserConfirm || 'Are you sure you want to delete this user?')) return;
     try {
       const res = await fetch(`/api/users/${userId}`, { method: 'DELETE', credentials: 'include' });
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: 'User deleted successfully' });
+        setMessage({ type: 'success', text: dict?.admin?.userDeletedSuccess || dict?.common?.userDeletedSuccess || 'User deleted successfully' });
         fetchUsers();
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to delete user' });
+        setMessage({ type: 'error', text: data.error || dict?.admin?.failedToDeleteUser || dict?.common?.failedToDeleteUser || 'Failed to delete user' });
       }
     } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to delete user' });
+      setMessage({ type: 'error', text: dict?.admin?.failedToDeleteUser || dict?.common?.failedToDeleteUser || 'Failed to delete user' });
     }
   };
 
@@ -83,13 +84,13 @@ export default function UsersPage() {
       });
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: `User ${!user.isActive ? 'activated' : 'deactivated'} successfully` });
+        setMessage({ type: 'success', text: `User ${!user.isActive ? (dict?.admin?.activated || 'activated') : (dict?.admin?.deactivated || 'deactivated')} ${dict?.admin?.successfully || 'successfully'}` });
         fetchUsers();
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to update user' });
+        setMessage({ type: 'error', text: data.error || dict?.common?.failedToUpdateUser || 'Failed to update user' });
       }
     } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to update user' });
+      setMessage({ type: 'error', text: dict?.common?.failedToUpdateUser || 'Failed to update user' });
     }
   };
 
@@ -98,7 +99,7 @@ export default function UsersPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
     );
@@ -179,7 +180,7 @@ export default function UsersPage() {
                             setShowPINModal(true);
                           }}
                           className="text-purple-600 hover:text-purple-900 text-xs"
-                          title="Manage PIN"
+                          title={dict?.admin?.managePIN || 'Manage PIN'}
                         >
                           PIN
                         </button>
@@ -189,7 +190,7 @@ export default function UsersPage() {
                             setShowQRModal(true);
                           }}
                           className="text-indigo-600 hover:text-indigo-900 text-xs"
-                          title="View QR Code"
+                          title={dict?.admin?.viewQRCode || 'View QR Code'}
                         >
                           QR
                         </button>
@@ -474,7 +475,8 @@ function PINModal({
   };
 
   const handleRemovePIN = async () => {
-    if (!confirm('Are you sure you want to remove the PIN for this user?')) return;
+    if (!dict) return;
+    if (!confirm(dict.common?.removePINConfirm || dict.admin?.removePINConfirm || 'Are you sure you want to remove the PIN for this user?')) return;
     
     setRemoving(true);
     setError('');
@@ -601,7 +603,8 @@ function QRModal({
   };
 
   const handleRegenerate = async () => {
-    if (!confirm('Are you sure you want to regenerate the QR code? The old QR code will no longer work.')) return;
+    if (!dict) return;
+    if (!confirm(dict.common?.regenerateQRConfirm || dict.admin?.regenerateQRConfirm || 'Are you sure you want to regenerate the QR code? The old QR code will no longer work.')) return;
     
     setRegenerating(true);
     setError('');

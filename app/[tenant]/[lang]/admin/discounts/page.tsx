@@ -50,11 +50,11 @@ export default function DiscountsPage() {
         setDiscounts(data.data);
         setMessage(null);
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to fetch discounts' });
+        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchDiscounts || 'Failed to fetch discounts' });
       }
     } catch (error) {
       console.error('Error fetching discounts:', error);
-      setMessage({ type: 'error', text: 'Failed to fetch discounts' });
+      setMessage({ type: 'error', text: dict?.common?.failedToFetchDiscounts || 'Failed to fetch discounts' });
     } finally {
       setLoading(false);
     }
@@ -354,7 +354,7 @@ function DiscountModal({
                   value={formData.code}
                   onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
-                  placeholder="DISCOUNT10"
+                  placeholder={dict?.admin?.discountCodePlaceholder || 'DISCOUNT10'}
                 />
               </div>
               <div>

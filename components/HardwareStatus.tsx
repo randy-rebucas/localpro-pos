@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { hardwareStatusChecker, DeviceStatus, HardwareStatus } from '@/lib/hardware/status-checker';
 import { useParams } from 'next/navigation';
+import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
 
 interface HardwareStatusProps {
   compact?: boolean;
@@ -21,9 +22,15 @@ export default function HardwareStatusChecker({
 }: HardwareStatusProps) {
   const params = useParams();
   const tenant = params.tenant as string;
+  const lang = (params?.lang as 'en' | 'es') || 'en';
+  const [dict, setDict] = useState<any>(null);
   const [status, setStatus] = useState<HardwareStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [testing, setTesting] = useState<string | null>(null);
+
+  useEffect(() => {
+    getDictionaryClient(lang).then(setDict);
+  }, [lang]);
 
   const checkStatus = useCallback(async () => {
     try {
@@ -54,7 +61,7 @@ export default function HardwareStatusChecker({
       // Refresh status after test
       setTimeout(checkStatus, 1000);
     } catch (error: any) {
-      alert(error.message || 'Test failed');
+      alert(error.message || dict?.common?.testFailed || 'Test failed');
     } finally {
       setTesting(null);
     }
@@ -130,13 +137,13 @@ export default function HardwareStatusChecker({
         ) : status ? (
           <>
             <div className={`px-2 py-1 border border-gray-300 text-xs font-medium ${getOverallStatusColor()}`}>
-              {status.overallStatus === 'all-connected' ? 'All Connected' :
-               status.overallStatus === 'partial' ? 'Partial' : 'Not Configured'}
+              {status.overallStatus === 'all-connected' ? (dict?.components?.hardwareStatus?.allConnected || dict?.common?.allConnected || 'All Connected') :
+               status.overallStatus === 'partial' ? (dict?.components?.hardwareStatus?.partial || dict?.common?.partial || 'Partial') : (dict?.components?.hardwareStatus?.notConfigured || dict?.common?.notConfigured || 'Not Configured')}
             </div>
             <button
               onClick={checkStatus}
               className="text-gray-500 hover:text-gray-700"
-              title="Refresh status"
+              title={dict?.common?.refreshStatus || 'Refresh status'}
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -153,7 +160,7 @@ export default function HardwareStatusChecker({
       <div className={`bg-white border border-gray-300 ${sidebar ? 'p-4' : 'p-6'}`}>
         <div className={`flex items-center justify-center ${sidebar ? 'py-4' : 'py-8'}`}>
           <div className={`animate-spin border-b-2 border-blue-600 ${sidebar ? 'h-6 w-6' : 'h-8 w-8'}`}></div>
-          {!sidebar && <span className="ml-3 text-gray-600">Checking hardware status...</span>}
+          {!sidebar && <span className="ml-3 text-gray-600">{dict?.components?.hardwareStatus?.checkingHardwareStatus || 'Checking hardware status...'}</span>}
         </div>
       </div>
     );
@@ -163,7 +170,7 @@ export default function HardwareStatusChecker({
     return (
       <div className={`bg-white border border-gray-300 ${sidebar ? 'p-4' : 'p-6'}`}>
         <p className={`text-gray-600 ${sidebar ? 'text-sm' : ''}`}>
-          {sidebar ? 'Unable to check status' : 'Unable to check hardware status'}
+          {sidebar ? (dict?.common?.unableToCheckStatus || 'Unable to check status') : (dict?.common?.unableToCheckHardwareStatus || 'Unable to check hardware status')}
         </p>
       </div>
     );
@@ -178,7 +185,7 @@ export default function HardwareStatusChecker({
             onClick={checkStatus}
             disabled={loading}
             className="p-1.5 text-gray-500 hover:text-gray-700 disabled:opacity-50"
-            title="Refresh status"
+            title={dict?.common?.refreshStatus || 'Refresh status'}
           >
             <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -188,8 +195,8 @@ export default function HardwareStatusChecker({
 
         <div className="mb-3">
           <div className={`px-2 py-1 border border-gray-300 text-xs font-medium text-center ${getOverallStatusColor()}`}>
-            {status.overallStatus === 'all-connected' ? 'All Connected' :
-             status.overallStatus === 'partial' ? 'Partial' : 'Not Configured'}
+            {status.overallStatus === 'all-connected' ? (dict?.common?.allConnected || 'All Connected') :
+             status.overallStatus === 'partial' ? (dict?.common?.partialConnection || 'Partial Connection') : (dict?.common?.notConfigured || 'Not Configured')}
           </div>
         </div>
 
@@ -226,7 +233,7 @@ export default function HardwareStatusChecker({
 
         {status.devices.length === 0 && (
           <div className="text-center py-4 text-gray-500 text-sm">
-            <p>No devices</p>
+            <p>{dict?.components?.hardwareStatus?.noDevices || 'No devices'}</p>
           </div>
         )}
       </div>
@@ -237,21 +244,21 @@ export default function HardwareStatusChecker({
     <div className="bg-white border border-gray-300 p-6">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Hardware Status</h2>
+          <h2 className="text-2xl font-bold text-gray-900">{dict?.components?.hardwareStatus?.title || 'Hardware Status'}</h2>
           <p className="text-sm text-gray-500 mt-1">
-            Last checked: {status.lastCheck.toLocaleTimeString()}
+            {(dict?.components?.hardwareStatus?.lastChecked || 'Last checked: {time}').replace('{time}', status.lastCheck.toLocaleTimeString())}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <div className={`px-3 py-1 border border-gray-300 text-sm font-medium ${getOverallStatusColor()}`}>
-            {status.overallStatus === 'all-connected' ? 'All Connected' :
-             status.overallStatus === 'partial' ? 'Partial Connection' : 'Not Configured'}
+            {status.overallStatus === 'all-connected' ? (dict?.components?.hardwareStatus?.allConnected || dict?.common?.allConnected || 'All Connected') :
+             status.overallStatus === 'partial' ? (dict?.components?.hardwareStatus?.partialConnection || dict?.common?.partialConnection || 'Partial Connection') : (dict?.components?.hardwareStatus?.notConfigured || dict?.common?.notConfigured || 'Not Configured')}
           </div>
           <button
             onClick={checkStatus}
             disabled={loading}
             className="p-2 text-gray-500 hover:text-gray-700 disabled:opacity-50"
-            title="Refresh status"
+            title={dict?.common?.refreshStatus || 'Refresh status'}
           >
             <svg className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -297,7 +304,7 @@ export default function HardwareStatusChecker({
                       disabled={testing === device.type || device.status === 'not-configured'}
                       className="px-3 py-1.5 text-sm bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed border border-blue-700"
                     >
-                      {testing === device.type ? 'Testing...' : 'Test'}
+                      {testing === device.type ? (dict?.components?.hardwareStatus?.testing || 'Testing...') : (dict?.components?.hardwareStatus?.test || 'Test')}
                     </button>
                   )}
                 </div>
@@ -309,7 +316,7 @@ export default function HardwareStatusChecker({
 
       {status.devices.length === 0 && (
         <div className="text-center py-8 text-gray-500">
-          <p>No hardware devices configured</p>
+          <p>{dict?.components?.hardwareStatus?.noHardwareDevicesConfigured || 'No hardware devices configured'}</p>
         </div>
       )}
     </div>

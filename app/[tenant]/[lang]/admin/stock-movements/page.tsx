@@ -59,11 +59,11 @@ export default function StockMovementsPage() {
         setTotalPages(data.pagination?.pages || 1);
         setMessage(null);
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to fetch stock movements' });
+        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchStockMovements || 'Failed to fetch stock movements' });
       }
     } catch (error) {
       console.error('Error fetching stock movements:', error);
-      setMessage({ type: 'error', text: 'Failed to fetch stock movements' });
+      setMessage({ type: 'error', text: dict?.common?.failedToFetchStockMovements || 'Failed to fetch stock movements' });
     } finally {
       setLoading(false);
     }
@@ -86,7 +86,7 @@ export default function StockMovementsPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
     );

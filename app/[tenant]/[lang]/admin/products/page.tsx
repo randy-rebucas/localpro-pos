@@ -61,11 +61,11 @@ export default function ProductsPage() {
         setProducts(data.data);
         setMessage(null);
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to fetch products' });
+        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchProducts || 'Failed to fetch products' });
       }
     } catch (error) {
       console.error('Error fetching products:', error);
-      setMessage({ type: 'error', text: 'Failed to fetch products' });
+      setMessage({ type: 'error', text: dict?.common?.failedToFetchProducts || 'Failed to fetch products' });
     } finally {
       setLoading(false);
     }
@@ -86,18 +86,19 @@ export default function ProductsPage() {
   };
 
   const handleDeleteProduct = async (productId: string) => {
-    if (!confirm('Are you sure you want to delete this product?')) return;
+    if (!dict) return;
+    if (!confirm(dict.common?.deleteProductConfirm || 'Are you sure you want to delete this product?')) return;
     try {
       const res = await fetch(`/api/products/${productId}`, { method: 'DELETE', credentials: 'include' });
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: 'Product deleted successfully' });
+        setMessage({ type: 'success', text: dict.common?.productDeletedSuccess || 'Product deleted successfully' });
         fetchProducts();
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to delete product' });
+        setMessage({ type: 'error', text: data.error || dict.common?.failedToDeleteProduct || 'Failed to delete product' });
       }
     } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to delete product' });
+      setMessage({ type: 'error', text: dict.common?.failedToDeleteProduct || 'Failed to delete product' });
     }
   };
 
@@ -112,7 +113,7 @@ export default function ProductsPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
     );

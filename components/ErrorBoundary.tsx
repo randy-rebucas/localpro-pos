@@ -1,6 +1,8 @@
 'use client';
 
 import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { useParams } from 'next/navigation';
+import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
 
 interface Props {
   children: ReactNode;
@@ -10,12 +12,24 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
+  dict: any;
 }
 
 export default class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false, error: null, dict: null };
+  }
+
+  async componentDidMount() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const lang = params.get('lang') || 'en';
+      const dict = await getDictionaryClient(lang as 'en' | 'es');
+      this.setState({ dict });
+    } catch (error) {
+      console.error('Failed to load dictionary:', error);
+    }
   }
 
   static getDerivedStateFromError(error: Error): State {
@@ -59,23 +73,23 @@ export default class ErrorBoundary extends Component<Props, State> {
               </svg>
             </div>
             <h1 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">
-              Something went wrong
+              {this.state.dict?.components?.errorBoundary?.somethingWentWrong || this.state.dict?.common?.somethingWentWrong || 'Something went wrong'}
             </h1>
             <p className="text-gray-600 mb-6 text-sm sm:text-base">
-              {this.state.error?.message || 'An unexpected error occurred. Please try again.'}
+              {this.state.error?.message || (this.state.dict?.components?.errorBoundary?.unexpectedError || this.state.dict?.common?.unexpectedError || 'An unexpected error occurred. Please try again.')}
             </p>
             <div className="space-y-3">
               <button
                 onClick={this.handleReset}
                 className="w-full bg-blue-600 text-white px-4 py-2.5 sm:py-3 rounded-md hover:bg-blue-700 font-medium transition-colors text-sm sm:text-base"
               >
-                Try Again
+                {this.state.dict?.components?.errorBoundary?.tryAgain || this.state.dict?.common?.tryAgain || 'Try Again'}
               </button>
               <button
                 onClick={() => window.location.reload()}
                 className="w-full bg-gray-100 text-gray-700 px-4 py-2.5 sm:py-3 rounded-md hover:bg-gray-200 font-medium transition-colors text-sm sm:text-base"
               >
-                Reload Page
+                {this.state.dict?.components?.errorBoundary?.reloadPage || this.state.dict?.common?.reloadPage || 'Reload Page'}
               </button>
             </div>
           </div>

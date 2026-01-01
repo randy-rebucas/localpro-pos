@@ -4,6 +4,7 @@ import Branch from '@/models/Branch';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function GET(request: NextRequest) {
   try {
@@ -40,16 +41,17 @@ export async function POST(request: NextRequest) {
     await connectDB();
     await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
+    const t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
     const body = await request.json();
     const { name, code, address, phone, email, managerId } = body;
 
     if (!name) {
-      return NextResponse.json({ success: false, error: 'Branch name is required' }, { status: 400 });
+      return NextResponse.json({ success: false, error: t('validation.branchNameRequired', 'Branch name is required') }, { status: 400 });
     }
 
     const branch = await Branch.create({
@@ -73,9 +75,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, data: branch }, { status: 201 });
   } catch (error: any) {
+    const t = await getValidationTranslatorFromRequest(request);
     if (error.code === 11000) {
       return NextResponse.json(
-        { success: false, error: 'Branch with this code already exists' },
+        { success: false, error: t('validation.branchCodeExists', 'Branch with this code already exists') },
         { status: 400 }
       );
     }

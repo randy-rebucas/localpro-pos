@@ -4,6 +4,7 @@ import Tenant from '@/models/Tenant';
 import { requireAuth, requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getDefaultTenantSettings } from '@/lib/currency';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function GET(
   request: NextRequest,
@@ -13,11 +14,12 @@ export async function GET(
     await connectDB();
     // Settings are public per tenant (no sensitive data exposed)
     const { slug } = await params;
+    const t = await getValidationTranslatorFromRequest(request);
     
     const tenant = await Tenant.findOne({ slug, isActive: true }).lean();
     if (!tenant) {
       return NextResponse.json(
-        { success: false, error: 'Tenant not found' },
+        { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
         { status: 404 }
       );
     }
@@ -25,7 +27,8 @@ export async function GET(
     return NextResponse.json({ success: true, data: tenant.settings });
   } catch (error: any) {
     console.error('Error fetching tenant settings:', error);
-    return NextResponse.json({ success: false, error: error.message || 'Failed to fetch settings' }, { status: 500 });
+    const t = await getValidationTranslatorFromRequest(request);
+    return NextResponse.json({ success: false, error: error.message || t('validation.failedToFetchSettings', 'Failed to fetch settings') }, { status: 500 });
   }
 }
 
@@ -50,6 +53,7 @@ export async function PUT(
     
     const body = await request.json();
     const settings = body.settings || body;
+    const t = await getValidationTranslatorFromRequest(request);
 
     // Validate settings structure
     const defaultSettings = getDefaultTenantSettings();
@@ -58,7 +62,7 @@ export async function PUT(
     // Validate currency code (basic check)
     if (updatedSettings.currency && updatedSettings.currency.length !== 3) {
       return NextResponse.json(
-        { success: false, error: 'Invalid currency code' },
+        { success: false, error: t('validation.invalidCurrencyCode', 'Invalid currency code') },
         { status: 400 }
       );
     }
@@ -67,7 +71,7 @@ export async function PUT(
     if (updatedSettings.taxRate !== undefined) {
       if (updatedSettings.taxRate < 0 || updatedSettings.taxRate > 100) {
         return NextResponse.json(
-          { success: false, error: 'Tax rate must be between 0 and 100' },
+          { success: false, error: t('validation.taxRateRange', 'Tax rate must be between 0 and 100') },
           { status: 400 }
         );
       }
@@ -90,9 +94,10 @@ export async function PUT(
       { new: true, runValidators: true }
     );
 
+    const t = await getValidationTranslatorFromRequest(request);
     if (!tenant) {
       return NextResponse.json(
-        { success: false, error: 'Tenant not found' },
+        { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
         { status: 404 }
       );
     }
@@ -114,7 +119,8 @@ export async function PUT(
     return NextResponse.json({ success: true, data: tenant.settings });
   } catch (error: any) {
     console.error('Error updating tenant settings:', error);
-    return NextResponse.json({ success: false, error: error.message || 'Failed to update settings' }, { status: 400 });
+    const t = await getValidationTranslatorFromRequest(request);
+    return NextResponse.json({ success: false, error: error.message || t('validation.failedToUpdateSettings', 'Failed to update settings') }, { status: 400 });
   }
 }
 
