@@ -350,9 +350,9 @@ export default function ProductsPage() {
               {sortedProducts.map((product) => (
                 <div
                   key={product._id}
-                  className="px-4 sm:px-6 py-4 hover:bg-gray-50 transition-colors"
+                  className="group relative px-4 sm:px-6 py-4 sm:py-5 hover:bg-gray-50 transition-colors"
                 >
-                  <div className="flex flex-col md:grid md:grid-cols-12 gap-4 items-center">
+                  <div className="flex flex-col md:grid md:grid-cols-12 gap-3 sm:gap-4">
                     {/* Name - Mobile & Desktop */}
                     {visibleColumns.name && (
                       <div className={`${getColSpanClass(columnSpans.name)} w-full md:w-auto`}>
@@ -417,34 +417,40 @@ export default function ProductsPage() {
                     {/* Actions column */}
                     {visibleColumns.actions && (
                       <div className={`${getColSpanClass(columnSpans.actions)} w-full md:w-auto`}>
-                        <div className="text-sm text-gray-500 md:hidden mb-2">{dict.common.actions}</div>
-                        <div className="flex gap-2 md:justify-end items-center">
+                        <div className="text-xs sm:text-sm text-gray-500 md:hidden mb-1 font-medium">{dict.common.actions}</div>
+                        <div className="flex gap-2 md:gap-1.5 w-full md:w-auto md:justify-end actions-touch-visible transition-opacity duration-200">
                           <button
                             onClick={() => handleRefill(product)}
-                            className="p-2.5 bg-green-50 hover:bg-green-100 active:bg-green-200 text-green-700 transition-all duration-200 border border-green-300 hover:border-green-400 flex items-center justify-center group"
+                            className="flex-1 md:flex-none px-4 py-3 md:px-3 md:py-2 bg-green-600 text-white hover:bg-green-700 active:bg-green-800 transition-all duration-200 border border-green-700 flex items-center justify-center gap-2 touch-manipulation min-h-[44px] md:min-h-0"
                             title={dict.products.refill?.title || 'Refill Stock'}
+                            aria-label={dict.products.refill?.title || 'Refill Stock'}
                           >
-                            <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                            <svg className="w-5 h-5 md:w-4 md:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                             </svg>
+                            <span className="md:hidden text-sm font-medium">{dict.products.refill?.title || 'Refill'}</span>
                           </button>
                           <button
                             onClick={() => handleEdit(product)}
-                            className="p-2.5 bg-blue-50 hover:bg-blue-100 active:bg-blue-200 text-blue-700 transition-all duration-200 border border-blue-300 hover:border-blue-400 flex items-center justify-center group"
+                            className="flex-1 md:flex-none px-4 py-3 md:px-3 md:py-2 bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 transition-all duration-200 border border-blue-700 flex items-center justify-center gap-2 touch-manipulation min-h-[44px] md:min-h-0"
                             title={dict.common.edit}
+                            aria-label={dict.common.edit}
                           >
-                            <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            <svg className="w-5 h-5 md:w-4 md:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                             </svg>
+                            <span className="md:hidden text-sm font-medium">{dict.common.edit}</span>
                           </button>
                           <button
                             onClick={() => handleDelete(product._id)}
-                            className="p-2.5 bg-red-50 hover:bg-red-100 active:bg-red-200 text-red-700 transition-all duration-200 border border-red-300 hover:border-red-400 flex items-center justify-center group"
+                            className="flex-1 md:flex-none px-4 py-3 md:px-3 md:py-2 bg-red-600 text-white hover:bg-red-700 active:bg-red-800 transition-all duration-200 border border-red-700 flex items-center justify-center gap-2 touch-manipulation min-h-[44px] md:min-h-0"
                             title={dict.common.delete}
+                            aria-label={dict.common.delete}
                           >
-                            <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            <svg className="w-5 h-5 md:w-4 md:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                             </svg>
+                            <span className="md:hidden text-sm font-medium">{dict.common.delete}</span>
                           </button>
                         </div>
                       </div>
