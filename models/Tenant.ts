@@ -95,6 +95,119 @@ export interface ITenantSettings {
       enabled: boolean;
     };
   };
+  
+  // Multi-Currency Support
+  multiCurrency?: {
+    enabled: boolean;
+    displayCurrencies?: string[]; // Array of currency codes to display
+    exchangeRates?: Record<string, number>; // Exchange rates from base currency
+    exchangeRateSource?: 'manual' | 'api'; // How rates are updated
+    exchangeRateApiKey?: string; // API key for exchange rate service
+    lastUpdated?: Date;
+  };
+  
+  // Receipt Templates
+  receiptTemplates?: {
+    default?: string; // Template ID
+    templates?: Array<{
+      id: string;
+      name: string;
+      html: string;
+      isDefault?: boolean;
+      createdAt?: Date;
+      updatedAt?: Date;
+    }>;
+  };
+  
+  // Notification Templates
+  notificationTemplates?: {
+    email?: {
+      bookingConfirmation?: string;
+      bookingReminder?: string;
+      bookingCancellation?: string;
+      lowStockAlert?: string;
+      attendanceAlert?: string;
+    };
+    sms?: {
+      bookingConfirmation?: string;
+      bookingReminder?: string;
+      bookingCancellation?: string;
+      lowStockAlert?: string;
+    };
+  };
+  
+  // Advanced Branding
+  advancedBranding?: {
+    fontFamily?: string;
+    fontSource?: 'google' | 'custom' | 'system';
+    googleFontUrl?: string;
+    customFontUrl?: string;
+    theme?: 'light' | 'dark' | 'auto' | 'custom';
+    customTheme?: {
+      css?: string; // Custom CSS
+      variables?: Record<string, string>; // CSS variables
+    };
+    borderRadius?: 'none' | 'sm' | 'md' | 'lg' | 'xl' | 'custom';
+    customBorderRadius?: string;
+  };
+  
+  // Regional Tax Rules
+  taxRules?: Array<{
+    id: string;
+    name: string;
+    rate: number;
+    label: string;
+    appliesTo?: 'all' | 'products' | 'services' | 'categories';
+    categoryIds?: string[];
+    productIds?: string[];
+    region?: {
+      country?: string;
+      state?: string;
+      city?: string;
+      zipCodes?: string[];
+    };
+    priority: number; // Higher priority rules apply first
+    isActive: boolean;
+  }>;
+  
+  // Business Hours
+  businessHours?: {
+    timezone?: string; // Override tenant timezone for hours
+    schedule?: {
+      [key: string]: { // 'monday', 'tuesday', etc.
+        enabled: boolean;
+        openTime?: string; // HH:MM format
+        closeTime?: string; // HH:MM format
+        breaks?: Array<{
+          start: string; // HH:MM
+          end: string; // HH:MM
+        }>;
+      };
+    };
+    specialHours?: Array<{
+      date: string; // YYYY-MM-DD
+      enabled: boolean;
+      openTime?: string;
+      closeTime?: string;
+      note?: string;
+    }>;
+  };
+  
+  // Holiday Calendar
+  holidays?: Array<{
+    id: string;
+    name: string;
+    date: string; // YYYY-MM-DD or YYYY-MM-DD for recurring
+    type: 'single' | 'recurring';
+    recurring?: {
+      pattern: 'yearly' | 'monthly' | 'weekly';
+      dayOfMonth?: number;
+      dayOfWeek?: number; // 0-6, Sunday = 0
+      month?: number; // 1-12
+    };
+    isBusinessClosed: boolean; // If true, business is closed on this holiday
+    createdAt?: Date;
+  }>;
 }
 
 export interface ITenant extends Document {
@@ -334,6 +447,172 @@ const TenantSchema: Schema = new Schema(
           enabled: Boolean,
         },
       },
+      
+      // Multi-Currency Support
+      multiCurrency: {
+        enabled: {
+          type: Boolean,
+          default: false,
+        },
+        displayCurrencies: [String],
+        exchangeRates: {
+          type: Map,
+          of: Number,
+        },
+        exchangeRateSource: {
+          type: String,
+          enum: ['manual', 'api'],
+          default: 'manual',
+        },
+        exchangeRateApiKey: String,
+        lastUpdated: Date,
+      },
+      
+      // Receipt Templates
+      receiptTemplates: {
+        default: String,
+        templates: [{
+          id: String,
+          name: String,
+          html: String,
+          isDefault: Boolean,
+          createdAt: Date,
+          updatedAt: Date,
+        }],
+      },
+      
+      // Notification Templates
+      notificationTemplates: {
+        email: {
+          bookingConfirmation: String,
+          bookingReminder: String,
+          bookingCancellation: String,
+          lowStockAlert: String,
+          attendanceAlert: String,
+        },
+        sms: {
+          bookingConfirmation: String,
+          bookingReminder: String,
+          bookingCancellation: String,
+          lowStockAlert: String,
+        },
+      },
+      
+      // Advanced Branding
+      advancedBranding: {
+        fontFamily: String,
+        fontSource: {
+          type: String,
+          enum: ['google', 'custom', 'system'],
+          default: 'system',
+        },
+        googleFontUrl: String,
+        customFontUrl: String,
+        theme: {
+          type: String,
+          enum: ['light', 'dark', 'auto', 'custom'],
+          default: 'light',
+        },
+        customTheme: {
+          css: String,
+          variables: {
+            type: Map,
+            of: String,
+          },
+        },
+        borderRadius: {
+          type: String,
+          enum: ['none', 'sm', 'md', 'lg', 'xl', 'custom'],
+          default: 'md',
+        },
+        customBorderRadius: String,
+      },
+      
+      // Regional Tax Rules
+      taxRules: [{
+        id: String,
+        name: String,
+        rate: {
+          type: Number,
+          min: 0,
+          max: 100,
+        },
+        label: String,
+        appliesTo: {
+          type: String,
+          enum: ['all', 'products', 'services', 'categories'],
+          default: 'all',
+        },
+        categoryIds: [String],
+        productIds: [String],
+        region: {
+          country: String,
+          state: String,
+          city: String,
+          zipCodes: [String],
+        },
+        priority: {
+          type: Number,
+          default: 0,
+        },
+        isActive: {
+          type: Boolean,
+          default: true,
+        },
+      }],
+      
+      // Business Hours
+      businessHours: {
+        timezone: String,
+        schedule: {
+          type: Map,
+          of: {
+            enabled: Boolean,
+            openTime: String,
+            closeTime: String,
+            breaks: [{
+              start: String,
+              end: String,
+            }],
+          },
+        },
+        specialHours: [{
+          date: String,
+          enabled: Boolean,
+          openTime: String,
+          closeTime: String,
+          note: String,
+        }],
+      },
+      
+      // Holiday Calendar
+      holidays: [{
+        id: String,
+        name: String,
+        date: String,
+        type: {
+          type: String,
+          enum: ['single', 'recurring'],
+          default: 'single',
+        },
+        recurring: {
+          pattern: {
+            type: String,
+            enum: ['yearly', 'monthly', 'weekly'],
+          },
+          dayOfMonth: Number,
+          dayOfWeek: Number,
+          month: Number,
+        },
+        isBusinessClosed: {
+          type: Boolean,
+          default: true,
+        },
+        createdAt: {
+          type: Date,
+          default: Date.now,
+        },
+      }],
     },
     isActive: {
       type: Boolean,

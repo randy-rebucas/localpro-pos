@@ -10,6 +10,12 @@ import { getDictionaryClient } from '../dictionaries-client';
 import { ITenantSettings } from '@/models/Tenant';
 import { detectLocation, getCurrencySymbolForCode } from '@/lib/location-detection';
 import { hardwareService } from '@/lib/hardware';
+import MultiCurrencySettings from '@/components/settings/MultiCurrencySettings';
+import ReceiptTemplatesManager from '@/components/settings/ReceiptTemplatesManager';
+import TaxRulesManager from '@/components/settings/TaxRulesManager';
+import BusinessHoursManager from '@/components/settings/BusinessHoursManager';
+import HolidaysManager from '@/components/settings/HolidaysManager';
+import NotificationTemplatesManager from '@/components/settings/NotificationTemplatesManager';
 
 export default function SettingsPage() {
   const params = useParams();
@@ -23,14 +29,7 @@ export default function SettingsPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [detecting, setDetecting] = useState(false);
   const [detectedInfo, setDetectedInfo] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'general' | 'branding' | 'contact' | 'receipt' | 'business' | 'notifications' | 'hardware' | 'reset'>('general');
-  const [resetting, setResetting] = useState(false);
-  const [selectedCollections, setSelectedCollections] = useState<string[]>([]);
-  const [resetResults, setResetResults] = useState<Record<string, { deleted: number }> | null>(null);
-  const [backingUp, setBackingUp] = useState(false);
-  const [restoring, setRestoring] = useState(false);
-  const [restoreFile, setRestoreFile] = useState<File | null>(null);
-  const [restoreResults, setRestoreResults] = useState<Record<string, { restored: number; cleared: number }> | null>(null);
+  const [activeTab, setActiveTab] = useState<'general' | 'branding' | 'contact' | 'receipt' | 'business' | 'notifications' | 'notificationTemplates' | 'hardware' | 'multiCurrency' | 'taxRules' | 'businessHours' | 'holidays'>('general');
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -142,8 +141,63 @@ export default function SettingsPage() {
     }
   };
 
+  const validateSettings = (): string | null => {
+    if (!settings) return 'Settings not loaded';
+
+    // Validate currency
+    if (settings.currency && settings.currency.length !== 3) {
+      return 'Currency code must be 3 characters (e.g., USD, EUR)';
+    }
+
+    // Validate colors (hex format)
+    const colorFields = ['primaryColor', 'secondaryColor', 'accentColor', 'backgroundColor', 'textColor'];
+    for (const field of colorFields) {
+      const value = settings[field as keyof ITenantSettings] as string | undefined;
+      if (value && !/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(value)) {
+        return `Invalid color format for ${field}. Use hex format (e.g., #FF5733)`;
+      }
+    }
+
+    // Validate URLs
+    if (settings.logo && !/^https?:\/\/.+/.test(settings.logo)) {
+      return 'Logo URL must be a valid HTTP/HTTPS URL';
+    }
+    if (settings.favicon && !/^https?:\/\/.+/.test(settings.favicon)) {
+      return 'Favicon URL must be a valid HTTP/HTTPS URL';
+    }
+    if (settings.website && !/^https?:\/\/.+/.test(settings.website)) {
+      return 'Website URL must be a valid HTTP/HTTPS URL';
+    }
+
+    // Validate email
+    if (settings.email && !/^\S+@\S+\.\S+$/.test(settings.email)) {
+      return 'Invalid email format';
+    }
+
+    // Validate tax rate
+    if (settings.taxEnabled && (settings.taxRate === undefined || settings.taxRate < 0 || settings.taxRate > 100)) {
+      return 'Tax rate must be between 0 and 100';
+    }
+
+    // Validate number format
+    if (settings.numberFormat) {
+      if (settings.numberFormat.decimalPlaces < 0 || settings.numberFormat.decimalPlaces > 4) {
+        return 'Decimal places must be between 0 and 4';
+      }
+    }
+
+    return null;
+  };
+
   const handleSave = async () => {
     if (!settings) return;
+
+    // Validate settings before saving
+    const validationError = validateSettings();
+    if (validationError) {
+      setMessage({ type: 'error', text: validationError });
+      return;
+    }
 
     try {
       setSaving(true);
@@ -161,6 +215,8 @@ export default function SettingsPage() {
       if (data.success) {
         setMessage({ type: 'success', text: dict?.settings?.saved || 'Settings saved successfully!' });
         setSettings(data.data);
+        // Clear message after 3 seconds
+        setTimeout(() => setMessage(null), 3000);
       } else {
         if (res.status === 401 || res.status === 403) {
           setMessage({ type: 'error', text: dict?.settings?.unauthorized || 'Unauthorized. Please login with admin or manager account to save settings.' });
@@ -320,6 +376,16 @@ export default function SettingsPage() {
                 {dict?.settings?.tabs?.notifications || 'Notifications'}
               </button>
               <button
+                onClick={() => setActiveTab('notificationTemplates')}
+                className={`px-6 py-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                  activeTab === 'notificationTemplates'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Notification Templates
+              </button>
+              <button
                 onClick={() => setActiveTab('hardware')}
                 className={`px-6 py-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
                   activeTab === 'hardware'
@@ -330,14 +396,44 @@ export default function SettingsPage() {
                 {dict?.settings?.tabs?.hardware || 'Hardware'}
               </button>
               <button
-                onClick={() => setActiveTab('reset')}
+                onClick={() => setActiveTab('multiCurrency')}
                 className={`px-6 py-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                  activeTab === 'reset'
-                    ? 'border-red-600 text-red-600'
+                  activeTab === 'multiCurrency'
+                    ? 'border-blue-600 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
-                {dict?.settings?.tabs?.reset || 'Collection Reset'}
+                Multi-Currency
+              </button>
+              <button
+                onClick={() => setActiveTab('taxRules')}
+                className={`px-6 py-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                  activeTab === 'taxRules'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Tax Rules
+              </button>
+              <button
+                onClick={() => setActiveTab('businessHours')}
+                className={`px-6 py-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                  activeTab === 'businessHours'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Business Hours
+              </button>
+              <button
+                onClick={() => setActiveTab('holidays')}
+                className={`px-6 py-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                  activeTab === 'holidays'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Holidays
               </button>
             </nav>
           </div>
@@ -751,9 +847,10 @@ export default function SettingsPage() {
 
             {/* Branding Tab */}
             {activeTab === 'branding' && (
-              <section>
-                <h2 className="text-xl font-bold text-gray-900 mb-5">Branding</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <section className="space-y-8">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900 mb-5">Basic Branding</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Company Name
@@ -888,6 +985,161 @@ export default function SettingsPage() {
                         placeholder="#111827"
                       />
                     </div>
+                  </div>
+                </div>
+                </div>
+
+                {/* Advanced Branding Section */}
+                <div className="pt-8 mt-8 border-t-2 border-gray-200">
+                  <h2 className="text-xl font-bold text-gray-900 mb-5">Advanced Branding</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Font Source
+                      </label>
+                      <select
+                        value={settings.advancedBranding?.fontSource || 'system'}
+                        onChange={(e) => {
+                          const fontSource = e.target.value as 'google' | 'custom' | 'system';
+                          updateSetting('advancedBranding', {
+                            ...settings.advancedBranding,
+                            fontSource,
+                          });
+                        }}
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                      >
+                        <option value="system">System Font</option>
+                        <option value="google">Google Font</option>
+                        <option value="custom">Custom Font</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Font Family Name
+                      </label>
+                      <input
+                        type="text"
+                        value={settings.advancedBranding?.fontFamily || ''}
+                        onChange={(e) => updateSetting('advancedBranding', {
+                          ...settings.advancedBranding,
+                          fontFamily: e.target.value,
+                        })}
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                        placeholder="e.g., Roboto, Inter, Arial"
+                      />
+                    </div>
+                    {settings.advancedBranding?.fontSource === 'google' && (
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Google Font URL
+                        </label>
+                        <input
+                          type="url"
+                          value={settings.advancedBranding?.googleFontUrl || ''}
+                          onChange={(e) => updateSetting('advancedBranding', {
+                            ...settings.advancedBranding,
+                            googleFontUrl: e.target.value,
+                          })}
+                          className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                          placeholder="https://fonts.googleapis.com/css2?family=Roboto"
+                        />
+                      </div>
+                    )}
+                    {settings.advancedBranding?.fontSource === 'custom' && (
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Custom Font URL
+                        </label>
+                        <input
+                          type="url"
+                          value={settings.advancedBranding?.customFontUrl || ''}
+                          onChange={(e) => updateSetting('advancedBranding', {
+                            ...settings.advancedBranding,
+                            customFontUrl: e.target.value,
+                          })}
+                          className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                          placeholder="https://example.com/fonts/custom-font.woff2"
+                        />
+                      </div>
+                    )}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Theme
+                      </label>
+                      <select
+                        value={settings.advancedBranding?.theme || 'light'}
+                        onChange={(e) => updateSetting('advancedBranding', {
+                          ...settings.advancedBranding,
+                          theme: e.target.value as 'light' | 'dark' | 'auto' | 'custom',
+                        })}
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                      >
+                        <option value="light">Light</option>
+                        <option value="dark">Dark</option>
+                        <option value="auto">Auto (System)</option>
+                        <option value="custom">Custom</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Border Radius
+                      </label>
+                      <select
+                        value={settings.advancedBranding?.borderRadius || 'md'}
+                        onChange={(e) => updateSetting('advancedBranding', {
+                          ...settings.advancedBranding,
+                          borderRadius: e.target.value as 'none' | 'sm' | 'md' | 'lg' | 'xl' | 'custom',
+                        })}
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                      >
+                        <option value="none">None</option>
+                        <option value="sm">Small</option>
+                        <option value="md">Medium</option>
+                        <option value="lg">Large</option>
+                        <option value="xl">Extra Large</option>
+                        <option value="custom">Custom</option>
+                      </select>
+                    </div>
+                    {settings.advancedBranding?.borderRadius === 'custom' && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Custom Border Radius
+                        </label>
+                        <input
+                          type="text"
+                          value={settings.advancedBranding?.customBorderRadius || ''}
+                          onChange={(e) => updateSetting('advancedBranding', {
+                            ...settings.advancedBranding,
+                            customBorderRadius: e.target.value,
+                          })}
+                          className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                          placeholder="e.g., 8px, 0.5rem, 12px 8px"
+                        />
+                      </div>
+                    )}
+                    {settings.advancedBranding?.theme === 'custom' && (
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Custom CSS
+                        </label>
+                        <textarea
+                          value={settings.advancedBranding?.customTheme?.css || ''}
+                          onChange={(e) => updateSetting('advancedBranding', {
+                            ...settings.advancedBranding,
+                            customTheme: {
+                              ...settings.advancedBranding?.customTheme,
+                              css: e.target.value,
+                            },
+                          })}
+                          rows={6}
+                          className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white font-mono text-sm"
+                          placeholder=":root { --primary-color: #2563eb; }"
+                        />
+                        <p className="mt-2 text-xs text-gray-500">
+                          Add custom CSS variables or styles. Use CSS variables for better theme integration.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </section>
@@ -1058,6 +1310,17 @@ export default function SettingsPage() {
                     </div>
                   </div>
                 </div>
+
+                {/* Receipt Templates Section */}
+                <div className="mt-8 pt-8 border-t-2 border-gray-200">
+                  <ReceiptTemplatesManager
+                    settings={settings}
+                    tenant={tenant}
+                    onUpdate={(updates) => {
+                      setSettings({ ...settings, ...updates });
+                    }}
+                  />
+                </div>
               </section>
             )}
 
@@ -1118,6 +1381,9 @@ export default function SettingsPage() {
             {activeTab === 'notifications' && (
               <section>
                 <h2 className="text-xl font-bold text-gray-900 mb-5">Notification Settings</h2>
+                <p className="text-sm text-gray-600 mb-6">
+                  Configure notification preferences and alert thresholds
+                </p>
                 <div className="space-y-6">
                   <div>
                     <h3 className="text-lg font-semibold text-gray-900 mb-3">Stock Alerts</h3>
@@ -1199,6 +1465,25 @@ export default function SettingsPage() {
               </section>
             )}
 
+            {/* Notification Templates Tab */}
+            {activeTab === 'notificationTemplates' && (
+              <section>
+                <div className="mb-6">
+                  <h2 className="text-xl font-bold text-gray-900 mb-2">Notification Templates</h2>
+                  <p className="text-sm text-gray-600">
+                    Customize email and SMS templates for bookings, alerts, and notifications
+                  </p>
+                </div>
+                <NotificationTemplatesManager
+                  settings={settings}
+                  tenant={tenant}
+                  onUpdate={(updates) => {
+                    setSettings({ ...settings, ...updates });
+                  }}
+                />
+              </section>
+            )}
+
             {/* Hardware Tab */}
             {activeTab === 'hardware' && (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1215,390 +1500,84 @@ export default function SettingsPage() {
               </div>
             )}
 
-            {/* Collection Reset Tab */}
-            {activeTab === 'reset' && (
+            {/* Multi-Currency Tab */}
+            {activeTab === 'multiCurrency' && (
               <section>
                 <div className="mb-6">
-                  <h2 className="text-xl font-bold text-gray-900 mb-2">Collection Backup & Reset</h2>
-                  <p className="text-sm text-gray-600 mb-4">
-                    Backup your data before resetting. Warning: Reset action will permanently delete all data in the selected collections for this tenant. This cannot be undone.
+                  <h2 className="text-xl font-bold text-gray-900 mb-2">Multi-Currency Settings</h2>
+                  <p className="text-sm text-gray-600">
+                    Configure multiple currency display and exchange rates
                   </p>
                 </div>
-
-                {/* Backup Section */}
-                <div className="mb-8 p-5 bg-blue-50 border-2 border-blue-300">
-                  <h3 className="text-lg font-semibold text-blue-900 mb-3">Backup Collections</h3>
-                  <p className="text-sm text-blue-800 mb-4">
-                    Export selected collections as a JSON backup file. You can restore this backup later.
-                  </p>
-                  
-                  <div className="flex items-center gap-4">
-                    <button
-                      onClick={async () => {
-                        if (selectedCollections.length === 0) {
-                          setMessage({ type: 'error', text: dict?.common?.selectAtLeastOneCollection || 'Please select at least one collection to backup.' });
-                          return;
-                        }
-
-                        try {
-                          setBackingUp(true);
-                          setMessage(null);
-
-                          const collectionsParam = selectedCollections.join(',');
-                          const url = `/api/tenants/${tenant}/reset-collections?collections=${collectionsParam}`;
-                          
-                          const res = await fetch(url, {
-                            method: 'GET',
-                            credentials: 'include',
-                          });
-
-                          if (!res.ok) {
-                            const data = await res.json();
-                            if (res.status === 401 || res.status === 403) {
-                              setMessage({ type: 'error', text: dict?.common?.unauthorizedBackup || 'Unauthorized. Only admins can backup collections.' });
-                            } else {
-                              setMessage({ type: 'error', text: data.error || dict?.common?.failedToCreateBackup || 'Failed to create backup' });
-                            }
-                            return;
-                          }
-
-                          // Download the file
-                          const blob = await res.blob();
-                          const downloadUrl = window.URL.createObjectURL(blob);
-                          const a = document.createElement('a');
-                          a.href = downloadUrl;
-                          a.download = `backup-${tenant}-${new Date().toISOString().split('T')[0]}.json`;
-                          document.body.appendChild(a);
-                          a.click();
-                          window.URL.revokeObjectURL(downloadUrl);
-                          document.body.removeChild(a);
-
-                          setMessage({ type: 'success', text: `Backup created successfully for ${selectedCollections.length} collection(s)` });
-                        } catch (error) {
-                          console.error('Error creating backup:', error);
-                          setMessage({ type: 'error', text: dict?.common?.failedToCreateBackup || 'Failed to create backup. Please check your connection.' });
-                        } finally {
-                          setBackingUp(false);
-                        }
-                      }}
-                      disabled={backingUp || selectedCollections.length === 0}
-                      className="px-6 py-3 bg-blue-600 text-white hover:bg-blue-700 font-semibold transition-all duration-200 border border-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                    >
-                      {backingUp ? (
-                        <>
-                          <div className="animate-spin h-5 w-5 border-b-2 border-white"></div>
-                          <span>Creating Backup...</span>
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                          </svg>
-                          <span>Download Backup</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Restore Section */}
-                <div className="mb-8 p-5 bg-green-50 border-2 border-green-300">
-                  <h3 className="text-lg font-semibold text-green-900 mb-3">Restore Collections</h3>
-                  <p className="text-sm text-green-800 mb-4">
-                    Upload a backup JSON file to restore collections. You can choose to clear existing data before restoring.
-                  </p>
-                  
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-green-900 mb-2">
-                        Select Backup File
-                      </label>
-                      <input
-                        type="file"
-                        accept=".json"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            setRestoreFile(file);
-                            setRestoreResults(null);
-                          }
-                        }}
-                        className="w-full px-4 py-2 border-2 border-green-300 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all bg-white"
-                      />
-                    </div>
-
-                    {restoreFile && (
-                      <div className="p-3 bg-white border border-green-300">
-                        <p className="text-sm text-green-800">
-                          <span className="font-medium">Selected:</span> {restoreFile.name} ({(restoreFile.size / 1024).toFixed(2)} KB)
-                        </p>
-                      </div>
-                    )}
-
-                    {restoreResults && (
-                      <div className="p-4 bg-white border-2 border-green-300">
-                        <h4 className="font-semibold text-green-900 mb-2">Restore Results:</h4>
-                        <ul className="space-y-1">
-                          {Object.entries(restoreResults).map(([collection, result]) => (
-                            <li key={collection} className="text-sm text-green-800">
-                              <span className="font-medium capitalize">{collection.replace(/([A-Z])/g, ' $1').trim()}:</span> {result.restored} record(s) restored
-                              {result.cleared > 0 && `, ${result.cleared} cleared`}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    <div className="flex items-center gap-4">
-                      <label className="flex items-center">
-                        <input
-                          type="checkbox"
-                          id="clearExisting"
-                          className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 cursor-pointer"
-                        />
-                        <span className="ml-2 text-sm font-medium text-green-900">
-                          Clear existing data before restoring
-                        </span>
-                      </label>
-                    </div>
-
-                    <button
-                      onClick={async () => {
-                        if (!restoreFile) {
-                          setMessage({ type: 'error', text: dict?.common?.selectBackupFile || 'Please select a backup file to restore.' });
-                          return;
-                        }
-
-                        const clearExisting = (document.getElementById('clearExisting') as HTMLInputElement)?.checked || false;
-
-                        if (clearExisting && !confirm(
-                          dict?.common?.clearExistingDataConfirm || 
-                          'Are you sure you want to clear existing data before restoring?\n\n' +
-                          'This will delete all current data in the collections being restored!'
-                        )) {
-                          return;
-                        }
-
-                        try {
-                          setRestoring(true);
-                          setMessage(null);
-                          setRestoreResults(null);
-
-                          const fileContent = await restoreFile.text();
-                          let backupData;
-                          try {
-                            backupData = JSON.parse(fileContent);
-                          } catch (e) {
-                            setMessage({ type: 'error', text: dict?.common?.invalidBackupFormat || 'Invalid backup file format. Please select a valid JSON backup file.' });
-                            return;
-                          }
-
-                          if (!backupData.collections) {
-                            setMessage({ type: 'error', text: dict?.common?.invalidBackupFile || 'Invalid backup file. Missing collections data.' });
-                            return;
-                          }
-
-                          const res = await fetch(`/api/tenants/${tenant}/reset-collections`, {
-                            method: 'PUT',
-                            headers: {
-                              'Content-Type': 'application/json',
-                            },
-                            credentials: 'include',
-                            body: JSON.stringify({ backupData, clearExisting }),
-                          });
-
-                          const data = await res.json();
-                          if (data.success) {
-                            setMessage({ type: 'success', text: data.data.message });
-                            setRestoreResults(data.data.results);
-                            setRestoreFile(null);
-                            // Reset file input
-                            const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
-                            if (fileInput) fileInput.value = '';
-                          } else {
-                            if (res.status === 401 || res.status === 403) {
-                              setMessage({ type: 'error', text: dict?.common?.unauthorizedRestore || 'Unauthorized. Only admins can restore collections.' });
-                            } else {
-                              setMessage({ type: 'error', text: data.error || dict?.common?.failedToRestoreBackup || 'Failed to restore backup' });
-                            }
-                          }
-                        } catch (error) {
-                          console.error('Error restoring backup:', error);
-                          setMessage({ type: 'error', text: dict?.common?.failedToRestoreBackup || 'Failed to restore backup. Please check your connection.' });
-                        } finally {
-                          setRestoring(false);
-                        }
-                      }}
-                      disabled={restoring || !restoreFile}
-                      className="px-6 py-3 bg-green-600 text-white hover:bg-green-700 font-semibold transition-all duration-200 border border-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                    >
-                      {restoring ? (
-                        <>
-                          <div className="animate-spin h-5 w-5 border-b-2 border-white"></div>
-                          <span>Restoring...</span>
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                          </svg>
-                          <span>Restore Backup</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Reset Section */}
-                <div className="mb-6 p-5 bg-red-50 border-2 border-red-300">
-                  <h3 className="text-lg font-semibold text-red-900 mb-3">Reset Collections</h3>
-                  <p className="text-sm text-red-800 mb-4">
-                    Warning: This action will permanently delete all data in the selected collections for this tenant. This cannot be undone.
-                  </p>
-
-                {resetResults && (
-                  <div className="mb-6 p-4 bg-blue-50 border-2 border-blue-300">
-                    <h3 className="font-semibold text-blue-900 mb-2">Reset Results:</h3>
-                    <ul className="space-y-1">
-                      {Object.entries(resetResults).map(([collection, result]) => (
-                        <li key={collection} className="text-sm text-blue-800">
-                          <span className="font-medium capitalize">{collection.replace(/([A-Z])/g, ' $1').trim()}:</span> {result.deleted} record(s) deleted
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-3">
-                      Select Collections to Reset:
-                    </label>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {[
-                        { key: 'products', label: 'Products' },
-                        { key: 'transactions', label: 'Transactions' },
-                        { key: 'categories', label: 'Categories' },
-                        { key: 'stockMovements', label: 'Stock Movements' },
-                        { key: 'expenses', label: 'Expenses' },
-                        { key: 'discounts', label: 'Discounts' },
-                        { key: 'branches', label: 'Branches' },
-                        { key: 'cashDrawerSessions', label: 'Cash Drawer Sessions' },
-                        { key: 'productBundles', label: 'Product Bundles' },
-                        { key: 'attendance', label: 'Attendance' },
-                      ].map((collection) => (
-                        <label
-                          key={collection.key}
-                          className="flex items-center p-3 border-2 border-gray-300 hover:bg-gray-50 cursor-pointer transition-colors"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={selectedCollections.includes(collection.key)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedCollections([...selectedCollections, collection.key]);
-                              } else {
-                                setSelectedCollections(selectedCollections.filter(c => c !== collection.key));
-                              }
-                            }}
-                            className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 cursor-pointer"
-                          />
-                          <span className="ml-3 text-sm font-medium text-gray-700">
-                            {collection.label}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-4 pt-4 border-t border-gray-200">
-                    <button
-                      onClick={async () => {
-                        if (selectedCollections.length === 0) {
-                          setMessage({ type: 'error', text: dict?.common?.selectAtLeastOneCollectionReset || 'Please select at least one collection to reset.' });
-                          return;
-                        }
-
-                        const resetConfirmText = dict?.common?.resetCollectionsConfirm
-                          ?.replace('{count}', selectedCollections.length.toString())
-                          ?.replace('{collections}', selectedCollections.join(', ')) ||
-                          `Are you sure you want to reset ${selectedCollections.length} collection(s)?\n\n` +
-                          `Selected: ${selectedCollections.join(', ')}\n\n` +
-                          `This action cannot be undone!`;
-                        if (!confirm(resetConfirmText)) {
-                          return;
-                        }
-
-                        try {
-                          setResetting(true);
-                          setMessage(null);
-                          setResetResults(null);
-
-                          const res = await fetch(`/api/tenants/${tenant}/reset-collections`, {
-                            method: 'POST',
-                            headers: {
-                              'Content-Type': 'application/json',
-                            },
-                            credentials: 'include',
-                            body: JSON.stringify({ collections: selectedCollections }),
-                          });
-
-                          const data = await res.json();
-                          if (data.success) {
-                            setMessage({ type: 'success', text: data.data.message });
-                            setResetResults(data.data.results);
-                            setSelectedCollections([]);
-                          } else {
-                            if (res.status === 401 || res.status === 403) {
-                              setMessage({ type: 'error', text: dict?.common?.unauthorizedReset || 'Unauthorized. Only admins can reset collections.' });
-                            } else {
-                              setMessage({ type: 'error', text: data.error || dict?.common?.failedToResetCollections || 'Failed to reset collections' });
-                            }
-                          }
-                        } catch (error) {
-                          console.error('Error resetting collections:', error);
-                          setMessage({ type: 'error', text: dict?.common?.failedToResetCollections || 'Failed to reset collections. Please check your connection.' });
-                        } finally {
-                          setResetting(false);
-                        }
-                      }}
-                      disabled={resetting || selectedCollections.length === 0}
-                      className="px-6 py-3 bg-red-600 text-white hover:bg-red-700 font-semibold transition-all duration-200 border border-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                    >
-                      {resetting ? (
-                        <>
-                          <div className="animate-spin h-5 w-5 border-b-2 border-white"></div>
-                          <span>Resetting...</span>
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                          <span>Reset Selected Collections</span>
-                        </>
-                      )}
-                    </button>
-                    {selectedCollections.length > 0 && (
-                      <button
-                        onClick={() => {
-                          setSelectedCollections([]);
-                          setResetResults(null);
-                        }}
-                        className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 font-medium"
-                      >
-                        Clear Selection
-                      </button>
-                    )}
-                  </div>
-                </div>
-                </div>
+                <MultiCurrencySettings
+                  settings={settings}
+                  tenant={tenant}
+                  onUpdate={(updates) => {
+                    setSettings({ ...settings, ...updates });
+                  }}
+                />
               </section>
             )}
 
-            {/* Save Button - Hidden on reset tab */}
-            {activeTab !== 'reset' && (
-              <div className="flex justify-end pt-6 mt-8 border-t border-gray-200">
+            {/* Tax Rules Tab */}
+            {activeTab === 'taxRules' && (
+              <section>
+                <div className="mb-6">
+                  <h2 className="text-xl font-bold text-gray-900 mb-2">Tax Rules</h2>
+                  <p className="text-sm text-gray-600">
+                    Configure multiple tax rates based on region, product type, or category
+                  </p>
+                </div>
+                <TaxRulesManager
+                  settings={settings}
+                  tenant={tenant}
+                  onUpdate={(updates) => {
+                    setSettings({ ...settings, ...updates });
+                  }}
+                />
+              </section>
+            )}
+
+            {/* Business Hours Tab */}
+            {activeTab === 'businessHours' && (
+              <section>
+                <div className="mb-6">
+                  <h2 className="text-xl font-bold text-gray-900 mb-2">Business Hours</h2>
+                  <p className="text-sm text-gray-600">
+                    Configure weekly schedule and special hours
+                  </p>
+                </div>
+                <BusinessHoursManager
+                  settings={settings}
+                  tenant={tenant}
+                  onUpdate={(updates) => {
+                    setSettings({ ...settings, ...updates });
+                  }}
+                />
+              </section>
+            )}
+
+            {/* Holidays Tab */}
+            {activeTab === 'holidays' && (
+              <section>
+                <div className="mb-6">
+                  <h2 className="text-xl font-bold text-gray-900 mb-2">Holiday Calendar</h2>
+                  <p className="text-sm text-gray-600">
+                    Manage holidays and recurring holidays
+                  </p>
+                </div>
+                <HolidaysManager
+                  settings={settings}
+                  tenant={tenant}
+                  onUpdate={(updates) => {
+                    setSettings({ ...settings, ...updates });
+                  }}
+                />
+              </section>
+            )}
+
+            {/* Save Button */}
+            <div className="flex justify-end pt-6 mt-8 border-t border-gray-200">
                 <button
                   onClick={handleSave}
                   disabled={saving}
@@ -1619,7 +1598,6 @@ export default function SettingsPage() {
                   )}
                 </button>
               </div>
-            )}
           </div>
         </div>
       </div>

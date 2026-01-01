@@ -6,6 +6,7 @@
 import { ITenantSettings } from '@/models/Tenant';
 import { formatDate, formatTime } from '@/lib/formatting';
 import { getDefaultTenantSettings } from '@/lib/currency';
+import { renderNotificationTemplate, getDefaultTemplate } from '@/lib/notification-templates';
 
 export interface NotificationOptions {
   to: string;
@@ -232,22 +233,91 @@ export async function sendBookingConfirmation(
     return results;
   }
 
-  const formattedDate = formatDate(data.startTime, tenantSettings);
-  const formattedTime = formatTime(data.startTime, tenantSettings);
+  // Use template if available, otherwise use default message
+  const emailTemplate = tenantSettings.notificationTemplates?.email?.bookingConfirmation;
+  const smsTemplate = tenantSettings.notificationTemplates?.sms?.bookingConfirmation;
 
-  const message = `Your booking for ${data.serviceName} is confirmed.\n\n` +
-    `Date: ${formattedDate}\n` +
-    `Time: ${formattedTime}\n` +
-    (data.staffName ? `Staff: ${data.staffName}\n` : '') +
-    (data.notes ? `Notes: ${data.notes}\n` : '') +
-    `\nWe look forward to seeing you!`;
+  let emailMessage = '';
+  let smsMessage = '';
+
+  if (emailTemplate) {
+    // Template may contain subject|body format
+    const parts = emailTemplate.split('|');
+    emailMessage = parts.length > 1 ? parts[1] : parts[0];
+    emailMessage = renderNotificationTemplate(emailMessage, {
+      customerName: data.customerName,
+      serviceName: data.serviceName,
+      date: data.startTime,
+      time: data.startTime,
+      staffName: data.staffName,
+      notes: data.notes,
+      companyName: tenantSettings.companyName || 'Business',
+    }, tenantSettings);
+  } else {
+    // Fallback to default template
+    const defaultTemplate = getDefaultTemplate('email', 'booking', 'confirmation');
+    if (defaultTemplate) {
+      emailMessage = renderNotificationTemplate(defaultTemplate.body, {
+        customerName: data.customerName,
+        serviceName: data.serviceName,
+        date: data.startTime,
+        time: data.startTime,
+        staffName: data.staffName,
+        notes: data.notes,
+        companyName: tenantSettings.companyName || 'Business',
+      }, tenantSettings);
+    } else {
+      // Ultimate fallback
+      const formattedDate = formatDate(data.startTime, tenantSettings);
+      const formattedTime = formatTime(data.startTime, tenantSettings);
+      emailMessage = `Your booking for ${data.serviceName} is confirmed.\n\n` +
+        `Date: ${formattedDate}\n` +
+        `Time: ${formattedTime}\n` +
+        (data.staffName ? `Staff: ${data.staffName}\n` : '') +
+        (data.notes ? `Notes: ${data.notes}\n` : '') +
+        `\nWe look forward to seeing you!`;
+    }
+  }
+
+  if (smsTemplate) {
+    smsMessage = renderNotificationTemplate(smsTemplate, {
+      customerName: data.customerName,
+      serviceName: data.serviceName,
+      date: data.startTime,
+      time: data.startTime,
+    }, tenantSettings);
+  } else {
+    const defaultTemplate = getDefaultTemplate('sms', 'booking', 'confirmation');
+    if (defaultTemplate) {
+      smsMessage = renderNotificationTemplate(defaultTemplate.body, {
+        customerName: data.customerName,
+        serviceName: data.serviceName,
+        date: data.startTime,
+        time: data.startTime,
+      }, tenantSettings);
+    } else {
+      const formattedDate = formatDate(data.startTime, tenantSettings);
+      const formattedTime = formatTime(data.startTime, tenantSettings);
+      smsMessage = `Hi ${data.customerName}, your booking for ${data.serviceName} is confirmed for ${formattedDate} at ${formattedTime}. See you soon!`;
+    }
+  }
+
+  const message = emailMessage || smsMessage;
 
   // Send email if email is provided and email notifications are enabled
   if (data.customerEmail && tenantSettings.emailNotifications) {
+    const emailTemplate = tenantSettings.notificationTemplates?.email?.bookingConfirmation;
+    let subject = `Booking Confirmation: ${data.serviceName}`;
+    if (emailTemplate && emailTemplate.includes('|')) {
+      subject = emailTemplate.split('|')[0];
+      subject = renderNotificationTemplate(subject, {
+        serviceName: data.serviceName,
+      }, tenantSettings);
+    }
     results.email = await sendEmail({
       to: data.customerEmail,
-      subject: `Booking Confirmation: ${data.serviceName}`,
-      message,
+      subject,
+      message: emailMessage,
       type: 'email',
     });
   }
@@ -256,7 +326,7 @@ export async function sendBookingConfirmation(
   if (data.customerPhone && tenantSettings.smsNotifications) {
     results.sms = await sendSMS({
       to: data.customerPhone,
-      message,
+      message: smsMessage,
       type: 'sms',
     });
   }
@@ -280,21 +350,85 @@ export async function sendBookingReminder(
     return results;
   }
 
-  const formattedDate = formatDate(data.startTime, tenantSettings);
-  const formattedTime = formatTime(data.startTime, tenantSettings);
+  // Use template if available
+  const emailTemplate = tenantSettings.notificationTemplates?.email?.bookingReminder;
+  const smsTemplate = tenantSettings.notificationTemplates?.sms?.bookingReminder;
 
-  const message = `Reminder: You have a booking for ${data.serviceName}.\n\n` +
-    `Date: ${formattedDate}\n` +
-    `Time: ${formattedTime}\n` +
-    (data.staffName ? `Staff: ${data.staffName}\n` : '') +
-    `\nSee you soon!`;
+  let emailMessage = '';
+  let smsMessage = '';
+
+  if (emailTemplate) {
+    const parts = emailTemplate.split('|');
+    emailMessage = parts.length > 1 ? parts[1] : parts[0];
+    emailMessage = renderNotificationTemplate(emailMessage, {
+      customerName: data.customerName,
+      serviceName: data.serviceName,
+      date: data.startTime,
+      time: data.startTime,
+      staffName: data.staffName,
+      companyName: tenantSettings.companyName || 'Business',
+    }, tenantSettings);
+  } else {
+    const defaultTemplate = getDefaultTemplate('email', 'booking', 'reminder');
+    if (defaultTemplate) {
+      emailMessage = renderNotificationTemplate(defaultTemplate.body, {
+        customerName: data.customerName,
+        serviceName: data.serviceName,
+        date: data.startTime,
+        time: data.startTime,
+        staffName: data.staffName,
+        companyName: tenantSettings.companyName || 'Business',
+      }, tenantSettings);
+    } else {
+      const formattedDate = formatDate(data.startTime, tenantSettings);
+      const formattedTime = formatTime(data.startTime, tenantSettings);
+      emailMessage = `Reminder: You have a booking for ${data.serviceName}.\n\n` +
+        `Date: ${formattedDate}\n` +
+        `Time: ${formattedTime}\n` +
+        (data.staffName ? `Staff: ${data.staffName}\n` : '') +
+        `\nSee you soon!`;
+    }
+  }
+
+  if (smsTemplate) {
+    smsMessage = renderNotificationTemplate(smsTemplate, {
+      customerName: data.customerName,
+      serviceName: data.serviceName,
+      date: data.startTime,
+      time: data.startTime,
+    }, tenantSettings);
+  } else {
+    const defaultTemplate = getDefaultTemplate('sms', 'booking', 'reminder');
+    if (defaultTemplate) {
+      smsMessage = renderNotificationTemplate(defaultTemplate.body, {
+        customerName: data.customerName,
+        serviceName: data.serviceName,
+        date: data.startTime,
+        time: data.startTime,
+      }, tenantSettings);
+    } else {
+      const formattedDate = formatDate(data.startTime, tenantSettings);
+      const formattedTime = formatTime(data.startTime, tenantSettings);
+      smsMessage = `Reminder: You have a booking for ${data.serviceName} on ${formattedDate} at ${formattedTime}. See you soon!`;
+    }
+  }
+
+  const message = emailMessage || smsMessage;
 
   // Send email if email is provided and email notifications are enabled
   if (data.customerEmail && tenantSettings.emailNotifications) {
+    const emailTemplate = tenantSettings.notificationTemplates?.email?.bookingReminder;
+    let subject = `Reminder: ${data.serviceName} Booking`;
+    if (emailTemplate && emailTemplate.includes('|')) {
+      subject = emailTemplate.split('|')[0];
+      subject = renderNotificationTemplate(subject, {
+        serviceName: data.serviceName,
+      }, tenantSettings);
+    }
     results.email = await sendEmail({
       to: data.customerEmail,
-      subject: `Reminder: ${data.serviceName} Booking`,
-      message,
+      subject,
+      message: emailMessage,
       type: 'email',
     });
   }
@@ -303,7 +437,7 @@ export async function sendBookingReminder(
   if (data.customerPhone && tenantSettings.smsNotifications) {
     results.sms = await sendSMS({
       to: data.customerPhone,
-      message,
+      message: smsMessage,
       type: 'sms',
     });
   }
