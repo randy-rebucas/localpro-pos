@@ -202,7 +202,7 @@ export default function SettingsPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
           <p className="mt-4 text-gray-600">{dict?.settings?.loading || 'Loading settings...'}</p>
         </div>
       </div>
@@ -215,14 +215,14 @@ export default function SettingsPage() {
       <div className="min-h-screen bg-gray-50">
         <Navbar />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-          <div className="bg-red-50 border-2 border-red-200 rounded-xl shadow-md p-5 sm:p-6">
+          <div className="bg-red-50 border-2 border-red-300 p-5 sm:p-6">
             <h2 className="text-xl font-bold text-red-800 mb-2">{dict?.settings?.failedToLoad || 'Failed to Load Settings'}</h2>
             <p className="text-red-700 mb-4">
               {message?.text || 'Unable to load tenant settings. Please check your connection and try again.'}
             </p>
             <button
               onClick={fetchSettings}
-              className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 font-medium transition-colors shadow-sm hover:shadow-md"
+              className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 font-medium transition-colors border border-red-700"
             >
               {dict?.settings?.retry || 'Retry'}
             </button>
@@ -245,17 +245,17 @@ export default function SettingsPage() {
 
         {message && (
           <div
-            className={`mb-6 p-4 rounded-xl shadow-sm ${
+            className={`mb-6 p-4 border ${
               message.type === 'success'
-                ? 'bg-green-50 text-green-800 border-2 border-green-200'
-                : 'bg-red-50 text-red-800 border-2 border-red-200'
+                ? 'bg-green-50 text-green-800 border-green-300'
+                : 'bg-red-50 text-red-800 border-red-300'
             }`}
           >
             {message.text}
           </div>
         )}
 
-        <div className="bg-white rounded-xl shadow-md overflow-hidden">
+        <div className="bg-white border border-gray-300 overflow-hidden">
           {/* Tabs */}
           <div className="border-b border-gray-200">
             <nav className="flex overflow-x-auto" aria-label="Tabs">
@@ -354,11 +354,11 @@ export default function SettingsPage() {
                     <button
                       onClick={handleDetectLocation}
                       disabled={detecting}
-                      className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-sm"
+                      className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 border border-blue-300"
                     >
                       {detecting ? (
                         <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                          <div className="animate-spin h-4 w-4 border-b-2 border-blue-600"></div>
                           <span>{dict?.settings?.detecting || 'Detecting...'}</span>
                         </>
                       ) : (
@@ -372,7 +372,7 @@ export default function SettingsPage() {
                     </button>
                   </div>
                   {detectedInfo && (
-                    <div className="mb-5 p-3 bg-green-50 border-2 border-green-200 rounded-xl text-sm text-green-800 shadow-sm">
+                    <div className="mb-5 p-3 bg-green-50 border-2 border-green-300 text-sm text-green-800">
                       <div className="flex items-center gap-2">
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -398,7 +398,7 @@ export default function SettingsPage() {
                             updateSetting('currencySymbol', symbol);
                           }
                         }}
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                         placeholder="USD"
                         maxLength={3}
                       />
@@ -412,7 +412,7 @@ export default function SettingsPage() {
                           type="text"
                           value={settings.currencySymbol || getCurrencySymbolForCode(settings.currency || 'USD')}
                           onChange={(e) => updateSetting('currencySymbol', e.target.value)}
-                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                          className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                           placeholder="$"
                         />
                         {!settings.currencySymbol && (
@@ -434,7 +434,7 @@ export default function SettingsPage() {
                       <select
                         value={settings.currencyPosition || 'before'}
                         onChange={(e) => updateSetting('currencyPosition', e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                       >
                         <option value="before">Before amount ($100)</option>
                         <option value="after">After amount (100$)</option>
@@ -448,7 +448,7 @@ export default function SettingsPage() {
                         type="text"
                         value={settings.timezone || 'UTC'}
                         onChange={(e) => updateSetting('timezone', e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                         placeholder="America/New_York"
                         list="timezone-suggestions"
                       />
@@ -476,7 +476,7 @@ export default function SettingsPage() {
                       <select
                         value={settings.dateFormat || 'MM/DD/YYYY'}
                         onChange={(e) => updateSetting('dateFormat', e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                       >
                         <option value="MM/DD/YYYY">MM/DD/YYYY</option>
                         <option value="DD/MM/YYYY">DD/MM/YYYY</option>
@@ -490,7 +490,7 @@ export default function SettingsPage() {
                       <select
                         value={settings.timeFormat || '12h'}
                         onChange={(e) => updateSetting('timeFormat', e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                       >
                         <option value="12h">12-hour (AM/PM)</option>
                         <option value="24h">24-hour</option>
@@ -536,7 +536,7 @@ export default function SettingsPage() {
                             setSaving(false);
                           }
                         }}
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                       >
                         <option value="en">English</option>
                         <option value="es">Español</option>
@@ -552,7 +552,7 @@ export default function SettingsPage() {
                       <select
                         value={settings.numberFormat?.decimalSeparator || '.'}
                         onChange={(e) => updateSetting('numberFormat.decimalSeparator', e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                       >
                         <option value=".">Period (.)</option>
                         <option value=",">Comma (,)</option>
@@ -565,7 +565,7 @@ export default function SettingsPage() {
                       <select
                         value={settings.numberFormat?.thousandsSeparator || ','}
                         onChange={(e) => updateSetting('numberFormat.thousandsSeparator', e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                       >
                         <option value=",">Comma (,)</option>
                         <option value=".">Period (.)</option>
@@ -583,7 +583,7 @@ export default function SettingsPage() {
                         max="4"
                         value={settings.numberFormat?.decimalPlaces || 2}
                         onChange={(e) => updateSetting('numberFormat.decimalPlaces', parseInt(e.target.value) || 2)}
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                       />
                     </div>
                   </div>
@@ -593,13 +593,13 @@ export default function SettingsPage() {
                 <section>
                   <h2 className="text-xl font-bold text-gray-900 mb-5">Feature Flags</h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="flex items-center p-4 border-2 border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+                    <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
                       <input
                         type="checkbox"
                         id="enableInventory"
                         checked={settings.enableInventory !== false}
                         onChange={(e) => updateSetting('enableInventory', e.target.checked)}
-                        className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                        className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
                       />
                       <label htmlFor="enableInventory" className="ml-3 flex-1">
                         <div className="text-sm font-medium text-gray-900">
@@ -610,13 +610,13 @@ export default function SettingsPage() {
                         </div>
                       </label>
                     </div>
-                    <div className="flex items-center p-4 border-2 border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+                    <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
                       <input
                         type="checkbox"
                         id="enableCategories"
                         checked={settings.enableCategories !== false}
                         onChange={(e) => updateSetting('enableCategories', e.target.checked)}
-                        className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                        className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
                       />
                       <label htmlFor="enableCategories" className="ml-3 flex-1">
                         <div className="text-sm font-medium text-gray-900">
@@ -627,13 +627,13 @@ export default function SettingsPage() {
                         </div>
                       </label>
                     </div>
-                    <div className="flex items-center p-4 border-2 border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+                    <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
                       <input
                         type="checkbox"
                         id="enableDiscounts"
                         checked={settings.enableDiscounts || false}
                         onChange={(e) => updateSetting('enableDiscounts', e.target.checked)}
-                        className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                        className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
                       />
                       <label htmlFor="enableDiscounts" className="ml-3 flex-1">
                         <div className="text-sm font-medium text-gray-900">
@@ -644,13 +644,13 @@ export default function SettingsPage() {
                         </div>
                       </label>
                     </div>
-                    <div className="flex items-center p-4 border-2 border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+                    <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
                       <input
                         type="checkbox"
                         id="enableLoyaltyProgram"
                         checked={settings.enableLoyaltyProgram || false}
                         onChange={(e) => updateSetting('enableLoyaltyProgram', e.target.checked)}
-                        className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                        className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
                       />
                       <label htmlFor="enableLoyaltyProgram" className="ml-3 flex-1">
                         <div className="text-sm font-medium text-gray-900">
@@ -661,13 +661,13 @@ export default function SettingsPage() {
                         </div>
                       </label>
                     </div>
-                    <div className="flex items-center p-4 border-2 border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+                    <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
                       <input
                         type="checkbox"
                         id="enableCustomerManagement"
                         checked={settings.enableCustomerManagement || false}
                         onChange={(e) => updateSetting('enableCustomerManagement', e.target.checked)}
-                        className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                        className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
                       />
                       <label htmlFor="enableCustomerManagement" className="ml-3 flex-1">
                         <div className="text-sm font-medium text-gray-900">
@@ -678,13 +678,13 @@ export default function SettingsPage() {
                         </div>
                       </label>
                     </div>
-                    <div className="flex items-center p-4 border-2 border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+                    <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
                       <input
                         type="checkbox"
                         id="enableBookingScheduling"
                         checked={settings.enableBookingScheduling || false}
                         onChange={(e) => updateSetting('enableBookingScheduling', e.target.checked)}
-                        className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                        className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
                       />
                       <label htmlFor="enableBookingScheduling" className="ml-3 flex-1">
                         <div className="text-sm font-medium text-gray-900">
@@ -708,7 +708,7 @@ export default function SettingsPage() {
                         id="taxEnabled"
                         checked={settings.taxEnabled || false}
                         onChange={(e) => updateSetting('taxEnabled', e.target.checked)}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
                       />
                       <label htmlFor="taxEnabled" className="ml-2 text-sm font-medium text-gray-700">
                         Enable Tax
@@ -727,7 +727,7 @@ export default function SettingsPage() {
                             step="0.01"
                             value={settings.taxRate || 0}
                             onChange={(e) => updateSetting('taxRate', parseFloat(e.target.value) || 0)}
-                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                            className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                           />
                         </div>
                         <div>
@@ -738,7 +738,7 @@ export default function SettingsPage() {
                             type="text"
                             value={settings.taxLabel || 'Tax'}
                             onChange={(e) => updateSetting('taxLabel', e.target.value)}
-                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                            className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                             placeholder="VAT, GST, Sales Tax"
                           />
                         </div>
@@ -762,7 +762,7 @@ export default function SettingsPage() {
                       type="text"
                       value={settings.companyName || ''}
                       onChange={(e) => updateSetting('companyName', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                     />
                   </div>
                   <div>
@@ -773,7 +773,7 @@ export default function SettingsPage() {
                       type="url"
                       value={settings.logo || ''}
                       onChange={(e) => updateSetting('logo', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                       placeholder="https://example.com/logo.png"
                     />
                   </div>
@@ -785,7 +785,7 @@ export default function SettingsPage() {
                       type="url"
                       value={settings.favicon || ''}
                       onChange={(e) => updateSetting('favicon', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                       placeholder="https://example.com/favicon.ico"
                     />
                   </div>
@@ -798,13 +798,13 @@ export default function SettingsPage() {
                         type="color"
                         value={settings.primaryColor || '#2563eb'}
                         onChange={(e) => updateSetting('primaryColor', e.target.value)}
-                        className="h-10 w-20 border-2 border-gray-200 rounded-xl cursor-pointer shadow-sm"
+                        className="h-10 w-20 border-2 border-gray-300 cursor-pointer bg-white"
                       />
                       <input
                         type="text"
                         value={settings.primaryColor || '#2563eb'}
                         onChange={(e) => updateSetting('primaryColor', e.target.value)}
-                        className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                        className="flex-1 px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                         placeholder="#2563eb"
                       />
                     </div>
@@ -818,13 +818,13 @@ export default function SettingsPage() {
                         type="color"
                         value={settings.secondaryColor || '#64748b'}
                         onChange={(e) => updateSetting('secondaryColor', e.target.value)}
-                        className="h-10 w-20 border-2 border-gray-200 rounded-xl cursor-pointer shadow-sm"
+                        className="h-10 w-20 border-2 border-gray-300 cursor-pointer bg-white"
                       />
                       <input
                         type="text"
                         value={settings.secondaryColor || ''}
                         onChange={(e) => updateSetting('secondaryColor', e.target.value)}
-                        className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                        className="flex-1 px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                         placeholder="#64748b"
                       />
                     </div>
@@ -838,13 +838,13 @@ export default function SettingsPage() {
                         type="color"
                         value={settings.accentColor || '#10b981'}
                         onChange={(e) => updateSetting('accentColor', e.target.value)}
-                        className="h-10 w-20 border-2 border-gray-200 rounded-xl cursor-pointer shadow-sm"
+                        className="h-10 w-20 border-2 border-gray-300 cursor-pointer bg-white"
                       />
                       <input
                         type="text"
                         value={settings.accentColor || ''}
                         onChange={(e) => updateSetting('accentColor', e.target.value)}
-                        className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                        className="flex-1 px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                         placeholder="#10b981"
                       />
                     </div>
@@ -858,13 +858,13 @@ export default function SettingsPage() {
                         type="color"
                         value={settings.backgroundColor || '#ffffff'}
                         onChange={(e) => updateSetting('backgroundColor', e.target.value)}
-                        className="h-10 w-20 border-2 border-gray-200 rounded-xl cursor-pointer shadow-sm"
+                        className="h-10 w-20 border-2 border-gray-300 cursor-pointer bg-white"
                       />
                       <input
                         type="text"
                         value={settings.backgroundColor || ''}
                         onChange={(e) => updateSetting('backgroundColor', e.target.value)}
-                        className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                        className="flex-1 px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                         placeholder="#ffffff"
                       />
                     </div>
@@ -878,13 +878,13 @@ export default function SettingsPage() {
                         type="color"
                         value={settings.textColor || '#111827'}
                         onChange={(e) => updateSetting('textColor', e.target.value)}
-                        className="h-10 w-20 border-2 border-gray-200 rounded-xl cursor-pointer shadow-sm"
+                        className="h-10 w-20 border-2 border-gray-300 cursor-pointer bg-white"
                       />
                       <input
                         type="text"
                         value={settings.textColor || ''}
                         onChange={(e) => updateSetting('textColor', e.target.value)}
-                        className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                        className="flex-1 px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                         placeholder="#111827"
                       />
                     </div>
@@ -904,7 +904,7 @@ export default function SettingsPage() {
                       type="email"
                       value={settings.email || ''}
                       onChange={(e) => updateSetting('email', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                     />
                   </div>
                   <div>
@@ -913,7 +913,7 @@ export default function SettingsPage() {
                       type="tel"
                       value={settings.phone || ''}
                       onChange={(e) => updateSetting('phone', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                     />
                   </div>
                   <div className="md:col-span-2">
@@ -922,7 +922,7 @@ export default function SettingsPage() {
                       type="text"
                       value={settings.address?.street || ''}
                       onChange={(e) => updateSetting('address.street', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                     />
                   </div>
                   <div>
@@ -931,7 +931,7 @@ export default function SettingsPage() {
                       type="text"
                       value={settings.address?.city || ''}
                       onChange={(e) => updateSetting('address.city', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                     />
                   </div>
                   <div>
@@ -940,7 +940,7 @@ export default function SettingsPage() {
                       type="text"
                       value={settings.address?.state || ''}
                       onChange={(e) => updateSetting('address.state', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                     />
                   </div>
                   <div>
@@ -949,7 +949,7 @@ export default function SettingsPage() {
                       type="text"
                       value={settings.address?.zipCode || ''}
                       onChange={(e) => updateSetting('address.zipCode', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                     />
                   </div>
                   <div>
@@ -958,7 +958,7 @@ export default function SettingsPage() {
                       type="text"
                       value={settings.address?.country || ''}
                       onChange={(e) => updateSetting('address.country', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                     />
                   </div>
                   <div>
@@ -967,7 +967,7 @@ export default function SettingsPage() {
                       type="url"
                       value={settings.website || ''}
                       onChange={(e) => updateSetting('website', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                       placeholder="https://example.com"
                     />
                   </div>
@@ -988,7 +988,7 @@ export default function SettingsPage() {
                       value={settings.receiptHeader || ''}
                       onChange={(e) => updateSetting('receiptHeader', e.target.value)}
                       rows={3}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                       placeholder="Custom header text to appear at the top of receipts"
                     />
                   </div>
@@ -1000,56 +1000,56 @@ export default function SettingsPage() {
                       value={settings.receiptFooter || ''}
                       onChange={(e) => updateSetting('receiptFooter', e.target.value)}
                       rows={3}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                       placeholder="Custom footer text to appear at the bottom of receipts"
                     />
                   </div>
                   <div>
                     <h3 className="text-lg font-semibold text-gray-900 mb-3">Display Options</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="flex items-center p-4 border-2 border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
                         <input
                           type="checkbox"
                           id="receiptShowLogo"
                           checked={settings.receiptShowLogo !== false}
                           onChange={(e) => updateSetting('receiptShowLogo', e.target.checked)}
-                          className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                          className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
                         />
                         <label htmlFor="receiptShowLogo" className="ml-3 text-sm font-medium text-gray-700">
                           Show Logo on Receipts
                         </label>
                       </div>
-                      <div className="flex items-center p-4 border-2 border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
                         <input
                           type="checkbox"
                           id="receiptShowAddress"
                           checked={settings.receiptShowAddress !== false}
                           onChange={(e) => updateSetting('receiptShowAddress', e.target.checked)}
-                          className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                          className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
                         />
                         <label htmlFor="receiptShowAddress" className="ml-3 text-sm font-medium text-gray-700">
                           Show Address on Receipts
                         </label>
                       </div>
-                      <div className="flex items-center p-4 border-2 border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
                         <input
                           type="checkbox"
                           id="receiptShowPhone"
                           checked={settings.receiptShowPhone || false}
                           onChange={(e) => updateSetting('receiptShowPhone', e.target.checked)}
-                          className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                          className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
                         />
                         <label htmlFor="receiptShowPhone" className="ml-3 text-sm font-medium text-gray-700">
                           Show Phone on Receipts
                         </label>
                       </div>
-                      <div className="flex items-center p-4 border-2 border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
                         <input
                           type="checkbox"
                           id="receiptShowEmail"
                           checked={settings.receiptShowEmail || false}
                           onChange={(e) => updateSetting('receiptShowEmail', e.target.checked)}
-                          className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                          className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
                         />
                         <label htmlFor="receiptShowEmail" className="ml-3 text-sm font-medium text-gray-700">
                           Show Email on Receipts
@@ -1073,7 +1073,7 @@ export default function SettingsPage() {
                     <select
                       value={settings.businessType || ''}
                       onChange={(e) => updateSetting('businessType', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                     >
                       <option value="">Select business type</option>
                       <option value="Retail">Retail</option>
@@ -1094,7 +1094,7 @@ export default function SettingsPage() {
                       type="text"
                       value={settings.taxId || ''}
                       onChange={(e) => updateSetting('taxId', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                       placeholder="12-3456789"
                     />
                   </div>
@@ -1106,7 +1106,7 @@ export default function SettingsPage() {
                       type="text"
                       value={settings.registrationNumber || ''}
                       onChange={(e) => updateSetting('registrationNumber', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                       placeholder="Business registration number"
                     />
                   </div>
@@ -1131,19 +1131,19 @@ export default function SettingsPage() {
                           min="0"
                           value={settings.lowStockThreshold || 10}
                           onChange={(e) => updateSetting('lowStockThreshold', parseInt(e.target.value) || 10)}
-                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                          className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                         />
                         <p className="mt-2 text-xs text-gray-500">
                           Alert when stock falls below this quantity
                         </p>
                       </div>
-                      <div className="flex items-center p-4 border-2 border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
                         <input
                           type="checkbox"
                           id="lowStockAlert"
                           checked={settings.lowStockAlert !== false}
                           onChange={(e) => updateSetting('lowStockAlert', e.target.checked)}
-                          className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                          className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
                         />
                         <label htmlFor="lowStockAlert" className="ml-3 flex-1">
                           <div className="text-sm font-medium text-gray-900">
@@ -1159,13 +1159,13 @@ export default function SettingsPage() {
                   <div>
                     <h3 className="text-lg font-semibold text-gray-900 mb-3">Notification Channels</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="flex items-center p-4 border-2 border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
                         <input
                           type="checkbox"
                           id="emailNotifications"
                           checked={settings.emailNotifications || false}
                           onChange={(e) => updateSetting('emailNotifications', e.target.checked)}
-                          className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                          className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
                         />
                         <label htmlFor="emailNotifications" className="ml-3 flex-1">
                           <div className="text-sm font-medium text-gray-900">
@@ -1176,13 +1176,13 @@ export default function SettingsPage() {
                           </div>
                         </label>
                       </div>
-                      <div className="flex items-center p-4 border-2 border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
                         <input
                           type="checkbox"
                           id="smsNotifications"
                           checked={settings.smsNotifications || false}
                           onChange={(e) => updateSetting('smsNotifications', e.target.checked)}
-                          className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                          className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
                         />
                         <label htmlFor="smsNotifications" className="ml-3 flex-1">
                           <div className="text-sm font-medium text-gray-900">
@@ -1226,7 +1226,7 @@ export default function SettingsPage() {
                 </div>
 
                 {/* Backup Section */}
-                <div className="mb-8 p-5 bg-blue-50 border-2 border-blue-200 rounded-xl">
+                <div className="mb-8 p-5 bg-blue-50 border-2 border-blue-300">
                   <h3 className="text-lg font-semibold text-blue-900 mb-3">Backup Collections</h3>
                   <p className="text-sm text-blue-800 mb-4">
                     Export selected collections as a JSON backup file. You can restore this backup later.
@@ -1282,11 +1282,11 @@ export default function SettingsPage() {
                         }
                       }}
                       disabled={backingUp || selectedCollections.length === 0}
-                      className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-semibold transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      className="px-6 py-3 bg-blue-600 text-white hover:bg-blue-700 font-semibold transition-all duration-200 border border-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                     >
                       {backingUp ? (
                         <>
-                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                          <div className="animate-spin h-5 w-5 border-b-2 border-white"></div>
                           <span>Creating Backup...</span>
                         </>
                       ) : (
@@ -1302,7 +1302,7 @@ export default function SettingsPage() {
                 </div>
 
                 {/* Restore Section */}
-                <div className="mb-8 p-5 bg-green-50 border-2 border-green-200 rounded-xl">
+                <div className="mb-8 p-5 bg-green-50 border-2 border-green-300">
                   <h3 className="text-lg font-semibold text-green-900 mb-3">Restore Collections</h3>
                   <p className="text-sm text-green-800 mb-4">
                     Upload a backup JSON file to restore collections. You can choose to clear existing data before restoring.
@@ -1323,12 +1323,12 @@ export default function SettingsPage() {
                             setRestoreResults(null);
                           }
                         }}
-                        className="w-full px-4 py-2 border-2 border-green-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
+                        className="w-full px-4 py-2 border-2 border-green-300 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all bg-white"
                       />
                     </div>
 
                     {restoreFile && (
-                      <div className="p-3 bg-white rounded-lg border border-green-300">
+                      <div className="p-3 bg-white border border-green-300">
                         <p className="text-sm text-green-800">
                           <span className="font-medium">Selected:</span> {restoreFile.name} ({(restoreFile.size / 1024).toFixed(2)} KB)
                         </p>
@@ -1336,7 +1336,7 @@ export default function SettingsPage() {
                     )}
 
                     {restoreResults && (
-                      <div className="p-4 bg-white border-2 border-green-300 rounded-xl">
+                      <div className="p-4 bg-white border-2 border-green-300">
                         <h4 className="font-semibold text-green-900 mb-2">Restore Results:</h4>
                         <ul className="space-y-1">
                           {Object.entries(restoreResults).map(([collection, result]) => (
@@ -1354,7 +1354,7 @@ export default function SettingsPage() {
                         <input
                           type="checkbox"
                           id="clearExisting"
-                          className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded cursor-pointer"
+                          className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 cursor-pointer"
                         />
                         <span className="ml-2 text-sm font-medium text-green-900">
                           Clear existing data before restoring
@@ -1429,11 +1429,11 @@ export default function SettingsPage() {
                         }
                       }}
                       disabled={restoring || !restoreFile}
-                      className="px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 font-semibold transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      className="px-6 py-3 bg-green-600 text-white hover:bg-green-700 font-semibold transition-all duration-200 border border-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                     >
                       {restoring ? (
                         <>
-                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                          <div className="animate-spin h-5 w-5 border-b-2 border-white"></div>
                           <span>Restoring...</span>
                         </>
                       ) : (
@@ -1449,14 +1449,14 @@ export default function SettingsPage() {
                 </div>
 
                 {/* Reset Section */}
-                <div className="mb-6 p-5 bg-red-50 border-2 border-red-200 rounded-xl">
+                <div className="mb-6 p-5 bg-red-50 border-2 border-red-300">
                   <h3 className="text-lg font-semibold text-red-900 mb-3">Reset Collections</h3>
                   <p className="text-sm text-red-800 mb-4">
                     Warning: This action will permanently delete all data in the selected collections for this tenant. This cannot be undone.
                   </p>
 
                 {resetResults && (
-                  <div className="mb-6 p-4 bg-blue-50 border-2 border-blue-200 rounded-xl">
+                  <div className="mb-6 p-4 bg-blue-50 border-2 border-blue-300">
                     <h3 className="font-semibold text-blue-900 mb-2">Reset Results:</h3>
                     <ul className="space-y-1">
                       {Object.entries(resetResults).map(([collection, result]) => (
@@ -1488,7 +1488,7 @@ export default function SettingsPage() {
                       ].map((collection) => (
                         <label
                           key={collection.key}
-                          className="flex items-center p-3 border-2 border-gray-200 rounded-xl hover:bg-gray-50 cursor-pointer transition-colors"
+                          className="flex items-center p-3 border-2 border-gray-300 hover:bg-gray-50 cursor-pointer transition-colors"
                         >
                           <input
                             type="checkbox"
@@ -1500,7 +1500,7 @@ export default function SettingsPage() {
                                 setSelectedCollections(selectedCollections.filter(c => c !== collection.key));
                               }
                             }}
-                            className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded cursor-pointer"
+                            className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 cursor-pointer"
                           />
                           <span className="ml-3 text-sm font-medium text-gray-700">
                             {collection.label}
@@ -1560,11 +1560,11 @@ export default function SettingsPage() {
                         }
                       }}
                       disabled={resetting || selectedCollections.length === 0}
-                      className="px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 font-semibold transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      className="px-6 py-3 bg-red-600 text-white hover:bg-red-700 font-semibold transition-all duration-200 border border-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                     >
                       {resetting ? (
                         <>
-                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                          <div className="animate-spin h-5 w-5 border-b-2 border-white"></div>
                           <span>Resetting...</span>
                         </>
                       ) : (
@@ -1599,11 +1599,11 @@ export default function SettingsPage() {
                 <button
                   onClick={handleSave}
                   disabled={saving}
-                  className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-semibold transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="px-6 py-3 bg-blue-600 text-white hover:bg-blue-700 font-semibold transition-all duration-200 border border-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   {saving ? (
                     <>
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                      <div className="animate-spin h-5 w-5 border-b-2 border-white"></div>
                       <span>{dict?.settings?.saving || 'Saving...'}</span>
                     </>
                   ) : (

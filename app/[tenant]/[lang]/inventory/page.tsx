@@ -73,7 +73,7 @@ export default function InventoryPage() {
               <select
                 value={selectedBranch}
                 onChange={(e) => setSelectedBranch(e.target.value)}
-                className="block w-48 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                className="block w-48 border-2 border-gray-300 focus:border-blue-500 focus:ring-blue-500 sm:text-sm bg-white"
               >
                 <option value="">{dict?.inventory?.allBranches || 'All Branches'}</option>
                 {branches.map((branch) => (
@@ -103,12 +103,12 @@ export default function InventoryPage() {
           </div>
         </div>
 
-        <div className="mt-8 bg-white rounded-lg shadow p-6">
+        <div className="mt-8 bg-white border border-gray-300 p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">
             {dict?.inventory?.features || 'Inventory Features'}
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div className="p-4 border border-gray-200 rounded-lg">
+            <div className="p-4 border border-gray-300">
               <h3 className="font-medium text-gray-900 mb-2">
                 ✓ {dict?.inventory?.realtimeTracking || 'Real-time Stock Tracking'}
               </h3>
@@ -116,7 +116,7 @@ export default function InventoryPage() {
                 {dict?.inventory?.realtimeTrackingDesc || 'Monitor stock levels in real-time across all branches'}
               </p>
             </div>
-            <div className="p-4 border border-gray-200 rounded-lg">
+            <div className="p-4 border border-gray-300">
               <h3 className="font-medium text-gray-900 mb-2">
                 ✓ {dict?.inventory?.lowStockAlerts || 'Low Stock Alerts'}
               </h3>
@@ -124,7 +124,7 @@ export default function InventoryPage() {
                 {dict?.inventory?.lowStockAlertsDesc || 'Get notified when products fall below threshold'}
               </p>
             </div>
-            <div className="p-4 border border-gray-200 rounded-lg">
+            <div className="p-4 border border-gray-300">
               <h3 className="font-medium text-gray-900 mb-2">
                 ✓ {dict?.inventory?.autoDecrement || 'Auto-decrement on Sale'}
               </h3>
@@ -132,7 +132,7 @@ export default function InventoryPage() {
                 {dict?.inventory?.autoDecrementDesc || 'Stock automatically decreases when items are sold'}
               </p>
             </div>
-            <div className="p-4 border border-gray-200 rounded-lg">
+            <div className="p-4 border border-gray-300">
               <h3 className="font-medium text-gray-900 mb-2">
                 ✓ {dict?.inventory?.multiBranch || 'Multi-branch Monitoring'}
               </h3>
@@ -140,7 +140,7 @@ export default function InventoryPage() {
                 {dict?.inventory?.multiBranchDesc || 'Track inventory across multiple locations'}
               </p>
             </div>
-            <div className="p-4 border border-gray-200 rounded-lg">
+            <div className="p-4 border border-gray-300">
               <h3 className="font-medium text-gray-900 mb-2">
                 ✓ {dict?.inventory?.itemVariations || 'Item Variations'}
               </h3>
@@ -148,7 +148,7 @@ export default function InventoryPage() {
                 {dict?.inventory?.itemVariationsDesc || 'Support for size, color, and type variations'}
               </p>
             </div>
-            <div className="p-4 border border-gray-200 rounded-lg">
+            <div className="p-4 border border-gray-300">
               <h3 className="font-medium text-gray-900 mb-2">
                 ✓ {dict?.inventory?.bundledProducts || 'Bundled Products'}
               </h3>

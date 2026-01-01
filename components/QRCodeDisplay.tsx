@@ -19,7 +19,7 @@ export default function QRCodeDisplay({ qrToken, name, onRegenerate }: QRCodeDis
   };
 
   return (
-    <div className="flex flex-col items-center space-y-4 p-6 bg-white rounded-lg border-2 border-gray-200">
+    <div className="flex flex-col items-center space-y-4 p-6 bg-white border-2 border-gray-200">
       {name && (
         <div className="text-center">
           <h3 className="text-lg font-semibold text-gray-900">{name}</h3>
@@ -27,7 +27,7 @@ export default function QRCodeDisplay({ qrToken, name, onRegenerate }: QRCodeDis
         </div>
       )}
       
-      <div className="p-4 bg-white rounded-lg border-2 border-gray-300">
+      <div className="p-4 bg-white border-2 border-gray-300">
         <QRCodeSVG
           value={qrToken}
           size={200}

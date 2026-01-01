@@ -756,7 +756,7 @@ export default function POSPage() {
         <div className="flex flex-col lg:grid lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Cart Section - Mobile: First, Desktop: Right */}
           <div className="lg:col-span-1 order-1 lg:order-2">
-            <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-5 sm:p-6 lg:sticky lg:top-20 flex flex-col h-full max-h-[calc(100vh-6rem)]">
+            <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:sticky lg:top-20 flex flex-col h-full max-h-[calc(100vh-6rem)]">
               <div className="flex justify-between items-center mb-4 pb-4 border-b border-gray-200">
                 <h2 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2">
                   <svg className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -764,7 +764,7 @@ export default function POSPage() {
                   </svg>
                   {dict.pos.cart}
                   {cart.length > 0 && (
-                    <span className="ml-2 px-2.5 py-1 bg-blue-600 text-white text-xs font-bold rounded-full">
+                    <span className="ml-2 px-2.5 py-1 bg-blue-600 text-white text-xs font-bold border border-blue-700">
                       {cart.length}
                     </span>
                   )}
@@ -774,7 +774,7 @@ export default function POSPage() {
                     <>
                       <button
                         onClick={() => setShowSaveCartModal(true)}
-                        className="p-2 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-lg transition-colors"
+                        className="p-2 text-green-600 hover:text-green-700 hover:bg-green-50 transition-colors"
                         title={dict.pos?.saveCart || 'Save Cart'}
                       >
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -783,7 +783,7 @@ export default function POSPage() {
                       </button>
                       <button
                         onClick={clearCart}
-                        className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                        className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors"
                         title={dict.common.clear}
                       >
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -797,7 +797,7 @@ export default function POSPage() {
                       setShowSavedCartsModal(true);
                       loadSavedCarts();
                     }}
-                    className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+                    className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 transition-colors"
                     title={dict.pos?.loadCart || 'Load Saved Cart'}
                   >
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -820,7 +820,7 @@ export default function POSPage() {
                 <>
                   <div className="flex-1 overflow-y-auto pr-2 -mr-2 space-y-3 mb-4">
                     {cart.map((item) => (
-                      <div key={item.productId} className="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:border-gray-300 transition-colors">
+                      <div key={item.productId} className="bg-gray-50 p-4 border border-gray-300 hover:border-gray-400 transition-colors">
                         <div className="flex justify-between items-start mb-3">
                           <div className="flex-1 min-w-0 pr-2">
                             <div className="font-semibold text-gray-900 text-base mb-1">{item.name}</div>
@@ -830,7 +830,7 @@ export default function POSPage() {
                           </div>
                           <button
                             onClick={() => removeFromCart(item.productId)}
-                            className="p-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+                            className="p-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors flex-shrink-0"
                             aria-label="Remove item"
                           >
                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -839,7 +839,7 @@ export default function POSPage() {
                           </button>
                         </div>
                         <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center border-2 border-gray-300 rounded-lg overflow-hidden bg-white">
+                          <div className="flex items-center border-2 border-gray-300 overflow-hidden bg-white">
                             <button
                               type="button"
                               onClick={() => updateQuantity(item.productId, item.quantity - 1)}
@@ -888,13 +888,13 @@ export default function POSPage() {
                             value={promoCode}
                             onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
                             onKeyPress={(e) => e.key === 'Enter' && applyDiscount()}
-                            className="flex-1 min-w-0 px-4 py-3 text-base border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white shadow-sm transition-all placeholder:text-gray-400"
+                            className="flex-1 min-w-0 px-4 py-3 text-base border-2 border-gray-300 focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white transition-all placeholder:text-gray-400"
                           />
                           <button
                             type="button"
                             onClick={applyDiscount}
                             disabled={!promoCode.trim()}
-                            className="p-3 bg-green-600 text-white rounded-xl hover:bg-green-700 active:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-md hover:shadow-lg flex items-center justify-center flex-shrink-0"
+                            className="p-3 bg-green-600 text-white hover:bg-green-700 active:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 border border-green-700 flex items-center justify-center flex-shrink-0"
                             title={dict.pos.applyDiscount || 'Apply Discount'}
                           >
                             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -904,7 +904,7 @@ export default function POSPage() {
                         </div>
                       </div>
                     ) : (
-                      <div className="mb-4 p-4 bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl shadow-sm">
+                      <div className="mb-4 p-4 bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300">
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
@@ -923,7 +923,7 @@ export default function POSPage() {
                           <button
                             type="button"
                             onClick={removeDiscount}
-                            className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+                            className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors flex-shrink-0"
                             title={dict.pos.removeDiscount}
                           >
                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -935,7 +935,7 @@ export default function POSPage() {
                     )}
                   </div>
 
-                  <div className="border-t border-gray-200 pt-4 mt-4 bg-gray-50 -mx-5 sm:-mx-6 px-5 sm:px-6 pb-5 sm:pb-6 rounded-b-xl">
+                  <div className="border-t border-gray-300 pt-4 mt-4 bg-gray-50 -mx-5 sm:-mx-6 px-5 sm:px-6 pb-5 sm:pb-6">
                     <div className="space-y-2 mb-4">
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-gray-600">{dict.pos.subtotal}:</span>
@@ -962,11 +962,11 @@ export default function POSPage() {
                       type="button"
                       onClick={handleCheckout}
                       disabled={processing}
-                      className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 active:bg-blue-800 transition-all duration-200 text-lg shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      className="w-full bg-blue-600 text-white py-4 font-bold hover:bg-blue-700 active:bg-blue-800 transition-all duration-200 text-lg border border-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                       {processing ? (
                         <>
-                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                          <div className="animate-spin h-6 w-6 border-b-2 border-white"></div>
                           <span>Processing...</span>
                         </>
                       ) : (
@@ -995,7 +995,7 @@ export default function POSPage() {
                     placeholder={dict.pos.searchPlaceholder}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="w-full px-4 py-3 pl-11 text-base border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all"
+                    className="w-full px-4 py-3 pl-11 text-base border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all"
                   />
                   <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -1003,7 +1003,7 @@ export default function POSPage() {
                 </div>
                 <button
                   onClick={() => setShowQRScanner(true)}
-                  className="px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors shadow-sm"
+                  className="px-4 py-3 bg-blue-600 text-white hover:bg-blue-700 transition-colors border border-blue-700"
                   title="Scan QR Code"
                 >
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1012,7 +1012,7 @@ export default function POSPage() {
                 </button>
                 <button
                   onClick={() => setShowRefundModal(true)}
-                  className="px-4 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors shadow-sm"
+                  className="px-4 py-3 bg-red-600 text-white hover:bg-red-700 transition-colors border border-red-700"
                   title={dict.pos.refunds}
                 >
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1025,16 +1025,16 @@ export default function POSPage() {
             {loading ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
-                  <div key={i} className="bg-white rounded-xl shadow-md p-5 animate-pulse">
-                    <div className="h-6 bg-gray-200 rounded-lg w-3/4 mb-3"></div>
-                    <div className="h-4 bg-gray-200 rounded-lg w-1/2 mb-3"></div>
-                    <div className="h-8 bg-gray-200 rounded-lg w-20 mb-4"></div>
-                    <div className="h-8 bg-gray-200 rounded-lg w-full"></div>
+                  <div key={i} className="bg-white border border-gray-300 p-5 animate-pulse">
+                    <div className="h-6 bg-gray-200 w-3/4 mb-3"></div>
+                    <div className="h-4 bg-gray-200 w-1/2 mb-3"></div>
+                    <div className="h-8 bg-gray-200 w-20 mb-4"></div>
+                    <div className="h-8 bg-gray-200 w-full"></div>
                   </div>
                 ))}
               </div>
             ) : products.length === 0 ? (
-              <div className="text-center py-16 bg-white rounded-xl shadow-md">
+              <div className="text-center py-16 bg-white border border-gray-300">
                 <svg className="mx-auto h-16 w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
                 </svg>
@@ -1052,7 +1052,7 @@ export default function POSPage() {
                   .map((product) => (
                   <div
                     key={product._id}
-                    className={`bg-white rounded-xl shadow-md p-5 hover:shadow-lg transition-all duration-200 relative ${
+                    className={`bg-white border border-gray-300 p-5 hover:border-gray-400 transition-all duration-200 relative ${
                       product.stock === 0 && !product.allowOutOfStockSales ? 'opacity-60' : ''
                     }`}
                   >
@@ -1069,10 +1069,10 @@ export default function POSPage() {
                               e.preventDefault();
                               handleTogglePin(product._id, product.pinned || false);
                             }}
-                            className={`p-1.5 rounded-lg transition-all duration-200 flex-shrink-0 mt-0.5 flex items-center justify-center ${
+                            className={`p-1.5 transition-all duration-200 flex-shrink-0 mt-0.5 flex items-center justify-center border ${
                               product.pinned
-                                ? 'bg-amber-50 hover:bg-amber-100 text-amber-600'
-                                : 'bg-gray-50 hover:bg-gray-100 text-gray-400 hover:text-gray-600'
+                                ? 'bg-amber-50 hover:bg-amber-100 text-amber-600 border-amber-300'
+                                : 'bg-gray-50 hover:bg-gray-100 text-gray-400 hover:text-gray-600 border-gray-300'
                             }`}
                             title={product.pinned ? 'Unpin Product' : 'Pin Product'}
                           >
@@ -1088,12 +1088,12 @@ export default function POSPage() {
                         )}
                         <div className="mb-3">
                           <span
-                            className={`inline-block text-xs font-semibold px-3 py-1.5 rounded-full ${
+                            className={`inline-block text-xs font-semibold px-3 py-1.5 border ${
                               product.stock > 10
-                                ? 'bg-green-100 text-green-800'
+                                ? 'bg-green-100 text-green-800 border-green-300'
                                 : product.stock > 0
-                                ? 'bg-yellow-100 text-yellow-800'
-                                : 'bg-red-100 text-red-800'
+                                ? 'bg-yellow-100 text-yellow-800 border-yellow-300'
+                                : 'bg-red-100 text-red-800 border-red-300'
                             }`}
                           >
                             {product.stock} {dict.pos.inStock}
@@ -1111,10 +1111,10 @@ export default function POSPage() {
                             addToCart(product);
                           }
                         }}
-                        className={`w-full px-4 py-3 rounded-lg font-medium text-sm transition-all duration-200 ${
+                        className={`w-full px-4 py-3 font-medium text-sm transition-all duration-200 ${
                           product.stock > 0 || product.allowOutOfStockSales
-                            ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm hover:shadow-md'
-                            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                            ? 'bg-blue-600 text-white hover:bg-blue-700 border border-blue-700'
+                            : 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300'
                         }`}
                       >
                         {product.stock > 0 || product.allowOutOfStockSales 
@@ -1140,7 +1140,7 @@ export default function POSPage() {
           }}
         >
           <div 
-            className="absolute inset-y-0 right-0 w-full max-w-md bg-white shadow-xl flex flex-col animate-slide-in-right"
+            className="absolute inset-y-0 right-0 w-full max-w-md bg-white border-l border-gray-300 flex flex-col animate-slide-in-right"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between p-5 sm:p-6 border-b border-gray-200">
@@ -1176,10 +1176,10 @@ export default function POSPage() {
                           setPaymentMethod(method);
                           if (method !== 'cash') setCashReceived('');
                         }}
-                        className={`px-3 sm:px-4 py-2.5 rounded-xl border-2 font-medium text-sm sm:text-base transition-all duration-200 ${
+                        className={`px-3 sm:px-4 py-2.5 border-2 font-medium text-sm sm:text-base transition-all duration-200 ${
                           paymentMethod === method
-                            ? 'bg-blue-600 text-white border-blue-600 shadow-md'
-                            : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50 shadow-sm'
+                            ? 'bg-blue-600 text-white border-blue-700'
+                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
                         }`}
                       >
                         {dict.pos[method]}
@@ -1197,7 +1197,7 @@ export default function POSPage() {
                       step="0.01"
                       value={cashReceived}
                       onChange={(e) => setCashReceived(e.target.value)}
-                      className="w-full px-4 py-3 text-base border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-4 py-3 text-base border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="0.00"
                     />
                     {cashReceived && parseFloat(cashReceived) >= getTotal() && (
@@ -1216,7 +1216,7 @@ export default function POSPage() {
                   setShowPaymentModal(false);
                   setCashReceived('');
                 }}
-                className="w-full sm:w-auto px-4 py-2.5 border-2 border-gray-200 rounded-xl text-gray-700 hover:bg-gray-50 font-medium transition-colors shadow-sm"
+                className="w-full sm:w-auto px-4 py-2.5 border-2 border-gray-300 text-gray-700 hover:bg-gray-100 font-medium transition-colors bg-white"
               >
                 {dict.common.cancel}
               </button>
@@ -1224,7 +1224,7 @@ export default function POSPage() {
                 type="button"
                 onClick={processPayment}
                 disabled={processing || (paymentMethod === 'cash' && (!cashReceived || parseFloat(cashReceived) < getTotal()))}
-                className="w-full sm:w-auto px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors shadow-md hover:shadow-lg"
+                className="w-full sm:w-auto px-4 py-2.5 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors border border-blue-700"
               >
                 {processing ? dict.pos.processing : dict.pos.completePayment}
               </button>
@@ -1248,7 +1248,7 @@ export default function POSPage() {
           }}
         >
           <div 
-            className="absolute inset-y-0 right-0 w-full max-w-2xl bg-white shadow-xl flex flex-col animate-slide-in-right"
+            className="absolute inset-y-0 right-0 w-full max-w-2xl bg-white border-l border-gray-300 flex flex-col animate-slide-in-right"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between p-5 sm:p-6 border-b border-gray-200">
@@ -1283,14 +1283,14 @@ export default function POSPage() {
                       value={refundTransactionId}
                       onChange={(e) => setRefundTransactionId(e.target.value)}
                       onKeyPress={(e) => e.key === 'Enter' && lookupTransaction()}
-                      className="flex-1 px-4 py-3 text-base border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="flex-1 px-4 py-3 text-base border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder={dict.pos.transactionId}
                     />
                     <button
                       type="button"
                       onClick={lookupTransaction}
                       disabled={!refundTransactionId.trim()}
-                      className="px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+                      className="px-4 py-3 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors border border-blue-700"
                     >
                       {dict.pos.lookupTransaction}
                     </button>
@@ -1303,7 +1303,7 @@ export default function POSPage() {
                       setShowRefundModal(false);
                       setRefundTransactionId('');
                     }}
-                    className="px-4 py-2.5 border-2 border-gray-200 rounded-xl text-gray-700 hover:bg-gray-50 font-medium transition-colors shadow-sm"
+                    className="px-4 py-2.5 border-2 border-gray-300 text-gray-700 hover:bg-gray-100 font-medium transition-colors bg-white"
                   >
                     {dict.common.cancel}
                   </button>
@@ -1311,7 +1311,7 @@ export default function POSPage() {
               </div>
             ) : (
               <div>
-                <div className="mb-5 p-4 bg-gray-50 rounded-lg">
+                <div className="mb-5 p-4 bg-gray-50 border border-gray-300">
                   <div className="text-sm text-gray-600 mb-1">{dict.pos.receiptNumber}</div>
                   <div className="font-semibold text-lg">{refundTransaction.receiptNumber || refundTransaction._id}</div>
                   <div className="text-sm text-gray-600 mt-2">
@@ -1326,14 +1326,14 @@ export default function POSPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     {dict.pos.selectItemsToRefund}
                   </label>
-                  <div className="space-y-3 max-h-64 overflow-y-auto border border-gray-200 rounded-lg p-3">
+                  <div className="space-y-3 max-h-64 overflow-y-auto border border-gray-300 p-3">
                     {refundTransaction.items.map((item: any) => {
                       const productId = item.product.toString();
                       const maxQty = item.quantity;
                       const currentQty = refundItems[productId] || 0;
                       
                       return (
-                        <div key={productId} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded">
+                        <div key={productId} className="flex items-center justify-between p-2 hover:bg-gray-50 border-b border-gray-200 last:border-b-0">
                           <div className="flex-1">
                             <div className="font-medium text-gray-900">{item.name}</div>
                             <div className="text-sm text-gray-500">
@@ -1344,7 +1344,7 @@ export default function POSPage() {
                             <button
                               type="button"
                               onClick={() => setRefundItems({ ...refundItems, [productId]: Math.max(0, currentQty - 1) })}
-                              className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100"
+                              className="px-3 py-1 border border-gray-300 hover:bg-gray-100"
                             >
                               −
                             </button>
@@ -1357,19 +1357,19 @@ export default function POSPage() {
                                 const val = Math.max(0, Math.min(maxQty, parseInt(e.target.value) || 0));
                                 setRefundItems({ ...refundItems, [productId]: val });
                               }}
-                              className="w-16 px-2 py-1 text-center border border-gray-300 rounded"
+                              className="w-16 px-2 py-1 text-center border border-gray-300"
                             />
                             <button
                               type="button"
                               onClick={() => setRefundItems({ ...refundItems, [productId]: Math.min(maxQty, currentQty + 1) })}
-                              className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100"
+                              className="px-3 py-1 border border-gray-300 hover:bg-gray-100"
                             >
                               +
                             </button>
                             <button
                               type="button"
                               onClick={() => setRefundItems({ ...refundItems, [productId]: maxQty })}
-                              className="ml-2 px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                              className="ml-2 px-2 py-1 text-xs bg-blue-100 text-blue-700 border border-blue-300 hover:bg-blue-200"
                             >
                               {dict.pos.fullRefund}
                             </button>
@@ -1388,7 +1388,7 @@ export default function POSPage() {
                     type="text"
                     value={refundReason}
                     onChange={(e) => setRefundReason(e.target.value)}
-                    className="w-full px-4 py-3 text-base border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-4 py-3 text-base border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Reason for refund"
                   />
                 </div>
@@ -1401,7 +1401,7 @@ export default function POSPage() {
                     value={refundNotes}
                     onChange={(e) => setRefundNotes(e.target.value)}
                     rows={3}
-                    className="w-full px-4 py-3 text-base border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-4 py-3 text-base border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Additional notes"
                   />
                 </div>
@@ -1417,7 +1417,7 @@ export default function POSPage() {
                       setRefundReason('');
                       setRefundNotes('');
                     }}
-                    className="px-4 py-2.5 border-2 border-gray-200 rounded-xl text-gray-700 hover:bg-gray-50 font-medium transition-colors shadow-sm"
+                    className="px-4 py-2.5 border-2 border-gray-300 text-gray-700 hover:bg-gray-100 font-medium transition-colors bg-white"
                   >
                     {dict.common.cancel}
                   </button>
@@ -1425,7 +1425,7 @@ export default function POSPage() {
                     type="button"
                     onClick={processRefund}
                     disabled={processingRefund || Object.values(refundItems).every(qty => qty === 0)}
-                    className="px-4 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors shadow-md hover:shadow-lg"
+                    className="px-4 py-2.5 bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors border border-red-700"
                   >
                     {processingRefund ? dict.pos.processing : dict.pos.processRefund}
                   </button>
@@ -1447,7 +1447,7 @@ export default function POSPage() {
           }}
         >
           <div 
-            className="absolute inset-y-0 right-0 w-full max-w-md bg-white shadow-xl flex flex-col animate-slide-in-right"
+            className="absolute inset-y-0 right-0 w-full max-w-md bg-white border-l border-gray-300 flex flex-col animate-slide-in-right"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between p-5 sm:p-6 border-b border-gray-200">
@@ -1476,7 +1476,7 @@ export default function POSPage() {
                 value={cartName}
                 onChange={(e) => setCartName(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && saveCart()}
-                className="w-full px-4 py-3 text-base border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-4 py-3 text-base border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder={dict.pos?.cartNamePlaceholder || 'Enter a name for this cart'}
                 autoFocus
               />
@@ -1491,7 +1491,7 @@ export default function POSPage() {
                   setShowSaveCartModal(false);
                   setCartName('');
                 }}
-                className="px-4 py-2.5 border-2 border-gray-200 rounded-xl text-gray-700 hover:bg-gray-50 font-medium transition-colors shadow-sm"
+                className="px-4 py-2.5 border-2 border-gray-300 text-gray-700 hover:bg-gray-100 font-medium transition-colors bg-white"
               >
                 {dict.common.cancel}
               </button>
@@ -1499,7 +1499,7 @@ export default function POSPage() {
                 type="button"
                 onClick={saveCart}
                 disabled={savingCart || !cartName.trim()}
-                className="px-4 py-2.5 bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors shadow-md hover:shadow-lg"
+                className="px-4 py-2.5 bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors border border-green-700"
               >
                 {savingCart ? (dict.common.saving || 'Saving...') : (dict.common.save || 'Save')}
               </button>
@@ -1516,7 +1516,7 @@ export default function POSPage() {
           onClick={() => setShowSavedCartsModal(false)}
         >
           <div 
-            className="absolute inset-y-0 right-0 w-full max-w-2xl bg-white shadow-xl flex flex-col animate-slide-in-right"
+            className="absolute inset-y-0 right-0 w-full max-w-2xl bg-white border-l border-gray-300 flex flex-col animate-slide-in-right"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between p-5 sm:p-6 border-b border-gray-200">
@@ -1536,7 +1536,7 @@ export default function POSPage() {
 
             {loadingSavedCarts ? (
               <div className="text-center py-12">
-                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
                 <p className="mt-4 text-gray-600">{dict.common.loading || 'Loading...'}</p>
               </div>
             ) : savedCarts.length === 0 ? (
@@ -1551,7 +1551,7 @@ export default function POSPage() {
                 {savedCarts.map((savedCart) => (
                   <div
                     key={savedCart._id}
-                    className="border-2 border-gray-200 rounded-xl p-4 hover:border-blue-500 transition-colors"
+                    className="border-2 border-gray-300 p-4 hover:border-blue-500 transition-colors"
                   >
                     <div className="flex justify-between items-start mb-3">
                       <div className="flex-1">
@@ -1583,13 +1583,13 @@ export default function POSPage() {
                     <div className="flex gap-2">
                       <button
                         onClick={() => loadCart(savedCart)}
-                        className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
+                        className="flex-1 px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium transition-colors border border-blue-700"
                       >
                         {dict.pos?.loadCart || 'Load Cart'}
                       </button>
                       <button
                         onClick={() => deleteSavedCart(savedCart._id)}
-                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition-colors"
+                        className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 font-medium transition-colors border border-red-700"
                         title={dict.pos?.deleteCart || 'Delete Cart'}
                       >
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

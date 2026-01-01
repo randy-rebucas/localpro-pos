@@ -213,7 +213,7 @@ export default function ProfilePage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
           <p className="mt-4 text-gray-600">Loading profile...</p>
         </div>
       </div>
@@ -233,17 +233,17 @@ export default function ProfilePage() {
 
         {message && (
           <div
-            className={`mb-6 p-4 rounded-xl shadow-sm ${
+            className={`mb-6 p-4 border ${
               message.type === 'success'
-                ? 'bg-green-50 text-green-800 border-2 border-green-200'
-                : 'bg-red-50 text-red-800 border-2 border-red-200'
+                ? 'bg-green-50 text-green-800 border-green-300'
+                : 'bg-red-50 text-red-800 border-red-300'
             }`}
           >
             {message.text}
           </div>
         )}
 
-        <div className="bg-white rounded-xl shadow-md overflow-hidden">
+        <div className="bg-white border border-gray-300 overflow-hidden">
           <div className="p-5 sm:p-6 lg:p-8">
             {/* Profile Information */}
             <section className="mb-6">
@@ -261,7 +261,7 @@ export default function ProfilePage() {
                       value={profileData.name}
                       onChange={(e) => setProfileData({ ...profileData, name: e.target.value })}
                       required
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                       placeholder={dict?.profile?.namePlaceholder || 'Enter your full name'}
                     />
                   </div>
@@ -274,7 +274,7 @@ export default function ProfilePage() {
                       value={profileData.email}
                       onChange={(e) => setProfileData({ ...profileData, email: e.target.value })}
                       required
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                       placeholder={dict?.profile?.emailPlaceholder || 'Enter your email'}
                     />
                   </div>
@@ -286,7 +286,7 @@ export default function ProfilePage() {
                       <label className="block text-sm font-medium text-gray-500 mb-1">
                         {dict?.profile?.role || 'Role'}
                       </label>
-                      <div className="px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl text-gray-700 capitalize">
+                      <div className="px-4 py-3 bg-gray-50 border-2 border-gray-300 text-gray-700 capitalize">
                         {profileInfo.role}
                       </div>
                     </div>
@@ -294,7 +294,7 @@ export default function ProfilePage() {
                       <label className="block text-sm font-medium text-gray-500 mb-1">
                         {dict?.profile?.memberSince || 'Member Since'}
                       </label>
-                      <div className="px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl text-gray-700">
+                      <div className="px-4 py-3 bg-gray-50 border-2 border-gray-300 text-gray-700">
                         {profileInfo.createdAt ? new Date(profileInfo.createdAt).toLocaleDateString() : 'N/A'}
                       </div>
                     </div>
@@ -305,11 +305,11 @@ export default function ProfilePage() {
                   <button
                     type="submit"
                     disabled={saving}
-                    className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-semibold transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    className="px-6 py-3 bg-blue-600 text-white hover:bg-blue-700 font-semibold transition-all duration-200 border border-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   >
                     {saving ? (
                       <>
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                        <div className="animate-spin h-5 w-5 border-b-2 border-white"></div>
                         <span>{dict?.profile?.saving || 'Saving...'}</span>
                       </>
                     ) : (
@@ -333,7 +333,7 @@ export default function ProfilePage() {
                 </h2>
                 <button
                   onClick={() => setShowPasswordSection(!showPasswordSection)}
-                  className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-xl transition-colors shadow-sm"
+                  className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors border border-blue-300"
                 >
                   {showPasswordSection ? 'Cancel' : 'Change Password'}
                 </button>
@@ -351,7 +351,7 @@ export default function ProfilePage() {
                         value={passwordData.currentPassword}
                         onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
                         required
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                         placeholder={dict?.profile?.currentPasswordPlaceholder || 'Enter current password'}
                       />
                     </div>
@@ -365,7 +365,7 @@ export default function ProfilePage() {
                         onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
                         required
                         minLength={8}
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                         placeholder={dict?.profile?.newPasswordPlaceholder || 'Enter new password (min 8 chars)'}
                       />
                     </div>
@@ -379,7 +379,7 @@ export default function ProfilePage() {
                         onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
                         required
                         minLength={8}
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                         placeholder={dict?.profile?.confirmPasswordPlaceholder || 'Confirm new password'}
                       />
                     </div>
@@ -389,11 +389,11 @@ export default function ProfilePage() {
                     <button
                       type="submit"
                       disabled={saving}
-                      className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-semibold transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      className="px-6 py-3 bg-blue-600 text-white hover:bg-blue-700 font-semibold transition-all duration-200 border border-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                     >
                       {saving ? (
                         <>
-                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                          <div className="animate-spin h-5 w-5 border-b-2 border-white"></div>
                           <span>{dict?.profile?.saving || 'Saving...'}</span>
                         </>
                       ) : (
@@ -425,7 +425,7 @@ export default function ProfilePage() {
                 </div>
                 <button
                   onClick={() => setShowPinSection(!showPinSection)}
-                  className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-xl transition-colors shadow-sm"
+                  className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors border border-blue-300"
                 >
                   {showPinSection ? 'Cancel' : (profileInfo?.hasPin ? 'Change PIN' : 'Set PIN')}
                 </button>
@@ -446,7 +446,7 @@ export default function ProfilePage() {
                         onChange={(e) => setPinData({ ...pinData, currentPin: e.target.value.replace(/\D/g, '') })}
                         required={profileInfo?.hasPin}
                         maxLength={8}
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                         placeholder={dict?.profile?.currentPinPlaceholder || 'Enter current PIN'}
                       />
                     </div>
@@ -467,7 +467,7 @@ export default function ProfilePage() {
                         required
                         minLength={4}
                         maxLength={8}
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                         placeholder={profileInfo?.hasPin 
                           ? (dict?.profile?.newPinPlaceholder || 'Enter new PIN (4-8 digits)')
                           : (dict?.profile?.pinPlaceholder || 'Enter PIN (4-8 digits)')}
@@ -488,7 +488,7 @@ export default function ProfilePage() {
                         required
                         minLength={4}
                         maxLength={8}
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                         placeholder={profileInfo?.hasPin 
                           ? (dict?.profile?.confirmPinPlaceholder || 'Confirm new PIN')
                           : (dict?.profile?.confirmPinPlaceholder || 'Confirm PIN')}
@@ -500,11 +500,11 @@ export default function ProfilePage() {
                     <button
                       type="submit"
                       disabled={saving}
-                      className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-semibold transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      className="px-6 py-3 bg-blue-600 text-white hover:bg-blue-700 font-semibold transition-all duration-200 border border-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                     >
                       {saving ? (
                         <>
-                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                          <div className="animate-spin h-5 w-5 border-b-2 border-white"></div>
                           <span>{dict?.profile?.saving || 'Saving...'}</span>
                         </>
                       ) : (
@@ -545,13 +545,13 @@ export default function ProfilePage() {
                   />
                 </div>
               ) : (
-                <div className="p-6 bg-blue-50 border-2 border-blue-200 rounded-xl text-center">
+                <div className="p-6 bg-blue-50 border-2 border-blue-300 text-center">
                   <p className="text-blue-800 mb-4">
                     {dict?.profile?.qrNotAvailable || 'QR code not generated yet.'}
                   </p>
                   <button
                     onClick={handleRegenerateQR}
-                    className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-semibold transition-all duration-200 shadow-md hover:shadow-lg flex items-center gap-2 mx-auto"
+                    className="px-6 py-3 bg-blue-600 text-white hover:bg-blue-700 font-semibold transition-all duration-200 border border-blue-700 flex items-center gap-2 mx-auto"
                   >
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />

@@ -209,7 +209,7 @@ export default function ProductsPage() {
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">{dict.products.title}</h1>
           <button
             onClick={() => setIsModalOpen(true)}
-            className="w-full sm:w-auto bg-blue-600 text-white px-5 py-2.5 rounded-xl hover:bg-blue-700 font-semibold transition-all duration-200 shadow-md hover:shadow-lg flex items-center justify-center gap-2"
+            className="w-full sm:w-auto bg-blue-600 text-white px-5 py-2.5 hover:bg-blue-700 font-semibold transition-all duration-200 border border-blue-700 flex items-center justify-center gap-2"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -225,7 +225,7 @@ export default function ProductsPage() {
               placeholder={dict.products.searchPlaceholder}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full px-4 py-3 pl-11 text-base border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all"
+              className="w-full px-4 py-3 pl-11 text-base border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all"
             />
             <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -235,8 +235,8 @@ export default function ProductsPage() {
           <div className="relative">
             <button
               onClick={() => setShowColumnMenu(!showColumnMenu)}
-              className={`w-full sm:w-auto px-4 py-3 bg-white border-2 border-gray-200 rounded-xl hover:bg-gray-50 hover:border-blue-300 transition-all duration-200 shadow-sm hover:shadow-md flex items-center justify-center gap-2 text-sm font-medium text-gray-700 ${
-                showColumnMenu ? 'border-blue-500 bg-blue-50' : ''
+              className={`w-full sm:w-auto px-4 py-3 bg-white border-2 border-gray-300 hover:bg-gray-100 hover:border-blue-500 transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium text-gray-700 ${
+                showColumnMenu ? 'border-blue-600 bg-blue-50' : ''
               }`}
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -255,7 +255,7 @@ export default function ProductsPage() {
                 ></div>
                 <div className={`absolute ${
                   deviceType.isMobile ? 'left-0 right-0' : 'right-0'
-                } mt-2 w-64 sm:w-72 bg-white rounded-xl shadow-xl border border-gray-200 z-20 py-2 max-h-96 overflow-y-auto`}>
+                } mt-2 w-64 sm:w-72 bg-white border border-gray-300 z-20 py-2 max-h-96 overflow-y-auto`}>
                   <div className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide border-b border-gray-100 bg-gray-50 sticky top-0">
                     {dict?.common?.toggleColumns || 'Toggle Columns'}
                   </div>
@@ -270,7 +270,7 @@ export default function ProductsPage() {
                             type="checkbox"
                             checked={visible}
                             onChange={() => toggleColumn(key as keyof typeof visibleColumns)}
-                            className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 cursor-pointer transition-all"
+                            className="w-5 h-5 text-blue-600 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 cursor-pointer transition-all"
                           />
                           <span className="ml-3 text-sm font-medium text-gray-700 group-hover:text-blue-700 transition-colors">
                             {key === 'name' ? dict.products.name :
@@ -296,19 +296,19 @@ export default function ProductsPage() {
         </div>
 
         {loading ? (
-          <div className="bg-white rounded-xl shadow-md overflow-hidden">
-            <div className="divide-y divide-gray-200">
+          <div className="bg-white border border-gray-300 overflow-hidden">
+            <div className="divide-y divide-gray-300">
               {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
                 <div key={i} className="p-4 sm:p-6 animate-pulse">
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
-                      <div className="h-5 bg-gray-200 rounded-lg w-1/3 mb-2"></div>
-                      <div className="h-4 bg-gray-200 rounded-lg w-1/4"></div>
+                      <div className="h-5 bg-gray-200 w-1/3 mb-2"></div>
+                      <div className="h-4 bg-gray-200 w-1/4"></div>
                     </div>
                     <div className="flex items-center gap-4">
-                      <div className="h-4 bg-gray-200 rounded-lg w-20"></div>
-                      <div className="h-4 bg-gray-200 rounded-lg w-16"></div>
-                      <div className="h-9 bg-gray-200 rounded-lg w-24"></div>
+                      <div className="h-4 bg-gray-200 w-20"></div>
+                      <div className="h-4 bg-gray-200 w-16"></div>
+                      <div className="h-9 bg-gray-200 w-24"></div>
                     </div>
                   </div>
                 </div>
@@ -316,16 +316,16 @@ export default function ProductsPage() {
             </div>
           </div>
         ) : products.length === 0 ? (
-          <div className="text-center py-16 bg-white rounded-xl shadow-md">
+          <div className="text-center py-16 bg-white border border-gray-300">
             <svg className="mx-auto h-16 w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
             </svg>
             <p className="text-gray-500 text-lg">{dict.common.noResults}</p>
           </div>
         ) : (
-          <div className="bg-white rounded-xl shadow-md overflow-hidden">
+          <div className="bg-white border border-gray-300 overflow-hidden">
             {/* Desktop Table Header */}
-            <div className="hidden md:grid md:grid-cols-12 gap-4 px-6 py-4 bg-gray-50 border-b border-gray-200 text-sm font-semibold text-gray-700">
+            <div className="hidden md:grid md:grid-cols-12 gap-4 px-6 py-4 bg-gray-100 border-b border-gray-300 text-sm font-semibold text-gray-700">
               {visibleColumns.name && (
                 <div className={getColSpanClass(columnSpans.name)}>{dict.products.name}</div>
               )}
@@ -346,7 +346,7 @@ export default function ProductsPage() {
               )}
             </div>
             {/* Product List */}
-            <div className="divide-y divide-gray-200">
+            <div className="divide-y divide-gray-300">
               {sortedProducts.map((product) => (
                 <div
                   key={product._id}
@@ -402,12 +402,12 @@ export default function ProductsPage() {
                       <div className={`${getColSpanClass(columnSpans.stock)} w-full md:w-auto text-left md:text-right`}>
                         <div className="text-sm text-gray-500 md:hidden mb-1">{dict.products.stock}</div>
                         <span
-                          className={`inline-block text-xs font-semibold px-3 py-1.5 rounded-full ${
+                          className={`inline-block text-xs font-semibold px-3 py-1.5 border ${
                             product.stock > 10
-                              ? 'bg-green-100 text-green-800'
+                              ? 'bg-green-100 text-green-800 border-green-300'
                               : product.stock > 0
-                              ? 'bg-yellow-100 text-yellow-800'
-                              : 'bg-red-100 text-red-800'
+                              ? 'bg-yellow-100 text-yellow-800 border-yellow-300'
+                              : 'bg-red-100 text-red-800 border-red-300'
                           }`}
                         >
                           {product.stock} {dict.products.inStock}
@@ -421,7 +421,7 @@ export default function ProductsPage() {
                         <div className="flex gap-2 md:justify-end items-center">
                           <button
                             onClick={() => handleRefill(product)}
-                            className="p-2.5 bg-green-50 hover:bg-green-100 active:bg-green-200 text-green-700 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md border border-green-200 hover:border-green-300 flex items-center justify-center group"
+                            className="p-2.5 bg-green-50 hover:bg-green-100 active:bg-green-200 text-green-700 transition-all duration-200 border border-green-300 hover:border-green-400 flex items-center justify-center group"
                             title={dict.products.refill?.title || 'Refill Stock'}
                           >
                             <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -430,7 +430,7 @@ export default function ProductsPage() {
                           </button>
                           <button
                             onClick={() => handleEdit(product)}
-                            className="p-2.5 bg-blue-50 hover:bg-blue-100 active:bg-blue-200 text-blue-700 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md border border-blue-200 hover:border-blue-300 flex items-center justify-center group"
+                            className="p-2.5 bg-blue-50 hover:bg-blue-100 active:bg-blue-200 text-blue-700 transition-all duration-200 border border-blue-300 hover:border-blue-400 flex items-center justify-center group"
                             title={dict.common.edit}
                           >
                             <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -439,7 +439,7 @@ export default function ProductsPage() {
                           </button>
                           <button
                             onClick={() => handleDelete(product._id)}
-                            className="p-2.5 bg-red-50 hover:bg-red-100 active:bg-red-200 text-red-700 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md border border-red-200 hover:border-red-300 flex items-center justify-center group"
+                            className="p-2.5 bg-red-50 hover:bg-red-100 active:bg-red-200 text-red-700 transition-all duration-200 border border-red-300 hover:border-red-400 flex items-center justify-center group"
                             title={dict.common.delete}
                           >
                             <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

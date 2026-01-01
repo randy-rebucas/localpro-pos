@@ -126,7 +126,7 @@ export default function ExpensesPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
           <p className="mt-4 text-gray-600">Loading...</p>
         </div>
       </div>
@@ -147,7 +147,7 @@ export default function ExpensesPage() {
             </div>
             <button
               onClick={() => router.push(`/${tenant}/${lang}/admin`)}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
             >
               {dict.common?.back || 'Back'}
             </button>
@@ -155,7 +155,7 @@ export default function ExpensesPage() {
         </div>
 
         {message && (
-          <div className={`mb-6 p-4 rounded-lg flex items-center justify-between ${message.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
+          <div className={`mb-6 p-4 border flex items-center justify-between ${message.type === 'success' ? 'bg-green-50 text-green-800 border-green-300' : 'bg-red-50 text-red-800 border-red-300'}`}>
             <span>{message.text}</span>
             <button
               onClick={() => setMessage(null)}
@@ -169,7 +169,7 @@ export default function ExpensesPage() {
         )}
 
         {/* Summary Card */}
-        <div className="bg-white rounded-xl shadow-md p-6 mb-6">
+        <div className="bg-white border border-gray-300 p-6 mb-6">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-medium text-gray-500">{dict.admin?.totalExpenses || 'Total Expenses'}</h3>
@@ -184,7 +184,7 @@ export default function ExpensesPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-md p-6">
+        <div className="bg-white border border-gray-300 p-6">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold text-gray-900">{dict.admin?.expenses || 'Expenses'}</h2>
             <button
@@ -192,14 +192,14 @@ export default function ExpensesPage() {
                 setEditingExpense(null);
                 setShowExpenseModal(true);
               }}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+              className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
             >
               {dict.common?.add || 'Add'} {dict.admin?.expense || 'Expense'}
             </button>
           </div>
 
           {/* Filters */}
-          <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+          <div className="mb-6 p-4 bg-gray-50 border border-gray-300">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-medium text-gray-700">{dict.admin?.filters || 'Filters'}</h3>
               {(filters.startDate || filters.endDate || filters.name) && (
@@ -220,7 +220,7 @@ export default function ExpensesPage() {
                 type="date"
                 value={filters.startDate}
                 onChange={(e) => handleDateFilterChange('startDate', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm"
+                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 text-sm bg-white"
               />
             </div>
             <div>
@@ -231,7 +231,7 @@ export default function ExpensesPage() {
                 type="date"
                 value={filters.endDate}
                 onChange={(e) => handleDateFilterChange('endDate', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm"
+                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 text-sm bg-white"
               />
             </div>
             <div>
@@ -241,7 +241,7 @@ export default function ExpensesPage() {
               <select
                 value={filters.name}
                 onChange={(e) => setFilters({ ...filters, name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm"
+                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 text-sm bg-white"
               >
                 <option value="">{dict.common?.all || 'All Names'}</option>
                 {expenseNames.map((name) => (
@@ -278,7 +278,7 @@ export default function ExpensesPage() {
                         {new Date(expense.date).toLocaleDateString()}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                        <span className="px-2 py-1 text-xs font-semibold border border-blue-300 bg-blue-100 text-blue-800">
                           {expense.name}
                         </span>
                       </td>
@@ -460,7 +460,7 @@ function ExpenseModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white border border-gray-300 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
             {expense ? (dict.admin?.editExpense || 'Edit Expense') : (dict.admin?.addExpense || 'Add Expense')}
@@ -476,7 +476,7 @@ function ExpenseModal({
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder={dict.admin?.expenseNamePlaceholder || 'Enter expense name (e.g., Office Supplies, Rent, Utilities)'}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                   required
                 />
               </div>
@@ -498,7 +498,7 @@ function ExpenseModal({
                     }
                   }}
                   placeholder="0.00"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                 />
               </div>
             </div>
@@ -512,7 +512,7 @@ function ExpenseModal({
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   rows={2}
                   placeholder="Enter expense description"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                 />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -525,7 +525,7 @@ function ExpenseModal({
                   required
                   value={formData.date}
                   onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                 />
               </div>
               <div>
@@ -535,7 +535,7 @@ function ExpenseModal({
                 <select
                   value={formData.paymentMethod}
                   onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value as any })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                   required
                 >
                   <option value="cash">Cash</option>
@@ -554,7 +554,7 @@ function ExpenseModal({
                 value={formData.receipt}
                 onChange={(e) => setFormData({ ...formData, receipt: e.target.value })}
                 placeholder="Receipt URL or reference"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               />
             </div>
             <div>
@@ -565,11 +565,11 @@ function ExpenseModal({
                 value={formData.notes}
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                 rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               />
             </div>
             {error && (
-              <div className="bg-red-50 text-red-800 border border-red-200 rounded-lg p-3">
+              <div className="bg-red-50 text-red-800 border border-red-300 p-3">
                 {error}
               </div>
             )}
@@ -577,14 +577,14 @@ function ExpenseModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
               >
                 {dict.common?.cancel || 'Cancel'}
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
               >
                 {saving ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
               </button>

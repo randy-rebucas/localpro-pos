@@ -41,12 +41,24 @@ button, a {
   transition: all 0.2s ease-in-out;
 }
 
-/* Better focus states for accessibility */
+/* Better focus states for accessibility - Windows style */
 button:focus-visible,
 a:focus-visible,
 input:focus-visible {
-  outline: 2px solid #3b82f6;
-  outline-offset: 2px;
+  outline: 2px solid #0066cc;
+  outline-offset: 1px;
+}
+
+/* Windows-style: Sharp corners for buttons and inputs */
+button,
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="search"],
+select,
+textarea {
+  border-radius: 0;
 }
 
 /* Loading spinner animation */
@@ -109,6 +121,28 @@ body {
 button, a {
   min-height: 44px;
   min-width: 44px;
+}
+
+/* Touch manipulation for better mobile responsiveness */
+.touch-manipulation {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Show actions on touch devices, hide on hover-capable devices until hover */
+.actions-touch-visible {
+  opacity: 1;
+}
+
+/* Only hide on hover on devices that actually support hover */
+@media (hover: hover) {
+  .actions-touch-visible {
+    opacity: 0;
+  }
+  
+  .group:hover .actions-touch-visible {
+    opacity: 1;
+  }
 }
 
 /* Larger screens - enhance typography */

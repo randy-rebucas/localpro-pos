@@ -92,7 +92,7 @@ export default function LoginPage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
@@ -105,9 +105,9 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center px-4 py-12">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-6 sm:p-8 animate-fade-in">
+      <div className="max-w-md w-full bg-white border border-gray-300 p-6 sm:p-8 animate-fade-in">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-full mb-4">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 border border-blue-700 mb-4">
             <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
             </svg>
@@ -117,33 +117,33 @@ export default function LoginPage() {
         </div>
 
         {/* Login Method Tabs */}
-        <div className="flex gap-2 mb-6 bg-gray-100 p-1 rounded-lg">
+        <div className="flex gap-0 mb-6 bg-gray-100 border border-gray-300">
           <button
             onClick={() => { setLoginMethod('email'); setError(''); }}
-            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
+            className={`flex-1 py-2 px-4 text-sm font-medium transition-all border-r border-gray-300 last:border-r-0 ${
               loginMethod === 'email'
-                ? 'bg-white text-blue-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
+                ? 'bg-white text-blue-600 border-b-2 border-b-blue-600'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
             }`}
           >
             {dict?.login?.email || 'Email'}
           </button>
           <button
             onClick={() => { setLoginMethod('pin'); setError(''); }}
-            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
+            className={`flex-1 py-2 px-4 text-sm font-medium transition-all border-r border-gray-300 last:border-r-0 ${
               loginMethod === 'pin'
-                ? 'bg-white text-blue-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
+                ? 'bg-white text-blue-600 border-b-2 border-b-blue-600'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
             }`}
           >
             {dict?.login?.pin || 'PIN'}
           </button>
           <button
             onClick={() => { setLoginMethod('qr'); setError(''); setShowQRScanner(true); }}
-            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
+            className={`flex-1 py-2 px-4 text-sm font-medium transition-all border-r border-gray-300 last:border-r-0 ${
               loginMethod === 'qr'
-                ? 'bg-white text-blue-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
+                ? 'bg-white text-blue-600 border-b-2 border-b-blue-600'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
             }`}
           >
             {dict?.login?.qrCode || 'QR Code'}
@@ -151,7 +151,7 @@ export default function LoginPage() {
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border-2 border-red-200 rounded-lg text-red-700 text-sm flex items-center gap-2 animate-fade-in">
+          <div className="mb-4 p-3 bg-red-50 border-2 border-red-300 text-red-700 text-sm flex items-center gap-2 animate-fade-in">
             <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
@@ -172,7 +172,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all text-base"
+                className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all text-base"
                 placeholder="admin@example.com"
                 autoComplete="email"
                 disabled={loggingIn}
@@ -189,7 +189,7 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all text-base"
+                className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all text-base"
                 placeholder={dict?.login?.enterPassword || 'Enter your password'}
                 autoComplete="current-password"
                 disabled={loggingIn}
@@ -199,11 +199,11 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loggingIn}
-              className="w-full bg-blue-600 text-white py-3.5 rounded-xl font-semibold hover:bg-blue-700 active:bg-blue-800 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-base shadow-md hover:shadow-lg flex items-center justify-center gap-2"
+              className="w-full bg-blue-600 text-white py-3.5 font-semibold hover:bg-blue-700 active:bg-blue-800 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-base border border-blue-700 flex items-center justify-center gap-2"
             >
               {loggingIn ? (
                 <>
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  <div className="animate-spin h-5 w-5 border-b-2 border-white"></div>
                   <span>{dict?.login?.signingIn || 'Signing in...'}</span>
                 </>
               ) : (
@@ -234,7 +234,7 @@ export default function LoginPage() {
             </div>
             {loggingIn && (
               <div className="flex items-center justify-center gap-2 text-blue-600">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                <div className="animate-spin h-5 w-5 border-b-2 border-blue-600"></div>
                 <span>{dict?.login?.verifyingPin || 'Verifying PIN...'}</span>
               </div>
             )}
@@ -247,7 +247,7 @@ export default function LoginPage() {
             <button
               onClick={() => setShowQRScanner(true)}
               disabled={loggingIn}
-              className="w-full bg-blue-600 text-white py-3.5 rounded-xl font-semibold hover:bg-blue-700 active:bg-blue-800 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-base shadow-md hover:shadow-lg flex items-center justify-center gap-2"
+              className="w-full bg-blue-600 text-white py-3.5 font-semibold hover:bg-blue-700 active:bg-blue-800 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-base border border-blue-700 flex items-center justify-center gap-2"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />

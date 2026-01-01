@@ -25,7 +25,7 @@ export default function AdminPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
@@ -184,9 +184,9 @@ export default function AdminPage() {
             <Link
               key={index}
               href={card.href}
-              className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow duration-200 border border-gray-200 hover:border-blue-300"
+              className="bg-white border border-gray-300 p-6 hover:border-blue-500 transition-all duration-200"
             >
-              <div className={`inline-flex p-3 rounded-lg mb-4 ${
+              <div className={`inline-flex p-3 border mb-4 ${
                 card.color === 'blue' ? 'bg-blue-100 text-blue-600' :
                 card.color === 'green' ? 'bg-green-100 text-green-600' :
                 card.color === 'orange' ? 'bg-orange-100 text-orange-600' :

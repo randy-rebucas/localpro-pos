@@ -67,7 +67,7 @@ export default function TransactionsPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
           <p className="mt-4 text-gray-600">Loading...</p>
         </div>
       </div>
@@ -88,14 +88,14 @@ export default function TransactionsPage() {
             </div>
             <button
               onClick={() => router.push(`/${tenant}/${lang}/admin`)}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
             >
               {dict.common?.back || 'Back'}
             </button>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-md p-6">
+        <div className="bg-white border border-gray-300 p-6">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
@@ -138,7 +138,7 @@ export default function TransactionsPage() {
                       <Currency amount={transaction.total} />
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap">
-                      <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                      <span className="px-2 py-1 text-xs font-semibold border border-blue-300 bg-blue-100 text-blue-800">
                         {transaction.paymentMethod}
                       </span>
                       {transaction.paymentMethod === 'cash' && transaction.change !== undefined && (
@@ -146,7 +146,7 @@ export default function TransactionsPage() {
                       )}
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                      <span className={`px-2 py-1 text-xs font-semibold border ${
                         transaction.status === 'completed' ? 'bg-green-100 text-green-800' :
                         transaction.status === 'refunded' ? 'bg-orange-100 text-orange-800' :
                         'bg-red-100 text-red-800'
@@ -175,7 +175,7 @@ export default function TransactionsPage() {
               <button
                 onClick={() => setPage(p => Math.max(1, p - 1))}
                 disabled={page === 1}
-                className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50"
+                className="px-4 py-2 border border-gray-300 disabled:opacity-50 bg-white"
               >
                 Previous
               </button>
@@ -185,7 +185,7 @@ export default function TransactionsPage() {
               <button
                 onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
-                className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50"
+                className="px-4 py-2 border border-gray-300 disabled:opacity-50 bg-white"
               >
                 Next
               </button>
@@ -216,7 +216,7 @@ function TransactionDetailModal({
 }) {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white border border-gray-300 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-bold text-gray-900">
@@ -244,10 +244,10 @@ function TransactionDetailModal({
               <div>
                 <label className="text-sm font-medium text-gray-500">Status</label>
                 <div>
-                  <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                    transaction.status === 'completed' ? 'bg-green-100 text-green-800' :
-                    transaction.status === 'refunded' ? 'bg-orange-100 text-orange-800' :
-                    'bg-red-100 text-red-800'
+                  <span className={`px-2 py-1 text-xs font-semibold border ${
+                    transaction.status === 'completed' ? 'bg-green-100 text-green-800 border-green-300' :
+                    transaction.status === 'refunded' ? 'bg-orange-100 text-orange-800 border-orange-300' :
+                    'bg-red-100 text-red-800 border-red-300'
                   }`}>
                     {transaction.status}
                   </span>
@@ -260,7 +260,7 @@ function TransactionDetailModal({
             </div>
             <div>
               <label className="text-sm font-medium text-gray-500 mb-2 block">Items</label>
-              <div className="border rounded-lg divide-y">
+              <div className="border border-gray-300 divide-y">
                 {transaction.items.map((item, idx) => (
                   <div key={idx} className="p-3 flex justify-between">
                     <div>
@@ -303,14 +303,14 @@ function TransactionDetailModal({
             {transaction.notes && (
               <div>
                 <label className="text-sm font-medium text-gray-500 mb-1 block">Notes</label>
-                <div className="p-3 bg-gray-50 rounded-lg">{transaction.notes}</div>
+                <div className="p-3 bg-gray-50 border border-gray-300">{transaction.notes}</div>
               </div>
             )}
           </div>
           <div className="mt-6 flex justify-end">
             <button
               onClick={onClose}
-              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+              className="px-4 py-2 bg-gray-200 text-gray-700 hover:bg-gray-300 border border-gray-400"
             >
               {dict.common?.close || 'Close'}
             </button>

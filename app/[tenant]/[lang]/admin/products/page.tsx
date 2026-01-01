@@ -101,7 +101,7 @@ export default function ProductsPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
           <p className="mt-4 text-gray-600">Loading...</p>
         </div>
       </div>
@@ -122,7 +122,7 @@ export default function ProductsPage() {
             </div>
             <button
               onClick={() => router.push(`/${tenant}/${lang}/admin`)}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
             >
               {dict.common?.back || 'Back'}
             </button>
@@ -130,12 +130,12 @@ export default function ProductsPage() {
         </div>
 
         {message && (
-          <div className={`mb-6 p-4 rounded-lg ${message.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
+          <div className={`mb-6 p-4 border ${message.type === 'success' ? 'bg-green-50 text-green-800 border-green-300' : 'bg-red-50 text-red-800 border-red-300'}`}>
             {message.text}
           </div>
         )}
 
-        <div className="bg-white rounded-xl shadow-md p-6">
+        <div className="bg-white border border-gray-300 p-6">
           <div className="flex justify-between items-center mb-6">
             <div className="flex-1 max-w-md">
               <input
@@ -143,7 +143,7 @@ export default function ProductsPage() {
                 placeholder={dict.common?.search || 'Search products...'}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               />
             </div>
             <button
@@ -151,7 +151,7 @@ export default function ProductsPage() {
                 setEditingProduct(null);
                 setShowProductModal(true);
               }}
-              className="ml-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+              className="ml-4 px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
             >
               {dict.common?.add || 'Add'} {dict.admin?.product || 'Product'}
             </button>
@@ -191,7 +191,7 @@ export default function ProductsPage() {
                       </span>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap">
-                      <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                      <span className="px-2 py-1 text-xs font-semibold border border-blue-300 bg-blue-100 text-blue-800">
                         {product.productType}
                         {product.hasVariations && ' (variations)'}
                       </span>
@@ -368,7 +368,7 @@ function ProductModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white border border-gray-300 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
             {product ? (dict.admin?.editProduct || 'Edit Product') : (dict.admin?.addProduct || 'Add Product')}
@@ -384,7 +384,7 @@ function ProductModal({
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                 />
               </div>
               <div>
@@ -393,7 +393,7 @@ function ProductModal({
                   type="text"
                   value={formData.sku}
                   onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                 />
               </div>
             </div>
@@ -405,7 +405,7 @@ function ProductModal({
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               />
             </div>
             <div className="grid grid-cols-3 gap-4">
@@ -420,7 +420,7 @@ function ProductModal({
                   required
                   value={formData.price}
                   onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                 />
               </div>
               <div>
@@ -432,7 +432,7 @@ function ProductModal({
                   min="0"
                   value={formData.stock}
                   onChange={(e) => setFormData({ ...formData, stock: parseInt(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                   disabled={!formData.trackInventory}
                 />
               </div>
@@ -445,7 +445,7 @@ function ProductModal({
                   min="0"
                   value={formData.lowStockThreshold}
                   onChange={(e) => setFormData({ ...formData, lowStockThreshold: parseInt(e.target.value) || 10 })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                 />
               </div>
             </div>
@@ -474,12 +474,12 @@ function ProductModal({
                     }}
                     onFocus={() => setShowCategorySuggestions(true)}
                     placeholder={dict.admin?.searchCategory || 'Type to search categories...'}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                   />
                   {showCategorySuggestions && filteredCategories.length > 0 && (
                     <div
                       ref={categoryListRef}
-                      className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto"
+                      className="absolute z-50 w-full mt-1 bg-white border border-gray-300 max-h-60 overflow-y-auto"
                     >
                       {filteredCategories.map((cat) => (
                         <button
@@ -498,7 +498,7 @@ function ProductModal({
                   {showCategorySuggestions && categorySearch && filteredCategories.length === 0 && (
                     <div
                       ref={categoryListRef}
-                      className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg p-4 text-sm text-gray-500"
+                      className="absolute z-50 w-full mt-1 bg-white border border-gray-300 p-4 text-sm text-gray-500"
                     >
                       {dict.admin?.noCategoryFound || 'No category found'}
                     </div>
@@ -512,7 +512,7 @@ function ProductModal({
                 <select
                   value={formData.productType}
                   onChange={(e) => setFormData({ ...formData, productType: e.target.value as any })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                 >
                   <option value="regular">{dict.admin?.regular || 'Regular'}</option>
                   <option value="bundle">{dict.admin?.bundle || 'Bundle'}</option>
@@ -534,7 +534,7 @@ function ProductModal({
               </label>
             </div>
             {error && (
-              <div className="bg-red-50 text-red-800 border border-red-200 rounded-lg p-3">
+              <div className="bg-red-50 text-red-800 border border-red-300 p-3">
                 {error}
               </div>
             )}
@@ -542,14 +542,14 @@ function ProductModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
               >
                 {dict.common?.cancel || 'Cancel'}
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
               >
                 {saving ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
               </button>

@@ -91,7 +91,7 @@ export default function UsersPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
           <p className="mt-4 text-gray-600">Loading...</p>
         </div>
       </div>
@@ -112,7 +112,7 @@ export default function UsersPage() {
             </div>
             <button
               onClick={() => router.push(`/${tenant}/${lang}/admin`)}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
             >
               {dict.common?.back || 'Back'}
             </button>
@@ -120,12 +120,12 @@ export default function UsersPage() {
         </div>
 
         {message && (
-          <div className={`mb-6 p-4 rounded-lg ${message.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
+          <div className={`mb-6 p-4 border ${message.type === 'success' ? 'bg-green-50 text-green-800 border-green-300' : 'bg-red-50 text-red-800 border-red-300'}`}>
             {message.text}
           </div>
         )}
 
-        <div className="bg-white rounded-xl shadow-md p-6">
+        <div className="bg-white border border-gray-300 p-6">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold text-gray-900">{dict.admin?.users || 'Users'}</h2>
             <button
@@ -133,7 +133,7 @@ export default function UsersPage() {
                 setEditingUser(null);
                 setShowUserModal(true);
               }}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+              className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
             >
               {dict.common?.add || 'Add'} {dict.admin?.user || 'User'}
             </button>
@@ -156,12 +156,12 @@ export default function UsersPage() {
                     <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{user.name}</td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{user.email}</td>
                     <td className="px-4 py-4 whitespace-nowrap">
-                      <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 capitalize">
+                      <span className="px-2 py-1 text-xs font-semibold border border-blue-300 bg-blue-100 text-blue-800 capitalize">
                         {user.role}
                       </span>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs font-semibold rounded-full ${user.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                      <span className={`px-2 py-1 text-xs font-semibold border ${user.isActive ? 'bg-green-100 text-green-800 border-green-300' : 'bg-red-100 text-red-800 border-red-300'}`}>
                         {user.isActive ? (dict.admin?.active || 'Active') : (dict.admin?.inactive || 'Inactive')}
                       </span>
                     </td>
@@ -334,7 +334,7 @@ function UserModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white border border-gray-300 max-w-md w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
             {user ? (dict.admin?.editUser || 'Edit User') : (dict.admin?.addUser || 'Add User')}
@@ -349,7 +349,7 @@ function UserModal({
                 required
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               />
             </div>
             <div>
@@ -361,7 +361,7 @@ function UserModal({
                 required
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               />
             </div>
             <div>
@@ -373,7 +373,7 @@ function UserModal({
                 required={!user}
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               />
             </div>
             <div>
@@ -383,7 +383,7 @@ function UserModal({
               <select
                 value={formData.role}
                 onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               >
                 <option value="viewer">Viewer</option>
                 <option value="cashier">Cashier</option>
@@ -393,7 +393,7 @@ function UserModal({
               </select>
             </div>
             {error && (
-              <div className="bg-red-50 text-red-800 border border-red-200 rounded-lg p-3">
+              <div className="bg-red-50 text-red-800 border border-red-300 p-3">
                 {error}
               </div>
             )}
@@ -401,14 +401,14 @@ function UserModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
               >
                 {dict.common?.cancel || 'Cancel'}
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
               >
                 {saving ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
               </button>
@@ -493,7 +493,7 @@ function PINModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
+      <div className="bg-white border border-gray-300 max-w-md w-full">
         <div className="p-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
             Manage PIN for {user.name}
@@ -513,13 +513,13 @@ function PINModal({
                   const value = e.target.value.replace(/\D/g, '');
                   if (value.length <= 8) setPin(value);
                 }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-center text-2xl font-mono tracking-widest"
+                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 text-center text-2xl font-mono tracking-widest bg-white"
                 placeholder="0000"
                 required
               />
             </div>
             {error && (
-              <div className="bg-red-50 text-red-800 border border-red-200 rounded-lg p-3">
+              <div className="bg-red-50 text-red-800 border border-red-300 p-3">
                 {error}
               </div>
             )}
@@ -528,21 +528,21 @@ function PINModal({
                 type="button"
                 onClick={handleRemovePIN}
                 disabled={removing}
-                className="px-4 py-2 border border-red-300 text-red-700 rounded-lg hover:bg-red-50 disabled:opacity-50"
+                className="px-4 py-2 border border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-50 bg-white"
               >
                 {removing ? 'Removing...' : 'Remove PIN'}
               </button>
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
               >
                 {dict.common?.cancel || 'Cancel'}
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
               >
                 {saving ? 'Saving...' : 'Set PIN'}
               </button>
@@ -621,9 +621,9 @@ function QRModal({
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-xl p-6">
+        <div className="bg-white border border-gray-300 p-6">
           <div className="text-center">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
             <p className="mt-4 text-gray-600">Loading QR code...</p>
           </div>
         </div>
@@ -633,32 +633,32 @@ function QRModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
+      <div className="bg-white border border-gray-300 max-w-md w-full">
         <div className="p-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
             QR Code for {user.name}
           </h2>
           {error && (
-            <div className="bg-red-50 text-red-800 border border-red-200 rounded-lg p-3 mb-4">
+            <div className="bg-red-50 text-red-800 border border-red-300 p-3 mb-4">
               {error}
             </div>
           )}
           {qrData && (
             <div className="space-y-4">
-              <div className="flex justify-center p-4 bg-gray-50 rounded-lg">
+              <div className="flex justify-center p-4 bg-gray-50 border border-gray-300">
                 <QRCodeDisplay qrToken={qrData.qrToken} name={qrData.name} />
               </div>
               <div className="flex gap-3 justify-end pt-4">
                 <button
                   onClick={handleRegenerate}
                   disabled={regenerating}
-                  className="px-4 py-2 border border-orange-300 text-orange-700 rounded-lg hover:bg-orange-50 disabled:opacity-50"
+                  className="px-4 py-2 border border-orange-300 text-orange-700 hover:bg-orange-50 disabled:opacity-50 bg-white"
                 >
                   {regenerating ? 'Regenerating...' : 'Regenerate QR Code'}
                 </button>
                 <button
                   onClick={onClose}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 border border-blue-700"
                 >
                   {dict.common?.close || 'Close'}
                 </button>
