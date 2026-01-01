@@ -152,6 +152,32 @@ export function getDefaultTenantSettings(): ITenantSettings {
     enableLoyaltyProgram: false,
     enableCustomerManagement: false,
     enableBookingScheduling: false,
+    multiCurrency: {
+      enabled: false,
+      displayCurrencies: [],
+      exchangeRates: {},
+      exchangeRateSource: 'manual',
+    },
+    receiptTemplates: {
+      default: undefined,
+      templates: [],
+    },
+    notificationTemplates: {
+      email: {},
+      sms: {},
+    },
+    advancedBranding: {
+      fontFamily: undefined,
+      fontSource: 'system',
+      theme: 'light',
+      borderRadius: 'md',
+    },
+    taxRules: [],
+    businessHours: {
+      schedule: {},
+      specialHours: [],
+    },
+    holidays: [],
   };
 }
 
