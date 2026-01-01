@@ -100,7 +100,8 @@ export async function updateStock(
   }
 
   // If product doesn't track inventory, skip stock update
-  if (!product.trackInventory) {
+  if (product.trackInventory === false) {
+    console.log(`Skipping stock update for product ${productId}: trackInventory is false`);
     return;
   }
 

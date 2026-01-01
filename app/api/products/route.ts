@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
 
     const products = await Product.find(query)
       .populate('categoryId', 'name')
-      .sort({ createdAt: -1 })
+      .sort({ pinned: -1, createdAt: -1 }) // Pinned products first, then by creation date
       .lean();
     
     return NextResponse.json({ success: true, data: products });

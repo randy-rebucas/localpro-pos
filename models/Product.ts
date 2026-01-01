@@ -30,7 +30,9 @@ export interface IProduct extends Document {
   variations?: IProductVariation[];
   branchStock?: IBranchStock[]; // Branch-specific stock levels
   trackInventory: boolean; // Whether to track inventory for this product
+  allowOutOfStockSales?: boolean; // Whether to allow sales when out of stock
   lowStockThreshold?: number; // Product-specific threshold (overrides tenant default)
+  pinned?: boolean; // Whether the product is pinned to the top
   createdAt: Date;
   updatedAt: Date;
 }
@@ -121,9 +123,18 @@ const ProductSchema: Schema = new Schema(
       type: Boolean,
       default: true,
     },
+    allowOutOfStockSales: {
+      type: Boolean,
+      default: false,
+    },
     lowStockThreshold: {
       type: Number,
       min: 0,
+    },
+    pinned: {
+      type: Boolean,
+      default: false,
+      index: true,
     },
   },
   {

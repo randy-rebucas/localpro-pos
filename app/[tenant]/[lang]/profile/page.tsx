@@ -246,7 +246,7 @@ export default function ProfilePage() {
         <div className="bg-white rounded-xl shadow-md overflow-hidden">
           <div className="p-5 sm:p-6 lg:p-8">
             {/* Profile Information */}
-            <section>
+            <section className="mb-6">
               <h2 className="text-xl font-bold text-gray-900 mb-5">
                 {dict?.profile?.information || 'Profile Information'}
               </h2>

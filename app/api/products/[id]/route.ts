@@ -17,13 +17,20 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
     
-    const product = await Product.findOne({ _id: id, tenantId });
+    const product = await Product.findOne({ _id: id, tenantId }).lean();
     
     if (!product) {
       return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
     }
     
-    return NextResponse.json({ success: true, data: product });
+    // Ensure boolean fields are properly set
+    const productData = {
+      ...product,
+      trackInventory: product.trackInventory !== undefined ? Boolean(product.trackInventory) : true,
+      allowOutOfStockSales: product.allowOutOfStockSales !== undefined ? Boolean(product.allowOutOfStockSales) : false,
+    };
+    
+    return NextResponse.json({ success: true, data: productData });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -54,7 +61,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (!oldProduct) {
       return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
     }
-
     const product = await Product.findOneAndUpdate(
       { _id: id, tenantId },
       data,

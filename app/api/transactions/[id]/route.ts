@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Transaction from '@/models/Transaction';
+import Product from '@/models/Product';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth, requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -58,19 +59,22 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       transaction.status = body.status;
       await transaction.save();
 
-      // If refunding, restore stock
+      // If refunding, restore stock (only if product tracks inventory)
       if (body.status === 'refunded' && oldStatus === 'completed') {
         for (const item of transaction.items) {
-          await updateStock(
-            item.product.toString(),
-            tenantId,
-            item.quantity, // Positive to restore
-            'return',
-            {
-              transactionId: transaction._id.toString(),
-              reason: 'Transaction refund',
-            }
-          );
+          const product = await Product.findOne({ _id: item.product.toString(), tenantId });
+          if (product && product.trackInventory !== false) {
+            await updateStock(
+              item.product.toString(),
+              tenantId,
+              item.quantity, // Positive to restore
+              'return',
+              {
+                transactionId: transaction._id.toString(),
+                reason: 'Transaction refund',
+              }
+            );
+          }
         }
       }
 

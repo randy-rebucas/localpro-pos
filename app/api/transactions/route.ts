@@ -272,21 +272,27 @@ export async function POST(request: NextRequest) {
             }
           );
         } else if (productId) {
-          // Update stock for regular product
-          console.log(`Updating stock for product ${productId}, quantity: -${quantity}`);
-          await updateStock(
-            productId,
-            tenantId,
-            -quantity, // Negative for sale
-            'sale',
-            {
-              userId: user.userId,
-              branchId,
-              variation,
-              reason: 'Transaction sale',
-            }
-          );
-          console.log(`Stock update completed for product ${productId}`);
+          // Check if product tracks inventory before updating stock
+          const product = await Product.findOne({ _id: productId, tenantId });
+          if (product && product.trackInventory !== false) {
+            // Update stock for regular product (only if tracking inventory)
+            console.log(`Updating stock for product ${productId}, quantity: -${quantity}`);
+            await updateStock(
+              productId,
+              tenantId,
+              -quantity, // Negative for sale
+              'sale',
+              {
+                userId: user.userId,
+                branchId,
+                variation,
+                reason: 'Transaction sale',
+              }
+            );
+            console.log(`Stock update completed for product ${productId}`);
+          } else {
+            console.log(`Skipping stock update for product ${productId}: trackInventory is false`);
+          }
         }
       } catch (error: any) {
         // Stock update is critical - fail the entire transaction

@@ -90,15 +90,22 @@ class ReceiptPrinterService {
 
   private async sendData(data: Uint8Array): Promise<void> {
     if (!this.device || !this.config) {
+      // Throw error to be caught by printReceipt's try-catch for fallback
       throw new Error('Printer not connected');
     }
 
-    if (this.config.type === 'usb') {
-      await (this.device as USBDevice).transferOut(1, data);
-    } else if (this.config.type === 'serial') {
-      const writer = (this.device as SerialPort).writable.getWriter();
-      await writer.write(data);
-      writer.releaseLock();
+    try {
+      if (this.config.type === 'usb') {
+        await (this.device as USBDevice).transferOut(1, data);
+      } else if (this.config.type === 'serial') {
+        const writer = (this.device as SerialPort).writable.getWriter();
+        await writer.write(data);
+        writer.releaseLock();
+      }
+    } catch (error) {
+      console.warn('Failed to send data to printer:', error);
+      // Re-throw to be caught by printReceipt's try-catch
+      throw error;
     }
   }
 
@@ -229,6 +236,12 @@ class ReceiptPrinterService {
       // Feed and cut
       commands.push(this.feed(3));
       commands.push(this.cut());
+
+      // Check if printer is connected before attempting to send commands
+      if (!this.device || !this.config) {
+        console.warn('Printer not connected, falling back to browser print');
+        return this.printViaBrowser(data);
+      }
 
       // Send all commands
       for (const cmd of commands) {

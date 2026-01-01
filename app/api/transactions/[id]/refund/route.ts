@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Transaction from '@/models/Transaction';
+import Product from '@/models/Product';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -103,19 +104,22 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       notes: notes || reason || 'Refund',
     });
 
-    // Restore stock for refunded items
+    // Restore stock for refunded items (only if product tracks inventory)
     for (const refundItem of refundItems) {
-      await updateStock(
-        refundItem.productId,
-        tenantId,
-        refundItem.quantity, // Positive to restore
-        'return',
-        {
-          transactionId: refundTransaction._id.toString(),
-          reason: reason || 'Transaction refund',
-          notes: notes,
-        }
-      );
+      const product = await Product.findOne({ _id: refundItem.productId, tenantId });
+      if (product && product.trackInventory !== false) {
+        await updateStock(
+          refundItem.productId,
+          tenantId,
+          refundItem.quantity, // Positive to restore
+          'return',
+          {
+            transactionId: refundTransaction._id.toString(),
+            reason: reason || 'Transaction refund',
+            notes: notes,
+          }
+        );
+      }
     }
 
     // Mark original transaction as refunded if full refund

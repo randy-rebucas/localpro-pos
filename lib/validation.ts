@@ -80,7 +80,12 @@ export function validateProduct(data: any): ValidationError[] {
   if (data.sku && data.sku.length > 50) {
     errors.push({ field: 'sku', message: 'SKU must be less than 50 characters' });
   }
-
+  if (data.trackInventory !== undefined && typeof data.trackInventory !== 'boolean') {
+    errors.push({ field: 'trackInventory', message: 'Track inventory must be a boolean' });
+  }
+  if (data.allowOutOfStockSales !== undefined && typeof data.allowOutOfStockSales !== 'boolean') {
+    errors.push({ field: 'allowOutOfStockSales', message: 'Allow out of stock sales must be a boolean' });
+  }
   return errors;
 }
 
