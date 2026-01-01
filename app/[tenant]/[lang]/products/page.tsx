@@ -8,6 +8,8 @@ import ProductModal from '@/components/ProductModal';
 import StockRefillModal from '@/components/StockRefillModal';
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '../dictionaries-client';
+import { showToast } from '@/lib/toast';
+import { useConfirm } from '@/lib/confirm';
 
 interface Product {
   _id: string;
@@ -35,6 +37,7 @@ export default function ProductsPage() {
   const [refillingProduct, setRefillingProduct] = useState<Product | null>(null);
   const [dict, setDict] = useState<any>(null);
   const [displayMode, setDisplayMode] = useState<'grid' | 'list'>('grid');
+  const { confirm, Dialog: ConfirmDialog } = useConfirm();
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -81,19 +84,25 @@ export default function ProductsPage() {
 
   const handleDelete = async (id: string) => {
     if (!dict) return;
-    if (!confirm(dict.products.deleteConfirm)) return;
+    const confirmed = await confirm(
+      dict.products.deleteConfirmTitle || 'Delete Product',
+      dict.products.deleteConfirm,
+      { variant: 'danger' }
+    );
+    if (!confirmed) return;
 
     try {
       const res = await fetch(`/api/products/${id}?tenant=${tenant}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.success) {
+        showToast.success(dict.products.productDeleted || 'Product deleted successfully');
         fetchProducts();
       } else {
-        alert(data.error || dict.products.deleteError);
+        showToast.error(data.error || dict.products.deleteError);
       }
     } catch (error) {
       console.error('Error deleting product:', error);
-      alert(dict.products.deleteError);
+      showToast.error(dict.products.deleteError);
     }
   };
 
@@ -144,6 +153,7 @@ export default function ProductsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <ConfirmDialog />
       <PageTitle />
       <Navbar />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">

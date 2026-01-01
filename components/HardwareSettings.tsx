@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { hardwareService, HardwareConfig, PrinterConfig } from '@/lib/hardware';
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
+import { showToast } from '@/lib/toast';
 
 interface HardwareSettingsProps {
   onClose?: () => void;
@@ -66,11 +67,11 @@ export default function HardwareSettings({
       const hardwareConfigKey = `hardware_config_${tenant}`;
       localStorage.setItem(hardwareConfigKey, JSON.stringify(config));
       await hardwareService.setConfig(config);
-      alert(dict?.common?.hardwareSettingsSaved || 'Hardware settings saved successfully!');
+      showToast.success(dict?.common?.hardwareSettingsSaved || 'Hardware settings saved successfully!');
       if (onClose) onClose();
     } catch (error) {
       console.error('Failed to save hardware config:', error);
-      alert(dict?.common?.failedToSaveHardwareSettings || 'Failed to save hardware settings');
+      showToast.error(dict?.common?.failedToSaveHardwareSettings || 'Failed to save hardware settings');
     } finally {
       setLoading(false);
     }
@@ -94,7 +95,7 @@ export default function HardwareSettings({
 
   const testPrinter = async () => {
     if (!config.printer) {
-      alert(dict?.common?.configurePrinterFirst || 'Please configure a printer first');
+      showToast.error(dict?.common?.configurePrinterFirst || 'Please configure a printer first');
       return;
     }
 
@@ -117,13 +118,13 @@ export default function HardwareSettings({
 
       const success = await hardwareService.printReceipt(testReceipt);
       if (success) {
-        alert(dict?.common?.testReceiptSent || 'Test receipt sent successfully!');
+        showToast.success(dict?.common?.testReceiptSent || 'Test receipt sent successfully!');
       } else {
-        alert(dict?.common?.failedToPrintTestReceipt || 'Failed to print test receipt');
+        showToast.error(dict?.common?.failedToPrintTestReceipt || 'Failed to print test receipt');
       }
     } catch (error) {
       console.error('Print test error:', error);
-      alert(dict?.common?.failedToPrintTestReceipt || 'Failed to print test receipt');
+      showToast.error(dict?.common?.failedToPrintTestReceipt || 'Failed to print test receipt');
     } finally {
       setTesting(null);
     }
@@ -134,13 +135,13 @@ export default function HardwareSettings({
     try {
       const success = await hardwareService.openCashDrawer();
       if (success) {
-        alert(dict?.common?.cashDrawerOpened || 'Cash drawer opened!');
+        showToast.success(dict?.common?.cashDrawerOpened || 'Cash drawer opened!');
       } else {
-        alert(dict?.common?.failedToOpenCashDrawer || 'Failed to open cash drawer. Make sure it is connected to the printer.');
+        showToast.error(dict?.common?.failedToOpenCashDrawer || 'Failed to open cash drawer. Make sure it is connected to the printer.');
       }
     } catch (error) {
       console.error('Cash drawer test error:', error);
-      alert(dict?.common?.failedToOpenCashDrawerShort || 'Failed to open cash drawer');
+      showToast.error(dict?.common?.failedToOpenCashDrawerShort || 'Failed to open cash drawer');
     } finally {
       setTesting(null);
     }

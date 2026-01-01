@@ -94,7 +94,6 @@ export async function PUT(
       { new: true, runValidators: true }
     );
 
-    const t = await getValidationTranslatorFromRequest(request);
     if (!tenant) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },

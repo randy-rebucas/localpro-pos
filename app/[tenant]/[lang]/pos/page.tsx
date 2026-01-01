@@ -13,6 +13,8 @@ import QRCodeScanner from '@/components/QRCodeScanner';
 import HardwareStatusChecker from '@/components/HardwareStatus';
 import { hardwareService } from '@/lib/hardware';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { showToast } from '@/lib/toast';
+import { useConfirm } from '@/lib/confirm';
 
 interface Product {
   _id: string;
@@ -66,6 +68,7 @@ export default function POSPage() {
   const [showSaveCartModal, setShowSaveCartModal] = useState(false);
   const [cartName, setCartName] = useState('');
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const { confirm, Dialog: ConfirmDialog } = useConfirm();
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -148,7 +151,7 @@ export default function POSPage() {
     const trackInventory = product.trackInventory !== false; // Default to true if not set
     
     if (isOutOfStock && !canSellOutOfStock) {
-      alert(dict.pos.outOfStock);
+      showToast.error(dict.pos.outOfStock);
       return;
     }
 
@@ -157,7 +160,7 @@ export default function POSPage() {
       if (existingItem) {
         // If tracking inventory and not allowing out of stock sales, check stock
         if (trackInventory && !canSellOutOfStock && existingItem.quantity >= product.stock) {
-          alert(dict.pos.insufficientStock);
+          showToast.error(dict.pos.insufficientStock);
           return prevCart;
         }
         return prevCart.map((item) =>
@@ -190,7 +193,7 @@ export default function POSPage() {
       addToCart(product);
     } else {
       if (dict) {
-        alert(dict.pos.productNotFound || 'Product not found');
+        showToast.error(dict.pos.productNotFound || 'Product not found');
       }
     }
   }, [products, dict, addToCart]);
@@ -279,7 +282,7 @@ export default function POSPage() {
     
     // Check stock only if tracking inventory and not allowing out of stock sales
     if (item && trackInventory && !canSellOutOfStock && quantity > item.stock) {
-      alert(dict.pos.insufficientStock);
+      showToast.error(dict.pos.insufficientStock);
       return;
     }
     setCart(
@@ -322,12 +325,13 @@ export default function POSPage() {
           name: data.data.name,
         });
         setPromoCode('');
+        showToast.success(dict.pos.discountApplied || 'Discount applied successfully');
       } else {
-        alert(data.error || dict.pos.invalidDiscountCode);
+        showToast.error(data.error || dict.pos.invalidDiscountCode);
       }
     } catch (error) {
       console.error('Error applying discount:', error);
-      alert(dict.pos.invalidDiscountCode);
+      showToast.error(dict.pos.invalidDiscountCode);
     }
   };
 
@@ -346,11 +350,11 @@ export default function POSPage() {
       if (data.success) {
         const transaction = data.data;
         if (transaction.status === 'refunded') {
-          alert(dict.pos.alreadyRefunded || 'This transaction has already been refunded');
+          showToast.error(dict.pos.alreadyRefunded || 'This transaction has already been refunded');
           return;
         }
         if (transaction.status !== 'completed') {
-          alert(dict.pos.onlyCompletedRefundable || 'Only completed transactions can be refunded');
+          showToast.error(dict.pos.onlyCompletedRefundable || 'Only completed transactions can be refunded');
           return;
         }
         setRefundTransaction(transaction);
@@ -361,11 +365,11 @@ export default function POSPage() {
         });
         setRefundItems(items);
       } else {
-        alert(data.error || dict.pos.noTransactionFound);
+        showToast.error(data.error || dict.pos.noTransactionFound);
       }
     } catch (error) {
       console.error('Error looking up transaction:', error);
-      alert(dict.pos.noTransactionFound);
+      showToast.error(dict.pos.noTransactionFound);
     }
   };
 
@@ -377,7 +381,7 @@ export default function POSPage() {
       .map(([productId, quantity]) => ({ productId, quantity }));
 
     if (selectedItems.length === 0) {
-      alert(dict.pos.selectAtLeastOneItem);
+      showToast.error(dict.pos.selectAtLeastOneItem);
       return;
     }
 
@@ -395,7 +399,7 @@ export default function POSPage() {
 
       const data = await res.json();
       if (data.success) {
-        alert(dict.pos.refundSuccess);
+        showToast.success(dict.pos.refundSuccess);
         setShowRefundModal(false);
         setRefundTransaction(null);
         setRefundTransactionId('');
@@ -404,11 +408,11 @@ export default function POSPage() {
         setRefundNotes('');
         fetchProducts();
       } else {
-        alert(data.error || dict.pos.refundError);
+        showToast.error(data.error || dict.pos.refundError);
       }
     } catch (error) {
       console.error('Error processing refund:', error);
-      alert(dict.pos.refundError);
+      showToast.error(dict.pos.refundError);
     } finally {
       setProcessingRefund(false);
     }
@@ -417,7 +421,7 @@ export default function POSPage() {
   const handleCheckout = () => {
     if (!dict) return;
     if (cart.length === 0) {
-      alert(dict.pos.cartEmptyAlert);
+      showToast.error(dict.pos.cartEmptyAlert);
       return;
     }
     setShowPaymentModal(true);
@@ -429,7 +433,7 @@ export default function POSPage() {
       const cash = parseFloat(cashReceived);
       const total = getTotal();
       if (isNaN(cash) || cash < total) {
-        alert(dict.pos.insufficientCash);
+        showToast.error(dict.pos.insufficientCash);
         return;
       }
     }
@@ -468,7 +472,7 @@ export default function POSPage() {
               }
             }
             
-            alert(`${dict.pos.transactionCompleted} ${totalFormatted}`);
+            showToast.success(`${dict.pos.transactionCompleted} ${totalFormatted}`);
             setCart([]);
             setShowPaymentModal(false);
             setCashReceived('');
@@ -549,7 +553,7 @@ export default function POSPage() {
         ? `${dict.pos.transactionCompleted} ${totalFormatted}`
         : `${dict.pos.transactionSavedOffline || 'Transaction saved offline'} ${totalFormatted}. ${dict.pos.willSyncWhenOnline || 'Will sync when connection is restored.'}`;
       
-      alert(message);
+      showToast.success(message);
       setCart([]);
       setShowPaymentModal(false);
       setCashReceived('');
@@ -563,25 +567,31 @@ export default function POSPage() {
       }
     } catch (error) {
       console.error('Error processing transaction:', error);
-      alert(dict.pos.transactionError || 'Failed to process transaction');
+      showToast.error(dict.pos.transactionError || 'Failed to process transaction');
     } finally {
       setProcessing(false);
     }
   };
 
-  const clearCart = () => {
+  const clearCart = async () => {
     if (!dict) return;
-    if (confirm(dict.pos.clearCartConfirm)) {
+    const confirmed = await confirm(
+      dict.pos.clearCartConfirmTitle || 'Clear Cart',
+      dict.pos.clearCartConfirm,
+      { variant: 'warning' }
+    );
+    if (confirmed) {
       setCart([]);
       setAppliedDiscount(null);
       setPromoCode('');
+      showToast.success(dict.pos.cartCleared || 'Cart cleared');
     }
   };
 
   const saveCart = async () => {
     if (!dict || cart.length === 0) return;
     if (!cartName.trim()) {
-      alert(dict.pos?.cartNameRequired || 'Please enter a name for this cart');
+      showToast.error(dict.pos?.cartNameRequired || 'Please enter a name for this cart');
       return;
     }
 
@@ -606,16 +616,16 @@ export default function POSPage() {
 
       const data = await res.json();
       if (data.success) {
-        alert(dict.pos?.cartSaved || 'Cart saved successfully');
+        showToast.success(dict.pos?.cartSaved || 'Cart saved successfully');
         setShowSaveCartModal(false);
         setCartName('');
         loadSavedCarts();
       } else {
-        alert(data.error || dict.pos?.saveCartError || 'Failed to save cart');
+        showToast.error(data.error || dict.pos?.saveCartError || 'Failed to save cart');
       }
     } catch (error) {
       console.error('Error saving cart:', error);
-      alert(dict.pos?.saveCartError || 'Failed to save cart');
+      showToast.error(dict.pos?.saveCartError || 'Failed to save cart');
     } finally {
       setSavingCart(false);
     }
@@ -642,7 +652,12 @@ export default function POSPage() {
     if (!dict) return;
     
     if (cart.length > 0) {
-      if (!confirm(dict.pos?.loadCartConfirm || 'Loading a saved cart will replace your current cart. Continue?')) {
+      const confirmed = await confirm(
+        dict.pos?.loadCartConfirmTitle || 'Load Saved Cart',
+        dict.pos?.loadCartConfirm || 'Loading a saved cart will replace your current cart. Continue?',
+        { variant: 'warning' }
+      );
+      if (!confirmed) {
         return;
       }
     }
@@ -674,15 +689,21 @@ export default function POSPage() {
       
       // Refresh products to get current stock
       fetchProducts();
+      showToast.success(dict.pos?.cartLoaded || 'Cart loaded successfully');
     } catch (error) {
       console.error('Error loading cart:', error);
-      alert(dict.pos?.loadCartError || 'Failed to load cart');
+      showToast.error(dict.pos?.loadCartError || 'Failed to load cart');
     }
   };
 
   const deleteSavedCart = async (cartId: string) => {
     if (!dict) return;
-    if (!confirm(dict.pos?.deleteCartConfirm || 'Are you sure you want to delete this saved cart?')) {
+    const confirmed = await confirm(
+      dict.pos?.deleteCartConfirmTitle || 'Delete Saved Cart',
+      dict.pos?.deleteCartConfirm || 'Are you sure you want to delete this saved cart?',
+      { variant: 'danger' }
+    );
+    if (!confirmed) {
       return;
     }
 
@@ -694,13 +715,14 @@ export default function POSPage() {
 
       const data = await res.json();
       if (data.success) {
+        showToast.success(dict.pos?.cartDeleted || 'Cart deleted successfully');
         loadSavedCarts();
       } else {
-        alert(data.error || dict.pos?.deleteCartError || 'Failed to delete cart');
+        showToast.error(data.error || dict.pos?.deleteCartError || 'Failed to delete cart');
       }
     } catch (error) {
       console.error('Error deleting cart:', error);
-      alert(dict.pos?.deleteCartError || 'Failed to delete cart');
+      showToast.error(dict.pos?.deleteCartError || 'Failed to delete cart');
     }
   };
 
@@ -734,7 +756,7 @@ export default function POSPage() {
         setProducts(prev => prev.map(p => 
           p._id === productId ? { ...p, pinned: currentPinned } : p
         ));
-        alert(data.error || dict?.common?.failedToTogglePin || 'Failed to toggle pin status');
+        showToast.error(data.error || dict?.common?.failedToTogglePin || 'Failed to toggle pin status');
       }
     } catch (error) {
       // Revert optimistic update on error
@@ -742,7 +764,7 @@ export default function POSPage() {
         p._id === productId ? { ...p, pinned: currentPinned } : p
       ));
       console.error('Error toggling pin:', error);
-      alert(dict?.common?.failedToTogglePin || 'Failed to toggle pin status');
+      showToast.error(dict?.common?.failedToTogglePin || 'Failed to toggle pin status');
     }
   };
 

@@ -6,6 +6,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { useAuth } from '@/contexts/AuthContext';
 import QRCodeDisplay from '@/components/QRCodeDisplay';
+import { showToast } from '@/lib/toast';
+import { useConfirm } from '@/lib/confirm';
 
 interface User {
   _id: string;
@@ -33,6 +35,7 @@ export default function UsersPage() {
   const [showQRModal, setShowQRModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const { user: currentUser } = useAuth();
+  const { confirm, Dialog: ConfirmDialog } = useConfirm();
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -59,12 +62,17 @@ export default function UsersPage() {
 
   const handleDeleteUser = async (userId: string) => {
     if (!dict) return;
-    if (!confirm(dict.common?.deleteUserConfirm || 'Are you sure you want to delete this user?')) return;
+    const confirmed = await confirm(
+      dict.common?.deleteUserConfirmTitle || 'Delete User',
+      dict.common?.deleteUserConfirm || 'Are you sure you want to delete this user?',
+      { variant: 'danger' }
+    );
+    if (!confirmed) return;
     try {
       const res = await fetch(`/api/users/${userId}`, { method: 'DELETE', credentials: 'include' });
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: dict?.admin?.userDeletedSuccess || dict?.common?.userDeletedSuccess || 'User deleted successfully' });
+        showToast.success(dict?.admin?.userDeletedSuccess || dict?.common?.userDeletedSuccess || 'User deleted successfully');
         fetchUsers();
       } else {
         setMessage({ type: 'error', text: data.error || dict?.admin?.failedToDeleteUser || dict?.common?.failedToDeleteUser || 'Failed to delete user' });
@@ -107,6 +115,7 @@ export default function UsersPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <ConfirmDialog />
       <Navbar />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         <div className="mb-6 sm:mb-8">
@@ -476,7 +485,12 @@ function PINModal({
 
   const handleRemovePIN = async () => {
     if (!dict) return;
-    if (!confirm(dict.common?.removePINConfirm || dict.admin?.removePINConfirm || 'Are you sure you want to remove the PIN for this user?')) return;
+    const confirmed = await confirm(
+      dict.common?.removePINConfirmTitle || 'Remove PIN',
+      dict.common?.removePINConfirm || dict.admin?.removePINConfirm || 'Are you sure you want to remove the PIN for this user?',
+      { variant: 'warning' }
+    );
+    if (!confirmed) return;
     
     setRemoving(true);
     setError('');
@@ -604,7 +618,12 @@ function QRModal({
 
   const handleRegenerate = async () => {
     if (!dict) return;
-    if (!confirm(dict.common?.regenerateQRConfirm || dict.admin?.regenerateQRConfirm || 'Are you sure you want to regenerate the QR code? The old QR code will no longer work.')) return;
+    const confirmed = await confirm(
+      dict.common?.regenerateQRConfirmTitle || 'Regenerate QR Code',
+      dict.common?.regenerateQRConfirm || dict.admin?.regenerateQRConfirm || 'Are you sure you want to regenerate the QR code? The old QR code will no longer work.',
+      { variant: 'warning' }
+    );
+    if (!confirmed) return;
     
     setRegenerating(true);
     setError('');

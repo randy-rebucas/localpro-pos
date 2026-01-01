@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { hardwareStatusChecker, DeviceStatus, HardwareStatus } from '@/lib/hardware/status-checker';
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
+import { showToast } from '@/lib/toast';
 
 interface HardwareStatusProps {
   compact?: boolean;
@@ -57,15 +58,19 @@ export default function HardwareStatusChecker({
     setTesting(deviceType);
     try {
       const result = await hardwareStatusChecker.testDevice(deviceType);
-      alert(result.message);
+      if (result.success) {
+        showToast.success(result.message);
+      } else {
+        showToast.error(result.message);
+      }
       // Refresh status after test
       setTimeout(checkStatus, 1000);
     } catch (error: any) {
-      alert(error.message || dict?.common?.testFailed || 'Test failed');
+      showToast.error(error.message || dict?.common?.testFailed || 'Test failed');
     } finally {
       setTesting(null);
     }
-  }, [checkStatus]);
+  }, [checkStatus, dict]);
 
   const getStatusColor = (deviceStatus: DeviceStatus) => {
     switch (deviceStatus.status) {

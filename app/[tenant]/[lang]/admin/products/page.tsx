@@ -6,6 +6,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { getDictionaryClient } from '../../dictionaries-client';
 import Currency from '@/components/Currency';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { showToast } from '@/lib/toast';
+import { useConfirm } from '@/lib/confirm';
 
 interface Product {
   _id: string;
@@ -87,18 +89,23 @@ export default function ProductsPage() {
 
   const handleDeleteProduct = async (productId: string) => {
     if (!dict) return;
-    if (!confirm(dict.common?.deleteProductConfirm || 'Are you sure you want to delete this product?')) return;
+    const confirmed = await confirm(
+      dict.common?.deleteProductConfirmTitle || 'Delete Product',
+      dict.common?.deleteProductConfirm || 'Are you sure you want to delete this product?',
+      { variant: 'danger' }
+    );
+    if (!confirmed) return;
     try {
       const res = await fetch(`/api/products/${productId}`, { method: 'DELETE', credentials: 'include' });
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: dict.common?.productDeletedSuccess || 'Product deleted successfully' });
+        showToast.success(dict.common?.productDeletedSuccess || 'Product deleted successfully');
         fetchProducts();
       } else {
-        setMessage({ type: 'error', text: data.error || dict.common?.failedToDeleteProduct || 'Failed to delete product' });
+        showToast.error(data.error || dict.common?.failedToDeleteProduct || 'Failed to delete product');
       }
     } catch (error) {
-      setMessage({ type: 'error', text: dict.common?.failedToDeleteProduct || 'Failed to delete product' });
+      showToast.error(dict.common?.failedToDeleteProduct || 'Failed to delete product');
     }
   };
 
@@ -121,6 +128,7 @@ export default function ProductsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <ConfirmDialog />
       <Navbar />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         <div className="mb-6 sm:mb-8">
