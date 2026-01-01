@@ -4,7 +4,8 @@ import Category from '@/models/Category';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
-import { validateAndSanitize, validateTenant } from '@/lib/validation';
+import { validateAndSanitize, validateCategory } from '@/lib/validation';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,7 +16,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    const categories = await Category.find({ tenantId, isActive: true })
+    const categories = await Category.find({ tenantId })
       .sort({ name: 1 })
       .lean();
 
@@ -36,7 +37,8 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { data, errors } = validateAndSanitize(body, validateTenant);
+    const t = await getValidationTranslatorFromRequest(request);
+    const { data, errors } = validateAndSanitize(body, validateCategory, t);
 
     if (errors.length > 0) {
       return NextResponse.json(

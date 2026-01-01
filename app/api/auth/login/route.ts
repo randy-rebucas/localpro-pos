@@ -5,24 +5,27 @@ import { generateToken } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateEmail } from '@/lib/validation';
 import bcrypt from 'bcryptjs';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function POST(request: NextRequest) {
+  let t: (key: string, fallback: string) => string;
   try {
     await connectDB();
     const body = await request.json();
     const { email, password, tenantSlug } = body;
+    t = await getValidationTranslatorFromRequest(request);
 
     // Validation
     if (!email || !password) {
       return NextResponse.json(
-        { success: false, error: 'Email and password are required' },
+        { success: false, error: t('validation.emailPasswordRequired', 'Email and password are required') },
         { status: 400 }
       );
     }
 
     if (!validateEmail(email)) {
       return NextResponse.json(
-        { success: false, error: 'Invalid email format' },
+        { success: false, error: t('validation.invalidEmailFormat', 'Invalid email format') },
         { status: 400 }
       );
     }
@@ -33,7 +36,7 @@ export async function POST(request: NextRequest) {
     
     if (!tenant) {
       return NextResponse.json(
-        { success: false, error: 'Tenant not found or inactive' },
+        { success: false, error: t('validation.tenantNotFoundOrInactive', 'Tenant not found or inactive') },
         { status: 404 }
       );
     }
@@ -69,7 +72,7 @@ export async function POST(request: NextRequest) {
           metadata: { success: false, reason: 'user_not_found', email: email.toLowerCase() },
         });
         return NextResponse.json(
-          { success: false, error: 'Invalid credentials' },
+          { success: false, error: t('validation.invalidCredentials', 'Invalid credentials') },
           { status: 401 }
         );
       }
@@ -79,7 +82,7 @@ export async function POST(request: NextRequest) {
     if (!user.password || typeof user.password !== 'string') {
       console.error('User password is missing or invalid for user:', user._id, 'Password type:', typeof user.password);
       return NextResponse.json(
-        { success: false, error: 'Invalid credentials' },
+        { success: false, error: t('validation.invalidCredentials', 'Invalid credentials') },
         { status: 401 }
       );
     }
@@ -91,7 +94,7 @@ export async function POST(request: NextRequest) {
     } catch (bcryptError: any) {
       console.error('Bcrypt comparison error:', bcryptError);
       return NextResponse.json(
-        { success: false, error: 'Invalid credentials' },
+        { success: false, error: t('validation.invalidCredentials', 'Invalid credentials') },
         { status: 401 }
       );
     }
@@ -105,7 +108,7 @@ export async function POST(request: NextRequest) {
         metadata: { success: false, reason: 'invalid_password' },
       });
       return NextResponse.json(
-        { success: false, error: 'Invalid credentials' },
+        { success: false, error: t('validation.invalidCredentials', 'Invalid credentials') },
         { status: 401 }
       );
     }
@@ -154,8 +157,9 @@ export async function POST(request: NextRequest) {
     return response;
   } catch (error: any) {
     console.error('Login error:', error);
+    const errorMessage = error.message || 'Login failed';
     return NextResponse.json(
-      { success: false, error: error.message || 'Login failed' },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }

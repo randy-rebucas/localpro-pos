@@ -46,9 +46,13 @@ class QRReaderService {
         // while play() is pending, which is expected behavior
         if (playError.name === 'AbortError' || playError.name === 'NotAllowedError') {
           // Clean up resources if play was interrupted
-          this.stream.getTracks().forEach(track => track.stop());
-          this.stream = null;
-          videoElement.srcObject = null;
+          if (this.stream) {
+            this.stream.getTracks().forEach(track => track.stop());
+            this.stream = null;
+          }
+          if (videoElement) {
+            videoElement.srcObject = null;
+          }
           return false;
         }
         throw playError; // Re-throw other errors

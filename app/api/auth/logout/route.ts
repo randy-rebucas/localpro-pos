@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,8 +22,9 @@ export async function POST(request: NextRequest) {
     
     return response;
   } catch (error: any) {
+    const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
-      { success: false, error: error.message || 'Logout failed' },
+      { success: false, error: error.message || t('validation.logoutFailed', 'Logout failed') },
       { status: 500 }
     );
   }

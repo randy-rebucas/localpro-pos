@@ -100,7 +100,8 @@ export async function updateStock(
   }
 
   // If product doesn't track inventory, skip stock update
-  if (!product.trackInventory) {
+  if (product.trackInventory === false) {
+    console.log(`Skipping stock update for product ${productId}: trackInventory is false`);
     return;
   }
 
@@ -124,7 +125,8 @@ export async function updateStock(
     previousStock = product.variations[variationIndex].stock || 0;
     newStock = previousStock + quantity;
 
-    if (newStock < 0) {
+    // Only check for negative stock if product doesn't allow out-of-stock sales
+    if (newStock < 0 && !product.allowOutOfStockSales) {
       throw new Error(
         `Insufficient stock for variation. Available: ${previousStock}, Requested: ${Math.abs(quantity)}`
       );
@@ -151,7 +153,8 @@ export async function updateStock(
       previousStock = product.branchStock[branchStockIndex].stock;
       newStock = previousStock + quantity;
 
-      if (newStock < 0) {
+      // Only check for negative stock if product doesn't allow out-of-stock sales
+      if (newStock < 0 && !product.allowOutOfStockSales) {
         throw new Error(
           `Insufficient stock at branch. Available: ${previousStock}, Requested: ${Math.abs(quantity)}`
         );
@@ -166,7 +169,8 @@ export async function updateStock(
     previousStock = product.stock || 0;
     newStock = previousStock + quantity;
 
-    if (newStock < 0) {
+    // Only check for negative stock if product doesn't allow out-of-stock sales
+    if (newStock < 0 && !product.allowOutOfStockSales) {
       throw new Error(
         `Insufficient stock. Available: ${previousStock}, Requested: ${Math.abs(quantity)}`
       );

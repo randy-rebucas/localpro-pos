@@ -32,6 +32,7 @@ export default function CashDrawerPage() {
   const [loading, setLoading] = useState(true);
   const [selectedSession, setSelectedSession] = useState<CashDrawerSession | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('');
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const { settings } = useTenantSettings();
 
   useEffect(() => {
@@ -46,9 +47,15 @@ export default function CashDrawerPage() {
       
       const res = await fetch(url, { credentials: 'include' });
       const data = await res.json();
-      if (data.success) setSessions(data.data);
+      if (data.success) {
+        setSessions(data.data);
+        setMessage(null);
+      } else {
+        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchCashDrawerSessions || 'Failed to fetch cash drawer sessions' });
+      }
     } catch (error) {
       console.error('Error fetching cash drawer sessions:', error);
+      setMessage({ type: 'error', text: dict?.common?.failedToFetchCashDrawerSessions || 'Failed to fetch cash drawer sessions' });
     } finally {
       setLoading(false);
     }
@@ -58,8 +65,8 @@ export default function CashDrawerPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
     );
@@ -79,19 +86,25 @@ export default function CashDrawerPage() {
             </div>
             <button
               onClick={() => router.push(`/${tenant}/${lang}/admin`)}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
             >
               {dict.common?.back || 'Back'}
             </button>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-md p-6">
+        {message && (
+          <div className={`mb-6 p-4 border ${message.type === 'success' ? 'bg-green-50 text-green-800 border-green-300' : 'bg-red-50 text-red-800 border-red-300'}`}>
+            {message.text}
+          </div>
+        )}
+
+        <div className="bg-white border border-gray-300 p-6">
           <div className="mb-4">
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
             >
               <option value="">All Sessions</option>
               <option value="open">Open Sessions</option>
@@ -148,7 +161,7 @@ export default function CashDrawerPage() {
                         ) : '-'}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                        <span className={`px-2 py-1 text-xs font-semibold border ${
                           session.status === 'open' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
                         }`}>
                           {session.status}
@@ -198,8 +211,8 @@ function CashDrawerDetailModal({
   const userEmail = typeof session.userId === 'object' ? session.userId.email : '';
   
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white border border-gray-300 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-bold text-gray-900">
@@ -224,8 +237,8 @@ function CashDrawerDetailModal({
               <div>
                 <label className="text-sm font-medium text-gray-500">Status</label>
                 <div>
-                  <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                    session.status === 'open' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                  <span className={`px-2 py-1 text-xs font-semibold border ${
+                    session.status === 'open' ? 'bg-green-100 text-green-800 border-green-300' : 'bg-gray-100 text-gray-800 border-gray-300'
                   }`}>
                     {session.status}
                   </span>
@@ -286,14 +299,14 @@ function CashDrawerDetailModal({
             {session.notes && (
               <div>
                 <label className="text-sm font-medium text-gray-500 mb-1 block">Notes</label>
-                <div className="p-3 bg-gray-50 rounded-lg">{session.notes}</div>
+                <div className="p-3 bg-gray-50 border border-gray-300">{session.notes}</div>
               </div>
             )}
           </div>
           <div className="mt-6 flex justify-end">
             <button
               onClick={onClose}
-              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+              className="px-4 py-2 bg-gray-200 text-gray-700 hover:bg-gray-300 border border-gray-400"
             >
               {dict.common?.close || 'Close'}
             </button>

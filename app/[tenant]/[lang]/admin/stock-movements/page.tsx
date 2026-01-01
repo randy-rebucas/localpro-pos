@@ -39,6 +39,7 @@ export default function StockMovementsPage() {
     type: '',
     productId: '',
   });
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -56,9 +57,13 @@ export default function StockMovementsPage() {
       if (data.success) {
         setMovements(data.data);
         setTotalPages(data.pagination?.pages || 1);
+        setMessage(null);
+      } else {
+        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchStockMovements || 'Failed to fetch stock movements' });
       }
     } catch (error) {
       console.error('Error fetching stock movements:', error);
+      setMessage({ type: 'error', text: dict?.common?.failedToFetchStockMovements || 'Failed to fetch stock movements' });
     } finally {
       setLoading(false);
     }
@@ -80,8 +85,8 @@ export default function StockMovementsPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
     );
@@ -101,19 +106,25 @@ export default function StockMovementsPage() {
             </div>
             <button
               onClick={() => router.push(`/${tenant}/${lang}/admin`)}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
             >
               {dict.common?.back || 'Back'}
             </button>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-md p-6">
+        {message && (
+          <div className={`mb-6 p-4 border ${message.type === 'success' ? 'bg-green-50 text-green-800 border-green-300' : 'bg-red-50 text-red-800 border-red-300'}`}>
+            {message.text}
+          </div>
+        )}
+
+        <div className="bg-white border border-gray-300 p-6">
           <div className="mb-4 flex gap-4">
             <select
               value={filters.type}
               onChange={(e) => setFilters({ ...filters, type: e.target.value })}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
             >
               <option value="">All Types</option>
               <option value="sale">Sale</option>
@@ -166,7 +177,7 @@ export default function StockMovementsPage() {
                         )}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getTypeColor(movement.type)}`}>
+                        <span className={`px-2 py-1 text-xs font-semibold border ${getTypeColor(movement.type)}`}>
                           {movement.type}
                         </span>
                       </td>
@@ -201,7 +212,7 @@ export default function StockMovementsPage() {
               <button
                 onClick={() => setPage(p => Math.max(1, p - 1))}
                 disabled={page === 1}
-                className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50"
+                className="px-4 py-2 border border-gray-300 disabled:opacity-50 bg-white"
               >
                 Previous
               </button>
@@ -211,7 +222,7 @@ export default function StockMovementsPage() {
               <button
                 onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
-                className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50"
+                className="px-4 py-2 border border-gray-300 disabled:opacity-50 bg-white"
               >
                 Next
               </button>

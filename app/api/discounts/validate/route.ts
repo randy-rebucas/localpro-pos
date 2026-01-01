@@ -3,15 +3,29 @@ import connectDB from '@/lib/mongodb';
 import Discount from '@/models/Discount';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { getTenantSettingsById } from '@/lib/tenant';
 
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
     await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
+    const t = await getValidationTranslatorFromRequest(request);
     
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
+    }
+    
+    // Get tenant settings to check feature flags
+    const tenantSettings = await getTenantSettingsById(tenantId);
+    
+    // Check if discounts are enabled
+    if (tenantSettings && tenantSettings.enableDiscounts === false) {
+      return NextResponse.json(
+        { success: false, error: t('validation.discountsNotEnabled', 'Discounts are not enabled for this tenant') },
+        { status: 400 }
+      );
     }
     
     const body = await request.json();
@@ -19,7 +33,7 @@ export async function POST(request: NextRequest) {
 
     if (!code) {
       return NextResponse.json(
-        { success: false, error: 'Discount code is required' },
+        { success: false, error: t('validation.discountCodeRequired', 'Discount code is required') },
         { status: 400 }
       );
     }
@@ -32,7 +46,7 @@ export async function POST(request: NextRequest) {
 
     if (!discount) {
       return NextResponse.json(
-        { success: false, error: 'Invalid or inactive discount code' },
+        { success: false, error: t('validation.invalidDiscountCode', 'Invalid or inactive discount code') },
         { status: 404 }
       );
     }
@@ -41,7 +55,7 @@ export async function POST(request: NextRequest) {
     const now = new Date();
     if (now < discount.validFrom || now > discount.validUntil) {
       return NextResponse.json(
-        { success: false, error: 'Discount code is not valid at this time' },
+        { success: false, error: t('validation.discountCodeNotValid', 'Discount code is not valid at this time') },
         { status: 400 }
       );
     }
@@ -49,17 +63,18 @@ export async function POST(request: NextRequest) {
     // Check usage limit
     if (discount.usageLimit && discount.usageCount >= discount.usageLimit) {
       return NextResponse.json(
-        { success: false, error: 'Discount code has reached its usage limit' },
+        { success: false, error: t('validation.discountCodeUsageLimit', 'Discount code has reached its usage limit') },
         { status: 400 }
       );
     }
 
     // Check minimum purchase amount
     if (discount.minPurchaseAmount && subtotal < discount.minPurchaseAmount) {
+      const errorMsg = t('validation.minimumPurchaseAmount', 'Minimum purchase amount of {amount} required').replace('{amount}', discount.minPurchaseAmount.toString());
       return NextResponse.json(
         { 
           success: false, 
-          error: `Minimum purchase amount of ${discount.minPurchaseAmount} required` 
+          error: errorMsg
         },
         { status: 400 }
       );

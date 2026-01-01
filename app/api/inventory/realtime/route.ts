@@ -4,6 +4,7 @@ import Product from '@/models/Product';
 import StockMovement from '@/models/StockMovement';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 /**
  * Server-Sent Events endpoint for real-time stock tracking
@@ -14,9 +15,10 @@ export async function GET(request: NextRequest) {
     await connectDB();
     await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
+    const t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
-      return new Response('Tenant not found', { status: 404 });
+      return new Response(t('validation.tenantNotFound', 'Tenant not found'), { status: 404 });
     }
 
     const searchParams = request.nextUrl.searchParams;
@@ -34,7 +36,8 @@ export async function GET(request: NextRequest) {
           controller.enqueue(encoder.encode(message));
         };
 
-        send({ type: 'connected', message: 'Real-time stock tracking connected' });
+        const t = await getValidationTranslatorFromRequest(request);
+        send({ type: 'connected', message: t('validation.realtimeStockConnected', 'Real-time stock tracking connected') });
 
         // Poll for stock movements (more reliable than change streams)
         let lastCheck = new Date();
@@ -81,7 +84,7 @@ export async function GET(request: NextRequest) {
             }
           } catch (error) {
             console.error('Error polling stock movements:', error);
-            send({ type: 'error', message: 'Polling error' });
+            send({ type: 'error', message: t('validation.pollingError', 'Polling error') });
           }
         }, 2000); // Poll every 2 seconds
 
@@ -109,7 +112,8 @@ export async function GET(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('Error setting up real-time stock tracking:', error);
-    return new Response('Internal server error', { status: 500 });
+    const t = await getValidationTranslatorFromRequest(request);
+    return new Response(t('validation.internalServerError', 'Internal server error'), { status: 500 });
   }
 }
 

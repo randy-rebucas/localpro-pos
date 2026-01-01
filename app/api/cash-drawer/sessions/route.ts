@@ -6,15 +6,17 @@ import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import Transaction from '@/models/Transaction';
 import Expense from '@/models/Expense';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
     await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
+    const t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
     const searchParams = request.nextUrl.searchParams;
@@ -42,9 +44,10 @@ export async function POST(request: NextRequest) {
     await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
+    const t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
     const body = await request.json();
@@ -59,7 +62,7 @@ export async function POST(request: NextRequest) {
 
       if (openSession) {
         return NextResponse.json(
-          { success: false, error: 'There is already an open cash drawer session' },
+          { success: false, error: t('validation.cashDrawerAlreadyOpen', 'There is already an open cash drawer session') },
           { status: 400 }
         );
       }
@@ -90,7 +93,7 @@ export async function POST(request: NextRequest) {
 
       if (!openSession) {
         return NextResponse.json(
-          { success: false, error: 'No open cash drawer session found' },
+          { success: false, error: t('validation.noOpenCashDrawerSession', 'No open cash drawer session found') },
           { status: 404 }
         );
       }
@@ -150,7 +153,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, data: openSession });
     } else {
       return NextResponse.json(
-        { success: false, error: 'Invalid action. Use "open" or "close"' },
+        { success: false, error: t('validation.invalidCashDrawerAction', 'Invalid action. Use "open" or "close"') },
         { status: 400 }
       );
     }

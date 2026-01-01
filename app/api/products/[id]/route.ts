@@ -5,6 +5,7 @@ import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateAndSanitize, validateProduct } from '@/lib/validation';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -17,13 +18,20 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
     
-    const product = await Product.findOne({ _id: id, tenantId });
+    const product = await Product.findOne({ _id: id, tenantId }).lean();
     
     if (!product) {
       return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
     }
     
-    return NextResponse.json({ success: true, data: product });
+    // Ensure boolean fields are properly set
+    const productData = {
+      ...product,
+      trackInventory: product.trackInventory !== undefined ? Boolean(product.trackInventory) : true,
+      allowOutOfStockSales: product.allowOutOfStockSales !== undefined ? Boolean(product.allowOutOfStockSales) : false,
+    };
+    
+    return NextResponse.json({ success: true, data: productData });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -41,7 +49,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
     
     const body = await request.json();
-    const { data, errors } = validateAndSanitize(body, validateProduct);
+    const t = await getValidationTranslatorFromRequest(request);
+    const { data, errors } = validateAndSanitize(body, validateProduct, t);
 
     if (errors.length > 0) {
       return NextResponse.json(
@@ -54,7 +63,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (!oldProduct) {
       return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
     }
-
     const product = await Product.findOneAndUpdate(
       { _id: id, tenantId },
       data,

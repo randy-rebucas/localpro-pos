@@ -4,19 +4,26 @@ import ProductBundle from '@/models/ProductBundle';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
     const tenantId = await getTenantIdFromRequest(request);
+    const t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
     const searchParams = request.nextUrl.searchParams;
     const search = searchParams.get('search') || '';
     const isActive = searchParams.get('isActive');
+    const categoryId = searchParams.get('categoryId');
+    const minPrice = searchParams.get('minPrice');
+    const maxPrice = searchParams.get('maxPrice');
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
 
     const query: any = { tenantId };
     if (search) {
@@ -26,8 +33,25 @@ export async function GET(request: NextRequest) {
         { sku: { $regex: search, $options: 'i' } },
       ];
     }
-    if (isActive !== null) {
+    if (isActive !== null && isActive !== '') {
       query.isActive = isActive === 'true';
+    }
+    if (categoryId) {
+      query.categoryId = categoryId;
+    }
+    if (minPrice || maxPrice) {
+      query.price = {};
+      if (minPrice) query.price.$gte = parseFloat(minPrice);
+      if (maxPrice) query.price.$lte = parseFloat(maxPrice);
+    }
+    if (startDate || endDate) {
+      query.createdAt = {};
+      if (startDate) query.createdAt.$gte = new Date(startDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        query.createdAt.$lte = end;
+      }
     }
 
     const bundles = await ProductBundle.find(query)
@@ -48,9 +72,10 @@ export async function POST(request: NextRequest) {
     await connectDB();
     await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
+    const t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
     const body = await request.json();
@@ -58,7 +83,7 @@ export async function POST(request: NextRequest) {
 
     if (!name || !price || !items || items.length === 0) {
       return NextResponse.json(
-        { success: false, error: 'Name, price, and at least one item are required' },
+        { success: false, error: t('validation.bundleFieldsRequired', 'Name, price, and at least one item are required') },
         { status: 400 }
       );
     }
@@ -86,9 +111,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, data: bundle }, { status: 201 });
   } catch (error: any) {
+    const t = await getValidationTranslatorFromRequest(request);
     if (error.code === 11000) {
       return NextResponse.json(
-        { success: false, error: 'Bundle with this SKU already exists' },
+        { success: false, error: t('validation.bundleSkuExists', 'Bundle with this SKU already exists') },
         { status: 400 }
       );
     }

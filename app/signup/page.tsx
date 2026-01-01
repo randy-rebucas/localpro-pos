@@ -4,9 +4,12 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { detectLocation } from '@/lib/location-detection';
+import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
+import { validatePassword as validatePasswordLib } from '@/lib/validation';
 
 export default function SignupPage() {
   const router = useRouter();
+  const [dict, setDict] = useState<any>(null);
   const [formData, setFormData] = useState({
     // Store info
     slug: '',
@@ -28,6 +31,11 @@ export default function SignupPage() {
   const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
   const [phonePlaceholder, setPhonePlaceholder] = useState('+1 (555) 123-4567');
   const [detectingLocation, setDetectingLocation] = useState(true);
+
+  // Load dictionary
+  useEffect(() => {
+    getDictionaryClient(formData.language as 'en' | 'es' || 'en').then(setDict);
+  }, [formData.language]);
 
   // Detect location on component mount
   useEffect(() => {
@@ -56,23 +64,18 @@ export default function SignupPage() {
   }, []);
 
   const validatePassword = (password: string) => {
-    const errors: string[] = [];
-    if (password.length < 8) {
-      errors.push('Password must be at least 8 characters');
-    }
-    if (!/[A-Z]/.test(password)) {
-      errors.push('Password must contain at least one uppercase letter');
-    }
-    if (!/[a-z]/.test(password)) {
-      errors.push('Password must contain at least one lowercase letter');
-    }
-    if (!/[0-9]/.test(password)) {
-      errors.push('Password must contain at least one number');
-    }
-    if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
-      errors.push('Password must contain at least one special character');
-    }
-    return errors;
+    if (!dict) return [];
+    const t = (key: string, fallback: string) => {
+      const keys = key.split('.');
+      let value: any = dict;
+      for (const k of keys) {
+        value = value?.[k];
+        if (value === undefined) break;
+      }
+      return value || fallback;
+    };
+    const result = validatePasswordLib(password, t);
+    return result.errors;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -89,7 +92,7 @@ export default function SignupPage() {
 
     // Validate slug format
     if (!/^[a-z0-9-]+$/.test(formData.slug)) {
-      setError('Store identifier can only contain lowercase letters, numbers, and hyphens');
+      setError(dict?.signup?.storeIdentifierFormatError || 'Store identifier can only contain lowercase letters, numbers, and hyphens');
       return;
     }
 
@@ -108,13 +111,13 @@ export default function SignupPage() {
         setSuccess(true);
         // Redirect to login after 3 seconds
         setTimeout(() => {
-          router.push(`/${data.data.tenant.slug}/en/login`);
+          router.push(`/${data.data.tenant.slug}/${formData.language}/login`);
         }, 3000);
       } else {
-        setError(data.error || 'Failed to create store. Please try again.');
+        setError(data.error || dict?.signup?.failedToCreateStore || 'Failed to create store. Please try again.');
       }
     } catch (err: any) {
-      setError(err.message || 'An error occurred. Please try again.');
+      setError(err.message || dict?.signup?.errorOccurred || 'An error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -131,18 +134,18 @@ export default function SignupPage() {
               </svg>
             </div>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-3">Store Created Successfully!</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-3">{dict?.signup?.storeCreatedSuccessfully || 'Store Created Successfully!'}</h1>
           <p className="text-gray-600 mb-6">
-            Your store has been created. You will be redirected to the login page shortly.
+            {dict?.signup?.storeCreatedMessage || 'Your store has been created. You will be redirected to the login page shortly.'}
           </p>
           <p className="text-sm text-gray-500 mb-6">
-            Please use your admin email and password to login.
+            {dict?.signup?.useAdminToLogin || 'Please use your admin email and password to login.'}
           </p>
           <Link
-            href={`/${formData.slug}/en/login`}
+            href={`/${formData.slug}/${formData.language}/login`}
             className="inline-block w-full bg-blue-600 text-white px-4 py-3 rounded-xl hover:bg-blue-700 font-medium transition-colors"
           >
-            Go to Login
+            {dict?.signup?.goToLogin || 'Go to Login'}
           </Link>
         </div>
       </div>
@@ -158,8 +161,8 @@ export default function SignupPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
             </svg>
           </div>
-          <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">Create Your Store</h1>
-          <p className="text-gray-600 text-sm sm:text-base">Sign up to get started with your POS system</p>
+          <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">{dict?.signup?.createYourStore || 'Create Your Store'}</h1>
+          <p className="text-gray-600 text-sm sm:text-base">{dict?.signup?.signupSubtitle || 'Sign up to get started with your POS system'}</p>
         </div>
 
         {error && (
@@ -174,12 +177,12 @@ export default function SignupPage() {
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Store Information */}
           <div className="border-b border-gray-200 pb-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Store Information</h2>
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">{dict?.signup?.storeInformation || 'Store Information'}</h2>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label htmlFor="slug" className="block text-sm font-medium text-gray-700 mb-1">
-                  Store Identifier <span className="text-red-500">*</span>
+                  {dict?.signup?.storeIdentifier || 'Store Identifier'} <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -188,15 +191,15 @@ export default function SignupPage() {
                   value={formData.slug}
                   onChange={(e) => setFormData({ ...formData, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })}
                   className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all"
-                  placeholder="my-store"
+                  placeholder={dict?.signup?.storeIdentifierPlaceholder || 'my-store'}
                   pattern="[a-z0-9-]+"
                 />
-                <p className="mt-1 text-xs text-gray-500">Lowercase letters, numbers, and hyphens only</p>
+                <p className="mt-1 text-xs text-gray-500">{dict?.signup?.lowercaseLettersOnly || 'Lowercase letters, numbers, and hyphens only'}</p>
               </div>
 
               <div>
                 <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-                  Store Name <span className="text-red-500">*</span>
+                  {dict?.signup?.storeName || 'Store Name'} <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -205,14 +208,14 @@ export default function SignupPage() {
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all"
-                  placeholder="My Store"
+                  placeholder={dict?.signup?.storeNamePlaceholder || 'My Store'}
                 />
               </div>
             </div>
 
             <div className="mt-4">
               <label htmlFor="companyName" className="block text-sm font-medium text-gray-700 mb-1">
-                Company Name (Optional)
+                {dict?.signup?.companyNameOptional || 'Company Name (Optional)'}
               </label>
               <input
                 type="text"
@@ -220,19 +223,19 @@ export default function SignupPage() {
                 value={formData.companyName}
                 onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
                 className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all"
-                placeholder="My Company Inc."
+                placeholder={dict?.signup?.companyNamePlaceholder || 'My Company Inc.'}
               />
             </div>
           </div>
 
           {/* Admin Account */}
           <div className="border-b border-gray-200 pb-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Admin Account</h2>
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">{dict?.signup?.adminAccount || 'Admin Account'}</h2>
             
             <div className="space-y-4">
               <div>
                 <label htmlFor="adminName" className="block text-sm font-medium text-gray-700 mb-1">
-                  Your Name <span className="text-red-500">*</span>
+                  {dict?.signup?.yourName || 'Your Name'} <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -241,13 +244,13 @@ export default function SignupPage() {
                   value={formData.adminName}
                   onChange={(e) => setFormData({ ...formData, adminName: e.target.value })}
                   className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all"
-                  placeholder="John Doe"
+                  placeholder={dict?.signup?.namePlaceholder || 'John Doe'}
                 />
               </div>
 
               <div>
                 <label htmlFor="adminEmail" className="block text-sm font-medium text-gray-700 mb-1">
-                  Admin Email <span className="text-red-500">*</span>
+                  {dict?.signup?.adminEmail || 'Admin Email'} <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="email"
@@ -256,13 +259,13 @@ export default function SignupPage() {
                   value={formData.adminEmail}
                   onChange={(e) => setFormData({ ...formData, adminEmail: e.target.value })}
                   className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all"
-                  placeholder="admin@example.com"
+                  placeholder={dict?.signup?.adminEmailPlaceholder || 'admin@example.com'}
                 />
               </div>
 
               <div>
                 <label htmlFor="adminPassword" className="block text-sm font-medium text-gray-700 mb-1">
-                  Admin Password <span className="text-red-500">*</span>
+                  {dict?.signup?.adminPassword || 'Admin Password'} <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="password"
@@ -278,7 +281,7 @@ export default function SignupPage() {
                     }
                   }}
                   className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all"
-                  placeholder="Create a strong password"
+                  placeholder={dict?.signup?.createStrongPassword || 'Create a strong password'}
                 />
                 {passwordErrors.length > 0 && (
                   <ul className="mt-2 text-xs text-red-600 space-y-1">
@@ -293,12 +296,12 @@ export default function SignupPage() {
 
           {/* Optional Settings */}
           <div>
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Optional Settings</h2>
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">{dict?.signup?.optionalSettings || 'Optional Settings'}</h2>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label htmlFor="currency" className="block text-sm font-medium text-gray-700 mb-1">
-                  Currency
+                  {dict?.signup?.currency || 'Currency'}
                 </label>
                 <select
                   id="currency"
@@ -326,13 +329,13 @@ export default function SignupPage() {
                   <option value="ZAR">ZAR - South African Rand</option>
                 </select>
                 {detectingLocation && (
-                  <p className="mt-1 text-xs text-gray-500">Detecting your location...</p>
+                  <p className="mt-1 text-xs text-gray-500">{dict?.signup?.detectingLocation || 'Detecting your location...'}</p>
                 )}
               </div>
 
               <div>
                 <label htmlFor="language" className="block text-sm font-medium text-gray-700 mb-1">
-                  Language
+                  {dict?.signup?.language || 'Language'}
                 </label>
                 <select
                   id="language"
@@ -349,7 +352,7 @@ export default function SignupPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
               <div>
                 <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
-                  Phone Number
+                  {dict?.signup?.phoneNumber || 'Phone Number'}
                 </label>
                 <input
                   type="tel"
@@ -363,7 +366,7 @@ export default function SignupPage() {
 
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                  Contact Email
+                  {dict?.signup?.contactEmail || 'Contact Email'}
                 </label>
                 <input
                   type="email"
@@ -371,7 +374,7 @@ export default function SignupPage() {
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all"
-                  placeholder="contact@example.com"
+                  placeholder={dict?.signup?.contactEmailPlaceholder || 'contact@example.com'}
                 />
               </div>
             </div>
@@ -385,17 +388,17 @@ export default function SignupPage() {
             {loading ? (
               <span className="flex items-center justify-center gap-2">
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                Creating Store...
+                {dict?.signup?.creatingStore || 'Creating Store...'}
               </span>
             ) : (
-              'Create Store'
+              dict?.signup?.createStore || 'Create Store'
             )}
           </button>
 
           <p className="text-center text-sm text-gray-600">
-            Already have a store?{' '}
+            {dict?.signup?.alreadyHaveStore || 'Already have a store?'}{' '}
             <Link href="/" className="text-blue-600 hover:text-blue-700 font-medium">
-              Select a store to login
+              {dict?.signup?.selectStoreToLogin || 'Select a store to login'}
             </Link>
           </p>
         </form>

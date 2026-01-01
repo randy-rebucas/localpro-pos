@@ -4,15 +4,17 @@ import Expense from '@/models/Expense';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
     await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
+    const t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
     const searchParams = request.nextUrl.searchParams;
@@ -49,9 +51,10 @@ export async function POST(request: NextRequest) {
     await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
+    const t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
     const body = await request.json();
@@ -60,21 +63,21 @@ export async function POST(request: NextRequest) {
     // Validate required fields
     if (!name || !name.trim()) {
       return NextResponse.json(
-        { success: false, error: 'Name of expense is required' },
+        { success: false, error: t('validation.expenseNameRequired', 'Name of expense is required') },
         { status: 400 }
       );
     }
 
     if (!description || !description.trim()) {
       return NextResponse.json(
-        { success: false, error: 'Description is required' },
+        { success: false, error: t('validation.descriptionRequired', 'Description is required') },
         { status: 400 }
       );
     }
 
     if (amount === undefined || amount === null || amount === '') {
       return NextResponse.json(
-        { success: false, error: 'Amount is required' },
+        { success: false, error: t('validation.amountRequired', 'Amount is required') },
         { status: 400 }
       );
     }
@@ -82,7 +85,7 @@ export async function POST(request: NextRequest) {
     const amountValue = parseFloat(amount);
     if (isNaN(amountValue) || amountValue < 0) {
       return NextResponse.json(
-        { success: false, error: 'Amount must be a valid positive number' },
+        { success: false, error: t('validation.amountPositive', 'Amount must be a valid positive number') },
         { status: 400 }
       );
     }

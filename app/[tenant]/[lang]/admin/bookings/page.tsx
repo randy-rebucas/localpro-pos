@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import BookingCalendar from '@/components/BookingCalendar';
+import { getDictionaryClient } from '../../dictionaries-client';
 
 interface Booking {
   _id: string;
@@ -43,6 +44,7 @@ export default function BookingsPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
+  const [dict, setDict] = useState<any>(null);
 
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,6 +55,7 @@ export default function BookingsPage() {
   const [staff, setStaff] = useState<User[]>([]);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterStaff, setFilterStaff] = useState<string>('all');
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -67,6 +70,10 @@ export default function BookingsPage() {
     notes: '',
     status: 'pending' as Booking['status'],
   });
+
+  useEffect(() => {
+    getDictionaryClient(lang).then(setDict);
+  }, [lang]);
 
   useEffect(() => {
     fetchBookings();
@@ -97,10 +104,19 @@ export default function BookingsPage() {
 
       if (response.ok) {
         const data = await response.json();
-        setBookings(data.data || []);
+        if (data.success) {
+          setBookings(data.data || []);
+          setMessage(null);
+        } else {
+          setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchBookings || 'Failed to fetch bookings' });
+        }
+      } else {
+        const data = await response.json();
+        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchBookings || 'Failed to fetch bookings' });
       }
     } catch (error) {
       console.error('Failed to fetch bookings:', error);
+      setMessage({ type: 'error', text: dict?.common?.failedToFetchBookings || 'Failed to fetch bookings' });
     } finally {
       setLoading(false);
     }
@@ -121,7 +137,14 @@ export default function BookingsPage() {
 
       if (response.ok) {
         const data = await response.json();
-        setStaff(data.data || []);
+        if (data.success) {
+          setStaff(data.data || []);
+        } else {
+          console.error('Failed to fetch staff:', data.error);
+        }
+      } else {
+        const data = await response.json();
+        console.error('Failed to fetch staff:', data.error);
       }
     } catch (error) {
       console.error('Failed to fetch staff:', error);
@@ -146,16 +169,22 @@ export default function BookingsPage() {
       });
 
       if (response.ok) {
-        await fetchBookings();
-        setShowCreateModal(false);
-        resetForm();
+        const data = await response.json();
+        if (data.success) {
+          setMessage({ type: 'success', text: dict?.common?.bookingCreatedSuccess || 'Booking created successfully' });
+          await fetchBookings();
+          setShowCreateModal(false);
+          resetForm();
+        } else {
+          setMessage({ type: 'error', text: data.error || dict?.common?.failedToCreateBooking || 'Failed to create booking' });
+        }
       } else {
         const error = await response.json();
-        alert(error.error || 'Failed to create booking');
+        setMessage({ type: 'error', text: error.error || dict?.common?.failedToCreateBooking || 'Failed to create booking' });
       }
     } catch (error) {
       console.error('Failed to create booking:', error);
-      alert('Failed to create booking');
+      setMessage({ type: 'error', text: dict?.common?.failedToCreateBooking || 'Failed to create booking' });
     }
   };
 
@@ -176,21 +205,28 @@ export default function BookingsPage() {
       });
 
       if (response.ok) {
-        await fetchBookings();
-        setShowModal(false);
-        setSelectedBooking(null);
+        const data = await response.json();
+        if (data.success) {
+          setMessage({ type: 'success', text: dict?.common?.bookingUpdatedSuccess || 'Booking updated successfully' });
+          await fetchBookings();
+          setShowModal(false);
+          setSelectedBooking(null);
+        } else {
+          setMessage({ type: 'error', text: data.error || dict?.common?.failedToUpdateBooking || 'Failed to update booking' });
+        }
       } else {
         const error = await response.json();
-        alert(error.error || 'Failed to update booking');
+        setMessage({ type: 'error', text: error.error || dict?.common?.failedToUpdateBooking || 'Failed to update booking' });
       }
     } catch (error) {
       console.error('Failed to update booking:', error);
-      alert('Failed to update booking');
+      setMessage({ type: 'error', text: dict?.common?.failedToUpdateBooking || 'Failed to update booking' });
     }
   };
 
   const handleDeleteBooking = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this booking?')) {
+    if (!dict) return;
+    if (!confirm(dict.common?.deleteBookingConfirm || 'Are you sure you want to delete this booking?')) {
       return;
     }
 
@@ -208,16 +244,22 @@ export default function BookingsPage() {
       });
 
       if (response.ok) {
-        await fetchBookings();
-        setShowModal(false);
-        setSelectedBooking(null);
+        const data = await response.json();
+        if (data.success) {
+          setMessage({ type: 'success', text: dict?.common?.bookingDeletedSuccess || 'Booking deleted successfully' });
+          await fetchBookings();
+          setShowModal(false);
+          setSelectedBooking(null);
+        } else {
+          setMessage({ type: 'error', text: data.error || dict?.common?.failedToDeleteBooking || 'Failed to delete booking' });
+        }
       } else {
         const error = await response.json();
-        alert(error.error || 'Failed to delete booking');
+        setMessage({ type: 'error', text: error.error || dict?.common?.failedToDeleteBooking || 'Failed to delete booking' });
       }
     } catch (error) {
       console.error('Failed to delete booking:', error);
-      alert('Failed to delete booking');
+      setMessage({ type: 'error', text: dict?.common?.failedToDeleteBooking || 'Failed to delete booking' });
     }
   };
 
@@ -236,14 +278,19 @@ export default function BookingsPage() {
       });
 
       if (response.ok) {
-        alert('Reminder sent successfully');
+        const data = await response.json();
+        if (data.success) {
+          setMessage({ type: 'success', text: dict?.common?.reminderSentSuccess || 'Reminder sent successfully' });
+        } else {
+          setMessage({ type: 'error', text: data.error || dict?.common?.failedToSendReminder || 'Failed to send reminder' });
+        }
       } else {
         const error = await response.json();
-        alert(error.error || 'Failed to send reminder');
+        setMessage({ type: 'error', text: error.error || dict?.common?.failedToSendReminder || 'Failed to send reminder' });
       }
     } catch (error) {
       console.error('Failed to send reminder:', error);
-      alert('Failed to send reminder');
+      setMessage({ type: 'error', text: dict?.common?.failedToSendReminder || 'Failed to send reminder' });
     }
   };
 
@@ -295,7 +342,7 @@ export default function BookingsPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
           <p className="mt-4 text-gray-600">Loading bookings...</p>
         </div>
       </div>
@@ -315,7 +362,7 @@ export default function BookingsPage() {
           </div>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+            className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 transition-colors flex items-center gap-2 border border-blue-700"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -324,12 +371,18 @@ export default function BookingsPage() {
           </button>
         </div>
 
+        {message && (
+          <div className={`mb-6 p-4 border ${message.type === 'success' ? 'bg-green-50 text-green-800 border-green-300' : 'bg-red-50 text-red-800 border-red-300'}`}>
+            {message.text}
+          </div>
+        )}
+
         {/* Filters */}
         <div className="mb-6 flex gap-4">
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
           >
             <option value="all">All Status</option>
             <option value="pending">Pending</option>
@@ -341,7 +394,7 @@ export default function BookingsPage() {
           <select
             value={filterStaff}
             onChange={(e) => setFilterStaff(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
           >
             <option value="all">All Staff</option>
             {staff.map((s) => (
@@ -376,7 +429,7 @@ export default function BookingsPage() {
         </div>
 
         {/* Bookings List */}
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+        <div className="bg-white border border-gray-300 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200">
             <h2 className="text-lg font-semibold text-gray-900">All Bookings</h2>
           </div>
@@ -430,7 +483,7 @@ export default function BookingsPage() {
                       {booking.staffName || booking.staffId?.name || 'Unassigned'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(booking.status)}`}>
+                      <span className={`px-2 py-1 text-xs font-semibold border ${getStatusColor(booking.status)}`}>
                         {booking.status}
                       </span>
                     </td>
@@ -470,8 +523,8 @@ export default function BookingsPage() {
 
       {/* Booking Detail Modal */}
       {showModal && selectedBooking && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white border border-gray-300 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900">Booking Details</h3>
               <button
@@ -522,7 +575,7 @@ export default function BookingsPage() {
                   onChange={(e) => {
                     handleUpdateBooking(selectedBooking._id, { staffId: e.target.value || undefined });
                   }}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                 >
                   <option value="">Unassigned</option>
                   {staff.map((s) => (
@@ -539,7 +592,7 @@ export default function BookingsPage() {
                   onChange={(e) => {
                     handleUpdateBooking(selectedBooking._id, { status: e.target.value as Booking['status'] });
                   }}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                 >
                   <option value="pending">Pending</option>
                   <option value="confirmed">Confirmed</option>
@@ -557,13 +610,13 @@ export default function BookingsPage() {
               <div className="flex gap-2 pt-4 border-t border-gray-200">
                 <button
                   onClick={() => handleSendReminder(selectedBooking._id)}
-                  className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                  className="flex-1 px-4 py-2 bg-green-600 text-white hover:bg-green-700 transition-colors border border-green-700"
                 >
                   Send Reminder
                 </button>
                 <button
                   onClick={() => handleDeleteBooking(selectedBooking._id)}
-                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                  className="flex-1 px-4 py-2 bg-red-600 text-white hover:bg-red-700 transition-colors border border-red-700"
                 >
                   Delete
                 </button>
@@ -575,8 +628,8 @@ export default function BookingsPage() {
 
       {/* Create Booking Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white border border-gray-300 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900">Create New Booking</h3>
               <button
@@ -599,7 +652,7 @@ export default function BookingsPage() {
                   required
                   value={formData.customerName}
                   onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                 />
               </div>
               <div>
@@ -608,7 +661,7 @@ export default function BookingsPage() {
                   type="email"
                   value={formData.customerEmail}
                   onChange={(e) => setFormData({ ...formData, customerEmail: e.target.value })}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                 />
               </div>
               <div>
@@ -617,7 +670,7 @@ export default function BookingsPage() {
                   type="tel"
                   value={formData.customerPhone}
                   onChange={(e) => setFormData({ ...formData, customerPhone: e.target.value })}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                 />
               </div>
               <div>
@@ -627,7 +680,7 @@ export default function BookingsPage() {
                   required
                   value={formData.serviceName}
                   onChange={(e) => setFormData({ ...formData, serviceName: e.target.value })}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                 />
               </div>
               <div>
@@ -636,7 +689,7 @@ export default function BookingsPage() {
                   value={formData.serviceDescription}
                   onChange={(e) => setFormData({ ...formData, serviceDescription: e.target.value })}
                   rows={3}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -647,7 +700,7 @@ export default function BookingsPage() {
                     required
                     value={formData.startTime}
                     onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                   />
                 </div>
                 <div>
@@ -658,7 +711,7 @@ export default function BookingsPage() {
                     min="1"
                     value={formData.duration}
                     onChange={(e) => setFormData({ ...formData, duration: parseInt(e.target.value) })}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                   />
                 </div>
               </div>
@@ -667,7 +720,7 @@ export default function BookingsPage() {
                 <select
                   value={formData.staffId}
                   onChange={(e) => setFormData({ ...formData, staffId: e.target.value })}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                 >
                   <option value="">Unassigned</option>
                   {staff.map((s) => (
@@ -682,7 +735,7 @@ export default function BookingsPage() {
                 <select
                   value={formData.status}
                   onChange={(e) => setFormData({ ...formData, status: e.target.value as Booking['status'] })}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                 >
                   <option value="pending">Pending</option>
                   <option value="confirmed">Confirmed</option>
@@ -694,7 +747,7 @@ export default function BookingsPage() {
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   rows={3}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                 />
               </div>
               <div className="flex gap-2 pt-4 border-t border-gray-200">
@@ -704,13 +757,13 @@ export default function BookingsPage() {
                     setShowCreateModal(false);
                     resetForm();
                   }}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors bg-white"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 transition-colors border border-blue-700"
                 >
                   Create Booking
                 </button>

@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -20,6 +21,11 @@ export default function ProtectedRoute({
   const params = useParams();
   const tenant = (params?.tenant as string) || 'default';
   const lang = (params?.lang as 'en' | 'es') || 'en';
+  const [dict, setDict] = useState<any>(null);
+
+  useEffect(() => {
+    getDictionaryClient(lang).then(setDict);
+  }, [lang]);
 
   useEffect(() => {
     if (!loading) {
@@ -39,8 +45,8 @@ export default function ProtectedRoute({
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+          <p className="mt-4 text-gray-600">{dict?.components?.protectedRoute?.loading || dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
     );
@@ -55,9 +61,9 @@ export default function ProtectedRoute({
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center max-w-md">
           <div className="text-6xl mb-4">🔒</div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">{dict?.components?.protectedRoute?.accessDenied || 'Access Denied'}</h1>
           <p className="text-gray-600 mb-4">
-            You don't have permission to access this page. Required role: {requiredRoles.join(' or ')}
+            {(dict?.components?.protectedRoute?.noPermission || 'You don\'t have permission to access this page. Required role: {roles}').replace('{roles}', requiredRoles.join(' or '))}
           </p>
         </div>
       </div>

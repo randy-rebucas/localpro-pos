@@ -6,6 +6,7 @@ import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateEmail, validatePassword } from '@/lib/validation';
 import { handleApiError } from '@/lib/error-handler';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -13,9 +14,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     await requireRole(request, ['admin', 'manager']);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
+    const t = await getValidationTranslatorFromRequest(request);
     
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
     
     const user = await User.findOne({ _id: id, tenantId })
@@ -23,7 +25,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       .lean();
     
     if (!user) {
-      return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.userNotFound', 'User not found') }, { status: 404 });
     }
     
     return NextResponse.json({ success: true, data: user });
@@ -39,14 +41,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 }
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  let t: (key: string, fallback: string) => string;
   try {
     await connectDB();
     await requireRole(request, ['admin', 'manager']);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
+    t = await getValidationTranslatorFromRequest(request);
     
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
     
     const body = await request.json();
@@ -54,7 +58,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     const oldUser = await User.findOne({ _id: id, tenantId }).lean();
     if (!oldUser) {
-      return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.userNotFound', 'User not found') }, { status: 404 });
     }
 
     // Build update object
@@ -63,7 +67,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (email !== undefined) {
       if (!validateEmail(email)) {
         return NextResponse.json(
-          { success: false, error: 'Invalid email format' },
+          { success: false, error: t('validation.invalidEmailFormat', 'Invalid email format') },
           { status: 400 }
         );
       }
@@ -73,7 +77,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (name !== undefined) {
       if (!name.trim()) {
         return NextResponse.json(
-          { success: false, error: 'Name is required' },
+          { success: false, error: t('validation.nameRequired', 'Name is required') },
           { status: 400 }
         );
       }
@@ -83,7 +87,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (role !== undefined) {
       if (!['owner', 'admin', 'manager', 'cashier', 'viewer'].includes(role)) {
         return NextResponse.json(
-          { success: false, error: 'Invalid role' },
+          { success: false, error: t('validation.invalidRole', 'Invalid role') },
           { status: 400 }
         );
       }
@@ -95,10 +99,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
     
     if (password !== undefined && password) {
-      const passwordValidation = validatePassword(password);
+      const passwordValidation = validatePassword(password, t);
       if (!passwordValidation.valid) {
         return NextResponse.json(
-          { success: false, error: 'Password validation failed', errors: passwordValidation.errors },
+          { success: false, error: t('validation.passwordValidationFailed', 'Password validation failed'), errors: passwordValidation.errors },
           { status: 400 }
         );
       }

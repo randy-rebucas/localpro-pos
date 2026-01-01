@@ -4,6 +4,7 @@ import User from '@/models/User';
 import { requireRole, getCurrentUser } from '@/lib/auth';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { createAuditLog, AuditActions } from '@/lib/audit';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 /**
  * GET - Get QR code token for a user (admin/manager only)
@@ -12,15 +13,17 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  let t: (key: string, fallback: string) => string;
   try {
     await connectDB();
     await requireRole(request, ['owner', 'admin', 'manager']);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
+    t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
       return NextResponse.json(
-        { success: false, error: 'Tenant not found' },
+        { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
         { status: 404 }
       );
     }
@@ -29,7 +32,7 @@ export async function GET(
     
     if (!user) {
       return NextResponse.json(
-        { success: false, error: 'User not found' },
+        { success: false, error: t('validation.userNotFound', 'User not found') },
         { status: 404 }
       );
     }
@@ -58,8 +61,9 @@ export async function GET(
     });
   } catch (error: any) {
     console.error('Get user QR code error:', error);
+    const errorMessage = error.message || 'Failed to get QR code';
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to get QR code' },
+      { success: false, error: errorMessage },
       { status: error.message === 'Unauthorized' || error.message.includes('Forbidden') ? 403 : 500 }
     );
   }
@@ -72,16 +76,18 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  let t: (key: string, fallback: string) => string;
   try {
     await connectDB();
     await requireRole(request, ['owner', 'admin', 'manager']);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
     const currentUser = await getCurrentUser(request);
+    t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
       return NextResponse.json(
-        { success: false, error: 'Tenant not found' },
+        { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
         { status: 404 }
       );
     }
@@ -90,7 +96,7 @@ export async function POST(
     const user = await User.findOne({ _id: id, tenantId });
     if (!user) {
       return NextResponse.json(
-        { success: false, error: 'User not found' },
+        { success: false, error: t('validation.userNotFound', 'User not found') },
         { status: 404 }
       );
     }
@@ -117,8 +123,9 @@ export async function POST(
     });
   } catch (error: any) {
     console.error('Regenerate user QR code error:', error);
+    const errorMessage = error.message || 'Failed to regenerate QR code';
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to regenerate QR code' },
+      { success: false, error: errorMessage },
       { status: error.message === 'Unauthorized' || error.message.includes('Forbidden') ? 403 : 500 }
     );
   }

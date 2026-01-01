@@ -98,11 +98,11 @@ export default function AuditLogsPage() {
         setAuditLogs(data.data);
         setAuditPagination(data.pagination);
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to fetch audit logs' });
+        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchAuditLogs || 'Failed to fetch audit logs' });
       }
     } catch (error) {
       console.error('Error fetching audit logs:', error);
-      setMessage({ type: 'error', text: 'Failed to fetch audit logs' });
+      setMessage({ type: 'error', text: dict?.common?.failedToFetchAuditLogs || 'Failed to fetch audit logs' });
     } finally {
       setAuditLoading(false);
     }
@@ -121,8 +121,8 @@ export default function AuditLogsPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
     );
@@ -142,7 +142,7 @@ export default function AuditLogsPage() {
             </div>
             <button
               onClick={() => router.push(`/${tenant}/${lang}/admin`)}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
             >
               {dict.common?.back || 'Back'}
             </button>
@@ -150,17 +150,17 @@ export default function AuditLogsPage() {
         </div>
 
         {message && (
-          <div className={`mb-6 p-4 rounded-lg ${message.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
+          <div className={`mb-6 p-4 border ${message.type === 'success' ? 'bg-green-50 text-green-800 border-green-300' : 'bg-red-50 text-red-800 border-red-300'}`}>
             {message.text}
           </div>
         )}
 
-        <div className="bg-white rounded-xl shadow-md p-6">
+        <div className="bg-white border border-gray-300 p-6">
           <div className="mb-6">
             <h2 className="text-xl font-bold text-gray-900 mb-4">{dict.admin?.auditLogs || 'Audit Logs'}</h2>
             
             {/* Filters */}
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-4 p-4 bg-gray-50 rounded-lg">
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-4 p-4 bg-gray-50 border border-gray-300">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   {dict.admin?.action || 'Action'}
@@ -168,7 +168,7 @@ export default function AuditLogsPage() {
                 <select
                   value={auditFilters.action}
                   onChange={(e) => handleAuditFilterChange('action', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 text-sm bg-white"
                 >
                   <option value="">All Actions</option>
                   <option value="create">Create</option>
@@ -188,7 +188,7 @@ export default function AuditLogsPage() {
                   value={auditFilters.entityType}
                   onChange={(e) => handleAuditFilterChange('entityType', e.target.value)}
                   placeholder="e.g., user, product"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 text-sm bg-white"
                 />
               </div>
               <div>
@@ -198,7 +198,7 @@ export default function AuditLogsPage() {
                 <select
                   value={auditFilters.userId}
                   onChange={(e) => handleAuditFilterChange('userId', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 text-sm bg-white"
                 >
                   <option value="">All Users</option>
                   {users.map((u) => (
@@ -216,7 +216,7 @@ export default function AuditLogsPage() {
                   type="date"
                   value={auditFilters.startDate}
                   onChange={(e) => handleAuditFilterChange('startDate', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 text-sm bg-white"
                 />
               </div>
               <div>
@@ -227,7 +227,7 @@ export default function AuditLogsPage() {
                   type="date"
                   value={auditFilters.endDate}
                   onChange={(e) => handleAuditFilterChange('endDate', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 text-sm bg-white"
                 />
               </div>
             </div>
@@ -235,7 +235,7 @@ export default function AuditLogsPage() {
             {/* Audit Logs Table */}
             {auditLoading ? (
               <div className="text-center py-8">
-                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
                 <p className="mt-2 text-gray-600">{dict.common?.loading || 'Loading...'}</p>
               </div>
             ) : (
@@ -286,7 +286,7 @@ export default function AuditLogsPage() {
                               </div>
                             </td>
                             <td className="px-4 py-4 whitespace-nowrap">
-                              <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                              <span className="px-2 py-1 text-xs font-semibold border border-blue-300 bg-blue-100 text-blue-800">
                                 {log.action}
                               </span>
                             </td>
@@ -323,14 +323,14 @@ export default function AuditLogsPage() {
                       <button
                         onClick={() => handleAuditPageChange(auditPagination.page - 1)}
                         disabled={auditPagination.page === 1}
-                        className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-4 py-2 border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed bg-white"
                       >
                         {dict.common?.previous || 'Previous'}
                       </button>
                       <button
                         onClick={() => handleAuditPageChange(auditPagination.page + 1)}
                         disabled={auditPagination.page >= auditPagination.pages}
-                        className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-4 py-2 border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed bg-white"
                       >
                         {dict.common?.next || 'Next'}
                       </button>

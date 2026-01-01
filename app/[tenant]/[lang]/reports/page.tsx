@@ -273,7 +273,7 @@ export default function ReportsPage() {
           </div>
 
           {/* Date Range Selector */}
-          <div className="bg-white rounded-xl shadow-md p-5 sm:p-6 mb-6">
+          <div className="bg-white border border-gray-300 p-5 sm:p-6 mb-6">
             <div className="flex flex-wrap items-center gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -283,7 +283,7 @@ export default function ReportsPage() {
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                  className="px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                 />
               </div>
               <div>
@@ -294,7 +294,7 @@ export default function ReportsPage() {
                   type="date"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                  className="px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                 />
               </div>
               {activeTab === 'sales' && (
@@ -305,7 +305,7 @@ export default function ReportsPage() {
                   <select
                     value={period}
                     onChange={(e) => setPeriod(e.target.value as any)}
-                    className="px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                    className="px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                   >
                     <option value="daily">{dict.reports?.daily || 'Daily'}</option>
                     <option value="weekly">{dict.reports?.weekly || 'Weekly'}</option>
@@ -317,9 +317,9 @@ export default function ReportsPage() {
           </div>
 
           {/* Tabs */}
-          <div className="bg-white rounded-xl shadow-md overflow-hidden mb-6">
+          <div className="bg-white border border-gray-300 overflow-hidden mb-6">
             <div className="border-b border-gray-200">
-              <nav className="flex overflow-x-auto" aria-label="Tabs">
+              <nav className="flex overflow-x-auto" aria-label={dict?.common?.tabs || 'Tabs'}>
                 {(['sales', 'products', 'vat', 'profit-loss', 'cash-drawer'] as const).map((tab) => (
                   <button
                     key={tab}
@@ -340,7 +340,7 @@ export default function ReportsPage() {
             <div className="p-5 sm:p-6 lg:p-8">
               {loading ? (
                 <div className="flex items-center justify-center py-12">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <div className="animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
                   <span className="ml-3 text-gray-600">{dict?.common?.loading || 'Loading...'}</span>
                 </div>
               ) : (
@@ -417,7 +417,7 @@ function SalesReportView({ report, dict }: { report: SalesReport; dict: any }) {
     <div className="space-y-6">
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
-        <div className="bg-blue-50 rounded-xl shadow-md p-5 sm:p-6">
+        <div className="bg-blue-50 border border-blue-300 p-5 sm:p-6">
           <div className="text-xs sm:text-sm text-blue-600 font-semibold mb-2 uppercase tracking-wide">
             {dict.reports?.totalSales || 'Total Sales'}
           </div>
@@ -425,13 +425,13 @@ function SalesReportView({ report, dict }: { report: SalesReport; dict: any }) {
             <Currency amount={report.totalSales} />
           </div>
         </div>
-        <div className="bg-green-50 rounded-xl shadow-md p-5 sm:p-6">
+        <div className="bg-green-50 border border-green-300 p-5 sm:p-6">
           <div className="text-xs sm:text-sm text-green-600 font-semibold mb-2 uppercase tracking-wide">
             {dict.reports?.totalTransactions || 'Total Transactions'}
           </div>
           <div className="text-2xl sm:text-3xl font-bold text-green-900">{report.totalTransactions}</div>
         </div>
-        <div className="bg-purple-50 rounded-xl shadow-md p-5 sm:p-6">
+        <div className="bg-purple-50 border border-purple-300 p-5 sm:p-6">
           <div className="text-xs sm:text-sm text-purple-600 font-semibold mb-2 uppercase tracking-wide">
             {dict.reports?.averageTransaction || 'Average Transaction'}
           </div>
@@ -444,7 +444,7 @@ function SalesReportView({ report, dict }: { report: SalesReport; dict: any }) {
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {report.salesByDay && report.salesByDay.length > 0 && (
-          <div className="bg-white rounded-xl shadow-md p-5 sm:p-6">
+          <div className="bg-white border border-gray-300 p-5 sm:p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-5">
               {dict.reports?.salesByDay || 'Sales by Day'}
             </h3>
@@ -468,7 +468,7 @@ function SalesReportView({ report, dict }: { report: SalesReport; dict: any }) {
           </div>
         )}
 
-        <div className="bg-white rounded-xl shadow-md p-5 sm:p-6">
+        <div className="bg-white border border-gray-300 p-5 sm:p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-5">
             {dict.reports?.paymentMethods || 'Payment Methods'}
           </h3>
@@ -507,7 +507,7 @@ function SalesReportView({ report, dict }: { report: SalesReport; dict: any }) {
 function ProductPerformanceView({ data, dict }: { data: ProductPerformance[]; dict: any }) {
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-xl shadow-md p-5 sm:p-6">
+      <div className="bg-white border border-gray-300 p-5 sm:p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-5">
           {dict.reports?.topProducts || 'Top Products'}
         </h3>
@@ -530,7 +530,7 @@ function ProductPerformanceView({ data, dict }: { data: ProductPerformance[]; di
         </ResponsiveContainer>
       </div>
 
-      <div className="bg-white rounded-xl shadow-md overflow-hidden">
+      <div className="bg-white border border-gray-300 overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
@@ -582,7 +582,7 @@ function VATReportView({ report, dict }: { report: VATReport; dict: any }) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-        <div className="bg-blue-50 rounded-xl shadow-md p-5 sm:p-6">
+        <div className="bg-blue-50 border border-blue-300 p-5 sm:p-6">
           <div className="text-xs sm:text-sm text-blue-600 font-semibold mb-2 uppercase tracking-wide">
             {dict.reports?.vatSales || 'VAT Sales'}
           </div>
@@ -590,7 +590,7 @@ function VATReportView({ report, dict }: { report: VATReport; dict: any }) {
             <Currency amount={report.vatSales} />
           </div>
         </div>
-        <div className="bg-green-50 rounded-xl shadow-md p-5 sm:p-6">
+        <div className="bg-green-50 border border-green-300 p-5 sm:p-6">
           <div className="text-xs sm:text-sm text-green-600 font-semibold mb-2 uppercase tracking-wide">
             {dict.reports?.nonVatSales || 'Non-VAT Sales'}
           </div>
@@ -598,7 +598,7 @@ function VATReportView({ report, dict }: { report: VATReport; dict: any }) {
             <Currency amount={report.nonVatSales} />
           </div>
         </div>
-        <div className="bg-purple-50 rounded-xl shadow-md p-5 sm:p-6">
+        <div className="bg-purple-50 border border-purple-300 p-5 sm:p-6">
           <div className="text-xs sm:text-sm text-purple-600 font-semibold mb-2 uppercase tracking-wide">
             {dict.reports?.vatAmount || 'VAT Amount'}
           </div>
@@ -606,7 +606,7 @@ function VATReportView({ report, dict }: { report: VATReport; dict: any }) {
             <Currency amount={report.vatAmount} />
           </div>
         </div>
-        <div className="bg-orange-50 rounded-xl shadow-md p-5 sm:p-6">
+        <div className="bg-orange-50 border border-orange-300 p-5 sm:p-6">
           <div className="text-xs sm:text-sm text-orange-600 font-semibold mb-2 uppercase tracking-wide">
             {dict.reports?.vatRate || 'VAT Rate'}
           </div>
@@ -614,7 +614,7 @@ function VATReportView({ report, dict }: { report: VATReport; dict: any }) {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-md p-5 sm:p-6">
+      <div className="bg-white border border-gray-300 p-5 sm:p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-5">
           {dict.reports?.vatBreakdown || 'VAT Breakdown'}
         </h3>
@@ -661,7 +661,7 @@ function ProfitLossView({ summary, dict }: { summary: ProfitLossSummary; dict: a
     <div className="space-y-6">
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-        <div className="bg-green-50 rounded-xl shadow-md p-5 sm:p-6">
+        <div className="bg-green-50 border border-green-300 p-5 sm:p-6">
           <div className="text-xs sm:text-sm text-green-600 font-semibold mb-2 uppercase tracking-wide">
             {dict.reports?.totalRevenue || 'Total Revenue'}
           </div>
@@ -669,7 +669,7 @@ function ProfitLossView({ summary, dict }: { summary: ProfitLossSummary; dict: a
             <Currency amount={summary.revenue.total} />
           </div>
         </div>
-        <div className="bg-red-50 rounded-xl shadow-md p-5 sm:p-6">
+        <div className="bg-red-50 border border-red-300 p-5 sm:p-6">
           <div className="text-xs sm:text-sm text-red-600 font-semibold mb-2 uppercase tracking-wide">
             {dict.reports?.totalExpenses || 'Total Expenses'}
           </div>
@@ -677,7 +677,7 @@ function ProfitLossView({ summary, dict }: { summary: ProfitLossSummary; dict: a
             <Currency amount={summary.expenses.total} />
           </div>
         </div>
-        <div className="bg-blue-50 rounded-xl shadow-md p-5 sm:p-6">
+        <div className="bg-blue-50 border border-blue-300 p-5 sm:p-6">
           <div className="text-xs sm:text-sm text-blue-600 font-semibold mb-2 uppercase tracking-wide">
             {dict.reports?.netProfit || 'Net Profit'}
           </div>
@@ -685,7 +685,7 @@ function ProfitLossView({ summary, dict }: { summary: ProfitLossSummary; dict: a
             <Currency amount={summary.netProfit} />
           </div>
         </div>
-        <div className="bg-purple-50 rounded-xl shadow-md p-5 sm:p-6">
+        <div className="bg-purple-50 border border-purple-300 p-5 sm:p-6">
           <div className="text-xs sm:text-sm text-purple-600 font-semibold mb-2 uppercase tracking-wide">
             {dict.reports?.profitMargin || 'Profit Margin'}
           </div>
@@ -696,7 +696,7 @@ function ProfitLossView({ summary, dict }: { summary: ProfitLossSummary; dict: a
       </div>
 
       {/* Revenue by Payment Method */}
-      <div className="bg-white rounded-xl shadow-md p-5 sm:p-6">
+      <div className="bg-white border border-gray-300 p-5 sm:p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-5">
           {dict.reports?.revenueByPaymentMethod || 'Revenue by Payment Method'}
         </h3>
@@ -726,7 +726,7 @@ function ProfitLossView({ summary, dict }: { summary: ProfitLossSummary; dict: a
 
       {/* Expenses by Category */}
       {expenseData.length > 0 && (
-        <div className="bg-white rounded-xl shadow-md p-5 sm:p-6">
+        <div className="bg-white border border-gray-300 p-5 sm:p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-5">
             {dict.reports?.expensesByCategory || 'Expenses by Category'}
           </h3>
@@ -765,7 +765,7 @@ function ProfitLossView({ summary, dict }: { summary: ProfitLossSummary; dict: a
 function CashDrawerReportView({ reports, dict }: { reports: CashDrawerReport[]; dict: any }) {
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-xl shadow-md overflow-hidden">
+      <div className="bg-white border border-gray-300 overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
@@ -821,10 +821,10 @@ function CashDrawerReportView({ reports, dict }: { reports: CashDrawerReport[]; 
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span
-                    className={`px-2 py-1 text-xs font-medium rounded-full ${
+                    className={`px-2 py-1 text-xs font-medium border ${
                       report.status === 'closed'
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-yellow-100 text-yellow-800'
+                        ? 'bg-green-100 text-green-800 border-green-300'
+                        : 'bg-yellow-100 text-yellow-800 border-yellow-300'
                     }`}
                   >
                     {report.status}

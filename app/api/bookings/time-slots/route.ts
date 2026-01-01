@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb';
 import Booking from '@/models/Booking';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { getCurrentUser } from '@/lib/auth';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 /**
  * GET - Get available time slots for a given date
@@ -18,9 +19,10 @@ export async function GET(request: NextRequest) {
   try {
     await connectDB();
     const user = await getCurrentUser(request);
+    const t = await getValidationTranslatorFromRequest(request);
     if (!user) {
       return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
+        { success: false, error: t('validation.unauthorized', 'Unauthorized') },
         { status: 401 }
       );
     }
@@ -28,7 +30,7 @@ export async function GET(request: NextRequest) {
     const tenantId = await getTenantIdFromRequest(request);
     if (!tenantId) {
       return NextResponse.json(
-        { success: false, error: 'Tenant not found' },
+        { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
         { status: 404 }
       );
     }
@@ -43,7 +45,7 @@ export async function GET(request: NextRequest) {
 
     if (!dateParam) {
       return NextResponse.json(
-        { success: false, error: 'Date parameter is required' },
+        { success: false, error: t('validation.dateParameterRequired', 'Date parameter is required') },
         { status: 400 }
       );
     }
@@ -111,8 +113,9 @@ export async function GET(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('Get time slots error:', error);
+    const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to fetch time slots' },
+      { success: false, error: error.message || t('validation.failedToFetchTimeSlots', 'Failed to fetch time slots') },
       { status: 500 }
     );
   }

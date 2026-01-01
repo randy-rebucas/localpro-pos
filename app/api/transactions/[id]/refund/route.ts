@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Transaction from '@/models/Transaction';
+import Product from '@/models/Product';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { updateStock } from '@/lib/stock';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -13,26 +15,27 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
     const body = await request.json();
+    const t = await getValidationTranslatorFromRequest(request);
     
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
     const transaction = await Transaction.findOne({ _id: id, tenantId });
     if (!transaction) {
-      return NextResponse.json({ success: false, error: 'Transaction not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.transactionNotFound', 'Transaction not found') }, { status: 404 });
     }
 
     if (transaction.status === 'refunded') {
       return NextResponse.json(
-        { success: false, error: 'Transaction has already been refunded' },
+        { success: false, error: t('validation.transactionAlreadyRefunded', 'Transaction has already been refunded') },
         { status: 400 }
       );
     }
 
     if (transaction.status !== 'completed') {
       return NextResponse.json(
-        { success: false, error: 'Only completed transactions can be refunded' },
+        { success: false, error: t('validation.onlyCompletedRefundable', 'Only completed transactions can be refunded') },
         { status: 400 }
       );
     }
@@ -55,15 +58,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       );
 
       if (!originalItem) {
+        const errorMsg = t('validation.itemNotFoundInTransaction', 'Item {productId} not found in transaction').replace('{productId}', refundItem.productId);
         return NextResponse.json(
-          { success: false, error: `Item ${refundItem.productId} not found in transaction` },
+          { success: false, error: errorMsg },
           { status: 400 }
         );
       }
 
       if (refundItem.quantity > originalItem.quantity) {
         return NextResponse.json(
-          { success: false, error: `Cannot refund more than purchased quantity` },
+          { success: false, error: t('validation.cannotRefundMoreThanPurchased', 'Cannot refund more than purchased quantity') },
           { status: 400 }
         );
       }
@@ -103,19 +107,22 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       notes: notes || reason || 'Refund',
     });
 
-    // Restore stock for refunded items
+    // Restore stock for refunded items (only if product tracks inventory)
     for (const refundItem of refundItems) {
-      await updateStock(
-        refundItem.productId,
-        tenantId,
-        refundItem.quantity, // Positive to restore
-        'return',
-        {
-          transactionId: refundTransaction._id.toString(),
-          reason: reason || 'Transaction refund',
-          notes: notes,
-        }
-      );
+      const product = await Product.findOne({ _id: refundItem.productId, tenantId });
+      if (product && product.trackInventory !== false) {
+        await updateStock(
+          refundItem.productId,
+          tenantId,
+          refundItem.quantity, // Positive to restore
+          'return',
+          {
+            transactionId: refundTransaction._id.toString(),
+            reason: reason || 'Transaction refund',
+            notes: notes,
+          }
+        );
+      }
     }
 
     // Mark original transaction as refunded if full refund

@@ -4,6 +4,8 @@ import Booking from '@/models/Booking';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireRole, getCurrentUser } from '@/lib/auth';
 import { sendBookingReminder } from '@/lib/notifications';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { getTenantSettingsById } from '@/lib/tenant';
 
 /**
  * POST - Send reminder for a booking
@@ -15,9 +17,10 @@ export async function POST(
   try {
     await connectDB();
     const user = await getCurrentUser(request);
+    const t = await getValidationTranslatorFromRequest(request);
     if (!user) {
       return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
+        { success: false, error: t('validation.unauthorized', 'Unauthorized') },
         { status: 401 }
       );
     }
@@ -27,7 +30,7 @@ export async function POST(
     
     if (!tenantId) {
       return NextResponse.json(
-        { success: false, error: 'Tenant not found' },
+        { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
         { status: 404 }
       );
     }
@@ -37,18 +40,19 @@ export async function POST(
 
     if (!booking) {
       return NextResponse.json(
-        { success: false, error: 'Booking not found' },
+        { success: false, error: t('validation.bookingNotFound', 'Booking not found') },
         { status: 404 }
       );
     }
 
     if (booking.status === 'cancelled' || booking.status === 'completed') {
       return NextResponse.json(
-        { success: false, error: 'Cannot send reminder for cancelled or completed bookings' },
+        { success: false, error: t('validation.cannotSendReminder', 'Cannot send reminder for cancelled or completed bookings') },
         { status: 400 }
       );
     }
 
+    const tenantSettings = await getTenantSettingsById(tenantId);
     const results = await sendBookingReminder({
       customerName: booking.customerName,
       customerEmail: booking.customerEmail,
@@ -59,7 +63,7 @@ export async function POST(
       staffName: booking.staffName,
       notes: booking.notes,
       bookingId: id,
-    });
+    }, tenantSettings || undefined);
 
     // Update reminder sent status
     await Booking.findByIdAndUpdate(id, { reminderSent: true });
@@ -71,8 +75,9 @@ export async function POST(
     });
   } catch (error: any) {
     console.error('Send reminder error:', error);
+    const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to send reminder' },
+      { success: false, error: error.message || t('validation.failedToSendReminder', 'Failed to send reminder') },
       { status: 500 }
     );
   }

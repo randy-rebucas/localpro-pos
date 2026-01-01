@@ -4,6 +4,7 @@ import ProductBundle from '@/models/ProductBundle';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function GET(
   request: NextRequest,
@@ -13,9 +14,10 @@ export async function GET(
     await connectDB();
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
+    const t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
     const bundle = await ProductBundle.findOne({ _id: id, tenantId })
@@ -24,7 +26,7 @@ export async function GET(
       .lean();
 
     if (!bundle) {
-      return NextResponse.json({ success: false, error: 'Bundle not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.bundleNotFound', 'Bundle not found') }, { status: 404 });
     }
 
     return NextResponse.json({ success: true, data: bundle });
@@ -78,9 +80,10 @@ export async function PUT(
 
     return NextResponse.json({ success: true, data: bundle });
   } catch (error: any) {
+    const t = await getValidationTranslatorFromRequest(request);
     if (error.code === 11000) {
       return NextResponse.json(
-        { success: false, error: 'Bundle with this SKU already exists' },
+        { success: false, error: t('validation.bundleSkuExists', 'Bundle with this SKU already exists') },
         { status: 400 }
       );
     }
@@ -98,14 +101,15 @@ export async function DELETE(
     await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
+    const t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
     const bundle = await ProductBundle.findOne({ _id: id, tenantId });
     if (!bundle) {
-      return NextResponse.json({ success: false, error: 'Bundle not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.bundleNotFound', 'Bundle not found') }, { status: 404 });
     }
 
     // Soft delete - set isActive to false
@@ -120,7 +124,7 @@ export async function DELETE(
       changes: { name: bundle.name },
     });
 
-    return NextResponse.json({ success: true, message: 'Bundle deactivated' });
+    return NextResponse.json({ success: true, message: t('validation.bundleDeactivated', 'Bundle deactivated') });
   } catch (error: any) {
     console.error('Error deleting bundle:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });

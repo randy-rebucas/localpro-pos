@@ -4,12 +4,14 @@ import Tenant from '@/models/Tenant';
 import User from '@/models/User';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { validateEmail, validatePassword, validateTenant } from '@/lib/validation';
+import { getValidationTranslator } from '@/lib/validation-translations';
 
 /**
  * Public endpoint for tenant signup
  * Creates a new tenant and admin user without requiring authentication
  */
 export async function POST(request: NextRequest) {
+  let t: (key: string, fallback: string) => string;
   try {
     await connectDB();
     
@@ -30,8 +32,12 @@ export async function POST(request: NextRequest) {
       email: contactEmail,
     } = body;
 
+    // Get translation function based on selected language
+    const lang = (language === 'es' ? 'es' : 'en') as 'en' | 'es';
+    t = await getValidationTranslator(lang);
+
     // Validate tenant data
-    const tenantErrors = validateTenant({ slug, name });
+    const tenantErrors = validateTenant({ slug, name }, t);
     if (tenantErrors.length > 0) {
       return NextResponse.json(
         { success: false, error: tenantErrors[0].message },
@@ -42,19 +48,19 @@ export async function POST(request: NextRequest) {
     // Validate admin user data
     if (!adminEmail || !adminPassword || !adminName) {
       return NextResponse.json(
-        { success: false, error: 'Admin email, password, and name are required' },
+        { success: false, error: t('validation.adminFieldsRequired', 'Admin email, password, and name are required') },
         { status: 400 }
       );
     }
 
     if (!validateEmail(adminEmail)) {
       return NextResponse.json(
-        { success: false, error: 'Invalid admin email format' },
+        { success: false, error: t('validation.invalidEmailFormat', 'Invalid admin email format') },
         { status: 400 }
       );
     }
 
-    const passwordValidation = validatePassword(adminPassword);
+    const passwordValidation = validatePassword(adminPassword, t);
     if (!passwordValidation.valid) {
       return NextResponse.json(
         { success: false, error: 'Password validation failed', errors: passwordValidation.errors },
@@ -62,10 +68,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate slug format
+    // Validate slug format (already validated in validateTenant, but keeping for consistency)
     if (!/^[a-z0-9-]+$/.test(slug)) {
       return NextResponse.json(
-        { success: false, error: 'Slug can only contain lowercase letters, numbers, and hyphens' },
+        { success: false, error: t('validation.slugFormat', 'Slug can only contain lowercase letters, numbers, and hyphens') },
         { status: 400 }
       );
     }
@@ -79,7 +85,7 @@ export async function POST(request: NextRequest) {
 
     if (existingTenant) {
       return NextResponse.json(
-        { success: false, error: 'A store with this identifier already exists. Please choose a different one.' },
+        { success: false, error: t('validation.storeIdentifierExists', 'A store with this identifier already exists. Please choose a different one.') },
         { status: 400 }
       );
     }
@@ -88,7 +94,7 @@ export async function POST(request: NextRequest) {
     const existingUser = await User.findOne({ email: adminEmail.toLowerCase() });
     if (existingUser) {
       return NextResponse.json(
-        { success: false, error: 'An account with this email already exists' },
+        { success: false, error: t('validation.emailExists', 'An account with this email already exists') },
         { status: 400 }
       );
     }
@@ -135,7 +141,7 @@ export async function POST(request: NextRequest) {
           email: adminUser.email,
           name: adminUser.name,
         },
-        message: 'Store created successfully! You can now login with your admin credentials.'
+        message: t('validation.storeCreatedSuccess', 'Store created successfully! You can now login with your admin credentials.')
       }
     }, { status: 201 });
   } catch (error: any) {
@@ -147,9 +153,10 @@ export async function POST(request: NextRequest) {
       );
     }
     console.error('Signup error:', error);
+    const errorMessage = error.message || 'Failed to create store. Please try again.';
     return NextResponse.json({ 
       success: false, 
-      error: error.message || 'Failed to create store. Please try again.' 
+      error: errorMessage
     }, { status: 400 });
   }
 }

@@ -6,6 +6,8 @@ import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireRole, getCurrentUser } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { sendBookingConfirmation } from '@/lib/notifications';
+import { getTenantSettingsById } from '@/lib/tenant';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 /**
  * GET - Get all bookings for a tenant
@@ -83,9 +85,10 @@ export async function POST(request: NextRequest) {
   try {
     await connectDB();
     const user = await getCurrentUser(request);
+    const t = await getValidationTranslatorFromRequest(request);
     if (!user) {
       return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
+        { success: false, error: t('validation.unauthorized', 'Unauthorized') },
         { status: 401 }
       );
     }
@@ -96,7 +99,7 @@ export async function POST(request: NextRequest) {
     
     if (!tenantId) {
       return NextResponse.json(
-        { success: false, error: 'Tenant not found' },
+        { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
         { status: 404 }
       );
     }
@@ -118,7 +121,7 @@ export async function POST(request: NextRequest) {
     // Validation
     if (!customerName || !serviceName || !startTime || !duration) {
       return NextResponse.json(
-        { success: false, error: 'Customer name, service name, start time, and duration are required' },
+        { success: false, error: t('validation.bookingFieldsRequired', 'Customer name, service name, start time, and duration are required') },
         { status: 400 }
       );
     }
@@ -147,7 +150,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           {
             success: false,
-            error: 'Staff member already has a booking at this time',
+            error: t('validation.staffBookingConflict', 'Staff member already has a booking at this time'),
             conflicts: staffConflicts,
           },
           { status: 409 }
@@ -159,7 +162,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           {
             success: false,
-            error: 'Time slot is already booked',
+            error: t('validation.timeSlotBooked', 'Time slot is already booked'),
             conflicts: conflictingBookings,
           },
           { status: 409 }
@@ -172,7 +175,7 @@ export async function POST(request: NextRequest) {
       const staff = await User.findOne({ _id: staffId, tenantId, isActive: true });
       if (!staff) {
         return NextResponse.json(
-          { success: false, error: 'Staff member not found or inactive' },
+          { success: false, error: t('validation.staffNotFound', 'Staff member not found or inactive') },
           { status: 404 }
         );
       }
@@ -197,6 +200,7 @@ export async function POST(request: NextRequest) {
     // Send confirmation if status is confirmed and contact info is provided
     if (status === 'confirmed' && (customerEmail || customerPhone)) {
       try {
+        const tenantSettings = await getTenantSettingsById(tenantId);
         await sendBookingConfirmation({
           customerName,
           customerEmail,
@@ -207,7 +211,7 @@ export async function POST(request: NextRequest) {
           staffName: booking.staffName,
           notes,
           bookingId: booking._id.toString(),
-        });
+        }, tenantSettings || undefined);
         await Booking.findByIdAndUpdate(booking._id, { confirmationSent: true });
       } catch (notificationError) {
         console.error('Failed to send booking confirmation:', notificationError);
@@ -238,14 +242,15 @@ export async function POST(request: NextRequest) {
     );
   } catch (error: any) {
     console.error('Create booking error:', error);
+    const t = await getValidationTranslatorFromRequest(request);
     if (error.code === 11000) {
       return NextResponse.json(
-        { success: false, error: 'Booking already exists' },
+        { success: false, error: t('validation.bookingExists', 'Booking already exists') },
         { status: 400 }
       );
     }
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to create booking' },
+      { success: false, error: error.message || t('validation.failedToCreateBooking', 'Failed to create booking') },
       { status: 500 }
     );
   }

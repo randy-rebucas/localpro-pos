@@ -4,6 +4,7 @@ import SavedCart from '@/models/SavedCart';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import mongoose from 'mongoose';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function GET(
   request: NextRequest,
@@ -14,9 +15,10 @@ export async function GET(
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
+    const t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
     const tenantObjectId = new mongoose.Types.ObjectId(tenantId);
@@ -28,7 +30,7 @@ export async function GET(
     }).lean();
 
     if (!savedCart) {
-      return NextResponse.json({ success: false, error: 'Saved cart not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.savedCartNotFound', 'Saved cart not found') }, { status: 404 });
     }
 
     return NextResponse.json({ success: true, data: savedCart });
@@ -47,9 +49,10 @@ export async function DELETE(
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
+    const t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
     const tenantObjectId = new mongoose.Types.ObjectId(tenantId);
@@ -61,10 +64,10 @@ export async function DELETE(
     });
 
     if (!savedCart) {
-      return NextResponse.json({ success: false, error: 'Saved cart not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.savedCartNotFound', 'Saved cart not found') }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, message: 'Saved cart deleted successfully' });
+    return NextResponse.json({ success: true, message: t('validation.savedCartDeleted', 'Saved cart deleted successfully') });
   } catch (error: any) {
     console.error('Error deleting saved cart:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });

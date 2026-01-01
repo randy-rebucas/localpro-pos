@@ -4,15 +4,17 @@ import Discount from '@/models/Discount';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth, requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
     await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
+    const t = await getValidationTranslatorFromRequest(request);
     
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
     
     const searchParams = request.nextUrl.searchParams;
@@ -44,9 +46,10 @@ export async function POST(request: NextRequest) {
     await connectDB();
     await requireRole(request, ['admin', 'manager']);
     const tenantId = await getTenantIdFromRequest(request);
+    const t = await getValidationTranslatorFromRequest(request);
     
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
     
     const body = await request.json();
@@ -67,7 +70,7 @@ export async function POST(request: NextRequest) {
     // Validate required fields
     if (!code || !type || value === undefined || !validFrom || !validUntil) {
       return NextResponse.json(
-        { success: false, error: 'Missing required fields' },
+        { success: false, error: t('validation.missingRequiredFields', 'Missing required fields') },
         { status: 400 }
       );
     }
@@ -75,14 +78,14 @@ export async function POST(request: NextRequest) {
     // Validate value based on type
     if (type === 'percentage' && (value < 0 || value > 100)) {
       return NextResponse.json(
-        { success: false, error: 'Percentage discount must be between 0 and 100' },
+        { success: false, error: t('validation.percentageDiscountRange', 'Percentage discount must be between 0 and 100') },
         { status: 400 }
       );
     }
 
     if (type === 'fixed' && value < 0) {
       return NextResponse.json(
-        { success: false, error: 'Fixed discount must be positive' },
+        { success: false, error: t('validation.fixedDiscountPositive', 'Fixed discount must be positive') },
         { status: 400 }
       );
     }
@@ -91,7 +94,7 @@ export async function POST(request: NextRequest) {
     const existing = await Discount.findOne({ tenantId, code: code.toUpperCase() });
     if (existing) {
       return NextResponse.json(
-        { success: false, error: 'Discount code already exists' },
+        { success: false, error: t('validation.discountCodeExists', 'Discount code already exists') },
         { status: 400 }
       );
     }
@@ -122,9 +125,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, data: discount }, { status: 201 });
   } catch (error: any) {
+    const t = await getValidationTranslatorFromRequest(request);
     if (error.code === 11000) {
       return NextResponse.json(
-        { success: false, error: 'Discount code already exists' },
+        { success: false, error: t('validation.discountCodeExists', 'Discount code already exists') },
         { status: 400 }
       );
     }

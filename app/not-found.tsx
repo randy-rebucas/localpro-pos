@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
 
 interface Tenant {
   slug: string;
@@ -12,8 +13,13 @@ interface Tenant {
 }
 
 export default function RootNotFound() {
+  const [dict, setDict] = useState<any>(null);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getDictionaryClient('en').then(setDict);
+  }, []);
 
   useEffect(() => {
     async function fetchTenants() {
@@ -51,16 +57,16 @@ export default function RootNotFound() {
               />
             </svg>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-3">Select a Store</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-3">{dict?.common?.selectStore || 'Select a Store'}</h1>
           <p className="text-gray-600 text-lg">
-            Please select a store to continue. Choose from the available stores below or use the default store.
+            {dict?.common?.selectStoreMessage || 'Please select a store to continue. Choose from the available stores below or use the default store.'}
           </p>
         </div>
 
         {loading ? (
           <div className="text-center py-8">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <p className="mt-4 text-gray-600">Loading stores...</p>
+            <p className="mt-4 text-gray-600">{dict?.common?.loadingStores || 'Loading stores...'}</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -77,7 +83,7 @@ export default function RootNotFound() {
                         {tenant.settings?.companyName || tenant.name}
                       </h3>
                       <p className="text-sm text-gray-500 mt-1">
-                        {tenant.settings?.companyName ? tenant.name : `Store: ${tenant.slug}`}
+                        {tenant.settings?.companyName ? tenant.name : `${dict?.common?.store || 'Store'}: ${tenant.slug}`}
                       </p>
                     </div>
                     <svg
@@ -98,12 +104,12 @@ export default function RootNotFound() {
               ))
             ) : (
               <div className="text-center py-6">
-                <p className="text-gray-600 mb-4">No stores available. Please contact your administrator.</p>
+                <p className="text-gray-600 mb-4">{dict?.common?.noStoresAvailable || 'No stores available. Please contact your administrator.'}</p>
                 <Link
                   href="/default/en"
                   className="inline-block bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 font-medium transition-colors"
                 >
-                  Go to Default Store
+                  {dict?.common?.goToDefaultStore || 'Go to Default Store'}
                 </Link>
               </div>
             )}
@@ -116,13 +122,13 @@ export default function RootNotFound() {
               href="/default/en"
               className="block w-full bg-blue-600 text-white px-4 py-3 rounded-md hover:bg-blue-700 font-medium transition-colors text-center"
             >
-              Go to Default Store
+              {dict?.common?.goToDefaultStore || 'Go to Default Store'}
             </Link>
             <Link
               href="/signup"
               className="block w-full bg-gray-100 text-gray-700 px-4 py-3 rounded-md hover:bg-gray-200 font-medium transition-colors text-center"
             >
-              Create a New Store
+              {dict?.common?.createNewStore || 'Create a New Store'}
             </Link>
           </div>
         )}
@@ -133,7 +139,7 @@ export default function RootNotFound() {
               href="/signup"
               className="block w-full bg-blue-600 text-white px-4 py-3 rounded-md hover:bg-blue-700 font-medium transition-colors text-center"
             >
-              Create Your First Store
+              {dict?.common?.createYourFirstStore || 'Create Your First Store'}
             </Link>
           </div>
         )}

@@ -6,6 +6,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { useAuth } from '@/contexts/AuthContext';
 import QRCodeDisplay from '@/components/QRCodeDisplay';
+import { showToast } from '@/lib/toast';
+import { useConfirm } from '@/lib/confirm';
 
 interface User {
   _id: string;
@@ -33,6 +35,7 @@ export default function UsersPage() {
   const [showQRModal, setShowQRModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const { user: currentUser } = useAuth();
+  const { confirm, Dialog: ConfirmDialog } = useConfirm();
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -43,27 +46,39 @@ export default function UsersPage() {
     try {
       const res = await fetch('/api/users', { credentials: 'include' });
       const data = await res.json();
-      if (data.success) setUsers(data.data);
+      if (data.success) {
+        setUsers(data.data);
+        setMessage(null);
+      } else {
+        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchUsers || 'Failed to fetch users' });
+      }
     } catch (error) {
       console.error('Error fetching users:', error);
+      setMessage({ type: 'error', text: dict?.common?.failedToFetchUsers || 'Failed to fetch users' });
     } finally {
       setLoading(false);
     }
   };
 
   const handleDeleteUser = async (userId: string) => {
-    if (!confirm('Are you sure you want to delete this user?')) return;
+    if (!dict) return;
+    const confirmed = await confirm(
+      dict.common?.deleteUserConfirmTitle || 'Delete User',
+      dict.common?.deleteUserConfirm || 'Are you sure you want to delete this user?',
+      { variant: 'danger' }
+    );
+    if (!confirmed) return;
     try {
       const res = await fetch(`/api/users/${userId}`, { method: 'DELETE', credentials: 'include' });
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: 'User deleted successfully' });
+        showToast.success(dict?.admin?.userDeletedSuccess || dict?.common?.userDeletedSuccess || 'User deleted successfully');
         fetchUsers();
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to delete user' });
+        setMessage({ type: 'error', text: data.error || dict?.admin?.failedToDeleteUser || dict?.common?.failedToDeleteUser || 'Failed to delete user' });
       }
     } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to delete user' });
+      setMessage({ type: 'error', text: dict?.admin?.failedToDeleteUser || dict?.common?.failedToDeleteUser || 'Failed to delete user' });
     }
   };
 
@@ -77,13 +92,13 @@ export default function UsersPage() {
       });
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: `User ${!user.isActive ? 'activated' : 'deactivated'} successfully` });
+        setMessage({ type: 'success', text: `User ${!user.isActive ? (dict?.admin?.activated || 'activated') : (dict?.admin?.deactivated || 'deactivated')} ${dict?.admin?.successfully || 'successfully'}` });
         fetchUsers();
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to update user' });
+        setMessage({ type: 'error', text: data.error || dict?.common?.failedToUpdateUser || 'Failed to update user' });
       }
     } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to update user' });
+      setMessage({ type: 'error', text: dict?.common?.failedToUpdateUser || 'Failed to update user' });
     }
   };
 
@@ -91,8 +106,8 @@ export default function UsersPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
     );
@@ -100,6 +115,7 @@ export default function UsersPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {ConfirmDialog}
       <Navbar />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         <div className="mb-6 sm:mb-8">
@@ -112,7 +128,7 @@ export default function UsersPage() {
             </div>
             <button
               onClick={() => router.push(`/${tenant}/${lang}/admin`)}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
             >
               {dict.common?.back || 'Back'}
             </button>
@@ -120,12 +136,12 @@ export default function UsersPage() {
         </div>
 
         {message && (
-          <div className={`mb-6 p-4 rounded-lg ${message.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
+          <div className={`mb-6 p-4 border ${message.type === 'success' ? 'bg-green-50 text-green-800 border-green-300' : 'bg-red-50 text-red-800 border-red-300'}`}>
             {message.text}
           </div>
         )}
 
-        <div className="bg-white rounded-xl shadow-md p-6">
+        <div className="bg-white border border-gray-300 p-6">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold text-gray-900">{dict.admin?.users || 'Users'}</h2>
             <button
@@ -133,7 +149,7 @@ export default function UsersPage() {
                 setEditingUser(null);
                 setShowUserModal(true);
               }}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+              className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
             >
               {dict.common?.add || 'Add'} {dict.admin?.user || 'User'}
             </button>
@@ -156,12 +172,12 @@ export default function UsersPage() {
                     <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{user.name}</td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{user.email}</td>
                     <td className="px-4 py-4 whitespace-nowrap">
-                      <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 capitalize">
+                      <span className="px-2 py-1 text-xs font-semibold border border-blue-300 bg-blue-100 text-blue-800 capitalize">
                         {user.role}
                       </span>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs font-semibold rounded-full ${user.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                      <span className={`px-2 py-1 text-xs font-semibold border ${user.isActive ? 'bg-green-100 text-green-800 border-green-300' : 'bg-red-100 text-red-800 border-red-300'}`}>
                         {user.isActive ? (dict.admin?.active || 'Active') : (dict.admin?.inactive || 'Inactive')}
                       </span>
                     </td>
@@ -173,7 +189,7 @@ export default function UsersPage() {
                             setShowPINModal(true);
                           }}
                           className="text-purple-600 hover:text-purple-900 text-xs"
-                          title="Manage PIN"
+                          title={dict?.admin?.managePIN || 'Manage PIN'}
                         >
                           PIN
                         </button>
@@ -183,7 +199,7 @@ export default function UsersPage() {
                             setShowQRModal(true);
                           }}
                           className="text-indigo-600 hover:text-indigo-900 text-xs"
-                          title="View QR Code"
+                          title={dict?.admin?.viewQRCode || 'View QR Code'}
                         >
                           QR
                         </button>
@@ -333,8 +349,8 @@ function UserModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white border border-gray-300 max-w-md w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
             {user ? (dict.admin?.editUser || 'Edit User') : (dict.admin?.addUser || 'Add User')}
@@ -349,7 +365,7 @@ function UserModal({
                 required
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               />
             </div>
             <div>
@@ -361,7 +377,7 @@ function UserModal({
                 required
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               />
             </div>
             <div>
@@ -373,7 +389,7 @@ function UserModal({
                 required={!user}
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               />
             </div>
             <div>
@@ -383,7 +399,7 @@ function UserModal({
               <select
                 value={formData.role}
                 onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               >
                 <option value="viewer">Viewer</option>
                 <option value="cashier">Cashier</option>
@@ -393,7 +409,7 @@ function UserModal({
               </select>
             </div>
             {error && (
-              <div className="bg-red-50 text-red-800 border border-red-200 rounded-lg p-3">
+              <div className="bg-red-50 text-red-800 border border-red-300 p-3">
                 {error}
               </div>
             )}
@@ -401,14 +417,14 @@ function UserModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
               >
                 {dict.common?.cancel || 'Cancel'}
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
               >
                 {saving ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
               </button>
@@ -435,6 +451,7 @@ function PINModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [removing, setRemoving] = useState(false);
+  const { confirm, Dialog } = useConfirm();
 
   const handleSetPIN = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -468,7 +485,13 @@ function PINModal({
   };
 
   const handleRemovePIN = async () => {
-    if (!confirm('Are you sure you want to remove the PIN for this user?')) return;
+    if (!dict) return;
+    const confirmed = await confirm(
+      dict.common?.removePINConfirmTitle || 'Remove PIN',
+      dict.common?.removePINConfirm || dict.admin?.removePINConfirm || 'Are you sure you want to remove the PIN for this user?',
+      { variant: 'warning' }
+    );
+    if (!confirmed) return;
     
     setRemoving(true);
     setError('');
@@ -492,8 +515,9 @@ function PINModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
+    <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      {Dialog}
+      <div className="bg-white border border-gray-300 max-w-md w-full">
         <div className="p-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
             Manage PIN for {user.name}
@@ -513,13 +537,13 @@ function PINModal({
                   const value = e.target.value.replace(/\D/g, '');
                   if (value.length <= 8) setPin(value);
                 }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-center text-2xl font-mono tracking-widest"
+                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 text-center text-2xl font-mono tracking-widest bg-white"
                 placeholder="0000"
                 required
               />
             </div>
             {error && (
-              <div className="bg-red-50 text-red-800 border border-red-200 rounded-lg p-3">
+              <div className="bg-red-50 text-red-800 border border-red-300 p-3">
                 {error}
               </div>
             )}
@@ -528,21 +552,21 @@ function PINModal({
                 type="button"
                 onClick={handleRemovePIN}
                 disabled={removing}
-                className="px-4 py-2 border border-red-300 text-red-700 rounded-lg hover:bg-red-50 disabled:opacity-50"
+                className="px-4 py-2 border border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-50 bg-white"
               >
                 {removing ? 'Removing...' : 'Remove PIN'}
               </button>
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
               >
                 {dict.common?.cancel || 'Cancel'}
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
               >
                 {saving ? 'Saving...' : 'Set PIN'}
               </button>
@@ -569,6 +593,7 @@ function QRModal({
   const [loading, setLoading] = useState(true);
   const [regenerating, setRegenerating] = useState(false);
   const [error, setError] = useState('');
+  const { confirm, Dialog } = useConfirm();
 
   useEffect(() => {
     fetchQRCode();
@@ -595,7 +620,13 @@ function QRModal({
   };
 
   const handleRegenerate = async () => {
-    if (!confirm('Are you sure you want to regenerate the QR code? The old QR code will no longer work.')) return;
+    if (!dict) return;
+    const confirmed = await confirm(
+      dict.common?.regenerateQRConfirmTitle || 'Regenerate QR Code',
+      dict.common?.regenerateQRConfirm || dict.admin?.regenerateQRConfirm || 'Are you sure you want to regenerate the QR code? The old QR code will no longer work.',
+      { variant: 'warning' }
+    );
+    if (!confirmed) return;
     
     setRegenerating(true);
     setError('');
@@ -620,10 +651,10 @@ function QRModal({
 
   if (loading) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-xl p-6">
+      <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-white border border-gray-300 p-6">
           <div className="text-center">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
             <p className="mt-4 text-gray-600">Loading QR code...</p>
           </div>
         </div>
@@ -632,33 +663,34 @@ function QRModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
+    <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      {Dialog}
+      <div className="bg-white border border-gray-300 max-w-md w-full">
         <div className="p-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
             QR Code for {user.name}
           </h2>
           {error && (
-            <div className="bg-red-50 text-red-800 border border-red-200 rounded-lg p-3 mb-4">
+            <div className="bg-red-50 text-red-800 border border-red-300 p-3 mb-4">
               {error}
             </div>
           )}
           {qrData && (
             <div className="space-y-4">
-              <div className="flex justify-center p-4 bg-gray-50 rounded-lg">
+              <div className="flex justify-center p-4 bg-gray-50 border border-gray-300">
                 <QRCodeDisplay qrToken={qrData.qrToken} name={qrData.name} />
               </div>
               <div className="flex gap-3 justify-end pt-4">
                 <button
                   onClick={handleRegenerate}
                   disabled={regenerating}
-                  className="px-4 py-2 border border-orange-300 text-orange-700 rounded-lg hover:bg-orange-50 disabled:opacity-50"
+                  className="px-4 py-2 border border-orange-300 text-orange-700 hover:bg-orange-50 disabled:opacity-50 bg-white"
                 >
                   {regenerating ? 'Regenerating...' : 'Regenerate QR Code'}
                 </button>
                 <button
                   onClick={onClose}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 border border-blue-700"
                 >
                   {dict.common?.close || 'Close'}
                 </button>

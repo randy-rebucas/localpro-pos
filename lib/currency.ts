@@ -141,6 +141,11 @@ export function getDefaultTenantSettings(): ITenantSettings {
     lowStockAlert: true,
     emailNotifications: false,
     smsNotifications: false,
+    attendanceNotifications: {
+      enabled: true,
+      expectedStartTime: '09:00',
+      maxHoursWithoutClockOut: 12,
+    },
     enableInventory: true,
     enableCategories: true,
     enableDiscounts: false,

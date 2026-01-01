@@ -5,6 +5,7 @@ import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateAndSanitize, validateProduct } from '@/lib/validation';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function GET(request: NextRequest) {
   try {
@@ -37,7 +38,7 @@ export async function GET(request: NextRequest) {
 
     const products = await Product.find(query)
       .populate('categoryId', 'name')
-      .sort({ createdAt: -1 })
+      .sort({ pinned: -1, createdAt: -1 }) // Pinned products first, then by creation date
       .lean();
     
     return NextResponse.json({ success: true, data: products });
@@ -58,7 +59,8 @@ export async function POST(request: NextRequest) {
     }
     
     const body = await request.json();
-    const { data, errors } = validateAndSanitize(body, validateProduct);
+    const t = await getValidationTranslatorFromRequest(request);
+    const { data, errors } = validateAndSanitize(body, validateProduct, t);
 
     if (errors.length > 0) {
       return NextResponse.json(

@@ -3,7 +3,9 @@ import { getCurrentUser } from '@/lib/auth';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 import { validateEmail, validatePassword } from '@/lib/validation';
+import { isPinDuplicate } from '@/lib/pin-validation';
 import { createAuditLog, AuditActions } from '@/lib/audit';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 /**
  * GET - Get current user's profile
@@ -58,6 +60,7 @@ export async function GET(request: NextRequest) {
  * PUT - Update current user's profile
  */
 export async function PUT(request: NextRequest) {
+  let t: (key: string, fallback: string) => string;
   try {
     const currentUser = await getCurrentUser(request);
     
@@ -68,6 +71,9 @@ export async function PUT(request: NextRequest) {
     await connectDB();
     const body = await request.json();
     const { email, password, name, currentPassword, pin, currentPin } = body;
+
+    // Get translation function
+    t = await getValidationTranslatorFromRequest(request);
 
     const oldUser = await User.findById(currentUser.userId).lean();
     if (!oldUser || !oldUser.isActive) {
@@ -80,7 +86,7 @@ export async function PUT(request: NextRequest) {
     if (email !== undefined && email !== oldUser.email) {
       if (!validateEmail(email)) {
         return NextResponse.json(
-          { success: false, error: 'Invalid email format' },
+          { success: false, error: t('validation.invalidEmailFormat', 'Invalid email format') },
           { status: 400 }
         );
       }
@@ -90,7 +96,7 @@ export async function PUT(request: NextRequest) {
     if (name !== undefined && name !== oldUser.name) {
       if (!name.trim()) {
         return NextResponse.json(
-          { success: false, error: 'Name is required' },
+          { success: false, error: t('validation.nameRequired', 'Name is required') },
           { status: 400 }
         );
       }
@@ -101,7 +107,7 @@ export async function PUT(request: NextRequest) {
     if (password !== undefined && password) {
       if (!currentPassword) {
         return NextResponse.json(
-          { success: false, error: 'Current password is required to change password' },
+          { success: false, error: t('validation.currentPasswordRequired', 'Current password is required to change password') },
           { status: 400 }
         );
       }
@@ -115,12 +121,12 @@ export async function PUT(request: NextRequest) {
       const isPasswordValid = await userDoc.comparePassword(currentPassword);
       if (!isPasswordValid) {
         return NextResponse.json(
-          { success: false, error: 'Current password is incorrect' },
+          { success: false, error: t('validation.currentPasswordIncorrect', 'Current password is incorrect') },
           { status: 400 }
         );
       }
 
-      const passwordValidation = validatePassword(password);
+      const passwordValidation = validatePassword(password, t);
       if (!passwordValidation.valid) {
         return NextResponse.json(
           { success: false, error: 'Password validation failed', errors: passwordValidation.errors },
@@ -164,12 +170,21 @@ export async function PUT(request: NextRequest) {
         }
       }
 
+      // Check if PIN is already in use by another user in the same tenant
+      const pinExists = await isPinDuplicate(oldUser.tenantId, pin, currentUser.userId);
+      if (pinExists) {
+        return NextResponse.json(
+          { success: false, error: 'This PIN is already in use by another user in your organization' },
+          { status: 400 }
+        );
+      }
+
       updateData.pin = pin;
     }
 
     if (Object.keys(updateData).length === 0) {
       return NextResponse.json(
-        { success: false, error: 'No changes provided' },
+        { success: false, error: t('validation.noChanges', 'No changes provided') },
         { status: 400 }
       );
     }

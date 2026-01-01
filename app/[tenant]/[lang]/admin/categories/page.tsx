@@ -34,27 +34,34 @@ export default function CategoriesPage() {
     try {
       const res = await fetch('/api/categories', { credentials: 'include' });
       const data = await res.json();
-      if (data.success) setCategories(data.data);
+      if (data.success) {
+        setCategories(data.data);
+        setMessage(null);
+      } else {
+        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchCategories || 'Failed to fetch categories' });
+      }
     } catch (error) {
       console.error('Error fetching categories:', error);
+      setMessage({ type: 'error', text: dict?.common?.failedToFetchCategories || 'Failed to fetch categories' });
     } finally {
       setLoading(false);
     }
   };
 
   const handleDeleteCategory = async (categoryId: string) => {
-    if (!confirm('Are you sure you want to delete this category?')) return;
+    if (!dict) return;
+    if (!confirm(dict.common?.deleteCategoryConfirm || dict.admin?.deleteCategoryConfirm || 'Are you sure you want to delete this category?')) return;
     try {
       const res = await fetch(`/api/categories/${categoryId}`, { method: 'DELETE', credentials: 'include' });
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: 'Category deleted successfully' });
+        setMessage({ type: 'success', text: dict?.common?.categoryDeletedSuccess || 'Category deleted successfully' });
         fetchCategories();
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to delete category' });
+        setMessage({ type: 'error', text: data.error || dict?.common?.failedToDeleteCategory || 'Failed to delete category' });
       }
     } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to delete category' });
+      setMessage({ type: 'error', text: dict?.common?.failedToDeleteCategory || 'Failed to delete category' });
     }
   };
 
@@ -68,13 +75,13 @@ export default function CategoriesPage() {
       });
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: `Category ${!category.isActive ? 'activated' : 'deactivated'} successfully` });
+        setMessage({ type: 'success', text: `Category ${!category.isActive ? (dict?.admin?.activated || 'activated') : (dict?.admin?.deactivated || 'deactivated')} ${dict?.admin?.successfully || 'successfully'}` });
         fetchCategories();
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to update category' });
+        setMessage({ type: 'error', text: data.error || dict?.common?.failedToUpdateCategory || 'Failed to update category' });
       }
     } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to update category' });
+      setMessage({ type: 'error', text: dict?.common?.failedToUpdateCategory || 'Failed to update category' });
     }
   };
 
@@ -82,8 +89,8 @@ export default function CategoriesPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
     );
@@ -103,7 +110,7 @@ export default function CategoriesPage() {
             </div>
             <button
               onClick={() => router.push(`/${tenant}/${lang}/admin`)}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
             >
               {dict.common?.back || 'Back'}
             </button>
@@ -111,12 +118,12 @@ export default function CategoriesPage() {
         </div>
 
         {message && (
-          <div className={`mb-6 p-4 rounded-lg ${message.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
+          <div className={`mb-6 p-4 border ${message.type === 'success' ? 'bg-green-50 text-green-800 border-green-300' : 'bg-red-50 text-red-800 border-red-300'}`}>
             {message.text}
           </div>
         )}
 
-        <div className="bg-white rounded-xl shadow-md p-6">
+        <div className="bg-white border border-gray-300 p-6">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold text-gray-900">{dict.admin?.categories || 'Categories'}</h2>
             <button
@@ -124,7 +131,7 @@ export default function CategoriesPage() {
                 setEditingCategory(null);
                 setShowCategoryModal(true);
               }}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+              className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
             >
               {dict.common?.add || 'Add'} {dict.admin?.category || 'Category'}
             </button>
@@ -145,7 +152,7 @@ export default function CategoriesPage() {
                     <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{category.name}</td>
                     <td className="px-4 py-4 text-sm text-gray-500">{category.description || '-'}</td>
                     <td className="px-4 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs font-semibold rounded-full ${category.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                      <span className={`px-2 py-1 text-xs font-semibold border ${category.isActive ? 'bg-green-100 text-green-800 border-green-300' : 'bg-red-100 text-red-800 border-red-300'}`}>
                         {category.isActive ? (dict.admin?.active || 'Active') : (dict.admin?.inactive || 'Inactive')}
                       </span>
                     </td>
@@ -255,8 +262,8 @@ function CategoryModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
+    <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white border border-gray-300 max-w-md w-full">
         <div className="p-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
             {category ? (dict.admin?.editCategory || 'Edit Category') : (dict.admin?.addCategory || 'Add Category')}
@@ -271,7 +278,7 @@ function CategoryModal({
                 required
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               />
             </div>
             <div>
@@ -282,11 +289,11 @@ function CategoryModal({
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               />
             </div>
             {error && (
-              <div className="bg-red-50 text-red-800 border border-red-200 rounded-lg p-3">
+              <div className="bg-red-50 text-red-800 border border-red-300 p-3">
                 {error}
               </div>
             )}
@@ -294,14 +301,14 @@ function CategoryModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
               >
                 {dict.common?.cancel || 'Cancel'}
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
               >
                 {saving ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
               </button>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
 import Currency from './Currency';
 
 interface LowStockProduct {
@@ -25,9 +26,15 @@ export default function LowStockAlerts({
 }: LowStockAlertsProps) {
   const params = useParams();
   const tenant = params.tenant as string;
+  const lang = (params?.lang as 'en' | 'es') || 'en';
+  const [dict, setDict] = useState<any>(null);
   const [alerts, setAlerts] = useState<LowStockProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getDictionaryClient(lang).then(setDict);
+  }, [lang]);
 
   const fetchAlerts = async () => {
     try {
@@ -39,10 +46,10 @@ export default function LowStockAlerts({
       if (data.success) {
         setAlerts(data.data || []);
       } else {
-        setError(data.error || 'Failed to fetch alerts');
+        setError(data.error || dict?.common?.failedToFetchAlerts || 'Failed to fetch alerts');
       }
     } catch (err: any) {
-      setError(err.message || 'Error fetching alerts');
+      setError(err.message || dict?.common?.errorFetchingAlerts || 'Error fetching alerts');
     } finally {
       setLoading(false);
     }
@@ -59,12 +66,12 @@ export default function LowStockAlerts({
 
   if (loading && alerts.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow p-4">
+      <div className="bg-white border border-gray-300 p-4">
         <div className="animate-pulse">
-          <div className="h-4 bg-gray-200 rounded w-1/4 mb-4"></div>
+          <div className="h-4 bg-gray-200 w-1/4 mb-4"></div>
           <div className="space-y-2">
-            <div className="h-3 bg-gray-200 rounded"></div>
-            <div className="h-3 bg-gray-200 rounded"></div>
+            <div className="h-3 bg-gray-200"></div>
+            <div className="h-3 bg-gray-200"></div>
           </div>
         </div>
       </div>
@@ -73,13 +80,13 @@ export default function LowStockAlerts({
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+      <div className="bg-red-50 border border-red-300 p-4">
         <p className="text-red-800 text-sm">{error}</p>
         <button
           onClick={fetchAlerts}
           className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
         >
-          Retry
+          {dict?.components?.lowStockAlerts?.retry || dict?.common?.retry || 'Retry'}
         </button>
       </div>
     );
@@ -87,22 +94,22 @@ export default function LowStockAlerts({
 
   if (alerts.length === 0) {
     return (
-      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+      <div className="bg-green-50 border border-green-300 p-4">
         <p className="text-green-800 text-sm font-medium">
-          ✓ All products are well stocked
+          {dict?.components?.lowStockAlerts?.allProductsWellStocked || '✓ All products are well stocked'}
         </p>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg shadow">
+    <div className="bg-white border border-gray-300">
       <div className="p-4 border-b border-gray-200">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold text-gray-900">
-            Low Stock Alerts
+            {dict?.components?.lowStockAlerts?.title || 'Low Stock Alerts'}
           </h3>
-          <span className="bg-red-100 text-red-800 text-xs font-semibold px-2.5 py-0.5 rounded-full">
+          <span className="bg-red-100 text-red-800 text-xs font-semibold px-2.5 py-0.5 border border-red-300">
             {alerts.length}
           </span>
         </div>
@@ -127,7 +134,7 @@ export default function LowStockAlerts({
               </div>
               <div className="ml-4 flex-shrink-0 text-right">
                 <div
-                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                  className={`inline-flex items-center px-2.5 py-0.5 border border-gray-300 text-xs font-semibold ${
                     alert.currentStock === 0
                       ? 'bg-red-100 text-red-800'
                       : 'bg-yellow-100 text-yellow-800'
@@ -136,7 +143,7 @@ export default function LowStockAlerts({
                   {alert.currentStock} / {alert.threshold}
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  {alert.currentStock === 0 ? 'Out of stock' : 'Low stock'}
+                  {alert.currentStock === 0 ? (dict?.common?.outOfStock || 'Out of stock') : (dict?.common?.lowStock || 'Low stock')}
                 </p>
               </div>
             </div>
