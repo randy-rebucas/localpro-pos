@@ -552,8 +552,8 @@ function ProductPerformanceView({ data, dict }: { data: ProductPerformance[]; di
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {data.map((product) => (
-              <tr key={product.productId}>
+            {data.map((product, index) => (
+              <tr key={product.productId || `product-${index}`}>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                   #{product.rank}
                 </td>
@@ -796,8 +796,8 @@ function CashDrawerReportView({ reports, dict }: { reports: CashDrawerReport[]; 
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {reports.map((report) => (
-              <tr key={report.sessionId}>
+            {reports.map((report, index) => (
+              <tr key={report.sessionId || `session-${index}`}>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   {new Date(report.openingTime).toLocaleString()}
                 </td>
