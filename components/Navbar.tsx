@@ -98,7 +98,7 @@ export default function Navbar() {
 
   return (
     <>
-      <nav className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
+      <nav className="bg-white border-b border-gray-300 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Main Header */}
           <div className="flex justify-between items-center h-16">
@@ -107,7 +107,7 @@ export default function Navbar() {
               {/* Drawer Menu Button */}
               <button
                 onClick={() => setDrawerOpen(true)}
-                className="inline-flex items-center justify-center p-2 rounded-lg text-gray-700 hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 transition-colors"
+                className="inline-flex items-center justify-center p-2 border border-gray-300 text-gray-700 hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 transition-colors bg-white"
                 aria-expanded={drawerOpen}
                 aria-label="Open menu"
               >
@@ -146,7 +146,7 @@ export default function Navbar() {
               <div className="relative" data-user-menu>
                 <button
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
-                  className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  className="flex items-center space-x-2 px-3 py-2 hover:bg-gray-50 transition-colors bg-white"
                   aria-expanded={userMenuOpen}
                   aria-haspopup="true"
                 >
@@ -159,7 +159,7 @@ export default function Navbar() {
                     </div>
                   </div>
                   <div 
-                    className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shadow-md flex-shrink-0"
+                    className="w-10 h-10 flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
                     style={{ 
                       background: `linear-gradient(to bottom right, ${primaryColor}, ${primaryColor}dd)`,
                       boxShadow: `0 0 0 2px ${primaryColor}33`
@@ -179,7 +179,7 @@ export default function Navbar() {
 
                 {/* User Dropdown Menu */}
                 {userMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-56 rounded-lg shadow-lg bg-white z-50">
+                  <div className="absolute right-0 mt-2 w-56 border border-gray-300 bg-white z-50">
                     <div className="py-1">
                       {/* User Info Header */}
                       <div className="px-4 py-3 border-b border-gray-100">
@@ -268,13 +268,13 @@ export default function Navbar() {
               <div className="flex items-center space-x-3">
                 <Link
                   href={`/${tenant}/${lang}/login`}
-                  className="text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors px-3 py-2 rounded-md hover:bg-gray-50"
+                  className="text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors px-3 py-2 border border-gray-300 hover:bg-gray-50 bg-white"
                 >
                   {dict?.common?.login || 'Login'}
                 </Link>
                 <Link
                   href="/login"
-                  className="text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors px-3 py-2 rounded-md hover:bg-gray-50"
+                  className="text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors px-3 py-2 border border-gray-300 hover:bg-gray-50 bg-white"
                 >
                   {dict?.common?.switchStore || 'Switch Store'}
                 </Link>
@@ -296,7 +296,7 @@ export default function Navbar() {
 
       {/* Drawer */}
       <div
-        className={`fixed top-0 left-0 h-full w-80 max-w-[85vw] bg-white shadow-xl z-50 transform transition-transform duration-300 ease-in-out ${
+        className={`fixed top-0 left-0 h-full w-80 max-w-[85vw] bg-white border-r border-gray-300 z-50 transform transition-transform duration-300 ease-in-out ${
           drawerOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -311,7 +311,7 @@ export default function Navbar() {
             </div>
             <button
               onClick={() => setDrawerOpen(false)}
-              className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+              className="p-2 border border-gray-300 text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors bg-white"
               aria-label="Close menu"
             >
               <svg
@@ -333,7 +333,7 @@ export default function Navbar() {
               <div className="p-4 border-b border-gray-200 bg-gray-50">
                 <div className="flex items-center space-x-3">
                   <div 
-                    className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold shadow-md"
+                    className="w-12 h-12 border border-gray-300 flex items-center justify-center text-white font-bold"
                     style={{ 
                       background: `linear-gradient(to bottom right, ${primaryColor}, ${primaryColor}dd)`
                     }}
@@ -357,10 +357,10 @@ export default function Navbar() {
                     key={item.href}
                     href={item.href}
                     onClick={() => setDrawerOpen(false)}
-                    className={`flex items-center px-4 py-3 rounded-lg text-base font-medium transition-all mb-1 ${
+                    className={`flex items-center px-4 py-3 border border-gray-300 text-base font-medium transition-all mb-1 ${
                       isActive
-                        ? 'text-white shadow-md'
-                        : 'text-gray-700 hover:bg-gray-100'
+                        ? 'text-white border-gray-300'
+                        : 'text-gray-700 hover:bg-gray-100 bg-white'
                     }`}
                     style={isActive ? { backgroundColor: primaryColor } : {}}
                   >
@@ -378,10 +378,10 @@ export default function Navbar() {
                   <Link
                     href={`/${tenant}/${lang}/profile`}
                     onClick={() => setDrawerOpen(false)}
-                    className={`flex items-center px-4 py-3 rounded-lg text-base font-medium transition-colors ${
+                    className={`flex items-center px-4 py-3 border border-gray-300 text-base font-medium transition-colors ${
                       pathname.includes('/profile')
-                        ? 'bg-blue-50 text-blue-700'
-                        : 'text-gray-700 hover:bg-gray-100'
+                        ? 'bg-blue-50 text-blue-700 border-blue-300'
+                        : 'text-gray-700 hover:bg-gray-100 bg-white'
                     }`}
                   >
                     <svg className="w-5 h-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -393,10 +393,10 @@ export default function Navbar() {
                     <Link
                       href={`/${tenant}/${lang}/admin`}
                       onClick={() => setDrawerOpen(false)}
-                      className={`flex items-center px-4 py-3 rounded-lg text-base font-medium transition-colors ${
+                      className={`flex items-center px-4 py-3 border border-gray-300 text-base font-medium transition-colors ${
                         pathname.includes('/admin')
-                          ? 'bg-blue-50 text-blue-700'
-                          : 'text-gray-700 hover:bg-gray-100'
+                          ? 'bg-blue-50 text-blue-700 border-blue-300'
+                          : 'text-gray-700 hover:bg-gray-100 bg-white'
                       }`}
                     >
                       <svg className="w-5 h-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -408,10 +408,10 @@ export default function Navbar() {
                   <Link
                     href={`/${tenant}/${lang}/settings`}
                     onClick={() => setDrawerOpen(false)}
-                    className={`flex items-center px-4 py-3 rounded-lg text-base font-medium transition-colors ${
+                    className={`flex items-center px-4 py-3 border border-gray-300 text-base font-medium transition-colors ${
                       pathname.includes('/settings')
-                        ? 'bg-blue-50 text-blue-700'
-                        : 'text-gray-700 hover:bg-gray-100'
+                        ? 'bg-blue-50 text-blue-700 border-blue-300'
+                        : 'text-gray-700 hover:bg-gray-100 bg-white'
                     }`}
                   >
                     <svg className="w-5 h-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -423,7 +423,7 @@ export default function Navbar() {
                   <Link
                     href="/login"
                     onClick={() => setDrawerOpen(false)}
-                    className="flex items-center px-4 py-3 rounded-lg text-base font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                    className="flex items-center px-4 py-3 border border-gray-300 text-base font-medium text-gray-700 hover:bg-gray-100 transition-colors bg-white"
                   >
                     <svg className="w-5 h-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
@@ -438,7 +438,7 @@ export default function Navbar() {
                       setDrawerOpen(false);
                       handleLogout();
                     }}
-                    className="flex items-center w-full px-4 py-3 rounded-lg text-base font-medium text-red-700 bg-red-50 hover:bg-red-100 transition-colors"
+                    className="flex items-center w-full px-4 py-3 border border-red-300 text-base font-medium text-red-700 bg-red-50 hover:bg-red-100 transition-colors"
                   >
                     <svg className="w-5 h-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -457,7 +457,7 @@ export default function Navbar() {
                   <Link
                     href={`/${tenant}/${lang}/login`}
                     onClick={() => setDrawerOpen(false)}
-                    className="block w-full px-4 py-3 text-center text-base font-medium text-white rounded-lg transition-colors"
+                    className="block w-full px-4 py-3 text-center text-base font-medium text-white border border-gray-300 transition-colors"
                     style={{ backgroundColor: primaryColor }}
                   >
                     {dict?.common?.login || 'Login'}
@@ -465,7 +465,7 @@ export default function Navbar() {
                   <Link
                     href="/login"
                     onClick={() => setDrawerOpen(false)}
-                    className="block w-full px-4 py-3 text-center text-base font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                    className="block w-full px-4 py-3 text-center text-base font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-300 transition-colors"
                   >
                     {dict?.common?.switchStore || 'Switch Store'}
                   </Link>
