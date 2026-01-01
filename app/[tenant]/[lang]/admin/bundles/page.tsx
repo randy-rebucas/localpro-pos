@@ -5,6 +5,7 @@ import Navbar from '@/components/Navbar';
 import { useParams, useRouter } from 'next/navigation';
 import { getDictionaryClient } from '../../dictionaries-client';
 import Currency from '@/components/Currency';
+import { arrayToCSV, downloadCSV } from '@/lib/export';
 
 interface BundleItem {
   productId: string | { _id: string; name: string; price: number; stock: number };
@@ -62,19 +63,72 @@ export default function BundlesPage() {
   const [editingBundle, setEditingBundle] = useState<Bundle | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterActive, setFilterActive] = useState<boolean | null>(null);
+  const [filterCategory, setFilterCategory] = useState('');
+  const [filterMinPrice, setFilterMinPrice] = useState('');
+  const [filterMaxPrice, setFilterMaxPrice] = useState('');
+  const [filterStartDate, setFilterStartDate] = useState('');
+  const [filterEndDate, setFilterEndDate] = useState('');
+  const [selectedBundles, setSelectedBundles] = useState<Set<string>>(new Set());
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [analytics, setAnalytics] = useState<any>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsStartDate, setAnalyticsStartDate] = useState('');
+  const [analyticsEndDate, setAnalyticsEndDate] = useState('');
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
     fetchBundles();
     fetchProducts();
     fetchCategories();
+    // Set default analytics date range (last 30 days)
+    const end = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() - 30);
+    setAnalyticsEndDate(end.toISOString().split('T')[0]);
+    setAnalyticsStartDate(start.toISOString().split('T')[0]);
   }, [lang, tenant]);
+
+  const fetchAnalytics = async () => {
+    if (!analyticsStartDate || !analyticsEndDate) return;
+    
+    setAnalyticsLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.append('startDate', analyticsStartDate);
+      params.append('endDate', analyticsEndDate);
+      
+      const res = await fetch(`/api/bundles/analytics?${params}`, { credentials: 'include' });
+      const data = await res.json();
+      if (data.success) {
+        setAnalytics(data.data);
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Failed to fetch analytics' });
+      }
+    } catch (error) {
+      console.error('Error fetching analytics:', error);
+      setMessage({ type: 'error', text: 'Failed to fetch analytics' });
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (showAnalytics && analyticsStartDate && analyticsEndDate) {
+      fetchAnalytics();
+    }
+  }, [showAnalytics, analyticsStartDate, analyticsEndDate]);
 
   const fetchBundles = async () => {
     try {
       const params = new URLSearchParams();
       if (searchTerm) params.append('search', searchTerm);
       if (filterActive !== null) params.append('isActive', filterActive.toString());
+      if (filterCategory) params.append('categoryId', filterCategory);
+      if (filterMinPrice) params.append('minPrice', filterMinPrice);
+      if (filterMaxPrice) params.append('maxPrice', filterMaxPrice);
+      if (filterStartDate) params.append('startDate', filterStartDate);
+      if (filterEndDate) params.append('endDate', filterEndDate);
       
       const res = await fetch(`/api/bundles?${params}`, { credentials: 'include' });
       const data = await res.json();
@@ -129,7 +183,7 @@ export default function BundlesPage() {
     if (!loading) {
       fetchBundles();
     }
-  }, [searchTerm, filterActive]);
+  }, [searchTerm, filterActive, filterCategory, filterMinPrice, filterMaxPrice, filterStartDate, filterEndDate]);
 
   const handleDeleteBundle = async (bundleId: string) => {
     if (!confirm(dict?.admin?.deleteBundleConfirm || 'Are you sure you want to delete this bundle?')) return;
@@ -165,6 +219,95 @@ export default function BundlesPage() {
     } catch (error) {
       setMessage({ type: 'error', text: 'Failed to update bundle' });
     }
+  };
+
+  const handleBulkOperation = async (action: 'activate' | 'deactivate') => {
+    if (selectedBundles.size === 0) {
+      setMessage({ type: 'error', text: 'Please select at least one bundle' });
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to ${action} ${selectedBundles.size} bundle(s)?`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/bundles/bulk', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          bundleIds: Array.from(selectedBundles),
+          action,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMessage({ type: 'success', text: data.message || `Bundles ${action}d successfully` });
+        setSelectedBundles(new Set());
+        fetchBundles();
+      } else {
+        setMessage({ type: 'error', text: data.error || `Failed to ${action} bundles` });
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: `Failed to ${action} bundles` });
+    }
+  };
+
+  const handleSelectAll = () => {
+    if (selectedBundles.size === bundles.length) {
+      setSelectedBundles(new Set());
+    } else {
+      setSelectedBundles(new Set(bundles.map(b => b._id)));
+    }
+  };
+
+  const handleSelectBundle = (bundleId: string) => {
+    const newSelected = new Set(selectedBundles);
+    if (newSelected.has(bundleId)) {
+      newSelected.delete(bundleId);
+    } else {
+      newSelected.add(bundleId);
+    }
+    setSelectedBundles(newSelected);
+  };
+
+  const handleExport = () => {
+    const headers = [
+      'Name',
+      'SKU',
+      'Category',
+      'Price',
+      'Items Count',
+      'Status',
+      'Description',
+      'Created At',
+    ];
+    
+    const exportData = bundles.map(bundle => ({
+      Name: bundle.name,
+      SKU: bundle.sku || '',
+      Category: typeof bundle.categoryId === 'object' && bundle.categoryId?.name ? bundle.categoryId.name : '',
+      Price: bundle.price,
+      'Items Count': bundle.items.length,
+      Status: bundle.isActive ? 'Active' : 'Inactive',
+      Description: bundle.description || '',
+      'Created At': new Date(bundle.createdAt).toLocaleString(),
+    }));
+
+    const csv = arrayToCSV(exportData, headers);
+    const filename = `bundles_export_${new Date().toISOString().split('T')[0]}.csv`;
+    downloadCSV(csv, filename);
+  };
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setFilterActive(null);
+    setFilterCategory('');
+    setFilterMinPrice('');
+    setFilterMaxPrice('');
+    setFilterStartDate('');
+    setFilterEndDate('');
   };
 
   if (!dict || loading) {
@@ -205,8 +348,121 @@ export default function BundlesPage() {
           </div>
         )}
 
+        {/* Bundle Analytics Section */}
+        <div className="bg-white border border-gray-300 p-6 mb-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold text-gray-900">{dict.admin?.bundleAnalytics || 'Bundle Analytics'}</h2>
+            <button
+              onClick={() => setShowAnalytics(!showAnalytics)}
+              className="px-4 py-2 border border-gray-300 hover:bg-gray-50 bg-white"
+            >
+              {showAnalytics ? (dict.common?.hide || 'Hide') : (dict.admin?.viewAnalytics || 'View Analytics')}
+            </button>
+          </div>
+          {showAnalytics && (
+            <div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {dict.reports?.startDate || 'Start Date'}
+                  </label>
+                  <input
+                    type="date"
+                    value={analyticsStartDate}
+                    onChange={(e) => setAnalyticsStartDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {dict.reports?.endDate || 'End Date'}
+                  </label>
+                  <input
+                    type="date"
+                    value={analyticsEndDate}
+                    onChange={(e) => setAnalyticsEndDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <button
+                    onClick={fetchAnalytics}
+                    className="w-full px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
+                  >
+                    {dict.admin?.loadAnalytics || 'Load Analytics'}
+                  </button>
+                </div>
+              </div>
+              
+              {analyticsLoading ? (
+                <div className="text-center py-8">
+                  <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+                  <p className="mt-4 text-gray-600">{dict.common?.loading || 'Loading...'}</p>
+                </div>
+              ) : analytics && (
+                <div>
+                  {/* Summary Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <div className="bg-blue-50 border border-blue-200 p-4">
+                      <div className="text-sm text-blue-600 mb-1">{dict.admin?.totalBundles || 'Total Bundles'}</div>
+                      <div className="text-2xl font-bold text-blue-900">{analytics.summary.totalBundles}</div>
+                    </div>
+                    <div className="bg-green-50 border border-green-200 p-4">
+                      <div className="text-sm text-green-600 mb-1">{dict.admin?.totalSales || 'Total Sales'}</div>
+                      <div className="text-2xl font-bold text-green-900">
+                        <Currency amount={analytics.summary.totalSales} />
+                      </div>
+                    </div>
+                    <div className="bg-purple-50 border border-purple-200 p-4">
+                      <div className="text-sm text-purple-600 mb-1">{dict.admin?.totalQuantity || 'Total Quantity'}</div>
+                      <div className="text-2xl font-bold text-purple-900">{analytics.summary.totalQuantity}</div>
+                    </div>
+                    <div className="bg-orange-50 border border-orange-200 p-4">
+                      <div className="text-sm text-orange-600 mb-1">{dict.admin?.totalTransactions || 'Transactions'}</div>
+                      <div className="text-2xl font-bold text-orange-900">{analytics.summary.totalTransactions}</div>
+                    </div>
+                  </div>
+
+                  {/* Analytics Table */}
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.bundle || 'Bundle'}</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.price || 'Price'}</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.totalSales || 'Total Sales'}</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.quantity || 'Quantity'}</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.transactions || 'Transactions'}</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.avgOrderValue || 'Avg Order Value'}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {analytics.analytics.map((item: any) => (
+                          <tr key={item.bundleId}>
+                            <td className="px-4 py-4 text-sm font-medium text-gray-900">{item.bundleName}</td>
+                            <td className="px-4 py-4 text-sm text-gray-500"><Currency amount={item.bundlePrice} /></td>
+                            <td className="px-4 py-4 text-sm font-medium text-gray-900"><Currency amount={item.totalSales} /></td>
+                            <td className="px-4 py-4 text-sm text-gray-500">{item.totalQuantity}</td>
+                            <td className="px-4 py-4 text-sm text-gray-500">{item.transactionCount}</td>
+                            <td className="px-4 py-4 text-sm text-gray-500"><Currency amount={item.averageOrderValue} /></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {analytics.analytics.length === 0 && (
+                      <div className="text-center py-8 text-gray-500">
+                        {dict.admin?.noAnalyticsData || 'No sales data for selected period'}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         <div className="bg-white border border-gray-300 p-6">
-          <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
+          <div className="flex justify-between items-center mb-4 flex-wrap gap-4">
             <div className="flex-1 max-w-md">
               <input
                 type="text"
@@ -230,6 +486,18 @@ export default function BundlesPage() {
                 <option value="false">{dict.admin?.inactive || 'Inactive'}</option>
               </select>
               <button
+                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                className="px-4 py-2 border border-gray-300 hover:bg-gray-50 bg-white"
+              >
+                {dict.admin?.advancedFilters || 'Advanced Filters'}
+              </button>
+              <button
+                onClick={handleExport}
+                className="px-4 py-2 border border-gray-300 hover:bg-gray-50 bg-white"
+              >
+                {dict.admin?.export || 'Export CSV'}
+              </button>
+              <button
                 onClick={() => {
                   setEditingBundle(null);
                   setShowBundleModal(true);
@@ -240,10 +508,128 @@ export default function BundlesPage() {
               </button>
             </div>
           </div>
+
+          {/* Advanced Filters */}
+          {showAdvancedFilters && (
+            <div className="mb-4 p-4 bg-gray-50 border border-gray-200">
+              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {dict.admin?.category || 'Category'}
+                  </label>
+                  <select
+                    value={filterCategory}
+                    onChange={(e) => setFilterCategory(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    <option value="">{dict.common?.all || 'All'}</option>
+                    {categories.map((cat) => (
+                      <option key={cat._id} value={cat._id}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {dict.admin?.minPrice || 'Min Price'}
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={filterMinPrice}
+                    onChange={(e) => setFilterMinPrice(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                    placeholder="0.00"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {dict.admin?.maxPrice || 'Max Price'}
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={filterMaxPrice}
+                    onChange={(e) => setFilterMaxPrice(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                    placeholder="999999.99"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {dict.reports?.startDate || 'Start Date'}
+                  </label>
+                  <input
+                    type="date"
+                    value={filterStartDate}
+                    onChange={(e) => setFilterStartDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {dict.reports?.endDate || 'End Date'}
+                  </label>
+                  <input
+                    type="date"
+                    value={filterEndDate}
+                    onChange={(e) => setFilterEndDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <button
+                    onClick={clearFilters}
+                    className="w-full px-4 py-2 border border-gray-300 hover:bg-gray-50 bg-white"
+                  >
+                    {dict.common?.clear || 'Clear'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Bulk Actions */}
+          {selectedBundles.size > 0 && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 flex items-center justify-between">
+              <span className="text-sm font-medium text-blue-900">
+                {selectedBundles.size} {dict.admin?.selected || 'selected'}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleBulkOperation('activate')}
+                  className="px-4 py-2 bg-green-600 text-white hover:bg-green-700 text-sm"
+                >
+                  {dict.admin?.bulkActivate || 'Activate Selected'}
+                </button>
+                <button
+                  onClick={() => handleBulkOperation('deactivate')}
+                  className="px-4 py-2 bg-yellow-600 text-white hover:bg-yellow-700 text-sm"
+                >
+                  {dict.admin?.bulkDeactivate || 'Deactivate Selected'}
+                </button>
+                <button
+                  onClick={() => setSelectedBundles(new Set())}
+                  className="px-4 py-2 border border-gray-300 hover:bg-gray-50 bg-white text-sm"
+                >
+                  {dict.common?.cancel || 'Cancel'}
+                </button>
+              </div>
+            </div>
+          )}
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-12">
+                    <input
+                      type="checkbox"
+                      checked={selectedBundles.size === bundles.length && bundles.length > 0}
+                      onChange={handleSelectAll}
+                      className="rounded border-gray-300"
+                    />
+                  </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.name || 'Name'}</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.category || 'Category'}</th>
@@ -256,6 +642,14 @@ export default function BundlesPage() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {bundles.map((bundle) => (
                   <tr key={bundle._id}>
+                    <td className="px-4 py-4">
+                      <input
+                        type="checkbox"
+                        checked={selectedBundles.has(bundle._id)}
+                        onChange={() => handleSelectBundle(bundle._id)}
+                        className="rounded border-gray-300"
+                      />
+                    </td>
                     <td className="px-4 py-4">
                       <div className="text-sm font-medium text-gray-900">{bundle.name}</div>
                       {bundle.description && (

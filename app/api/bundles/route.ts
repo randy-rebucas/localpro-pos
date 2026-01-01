@@ -17,6 +17,11 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const search = searchParams.get('search') || '';
     const isActive = searchParams.get('isActive');
+    const categoryId = searchParams.get('categoryId');
+    const minPrice = searchParams.get('minPrice');
+    const maxPrice = searchParams.get('maxPrice');
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
 
     const query: any = { tenantId };
     if (search) {
@@ -26,8 +31,25 @@ export async function GET(request: NextRequest) {
         { sku: { $regex: search, $options: 'i' } },
       ];
     }
-    if (isActive !== null) {
+    if (isActive !== null && isActive !== '') {
       query.isActive = isActive === 'true';
+    }
+    if (categoryId) {
+      query.categoryId = categoryId;
+    }
+    if (minPrice || maxPrice) {
+      query.price = {};
+      if (minPrice) query.price.$gte = parseFloat(minPrice);
+      if (maxPrice) query.price.$lte = parseFloat(maxPrice);
+    }
+    if (startDate || endDate) {
+      query.createdAt = {};
+      if (startDate) query.createdAt.$gte = new Date(startDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        query.createdAt.$lte = end;
+      }
     }
 
     const bundles = await ProductBundle.find(query)

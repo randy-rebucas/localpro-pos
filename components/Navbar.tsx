@@ -59,7 +59,7 @@ export default function Navbar() {
   }, [userMenuOpen]);
 
   // Base navigation items available to all authenticated users
-  const baseNavItems = [
+  const baseNavItems: Array<{ href: string; key: string }> = [
     { href: `/${tenant}/${lang}`, key: 'dashboard' },
     { href: `/${tenant}/${lang}/pos`, key: 'pos' },
     { href: `/${tenant}/${lang}/products`, key: 'products' },
@@ -70,7 +70,7 @@ export default function Navbar() {
   ];
 
   // Conditional navigation items based on feature flags
-  const conditionalNavItems = [];
+  const conditionalNavItems: Array<{ href: string; key: string }> = [];
 
   // Combine all navigation items
   const navItems = [...baseNavItems, ...conditionalNavItems];

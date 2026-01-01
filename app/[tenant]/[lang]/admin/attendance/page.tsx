@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import { useParams, useRouter } from 'next/navigation';
 import { getDictionaryClient } from '../../dictionaries-client';
+import { arrayToCSV, downloadCSV } from '@/lib/export';
 
 interface Attendance {
   _id: string;
@@ -133,6 +134,44 @@ export default function AttendancePage() {
     return attendances.reduce((total, att) => total + (att.totalHours || 0), 0);
   };
 
+  const handleExport = () => {
+    const headers = [
+      'Employee',
+      'Clock In',
+      'Clock Out',
+      'Break Start',
+      'Break End',
+      'Total Hours',
+      'Notes',
+      'Date',
+    ];
+    
+    const exportData = attendances.map(attendance => {
+      const userName = typeof attendance.userId === 'object' 
+        ? attendance.userId.name 
+        : users.find(u => u._id === attendance.userId)?.name || 'Unknown';
+      const clockIn = new Date(attendance.clockIn);
+      const clockOut = attendance.clockOut ? new Date(attendance.clockOut) : null;
+      const breakStart = attendance.breakStart ? new Date(attendance.breakStart) : null;
+      const breakEnd = attendance.breakEnd ? new Date(attendance.breakEnd) : null;
+      
+      return {
+        Employee: userName,
+        'Clock In': clockIn.toLocaleString(),
+        'Clock Out': clockOut ? clockOut.toLocaleString() : 'Active',
+        'Break Start': breakStart ? breakStart.toLocaleTimeString() : '',
+        'Break End': breakEnd ? breakEnd.toLocaleTimeString() : '',
+        'Total Hours': attendance.totalHours ? formatHours(attendance.totalHours) : '-',
+        Notes: attendance.notes || '',
+        Date: clockIn.toLocaleDateString(),
+      };
+    });
+
+    const csv = arrayToCSV(exportData, headers);
+    const filename = `attendance_export_${startDate || 'all'}_to_${endDate || 'today'}.csv`;
+    downloadCSV(csv, filename);
+  };
+
   if (!dict) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -200,6 +239,24 @@ export default function AttendancePage() {
           </div>
         )}
 
+        {/* Attendance Notifications */}
+        <div className="bg-white border border-yellow-300 p-6 mb-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900 mb-1">{dict.admin?.attendanceNotifications || 'Attendance Notifications'}</h2>
+              <p className="text-sm text-gray-600">
+                {dict.admin?.attendanceNotificationsDesc || 'View alerts for late arrivals and missing clock-outs'}
+              </p>
+            </div>
+            <button
+              onClick={() => router.push(`/${tenant}/${lang}/admin/attendance/notifications`)}
+              className="px-4 py-2 border border-gray-300 hover:bg-gray-50 bg-white"
+            >
+              {dict.admin?.viewNotifications || 'View Notifications'}
+            </button>
+          </div>
+        </div>
+
         {/* Filters */}
         <div className="bg-white border border-gray-300 p-6 mb-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -242,7 +299,13 @@ export default function AttendancePage() {
                 className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               />
             </div>
-            <div className="flex items-end">
+            <div className="flex items-end gap-2">
+              <button
+                onClick={handleExport}
+                className="px-4 py-2 border border-gray-300 hover:bg-gray-50 bg-white font-medium"
+              >
+                {dict.admin?.export || 'Export CSV'}
+              </button>
               <button
                 onClick={fetchAttendances}
                 className="w-full px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
