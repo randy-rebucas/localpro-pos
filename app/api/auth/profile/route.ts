@@ -3,6 +3,7 @@ import { getCurrentUser } from '@/lib/auth';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 import { validateEmail, validatePassword } from '@/lib/validation';
+import { isPinDuplicate } from '@/lib/pin-validation';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 
 /**
@@ -162,6 +163,15 @@ export async function PUT(request: NextRequest) {
             { status: 400 }
           );
         }
+      }
+
+      // Check if PIN is already in use by another user in the same tenant
+      const pinExists = await isPinDuplicate(oldUser.tenantId, pin, currentUser.userId);
+      if (pinExists) {
+        return NextResponse.json(
+          { success: false, error: 'This PIN is already in use by another user in your organization' },
+          { status: 400 }
+        );
       }
 
       updateData.pin = pin;

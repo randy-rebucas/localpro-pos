@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 import { requireAuth } from '@/lib/auth';
-import bcrypt from 'bcryptjs';
+import { isPinDuplicate } from '@/lib/pin-validation';
 
 /**
  * PUT - Update current user's PIN
@@ -25,6 +25,24 @@ export async function PUT(request: NextRequest) {
     if (!/^\d{4,8}$/.test(pin)) {
       return NextResponse.json(
         { success: false, error: 'PIN must be 4-8 digits' },
+        { status: 400 }
+      );
+    }
+
+    // Get user's tenant ID
+    const userDoc = await User.findById(user.userId).select('tenantId').lean();
+    if (!userDoc) {
+      return NextResponse.json(
+        { success: false, error: 'User not found' },
+        { status: 404 }
+      );
+    }
+
+    // Check if PIN is already in use by another user in the same tenant
+    const pinExists = await isPinDuplicate(userDoc.tenantId, pin, user.userId);
+    if (pinExists) {
+      return NextResponse.json(
+        { success: false, error: 'This PIN is already in use by another user in your organization' },
         { status: 400 }
       );
     }

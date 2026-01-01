@@ -4,6 +4,7 @@ import User from '@/models/User';
 import { requireRole, getCurrentUser } from '@/lib/auth';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { createAuditLog, AuditActions } from '@/lib/audit';
+import { isPinDuplicate } from '@/lib/pin-validation';
 
 /**
  * PUT - Set or update PIN for a user (admin/manager only)
@@ -49,6 +50,15 @@ export async function PUT(
       return NextResponse.json(
         { success: false, error: 'User not found' },
         { status: 404 }
+      );
+    }
+
+    // Check if PIN is already in use by another user in the same tenant
+    const pinExists = await isPinDuplicate(tenantId, pin, id);
+    if (pinExists) {
+      return NextResponse.json(
+        { success: false, error: 'This PIN is already in use by another user in your organization' },
+        { status: 400 }
       );
     }
 
