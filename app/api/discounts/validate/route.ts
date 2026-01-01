@@ -4,6 +4,7 @@ import Discount from '@/models/Discount';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { getTenantSettingsById } from '@/lib/tenant';
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,6 +15,17 @@ export async function POST(request: NextRequest) {
     
     if (!tenantId) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
+    }
+    
+    // Get tenant settings to check feature flags
+    const tenantSettings = await getTenantSettingsById(tenantId);
+    
+    // Check if discounts are enabled
+    if (tenantSettings && tenantSettings.enableDiscounts === false) {
+      return NextResponse.json(
+        { success: false, error: t('validation.discountsNotEnabled', 'Discounts are not enabled for this tenant') },
+        { status: 400 }
+      );
     }
     
     const body = await request.json();
@@ -58,10 +70,11 @@ export async function POST(request: NextRequest) {
 
     // Check minimum purchase amount
     if (discount.minPurchaseAmount && subtotal < discount.minPurchaseAmount) {
+      const errorMsg = t('validation.minimumPurchaseAmount', 'Minimum purchase amount of {amount} required').replace('{amount}', discount.minPurchaseAmount.toString());
       return NextResponse.json(
         { 
           success: false, 
-          error: t('validation.minimumPurchaseAmount', 'Minimum purchase amount of {amount} required', discount.minPurchaseAmount).replace('{amount}', discount.minPurchaseAmount.toString())
+          error: errorMsg
         },
         { status: 400 }
       );

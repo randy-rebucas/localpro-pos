@@ -5,6 +5,7 @@ import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireRole, getCurrentUser } from '@/lib/auth';
 import { sendBookingReminder } from '@/lib/notifications';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { getTenantSettingsById } from '@/lib/tenant';
 
 /**
  * POST - Send reminder for a booking
@@ -51,6 +52,7 @@ export async function POST(
       );
     }
 
+    const tenantSettings = await getTenantSettingsById(tenantId);
     const results = await sendBookingReminder({
       customerName: booking.customerName,
       customerEmail: booking.customerEmail,
@@ -61,7 +63,7 @@ export async function POST(
       staffName: booking.staffName,
       notes: booking.notes,
       bookingId: id,
-    });
+    }, tenantSettings || undefined);
 
     // Update reminder sent status
     await Booking.findByIdAndUpdate(id, { reminderSent: true });

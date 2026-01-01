@@ -2,6 +2,8 @@ import { ITenantSettings } from '@/models/Tenant';
 
 /**
  * Format date based on tenant settings
+ * Note: Date objects are in the user's local timezone. For timezone conversion,
+ * you may need to use a library like date-fns-tz or handle it server-side.
  */
 export function formatDate(date: Date | string, settings: ITenantSettings): string {
   const d = typeof date === 'string' ? new Date(date) : date;
@@ -28,6 +30,8 @@ export function formatDate(date: Date | string, settings: ITenantSettings): stri
 
 /**
  * Format time based on tenant settings
+ * Note: Date objects are in the user's local timezone. For timezone conversion,
+ * you may need to use a library like date-fns-tz or handle it server-side.
  */
 export function formatTime(date: Date | string, settings: ITenantSettings): string {
   const d = typeof date === 'string' ? new Date(date) : date;

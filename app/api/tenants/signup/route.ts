@@ -11,6 +11,7 @@ import { getValidationTranslator } from '@/lib/validation-translations';
  * Creates a new tenant and admin user without requiring authentication
  */
 export async function POST(request: NextRequest) {
+  let t: (key: string, fallback: string) => string;
   try {
     await connectDB();
     
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest) {
 
     // Get translation function based on selected language
     const lang = (language === 'es' ? 'es' : 'en') as 'en' | 'es';
-    const t = await getValidationTranslator(lang);
+    t = await getValidationTranslator(lang);
 
     // Validate tenant data
     const tenantErrors = validateTenant({ slug, name }, t);
@@ -152,9 +153,10 @@ export async function POST(request: NextRequest) {
       );
     }
     console.error('Signup error:', error);
+    const errorMessage = error.message || 'Failed to create store. Please try again.';
     return NextResponse.json({ 
       success: false, 
-      error: error.message || t('validation.failedToCreateStore', 'Failed to create store. Please try again.') 
+      error: errorMessage
     }, { status: 400 });
   }
 }

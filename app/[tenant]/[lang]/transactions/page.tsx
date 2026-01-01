@@ -7,6 +7,9 @@ import FormattedDate from '@/components/FormattedDate';
 import PageTitle from '@/components/PageTitle';
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '../dictionaries-client';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { getDefaultTenantSettings } from '@/lib/currency';
+import { formatDateTime } from '@/lib/formatting';
 
 interface TransactionItem {
   product: string;
@@ -56,6 +59,7 @@ export default function TransactionsPage() {
   const [viewType, setViewType] = useState<ViewType>('all');
   const [displayMode, setDisplayMode] = useState<'grid' | 'list'>('list');
   const [dict, setDict] = useState<any>(null);
+  const { settings } = useTenantSettings();
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -109,14 +113,8 @@ export default function TransactionsPage() {
   // formatDate is now handled by FormattedDate component
   // Keep a simple version for receipt printing (template strings)
   const formatDateForReceipt = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleString(lang === 'es' ? 'es-ES' : 'en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    const tenantSettings = settings || getDefaultTenantSettings();
+    return formatDateTime(dateString, tenantSettings);
   };
 
   const printReceipt = (transaction: Transaction) => {

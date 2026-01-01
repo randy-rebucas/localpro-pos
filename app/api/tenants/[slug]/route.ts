@@ -103,8 +103,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const t = await getValidationTranslatorFromRequest(request);
     if (error.code === 11000) {
       const field = Object.keys(error.keyPattern)[0];
+      const errorMsg = t('validation.fieldAlreadyExists', '{field} already exists').replace('{field}', field);
       return NextResponse.json(
-        { success: false, error: t('validation.fieldAlreadyExists', '{field} already exists', field).replace('{field}', field) },
+        { success: false, error: errorMsg },
         { status: 400 }
       );
     }

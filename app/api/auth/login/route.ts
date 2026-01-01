@@ -8,11 +8,12 @@ import bcrypt from 'bcryptjs';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function POST(request: NextRequest) {
+  let t: (key: string, fallback: string) => string;
   try {
     await connectDB();
     const body = await request.json();
     const { email, password, tenantSlug } = body;
-    const t = await getValidationTranslatorFromRequest(request);
+    t = await getValidationTranslatorFromRequest(request);
 
     // Validation
     if (!email || !password) {
@@ -156,8 +157,9 @@ export async function POST(request: NextRequest) {
     return response;
   } catch (error: any) {
     console.error('Login error:', error);
+    const errorMessage = error.message || 'Login failed';
     return NextResponse.json(
-      { success: false, error: error.message || t('validation.loginFailed', 'Login failed') },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }

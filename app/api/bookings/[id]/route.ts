@@ -7,6 +7,7 @@ import { requireRole, getCurrentUser } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { sendBookingConfirmation, sendBookingCancellation, sendBookingReminder } from '@/lib/notifications';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { getTenantSettingsById } from '@/lib/tenant';
 
 /**
  * GET - Get a single booking by ID
@@ -193,6 +194,7 @@ export async function PUT(
     // Send notifications based on status changes
     if (status && status !== oldStatus) {
       try {
+        const tenantSettings = await getTenantSettingsById(tenantId);
         if (status === 'confirmed' && !existingBooking.confirmationSent) {
           await sendBookingConfirmation({
             customerName: updatedBooking!.customerName,
@@ -204,7 +206,7 @@ export async function PUT(
             staffName: updatedBooking!.staffName,
             notes: updatedBooking!.notes,
             bookingId: id,
-          });
+          }, tenantSettings || undefined);
           await Booking.findByIdAndUpdate(id, { confirmationSent: true });
         } else if (status === 'cancelled') {
           await sendBookingCancellation({
@@ -217,7 +219,7 @@ export async function PUT(
             staffName: existingBooking.staffName,
             notes: existingBooking.notes,
             bookingId: id,
-          });
+          }, tenantSettings || undefined);
         }
       } catch (notificationError) {
         console.error('Failed to send booking notification:', notificationError);

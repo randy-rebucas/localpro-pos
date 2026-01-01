@@ -2,7 +2,7 @@
 
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
-import { formatCurrency, getDefaultTenantSettings } from '@/lib/currency';
+import { formatCurrency, formatNumber, getCurrencySymbol, getDefaultTenantSettings } from '@/lib/currency';
 import Currency from '@/components/Currency';
 
 interface BundleAnalytics {
@@ -60,11 +60,16 @@ export default function BundlePerformanceCharts({ analytics, dict }: BundlePerfo
   // Format currency for Y-axis
   const formatYAxisValue = (value: number) => {
     const rounded = Math.round(value);
-    const symbol = tenantSettings.currencySymbol || '$';
+    const numberFormat = {
+      ...tenantSettings.numberFormat,
+      decimalPlaces: 0,
+    };
+    const formatted = formatNumber(rounded, numberFormat);
+    const symbol = tenantSettings.currencySymbol || getCurrencySymbol(tenantSettings.currency);
     if (tenantSettings.currencyPosition === 'after') {
-      return `${rounded.toLocaleString()} ${symbol}`;
+      return `${formatted} ${symbol}`;
     }
-    return `${symbol}${rounded.toLocaleString()}`;
+    return `${symbol}${formatted}`;
   };
 
   const CustomTooltip = ({ active, payload, label }: any) => {

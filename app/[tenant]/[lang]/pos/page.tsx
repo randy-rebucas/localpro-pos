@@ -15,6 +15,8 @@ import { hardwareService } from '@/lib/hardware';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { showToast } from '@/lib/toast';
 import { useConfirm } from '@/lib/confirm';
+import { formatCurrency, getDefaultTenantSettings } from '@/lib/currency';
+import { formatDateTime } from '@/lib/formatting';
 
 interface Product {
   _id: string;
@@ -460,7 +462,8 @@ export default function POSPage() {
           const data = await res.json();
             if (data.success) {
             const transaction = data.data;
-            const totalFormatted = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(getTotal());
+            const tenantSettings = settings || getDefaultTenantSettings();
+            const totalFormatted = formatCurrency(getTotal(), tenantSettings);
             
             // Print receipt if configured
             if (settings) {
@@ -516,14 +519,15 @@ export default function POSPage() {
         }
       }
 
-      const totalFormatted = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(getTotal());
+      const tenantSettings = settings || getDefaultTenantSettings();
+      const totalFormatted = formatCurrency(getTotal(), tenantSettings);
       
       // Create transaction object for receipt printing (offline)
       const subtotal = getSubtotal();
       const discountAmount = appliedDiscount?.amount || 0;
       const offlineTransaction = {
         receiptNumber: `OFF-${Date.now()}`,
-        date: new Date().toLocaleString(),
+        date: formatDateTime(new Date(), tenantSettings),
         items: cart.map(item => ({
           name: item.name,
           quantity: item.quantity,
@@ -779,7 +783,7 @@ export default function POSPage() {
         undefined,
       phone: settings.phone,
       receiptNumber: transaction.receiptNumber || transaction._id?.slice(-8) || 'N/A',
-      date: transaction.date || new Date(transaction.createdAt || Date.now()).toLocaleString(),
+      date: transaction.date || formatDateTime(new Date(transaction.createdAt || Date.now()), settings || getDefaultTenantSettings()),
       items: transaction.items || [],
       subtotal: transaction.subtotal || transaction.total,
       discountCode: transaction.discountCode,
@@ -1404,7 +1408,7 @@ export default function POSPage() {
                   <div className="text-sm text-gray-600 mb-1">{dict.pos.receiptNumber}</div>
                   <div className="font-semibold text-lg">{refundTransaction.receiptNumber || refundTransaction._id}</div>
                   <div className="text-sm text-gray-600 mt-2">
-                    {new Date(refundTransaction.createdAt).toLocaleString()}
+                    {formatDateTime(new Date(refundTransaction.createdAt), settings || getDefaultTenantSettings())}
                   </div>
                   <div className="text-sm text-gray-600">
                     {dict.common.total}: <Currency amount={refundTransaction.total} />
@@ -1646,13 +1650,7 @@ export default function POSPage() {
                       <div className="flex-1">
                         <h3 className="font-semibold text-gray-900 text-lg mb-1">{savedCart.name}</h3>
                         <p className="text-sm text-gray-500">
-                          {new Date(savedCart.createdAt).toLocaleString(lang === 'es' ? 'es-ES' : 'en-US', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
+                          {formatDateTime(new Date(savedCart.createdAt), settings || getDefaultTenantSettings())}
                         </p>
                         <p className="text-sm text-gray-600 mt-2">
                           {savedCart.items.length} {savedCart.items.length === 1 ? (dict.pos?.item || 'item') : (dict.pos?.items || 'items')}

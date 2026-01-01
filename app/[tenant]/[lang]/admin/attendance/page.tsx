@@ -14,7 +14,7 @@ const AttendanceTrendsCharts = dynamic(() => import('@/components/AttendanceTren
     <div className="w-full h-64 flex items-center justify-center">
       <div className="text-center">
         <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-        <p className="mt-4 text-gray-600">{dict?.common?.loadingChart || 'Loading chart...'}</p>
+        <p className="mt-4 text-gray-600">Loading chart...</p>
       </div>
     </div>
   ),
@@ -198,7 +198,7 @@ export default function AttendancePage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+          <p className="mt-4 text-gray-600">Loading...</p>
         </div>
       </div>
     );

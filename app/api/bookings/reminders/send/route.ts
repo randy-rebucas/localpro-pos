@@ -5,6 +5,7 @@ import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireRole, getCurrentUser } from '@/lib/auth';
 import { sendBookingReminder } from '@/lib/notifications';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { getTenantSettingsById } from '@/lib/tenant';
 
 /**
  * POST - Send reminders for upcoming bookings
@@ -58,6 +59,7 @@ export async function POST(request: NextRequest) {
       reminderSent: { $ne: true },
     }).lean();
 
+    const tenantSettings = await getTenantSettingsById(tenantId);
     const results = {
       total: bookingsToRemind.length,
       sent: 0,
@@ -77,7 +79,7 @@ export async function POST(request: NextRequest) {
           staffName: booking.staffName,
           notes: booking.notes,
           bookingId: booking._id.toString(),
-        });
+        }, tenantSettings || undefined);
 
         // Mark reminder as sent
         await Booking.findByIdAndUpdate(booking._id, { reminderSent: true });

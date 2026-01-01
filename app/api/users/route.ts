@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  let t: (key: string, fallback: string) => string;
   try {
     await connectDB();
     await requireRole(request, ['admin', 'manager']);
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
     const { email, password, name, role } = body;
 
     // Get translation function
-    const t = await getValidationTranslatorFromRequest(request);
+    t = await getValidationTranslatorFromRequest(request);
 
     // Validation
     if (!email || !password || !name) {
@@ -103,7 +104,7 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     if (error.code === 11000) {
       return NextResponse.json(
-        { success: false, error: t('validation.emailExists', 'User with this email already exists') },
+        { success: false, error: 'User with this email already exists' },
         { status: 400 }
       );
     }

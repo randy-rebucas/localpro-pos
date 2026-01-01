@@ -1,5 +1,6 @@
 import connectDB from './mongodb';
 import Tenant from '@/models/Tenant';
+import { ITenantSettings } from '@/models/Tenant';
 
 export interface TenantInfo {
   _id: string;
@@ -12,6 +13,20 @@ export interface TenantInfo {
     logo?: string;
     primaryColor?: string;
   };
+}
+
+/**
+ * Get tenant settings by tenant ID
+ */
+export async function getTenantSettingsById(tenantId: string): Promise<ITenantSettings | null> {
+  try {
+    await connectDB();
+    const tenant = await Tenant.findById(tenantId).select('settings').lean();
+    return tenant?.settings || null;
+  } catch (error) {
+    console.error('Error fetching tenant settings:', error);
+    return null;
+  }
 }
 
 /**

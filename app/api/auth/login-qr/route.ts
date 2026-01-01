@@ -6,11 +6,12 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function POST(request: NextRequest) {
+  let t: (key: string, fallback: string) => string;
   try {
     await connectDB();
     const body = await request.json();
     const { qrToken, tenantSlug } = body;
-    const t = await getValidationTranslatorFromRequest(request);
+    t = await getValidationTranslatorFromRequest(request);
 
     // Validation
     if (!qrToken) {
@@ -95,8 +96,9 @@ export async function POST(request: NextRequest) {
     return response;
   } catch (error: any) {
     console.error('QR login error:', error);
+    const errorMessage = error.message || 'Login failed';
     return NextResponse.json(
-      { success: false, error: error.message || t('validation.loginFailed', 'Login failed') },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }

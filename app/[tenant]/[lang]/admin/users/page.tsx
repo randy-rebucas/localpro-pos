@@ -115,7 +115,7 @@ export default function UsersPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <ConfirmDialog />
+      {ConfirmDialog}
       <Navbar />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         <div className="mb-6 sm:mb-8">
@@ -451,6 +451,7 @@ function PINModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [removing, setRemoving] = useState(false);
+  const { confirm, Dialog } = useConfirm();
 
   const handleSetPIN = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -515,6 +516,7 @@ function PINModal({
 
   return (
     <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      {Dialog}
       <div className="bg-white border border-gray-300 max-w-md w-full">
         <div className="p-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
@@ -591,6 +593,7 @@ function QRModal({
   const [loading, setLoading] = useState(true);
   const [regenerating, setRegenerating] = useState(false);
   const [error, setError] = useState('');
+  const { confirm, Dialog } = useConfirm();
 
   useEffect(() => {
     fetchQRCode();
@@ -661,6 +664,7 @@ function QRModal({
 
   return (
     <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      {Dialog}
       <div className="bg-white border border-gray-300 max-w-md w-full">
         <div className="p-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">

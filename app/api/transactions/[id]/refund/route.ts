@@ -58,8 +58,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       );
 
       if (!originalItem) {
+        const errorMsg = t('validation.itemNotFoundInTransaction', 'Item {productId} not found in transaction').replace('{productId}', refundItem.productId);
         return NextResponse.json(
-          { success: false, error: t('validation.itemNotFoundInTransaction', 'Item {productId} not found in transaction', refundItem.productId).replace('{productId}', refundItem.productId) },
+          { success: false, error: errorMsg },
           { status: 400 }
         );
       }

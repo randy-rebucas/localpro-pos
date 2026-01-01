@@ -14,13 +14,14 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  let t: (key: string, fallback: string) => string;
   try {
     await connectDB();
     await requireRole(request, ['owner', 'admin', 'manager']);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
     const currentUser = await getCurrentUser(request);
-    const t = await getValidationTranslatorFromRequest(request);
+    t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
       return NextResponse.json(
@@ -82,8 +83,9 @@ export async function PUT(
     });
   } catch (error: any) {
     console.error('Update user PIN error:', error);
+    const errorMessage = error.message || 'Failed to update PIN';
     return NextResponse.json(
-      { success: false, error: error.message || t('validation.failedToUpdatePin', 'Failed to update PIN') },
+      { success: false, error: errorMessage },
       { status: error.message === 'Unauthorized' || error.message.includes('Forbidden') ? 403 : 500 }
     );
   }
@@ -96,13 +98,14 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  let t: (key: string, fallback: string) => string;
   try {
     await connectDB();
     await requireRole(request, ['owner', 'admin', 'manager']);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
     const currentUser = await getCurrentUser(request);
-    const t = await getValidationTranslatorFromRequest(request);
+    t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
       return NextResponse.json(
@@ -138,8 +141,9 @@ export async function DELETE(
     });
   } catch (error: any) {
     console.error('Delete user PIN error:', error);
+    const errorMessage = error.message || 'Failed to remove PIN';
     return NextResponse.json(
-      { success: false, error: error.message || t('validation.failedToRemovePin', 'Failed to remove PIN') },
+      { success: false, error: errorMessage },
       { status: error.message === 'Unauthorized' || error.message.includes('Forbidden') ? 403 : 500 }
     );
   }

@@ -3,6 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { formatTime as formatTimeUtil } from '@/lib/formatting';
+import { getDefaultTenantSettings } from '@/lib/currency';
 
 interface Booking {
   _id: string;
@@ -46,6 +49,8 @@ export default function BookingCalendar({
   const [dict, setDict] = useState<any>(null);
   const [currentDate, setCurrentDate] = useState(selectedDate || new Date());
   const [view, setView] = useState<'month' | 'week' | 'day'>('month');
+  const { settings } = useTenantSettings();
+  const tenantSettings = settings || getDefaultTenantSettings();
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -104,8 +109,7 @@ export default function BookingCalendar({
   };
 
   const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    return formatTimeUtil(dateString, tenantSettings);
   };
 
   const navigateMonth = (direction: 'prev' | 'next') => {

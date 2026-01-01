@@ -9,10 +9,11 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
  * PUT - Update current user's PIN
  */
 export async function PUT(request: NextRequest) {
+  let t: (key: string, fallback: string) => string;
   try {
     const user = await requireAuth(request);
     await connectDB();
-    const t = await getValidationTranslatorFromRequest(request);
+    t = await getValidationTranslatorFromRequest(request);
 
     const body = await request.json();
     const { pin } = body;
@@ -59,8 +60,9 @@ export async function PUT(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('Update PIN error:', error);
+    const errorMessage = error.message || 'Failed to update PIN';
     return NextResponse.json(
-      { success: false, error: error.message || t('validation.failedToUpdatePin', 'Failed to update PIN') },
+      { success: false, error: errorMessage },
       { status: error.message === 'Unauthorized' ? 401 : 500 }
     );
   }
@@ -82,8 +84,9 @@ export async function DELETE(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('Delete PIN error:', error);
+    const errorMessage = error.message || 'Failed to remove PIN';
     return NextResponse.json(
-      { success: false, error: error.message || t('validation.failedToRemovePin', 'Failed to remove PIN') },
+      { success: false, error: errorMessage },
       { status: error.message === 'Unauthorized' ? 401 : 500 }
     );
   }

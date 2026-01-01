@@ -59,21 +59,29 @@ export default function Navbar() {
   }, [userMenuOpen]);
 
   // Base navigation items available to all authenticated users
-  const baseNavItems: Array<{ href: string; key: string }> = [
+  const baseNavItems: Array<{ href: string; key: string; featureFlag?: string }> = [
     { href: `/${tenant}/${lang}`, key: 'dashboard' },
     { href: `/${tenant}/${lang}/pos`, key: 'pos' },
     { href: `/${tenant}/${lang}/products`, key: 'products' },
-    { href: `/${tenant}/${lang}/inventory`, key: 'inventory' },
     { href: `/${tenant}/${lang}/transactions`, key: 'transactions' },
     { href: `/${tenant}/${lang}/reports`, key: 'reports' },
-    { href: `/${tenant}/${lang}/admin/bookings`, key: 'bookings' },
   ];
 
   // Conditional navigation items based on feature flags
-  const conditionalNavItems: Array<{ href: string; key: string }> = [];
+  const conditionalNavItems: Array<{ href: string; key: string; featureFlag?: string }> = [
+    { href: `/${tenant}/${lang}/inventory`, key: 'inventory', featureFlag: 'enableInventory' },
+    { href: `/${tenant}/${lang}/admin/bookings`, key: 'bookings', featureFlag: 'enableBookingScheduling' },
+  ];
 
-  // Combine all navigation items
-  const navItems = [...baseNavItems, ...conditionalNavItems];
+  // Filter navigation items based on feature flags
+  const navItems = [
+    ...baseNavItems,
+    ...conditionalNavItems.filter(item => {
+      if (!item.featureFlag) return true;
+      if (!settings) return true; // Show by default if settings not loaded yet
+      return (settings as any)[item.featureFlag] !== false; // Show if enabled or undefined (default enabled)
+    }),
+  ];
 
   const handleLogout = async () => {
     await logout();

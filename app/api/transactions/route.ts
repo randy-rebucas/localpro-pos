@@ -12,6 +12,7 @@ import { updateStock, updateBundleStock, getProductStock } from '@/lib/stock';
 import ProductBundle from '@/models/ProductBundle';
 import StockMovement from '@/models/StockMovement';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { getTenantSettingsById } from '@/lib/tenant';
 
 export async function GET(request: NextRequest) {
   try {
@@ -74,6 +75,17 @@ export async function POST(request: NextRequest) {
 
     const { items, paymentMethod, cashReceived, notes, discountCode, branchId } = data;
 
+    // Get tenant settings to check feature flags
+    const tenantSettings = await getTenantSettingsById(tenantId);
+
+    // Check if discounts are enabled
+    if (discountCode && tenantSettings && tenantSettings.enableDiscounts === false) {
+      return NextResponse.json(
+        { success: false, error: t('validation.discountsNotEnabled', 'Discounts are not enabled for this tenant') },
+        { status: 400 }
+      );
+    }
+
     // Validate and process items
     const transactionItems = [];
     let subtotal = 0;
@@ -110,13 +122,14 @@ export async function POST(request: NextRequest) {
 
             const requiredStock = bundleItem.quantity * quantity;
             if (availableStock < requiredStock) {
+              const errorMsg = t('validation.insufficientStockBundle', 'Insufficient stock for bundle item {productName}. Available: {available}, Required: {required}')
+                    .replace('{productName}', bundleItem.productName)
+                    .replace('{available}', availableStock.toString())
+                    .replace('{required}', requiredStock.toString());
               return NextResponse.json(
                 {
                   success: false,
-                  error: t('validation.insufficientStockBundle', 'Insufficient stock for bundle item {productName}. Available: {available}, Required: {required}', bundleItem.productName, availableStock, requiredStock)
-                    .replace('{productName}', bundleItem.productName)
-                    .replace('{available}', availableStock.toString())
-                    .replace('{required}', requiredStock.toString()),
+                  error: errorMsg,
                 },
                 { status: 400 }
               );
@@ -140,7 +153,8 @@ export async function POST(request: NextRequest) {
       else {
         const product = await Product.findOne({ _id: productId, tenantId });
         if (!product) {
-          return NextResponse.json({ success: false, error: t('validation.productNotFoundInTransaction', 'Product {productId} not found', productId).replace('{productId}', productId) }, { status: 404 });
+          const errorMsg = t('validation.productNotFoundInTransaction', 'Product {productId} not found').replace('{productId}', productId);
+          return NextResponse.json({ success: false, error: errorMsg }, { status: 404 });
         }
 
         // Check stock (considering variations and branches) - but respect allowOutOfStockSales and trackInventory
@@ -154,13 +168,14 @@ export async function POST(request: NextRequest) {
           });
 
           if (availableStock < quantity) {
+            const errorMsg = t('validation.insufficientStockProduct', 'Insufficient stock for {productName}. Available: {available}, Requested: {requested}')
+                  .replace('{productName}', product.name)
+                  .replace('{available}', availableStock.toString())
+                  .replace('{requested}', quantity.toString());
             return NextResponse.json(
               {
                 success: false,
-                error: t('validation.insufficientStockProduct', 'Insufficient stock for {productName}. Available: {available}, Requested: {requested}', product.name, availableStock, quantity)
-                  .replace('{productName}', product.name)
-                  .replace('{available}', availableStock.toString())
-                  .replace('{requested}', quantity.toString()),
+                error: errorMsg,
               },
               { status: 400 }
             );
@@ -232,10 +247,11 @@ export async function POST(request: NextRequest) {
 
       // Check minimum purchase amount
       if (discount.minPurchaseAmount && subtotal < discount.minPurchaseAmount) {
+        const errorMsg = t('validation.minimumPurchaseAmount', 'Minimum purchase amount of {amount} required').replace('{amount}', discount.minPurchaseAmount.toString());
         return NextResponse.json(
           { 
             success: false, 
-            error: t('validation.minimumPurchaseAmount', 'Minimum purchase amount of {amount} required', discount.minPurchaseAmount).replace('{amount}', discount.minPurchaseAmount.toString())
+            error: errorMsg
           },
           { status: 400 }
         );

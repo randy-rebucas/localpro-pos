@@ -6,6 +6,8 @@ import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireRole, getCurrentUser } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { sendBookingConfirmation } from '@/lib/notifications';
+import { getTenantSettingsById } from '@/lib/tenant';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 /**
  * GET - Get all bookings for a tenant
@@ -116,9 +118,6 @@ export async function POST(request: NextRequest) {
       status = 'pending',
     } = body;
 
-    // Get translation function
-    const t = await getValidationTranslatorFromRequest(request);
-
     // Validation
     if (!customerName || !serviceName || !startTime || !duration) {
       return NextResponse.json(
@@ -201,6 +200,7 @@ export async function POST(request: NextRequest) {
     // Send confirmation if status is confirmed and contact info is provided
     if (status === 'confirmed' && (customerEmail || customerPhone)) {
       try {
+        const tenantSettings = await getTenantSettingsById(tenantId);
         await sendBookingConfirmation({
           customerName,
           customerEmail,
@@ -211,7 +211,7 @@ export async function POST(request: NextRequest) {
           staffName: booking.staffName,
           notes,
           bookingId: booking._id.toString(),
-        });
+        }, tenantSettings || undefined);
         await Booking.findByIdAndUpdate(booking._id, { confirmationSent: true });
       } catch (notificationError) {
         console.error('Failed to send booking confirmation:', notificationError);

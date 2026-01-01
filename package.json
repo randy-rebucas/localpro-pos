@@ -37,6 +37,7 @@
     "@types/jspdf": "^1.3.3",
     "@types/negotiator": "^0.6.4",
     "@types/node": "^20",
+    "@types/nodemailer": "^7.0.4",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "baseline-browser-mapping": "^2.9.11",
@@ -45,5 +46,12 @@
     "tailwindcss": "^4",
     "tsx": "^4.20.6",
     "typescript": "^5"
+  },
+  "optionalDependencies": {
+    "@aws-sdk/client-sns": "^3.958.0",
+    "@sendgrid/mail": "^8.1.6",
+    "nodemailer": "^7.0.12",
+    "resend": "^6.6.0",
+    "twilio": "^5.11.1"
   }
 }

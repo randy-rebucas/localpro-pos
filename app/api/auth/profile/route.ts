@@ -60,6 +60,7 @@ export async function GET(request: NextRequest) {
  * PUT - Update current user's profile
  */
 export async function PUT(request: NextRequest) {
+  let t: (key: string, fallback: string) => string;
   try {
     const currentUser = await getCurrentUser(request);
     
@@ -72,7 +73,7 @@ export async function PUT(request: NextRequest) {
     const { email, password, name, currentPassword, pin, currentPin } = body;
 
     // Get translation function
-    const t = await getValidationTranslatorFromRequest(request);
+    t = await getValidationTranslatorFromRequest(request);
 
     const oldUser = await User.findById(currentUser.userId).lean();
     if (!oldUser || !oldUser.isActive) {
@@ -239,7 +240,7 @@ export async function PUT(request: NextRequest) {
   } catch (error: any) {
     if (error.code === 11000) {
       return NextResponse.json(
-        { success: false, error: t('validation.emailExists', 'User with this email already exists') },
+        { success: false, error: 'User with this email already exists' },
         { status: 400 }
       );
     }
