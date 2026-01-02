@@ -1025,6 +1025,19 @@
       "accessDenied": "Acceso Denegado",
       "noPermission": "No tiene permiso para acceder a esta página. Rol requerido: {roles}"
     },
+    "forbidden": {
+      "title": "Acceso Denegado",
+      "message": "No tiene permiso para acceder a esta tienda.",
+      "yourAccount": "Su Cuenta",
+      "yourStore": "Su Tienda",
+      "attemptedAccess": "Intento de Acceso",
+      "goToMyStore": "Ir a Mi Tienda",
+      "goToDefaultStore": "Ir a la Tienda Predeterminada",
+      "goBack": "Volver",
+      "securityViolation": "Violación de Seguridad Detectada",
+      "securityNotice": "Aviso de Seguridad: Este intento de acceso ha sido registrado con fines de seguridad.",
+      "contactAdmin": "Si cree que esto es un error, por favor contacte a su administrador."
+    },
     "realtimeStockTracker": {
       "connected": "Conectado",
       "disconnected": "Desconectado",

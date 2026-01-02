@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Customer from '@/models/Customer';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
     const tenantId = await getTenantIdFromRequest(request);
     
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: 'Tenant not found or access denied' }, { status: 403 });
     }
     
     const searchParams = request.nextUrl.searchParams;
@@ -61,13 +61,22 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
-    const user = await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
-    const t = await getValidationTranslatorFromRequest(request);
-    
-    if (!tenantId) {
-      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
+    // SECURITY: Validate tenant access for authenticated requests
+    let tenantId: string;
+    try {
+      const tenantAccess = await requireTenantAccess(request);
+      tenantId = tenantAccess.tenantId;
+    } catch (authError: any) {
+      const t = await getValidationTranslatorFromRequest(request);
+      if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
+        return NextResponse.json(
+          { success: false, error: authError.message },
+          { status: authError.message.includes('Unauthorized') ? 401 : 403 }
+        );
+      }
+      throw authError;
     }
+    const t = await getValidationTranslatorFromRequest(request);
     
     const body = await request.json();
     const { firstName, lastName, email, phone, addresses, dateOfBirth, notes, tags } = body;

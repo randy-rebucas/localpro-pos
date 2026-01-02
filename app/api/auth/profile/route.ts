@@ -38,9 +38,15 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Get tenant slug and name
+    const Tenant = (await import('@/models/Tenant')).default;
+    const tenant = await Tenant.findById(user.tenantId).select('slug name').lean();
+    const tenantSlug = tenant?.slug || null;
+    const tenantName = tenant?.name || null;
+
     return NextResponse.json({
       success: true,
-      data: {
+      user: {
         _id: user._id,
         email: user.email,
         name: user.name,
@@ -49,6 +55,9 @@ export async function GET(request: NextRequest) {
         lastLogin: user.lastLogin,
         hasPin: !!user.pin,
         qrToken: user.qrToken || null,
+        tenantId: user.tenantId?.toString() || null,
+        tenantSlug,
+        tenantName,
       },
     });
   } catch (error: any) {

@@ -5,8 +5,9 @@ import dynamic from 'next/dynamic';
 import Navbar from '@/components/Navbar';
 import Currency from '@/components/Currency';
 import PageTitle from '@/components/PageTitle';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { getDictionaryClient } from './dictionaries-client';
+import { handleApiResponse } from '@/lib/api-client';
 
 // Dynamically import chart to avoid SSR issues with Recharts
 const SalesChart = dynamic(() => import('@/components/SalesChart'), {
@@ -39,12 +40,39 @@ interface Stats {
 
 export default function Dashboard() {
   const params = useParams();
+  const router = useRouter();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('today');
   const [dict, setDict] = useState<any>(null);
+  
+  // If lang is "forbidden", this route was incorrectly matched
+  // Redirect to the forbidden page using hard redirect to prevent loops
+  useEffect(() => {
+    if (lang === 'forbidden' && typeof window !== 'undefined') {
+      const currentPath = window.location.pathname;
+      const targetPath = `/${tenant}/forbidden`;
+      // Only redirect if we're not already on the forbidden page
+      if (!currentPath.includes('/forbidden') && currentPath !== targetPath) {
+        // Use hard redirect to prevent Next.js from matching the route again
+        window.location.href = targetPath;
+      }
+    }
+  }, [lang, tenant]);
+  
+  // Don't render if lang is "forbidden" (will redirect)
+  if (lang === 'forbidden') {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Redirecting...</p>
+        </div>
+      </div>
+    );
+  }
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -55,10 +83,20 @@ export default function Dashboard() {
   }, [period, tenant]);
 
   const fetchStats = async () => {
+    // Don't fetch if we're already on the forbidden page
+    if (typeof window !== 'undefined' && window.location.pathname.includes('/forbidden')) {
+      return;
+    }
+    
     try {
       setLoading(true);
       const res = await fetch(`/api/transactions/stats?period=${period}&tenant=${tenant}`);
-      const data = await res.json();
+      
+      // Handle API response (automatically redirects on 403)
+      const data = await handleApiResponse(res, {
+        defaultRedirect: `/${tenant}/forbidden`
+      });
+      
       if (data.success && data.data) {
         // Ensure chartData is properly formatted with numeric values
         const processedChartData = (data.data.chartData || []).map((item: any) => {

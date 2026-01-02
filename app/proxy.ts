@@ -18,9 +18,10 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const host = request.headers.get('host') || '';
   
-  // Allow login page and API routes to pass through
-  if (pathname === '/login' || pathname.startsWith('/api/')) {
-    return;
+  // Allow login page, forbidden page, error pages, and API routes to pass through
+  // IMPORTANT: Check for forbidden BEFORE checking tenant/lang structure
+  if (pathname === '/login' || pathname.includes('/forbidden') || pathname.includes('/error') || pathname.includes('/not-found') || pathname.startsWith('/api/')) {
+    return NextResponse.next();
   }
   
   // Check if path already has tenant and locale structure: /tenant/lang/...
@@ -34,7 +35,13 @@ export function proxy(request: NextRequest) {
     // Check if it's already in tenant/lang format
     if (locales.includes(secondPart)) {
       // Assume tenant exists if format is correct (will be validated in layout)
-      return; // Already correctly formatted
+      return NextResponse.next(); // Already correctly formatted
+    }
+    
+    // Check if second part is a special route (forbidden, error, not-found) that should pass through
+    // This handles routes like /tenant/forbidden, /tenant/error, /tenant/not-found
+    if (secondPart === 'forbidden' || secondPart === 'error' || secondPart === 'not-found') {
+      return NextResponse.next(); // Let these routes pass through without adding locale
     }
   }
   
