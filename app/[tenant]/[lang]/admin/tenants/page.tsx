@@ -20,6 +20,7 @@ interface Tenant {
     email?: string;
     phone?: string;
     companyName?: string;
+    businessType?: string;
   };
 }
 
@@ -119,6 +120,7 @@ export default function TenantsPage() {
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.name || 'Name'}</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.slug || 'Slug'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.businessType || 'Business Type'}</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.currency || 'Currency'}</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.status || 'Status'}</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.actions || 'Actions'}</th>
@@ -129,6 +131,15 @@ export default function TenantsPage() {
                   <tr key={tenantItem._id}>
                     <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{tenantItem.name}</td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{tenantItem.slug}</td>
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {tenantItem.settings.businessType ? (
+                        <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 border border-blue-300">
+                          {tenantItem.settings.businessType}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 italic">Not set</span>
+                      )}
+                    </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{tenantItem.settings.currency}</td>
                     <td className="px-4 py-4 whitespace-nowrap">
                       <span className={`px-2 py-1 text-xs font-semibold border ${tenantItem.isActive ? 'bg-green-100 text-green-800 border-green-300' : 'bg-red-100 text-red-800 border-red-300'}`}>
@@ -197,9 +208,32 @@ function TenantModal({
     email: tenant?.settings.email || '',
     phone: tenant?.settings.phone || '',
     companyName: tenant?.settings.companyName || '',
+    businessType: tenant?.settings.businessType || 'general',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [businessTypes, setBusinessTypes] = useState<any[]>([]);
+  const [loadingBusinessTypes, setLoadingBusinessTypes] = useState(true);
+  const [businessTypeWarning, setBusinessTypeWarning] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadBusinessTypes();
+  }, []);
+
+  const loadBusinessTypes = async () => {
+    try {
+      setLoadingBusinessTypes(true);
+      const res = await fetch('/api/business-types');
+      const data = await res.json();
+      if (data.success) {
+        setBusinessTypes(data.data);
+      }
+    } catch (err) {
+      console.error('Failed to load business types:', err);
+    } finally {
+      setLoadingBusinessTypes(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -221,6 +255,7 @@ function TenantModal({
           email: formData.email || undefined,
           phone: formData.phone || undefined,
           companyName: formData.companyName || undefined,
+          businessType: formData.businessType || undefined,
         },
       };
       if (formData.domain) body.domain = formData.domain;
@@ -313,6 +348,61 @@ function TenantModal({
                 <option value="en">English</option>
                 <option value="es">Español</option>
               </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {dict.admin?.businessType || 'Business Type'} <span className="text-red-500">*</span>
+              </label>
+              {loadingBusinessTypes ? (
+                <div className="w-full px-3 py-2 border border-gray-300 bg-gray-50 flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent animate-spin"></div>
+                  <span className="text-xs text-gray-600">Loading business types...</span>
+                </div>
+              ) : (
+                <>
+                  <select
+                    value={formData.businessType}
+                    onChange={(e) => {
+                      const newType = e.target.value;
+                      if (newType !== tenant?.settings.businessType) {
+                        setBusinessTypeWarning(
+                          `Changing business type to "${newType}" will automatically configure features. This may enable or disable certain features based on the business type.`
+                        );
+                      } else {
+                        setBusinessTypeWarning(null);
+                      }
+                      setFormData({ ...formData, businessType: newType });
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    {businessTypes.map((type) => (
+                      <option key={type.type} value={type.type}>
+                        {type.name}
+                      </option>
+                    ))}
+                  </select>
+                  {businessTypeWarning && (
+                    <div className="mt-2 p-2 bg-yellow-50 border border-yellow-300 text-yellow-800 text-xs">
+                      <div className="flex items-start gap-2">
+                        <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <span>{businessTypeWarning}</span>
+                      </div>
+                    </div>
+                  )}
+                  {formData.businessType && !loadingBusinessTypes && (
+                    <div className="mt-2 p-3 bg-blue-50 border border-blue-200">
+                      <p className="text-xs text-blue-900 font-medium mb-1">
+                        {businessTypes.find((t) => t.type === formData.businessType)?.name || 'Business Type'}
+                      </p>
+                      <p className="text-xs text-blue-700">
+                        {businessTypes.find((t) => t.type === formData.businessType)?.description || ''}
+                      </p>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">

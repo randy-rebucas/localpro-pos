@@ -15,6 +15,7 @@ export default function SignupPage() {
     slug: '',
     name: '',
     companyName: '',
+    businessType: 'general' as 'retail' | 'restaurant' | 'laundry' | 'service' | 'general',
     // Admin user info
     adminEmail: '',
     adminPassword: '',
@@ -25,6 +26,8 @@ export default function SignupPage() {
     phone: '',
     email: '',
   });
+  const [businessTypes, setBusinessTypes] = useState<any[]>([]);
+  const [loadingBusinessTypes, setLoadingBusinessTypes] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -36,6 +39,24 @@ export default function SignupPage() {
   useEffect(() => {
     getDictionaryClient(formData.language as 'en' | 'es' || 'en').then(setDict);
   }, [formData.language]);
+
+  // Load business types
+  useEffect(() => {
+    const loadBusinessTypes = async () => {
+      try {
+        const res = await fetch('/api/business-types');
+        const data = await res.json();
+        if (data.success) {
+          setBusinessTypes(data.data);
+        }
+      } catch (err) {
+        console.error('Failed to load business types:', err);
+      } finally {
+        setLoadingBusinessTypes(false);
+      }
+    };
+    loadBusinessTypes();
+  }, []);
 
   // Detect location on component mount
   useEffect(() => {
@@ -126,9 +147,9 @@ export default function SignupPage() {
   if (success) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center px-4 py-12">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-8 text-center">
+        <div className="max-w-md w-full bg-white border border-gray-300 p-8 text-center">
           <div className="mb-6">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-green-500 rounded-full mb-4">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-green-500 border border-green-600 mb-4">
               <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
@@ -143,7 +164,7 @@ export default function SignupPage() {
           </p>
           <Link
             href={`/${formData.slug}/${formData.language}/login`}
-            className="inline-block w-full bg-blue-600 text-white px-4 py-3 rounded-xl hover:bg-blue-700 font-medium transition-colors"
+            className="inline-block w-full bg-blue-600 text-white px-4 py-3 hover:bg-blue-700 font-medium transition-colors border border-blue-700"
           >
             {dict?.signup?.goToLogin || 'Go to Login'}
           </Link>
@@ -154,9 +175,9 @@ export default function SignupPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center px-4 py-12">
-      <div className="max-w-2xl w-full bg-white rounded-2xl shadow-2xl p-6 sm:p-8">
+      <div className="max-w-2xl w-full bg-white border border-gray-300 p-6 sm:p-8">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-full mb-4">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 border border-blue-700 mb-4">
             <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
             </svg>
@@ -166,7 +187,7 @@ export default function SignupPage() {
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-lg text-red-700 text-sm flex items-start gap-2">
+          <div className="mb-6 p-4 bg-red-50 border-2 border-red-300 text-red-700 text-sm flex items-start gap-2">
             <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
@@ -190,7 +211,7 @@ export default function SignupPage() {
                   required
                   value={formData.slug}
                   onChange={(e) => setFormData({ ...formData, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })}
-                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all"
+                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all"
                   placeholder={dict?.signup?.storeIdentifierPlaceholder || 'my-store'}
                   pattern="[a-z0-9-]+"
                 />
@@ -207,7 +228,7 @@ export default function SignupPage() {
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all"
+                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all"
                   placeholder={dict?.signup?.storeNamePlaceholder || 'My Store'}
                 />
               </div>
@@ -222,9 +243,40 @@ export default function SignupPage() {
                 id="companyName"
                 value={formData.companyName}
                 onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all"
+                className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all"
                 placeholder={dict?.signup?.companyNamePlaceholder || 'My Company Inc.'}
               />
+            </div>
+
+            <div className="mt-4">
+              <label htmlFor="businessType" className="block text-sm font-medium text-gray-700 mb-1">
+                {dict?.signup?.businessType || 'Business Type'} <span className="text-red-500">*</span>
+              </label>
+              {loadingBusinessTypes ? (
+                <div className="w-full px-4 py-3 border-2 border-gray-300 bg-gray-50 flex items-center gap-2">
+                  <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent animate-spin"></div>
+                  <span className="text-sm text-gray-600">Loading business types...</span>
+                </div>
+              ) : (
+                <select
+                  id="businessType"
+                  required
+                  value={formData.businessType}
+                  onChange={(e) => setFormData({ ...formData, businessType: e.target.value as any })}
+                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all"
+                >
+                  {businessTypes.map((type) => (
+                    <option key={type.type} value={type.type}>
+                      {type.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {formData.businessType && !loadingBusinessTypes && (
+                <p className="mt-1 text-xs text-gray-600">
+                  {businessTypes.find((t) => t.type === formData.businessType)?.description || ''}
+                </p>
+              )}
             </div>
           </div>
 
@@ -243,7 +295,7 @@ export default function SignupPage() {
                   required
                   value={formData.adminName}
                   onChange={(e) => setFormData({ ...formData, adminName: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all"
+                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all"
                   placeholder={dict?.signup?.namePlaceholder || 'John Doe'}
                 />
               </div>
@@ -258,7 +310,7 @@ export default function SignupPage() {
                   required
                   value={formData.adminEmail}
                   onChange={(e) => setFormData({ ...formData, adminEmail: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all"
+                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all"
                   placeholder={dict?.signup?.adminEmailPlaceholder || 'admin@example.com'}
                 />
               </div>
@@ -280,7 +332,7 @@ export default function SignupPage() {
                       setPasswordErrors([]);
                     }
                   }}
-                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all"
+                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all"
                   placeholder={dict?.signup?.createStrongPassword || 'Create a strong password'}
                 />
                 {passwordErrors.length > 0 && (
@@ -307,7 +359,7 @@ export default function SignupPage() {
                   id="currency"
                   value={formData.currency}
                   onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all"
+                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all"
                   disabled={detectingLocation}
                 >
                   <option value="USD">USD - US Dollar</option>
@@ -341,7 +393,7 @@ export default function SignupPage() {
                   id="language"
                   value={formData.language}
                   onChange={(e) => setFormData({ ...formData, language: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all"
+                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all"
                 >
                   <option value="en">English</option>
                   <option value="es">Español</option>
@@ -359,7 +411,7 @@ export default function SignupPage() {
                   id="phone"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all"
+                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all"
                   placeholder={phonePlaceholder}
                 />
               </div>
@@ -373,7 +425,7 @@ export default function SignupPage() {
                   id="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all"
+                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all"
                   placeholder={dict?.signup?.contactEmailPlaceholder || 'contact@example.com'}
                 />
               </div>
@@ -383,13 +435,13 @@ export default function SignupPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 text-white px-4 py-4 rounded-xl hover:bg-blue-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-lg shadow-lg"
+            className="w-full bg-blue-600 text-white px-4 py-4 hover:bg-blue-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-lg border border-blue-700 flex items-center justify-center gap-2"
           >
             {loading ? (
-              <span className="flex items-center justify-center gap-2">
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                {dict?.signup?.creatingStore || 'Creating Store...'}
-              </span>
+              <>
+                <div className="w-5 h-5 border-2 border-white border-t-transparent animate-spin"></div>
+                <span>{dict?.signup?.creatingStore || 'Creating Store...'}</span>
+              </>
             ) : (
               dict?.signup?.createStore || 'Create Store'
             )}

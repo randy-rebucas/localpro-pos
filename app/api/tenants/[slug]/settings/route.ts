@@ -5,6 +5,7 @@ import { requireAuth, requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { applyBusinessTypeDefaults } from '@/lib/business-types';
 
 export async function GET(
   request: NextRequest,
@@ -57,7 +58,18 @@ export async function PUT(
 
     // Validate settings structure
     const defaultSettings = getDefaultTenantSettings();
-    const updatedSettings = { ...defaultSettings, ...settings };
+    const mergedSettings = { ...defaultSettings, ...settings };
+    
+    // Auto-configure features based on business type if business type is being set/changed
+    const existingTenant = await Tenant.findOne({ slug }).lean();
+    const currentBusinessType = existingTenant?.settings?.businessType;
+    const newBusinessType = settings.businessType;
+    
+    // Apply business type defaults if business type is being set or changed
+    let updatedSettings = mergedSettings;
+    if (newBusinessType && newBusinessType !== currentBusinessType) {
+      updatedSettings = applyBusinessTypeDefaults(mergedSettings, newBusinessType);
+    }
 
     // Validate currency code (basic check)
     if (updatedSettings.currency && updatedSettings.currency.length !== 3) {

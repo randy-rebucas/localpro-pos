@@ -6,6 +6,10 @@ import Link from 'next/link';
 import Navbar from '@/components/Navbar';
 import BookingCalendar from '@/components/BookingCalendar';
 import { getDictionaryClient } from '../../dictionaries-client';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { supportsFeature } from '@/lib/business-type-helpers';
+import { getBusinessTypeConfig } from '@/lib/business-types';
+import { getBusinessType } from '@/lib/business-type-helpers';
 
 interface Booking {
   _id: string;
@@ -57,6 +61,9 @@ export default function BookingsPage() {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterStaff, setFilterStaff] = useState<string>('all');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const { settings } = useTenantSettings();
+  const bookingEnabled = supportsFeature(settings ?? undefined, 'booking');
+  const businessTypeConfig = settings ? getBusinessTypeConfig(getBusinessType(settings)) : null;
 
   // Form state
   const [formData, setFormData] = useState({
@@ -371,21 +378,45 @@ export default function BookingsPage() {
               </h1>
               <p className="text-gray-600">{dict?.admin?.bookingSchedulingDescription || 'Manage appointments and bookings'}</p>
             </div>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 transition-colors flex items-center gap-2 border border-blue-700"
-            >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            {dict?.admin?.newBooking || 'New Booking'}
-          </button>
+            {bookingEnabled && (
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 transition-colors flex items-center gap-2 border border-blue-700"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                {dict?.admin?.newBooking || 'New Booking'}
+              </button>
+            )}
           </div>
         </div>
 
         {message && (
           <div className={`mb-6 p-4 border ${message.type === 'success' ? 'bg-green-50 text-green-800 border-green-300' : 'bg-red-50 text-red-800 border-red-300'}`}>
             {message.text}
+          </div>
+        )}
+
+        {!bookingEnabled && (
+          <div className="mb-6 p-4 bg-yellow-50 border-2 border-yellow-300 text-yellow-800">
+            <div className="flex items-start gap-3">
+              <svg className="w-6 h-6 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <div>
+                <h3 className="text-lg font-semibold text-yellow-900 mb-2">
+                  Booking & Scheduling Not Available
+                </h3>
+                <p className="text-yellow-800">
+                  Booking and scheduling is not enabled for {businessTypeConfig?.name || 'your business type'}. 
+                  This feature is typically used for service businesses, salons, and laundry services.
+                </p>
+                <p className="text-sm text-yellow-700 mt-2">
+                  If you need booking features, please enable it in Settings → Business or update your business type.
+                </p>
+              </div>
+            </div>
           </div>
         )}
 

@@ -3,6 +3,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { getBusinessTypeConfig } from '@/lib/business-types';
+import { getBusinessType } from '@/lib/business-type-helpers';
 
 interface Product {
   _id?: string;
@@ -38,12 +41,14 @@ const generateSKU = (name: string): string => {
 export default function ProductModal({ product, onClose, lang = 'en' }: ProductModalProps) {
   const params = useParams();
   const tenant = (params?.tenant as string) || 'default';
+  const { settings } = useTenantSettings();
   const [dict, setDict] = useState<any>(null);
   const [categories, setCategories] = useState<string[]>([]);
   const [showCategorySuggestions, setShowCategorySuggestions] = useState(false);
   const [filteredCategories, setFilteredCategories] = useState<string[]>([]);
   const categoryInputRef = useRef<HTMLInputElement>(null);
   const categoryListRef = useRef<HTMLDivElement>(null);
+  const businessTypeConfig = settings ? getBusinessTypeConfig(getBusinessType(settings)) : null;
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -389,11 +394,12 @@ export default function ProductModal({ product, onClose, lang = 'en' }: ProductM
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              {dict.products.sku}
+              {dict.products.sku} {businessTypeConfig?.requiredFields?.includes('sku') && <span className="text-red-500">*</span>}
             </label>
             <div className="flex gap-2">
               <input
                 type="text"
+                required={businessTypeConfig?.requiredFields?.includes('sku')}
                 value={formData.sku}
                 onChange={(e) => {
                   setFormData(prev => ({ ...prev, sku: e.target.value }));
@@ -468,11 +474,12 @@ export default function ProductModal({ product, onClose, lang = 'en' }: ProductM
             </div>
           </div>
           
-          {/* Inventory Settings */}
-          <div className="border-t border-gray-200 pt-4 space-y-4">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">
-              {dict?.products?.inventorySettings || 'Inventory Settings'}
-            </h3>
+          {/* Inventory Settings - Only show if inventory is enabled for business type */}
+          {businessTypeConfig?.defaultFeatures?.enableInventory !== false && (
+            <div className="border-t border-gray-200 pt-4 space-y-4">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">
+                {dict?.products?.inventorySettings || 'Inventory Settings'}
+              </h3>
             
             <div className="flex items-start gap-3">
               <input
@@ -520,6 +527,7 @@ export default function ProductModal({ product, onClose, lang = 'en' }: ProductM
               </div>
             </div>
           </div>
+          )}
           
           <div className="flex flex-col sm:flex-row justify-end gap-2 pt-4">
             <button

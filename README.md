@@ -94,6 +94,42 @@ A comprehensive, enterprise-grade Point of Sale (POS) system built with Next.js 
   - Receipt customization
   - Tax configuration (VAT/GST/Sales Tax)
 
+### Standard POS Architecture
+
+This system follows a **Universal POS Architecture Baseline** that ensures all businesses—laundry, retail, food, services—conform to a common base schema while allowing industry-specific customizations.
+
+**Universal POS Objects**:
+- ✅ **Business Profile** - Core business identity and configuration
+- ✅ **Outlet / Branch** - Physical or logical locations
+- ✅ **Products / Services** - Items or services sold
+- ✅ **Pricing Rules** - Discounts, promotions, and tax rules
+- ✅ **Orders / Tickets** - Sales transactions
+- ✅ **Payments** - Payment processing and tracking
+- ✅ **Invoices / Receipts** - Official transaction documents
+- ✅ **Staff & Roles** - User accounts and permissions
+- ✅ **Reports & Logs** - Audit trails and business intelligence
+
+📖 **Documentation**: See [`STANDARD_POS_ARCHITECTURE.md`](./STANDARD_POS_ARCHITECTURE.md) for the complete architecture specification and [`docs/STANDARD_POS_MAPPING.md`](./docs/STANDARD_POS_MAPPING.md) for implementation mapping.
+
+### Multi-Business Type Support
+
+The system supports multiple business types with industry-specific configurations while maintaining consistency:
+
+**Supported Business Types**:
+- 🏪 **Retail** - Product-focused with inventory management, SKU tracking, variations
+- 🍕 **Restaurant** - Menu items with modifiers, allergens, nutrition info, table management
+- 👔 **Laundry** - Service-based with weight pricing, pickup/delivery, duration tracking
+- 💼 **Service** - Time-based services with staff assignment, equipment requirements
+- 🔧 **General** - Flexible configuration for any business type
+
+**Features**:
+- Automatic feature configuration based on business type
+- Industry-specific product fields (modifiers, allergens, service duration, etc.)
+- Business type validation and helpers
+- Consistent base schema across all types
+
+📖 **Documentation**: See [`docs/BUSINESS_TYPES.md`](./docs/BUSINESS_TYPES.md) for business type configuration and examples.
+
 ### User Management & Authentication
 
 - **Authentication Methods**

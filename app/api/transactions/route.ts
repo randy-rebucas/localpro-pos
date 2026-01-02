@@ -3,7 +3,7 @@ import connectDB from '@/lib/mongodb';
 import Transaction from '@/models/Transaction';
 import Product from '@/models/Product';
 import Discount from '@/models/Discount';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateAndSanitize, validateTransaction } from '@/lib/validation';
@@ -13,6 +13,7 @@ import ProductBundle from '@/models/ProductBundle';
 import StockMovement from '@/models/StockMovement';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { getTenantSettingsById } from '@/lib/tenant';
+import { calculateTax } from '@/lib/tax-calculation';
 
 export async function GET(request: NextRequest) {
   try {
@@ -20,7 +21,7 @@ export async function GET(request: NextRequest) {
     const tenantId = await getTenantIdFromRequest(request);
     
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: 'Tenant not found or access denied' }, { status: 403 });
     }
     
     const searchParams = request.nextUrl.searchParams;
@@ -55,11 +56,21 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
-    const user = await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
-    
-    if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+    // SECURITY: Validate tenant access for authenticated requests
+    let tenantId: string;
+    let user: { userId: string; tenantId: string; email: string; role: string };
+    try {
+      const tenantAccess = await requireTenantAccess(request);
+      tenantId = tenantAccess.tenantId;
+      user = tenantAccess.user;
+    } catch (authError: any) {
+      if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
+        return NextResponse.json(
+          { success: false, error: authError.message },
+          { status: authError.message.includes('Unauthorized') ? 401 : 403 }
+        );
+      }
+      throw authError;
     }
     
     const body = await request.json();
@@ -205,7 +216,6 @@ export async function POST(request: NextRequest) {
           price: itemPrice,
           quantity: quantity,
           subtotal: itemSubtotal,
-          variation: variation,
         });
       }
     }
@@ -274,8 +284,42 @@ export async function POST(request: NextRequest) {
       await discount.save();
     }
 
-    // Calculate final total
-    const total = Math.max(0, subtotal - discountAmount);
+    // Calculate subtotal after discount
+    const subtotalAfterDiscount = Math.max(0, subtotal - discountAmount);
+
+    // Prepare items for tax calculation
+    const taxItems = [];
+    for (const item of transactionItems) {
+      const originalItem = items.find((i: typeof items[0]) => i.productId === item.product.toString());
+      if (originalItem?.bundleId) {
+        const bundle = await ProductBundle.findById(originalItem.bundleId).lean();
+        taxItems.push({
+          productId: originalItem.bundleId,
+          productType: 'bundle' as const,
+          categoryId: bundle?.categoryId?.toString(),
+        });
+      } else {
+        const product = await Product.findById(item.product).lean();
+        taxItems.push({
+          productId: item.product.toString(),
+          productType: product?.productType || 'regular',
+          categoryId: product?.categoryId?.toString(),
+        });
+      }
+    }
+
+    // Calculate tax
+    const taxCalculation = await calculateTax(
+      tenantId,
+      subtotalAfterDiscount,
+      taxItems,
+      tenantSettings ?? undefined
+    );
+
+    const taxAmount = taxCalculation.taxAmount;
+
+    // Calculate final total (subtotal after discount + tax)
+    const total = subtotalAfterDiscount + taxAmount;
 
     // Calculate change for cash payments
     let change = 0;
@@ -344,10 +388,12 @@ export async function POST(request: NextRequest) {
     // Create transaction after stock is successfully updated
     const transaction = await Transaction.create({
       tenantId,
+      branchId: branchId || undefined,
       items: transactionItems,
       subtotal,
       discountCode: appliedDiscountCode,
       discountAmount: discountAmount > 0 ? discountAmount : undefined,
+      taxAmount: taxAmount > 0 ? taxAmount : undefined,
       total,
       paymentMethod,
       cashReceived: paymentMethod === 'cash' ? cashReceived : undefined,

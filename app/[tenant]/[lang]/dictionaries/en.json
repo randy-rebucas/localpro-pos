@@ -1027,6 +1027,19 @@
       "accessDenied": "Access Denied",
       "noPermission": "You don't have permission to access this page. Required role: {roles}"
     },
+    "forbidden": {
+      "title": "Access Denied",
+      "message": "You don't have permission to access this store.",
+      "yourAccount": "Your Account",
+      "yourStore": "Your Store",
+      "attemptedAccess": "Attempted Access",
+      "goToMyStore": "Go to My Store",
+      "goToDefaultStore": "Go to Default Store",
+      "goBack": "Go Back",
+      "securityViolation": "Security Violation Detected",
+      "securityNotice": "Security Notice: This access attempt has been logged for security purposes.",
+      "contactAdmin": "If you believe this is an error, please contact your administrator."
+    },
     "realtimeStockTracker": {
       "connected": "Connected",
       "disconnected": "Disconnected",

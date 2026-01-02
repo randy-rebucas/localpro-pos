@@ -9,6 +9,8 @@ import Currency from '@/components/Currency';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { showToast } from '@/lib/toast';
 import { useConfirm } from '@/lib/confirm';
+import { getBusinessTypeConfig, getAllowedProductTypes } from '@/lib/business-types';
+import { getBusinessType } from '@/lib/business-type-helpers';
 
 interface Product {
   _id: string;
@@ -28,6 +30,28 @@ interface Product {
   trackInventory: boolean;
   lowStockThreshold?: number;
   createdAt: string;
+  // Restaurant-specific fields
+  modifiers?: Array<{
+    name: string;
+    options: Array<{ name: string; price: number }>;
+    required: boolean;
+  }>;
+  allergens?: string[];
+  nutritionInfo?: {
+    calories?: number;
+    protein?: number;
+    carbs?: number;
+    fat?: number;
+  };
+  // Laundry-specific fields
+  serviceType?: 'wash' | 'dry-clean' | 'press' | 'repair' | 'other';
+  weightBased?: boolean;
+  pickupDelivery?: boolean;
+  estimatedDuration?: number;
+  // Service-specific fields
+  serviceDuration?: number;
+  staffRequired?: number;
+  equipmentRequired?: string[];
 }
 
 interface Category {
@@ -50,12 +74,21 @@ export default function ProductsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const { settings } = useTenantSettings();
   const { confirm, Dialog } = useConfirm();
+  const [businessTypeConfig, setBusinessTypeConfig] = useState<any>(null);
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
     fetchProducts();
     fetchCategories();
   }, [lang, tenant]);
+
+  useEffect(() => {
+    if (settings) {
+      const businessType = getBusinessType(settings);
+      const config = getBusinessTypeConfig(businessType);
+      setBusinessTypeConfig(config);
+    }
+  }, [settings]);
 
   const fetchProducts = async () => {
     try {
@@ -265,6 +298,8 @@ export default function ProductsPage() {
               setEditingProduct(null);
             }}
             dict={dict}
+            businessTypeConfig={businessTypeConfig}
+            settings={settings}
           />
         )}
       </div>
@@ -278,12 +313,16 @@ function ProductModal({
   onClose,
   onSave,
   dict,
+  businessTypeConfig,
+  settings,
 }: {
   product: Product | null;
   categories: Category[];
   onClose: () => void;
   onSave: () => void;
   dict: any;
+  businessTypeConfig: any;
+  settings: any;
 }) {
   const [formData, setFormData] = useState({
     name: product?.name || '',
@@ -292,10 +331,51 @@ function ProductModal({
     stock: product?.stock || 0,
     sku: product?.sku || '',
     categoryId: typeof product?.categoryId === 'object' && product.categoryId?._id ? product.categoryId._id : product?.categoryId || '',
-    productType: product?.productType || 'regular',
-    trackInventory: product?.trackInventory !== undefined ? product.trackInventory : true,
+    productType: product?.productType || (businessTypeConfig?.productTypes?.[0] || 'regular'),
+    trackInventory: product?.trackInventory !== undefined ? product.trackInventory : (businessTypeConfig?.defaultFeatures?.enableInventory ?? true),
     lowStockThreshold: product?.lowStockThreshold || 10,
+    // Restaurant-specific fields
+    modifiers: product?.modifiers || [],
+    allergens: product?.allergens || [],
+    nutritionInfo: product?.nutritionInfo || { calories: undefined, protein: undefined, carbs: undefined, fat: undefined },
+    // Laundry-specific fields
+    serviceType: product?.serviceType || 'wash',
+    weightBased: product?.weightBased || false,
+    pickupDelivery: product?.pickupDelivery || false,
+    estimatedDuration: product?.estimatedDuration || undefined,
+    // Service-specific fields
+    serviceDuration: product?.serviceDuration || undefined,
+    staffRequired: product?.staffRequired || 1,
+    equipmentRequired: product?.equipmentRequired || [],
   });
+
+  // Update formData when product or businessTypeConfig changes
+  useEffect(() => {
+    setFormData({
+      name: product?.name || '',
+      description: product?.description || '',
+      price: product?.price || 0,
+      stock: product?.stock || 0,
+      sku: product?.sku || '',
+      categoryId: typeof product?.categoryId === 'object' && product.categoryId?._id ? product.categoryId._id : product?.categoryId || '',
+      productType: product?.productType || (businessTypeConfig?.productTypes?.[0] || 'regular'),
+      trackInventory: product?.trackInventory !== undefined ? product.trackInventory : (businessTypeConfig?.defaultFeatures?.enableInventory ?? true),
+      lowStockThreshold: product?.lowStockThreshold || 10,
+      // Restaurant-specific fields
+      modifiers: product?.modifiers || [],
+      allergens: product?.allergens || [],
+      nutritionInfo: product?.nutritionInfo || { calories: undefined, protein: undefined, carbs: undefined, fat: undefined },
+      // Laundry-specific fields
+      serviceType: product?.serviceType || 'wash',
+      weightBased: product?.weightBased || false,
+      pickupDelivery: product?.pickupDelivery || false,
+      estimatedDuration: product?.estimatedDuration || undefined,
+      // Service-specific fields
+      serviceDuration: product?.serviceDuration || undefined,
+      staffRequired: product?.staffRequired || 1,
+      equipmentRequired: product?.equipmentRequired || [],
+    });
+  }, [product, businessTypeConfig]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [categorySearch, setCategorySearch] = useState('');
@@ -358,7 +438,7 @@ function ProductModal({
     try {
       const url = product ? `/api/products/${product._id}` : '/api/products';
       const method = product ? 'PUT' : 'POST';
-      const body = {
+      const body: any = {
         name: formData.name,
         description: formData.description || undefined,
         price: formData.price,
@@ -369,6 +449,40 @@ function ProductModal({
         trackInventory: formData.trackInventory,
         lowStockThreshold: formData.lowStockThreshold,
       };
+
+      // Add restaurant-specific fields
+      if (settings?.businessType?.toLowerCase() === 'restaurant') {
+        if (formData.allergens && formData.allergens.length > 0) {
+          body.allergens = formData.allergens;
+        }
+        if (formData.nutritionInfo && (formData.nutritionInfo.calories || formData.nutritionInfo.protein)) {
+          body.nutritionInfo = formData.nutritionInfo;
+        }
+        if (formData.modifiers && formData.modifiers.length > 0) {
+          body.modifiers = formData.modifiers;
+        }
+      }
+
+      // Add laundry-specific fields
+      if (settings?.businessType?.toLowerCase() === 'laundry') {
+        body.serviceType = formData.serviceType;
+        body.weightBased = formData.weightBased;
+        body.pickupDelivery = formData.pickupDelivery;
+        if (formData.estimatedDuration) {
+          body.estimatedDuration = formData.estimatedDuration;
+        }
+      }
+
+      // Add service-specific fields
+      if (settings?.businessType?.toLowerCase() === 'service') {
+        if (formData.serviceDuration) {
+          body.serviceDuration = formData.serviceDuration;
+        }
+        body.staffRequired = formData.staffRequired;
+        if (formData.equipmentRequired && formData.equipmentRequired.length > 0) {
+          body.equipmentRequired = formData.equipmentRequired;
+        }
+      }
 
       const res = await fetch(url, {
         method,
@@ -397,6 +511,21 @@ function ProductModal({
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
             {product ? (dict.admin?.editProduct || 'Edit Product') : (dict.admin?.addProduct || 'Add Product')}
           </h2>
+          {businessTypeConfig && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded">
+              <p className="text-sm text-blue-900">
+                <strong>Business Type:</strong> {businessTypeConfig.name}
+              </p>
+              <p className="text-xs text-blue-700 mt-1">
+                {businessTypeConfig.description}
+              </p>
+              {businessTypeConfig.requiredFields.length > 0 && (
+                <p className="text-xs text-blue-700 mt-1">
+                  <strong>Required fields:</strong> {businessTypeConfig.requiredFields.join(', ')}
+                </p>
+              )}
+            </div>
+          )}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -412,9 +541,12 @@ function ProductModal({
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">SKU</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  SKU {businessTypeConfig?.requiredFields?.includes('sku') && <span className="text-red-500">*</span>}
+                </label>
                 <input
                   type="text"
+                  required={businessTypeConfig?.requiredFields?.includes('sku')}
                   value={formData.sku}
                   onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
@@ -432,7 +564,7 @@ function ProductModal({
                 className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               />
             </div>
-            <div className="grid grid-cols-3 gap-4">
+            <div className={`grid gap-4 ${businessTypeConfig?.defaultFeatures?.enableInventory !== false ? 'grid-cols-3' : 'grid-cols-1'}`}>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   {dict.admin?.price || 'Price'} *
@@ -447,31 +579,35 @@ function ProductModal({
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.stock || 'Stock'}
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  value={formData.stock}
-                  onChange={(e) => setFormData({ ...formData, stock: parseInt(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
-                  disabled={!formData.trackInventory}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.lowStockThreshold || 'Low Stock Threshold'}
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  value={formData.lowStockThreshold}
-                  onChange={(e) => setFormData({ ...formData, lowStockThreshold: parseInt(e.target.value) || 10 })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
-                />
-              </div>
+              {businessTypeConfig?.defaultFeatures?.enableInventory !== false && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {dict.admin?.stock || 'Stock'}
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formData.stock}
+                    onChange={(e) => setFormData({ ...formData, stock: parseInt(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                    disabled={!formData.trackInventory}
+                  />
+                </div>
+              )}
+              {businessTypeConfig?.defaultFeatures?.enableInventory !== false && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {dict.admin?.lowStockThreshold || 'Low Stock Threshold'}
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formData.lowStockThreshold}
+                    onChange={(e) => setFormData({ ...formData, lowStockThreshold: parseInt(e.target.value) || 10 })}
+                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  />
+                </div>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="relative">
@@ -531,32 +667,202 @@ function ProductModal({
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.common?.type || 'Type'}
+                  {dict.common?.type || 'Type'} {businessTypeConfig && `(${businessTypeConfig.name})`}
                 </label>
                 <select
                   value={formData.productType}
                   onChange={(e) => setFormData({ ...formData, productType: e.target.value as any })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                 >
-                  <option value="regular">{dict.admin?.regular || 'Regular'}</option>
-                  <option value="bundle">{dict.admin?.bundle || 'Bundle'}</option>
-                  <option value="service">{dict.admin?.service || 'Service'}</option>
+                  {businessTypeConfig?.productTypes?.map((type: string) => (
+                    <option key={type} value={type}>
+                      {type === 'regular' ? (dict.admin?.regular || 'Regular') : 
+                       type === 'bundle' ? (dict.admin?.bundle || 'Bundle') : 
+                       (dict.admin?.service || 'Service')}
+                    </option>
+                  )) || (
+                    <>
+                      <option value="regular">{dict.admin?.regular || 'Regular'}</option>
+                      <option value="bundle">{dict.admin?.bundle || 'Bundle'}</option>
+                      <option value="service">{dict.admin?.service || 'Service'}</option>
+                    </>
+                  )}
                 </select>
+                {businessTypeConfig && businessTypeConfig.productTypes.length === 1 && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Only {businessTypeConfig.productTypes[0]} products are allowed for {businessTypeConfig.name}
+                  </p>
+                )}
               </div>
             </div>
-            <div>
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={formData.trackInventory}
-                  onChange={(e) => setFormData({ ...formData, trackInventory: e.target.checked })}
-                  className="mr-2"
-                />
-                <span className="text-sm font-medium text-gray-700">
-                  {dict.admin?.trackInventory || 'Track Inventory'}
-                </span>
-              </label>
-            </div>
+            {businessTypeConfig?.defaultFeatures?.enableInventory !== false && (
+              <div>
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={formData.trackInventory}
+                    onChange={(e) => setFormData({ ...formData, trackInventory: e.target.checked })}
+                    className="mr-2"
+                  />
+                  <span className="text-sm font-medium text-gray-700">
+                    {dict.admin?.trackInventory || 'Track Inventory'}
+                  </span>
+                </label>
+              </div>
+            )}
+
+            {/* Restaurant-specific fields */}
+            {settings?.businessType?.toLowerCase() === 'restaurant' && (
+              <div className="space-y-4 pt-4 border-t border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900">Restaurant Information</h3>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Allergens (comma-separated)</label>
+                  <input
+                    type="text"
+                    value={Array.isArray(formData.allergens) ? formData.allergens.join(', ') : formData.allergens || ''}
+                    onChange={(e) => {
+                      const allergens = e.target.value.split(',').map(a => a.trim()).filter(a => a);
+                      setFormData({ ...formData, allergens });
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                    placeholder="e.g., gluten, dairy, nuts"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Calories</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formData.nutritionInfo?.calories || ''}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        nutritionInfo: { ...formData.nutritionInfo, calories: parseInt(e.target.value) || undefined }
+                      })}
+                      className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Protein (g)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      value={formData.nutritionInfo?.protein || ''}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        nutritionInfo: { ...formData.nutritionInfo, protein: parseFloat(e.target.value) || undefined }
+                      })}
+                      className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Laundry-specific fields */}
+            {settings?.businessType?.toLowerCase() === 'laundry' && (
+              <div className="space-y-4 pt-4 border-t border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900">Laundry Service Information</h3>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Service Type</label>
+                  <select
+                    value={formData.serviceType}
+                    onChange={(e) => setFormData({ ...formData, serviceType: e.target.value as any })}
+                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    <option value="wash">Wash</option>
+                    <option value="dry-clean">Dry Clean</option>
+                    <option value="press">Press</option>
+                    <option value="repair">Repair</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={formData.weightBased}
+                        onChange={(e) => setFormData({ ...formData, weightBased: e.target.checked })}
+                        className="mr-2"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Weight-based pricing</span>
+                    </label>
+                  </div>
+                  <div>
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={formData.pickupDelivery}
+                        onChange={(e) => setFormData({ ...formData, pickupDelivery: e.target.checked })}
+                        className="mr-2"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Pickup & Delivery</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Estimated Duration (minutes)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formData.estimatedDuration || ''}
+                    onChange={(e) => setFormData({ ...formData, estimatedDuration: parseInt(e.target.value) || undefined })}
+                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Service-specific fields */}
+            {settings?.businessType?.toLowerCase() === 'service' && (
+              <div className="space-y-4 pt-4 border-t border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900">Service Information</h3>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Service Duration (minutes)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formData.serviceDuration || ''}
+                      onChange={(e) => setFormData({ ...formData, serviceDuration: parseInt(e.target.value) || undefined })}
+                      className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Staff Required</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={formData.staffRequired || 1}
+                      onChange={(e) => setFormData({ ...formData, staffRequired: parseInt(e.target.value) || 1 })}
+                      className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Equipment Required (comma-separated)</label>
+                  <input
+                    type="text"
+                    value={Array.isArray(formData.equipmentRequired) ? formData.equipmentRequired.join(', ') : formData.equipmentRequired || ''}
+                    onChange={(e) => {
+                      const equipment = e.target.value.split(',').map(e => e.trim()).filter(e => e);
+                      setFormData({ ...formData, equipmentRequired: equipment });
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                    placeholder="e.g., scissors, clippers, styling chair"
+                  />
+                </div>
+              </div>
+            )}
             {error && (
               <div className="bg-red-50 text-red-800 border border-red-300 p-3">
                 {error}

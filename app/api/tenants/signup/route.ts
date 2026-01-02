@@ -5,6 +5,7 @@ import User from '@/models/User';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { validateEmail, validatePassword, validateTenant } from '@/lib/validation';
 import { getValidationTranslator } from '@/lib/validation-translations';
+import { applyBusinessTypeDefaults } from '@/lib/business-types';
 
 /**
  * Public endpoint for tenant signup
@@ -21,6 +22,7 @@ export async function POST(request: NextRequest) {
       slug, 
       name, 
       companyName,
+      businessType,
       // Admin user info
       adminEmail,
       adminPassword,
@@ -101,14 +103,20 @@ export async function POST(request: NextRequest) {
 
     // Get default settings and customize
     const defaultSettings = getDefaultTenantSettings();
-    const settings = {
+    const baseSettings = {
       ...defaultSettings,
       currency: currency || defaultSettings.currency,
       language: (language === 'es' ? 'es' : 'en') as 'en' | 'es',
       ...(contactEmail && { email: contactEmail }),
       ...(phone && { phone }),
       ...(companyName && { companyName }),
+      ...(businessType && { businessType }),
     };
+
+    // Apply business type defaults if business type is provided
+    const settings = businessType 
+      ? applyBusinessTypeDefaults(baseSettings, businessType)
+      : baseSettings;
 
     // Create tenant
     const tenantData: any = {
