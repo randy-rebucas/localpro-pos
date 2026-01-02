@@ -810,7 +810,7 @@ export default function POSPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       <OfflineIndicator />
       <BarcodeScanner onScan={handleBarcodeScan} enabled={true} />
       {showQRScanner && (

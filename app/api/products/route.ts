@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateAndSanitize, validateProduct } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { getTenantSettingsById } from '@/lib/tenant';
+import { validateProductForBusiness, getDefaultProductSettings } from '@/lib/business-type-helpers';
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,7 +15,7 @@ export async function GET(request: NextRequest) {
     const tenantId = await getTenantIdFromRequest(request);
     
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: 'Tenant not found or access denied' }, { status: 403 });
     }
     
     const searchParams = request.nextUrl.searchParams;
@@ -51,11 +53,19 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
-    await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
-    
-    if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+    // SECURITY: Validate tenant access for authenticated requests
+    let tenantId: string;
+    try {
+      const tenantAccess = await requireTenantAccess(request);
+      tenantId = tenantAccess.tenantId;
+    } catch (authError: any) {
+      if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
+        return NextResponse.json(
+          { success: false, error: authError.message },
+          { status: authError.message.includes('Unauthorized') ? 401 : 403 }
+        );
+      }
+      throw authError;
     }
     
     const body = await request.json();
@@ -67,6 +77,30 @@ export async function POST(request: NextRequest) {
         { success: false, errors },
         { status: 400 }
       );
+    }
+
+    // Get tenant settings for business type validation
+    const tenantSettings = await getTenantSettingsById(tenantId);
+    if (tenantSettings) {
+      // Validate product against business type
+      const businessValidation = validateProductForBusiness(data, tenantSettings);
+      if (!businessValidation.valid) {
+        return NextResponse.json(
+          {
+            success: false,
+            errors: businessValidation.errors.map(error => ({
+              field: 'businessType',
+              message: error,
+              code: 'businessTypeValidation',
+            })),
+          },
+          { status: 400 }
+        );
+      }
+
+      // Apply default product settings based on business type
+      const defaultSettings = getDefaultProductSettings(tenantSettings);
+      Object.assign(data, defaultSettings, data); // Defaults first, then user data
     }
 
     const product = await Product.create({ ...data, tenantId });

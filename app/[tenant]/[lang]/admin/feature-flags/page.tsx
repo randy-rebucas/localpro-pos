@@ -6,6 +6,9 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { ITenantSettings } from '@/models/Tenant';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { getBusinessTypeConfig } from '@/lib/business-types';
+import { getBusinessType } from '@/lib/business-type-helpers';
 
 export default function FeatureFlagsPage() {
   const params = useParams();
@@ -16,6 +19,8 @@ export default function FeatureFlagsPage() {
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState<ITenantSettings | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const { settings: tenantSettings } = useTenantSettings();
+  const businessTypeConfig = tenantSettings ? getBusinessTypeConfig(getBusinessType(tenantSettings)) : null;
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -166,6 +171,27 @@ export default function FeatureFlagsPage() {
             }`}
           >
             {message.text}
+          </div>
+        )}
+
+        {businessTypeConfig && (
+          <div className="mb-6 p-4 bg-blue-50 border-2 border-blue-300">
+            <div className="flex items-start gap-3">
+              <svg className="w-6 h-6 flex-shrink-0 mt-0.5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div>
+                <h3 className="text-lg font-semibold text-blue-900 mb-2">
+                  Current Business Type: {businessTypeConfig.name}
+                </h3>
+                <p className="text-blue-800 mb-2">
+                  {businessTypeConfig.description}
+                </p>
+                <p className="text-sm text-blue-700">
+                  Default features for this business type are auto-configured. You can override them below.
+                </p>
+              </div>
+            </div>
           </div>
         )}
 

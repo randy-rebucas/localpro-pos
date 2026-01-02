@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Discount from '@/models/Discount';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
 import { requireAuth, requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -9,13 +9,22 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
-    await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
-    const t = await getValidationTranslatorFromRequest(request);
-    
-    if (!tenantId) {
-      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
+    // SECURITY: Validate tenant access for authenticated requests
+    let tenantId: string;
+    try {
+      const tenantAccess = await requireTenantAccess(request);
+      tenantId = tenantAccess.tenantId;
+    } catch (authError: any) {
+      const t = await getValidationTranslatorFromRequest(request);
+      if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
+        return NextResponse.json(
+          { success: false, error: authError.message },
+          { status: authError.message.includes('Unauthorized') ? 401 : 403 }
+        );
+      }
+      throw authError;
     }
+    const t = await getValidationTranslatorFromRequest(request);
     
     const searchParams = request.nextUrl.searchParams;
     const code = searchParams.get('code');
@@ -44,13 +53,24 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
-    await requireRole(request, ['admin', 'manager']);
-    const tenantId = await getTenantIdFromRequest(request);
-    const t = await getValidationTranslatorFromRequest(request);
-    
-    if (!tenantId) {
-      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
+    // SECURITY: Validate tenant access for authenticated requests
+    let tenantId: string;
+    try {
+      const tenantAccess = await requireTenantAccess(request);
+      tenantId = tenantAccess.tenantId;
+      // Also check role
+      await requireRole(request, ['admin', 'manager']);
+    } catch (authError: any) {
+      const t = await getValidationTranslatorFromRequest(request);
+      if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
+        return NextResponse.json(
+          { success: false, error: authError.message },
+          { status: authError.message.includes('Unauthorized') ? 401 : 403 }
+        );
+      }
+      throw authError;
     }
+    const t = await getValidationTranslatorFromRequest(request);
     
     const body = await request.json();
     const {

@@ -55,7 +55,7 @@ export default class ErrorBoundary extends Component<Props, State> {
       }
 
       return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-12">
+        <div className="min-h-screen flex items-center justify-center px-4 py-12">
           <div className="max-w-md w-full bg-white border-2 border-red-300 p-6 sm:p-8 text-center">
             <div className="mb-6">
               <svg

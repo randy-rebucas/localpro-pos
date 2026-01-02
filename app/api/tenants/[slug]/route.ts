@@ -5,6 +5,7 @@ import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { applyBusinessTypeDefaults } from '@/lib/business-types';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
@@ -63,7 +64,19 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
     
     if (settings !== undefined) {
-      updateData.settings = { ...oldTenant.settings, ...settings };
+      // Check if business type is being changed
+      const currentBusinessType = oldTenant.settings?.businessType;
+      const newBusinessType = settings.businessType;
+      
+      // Merge settings first
+      let mergedSettings = { ...oldTenant.settings, ...settings };
+      
+      // Apply business type defaults if business type is being set or changed
+      if (newBusinessType && newBusinessType !== currentBusinessType) {
+        mergedSettings = applyBusinessTypeDefaults(mergedSettings, newBusinessType);
+      }
+      
+      updateData.settings = mergedSettings;
     }
 
     const tenant = await Tenant.findOneAndUpdate(

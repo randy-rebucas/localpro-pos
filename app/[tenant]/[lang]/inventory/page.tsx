@@ -7,6 +7,9 @@ import PageTitle from '@/components/PageTitle';
 import LowStockAlerts from '@/components/LowStockAlerts';
 import RealTimeStockTracker from '@/components/RealTimeStockTracker';
 import { getDictionaryClient } from '../dictionaries-client';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { getBusinessTypeConfig } from '@/lib/business-types';
+import { getBusinessType, supportsFeature } from '@/lib/business-type-helpers';
 
 interface Branch {
   _id: string;
@@ -18,10 +21,14 @@ export default function InventoryPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
+  const { settings } = useTenantSettings();
   const [dict, setDict] = useState<any>(null);
   const [selectedBranch, setSelectedBranch] = useState<string>('');
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  const inventoryEnabled = supportsFeature(settings ?? undefined, 'inventory');
+  const businessTypeConfig = settings ? getBusinessTypeConfig(getBusinessType(settings)) : null;
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -57,6 +64,42 @@ export default function InventoryPage() {
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If inventory is not enabled for this business type, show message
+  if (!inventoryEnabled) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navbar />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="mb-6">
+            <PageTitle />
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-4">
+              {dict?.inventory?.title || 'Inventory Management'}
+            </h1>
+          </div>
+          <div className="bg-yellow-50 border-2 border-yellow-300 p-6 rounded-lg">
+            <div className="flex items-start gap-3">
+              <svg className="w-6 h-6 text-yellow-600 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <div>
+                <h3 className="text-lg font-semibold text-yellow-900 mb-2">
+                  Inventory Management Not Available
+                </h3>
+                <p className="text-yellow-800">
+                  Inventory management is not enabled for {businessTypeConfig?.name || 'your business type'}. 
+                  This feature is typically used for retail businesses that need to track physical stock.
+                </p>
+                <p className="text-sm text-yellow-700 mt-2">
+                  If you need inventory management, please update your business type in Settings.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );

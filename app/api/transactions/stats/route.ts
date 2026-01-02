@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Transaction from '@/models/Transaction';
 import Expense from '@/models/Expense';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { getTenantIdFromRequest, TenantAccessViolationError, handleTenantAccessViolation } from '@/lib/api-tenant';
 import mongoose from 'mongoose';
 
 export async function GET(request: NextRequest) {
@@ -157,6 +157,10 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ success: true, data: result });
   } catch (error: any) {
+    // Handle tenant access violations with redirect
+    if (error instanceof TenantAccessViolationError) {
+      return handleTenantAccessViolation(error, request);
+    }
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

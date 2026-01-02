@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateAndSanitize, validateProduct } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { handleApiError } from '@/lib/error-handler';
+import { getTenantSettingsById } from '@/lib/tenant';
+import { validateProductForBusiness } from '@/lib/business-type-helpers';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -15,7 +17,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { id } = await params;
     
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: 'Tenant not found or access denied' }, { status: 403 });
     }
     
     const product = await Product.findOne({ _id: id, tenantId }).lean();
@@ -40,13 +42,21 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await connectDB();
-    await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
-    const { id } = await params;
-    
-    if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+    // SECURITY: Validate tenant access for authenticated requests
+    let tenantId: string;
+    try {
+      const tenantAccess = await requireTenantAccess(request);
+      tenantId = tenantAccess.tenantId;
+    } catch (authError: any) {
+      if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
+        return NextResponse.json(
+          { success: false, error: authError.message },
+          { status: authError.message.includes('Unauthorized') ? 401 : 403 }
+        );
+      }
+      throw authError;
     }
+    const { id } = await params;
     
     const body = await request.json();
     const t = await getValidationTranslatorFromRequest(request);
@@ -57,6 +67,30 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         { success: false, errors },
         { status: 400 }
       );
+    }
+
+    // Get tenant settings for business type validation
+    const tenantSettings = await getTenantSettingsById(tenantId);
+    if (tenantSettings) {
+      // Merge with existing product data for validation
+      const oldProduct = await Product.findOne({ _id: id, tenantId }).lean();
+      if (oldProduct) {
+        const mergedData = { ...oldProduct, ...data };
+        const businessValidation = validateProductForBusiness(mergedData, tenantSettings);
+        if (!businessValidation.valid) {
+          return NextResponse.json(
+            {
+              success: false,
+              errors: businessValidation.errors.map(error => ({
+                field: 'businessType',
+                message: error,
+                code: 'businessTypeValidation',
+              })),
+            },
+            { status: 400 }
+          );
+        }
+      }
     }
 
     const oldProduct = await Product.findOne({ _id: id, tenantId }).lean();
@@ -101,13 +135,21 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await connectDB();
-    await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
-    const { id } = await params;
-    
-    if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+    // SECURITY: Validate tenant access for authenticated requests
+    let tenantId: string;
+    try {
+      const tenantAccess = await requireTenantAccess(request);
+      tenantId = tenantAccess.tenantId;
+    } catch (authError: any) {
+      if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
+        return NextResponse.json(
+          { success: false, error: authError.message },
+          { status: authError.message.includes('Unauthorized') ? 401 : 403 }
+        );
+      }
+      throw authError;
     }
+    const { id } = await params;
     
     const product = await Product.findOneAndDelete({ _id: id, tenantId });
     

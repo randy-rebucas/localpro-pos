@@ -2,6 +2,20 @@
 
 A comprehensive, enterprise-grade Point of Sale (POS) system built with Next.js 16, MongoDB, Mongoose, and Tailwind CSS. Features multi-tenant architecture, real-time inventory management, advanced reporting, and extensive customization options.
 
+## 🤖 Automations
+
+The system includes **7 automated workflows** to reduce manual work:
+
+- ✅ **Automated Booking Reminders** - Sends reminders 24h before bookings
+- ✅ **Low Stock Alerts** - Email/SMS notifications when products run low
+- ✅ **Transaction Receipt Auto-Email** - Automatically emails receipts
+- ✅ **Scheduled Reports** - Daily/weekly/monthly sales reports
+- ✅ **Discount Management** - Auto-activate/deactivate discounts
+- ✅ **Auto Clock-Out** - Clocks out forgotten attendance sessions
+- ✅ **Cash Drawer Auto-Close** - Closes drawers at end of day
+
+See [AUTOMATION_QUICK_START.md](./AUTOMATION_QUICK_START.md) for setup instructions.
+
 ## 🚀 Features
 
 ### Core POS Features
@@ -93,6 +107,42 @@ A comprehensive, enterprise-grade Point of Sale (POS) system built with Next.js 
   - Timezone configuration
   - Receipt customization
   - Tax configuration (VAT/GST/Sales Tax)
+
+### Standard POS Architecture
+
+This system follows a **Universal POS Architecture Baseline** that ensures all businesses—laundry, retail, food, services—conform to a common base schema while allowing industry-specific customizations.
+
+**Universal POS Objects**:
+- ✅ **Business Profile** - Core business identity and configuration
+- ✅ **Outlet / Branch** - Physical or logical locations
+- ✅ **Products / Services** - Items or services sold
+- ✅ **Pricing Rules** - Discounts, promotions, and tax rules
+- ✅ **Orders / Tickets** - Sales transactions
+- ✅ **Payments** - Payment processing and tracking
+- ✅ **Invoices / Receipts** - Official transaction documents
+- ✅ **Staff & Roles** - User accounts and permissions
+- ✅ **Reports & Logs** - Audit trails and business intelligence
+
+📖 **Documentation**: See [`STANDARD_POS_ARCHITECTURE.md`](./STANDARD_POS_ARCHITECTURE.md) for the complete architecture specification and [`docs/STANDARD_POS_MAPPING.md`](./docs/STANDARD_POS_MAPPING.md) for implementation mapping.
+
+### Multi-Business Type Support
+
+The system supports multiple business types with industry-specific configurations while maintaining consistency:
+
+**Supported Business Types**:
+- 🏪 **Retail** - Product-focused with inventory management, SKU tracking, variations
+- 🍕 **Restaurant** - Menu items with modifiers, allergens, nutrition info, table management
+- 👔 **Laundry** - Service-based with weight pricing, pickup/delivery, duration tracking
+- 💼 **Service** - Time-based services with staff assignment, equipment requirements
+- 🔧 **General** - Flexible configuration for any business type
+
+**Features**:
+- Automatic feature configuration based on business type
+- Industry-specific product fields (modifiers, allergens, service duration, etc.)
+- Business type validation and helpers
+- Consistent base schema across all types
+
+📖 **Documentation**: See [`docs/BUSINESS_TYPES.md`](./docs/BUSINESS_TYPES.md) for business type configuration and examples.
 
 ### User Management & Authentication
 
@@ -680,11 +730,11 @@ See [PRODUCTION_README.md](./PRODUCTION_README.md) for detailed production deplo
 
 ### System Documentation
 
+- **[FEATURES.md](./FEATURES.md)** - Complete features documentation (100+ features)
 - [PRODUCTION_README.md](./PRODUCTION_README.md) - Production deployment guide
 - [MULTI_TENANT.md](./MULTI_TENANT.md) - Multi-tenant architecture details
+- [BOOKING_SCHEDULING.md](./BOOKING_SCHEDULING.md) - Booking and scheduling system
 - [INVENTORY_MANAGEMENT.md](./INVENTORY_MANAGEMENT.md) - Inventory management features
-- [TENANT_SETTINGS.md](./TENANT_SETTINGS.md) - Tenant settings and branding
-- [ENTERPRISE_FEATURES.md](./ENTERPRISE_FEATURES.md) - Enterprise features summary
 
 ## 🔒 Security Features
 
@@ -738,21 +788,41 @@ For issues or questions:
 
 ## 🎯 Feature Summary
 
-This POS system includes **50+ enterprise features** covering:
-- ✅ Complete POS functionality
-- ✅ Advanced inventory management
-- ✅ Multi-tenant architecture
-- ✅ Comprehensive reporting
-- ✅ User management with RBAC
-- ✅ Discount/promo system
-- ✅ Attendance tracking
-- ✅ Cash drawer management
-- ✅ Expense tracking
-- ✅ Hardware integration
-- ✅ Offline support
-- ✅ Internationalization
-- ✅ Security & audit logging
+This POS system includes **100+ enterprise features** covering:
+
+**Core Features:**
+- ✅ Complete POS functionality with multiple payment methods
+- ✅ Advanced inventory management with real-time updates
+- ✅ Multi-tenant architecture with complete data isolation
+- ✅ Multi-business type support (Retail, Restaurant, Laundry, Service, General)
+- ✅ Comprehensive reporting and analytics (Sales, Products, Financial, Tax, Cash Drawer)
+- ✅ User management with Role-Based Access Control (RBAC)
+- ✅ Customer management with lifetime value tracking
+- ✅ Discount and promo code system
+- ✅ Advanced tax rules management
+- ✅ Booking and scheduling system
+- ✅ Multi-currency support with exchange rates
+
+**Operations:**
+- ✅ Attendance tracking with GPS location
+- ✅ Cash drawer management with auto-close
+- ✅ Expense tracking by category
+- ✅ Branch management with multi-location support
+- ✅ Product bundles with analytics
+- ✅ Saved carts for customers
+- ✅ Stock movements with full audit trail
+
+**System Features:**
+- ✅ Hardware integration (Barcode scanners, QR codes, Receipt printers)
+- ✅ Offline support with automatic sync
+- ✅ Internationalization (English, Spanish, extensible)
+- ✅ Security & comprehensive audit logging
+- ✅ 30+ automated workflows
+- ✅ Receipt and notification templates
+- ✅ Business hours and holiday management
 - ✅ And much more!
+
+📖 **For complete feature documentation, see [FEATURES.md](./FEATURES.md)**
 
 ---
 

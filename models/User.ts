@@ -7,6 +7,7 @@ export interface IUser extends Document {
   name: string;
   role: 'owner' | 'admin' | 'manager' | 'cashier' | 'viewer';
   tenantId: mongoose.Types.ObjectId;
+  branchId?: mongoose.Types.ObjectId; // Branch assignment (optional)
   isActive: boolean;
   lastLogin?: Date;
   pin?: string; // Hashed PIN for quick login
@@ -61,6 +62,11 @@ const UserSchema: Schema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'Tenant',
       required: [true, 'Tenant is required'],
+      index: true,
+    },
+    branchId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Branch',
       index: true,
     },
     isActive: {
@@ -129,6 +135,8 @@ UserSchema.index({ tenantId: 1, email: 1 }, { unique: true });
 
 // Index for tenant and role queries
 UserSchema.index({ tenantId: 1, role: 1, isActive: 1 });
+// Index for branch assignment queries
+UserSchema.index({ tenantId: 1, branchId: 1, isActive: 1 });
 
 const User: Model<IUser> = mongoose.models.User || mongoose.model<IUser>('User', UserSchema);
 

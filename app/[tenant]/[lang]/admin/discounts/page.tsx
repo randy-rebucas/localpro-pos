@@ -7,6 +7,9 @@ import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 import Currency from '@/components/Currency';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { supportsFeature } from '@/lib/business-type-helpers';
+import { getBusinessTypeConfig } from '@/lib/business-types';
+import { getBusinessType } from '@/lib/business-type-helpers';
 
 interface Discount {
   _id: string;
@@ -37,6 +40,8 @@ export default function DiscountsPage() {
   const [showDiscountModal, setShowDiscountModal] = useState(false);
   const [editingDiscount, setEditingDiscount] = useState<Discount | null>(null);
   const { settings } = useTenantSettings();
+  const discountsEnabled = supportsFeature(settings ?? undefined, 'discounts');
+  const businessTypeConfig = settings ? getBusinessTypeConfig(getBusinessType(settings)) : null;
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -146,18 +151,42 @@ export default function DiscountsPage() {
           </div>
         )}
 
+        {!discountsEnabled && (
+          <div className="mb-6 p-4 bg-yellow-50 border-2 border-yellow-300 text-yellow-800">
+            <div className="flex items-start gap-3">
+              <svg className="w-6 h-6 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <div>
+                <h3 className="text-lg font-semibold text-yellow-900 mb-2">
+                  Discounts Not Available
+                </h3>
+                <p className="text-yellow-800">
+                  Discounts are not enabled for {businessTypeConfig?.name || 'your business type'}. 
+                  This feature is typically used for retail and restaurant businesses.
+                </p>
+                <p className="text-sm text-yellow-700 mt-2">
+                  If you need discounts, please enable it in Settings → Business or update your business type.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="bg-white border border-gray-300 p-6">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold text-gray-900">{dict.admin?.discounts || 'Discounts'}</h2>
-            <button
-              onClick={() => {
-                setEditingDiscount(null);
-                setShowDiscountModal(true);
-              }}
-              className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
-            >
-              {dict.common?.add || 'Add'} {dict.admin?.discount || 'Discount'}
-            </button>
+            {discountsEnabled && (
+              <button
+                onClick={() => {
+                  setEditingDiscount(null);
+                  setShowDiscountModal(true);
+                }}
+                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
+              >
+                {dict.common?.add || 'Add'} {dict.admin?.discount || 'Discount'}
+              </button>
+            )}
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -250,7 +279,7 @@ export default function DiscountsPage() {
           </div>
         </div>
 
-        {showDiscountModal && (
+        {showDiscountModal && discountsEnabled && (
           <DiscountModal
             discount={editingDiscount}
             onClose={() => {

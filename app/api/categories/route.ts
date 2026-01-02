@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Category from '@/models/Category';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateAndSanitize, validateCategory } from '@/lib/validation';
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     const tenantId = await getTenantIdFromRequest(request);
     
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: 'Tenant not found or access denied' }, { status: 403 });
     }
 
     const categories = await Category.find({ tenantId })
@@ -29,11 +29,19 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
-    await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
-    
-    if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+    // SECURITY: Validate tenant access for authenticated requests
+    let tenantId: string;
+    try {
+      const tenantAccess = await requireTenantAccess(request);
+      tenantId = tenantAccess.tenantId;
+    } catch (authError: any) {
+      if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
+        return NextResponse.json(
+          { success: false, error: authError.message },
+          { status: authError.message.includes('Unauthorized') ? 401 : 403 }
+        );
+      }
+      throw authError;
     }
 
     const body = await request.json();
