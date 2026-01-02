@@ -1,0 +1,4527 @@
+{
+  "productbundles": [
+    {
+      "_id": "69561bb4b7ce021f78f4624e",
+      "tenantId": "6954e570f6485146f828c457",
+      "name": "Test Bundle",
+      "description": "dfs",
+      "price": 800,
+      "items": [
+        {
+          "productId": "69561b6fb7ce021f78f46155",
+          "productName": "Test Product",
+          "quantity": 1,
+          "_id": "69561bb4b7ce021f78f4624f"
+        },
+        {
+          "productId": "69561b91b7ce021f78f461d4",
+          "productName": "Comforter",
+          "quantity": 1,
+          "_id": "69561bb4b7ce021f78f46250"
+        }
+      ],
+      "sku": "432423",
+      "categoryId": "695619e2b7ce021f78f45c9c",
+      "trackInventory": true,
+      "isActive": true,
+      "createdAt": "2026-01-01T07:01:08.833Z",
+      "updatedAt": "2026-01-01T07:01:08.833Z",
+      "__v": 0
+    },
+    {
+      "_id": "69561d5eb7ce021f78f4673e",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "name": "Bundle 1",
+      "description": "fsdf",
+      "price": 40,
+      "items": [
+        {
+          "productId": "69561ce2b7ce021f78f46583",
+          "productName": "Shorts",
+          "quantity": 1,
+          "_id": "69561d5eb7ce021f78f4673f"
+        }
+      ],
+      "sku": "423423",
+      "categoryId": "69561d0ab7ce021f78f46619",
+      "trackInventory": true,
+      "isActive": false,
+      "createdAt": "2026-01-01T07:08:14.653Z",
+      "updatedAt": "2026-01-01T19:48:15.420Z",
+      "__v": 0
+    }
+  ],
+  "categories": [
+    {
+      "_id": "695619e2b7ce021f78f45c9c",
+      "name": "Pants",
+      "description": "",
+      "tenantId": "6954e570f6485146f828c457",
+      "isActive": true,
+      "createdAt": "2026-01-01T06:53:22.482Z",
+      "updatedAt": "2026-01-01T06:53:56.597Z",
+      "__v": 0
+    },
+    {
+      "_id": "695619f0b7ce021f78f45cca",
+      "name": "T-Shirt",
+      "tenantId": "6954e570f6485146f828c457",
+      "isActive": true,
+      "createdAt": "2026-01-01T06:53:36.798Z",
+      "updatedAt": "2026-01-01T06:53:36.798Z",
+      "__v": 0
+    },
+    {
+      "_id": "69561d0ab7ce021f78f46619",
+      "name": "Comforter",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "isActive": true,
+      "createdAt": "2026-01-01T07:06:50.554Z",
+      "updatedAt": "2026-01-01T07:06:50.554Z",
+      "__v": 0
+    },
+    {
+      "_id": "69561d14b7ce021f78f4663b",
+      "name": "T-Shirt",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "isActive": true,
+      "createdAt": "2026-01-01T07:07:00.945Z",
+      "updatedAt": "2026-01-01T07:07:00.945Z",
+      "__v": 0
+    },
+    {
+      "_id": "69561d1ab7ce021f78f4664f",
+      "name": "Pants",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "isActive": true,
+      "createdAt": "2026-01-01T07:07:06.244Z",
+      "updatedAt": "2026-01-01T07:07:06.244Z",
+      "__v": 0
+    },
+    {
+      "_id": "69561d28b7ce021f78f4667f",
+      "name": "Shorts",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "isActive": true,
+      "createdAt": "2026-01-01T07:07:20.940Z",
+      "updatedAt": "2026-01-01T07:07:20.940Z",
+      "__v": 0
+    }
+  ],
+  "tenants": [
+    {
+      "_id": "6954e570f6485146f828c457",
+      "slug": "default",
+      "name": "Default Store",
+      "settings": {
+        "currency": "USD",
+        "timezone": "UTC",
+        "language": "en",
+        "primaryColor": "#2563eb",
+        "currencyPosition": "before",
+        "dateFormat": "MM/DD/YYYY",
+        "timeFormat": "12h",
+        "numberFormat": {
+          "decimalSeparator": ".",
+          "thousandsSeparator": ",",
+          "decimalPlaces": 2
+        },
+        "receiptShowLogo": true,
+        "receiptShowAddress": true,
+        "receiptShowPhone": false,
+        "receiptShowEmail": false,
+        "taxEnabled": false,
+        "taxRate": 0,
+        "taxLabel": "Tax",
+        "lowStockThreshold": 10,
+        "lowStockAlert": true,
+        "emailNotifications": false,
+        "smsNotifications": false,
+        "enableInventory": true,
+        "enableCategories": true,
+        "enableDiscounts": false,
+        "enableLoyaltyProgram": false,
+        "enableCustomerManagement": false,
+        "enableBookingScheduling": false
+      },
+      "isActive": true,
+      "createdAt": "2025-12-31T08:57:20.824Z",
+      "updatedAt": "2025-12-31T08:57:20.824Z",
+      "__v": 0
+    },
+    {
+      "_id": "6954e5f950505d7af7f38f02",
+      "slug": "jelave",
+      "name": "Jelave Laundry",
+      "settings": {
+        "currency": "PHP",
+        "currencyPosition": "before",
+        "dateFormat": "MM/DD/YYYY",
+        "timeFormat": "12h",
+        "timezone": "UTC",
+        "language": "en",
+        "numberFormat": {
+          "decimalSeparator": ".",
+          "thousandsSeparator": ",",
+          "decimalPlaces": 2
+        },
+        "primaryColor": "#155dfc",
+        "receiptShowLogo": true,
+        "receiptShowAddress": true,
+        "receiptShowPhone": false,
+        "receiptShowEmail": false,
+        "taxEnabled": false,
+        "taxRate": 0,
+        "taxLabel": "Tax",
+        "lowStockThreshold": 10,
+        "lowStockAlert": true,
+        "emailNotifications": true,
+        "smsNotifications": true,
+        "attendanceNotifications": {
+          "enabled": true,
+          "expectedStartTime": "09:00",
+          "maxHoursWithoutClockOut": 12
+        },
+        "enableInventory": true,
+        "enableCategories": true,
+        "enableDiscounts": false,
+        "enableLoyaltyProgram": false,
+        "enableCustomerManagement": false,
+        "enableBookingScheduling": false,
+        "multiCurrency": {
+          "enabled": false,
+          "displayCurrencies": [],
+          "exchangeRates": {},
+          "exchangeRateSource": "api",
+          "exchangeRateApiKey": "4f15d085a0f8a7a6fe05e1b0e0a29de9"
+        },
+        "receiptTemplates": {
+          "templates": []
+        },
+        "notificationTemplates": {
+          "email": {},
+          "sms": {}
+        },
+        "advancedBranding": {
+          "customTheme": {},
+          "fontSource": "system",
+          "theme": "light",
+          "borderRadius": "md"
+        },
+        "taxRules": [],
+        "businessHours": {
+          "timezone": "UTC",
+          "schedule": {
+            "monday": {
+              "enabled": true,
+              "breaks": [],
+              "_id": "695675088a2bb0b9a94dc9c7"
+            },
+            "tuesday": {
+              "enabled": true,
+              "breaks": [],
+              "_id": "695675088a2bb0b9a94dc9c8"
+            },
+            "wednesday": {
+              "enabled": true,
+              "breaks": [],
+              "_id": "695675088a2bb0b9a94dc9c9"
+            },
+            "thursday": {
+              "enabled": true,
+              "breaks": [],
+              "_id": "695675088a2bb0b9a94dc9ca"
+            },
+            "friday": {
+              "enabled": true,
+              "breaks": [],
+              "_id": "695675088a2bb0b9a94dc9cb"
+            },
+            "saturday": {
+              "enabled": true,
+              "breaks": [],
+              "_id": "695675088a2bb0b9a94dc9cc"
+            }
+          },
+          "specialHours": []
+        },
+        "holidays": [
+          {
+            "id": "holiday_1767296983216",
+            "name": "Test",
+            "date": "2026-04-05",
+            "type": "single",
+            "isBusinessClosed": true,
+            "createdAt": "2026-01-01T19:49:43.216Z",
+            "_id": "6956cfd78a2bb0b9a94de529"
+          }
+        ],
+        "hardwareConfig": {
+          "printer": {},
+          "barcodeScanner": {},
+          "qrReader": {},
+          "cashDrawer": {},
+          "touchscreen": {}
+        },
+        "address": {
+          "street": "A. Bonifacio St",
+          "city": "Baybay City",
+          "state": "PH",
+          "zipCode": "6521",
+          "country": "Philippines"
+        },
+        "email": "jelave2023@gmail.com",
+        "phone": "+639154585455",
+        "businessType": "laundry",
+        "companyName": "Jelave",
+        "receiptFooter": "https://linktomobileapp.com",
+        "registrationNumber": "123456789"
+      },
+      "isActive": true,
+      "createdAt": "2025-12-31T08:59:37.544Z",
+      "updatedAt": "2026-01-01T19:49:43.218Z",
+      "__v": 4
+    },
+    {
+      "_id": "695745c0a228fed788b0d8fb",
+      "slug": "gsmhub",
+      "name": "GSMHUB",
+      "settings": {
+        "currency": "PHP",
+        "currencyPosition": "before",
+        "dateFormat": "MM/DD/YYYY",
+        "timeFormat": "12h",
+        "timezone": "UTC",
+        "language": "en",
+        "numberFormat": {
+          "decimalSeparator": ".",
+          "thousandsSeparator": ",",
+          "decimalPlaces": 2
+        },
+        "primaryColor": "#2563eb",
+        "email": "admin@localpro.asia",
+        "phone": "+639154585455",
+        "receiptShowLogo": true,
+        "receiptShowAddress": true,
+        "receiptShowPhone": false,
+        "receiptShowEmail": false,
+        "taxEnabled": false,
+        "taxRate": 0,
+        "taxLabel": "Tax",
+        "businessType": "retail",
+        "lowStockThreshold": 10,
+        "lowStockAlert": true,
+        "emailNotifications": false,
+        "smsNotifications": false,
+        "attendanceNotifications": {
+          "enabled": true,
+          "expectedStartTime": "09:00",
+          "maxHoursWithoutClockOut": 12
+        },
+        "enableInventory": true,
+        "enableCategories": true,
+        "enableDiscounts": false,
+        "enableLoyaltyProgram": false,
+        "enableCustomerManagement": false,
+        "enableBookingScheduling": false,
+        "multiCurrency": {
+          "enabled": false,
+          "displayCurrencies": [],
+          "exchangeRates": {},
+          "exchangeRateSource": "manual"
+        },
+        "receiptTemplates": {
+          "templates": []
+        },
+        "advancedBranding": {
+          "fontSource": "system",
+          "theme": "light",
+          "borderRadius": "md"
+        },
+        "taxRules": [],
+        "businessHours": {
+          "schedule": {},
+          "specialHours": []
+        },
+        "holidays": []
+      },
+      "isActive": true,
+      "createdAt": "2026-01-02T04:12:48.907Z",
+      "updatedAt": "2026-01-02T04:12:48.907Z",
+      "__v": 0
+    }
+  ],
+  "stockmovements": [
+    {
+      "_id": "695504dd50505d7af7f391cc",
+      "productId": "6954edd650505d7af7f38ffd",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "type": "sale",
+      "quantity": -1,
+      "previousStock": 1,
+      "newStock": 0,
+      "reason": "Transaction sale",
+      "userId": "6954e5f950505d7af7f38f04",
+      "createdAt": "2025-12-31T11:11:25.240Z",
+      "updatedAt": "2025-12-31T11:11:25.953Z",
+      "__v": 0,
+      "transactionId": "695504dd50505d7af7f391cf"
+    },
+    {
+      "_id": "6955057250505d7af7f39236",
+      "productId": "6954edd650505d7af7f38ffd",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "type": "purchase",
+      "quantity": 10,
+      "previousStock": 0,
+      "newStock": 10,
+      "reason": "Stock refill",
+      "userId": "6954e5f950505d7af7f38f04",
+      "createdAt": "2025-12-31T11:13:54.018Z",
+      "updatedAt": "2025-12-31T11:13:54.018Z",
+      "__v": 0
+    },
+    {
+      "_id": "6955ee5fb7ce021f78f41712",
+      "productId": "69550a6550505d7af7f39650",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "type": "purchase",
+      "quantity": 10,
+      "previousStock": 0,
+      "newStock": 10,
+      "reason": "Stock refill",
+      "userId": "6954e5f950505d7af7f38f04",
+      "createdAt": "2026-01-01T03:47:43.880Z",
+      "updatedAt": "2026-01-01T03:47:43.880Z",
+      "__v": 0
+    },
+    {
+      "_id": "6955ee71b7ce021f78f41726",
+      "productId": "69550a6550505d7af7f39650",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "type": "sale",
+      "quantity": -1,
+      "previousStock": 10,
+      "newStock": 9,
+      "reason": "Transaction sale",
+      "userId": "6954e5f950505d7af7f38f04",
+      "createdAt": "2026-01-01T03:48:01.946Z",
+      "updatedAt": "2026-01-01T03:48:02.741Z",
+      "__v": 0,
+      "transactionId": "6955ee72b7ce021f78f41729"
+    },
+    {
+      "_id": "6955eeb1b7ce021f78f4173a",
+      "productId": "69550a6550505d7af7f39650",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "type": "sale",
+      "quantity": -1,
+      "previousStock": 9,
+      "newStock": 8,
+      "reason": "Transaction sale",
+      "userId": "6954e5f950505d7af7f38f04",
+      "createdAt": "2026-01-01T03:49:05.103Z",
+      "updatedAt": "2026-01-01T03:49:06.312Z",
+      "__v": 0,
+      "transactionId": "6955eeb1b7ce021f78f4173d"
+    },
+    {
+      "_id": "6955eeb5b7ce021f78f4174a",
+      "productId": "69550a6550505d7af7f39650",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "type": "sale",
+      "quantity": -1,
+      "previousStock": 8,
+      "newStock": 7,
+      "reason": "Transaction sale",
+      "userId": "6954e5f950505d7af7f38f04",
+      "createdAt": "2026-01-01T03:49:09.624Z",
+      "updatedAt": "2026-01-01T03:49:10.423Z",
+      "__v": 0,
+      "transactionId": "6955eeb5b7ce021f78f4174d"
+    },
+    {
+      "_id": "6955eebcb7ce021f78f41766",
+      "productId": "69550a6550505d7af7f39650",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "type": "sale",
+      "quantity": -1,
+      "previousStock": 7,
+      "newStock": 6,
+      "reason": "Transaction sale",
+      "userId": "6954e5f950505d7af7f38f04",
+      "createdAt": "2026-01-01T03:49:16.070Z",
+      "updatedAt": "2026-01-01T03:49:16.522Z",
+      "__v": 0,
+      "transactionId": "6955eebcb7ce021f78f41769"
+    },
+    {
+      "_id": "6955eebeb7ce021f78f41776",
+      "productId": "69550a6550505d7af7f39650",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "type": "sale",
+      "quantity": -1,
+      "previousStock": 6,
+      "newStock": 5,
+      "reason": "Transaction sale",
+      "userId": "6954e5f950505d7af7f38f04",
+      "createdAt": "2026-01-01T03:49:18.947Z",
+      "updatedAt": "2026-01-01T03:49:19.399Z",
+      "__v": 0,
+      "transactionId": "6955eebfb7ce021f78f41779"
+    },
+    {
+      "_id": "69565ffa5c0e694070c61579",
+      "productId": "69561ce2b7ce021f78f46583",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "type": "sale",
+      "quantity": -1,
+      "previousStock": 50,
+      "newStock": 49,
+      "reason": "Transaction sale",
+      "userId": "6954e5f950505d7af7f38f04",
+      "createdAt": "2026-01-01T11:52:26.566Z",
+      "updatedAt": "2026-01-01T11:52:26.816Z",
+      "__v": 0,
+      "transactionId": "69565ffa5c0e694070c6157c"
+    },
+    {
+      "_id": "695660405c0e694070c615a5",
+      "productId": "69561ce2b7ce021f78f46583",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "type": "purchase",
+      "quantity": 3,
+      "previousStock": 49,
+      "newStock": 52,
+      "reason": "Stock refill",
+      "userId": "6954e5f950505d7af7f38f04",
+      "createdAt": "2026-01-01T11:53:36.380Z",
+      "updatedAt": "2026-01-01T11:53:36.380Z",
+      "__v": 0
+    }
+  ],
+  "products": [
+    {
+      "_id": "69561b6fb7ce021f78f46155",
+      "tenantId": "6954e570f6485146f828c457",
+      "name": "Test Product",
+      "description": "swfsd",
+      "price": 150,
+      "stock": 10,
+      "sku": "2423432",
+      "categoryId": "695619e2b7ce021f78f45c9c",
+      "productType": "regular",
+      "hasVariations": false,
+      "variations": [],
+      "trackInventory": true,
+      "allowOutOfStockSales": false,
+      "lowStockThreshold": 10,
+      "pinned": false,
+      "branchStock": [],
+      "createdAt": "2026-01-01T06:59:59.525Z",
+      "updatedAt": "2026-01-01T07:00:06.494Z",
+      "__v": 0
+    },
+    {
+      "_id": "69561b91b7ce021f78f461d4",
+      "tenantId": "6954e570f6485146f828c457",
+      "name": "Comforter",
+      "description": "dasdas",
+      "price": 490,
+      "stock": 30,
+      "sku": "32434",
+      "categoryId": "695619e2b7ce021f78f45c9c",
+      "productType": "regular",
+      "hasVariations": false,
+      "variations": [],
+      "trackInventory": true,
+      "allowOutOfStockSales": false,
+      "lowStockThreshold": 10,
+      "pinned": false,
+      "branchStock": [],
+      "createdAt": "2026-01-01T07:00:33.560Z",
+      "updatedAt": "2026-01-01T07:00:33.560Z",
+      "__v": 0
+    },
+    {
+      "_id": "69561ce2b7ce021f78f46583",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "name": "Shorts",
+      "description": "fdsgdg",
+      "price": 50,
+      "stock": 52,
+      "productType": "regular",
+      "hasVariations": false,
+      "variations": [],
+      "trackInventory": true,
+      "allowOutOfStockSales": true,
+      "lowStockThreshold": 10,
+      "pinned": false,
+      "branchStock": [],
+      "createdAt": "2026-01-01T07:06:10.950Z",
+      "updatedAt": "2026-01-01T11:53:36.296Z",
+      "__v": 0,
+      "categoryId": "69561d1ab7ce021f78f4664f"
+    }
+  ],
+  "expenses": [
+    {
+      "_id": "69561a31b7ce021f78f45d9f",
+      "tenantId": "6954e570f6485146f828c457",
+      "name": "Office Supply",
+      "description": "Puchased pins, papers and books",
+      "amount": 150,
+      "date": "2026-01-01T00:00:00.000Z",
+      "paymentMethod": "cash",
+      "userId": "6954e5f950505d7af7f38f04",
+      "createdAt": "2026-01-01T06:54:41.527Z",
+      "updatedAt": "2026-01-01T06:54:41.527Z",
+      "__v": 0
+    }
+  ],
+  "users": [
+    {
+      "_id": "6954e5f950505d7af7f38f04",
+      "email": "jelave2023@gmail.com",
+      "password": "$2b$10$Dli08CSER5C13fsBUos0meLb53HHfO4OyqqAV9O6RqU0/Bj9IqrMC",
+      "name": "Gende Guibone",
+      "role": "admin",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "isActive": true,
+      "createdAt": "2025-12-31T08:59:37.625Z",
+      "updatedAt": "2026-01-01T10:53:26.564Z",
+      "qrToken": "6954e5f950505d7af7f38f04-mjtsbw4n-epyajqxqhie",
+      "__v": 0,
+      "lastLogin": "2026-01-01T09:33:52.501Z",
+      "pin": "0000"
+    },
+    {
+      "_id": "69561e00b7ce021f78f4695b",
+      "email": "admin@kidzklinika.com",
+      "password": "$2b$10$fvYdgoNmhLgDz1o4NRbQru1GiCDXZZGat1qdtVgN2qPfCvNlKYCPG",
+      "name": "tina",
+      "role": "cashier",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "isActive": true,
+      "createdAt": "2026-01-01T07:10:56.936Z",
+      "updatedAt": "2026-01-01T08:37:58.003Z",
+      "qrToken": "69561e00b7ce021f78f4695b-mjv3vzen-w2ye0cn14j",
+      "__v": 0,
+      "pin": "0000",
+      "lastLogin": "2026-01-01T08:35:32.593Z"
+    },
+    {
+      "_id": "695745c0a228fed788b0d8fd",
+      "email": "admin@localpro.asia",
+      "password": "$2b$10$5fZJVHTp3lPkpdKTiMmucewtM4gFhaCLtq72jNMPlsN0CzWP0Ls1W",
+      "name": "Randy Rebucas",
+      "role": "admin",
+      "tenantId": "695745c0a228fed788b0d8fb",
+      "isActive": true,
+      "createdAt": "2026-01-02T04:12:48.998Z",
+      "updatedAt": "2026-01-02T04:13:18.305Z",
+      "qrToken": "695745c0a228fed788b0d8fd-mjwcyr7m-vx5zb5s6p0p",
+      "__v": 0,
+      "lastLogin": "2026-01-02T04:13:18.304Z"
+    }
+  ],
+  "transactions": [
+    {
+      "_id": "695504dd50505d7af7f391cf",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "items": [
+        {
+          "product": "6954edd650505d7af7f38ffd",
+          "name": "Sample Product",
+          "price": 300,
+          "quantity": 1,
+          "subtotal": 300,
+          "_id": "695504dd50505d7af7f391d0"
+        }
+      ],
+      "subtotal": 300,
+      "total": 300,
+      "paymentMethod": "cash",
+      "cashReceived": 300,
+      "change": 0,
+      "status": "completed",
+      "userId": "6954e5f950505d7af7f38f04",
+      "receiptNumber": "REC-20251231-00001",
+      "createdAt": "2025-12-31T11:11:25.832Z",
+      "updatedAt": "2025-12-31T11:11:25.832Z",
+      "__v": 0
+    },
+    {
+      "_id": "6955ee16b7ce021f78f416d0",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "items": [
+        {
+          "product": "69550a6550505d7af7f39650",
+          "name": "Pickup & Delivery",
+          "price": 300,
+          "quantity": 1,
+          "subtotal": 300,
+          "_id": "6955ee16b7ce021f78f416d1"
+        }
+      ],
+      "subtotal": 300,
+      "total": 300,
+      "paymentMethod": "cash",
+      "cashReceived": 300,
+      "change": 0,
+      "status": "completed",
+      "userId": "6954e5f950505d7af7f38f04",
+      "receiptNumber": "REC-20260101-00001",
+      "createdAt": "2026-01-01T03:46:30.184Z",
+      "updatedAt": "2026-01-01T03:46:30.184Z",
+      "__v": 0
+    },
+    {
+      "_id": "6955ee72b7ce021f78f41729",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "items": [
+        {
+          "product": "69550a6550505d7af7f39650",
+          "name": "Pickup & Delivery",
+          "price": 300,
+          "quantity": 1,
+          "subtotal": 300,
+          "_id": "6955ee72b7ce021f78f4172a"
+        }
+      ],
+      "subtotal": 300,
+      "total": 300,
+      "paymentMethod": "cash",
+      "cashReceived": 300,
+      "change": 0,
+      "status": "completed",
+      "userId": "6954e5f950505d7af7f38f04",
+      "receiptNumber": "REC-20260101-00002",
+      "createdAt": "2026-01-01T03:48:02.596Z",
+      "updatedAt": "2026-01-01T03:48:02.596Z",
+      "__v": 0
+    },
+    {
+      "_id": "6955eeb1b7ce021f78f4173d",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "items": [
+        {
+          "product": "69550a6550505d7af7f39650",
+          "name": "Pickup & Delivery",
+          "price": 300,
+          "quantity": 1,
+          "subtotal": 300,
+          "_id": "6955eeb1b7ce021f78f4173e"
+        }
+      ],
+      "subtotal": 300,
+      "total": 300,
+      "paymentMethod": "cash",
+      "cashReceived": 300,
+      "change": 0,
+      "status": "completed",
+      "userId": "6954e5f950505d7af7f38f04",
+      "receiptNumber": "REC-20260101-00003",
+      "createdAt": "2026-01-01T03:49:05.429Z",
+      "updatedAt": "2026-01-01T03:49:05.429Z",
+      "__v": 0
+    },
+    {
+      "_id": "6955eeb5b7ce021f78f4174d",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "items": [
+        {
+          "product": "69550a6550505d7af7f39650",
+          "name": "Pickup & Delivery",
+          "price": 300,
+          "quantity": 1,
+          "subtotal": 300,
+          "_id": "6955eeb5b7ce021f78f4174e"
+        }
+      ],
+      "subtotal": 300,
+      "total": 300,
+      "paymentMethod": "cash",
+      "cashReceived": 300,
+      "change": 0,
+      "status": "completed",
+      "userId": "6954e5f950505d7af7f38f04",
+      "receiptNumber": "REC-20260101-00004",
+      "createdAt": "2026-01-01T03:49:09.921Z",
+      "updatedAt": "2026-01-01T03:49:09.921Z",
+      "__v": 0
+    },
+    {
+      "_id": "6955eeb9b7ce021f78f41759",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "items": [
+        {
+          "product": "6954edd650505d7af7f38ffd",
+          "name": "Express Service",
+          "price": 300,
+          "quantity": 3,
+          "subtotal": 900,
+          "_id": "6955eeb9b7ce021f78f4175a"
+        }
+      ],
+      "subtotal": 900,
+      "total": 900,
+      "paymentMethod": "cash",
+      "cashReceived": 1000,
+      "change": 100,
+      "status": "completed",
+      "userId": "6954e5f950505d7af7f38f04",
+      "receiptNumber": "REC-20260101-00005",
+      "createdAt": "2026-01-01T03:49:13.063Z",
+      "updatedAt": "2026-01-01T03:49:13.063Z",
+      "__v": 0
+    },
+    {
+      "_id": "6955eebcb7ce021f78f41769",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "items": [
+        {
+          "product": "69550a6550505d7af7f39650",
+          "name": "Pickup & Delivery",
+          "price": 300,
+          "quantity": 1,
+          "subtotal": 300,
+          "_id": "6955eebcb7ce021f78f4176a"
+        }
+      ],
+      "subtotal": 300,
+      "total": 300,
+      "paymentMethod": "cash",
+      "cashReceived": 500,
+      "change": 200,
+      "status": "completed",
+      "userId": "6954e5f950505d7af7f38f04",
+      "receiptNumber": "REC-20260101-00006",
+      "createdAt": "2026-01-01T03:49:16.367Z",
+      "updatedAt": "2026-01-01T03:49:16.367Z",
+      "__v": 0
+    },
+    {
+      "_id": "6955eebfb7ce021f78f41779",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "items": [
+        {
+          "product": "69550a6550505d7af7f39650",
+          "name": "Pickup & Delivery",
+          "price": 300,
+          "quantity": 1,
+          "subtotal": 300,
+          "_id": "6955eebfb7ce021f78f4177a"
+        }
+      ],
+      "subtotal": 300,
+      "total": 300,
+      "paymentMethod": "cash",
+      "cashReceived": 300,
+      "change": 0,
+      "status": "completed",
+      "userId": "6954e5f950505d7af7f38f04",
+      "receiptNumber": "REC-20260101-00007",
+      "createdAt": "2026-01-01T03:49:19.247Z",
+      "updatedAt": "2026-01-01T03:49:19.247Z",
+      "__v": 0
+    },
+    {
+      "_id": "69565ffa5c0e694070c6157c",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "items": [
+        {
+          "product": "69561ce2b7ce021f78f46583",
+          "name": "Shorts",
+          "price": 50,
+          "quantity": 1,
+          "subtotal": 50,
+          "_id": "69565ffa5c0e694070c6157d"
+        }
+      ],
+      "subtotal": 50,
+      "total": 50,
+      "paymentMethod": "cash",
+      "cashReceived": 300,
+      "change": 250,
+      "status": "completed",
+      "userId": "6954e5f950505d7af7f38f04",
+      "receiptNumber": "REC-20260101-00008",
+      "createdAt": "2026-01-01T11:52:26.733Z",
+      "updatedAt": "2026-01-01T11:52:26.733Z",
+      "__v": 0
+    }
+  ],
+  "branches": [
+    {
+      "_id": "69561d78b7ce021f78f4679c",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "name": "Main Branch",
+      "address": {
+        "street": "Brgy Hipusngo, Sitio Punong",
+        "city": "Baybay City",
+        "state": "PH",
+        "zipCode": "6521",
+        "country": "Philippines"
+      },
+      "phone": "09154585455",
+      "email": "admin@localpro.asia",
+      "managerId": "6954e5f950505d7af7f38f04",
+      "isActive": true,
+      "createdAt": "2026-01-01T07:08:40.829Z",
+      "updatedAt": "2026-01-01T07:09:15.298Z",
+      "__v": 0,
+      "code": "MAIN"
+    },
+    {
+      "_id": "69561d93b7ce021f78f467ef",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "name": "Visca Branch",
+      "code": "VSU",
+      "address": {
+        "street": "Brgy Hipusngo",
+        "city": "Baybay City",
+        "state": "PH",
+        "zipCode": "6521",
+        "country": "Philippines"
+      },
+      "phone": "09154585455",
+      "email": "rebucasrandy1986@gmail.com",
+      "managerId": "6954e5f950505d7af7f38f04",
+      "isActive": true,
+      "createdAt": "2026-01-01T07:09:07.642Z",
+      "updatedAt": "2026-01-01T07:09:07.642Z",
+      "__v": 0
+    }
+  ],
+  "auditlogs": [
+    {
+      "_id": "6954e61850505d7af7f38f10",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "action": "login",
+      "entityType": "user",
+      "entityId": "6954e5f950505d7af7f38f04",
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "metadata": {
+        "success": true
+      },
+      "createdAt": "2025-12-31T09:00:08.153Z",
+      "updatedAt": "2025-12-31T09:00:08.153Z",
+      "__v": 0
+    },
+    {
+      "_id": "6954e9cd50505d7af7f38f93",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "action": "login",
+      "entityType": "user",
+      "entityId": "6954e5f950505d7af7f38f04",
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "metadata": {
+        "success": true
+      },
+      "createdAt": "2025-12-31T09:15:57.669Z",
+      "updatedAt": "2025-12-31T09:15:57.669Z",
+      "__v": 0
+    },
+    {
+      "_id": "6954edd650505d7af7f39000",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "create",
+      "entityType": "product",
+      "entityId": "6954edd650505d7af7f38ffd",
+      "changes": {
+        "name": "Sample Product",
+        "description": "This is a sample product",
+        "price": 300,
+        "stock": 1,
+        "sku": "SXX-561294",
+        "category": "T-Shirt"
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15",
+      "createdAt": "2025-12-31T09:33:10.502Z",
+      "updatedAt": "2025-12-31T09:33:10.502Z",
+      "__v": 0
+    },
+    {
+      "_id": "695503fe50505d7af7f3905f",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "tenant",
+      "entityId": "6954e5f950505d7af7f38f02",
+      "changes": {
+        "settings": {
+          "currency": "PHP",
+          "currencyPosition": "before",
+          "dateFormat": "MM/DD/YYYY",
+          "timeFormat": "12h",
+          "timezone": "UTC",
+          "language": "en",
+          "numberFormat": {
+            "decimalSeparator": ".",
+            "thousandsSeparator": ",",
+            "decimalPlaces": 2
+          },
+          "primaryColor": "#2563eb",
+          "receiptShowLogo": true,
+          "receiptShowAddress": true,
+          "receiptShowPhone": false,
+          "receiptShowEmail": false,
+          "taxEnabled": false,
+          "taxRate": 0,
+          "taxLabel": "Tax",
+          "lowStockThreshold": 10,
+          "lowStockAlert": true,
+          "emailNotifications": false,
+          "smsNotifications": false,
+          "enableInventory": true,
+          "enableCategories": true,
+          "enableDiscounts": false,
+          "enableLoyaltyProgram": false,
+          "enableCustomerManagement": false,
+          "enableBookingScheduling": false,
+          "email": "jelave2023@gmail.com",
+          "phone": "+639154585455",
+          "businessType": "Service"
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15",
+      "createdAt": "2025-12-31T11:07:42.058Z",
+      "updatedAt": "2025-12-31T11:07:42.058Z",
+      "__v": 0
+    },
+    {
+      "_id": "695504de50505d7af7f391d4",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "transaction.create",
+      "entityType": "transaction",
+      "entityId": "695504dd50505d7af7f391cf",
+      "changes": {
+        "receiptNumber": "REC-20251231-00001",
+        "total": 300,
+        "itemsCount": 1
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2025-12-31T11:11:26.197Z",
+      "updatedAt": "2025-12-31T11:11:26.197Z",
+      "__v": 0
+    },
+    {
+      "_id": "6955057250505d7af7f3923a",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "6954edd650505d7af7f38ffd",
+      "changes": {
+        "stock": {
+          "old": 0,
+          "new": 10
+        },
+        "refillQuantity": 10
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2025-12-31T11:13:54.380Z",
+      "updatedAt": "2025-12-31T11:13:54.380Z",
+      "__v": 0
+    },
+    {
+      "_id": "695506e250505d7af7f39404",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "6954edd650505d7af7f38ffd",
+      "changes": {
+        "pinned": {
+          "new": true
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2025-12-31T11:20:02.796Z",
+      "updatedAt": "2025-12-31T11:20:02.796Z",
+      "__v": 0
+    },
+    {
+      "_id": "6955075450505d7af7f39447",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "create",
+      "entityType": "product",
+      "entityId": "6955075450505d7af7f39444",
+      "changes": {
+        "name": "Regular Service",
+        "description": "This is a regular laundry service.",
+        "price": 120,
+        "stock": 1,
+        "sku": "RXX-053663"
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2025-12-31T11:21:56.373Z",
+      "updatedAt": "2025-12-31T11:21:56.373Z",
+      "__v": 0
+    },
+    {
+      "_id": "6955078250505d7af7f39472",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "6954edd650505d7af7f38ffd",
+      "changes": {
+        "name": {
+          "old": "Sample Product",
+          "new": "Express Service"
+        },
+        "description": {
+          "old": "This is a sample product",
+          "new": "This is an express laundry service which could be done same day."
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2025-12-31T11:22:42.976Z",
+      "updatedAt": "2025-12-31T11:22:42.976Z",
+      "__v": 0
+    },
+    {
+      "_id": "695507cc50505d7af7f394a5",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "6955075450505d7af7f39444",
+      "changes": {
+        "pinned": {
+          "new": true
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2025-12-31T11:23:56.431Z",
+      "updatedAt": "2025-12-31T11:23:56.431Z",
+      "__v": 0
+    },
+    {
+      "_id": "695507ce50505d7af7f394af",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "6955075450505d7af7f39444",
+      "changes": {
+        "pinned": {
+          "new": true
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2025-12-31T11:23:58.472Z",
+      "updatedAt": "2025-12-31T11:23:58.472Z",
+      "__v": 0
+    },
+    {
+      "_id": "695508e750505d7af7f39560",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "6954edd650505d7af7f38ffd",
+      "changes": {
+        "pinned": {
+          "new": true
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2025-12-31T11:28:39.737Z",
+      "updatedAt": "2025-12-31T11:28:39.737Z",
+      "__v": 0
+    },
+    {
+      "_id": "695508ef50505d7af7f3956b",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "6955075450505d7af7f39444",
+      "changes": {
+        "pinned": {
+          "new": true
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2025-12-31T11:28:47.293Z",
+      "updatedAt": "2025-12-31T11:28:47.293Z",
+      "__v": 0
+    },
+    {
+      "_id": "69550a6550505d7af7f39653",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "create",
+      "entityType": "product",
+      "entityId": "69550a6550505d7af7f39650",
+      "changes": {
+        "name": "Pickup & Delivery",
+        "description": "Collection from your home/office and return once cleaned.",
+        "price": 300,
+        "stock": 0,
+        "sku": "PIC-885413",
+        "trackInventory": false,
+        "allowOutOfStockSales": true
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2025-12-31T11:35:01.875Z",
+      "updatedAt": "2025-12-31T11:35:01.875Z",
+      "__v": 0
+    },
+    {
+      "_id": "69550a7450505d7af7f39667",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "6954edd650505d7af7f38ffd",
+      "changes": {
+        "stock": {
+          "old": 10,
+          "new": 0
+        },
+        "trackInventory": {
+          "old": true,
+          "new": false
+        },
+        "allowOutOfStockSales": {
+          "new": true
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2025-12-31T11:35:16.204Z",
+      "updatedAt": "2025-12-31T11:35:16.204Z",
+      "__v": 0
+    },
+    {
+      "_id": "69550a7f50505d7af7f39679",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "6955075450505d7af7f39444",
+      "changes": {
+        "stock": {
+          "old": 1,
+          "new": 0
+        },
+        "trackInventory": {
+          "old": true,
+          "new": false
+        },
+        "allowOutOfStockSales": {
+          "new": true
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2025-12-31T11:35:27.152Z",
+      "updatedAt": "2025-12-31T11:35:27.152Z",
+      "__v": 0
+    },
+    {
+      "_id": "69550aa250505d7af7f39698",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "69550a6550505d7af7f39650",
+      "changes": {
+        "category": {
+          "new": "Convenience & Extras"
+        },
+        "allowOutOfStockSales": {
+          "new": false
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2025-12-31T11:36:02.465Z",
+      "updatedAt": "2025-12-31T11:36:02.465Z",
+      "__v": 0
+    },
+    {
+      "_id": "69550aa750505d7af7f396a7",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "69550a6550505d7af7f39650",
+      "changes": {
+        "allowOutOfStockSales": {
+          "new": true
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2025-12-31T11:36:07.386Z",
+      "updatedAt": "2025-12-31T11:36:07.386Z",
+      "__v": 0
+    },
+    {
+      "_id": "69550b3450505d7af7f396fb",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "69550a6550505d7af7f39650",
+      "changes": {
+        "allowOutOfStockSales": {
+          "new": true
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2025-12-31T11:38:28.390Z",
+      "updatedAt": "2025-12-31T11:38:28.390Z",
+      "__v": 0
+    },
+    {
+      "_id": "69550b8950505d7af7f39732",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "6955075450505d7af7f39444",
+      "changes": {
+        "category": {
+          "new": "Core Services"
+        },
+        "allowOutOfStockSales": {
+          "new": false
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2025-12-31T11:39:53.581Z",
+      "updatedAt": "2025-12-31T11:39:53.581Z",
+      "__v": 0
+    },
+    {
+      "_id": "69550b9750505d7af7f39746",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "6954edd650505d7af7f38ffd",
+      "changes": {
+        "category": {
+          "old": "T-Shirt",
+          "new": "Specialized Care"
+        },
+        "allowOutOfStockSales": {
+          "new": true
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2025-12-31T11:40:07.445Z",
+      "updatedAt": "2025-12-31T11:40:07.445Z",
+      "__v": 0
+    },
+    {
+      "_id": "69550bff50505d7af7f39796",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "6954edd650505d7af7f38ffd",
+      "changes": {
+        "allowOutOfStockSales": {
+          "new": true
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2025-12-31T11:41:51.484Z",
+      "updatedAt": "2025-12-31T11:41:51.484Z",
+      "__v": 0
+    },
+    {
+      "_id": "69550c5c50505d7af7f397e2",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "6954edd650505d7af7f38ffd",
+      "changes": {
+        "allowOutOfStockSales": {
+          "new": true
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2025-12-31T11:43:24.795Z",
+      "updatedAt": "2025-12-31T11:43:24.795Z",
+      "__v": 0
+    },
+    {
+      "_id": "69550e4450505d7af7f398f3",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "6954edd650505d7af7f38ffd",
+      "changes": {
+        "allowOutOfStockSales": {
+          "new": true
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2025-12-31T11:51:32.095Z",
+      "updatedAt": "2025-12-31T11:51:32.095Z",
+      "__v": 0
+    },
+    {
+      "_id": "69550efa50505d7af7f39987",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "6954edd650505d7af7f38ffd",
+      "changes": {
+        "allowOutOfStockSales": {
+          "new": true
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2025-12-31T11:54:34.859Z",
+      "updatedAt": "2025-12-31T11:54:34.859Z",
+      "__v": 0
+    },
+    {
+      "_id": "69550f4550505d7af7f399cc",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "6954edd650505d7af7f38ffd",
+      "changes": {
+        "allowOutOfStockSales": {
+          "new": true
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2025-12-31T11:55:49.316Z",
+      "updatedAt": "2025-12-31T11:55:49.316Z",
+      "__v": 0
+    },
+    {
+      "_id": "69550fc550505d7af7f39a2c",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "6954edd650505d7af7f38ffd",
+      "changes": {
+        "allowOutOfStockSales": {
+          "new": true
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2025-12-31T11:57:57.549Z",
+      "updatedAt": "2025-12-31T11:57:57.549Z",
+      "__v": 0
+    },
+    {
+      "_id": "6955102050505d7af7f39a7a",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "6954edd650505d7af7f38ffd",
+      "changes": {
+        "allowOutOfStockSales": {
+          "new": true
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2025-12-31T11:59:28.988Z",
+      "updatedAt": "2025-12-31T11:59:28.988Z",
+      "__v": 0
+    },
+    {
+      "_id": "6955102e50505d7af7f39a8f",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "6954edd650505d7af7f38ffd",
+      "changes": {
+        "description": {
+          "old": "This is an express laundry service which could be done same day.",
+          "new": "This is an express laundry service which could be done same day.ff"
+        },
+        "allowOutOfStockSales": {
+          "new": false
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2025-12-31T11:59:42.483Z",
+      "updatedAt": "2025-12-31T11:59:42.483Z",
+      "__v": 0
+    },
+    {
+      "_id": "6955103550505d7af7f39aa2",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "6954edd650505d7af7f38ffd",
+      "changes": {
+        "description": {
+          "old": "This is an express laundry service which could be done same day.ff",
+          "new": "This is an express laundry service which could be done same day."
+        },
+        "allowOutOfStockSales": {
+          "new": false
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2025-12-31T11:59:49.773Z",
+      "updatedAt": "2025-12-31T11:59:49.773Z",
+      "__v": 0
+    },
+    {
+      "_id": "695514e350505d7af7f39d21",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "6954edd650505d7af7f38ffd",
+      "changes": {
+        "allowOutOfStockSales": {
+          "new": true
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2025-12-31T12:19:47.674Z",
+      "updatedAt": "2025-12-31T12:19:47.674Z",
+      "__v": 0
+    },
+    {
+      "_id": "695514e950505d7af7f39d33",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "69550a6550505d7af7f39650",
+      "changes": {
+        "trackInventory": {
+          "old": false,
+          "new": true
+        },
+        "allowOutOfStockSales": {
+          "new": false
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2025-12-31T12:19:53.867Z",
+      "updatedAt": "2025-12-31T12:19:53.867Z",
+      "__v": 0
+    },
+    {
+      "_id": "6955158650505d7af7f39d99",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "6954edd650505d7af7f38ffd",
+      "changes": {
+        "allowOutOfStockSales": {
+          "new": true
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2025-12-31T12:22:30.961Z",
+      "updatedAt": "2025-12-31T12:22:30.961Z",
+      "__v": 0
+    },
+    {
+      "_id": "6955186550505d7af7f39f1f",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "6954edd650505d7af7f38ffd",
+      "changes": {
+        "allowOutOfStockSales": {
+          "new": true
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2025-12-31T12:34:45.403Z",
+      "updatedAt": "2025-12-31T12:34:45.403Z",
+      "__v": 0
+    },
+    {
+      "_id": "6955194f50505d7af7f39fb3",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "6954edd650505d7af7f38ffd",
+      "changes": {
+        "trackInventory": {
+          "old": false,
+          "new": true
+        },
+        "allowOutOfStockSales": {
+          "new": true
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2025-12-31T12:38:39.608Z",
+      "updatedAt": "2025-12-31T12:38:39.608Z",
+      "__v": 0
+    },
+    {
+      "_id": "6955196b50505d7af7f39fd8",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "6955075450505d7af7f39444",
+      "changes": {
+        "allowOutOfStockSales": {
+          "new": true
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2025-12-31T12:39:07.159Z",
+      "updatedAt": "2025-12-31T12:39:07.159Z",
+      "__v": 0
+    },
+    {
+      "_id": "69551aea50505d7af7f3a0c6",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "6954edd650505d7af7f38ffd",
+      "changes": {
+        "allowOutOfStockSales": {
+          "new": true
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2025-12-31T12:45:30.259Z",
+      "updatedAt": "2025-12-31T12:45:30.259Z",
+      "__v": 0
+    },
+    {
+      "_id": "6955e6cab7ce021f78f415a9",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "6954edd650505d7af7f38ffd",
+      "changes": {
+        "allowOutOfStockSales": {
+          "new": true
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T03:15:22.723Z",
+      "updatedAt": "2026-01-01T03:15:22.723Z",
+      "__v": 0
+    },
+    {
+      "_id": "6955e6d2b7ce021f78f415c0",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "6955075450505d7af7f39444",
+      "changes": {
+        "trackInventory": {
+          "old": false,
+          "new": true
+        },
+        "allowOutOfStockSales": {
+          "new": true
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T03:15:30.164Z",
+      "updatedAt": "2026-01-01T03:15:30.164Z",
+      "__v": 0
+    },
+    {
+      "_id": "6955e6d9b7ce021f78f415d7",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "69550a6550505d7af7f39650",
+      "changes": {
+        "allowOutOfStockSales": {
+          "new": true
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T03:15:37.385Z",
+      "updatedAt": "2026-01-01T03:15:37.385Z",
+      "__v": 0
+    },
+    {
+      "_id": "6955e6e0b7ce021f78f415ee",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "6955075450505d7af7f39444",
+      "changes": {
+        "trackInventory": {
+          "old": true,
+          "new": false
+        },
+        "allowOutOfStockSales": {
+          "old": true,
+          "new": false
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T03:15:44.458Z",
+      "updatedAt": "2026-01-01T03:15:44.458Z",
+      "__v": 0
+    },
+    {
+      "_id": "6955edfbb7ce021f78f416a9",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "69550a6550505d7af7f39650",
+      "changes": {
+        "trackInventory": {
+          "old": true,
+          "new": false
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T03:46:03.135Z",
+      "updatedAt": "2026-01-01T03:46:03.135Z",
+      "__v": 0
+    },
+    {
+      "_id": "6955ee02b7ce021f78f416b8",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "6954edd650505d7af7f38ffd",
+      "changes": {
+        "trackInventory": {
+          "old": true,
+          "new": false
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T03:46:10.001Z",
+      "updatedAt": "2026-01-01T03:46:10.001Z",
+      "__v": 0
+    },
+    {
+      "_id": "6955ee16b7ce021f78f416d5",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "transaction.create",
+      "entityType": "transaction",
+      "entityId": "6955ee16b7ce021f78f416d0",
+      "changes": {
+        "receiptNumber": "REC-20260101-00001",
+        "total": 300,
+        "itemsCount": 1
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T03:46:30.967Z",
+      "updatedAt": "2026-01-01T03:46:30.967Z",
+      "__v": 0
+    },
+    {
+      "_id": "6955ee38b7ce021f78f416e5",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "69550a6550505d7af7f39650",
+      "changes": {
+        "stock": {
+          "old": 0,
+          "new": 0
+        },
+        "refillQuantity": 10
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T03:47:04.082Z",
+      "updatedAt": "2026-01-01T03:47:04.082Z",
+      "__v": 0
+    },
+    {
+      "_id": "6955ee40b7ce021f78f416f4",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "69550a6550505d7af7f39650",
+      "changes": {
+        "trackInventory": {
+          "old": false,
+          "new": true
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T03:47:12.788Z",
+      "updatedAt": "2026-01-01T03:47:12.788Z",
+      "__v": 0
+    },
+    {
+      "_id": "6955ee60b7ce021f78f41716",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "69550a6550505d7af7f39650",
+      "changes": {
+        "stock": {
+          "old": 0,
+          "new": 10
+        },
+        "refillQuantity": 10
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T03:47:44.697Z",
+      "updatedAt": "2026-01-01T03:47:44.697Z",
+      "__v": 0
+    },
+    {
+      "_id": "6955ee74b7ce021f78f4172e",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "transaction.create",
+      "entityType": "transaction",
+      "entityId": "6955ee72b7ce021f78f41729",
+      "changes": {
+        "receiptNumber": "REC-20260101-00002",
+        "total": 300,
+        "itemsCount": 1
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T03:48:04.472Z",
+      "updatedAt": "2026-01-01T03:48:04.472Z",
+      "__v": 0
+    },
+    {
+      "_id": "6955eeb2b7ce021f78f41742",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "transaction.create",
+      "entityType": "transaction",
+      "entityId": "6955eeb1b7ce021f78f4173d",
+      "changes": {
+        "receiptNumber": "REC-20260101-00003",
+        "total": 300,
+        "itemsCount": 1
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T03:49:06.965Z",
+      "updatedAt": "2026-01-01T03:49:06.965Z",
+      "__v": 0
+    },
+    {
+      "_id": "6955eeb7b7ce021f78f41752",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "transaction.create",
+      "entityType": "transaction",
+      "entityId": "6955eeb5b7ce021f78f4174d",
+      "changes": {
+        "receiptNumber": "REC-20260101-00004",
+        "total": 300,
+        "itemsCount": 1
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T03:49:11.095Z",
+      "updatedAt": "2026-01-01T03:49:11.095Z",
+      "__v": 0
+    },
+    {
+      "_id": "6955eeb9b7ce021f78f4175e",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "transaction.create",
+      "entityType": "transaction",
+      "entityId": "6955eeb9b7ce021f78f41759",
+      "changes": {
+        "receiptNumber": "REC-20260101-00005",
+        "total": 900,
+        "itemsCount": 1
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T03:49:13.538Z",
+      "updatedAt": "2026-01-01T03:49:13.538Z",
+      "__v": 0
+    },
+    {
+      "_id": "6955eebcb7ce021f78f4176e",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "transaction.create",
+      "entityType": "transaction",
+      "entityId": "6955eebcb7ce021f78f41769",
+      "changes": {
+        "receiptNumber": "REC-20260101-00006",
+        "total": 300,
+        "itemsCount": 1
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T03:49:16.815Z",
+      "updatedAt": "2026-01-01T03:49:16.815Z",
+      "__v": 0
+    },
+    {
+      "_id": "6955eec0b7ce021f78f41780",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "transaction.create",
+      "entityType": "transaction",
+      "entityId": "6955eebfb7ce021f78f41779",
+      "changes": {
+        "receiptNumber": "REC-20260101-00007",
+        "total": 300,
+        "itemsCount": 1
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T03:49:20.056Z",
+      "updatedAt": "2026-01-01T03:49:20.056Z",
+      "__v": 0
+    },
+    {
+      "_id": "69560f9bb7ce021f78f43fb0",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "logout",
+      "entityType": "user",
+      "entityId": "6954e5f950505d7af7f38f04",
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "metadata": {
+        "success": true
+      },
+      "createdAt": "2026-01-01T06:09:31.562Z",
+      "updatedAt": "2026-01-01T06:09:31.562Z",
+      "__v": 0
+    },
+    {
+      "_id": "69560fd0b7ce021f78f4403b",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "action": "login",
+      "entityType": "user",
+      "entityId": "6954e5f950505d7af7f38f04",
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "metadata": {
+        "success": true
+      },
+      "createdAt": "2026-01-01T06:10:24.697Z",
+      "updatedAt": "2026-01-01T06:10:24.697Z",
+      "__v": 0
+    },
+    {
+      "_id": "695615ddb7ce021f78f45164",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "login",
+      "entityType": "user",
+      "entityId": "6954e5f950505d7af7f38f04",
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "metadata": {
+        "success": true
+      },
+      "createdAt": "2026-01-01T06:36:13.668Z",
+      "updatedAt": "2026-01-01T06:36:13.668Z",
+      "__v": 0
+    },
+    {
+      "_id": "695619e2b7ce021f78f45c9f",
+      "tenantId": "6954e570f6485146f828c457",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "create",
+      "entityType": "category",
+      "entityId": "695619e2b7ce021f78f45c9c",
+      "changes": {
+        "name": "Test Category",
+        "description": "Tetrty"
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T06:53:22.639Z",
+      "updatedAt": "2026-01-01T06:53:22.639Z",
+      "__v": 0
+    },
+    {
+      "_id": "695619f0b7ce021f78f45ccd",
+      "tenantId": "6954e570f6485146f828c457",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "create",
+      "entityType": "category",
+      "entityId": "695619f0b7ce021f78f45cca",
+      "changes": {
+        "name": "T-Shirt"
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T06:53:36.949Z",
+      "updatedAt": "2026-01-01T06:53:36.949Z",
+      "__v": 0
+    },
+    {
+      "_id": "695619fab7ce021f78f45cf1",
+      "tenantId": "6954e570f6485146f828c457",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "category",
+      "entityId": "695619e2b7ce021f78f45c9c",
+      "changes": {
+        "before": {
+          "_id": "695619e2b7ce021f78f45c9c",
+          "name": "Test Category",
+          "description": "Tetrty",
+          "tenantId": "6954e570f6485146f828c457",
+          "isActive": true,
+          "createdAt": "2026-01-01T06:53:22.482Z",
+          "updatedAt": "2026-01-01T06:53:22.482Z",
+          "__v": 0
+        },
+        "after": {
+          "_id": "695619e2b7ce021f78f45c9c",
+          "name": "Pants",
+          "description": "Tetrty",
+          "tenantId": "6954e570f6485146f828c457",
+          "isActive": true,
+          "createdAt": "2026-01-01T06:53:22.482Z",
+          "updatedAt": "2026-01-01T06:53:46.615Z",
+          "__v": 0
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T06:53:46.763Z",
+      "updatedAt": "2026-01-01T06:53:46.763Z",
+      "__v": 0
+    },
+    {
+      "_id": "69561a04b7ce021f78f45d15",
+      "tenantId": "6954e570f6485146f828c457",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "category",
+      "entityId": "695619e2b7ce021f78f45c9c",
+      "changes": {
+        "before": {
+          "_id": "695619e2b7ce021f78f45c9c",
+          "name": "Pants",
+          "description": "Tetrty",
+          "tenantId": "6954e570f6485146f828c457",
+          "isActive": true,
+          "createdAt": "2026-01-01T06:53:22.482Z",
+          "updatedAt": "2026-01-01T06:53:46.615Z",
+          "__v": 0
+        },
+        "after": {
+          "_id": "695619e2b7ce021f78f45c9c",
+          "name": "Pants",
+          "description": "",
+          "tenantId": "6954e570f6485146f828c457",
+          "isActive": true,
+          "createdAt": "2026-01-01T06:53:22.482Z",
+          "updatedAt": "2026-01-01T06:53:56.597Z",
+          "__v": 0
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T06:53:56.745Z",
+      "updatedAt": "2026-01-01T06:53:56.745Z",
+      "__v": 0
+    },
+    {
+      "_id": "69561a31b7ce021f78f45da2",
+      "tenantId": "6954e570f6485146f828c457",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "create",
+      "entityType": "expense",
+      "entityId": "69561a31b7ce021f78f45d9f",
+      "changes": {
+        "name": "Office Supply",
+        "description": "Puchased pins, papers and books",
+        "amount": 150
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T06:54:41.685Z",
+      "updatedAt": "2026-01-01T06:54:41.685Z",
+      "__v": 0
+    },
+    {
+      "_id": "69561aceb7ce021f78f45f9b",
+      "tenantId": "6954e570f6485146f828c457",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "discount.create",
+      "entityType": "discount",
+      "entityId": "69561aceb7ce021f78f45f98",
+      "changes": {
+        "code": "OPENING",
+        "type": "fixed",
+        "value": 10
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T06:57:18.455Z",
+      "updatedAt": "2026-01-01T06:57:18.455Z",
+      "__v": 0
+    },
+    {
+      "_id": "69561afbb7ce021f78f4601b",
+      "tenantId": "6954e570f6485146f828c457",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "discount.create",
+      "entityType": "discount",
+      "entityId": "69561afbb7ce021f78f46018",
+      "changes": {
+        "code": "OPENINGPRCNT",
+        "type": "percentage",
+        "value": 10
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T06:58:03.953Z",
+      "updatedAt": "2026-01-01T06:58:03.953Z",
+      "__v": 0
+    },
+    {
+      "_id": "69561b6fb7ce021f78f46158",
+      "tenantId": "6954e570f6485146f828c457",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "create",
+      "entityType": "product",
+      "entityId": "69561b6fb7ce021f78f46155",
+      "changes": {
+        "name": "Test Product",
+        "description": "swfsd",
+        "price": 150,
+        "stock": 0,
+        "sku": "2423432",
+        "categoryId": "695619e2b7ce021f78f45c9c",
+        "productType": "regular",
+        "trackInventory": true,
+        "lowStockThreshold": 10
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T06:59:59.687Z",
+      "updatedAt": "2026-01-01T06:59:59.687Z",
+      "__v": 0
+    },
+    {
+      "_id": "69561b76b7ce021f78f46174",
+      "tenantId": "6954e570f6485146f828c457",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "69561b6fb7ce021f78f46155",
+      "changes": {
+        "stock": {
+          "old": 0,
+          "new": 10
+        },
+        "categoryId": {
+          "old": "695619e2b7ce021f78f45c9c",
+          "new": "695619e2b7ce021f78f45c9c"
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T07:00:06.652Z",
+      "updatedAt": "2026-01-01T07:00:06.652Z",
+      "__v": 0
+    },
+    {
+      "_id": "69561b91b7ce021f78f461d7",
+      "tenantId": "6954e570f6485146f828c457",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "create",
+      "entityType": "product",
+      "entityId": "69561b91b7ce021f78f461d4",
+      "changes": {
+        "name": "Comforter",
+        "description": "dasdas",
+        "price": 490,
+        "stock": 30,
+        "sku": "32434",
+        "categoryId": "695619e2b7ce021f78f45c9c",
+        "productType": "regular",
+        "trackInventory": true,
+        "lowStockThreshold": 10
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T07:00:33.715Z",
+      "updatedAt": "2026-01-01T07:00:33.715Z",
+      "__v": 0
+    },
+    {
+      "_id": "69561bb4b7ce021f78f46253",
+      "tenantId": "6954e570f6485146f828c457",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "create",
+      "entityType": "bundle",
+      "entityId": "69561bb4b7ce021f78f4624e",
+      "changes": {
+        "name": "Test Bundle",
+        "description": "dfs",
+        "price": 800,
+        "sku": "432423",
+        "categoryId": "695619e2b7ce021f78f45c9c",
+        "trackInventory": true,
+        "items": [
+          {
+            "productId": "69561b6fb7ce021f78f46155",
+            "productName": "Test Product",
+            "quantity": 1
+          },
+          {
+            "productId": "69561b91b7ce021f78f461d4",
+            "productName": "Comforter",
+            "quantity": 1
+          }
+        ]
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T07:01:08.990Z",
+      "updatedAt": "2026-01-01T07:01:08.990Z",
+      "__v": 0
+    },
+    {
+      "_id": "69561ce3b7ce021f78f46587",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "create",
+      "entityType": "product",
+      "entityId": "69561ce2b7ce021f78f46583",
+      "changes": {
+        "name": "test",
+        "description": "fdsgdg",
+        "price": 50,
+        "stock": 50,
+        "productType": "regular",
+        "trackInventory": true,
+        "lowStockThreshold": 10
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T07:06:11.110Z",
+      "updatedAt": "2026-01-01T07:06:11.110Z",
+      "__v": 0
+    },
+    {
+      "_id": "69561cf0b7ce021f78f465b6",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "delete",
+      "entityType": "product",
+      "entityId": "6954edd650505d7af7f38ffd",
+      "changes": {
+        "name": "Express Service"
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T07:06:24.007Z",
+      "updatedAt": "2026-01-01T07:06:24.007Z",
+      "__v": 0
+    },
+    {
+      "_id": "69561cf2b7ce021f78f465c7",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "delete",
+      "entityType": "product",
+      "entityId": "6955075450505d7af7f39444",
+      "changes": {
+        "name": "Regular Service"
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T07:06:26.747Z",
+      "updatedAt": "2026-01-01T07:06:26.747Z",
+      "__v": 0
+    },
+    {
+      "_id": "69561cf5b7ce021f78f465d5",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "delete",
+      "entityType": "product",
+      "entityId": "69550a6550505d7af7f39650",
+      "changes": {
+        "name": "Pickup & Delivery"
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T07:06:29.349Z",
+      "updatedAt": "2026-01-01T07:06:29.349Z",
+      "__v": 0
+    },
+    {
+      "_id": "69561d0ab7ce021f78f4661c",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "create",
+      "entityType": "category",
+      "entityId": "69561d0ab7ce021f78f46619",
+      "changes": {
+        "name": "Comforter"
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T07:06:50.743Z",
+      "updatedAt": "2026-01-01T07:06:50.743Z",
+      "__v": 0
+    },
+    {
+      "_id": "69561d15b7ce021f78f4663e",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "create",
+      "entityType": "category",
+      "entityId": "69561d14b7ce021f78f4663b",
+      "changes": {
+        "name": "T-Shirt"
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T07:07:01.099Z",
+      "updatedAt": "2026-01-01T07:07:01.099Z",
+      "__v": 0
+    },
+    {
+      "_id": "69561d1ab7ce021f78f46652",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "create",
+      "entityType": "category",
+      "entityId": "69561d1ab7ce021f78f4664f",
+      "changes": {
+        "name": "Pants"
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T07:07:06.396Z",
+      "updatedAt": "2026-01-01T07:07:06.396Z",
+      "__v": 0
+    },
+    {
+      "_id": "69561d29b7ce021f78f46683",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "create",
+      "entityType": "category",
+      "entityId": "69561d28b7ce021f78f4667f",
+      "changes": {
+        "name": "Shorts"
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T07:07:21.738Z",
+      "updatedAt": "2026-01-01T07:07:21.738Z",
+      "__v": 0
+    },
+    {
+      "_id": "69561d3bb7ce021f78f466c4",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "69561ce2b7ce021f78f46583",
+      "changes": {
+        "name": {
+          "old": "test",
+          "new": "Shorts"
+        },
+        "categoryId": {
+          "new": "69561d1ab7ce021f78f4664f"
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T07:07:39.012Z",
+      "updatedAt": "2026-01-01T07:07:39.012Z",
+      "__v": 0
+    },
+    {
+      "_id": "69561d5eb7ce021f78f46743",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "create",
+      "entityType": "bundle",
+      "entityId": "69561d5eb7ce021f78f4673e",
+      "changes": {
+        "name": "Bundle 1",
+        "description": "fsdf",
+        "price": 40,
+        "sku": "423423",
+        "categoryId": "69561d0ab7ce021f78f46619",
+        "trackInventory": true,
+        "items": [
+          {
+            "productId": "69561ce2b7ce021f78f46583",
+            "productName": "Shorts",
+            "quantity": 1
+          }
+        ]
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T07:08:14.799Z",
+      "updatedAt": "2026-01-01T07:08:14.799Z",
+      "__v": 0
+    },
+    {
+      "_id": "69561d78b7ce021f78f4679f",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "create",
+      "entityType": "branch",
+      "entityId": "69561d78b7ce021f78f4679c",
+      "changes": {
+        "name": "Main Branch",
+        "address": {
+          "street": "Brgy Hipusngo, Sitio Punong",
+          "city": "Baybay City",
+          "state": "PH",
+          "zipCode": "6521",
+          "country": "Philippines"
+        },
+        "phone": "09154585455",
+        "email": "admin@localpro.asia",
+        "managerId": "6954e5f950505d7af7f38f04"
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T07:08:40.925Z",
+      "updatedAt": "2026-01-01T07:08:40.925Z",
+      "__v": 0
+    },
+    {
+      "_id": "69561d93b7ce021f78f467f3",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "create",
+      "entityType": "branch",
+      "entityId": "69561d93b7ce021f78f467ef",
+      "changes": {
+        "name": "Visca Branch",
+        "code": "VSU",
+        "address": {
+          "street": "Brgy Hipusngo",
+          "city": "Baybay City",
+          "state": "PH",
+          "zipCode": "6521",
+          "country": "Philippines"
+        },
+        "phone": "09154585455",
+        "email": "rebucasrandy1986@gmail.com",
+        "managerId": "6954e5f950505d7af7f38f04"
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T07:09:07.793Z",
+      "updatedAt": "2026-01-01T07:09:07.793Z",
+      "__v": 0
+    },
+    {
+      "_id": "69561d9bb7ce021f78f46811",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "branch",
+      "entityId": "69561d78b7ce021f78f4679c",
+      "changes": {
+        "before": {
+          "address": {
+            "street": "Brgy Hipusngo, Sitio Punong",
+            "city": "Baybay City",
+            "state": "PH",
+            "zipCode": "6521",
+            "country": "Philippines"
+          },
+          "_id": "69561d78b7ce021f78f4679c",
+          "tenantId": "6954e5f950505d7af7f38f02",
+          "name": "Main Branch",
+          "phone": "09154585455",
+          "email": "admin@localpro.asia",
+          "managerId": "6954e5f950505d7af7f38f04",
+          "isActive": true,
+          "createdAt": "2026-01-01T07:08:40.829Z",
+          "updatedAt": "2026-01-01T07:08:40.829Z",
+          "__v": 0
+        },
+        "after": {
+          "address": {
+            "street": "Brgy Hipusngo, Sitio Punong",
+            "city": "Baybay City",
+            "state": "PH",
+            "zipCode": "6521",
+            "country": "Philippines"
+          },
+          "_id": "69561d78b7ce021f78f4679c",
+          "tenantId": "6954e5f950505d7af7f38f02",
+          "name": "Main Branch",
+          "phone": "09154585455",
+          "email": "admin@localpro.asia",
+          "managerId": "6954e5f950505d7af7f38f04",
+          "isActive": true,
+          "createdAt": "2026-01-01T07:08:40.829Z",
+          "updatedAt": "2026-01-01T07:09:15.298Z",
+          "__v": 0,
+          "code": "MAIN"
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T07:09:15.395Z",
+      "updatedAt": "2026-01-01T07:09:15.395Z",
+      "__v": 0
+    },
+    {
+      "_id": "69561dbcb7ce021f78f46886",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "discount.create",
+      "entityType": "discount",
+      "entityId": "69561dbcb7ce021f78f46883",
+      "changes": {
+        "code": "OPENING",
+        "type": "percentage",
+        "value": 10
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T07:09:48.990Z",
+      "updatedAt": "2026-01-01T07:09:48.990Z",
+      "__v": 0
+    },
+    {
+      "_id": "69561e01b7ce021f78f46962",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "create",
+      "entityType": "user",
+      "entityId": "69561e00b7ce021f78f4695b",
+      "changes": {
+        "email": "admin@kidzklinika.com",
+        "name": "tina",
+        "role": "cashier"
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T07:10:57.545Z",
+      "updatedAt": "2026-01-01T07:10:57.545Z",
+      "__v": 0
+    },
+    {
+      "_id": "69561e14b7ce021f78f4699b",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "user",
+      "entityId": "69561e00b7ce021f78f4695b",
+      "changes": {
+        "pin": {
+          "changed": true
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "metadata": {
+        "updatedBy": "6954e5f950505d7af7f38f04"
+      },
+      "createdAt": "2026-01-01T07:11:16.283Z",
+      "updatedAt": "2026-01-01T07:11:16.283Z",
+      "__v": 0
+    },
+    {
+      "_id": "69562219b7ce021f78f47cee",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "tenant",
+      "entityId": "6954e5f950505d7af7f38f02",
+      "changes": {
+        "settings": {
+          "currency": "PHP",
+          "currencyPosition": "before",
+          "dateFormat": "MM/DD/YYYY",
+          "timeFormat": "12h",
+          "timezone": "UTC",
+          "language": "es",
+          "numberFormat": {
+            "decimalSeparator": ".",
+            "thousandsSeparator": ",",
+            "decimalPlaces": 2
+          },
+          "primaryColor": "#2563eb",
+          "receiptShowLogo": true,
+          "receiptShowAddress": true,
+          "receiptShowPhone": false,
+          "receiptShowEmail": false,
+          "taxEnabled": false,
+          "taxRate": 0,
+          "taxLabel": "Tax",
+          "lowStockThreshold": 10,
+          "lowStockAlert": true,
+          "emailNotifications": false,
+          "smsNotifications": false,
+          "enableInventory": true,
+          "enableCategories": true,
+          "enableDiscounts": false,
+          "enableLoyaltyProgram": false,
+          "enableCustomerManagement": false,
+          "enableBookingScheduling": false,
+          "email": "jelave2023@gmail.com",
+          "phone": "+639154585455",
+          "businessType": "Service"
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T07:28:25.888Z",
+      "updatedAt": "2026-01-01T07:28:25.888Z",
+      "__v": 0
+    },
+    {
+      "_id": "69562223b7ce021f78f47d13",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "tenant",
+      "entityId": "6954e5f950505d7af7f38f02",
+      "changes": {
+        "settings": {
+          "currency": "PHP",
+          "currencyPosition": "before",
+          "dateFormat": "MM/DD/YYYY",
+          "timeFormat": "12h",
+          "timezone": "UTC",
+          "language": "en",
+          "numberFormat": {
+            "decimalSeparator": ".",
+            "thousandsSeparator": ",",
+            "decimalPlaces": 2
+          },
+          "primaryColor": "#2563eb",
+          "receiptShowLogo": true,
+          "receiptShowAddress": true,
+          "receiptShowPhone": false,
+          "receiptShowEmail": false,
+          "taxEnabled": false,
+          "taxRate": 0,
+          "taxLabel": "Tax",
+          "lowStockThreshold": 10,
+          "lowStockAlert": true,
+          "emailNotifications": false,
+          "smsNotifications": false,
+          "enableInventory": true,
+          "enableCategories": true,
+          "enableDiscounts": false,
+          "enableLoyaltyProgram": false,
+          "enableCustomerManagement": false,
+          "enableBookingScheduling": false,
+          "email": "jelave2023@gmail.com",
+          "phone": "+639154585455",
+          "businessType": "Service"
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T07:28:35.629Z",
+      "updatedAt": "2026-01-01T07:28:35.629Z",
+      "__v": 0
+    },
+    {
+      "_id": "69562287b7ce021f78f47e26",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "tenant",
+      "entityId": "6954e5f950505d7af7f38f02",
+      "changes": {
+        "settings": {
+          "currency": "PHP",
+          "currencyPosition": "before",
+          "dateFormat": "MM/DD/YYYY",
+          "timeFormat": "12h",
+          "timezone": "UTC",
+          "language": "en",
+          "numberFormat": {
+            "decimalSeparator": ".",
+            "thousandsSeparator": ",",
+            "decimalPlaces": 2
+          },
+          "primaryColor": "#2563eb",
+          "receiptShowLogo": true,
+          "receiptShowAddress": true,
+          "receiptShowPhone": false,
+          "receiptShowEmail": false,
+          "taxEnabled": false,
+          "taxRate": 0,
+          "taxLabel": "Tax",
+          "lowStockThreshold": 10,
+          "lowStockAlert": true,
+          "emailNotifications": false,
+          "smsNotifications": false,
+          "enableInventory": true,
+          "enableCategories": true,
+          "enableDiscounts": false,
+          "enableLoyaltyProgram": false,
+          "enableCustomerManagement": false,
+          "enableBookingScheduling": false,
+          "email": "jelave2023@gmail.com",
+          "phone": "+639154585455",
+          "businessType": "Service",
+          "companyName": "Jelave"
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T07:30:15.183Z",
+      "updatedAt": "2026-01-01T07:30:15.183Z",
+      "__v": 0
+    },
+    {
+      "_id": "69562294b7ce021f78f47e56",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "tenant",
+      "entityId": "6954e5f950505d7af7f38f02",
+      "changes": {
+        "settings": {
+          "currency": "PHP",
+          "currencyPosition": "before",
+          "dateFormat": "MM/DD/YYYY",
+          "timeFormat": "12h",
+          "timezone": "UTC",
+          "language": "en",
+          "numberFormat": {
+            "decimalSeparator": ".",
+            "thousandsSeparator": ",",
+            "decimalPlaces": 2
+          },
+          "primaryColor": "#2563eb",
+          "receiptShowLogo": true,
+          "receiptShowAddress": true,
+          "receiptShowPhone": false,
+          "receiptShowEmail": false,
+          "taxEnabled": false,
+          "taxRate": 0,
+          "taxLabel": "Tax",
+          "lowStockThreshold": 10,
+          "lowStockAlert": true,
+          "emailNotifications": false,
+          "smsNotifications": false,
+          "enableInventory": true,
+          "enableCategories": true,
+          "enableDiscounts": false,
+          "enableLoyaltyProgram": false,
+          "enableCustomerManagement": false,
+          "enableBookingScheduling": false,
+          "email": "jelave2023@gmail.com",
+          "phone": "+639154585455",
+          "businessType": "Service",
+          "companyName": "Jelave",
+          "address": {
+            "street": "A. Bonifacio St",
+            "city": "Baybay City",
+            "state": "PH",
+            "zipCode": "6521",
+            "country": "Philippines"
+          }
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T07:30:28.315Z",
+      "updatedAt": "2026-01-01T07:30:28.315Z",
+      "__v": 0
+    },
+    {
+      "_id": "695622bcb7ce021f78f47ec0",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "tenant",
+      "entityId": "6954e5f950505d7af7f38f02",
+      "changes": {
+        "settings": {
+          "currency": "PHP",
+          "currencyPosition": "before",
+          "dateFormat": "MM/DD/YYYY",
+          "timeFormat": "12h",
+          "timezone": "UTC",
+          "language": "en",
+          "numberFormat": {
+            "decimalSeparator": ".",
+            "thousandsSeparator": ",",
+            "decimalPlaces": 2
+          },
+          "primaryColor": "#2563eb",
+          "receiptShowLogo": true,
+          "receiptShowAddress": true,
+          "receiptShowPhone": false,
+          "receiptShowEmail": false,
+          "taxEnabled": false,
+          "taxRate": 0,
+          "taxLabel": "Tax",
+          "lowStockThreshold": 10,
+          "lowStockAlert": true,
+          "emailNotifications": false,
+          "smsNotifications": false,
+          "enableInventory": true,
+          "enableCategories": true,
+          "enableDiscounts": false,
+          "enableLoyaltyProgram": false,
+          "enableCustomerManagement": false,
+          "enableBookingScheduling": false,
+          "address": {
+            "street": "A. Bonifacio St",
+            "city": "Baybay City",
+            "state": "PH",
+            "zipCode": "6521",
+            "country": "Philippines"
+          },
+          "email": "jelave2023@gmail.com",
+          "phone": "+639154585455",
+          "businessType": "Service",
+          "companyName": "Jelave",
+          "receiptFooter": "https://linktomobileapp.com"
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T07:31:08.437Z",
+      "updatedAt": "2026-01-01T07:31:08.437Z",
+      "__v": 0
+    },
+    {
+      "_id": "695622c9b7ce021f78f47ee4",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "tenant",
+      "entityId": "6954e5f950505d7af7f38f02",
+      "changes": {
+        "settings": {
+          "currency": "PHP",
+          "currencyPosition": "before",
+          "dateFormat": "MM/DD/YYYY",
+          "timeFormat": "12h",
+          "timezone": "UTC",
+          "language": "en",
+          "numberFormat": {
+            "decimalSeparator": ".",
+            "thousandsSeparator": ",",
+            "decimalPlaces": 2
+          },
+          "primaryColor": "#2563eb",
+          "receiptShowLogo": true,
+          "receiptShowAddress": true,
+          "receiptShowPhone": false,
+          "receiptShowEmail": false,
+          "taxEnabled": false,
+          "taxRate": 0,
+          "taxLabel": "Tax",
+          "lowStockThreshold": 10,
+          "lowStockAlert": true,
+          "emailNotifications": false,
+          "smsNotifications": false,
+          "enableInventory": true,
+          "enableCategories": true,
+          "enableDiscounts": false,
+          "enableLoyaltyProgram": false,
+          "enableCustomerManagement": false,
+          "enableBookingScheduling": false,
+          "address": {
+            "street": "A. Bonifacio St",
+            "city": "Baybay City",
+            "state": "PH",
+            "zipCode": "6521",
+            "country": "Philippines"
+          },
+          "email": "jelave2023@gmail.com",
+          "phone": "+639154585455",
+          "businessType": "Service",
+          "companyName": "Jelave",
+          "receiptFooter": "https://linktomobileapp.com",
+          "registrationNumber": "123456789"
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T07:31:21.582Z",
+      "updatedAt": "2026-01-01T07:31:21.582Z",
+      "__v": 0
+    },
+    {
+      "_id": "695622cfb7ce021f78f47ef9",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "tenant",
+      "entityId": "6954e5f950505d7af7f38f02",
+      "changes": {
+        "settings": {
+          "currency": "PHP",
+          "currencyPosition": "before",
+          "dateFormat": "MM/DD/YYYY",
+          "timeFormat": "12h",
+          "timezone": "UTC",
+          "language": "en",
+          "numberFormat": {
+            "decimalSeparator": ".",
+            "thousandsSeparator": ",",
+            "decimalPlaces": 2
+          },
+          "primaryColor": "#2563eb",
+          "receiptShowLogo": true,
+          "receiptShowAddress": true,
+          "receiptShowPhone": false,
+          "receiptShowEmail": false,
+          "taxEnabled": false,
+          "taxRate": 0,
+          "taxLabel": "Tax",
+          "lowStockThreshold": 10,
+          "lowStockAlert": true,
+          "emailNotifications": true,
+          "smsNotifications": true,
+          "enableInventory": true,
+          "enableCategories": true,
+          "enableDiscounts": false,
+          "enableLoyaltyProgram": false,
+          "enableCustomerManagement": false,
+          "enableBookingScheduling": false,
+          "address": {
+            "street": "A. Bonifacio St",
+            "city": "Baybay City",
+            "state": "PH",
+            "zipCode": "6521",
+            "country": "Philippines"
+          },
+          "email": "jelave2023@gmail.com",
+          "phone": "+639154585455",
+          "businessType": "Service",
+          "companyName": "Jelave",
+          "receiptFooter": "https://linktomobileapp.com",
+          "registrationNumber": "123456789"
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T07:31:27.895Z",
+      "updatedAt": "2026-01-01T07:31:27.895Z",
+      "__v": 0
+    },
+    {
+      "_id": "69562481b7ce021f78f4833b",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "tenant",
+      "entityId": "6954e5f950505d7af7f38f02",
+      "changes": {
+        "settings": {
+          "currency": "PHP",
+          "currencyPosition": "before",
+          "dateFormat": "MM/DD/YYYY",
+          "timeFormat": "12h",
+          "timezone": "UTC",
+          "language": "en",
+          "numberFormat": {
+            "decimalSeparator": ".",
+            "thousandsSeparator": ",",
+            "decimalPlaces": 2
+          },
+          "primaryColor": "#7bf1a8",
+          "receiptShowLogo": true,
+          "receiptShowAddress": true,
+          "receiptShowPhone": false,
+          "receiptShowEmail": false,
+          "taxEnabled": false,
+          "taxRate": 0,
+          "taxLabel": "Tax",
+          "lowStockThreshold": 10,
+          "lowStockAlert": true,
+          "emailNotifications": true,
+          "smsNotifications": true,
+          "enableInventory": true,
+          "enableCategories": true,
+          "enableDiscounts": false,
+          "enableLoyaltyProgram": false,
+          "enableCustomerManagement": false,
+          "enableBookingScheduling": false,
+          "address": {
+            "street": "A. Bonifacio St",
+            "city": "Baybay City",
+            "state": "PH",
+            "zipCode": "6521",
+            "country": "Philippines"
+          },
+          "email": "jelave2023@gmail.com",
+          "phone": "+639154585455",
+          "businessType": "Service",
+          "companyName": "Jelave",
+          "receiptFooter": "https://linktomobileapp.com",
+          "registrationNumber": "123456789"
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T07:38:41.228Z",
+      "updatedAt": "2026-01-01T07:38:41.228Z",
+      "__v": 0
+    },
+    {
+      "_id": "69562491b7ce021f78f48371",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "tenant",
+      "entityId": "6954e5f950505d7af7f38f02",
+      "changes": {
+        "settings": {
+          "currency": "PHP",
+          "currencyPosition": "before",
+          "dateFormat": "MM/DD/YYYY",
+          "timeFormat": "12h",
+          "timezone": "UTC",
+          "language": "en",
+          "numberFormat": {
+            "decimalSeparator": ".",
+            "thousandsSeparator": ",",
+            "decimalPlaces": 2
+          },
+          "primaryColor": "#155dfc",
+          "receiptShowLogo": true,
+          "receiptShowAddress": true,
+          "receiptShowPhone": false,
+          "receiptShowEmail": false,
+          "taxEnabled": false,
+          "taxRate": 0,
+          "taxLabel": "Tax",
+          "lowStockThreshold": 10,
+          "lowStockAlert": true,
+          "emailNotifications": true,
+          "smsNotifications": true,
+          "enableInventory": true,
+          "enableCategories": true,
+          "enableDiscounts": false,
+          "enableLoyaltyProgram": false,
+          "enableCustomerManagement": false,
+          "enableBookingScheduling": false,
+          "address": {
+            "street": "A. Bonifacio St",
+            "city": "Baybay City",
+            "state": "PH",
+            "zipCode": "6521",
+            "country": "Philippines"
+          },
+          "email": "jelave2023@gmail.com",
+          "phone": "+639154585455",
+          "businessType": "Service",
+          "companyName": "Jelave",
+          "receiptFooter": "https://linktomobileapp.com",
+          "registrationNumber": "123456789"
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T07:38:57.696Z",
+      "updatedAt": "2026-01-01T07:38:57.696Z",
+      "__v": 0
+    },
+    {
+      "_id": "69563194a7dca87041e750ea",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "logout",
+      "entityType": "user",
+      "entityId": "6954e5f950505d7af7f38f04",
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "metadata": {
+        "success": true
+      },
+      "createdAt": "2026-01-01T08:34:28.658Z",
+      "updatedAt": "2026-01-01T08:34:28.658Z",
+      "__v": 0
+    },
+    {
+      "_id": "695631d4a7dca87041e750f0",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "action": "login",
+      "entityType": "user",
+      "entityId": "69561e00b7ce021f78f4695b",
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "metadata": {
+        "success": true
+      },
+      "createdAt": "2026-01-01T08:35:32.678Z",
+      "updatedAt": "2026-01-01T08:35:32.678Z",
+      "__v": 0
+    },
+    {
+      "_id": "69563203a7dca87041e7516b",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "69561e00b7ce021f78f4695b",
+      "action": "logout",
+      "entityType": "user",
+      "entityId": "69561e00b7ce021f78f4695b",
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "metadata": {
+        "success": true
+      },
+      "createdAt": "2026-01-01T08:36:19.040Z",
+      "updatedAt": "2026-01-01T08:36:19.040Z",
+      "__v": 0
+    },
+    {
+      "_id": "69563208a7dca87041e7516f",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "action": "login",
+      "entityType": "user",
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "metadata": {
+        "success": false,
+        "reason": "invalid_pin",
+        "method": "pin"
+      },
+      "createdAt": "2026-01-01T08:36:24.476Z",
+      "updatedAt": "2026-01-01T08:36:24.476Z",
+      "__v": 0
+    },
+    {
+      "_id": "69563214a7dca87041e75173",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "action": "login",
+      "entityType": "user",
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "metadata": {
+        "success": false,
+        "reason": "invalid_pin",
+        "method": "pin"
+      },
+      "createdAt": "2026-01-01T08:36:36.472Z",
+      "updatedAt": "2026-01-01T08:36:36.472Z",
+      "__v": 0
+    },
+    {
+      "_id": "69563219a7dca87041e75177",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "action": "login",
+      "entityType": "user",
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "metadata": {
+        "success": false,
+        "reason": "invalid_pin",
+        "method": "pin"
+      },
+      "createdAt": "2026-01-01T08:36:41.177Z",
+      "updatedAt": "2026-01-01T08:36:41.177Z",
+      "__v": 0
+    },
+    {
+      "_id": "69563257a7dca87041e7517d",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "action": "login",
+      "entityType": "user",
+      "entityId": "6954e5f950505d7af7f38f04",
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "metadata": {
+        "success": true
+      },
+      "createdAt": "2026-01-01T08:37:43.924Z",
+      "updatedAt": "2026-01-01T08:37:43.924Z",
+      "__v": 0
+    },
+    {
+      "_id": "69563266a7dca87041e7519d",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "user",
+      "entityId": "69561e00b7ce021f78f4695b",
+      "changes": {
+        "pin": {
+          "changed": true
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "metadata": {
+        "updatedBy": "6954e5f950505d7af7f38f04"
+      },
+      "createdAt": "2026-01-01T08:37:58.116Z",
+      "updatedAt": "2026-01-01T08:37:58.116Z",
+      "__v": 0
+    },
+    {
+      "_id": "6956327fa7dca87041e751aa",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "logout",
+      "entityType": "user",
+      "entityId": "6954e5f950505d7af7f38f04",
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "metadata": {
+        "success": true
+      },
+      "createdAt": "2026-01-01T08:38:23.886Z",
+      "updatedAt": "2026-01-01T08:38:23.886Z",
+      "__v": 0
+    },
+    {
+      "_id": "69563283a7dca87041e751ae",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "action": "login",
+      "entityType": "user",
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "metadata": {
+        "success": false,
+        "reason": "invalid_pin",
+        "method": "pin"
+      },
+      "createdAt": "2026-01-01T08:38:27.965Z",
+      "updatedAt": "2026-01-01T08:38:27.965Z",
+      "__v": 0
+    },
+    {
+      "_id": "69563d42a7dca87041e751c3",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "action": "login",
+      "entityType": "user",
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "metadata": {
+        "success": false,
+        "reason": "invalid_pin",
+        "method": "pin"
+      },
+      "createdAt": "2026-01-01T09:24:18.247Z",
+      "updatedAt": "2026-01-01T09:24:18.247Z",
+      "__v": 0
+    },
+    {
+      "_id": "69563f80a7dca87041e751e4",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "action": "login",
+      "entityType": "user",
+      "entityId": "6954e5f950505d7af7f38f04",
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "metadata": {
+        "success": true
+      },
+      "createdAt": "2026-01-01T09:33:52.566Z",
+      "updatedAt": "2026-01-01T09:33:52.566Z",
+      "__v": 0
+    },
+    {
+      "_id": "695652265c0e694070c6143c",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "user",
+      "entityId": "6954e5f950505d7af7f38f04",
+      "changes": {
+        "pin": {
+          "changed": true
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T10:53:26.735Z",
+      "updatedAt": "2026-01-01T10:53:26.735Z",
+      "__v": 0
+    },
+    {
+      "_id": "69565fed5c0e694070c61567",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "tenant",
+      "entityId": "6954e5f950505d7af7f38f02",
+      "changes": {
+        "settings": {
+          "currency": "PHP",
+          "currencyPosition": "before",
+          "dateFormat": "MM/DD/YYYY",
+          "timeFormat": "12h",
+          "timezone": "UTC",
+          "language": "en",
+          "numberFormat": {
+            "decimalSeparator": ".",
+            "thousandsSeparator": ",",
+            "decimalPlaces": 2
+          },
+          "primaryColor": "#155dfc",
+          "receiptShowLogo": true,
+          "receiptShowAddress": true,
+          "receiptShowPhone": false,
+          "receiptShowEmail": false,
+          "taxEnabled": false,
+          "taxRate": 0,
+          "taxLabel": "Tax",
+          "lowStockThreshold": 10,
+          "lowStockAlert": true,
+          "emailNotifications": true,
+          "smsNotifications": true,
+          "attendanceNotifications": {
+            "enabled": true,
+            "expectedStartTime": "09:00",
+            "maxHoursWithoutClockOut": 12
+          },
+          "enableInventory": true,
+          "enableCategories": true,
+          "enableDiscounts": false,
+          "enableLoyaltyProgram": false,
+          "enableCustomerManagement": false,
+          "enableBookingScheduling": false,
+          "address": {
+            "street": "A. Bonifacio St",
+            "city": "Baybay City",
+            "state": "PH",
+            "zipCode": "6521",
+            "country": "Philippines"
+          },
+          "email": "jelave2023@gmail.com",
+          "phone": "+639154585455",
+          "businessType": "Service",
+          "companyName": "Jelave",
+          "receiptFooter": "https://linktomobileapp.com",
+          "registrationNumber": "123456789"
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T11:52:13.651Z",
+      "updatedAt": "2026-01-01T11:52:13.651Z",
+      "__v": 0
+    },
+    {
+      "_id": "69565ffa5c0e694070c61581",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "transaction.create",
+      "entityType": "transaction",
+      "entityId": "69565ffa5c0e694070c6157c",
+      "changes": {
+        "receiptNumber": "REC-20260101-00008",
+        "total": 50,
+        "itemsCount": 1
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T11:52:26.976Z",
+      "updatedAt": "2026-01-01T11:52:26.976Z",
+      "__v": 0
+    },
+    {
+      "_id": "695660295c0e694070c6159b",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "69561ce2b7ce021f78f46583",
+      "changes": {
+        "allowOutOfStockSales": {
+          "old": false,
+          "new": true
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T11:53:13.296Z",
+      "updatedAt": "2026-01-01T11:53:13.296Z",
+      "__v": 0
+    },
+    {
+      "_id": "695660405c0e694070c615a9",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "product",
+      "entityId": "69561ce2b7ce021f78f46583",
+      "changes": {
+        "stock": {
+          "old": 49,
+          "new": 52
+        },
+        "refillQuantity": 3
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T11:53:36.922Z",
+      "updatedAt": "2026-01-01T11:53:36.922Z",
+      "__v": 0
+    },
+    {
+      "_id": "695674e98a2bb0b9a94dc9b2",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "tenant",
+      "entityId": "6954e5f950505d7af7f38f02",
+      "changes": {
+        "settings": {
+          "currency": "PHP",
+          "currencyPosition": "before",
+          "dateFormat": "MM/DD/YYYY",
+          "timeFormat": "12h",
+          "timezone": "UTC",
+          "language": "en",
+          "numberFormat": {
+            "decimalSeparator": ".",
+            "thousandsSeparator": ",",
+            "decimalPlaces": 2
+          },
+          "primaryColor": "#155dfc",
+          "receiptShowLogo": true,
+          "receiptShowAddress": true,
+          "receiptShowPhone": false,
+          "receiptShowEmail": false,
+          "taxEnabled": false,
+          "taxRate": 0,
+          "taxLabel": "Tax",
+          "lowStockThreshold": 10,
+          "lowStockAlert": true,
+          "emailNotifications": true,
+          "smsNotifications": true,
+          "attendanceNotifications": {
+            "enabled": true,
+            "expectedStartTime": "09:00",
+            "maxHoursWithoutClockOut": 12
+          },
+          "enableInventory": true,
+          "enableCategories": true,
+          "enableDiscounts": false,
+          "enableLoyaltyProgram": false,
+          "enableCustomerManagement": false,
+          "enableBookingScheduling": false,
+          "multiCurrency": {
+            "enabled": false,
+            "displayCurrencies": [],
+            "exchangeRateSource": "manual"
+          },
+          "receiptTemplates": {
+            "templates": []
+          },
+          "advancedBranding": {
+            "fontSource": "system",
+            "theme": "light",
+            "borderRadius": "md"
+          },
+          "taxRules": [],
+          "businessHours": {
+            "specialHours": []
+          },
+          "holidays": [],
+          "address": {
+            "street": "A. Bonifacio St",
+            "city": "Baybay City",
+            "state": "PH",
+            "zipCode": "6521",
+            "country": "Philippines"
+          },
+          "email": "jelave2023@gmail.com",
+          "phone": "+639154585455",
+          "businessType": "Service",
+          "companyName": "Jelave",
+          "receiptFooter": "https://linktomobileapp.com",
+          "registrationNumber": "123456789"
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T13:21:45.159Z",
+      "updatedAt": "2026-01-01T13:21:45.159Z",
+      "__v": 0
+    },
+    {
+      "_id": "695674ef8a2bb0b9a94dc9bf",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "tenant",
+      "entityId": "6954e5f950505d7af7f38f02",
+      "changes": {
+        "settings": {
+          "currency": "PHP",
+          "currencyPosition": "before",
+          "dateFormat": "MM/DD/YYYY",
+          "timeFormat": "12h",
+          "timezone": "UTC",
+          "language": "en",
+          "numberFormat": {
+            "decimalSeparator": ".",
+            "thousandsSeparator": ",",
+            "decimalPlaces": 2
+          },
+          "primaryColor": "#155dfc",
+          "receiptShowLogo": true,
+          "receiptShowAddress": true,
+          "receiptShowPhone": false,
+          "receiptShowEmail": false,
+          "taxEnabled": false,
+          "taxRate": 0,
+          "taxLabel": "Tax",
+          "lowStockThreshold": 10,
+          "lowStockAlert": true,
+          "emailNotifications": true,
+          "smsNotifications": true,
+          "attendanceNotifications": {
+            "enabled": true,
+            "expectedStartTime": "09:00",
+            "maxHoursWithoutClockOut": 12
+          },
+          "enableInventory": true,
+          "enableCategories": true,
+          "enableDiscounts": false,
+          "enableLoyaltyProgram": false,
+          "enableCustomerManagement": false,
+          "enableBookingScheduling": false,
+          "multiCurrency": {
+            "enabled": false,
+            "displayCurrencies": [],
+            "exchangeRateSource": "manual"
+          },
+          "receiptTemplates": {
+            "templates": []
+          },
+          "advancedBranding": {
+            "fontSource": "system",
+            "theme": "light",
+            "borderRadius": "md"
+          },
+          "taxRules": [],
+          "businessHours": {
+            "specialHours": []
+          },
+          "holidays": [],
+          "address": {
+            "street": "A. Bonifacio St",
+            "city": "Baybay City",
+            "state": "PH",
+            "zipCode": "6521",
+            "country": "Philippines"
+          },
+          "email": "jelave2023@gmail.com",
+          "phone": "+639154585455",
+          "businessType": "Service",
+          "companyName": "Jelave",
+          "receiptFooter": "https://linktomobileapp.com",
+          "registrationNumber": "123456789"
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T13:21:51.941Z",
+      "updatedAt": "2026-01-01T13:21:51.941Z",
+      "__v": 0
+    },
+    {
+      "_id": "6956750d8a2bb0b9a94dc9d8",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "tenant",
+      "entityId": "6954e5f950505d7af7f38f02",
+      "changes": {
+        "settings": {
+          "currency": "PHP",
+          "currencyPosition": "before",
+          "dateFormat": "MM/DD/YYYY",
+          "timeFormat": "12h",
+          "timezone": "UTC",
+          "language": "en",
+          "numberFormat": {
+            "decimalSeparator": ".",
+            "thousandsSeparator": ",",
+            "decimalPlaces": 2
+          },
+          "primaryColor": "#155dfc",
+          "receiptShowLogo": true,
+          "receiptShowAddress": true,
+          "receiptShowPhone": false,
+          "receiptShowEmail": false,
+          "taxEnabled": false,
+          "taxRate": 0,
+          "taxLabel": "Tax",
+          "lowStockThreshold": 10,
+          "lowStockAlert": true,
+          "emailNotifications": true,
+          "smsNotifications": true,
+          "attendanceNotifications": {
+            "enabled": true,
+            "expectedStartTime": "09:00",
+            "maxHoursWithoutClockOut": 12
+          },
+          "enableInventory": true,
+          "enableCategories": true,
+          "enableDiscounts": false,
+          "enableLoyaltyProgram": false,
+          "enableCustomerManagement": false,
+          "enableBookingScheduling": false,
+          "multiCurrency": {
+            "enabled": false,
+            "displayCurrencies": [],
+            "exchangeRateSource": "manual"
+          },
+          "receiptTemplates": {
+            "templates": []
+          },
+          "advancedBranding": {
+            "fontSource": "system",
+            "theme": "light",
+            "borderRadius": "md"
+          },
+          "taxRules": [],
+          "businessHours": {
+            "timezone": "UTC",
+            "schedule": {
+              "monday": {
+                "enabled": true,
+                "_id": "695675088a2bb0b9a94dc9c7",
+                "breaks": []
+              },
+              "tuesday": {
+                "enabled": true,
+                "_id": "695675088a2bb0b9a94dc9c8",
+                "breaks": []
+              },
+              "wednesday": {
+                "enabled": true,
+                "_id": "695675088a2bb0b9a94dc9c9",
+                "breaks": []
+              },
+              "thursday": {
+                "enabled": true,
+                "_id": "695675088a2bb0b9a94dc9ca",
+                "breaks": []
+              },
+              "friday": {
+                "enabled": true,
+                "_id": "695675088a2bb0b9a94dc9cb",
+                "breaks": []
+              },
+              "saturday": {
+                "enabled": true,
+                "_id": "695675088a2bb0b9a94dc9cc",
+                "breaks": []
+              }
+            },
+            "specialHours": []
+          },
+          "holidays": [],
+          "address": {
+            "street": "A. Bonifacio St",
+            "city": "Baybay City",
+            "state": "PH",
+            "zipCode": "6521",
+            "country": "Philippines"
+          },
+          "email": "jelave2023@gmail.com",
+          "phone": "+639154585455",
+          "businessType": "Service",
+          "companyName": "Jelave",
+          "receiptFooter": "https://linktomobileapp.com",
+          "registrationNumber": "123456789"
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T13:22:21.374Z",
+      "updatedAt": "2026-01-01T13:22:21.374Z",
+      "__v": 0
+    },
+    {
+      "_id": "695675628a2bb0b9a94dc9fa",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "tenant",
+      "entityId": "6954e5f950505d7af7f38f02",
+      "changes": {
+        "settings": {
+          "currency": "PHP",
+          "currencyPosition": "before",
+          "dateFormat": "MM/DD/YYYY",
+          "timeFormat": "12h",
+          "timezone": "UTC",
+          "language": "en",
+          "numberFormat": {
+            "decimalSeparator": ".",
+            "thousandsSeparator": ",",
+            "decimalPlaces": 2
+          },
+          "primaryColor": "#155dfc",
+          "receiptShowLogo": true,
+          "receiptShowAddress": true,
+          "receiptShowPhone": false,
+          "receiptShowEmail": false,
+          "taxEnabled": false,
+          "taxRate": 0,
+          "taxLabel": "Tax",
+          "lowStockThreshold": 10,
+          "lowStockAlert": true,
+          "emailNotifications": true,
+          "smsNotifications": true,
+          "attendanceNotifications": {
+            "enabled": true,
+            "expectedStartTime": "09:00",
+            "maxHoursWithoutClockOut": 12
+          },
+          "enableInventory": true,
+          "enableCategories": true,
+          "enableDiscounts": false,
+          "enableLoyaltyProgram": false,
+          "enableCustomerManagement": false,
+          "enableBookingScheduling": false,
+          "multiCurrency": {
+            "enabled": false,
+            "displayCurrencies": [],
+            "exchangeRateSource": "manual"
+          },
+          "receiptTemplates": {
+            "templates": []
+          },
+          "advancedBranding": {
+            "fontSource": "system",
+            "theme": "light",
+            "borderRadius": "md"
+          },
+          "taxRules": [],
+          "businessHours": {
+            "timezone": "UTC",
+            "schedule": {
+              "monday": {
+                "enabled": true,
+                "breaks": [],
+                "_id": "695675088a2bb0b9a94dc9c7"
+              },
+              "tuesday": {
+                "enabled": true,
+                "breaks": [],
+                "_id": "695675088a2bb0b9a94dc9c8"
+              },
+              "wednesday": {
+                "enabled": true,
+                "breaks": [],
+                "_id": "695675088a2bb0b9a94dc9c9"
+              },
+              "thursday": {
+                "enabled": true,
+                "breaks": [],
+                "_id": "695675088a2bb0b9a94dc9ca"
+              },
+              "friday": {
+                "enabled": true,
+                "breaks": [],
+                "_id": "695675088a2bb0b9a94dc9cb"
+              },
+              "saturday": {
+                "enabled": true,
+                "breaks": [],
+                "_id": "695675088a2bb0b9a94dc9cc"
+              }
+            },
+            "specialHours": []
+          },
+          "holidays": [],
+          "address": {
+            "street": "A. Bonifacio St",
+            "city": "Baybay City",
+            "state": "PH",
+            "zipCode": "6521",
+            "country": "Philippines"
+          },
+          "email": "jelave2023@gmail.com",
+          "phone": "+639154585455",
+          "businessType": "Service",
+          "companyName": "Jelave",
+          "receiptFooter": "https://linktomobileapp.com",
+          "registrationNumber": "123456789"
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T13:23:46.348Z",
+      "updatedAt": "2026-01-01T13:23:46.348Z",
+      "__v": 0
+    },
+    {
+      "_id": "695676da8a2bb0b9a94dca2f",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "tenant",
+      "entityId": "6954e5f950505d7af7f38f02",
+      "changes": {
+        "settings": {
+          "currency": "PHP",
+          "currencyPosition": "before",
+          "dateFormat": "MM/DD/YYYY",
+          "timeFormat": "12h",
+          "timezone": "UTC",
+          "language": "en",
+          "numberFormat": {
+            "decimalSeparator": ".",
+            "thousandsSeparator": ",",
+            "decimalPlaces": 2
+          },
+          "primaryColor": "#155dfc",
+          "receiptShowLogo": true,
+          "receiptShowAddress": true,
+          "receiptShowPhone": false,
+          "receiptShowEmail": false,
+          "taxEnabled": false,
+          "taxRate": 0,
+          "taxLabel": "Tax",
+          "lowStockThreshold": 10,
+          "lowStockAlert": true,
+          "emailNotifications": true,
+          "smsNotifications": true,
+          "attendanceNotifications": {
+            "enabled": true,
+            "expectedStartTime": "09:00",
+            "maxHoursWithoutClockOut": 12
+          },
+          "enableInventory": true,
+          "enableCategories": true,
+          "enableDiscounts": false,
+          "enableLoyaltyProgram": false,
+          "enableCustomerManagement": false,
+          "enableBookingScheduling": false,
+          "multiCurrency": {
+            "enabled": false,
+            "displayCurrencies": [],
+            "exchangeRateSource": "manual"
+          },
+          "receiptTemplates": {
+            "templates": []
+          },
+          "advancedBranding": {
+            "fontSource": "system",
+            "theme": "light",
+            "borderRadius": "md"
+          },
+          "taxRules": [],
+          "businessHours": {
+            "timezone": "UTC",
+            "schedule": {
+              "monday": {
+                "enabled": true,
+                "breaks": [],
+                "_id": "695675088a2bb0b9a94dc9c7"
+              },
+              "tuesday": {
+                "enabled": true,
+                "breaks": [],
+                "_id": "695675088a2bb0b9a94dc9c8"
+              },
+              "wednesday": {
+                "enabled": true,
+                "breaks": [],
+                "_id": "695675088a2bb0b9a94dc9c9"
+              },
+              "thursday": {
+                "enabled": true,
+                "breaks": [],
+                "_id": "695675088a2bb0b9a94dc9ca"
+              },
+              "friday": {
+                "enabled": true,
+                "breaks": [],
+                "_id": "695675088a2bb0b9a94dc9cb"
+              },
+              "saturday": {
+                "enabled": true,
+                "breaks": [],
+                "_id": "695675088a2bb0b9a94dc9cc"
+              }
+            },
+            "specialHours": []
+          },
+          "holidays": [],
+          "address": {
+            "street": "A. Bonifacio St",
+            "city": "Baybay City",
+            "state": "PH",
+            "zipCode": "6521",
+            "country": "Philippines"
+          },
+          "email": "jelave2023@gmail.com",
+          "phone": "+639154585455",
+          "businessType": "Service",
+          "companyName": "Jelave",
+          "receiptFooter": "https://linktomobileapp.com",
+          "registrationNumber": "123456789"
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T13:30:02.424Z",
+      "updatedAt": "2026-01-01T13:30:02.424Z",
+      "__v": 0
+    },
+    {
+      "_id": "69567eac8a2bb0b9a94dca6c",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "tenant",
+      "entityId": "6954e5f950505d7af7f38f02",
+      "changes": {
+        "settings": {
+          "currency": "PHP",
+          "currencyPosition": "before",
+          "dateFormat": "MM/DD/YYYY",
+          "timeFormat": "12h",
+          "timezone": "UTC",
+          "language": "en",
+          "numberFormat": {
+            "decimalSeparator": ".",
+            "thousandsSeparator": ",",
+            "decimalPlaces": 2
+          },
+          "primaryColor": "#155dfc",
+          "receiptShowLogo": true,
+          "receiptShowAddress": true,
+          "receiptShowPhone": false,
+          "receiptShowEmail": false,
+          "taxEnabled": false,
+          "taxRate": 0,
+          "taxLabel": "Tax",
+          "lowStockThreshold": 10,
+          "lowStockAlert": true,
+          "emailNotifications": true,
+          "smsNotifications": true,
+          "attendanceNotifications": {
+            "enabled": true,
+            "expectedStartTime": "09:00",
+            "maxHoursWithoutClockOut": 12
+          },
+          "enableInventory": true,
+          "enableCategories": true,
+          "enableDiscounts": false,
+          "enableLoyaltyProgram": false,
+          "enableCustomerManagement": false,
+          "enableBookingScheduling": false,
+          "multiCurrency": {
+            "enabled": false,
+            "displayCurrencies": [],
+            "exchangeRateSource": "manual"
+          },
+          "receiptTemplates": {
+            "templates": []
+          },
+          "advancedBranding": {
+            "fontSource": "system",
+            "theme": "dark",
+            "borderRadius": "md"
+          },
+          "taxRules": [],
+          "businessHours": {
+            "timezone": "UTC",
+            "schedule": {
+              "monday": {
+                "enabled": true,
+                "breaks": [],
+                "_id": "695675088a2bb0b9a94dc9c7"
+              },
+              "tuesday": {
+                "enabled": true,
+                "breaks": [],
+                "_id": "695675088a2bb0b9a94dc9c8"
+              },
+              "wednesday": {
+                "enabled": true,
+                "breaks": [],
+                "_id": "695675088a2bb0b9a94dc9c9"
+              },
+              "thursday": {
+                "enabled": true,
+                "breaks": [],
+                "_id": "695675088a2bb0b9a94dc9ca"
+              },
+              "friday": {
+                "enabled": true,
+                "breaks": [],
+                "_id": "695675088a2bb0b9a94dc9cb"
+              },
+              "saturday": {
+                "enabled": true,
+                "breaks": [],
+                "_id": "695675088a2bb0b9a94dc9cc"
+              }
+            },
+            "specialHours": []
+          },
+          "holidays": [],
+          "address": {
+            "street": "A. Bonifacio St",
+            "city": "Baybay City",
+            "state": "PH",
+            "zipCode": "6521",
+            "country": "Philippines"
+          },
+          "email": "jelave2023@gmail.com",
+          "phone": "+639154585455",
+          "businessType": "Service",
+          "companyName": "Jelave",
+          "receiptFooter": "https://linktomobileapp.com",
+          "registrationNumber": "123456789"
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T14:03:24.614Z",
+      "updatedAt": "2026-01-01T14:03:24.614Z",
+      "__v": 0
+    },
+    {
+      "_id": "69567eb68a2bb0b9a94dca7f",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "tenant",
+      "entityId": "6954e5f950505d7af7f38f02",
+      "changes": {
+        "settings": {
+          "currency": "PHP",
+          "currencyPosition": "before",
+          "dateFormat": "MM/DD/YYYY",
+          "timeFormat": "12h",
+          "timezone": "UTC",
+          "language": "en",
+          "numberFormat": {
+            "decimalSeparator": ".",
+            "thousandsSeparator": ",",
+            "decimalPlaces": 2
+          },
+          "primaryColor": "#155dfc",
+          "receiptShowLogo": true,
+          "receiptShowAddress": true,
+          "receiptShowPhone": false,
+          "receiptShowEmail": false,
+          "taxEnabled": false,
+          "taxRate": 0,
+          "taxLabel": "Tax",
+          "lowStockThreshold": 10,
+          "lowStockAlert": true,
+          "emailNotifications": true,
+          "smsNotifications": true,
+          "attendanceNotifications": {
+            "enabled": true,
+            "expectedStartTime": "09:00",
+            "maxHoursWithoutClockOut": 12
+          },
+          "enableInventory": true,
+          "enableCategories": true,
+          "enableDiscounts": false,
+          "enableLoyaltyProgram": false,
+          "enableCustomerManagement": false,
+          "enableBookingScheduling": false,
+          "multiCurrency": {
+            "enabled": false,
+            "displayCurrencies": [],
+            "exchangeRateSource": "manual"
+          },
+          "receiptTemplates": {
+            "templates": []
+          },
+          "advancedBranding": {
+            "fontSource": "system",
+            "theme": "light",
+            "borderRadius": "md"
+          },
+          "taxRules": [],
+          "businessHours": {
+            "timezone": "UTC",
+            "schedule": {
+              "monday": {
+                "enabled": true,
+                "breaks": [],
+                "_id": "695675088a2bb0b9a94dc9c7"
+              },
+              "tuesday": {
+                "enabled": true,
+                "breaks": [],
+                "_id": "695675088a2bb0b9a94dc9c8"
+              },
+              "wednesday": {
+                "enabled": true,
+                "breaks": [],
+                "_id": "695675088a2bb0b9a94dc9c9"
+              },
+              "thursday": {
+                "enabled": true,
+                "breaks": [],
+                "_id": "695675088a2bb0b9a94dc9ca"
+              },
+              "friday": {
+                "enabled": true,
+                "breaks": [],
+                "_id": "695675088a2bb0b9a94dc9cb"
+              },
+              "saturday": {
+                "enabled": true,
+                "breaks": [],
+                "_id": "695675088a2bb0b9a94dc9cc"
+              }
+            },
+            "specialHours": []
+          },
+          "holidays": [],
+          "address": {
+            "street": "A. Bonifacio St",
+            "city": "Baybay City",
+            "state": "PH",
+            "zipCode": "6521",
+            "country": "Philippines"
+          },
+          "email": "jelave2023@gmail.com",
+          "phone": "+639154585455",
+          "businessType": "Service",
+          "companyName": "Jelave",
+          "receiptFooter": "https://linktomobileapp.com",
+          "registrationNumber": "123456789"
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T14:03:34.455Z",
+      "updatedAt": "2026-01-01T14:03:34.455Z",
+      "__v": 0
+    },
+    {
+      "_id": "6956aaf08a2bb0b9a94dd879",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "tenant",
+      "entityId": "6954e5f950505d7af7f38f02",
+      "changes": {
+        "settings": {
+          "currency": "PHP",
+          "currencyPosition": "before",
+          "dateFormat": "MM/DD/YYYY",
+          "timeFormat": "12h",
+          "timezone": "UTC",
+          "language": "en",
+          "numberFormat": {
+            "decimalSeparator": ".",
+            "thousandsSeparator": ",",
+            "decimalPlaces": 2
+          },
+          "primaryColor": "#155dfc",
+          "receiptShowLogo": true,
+          "receiptShowAddress": true,
+          "receiptShowPhone": false,
+          "receiptShowEmail": false,
+          "taxEnabled": false,
+          "taxRate": 0,
+          "taxLabel": "Tax",
+          "lowStockThreshold": 10,
+          "lowStockAlert": true,
+          "emailNotifications": true,
+          "smsNotifications": true,
+          "attendanceNotifications": {
+            "enabled": true,
+            "expectedStartTime": "09:00",
+            "maxHoursWithoutClockOut": 12
+          },
+          "enableInventory": true,
+          "enableCategories": true,
+          "enableDiscounts": false,
+          "enableLoyaltyProgram": false,
+          "enableCustomerManagement": false,
+          "enableBookingScheduling": false,
+          "multiCurrency": {
+            "enabled": false,
+            "displayCurrencies": [],
+            "exchangeRateSource": "api",
+            "exchangeRateApiKey": "4f15d085a0f8a7a6fe05e1b0e0a29de9"
+          },
+          "receiptTemplates": {
+            "templates": []
+          },
+          "advancedBranding": {
+            "fontSource": "system",
+            "theme": "light",
+            "borderRadius": "md"
+          },
+          "taxRules": [],
+          "businessHours": {
+            "timezone": "UTC",
+            "schedule": {
+              "monday": {
+                "enabled": true,
+                "breaks": [],
+                "_id": "695675088a2bb0b9a94dc9c7"
+              },
+              "tuesday": {
+                "enabled": true,
+                "breaks": [],
+                "_id": "695675088a2bb0b9a94dc9c8"
+              },
+              "wednesday": {
+                "enabled": true,
+                "breaks": [],
+                "_id": "695675088a2bb0b9a94dc9c9"
+              },
+              "thursday": {
+                "enabled": true,
+                "breaks": [],
+                "_id": "695675088a2bb0b9a94dc9ca"
+              },
+              "friday": {
+                "enabled": true,
+                "breaks": [],
+                "_id": "695675088a2bb0b9a94dc9cb"
+              },
+              "saturday": {
+                "enabled": true,
+                "breaks": [],
+                "_id": "695675088a2bb0b9a94dc9cc"
+              }
+            },
+            "specialHours": []
+          },
+          "holidays": [],
+          "address": {
+            "street": "A. Bonifacio St",
+            "city": "Baybay City",
+            "state": "PH",
+            "zipCode": "6521",
+            "country": "Philippines"
+          },
+          "email": "jelave2023@gmail.com",
+          "phone": "+639154585455",
+          "businessType": "Service",
+          "companyName": "Jelave",
+          "receiptFooter": "https://linktomobileapp.com",
+          "registrationNumber": "123456789"
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T17:12:16.563Z",
+      "updatedAt": "2026-01-01T17:12:16.563Z",
+      "__v": 0
+    },
+    {
+      "_id": "6956c2838a2bb0b9a94de15d",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "update",
+      "entityType": "tenant",
+      "entityId": "6954e5f950505d7af7f38f02",
+      "changes": {
+        "settings": {
+          "currency": "PHP",
+          "currencyPosition": "before",
+          "dateFormat": "MM/DD/YYYY",
+          "timeFormat": "12h",
+          "timezone": "UTC",
+          "language": "en",
+          "numberFormat": {
+            "decimalSeparator": ".",
+            "thousandsSeparator": ",",
+            "decimalPlaces": 2
+          },
+          "primaryColor": "#155dfc",
+          "receiptShowLogo": true,
+          "receiptShowAddress": true,
+          "receiptShowPhone": false,
+          "receiptShowEmail": false,
+          "taxEnabled": false,
+          "taxRate": 0,
+          "taxLabel": "Tax",
+          "lowStockThreshold": 10,
+          "lowStockAlert": true,
+          "emailNotifications": true,
+          "smsNotifications": true,
+          "attendanceNotifications": {
+            "enabled": true,
+            "expectedStartTime": "09:00",
+            "maxHoursWithoutClockOut": 12
+          },
+          "enableInventory": true,
+          "enableCategories": true,
+          "enableDiscounts": false,
+          "enableLoyaltyProgram": false,
+          "enableCustomerManagement": false,
+          "enableBookingScheduling": false,
+          "multiCurrency": {
+            "enabled": false,
+            "displayCurrencies": [],
+            "exchangeRateSource": "api",
+            "exchangeRateApiKey": "4f15d085a0f8a7a6fe05e1b0e0a29de9"
+          },
+          "receiptTemplates": {
+            "templates": []
+          },
+          "advancedBranding": {
+            "fontSource": "system",
+            "theme": "light",
+            "borderRadius": "md"
+          },
+          "taxRules": [],
+          "businessHours": {
+            "timezone": "UTC",
+            "schedule": {
+              "monday": {
+                "enabled": true,
+                "breaks": [],
+                "_id": "695675088a2bb0b9a94dc9c7"
+              },
+              "tuesday": {
+                "enabled": true,
+                "breaks": [],
+                "_id": "695675088a2bb0b9a94dc9c8"
+              },
+              "wednesday": {
+                "enabled": true,
+                "breaks": [],
+                "_id": "695675088a2bb0b9a94dc9c9"
+              },
+              "thursday": {
+                "enabled": true,
+                "breaks": [],
+                "_id": "695675088a2bb0b9a94dc9ca"
+              },
+              "friday": {
+                "enabled": true,
+                "breaks": [],
+                "_id": "695675088a2bb0b9a94dc9cb"
+              },
+              "saturday": {
+                "enabled": true,
+                "breaks": [],
+                "_id": "695675088a2bb0b9a94dc9cc"
+              }
+            },
+            "specialHours": []
+          },
+          "holidays": [],
+          "address": {
+            "street": "A. Bonifacio St",
+            "city": "Baybay City",
+            "state": "PH",
+            "zipCode": "6521",
+            "country": "Philippines"
+          },
+          "email": "jelave2023@gmail.com",
+          "phone": "+639154585455",
+          "businessType": "laundry",
+          "companyName": "Jelave",
+          "receiptFooter": "https://linktomobileapp.com",
+          "registrationNumber": "123456789"
+        }
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T18:52:51.395Z",
+      "updatedAt": "2026-01-01T18:52:51.395Z",
+      "__v": 0
+    },
+    {
+      "_id": "6956cf7f8a2bb0b9a94de49f",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "delete",
+      "entityType": "bundle",
+      "entityId": "69561d5eb7ce021f78f4673e",
+      "changes": {
+        "name": "Bundle 1"
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T19:48:15.554Z",
+      "updatedAt": "2026-01-01T19:48:15.554Z",
+      "__v": 0
+    },
+    {
+      "_id": "6956cf838a2bb0b9a94de4ad",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "delete",
+      "entityType": "bundle",
+      "entityId": "69561d5eb7ce021f78f4673e",
+      "changes": {
+        "name": "Bundle 1"
+      },
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "createdAt": "2026-01-01T19:48:19.051Z",
+      "updatedAt": "2026-01-01T19:48:19.051Z",
+      "__v": 0
+    },
+    {
+      "_id": "695745d4a228fed788b0d92f",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "userId": "6954e5f950505d7af7f38f04",
+      "action": "logout",
+      "entityType": "user",
+      "entityId": "6954e5f950505d7af7f38f04",
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "metadata": {
+        "success": true
+      },
+      "createdAt": "2026-01-02T04:13:08.242Z",
+      "updatedAt": "2026-01-02T04:13:08.242Z",
+      "__v": 0
+    },
+    {
+      "_id": "695745dea228fed788b0d935",
+      "tenantId": "695745c0a228fed788b0d8fb",
+      "action": "login",
+      "entityType": "user",
+      "entityId": "695745c0a228fed788b0d8fd",
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "metadata": {
+        "success": true
+      },
+      "createdAt": "2026-01-02T04:13:18.384Z",
+      "updatedAt": "2026-01-02T04:13:18.384Z",
+      "__v": 0
+    }
+  ],
+  "discounts": [
+    {
+      "_id": "69561aceb7ce021f78f45f98",
+      "tenantId": "6954e570f6485146f828c457",
+      "code": "OPENING",
+      "name": "Opening Promo",
+      "description": "This is a promo for opening.",
+      "type": "fixed",
+      "value": 10,
+      "minPurchaseAmount": 1,
+      "validFrom": "2026-01-01T00:00:00.000Z",
+      "validUntil": "2026-01-31T00:00:00.000Z",
+      "usageLimit": 10,
+      "usageCount": 0,
+      "isActive": true,
+      "createdAt": "2026-01-01T06:57:18.324Z",
+      "updatedAt": "2026-01-01T06:57:18.324Z",
+      "__v": 0
+    },
+    {
+      "_id": "69561afbb7ce021f78f46018",
+      "tenantId": "6954e570f6485146f828c457",
+      "code": "OPENINGPRCNT",
+      "name": "Percentage",
+      "type": "percentage",
+      "value": 10,
+      "maxDiscountAmount": 1,
+      "validFrom": "2026-01-01T00:00:00.000Z",
+      "validUntil": "2026-01-31T00:00:00.000Z",
+      "usageLimit": 10,
+      "usageCount": 0,
+      "isActive": true,
+      "createdAt": "2026-01-01T06:58:03.806Z",
+      "updatedAt": "2026-01-01T06:58:03.806Z",
+      "__v": 0
+    },
+    {
+      "_id": "69561dbcb7ce021f78f46883",
+      "tenantId": "6954e5f950505d7af7f38f02",
+      "code": "OPENING",
+      "name": "Opening",
+      "description": "saS",
+      "type": "percentage",
+      "value": 10,
+      "validFrom": "2026-01-01T00:00:00.000Z",
+      "validUntil": "2026-01-31T00:00:00.000Z",
+      "usageCount": 0,
+      "isActive": true,
+      "createdAt": "2026-01-01T07:09:48.834Z",
+      "updatedAt": "2026-01-01T07:09:48.834Z",
+      "__v": 0
+    }
+  ]
+}

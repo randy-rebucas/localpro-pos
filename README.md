@@ -2,6 +2,20 @@
 
 A comprehensive, enterprise-grade Point of Sale (POS) system built with Next.js 16, MongoDB, Mongoose, and Tailwind CSS. Features multi-tenant architecture, real-time inventory management, advanced reporting, and extensive customization options.
 
+## 🤖 Automations
+
+The system includes **7 automated workflows** to reduce manual work:
+
+- ✅ **Automated Booking Reminders** - Sends reminders 24h before bookings
+- ✅ **Low Stock Alerts** - Email/SMS notifications when products run low
+- ✅ **Transaction Receipt Auto-Email** - Automatically emails receipts
+- ✅ **Scheduled Reports** - Daily/weekly/monthly sales reports
+- ✅ **Discount Management** - Auto-activate/deactivate discounts
+- ✅ **Auto Clock-Out** - Clocks out forgotten attendance sessions
+- ✅ **Cash Drawer Auto-Close** - Closes drawers at end of day
+
+See [AUTOMATION_QUICK_START.md](./AUTOMATION_QUICK_START.md) for setup instructions.
+
 ## 🚀 Features
 
 ### Core POS Features
