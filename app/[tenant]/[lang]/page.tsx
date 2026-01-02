@@ -42,7 +42,7 @@ export default function Dashboard() {
   const params = useParams();
   const router = useRouter();
   const tenant = params.tenant as string;
-  const lang = params.lang as 'en' | 'es';
+  const lang = params.lang as 'en' | 'es' | 'forbidden';
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('today');
