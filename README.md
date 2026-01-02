@@ -730,11 +730,11 @@ See [PRODUCTION_README.md](./PRODUCTION_README.md) for detailed production deplo
 
 ### System Documentation
 
+- **[FEATURES.md](./FEATURES.md)** - Complete features documentation (100+ features)
 - [PRODUCTION_README.md](./PRODUCTION_README.md) - Production deployment guide
 - [MULTI_TENANT.md](./MULTI_TENANT.md) - Multi-tenant architecture details
+- [BOOKING_SCHEDULING.md](./BOOKING_SCHEDULING.md) - Booking and scheduling system
 - [INVENTORY_MANAGEMENT.md](./INVENTORY_MANAGEMENT.md) - Inventory management features
-- [TENANT_SETTINGS.md](./TENANT_SETTINGS.md) - Tenant settings and branding
-- [ENTERPRISE_FEATURES.md](./ENTERPRISE_FEATURES.md) - Enterprise features summary
 
 ## 🔒 Security Features
 
@@ -788,21 +788,41 @@ For issues or questions:
 
 ## 🎯 Feature Summary
 
-This POS system includes **50+ enterprise features** covering:
-- ✅ Complete POS functionality
-- ✅ Advanced inventory management
-- ✅ Multi-tenant architecture
-- ✅ Comprehensive reporting
-- ✅ User management with RBAC
-- ✅ Discount/promo system
-- ✅ Attendance tracking
-- ✅ Cash drawer management
-- ✅ Expense tracking
-- ✅ Hardware integration
-- ✅ Offline support
-- ✅ Internationalization
-- ✅ Security & audit logging
+This POS system includes **100+ enterprise features** covering:
+
+**Core Features:**
+- ✅ Complete POS functionality with multiple payment methods
+- ✅ Advanced inventory management with real-time updates
+- ✅ Multi-tenant architecture with complete data isolation
+- ✅ Multi-business type support (Retail, Restaurant, Laundry, Service, General)
+- ✅ Comprehensive reporting and analytics (Sales, Products, Financial, Tax, Cash Drawer)
+- ✅ User management with Role-Based Access Control (RBAC)
+- ✅ Customer management with lifetime value tracking
+- ✅ Discount and promo code system
+- ✅ Advanced tax rules management
+- ✅ Booking and scheduling system
+- ✅ Multi-currency support with exchange rates
+
+**Operations:**
+- ✅ Attendance tracking with GPS location
+- ✅ Cash drawer management with auto-close
+- ✅ Expense tracking by category
+- ✅ Branch management with multi-location support
+- ✅ Product bundles with analytics
+- ✅ Saved carts for customers
+- ✅ Stock movements with full audit trail
+
+**System Features:**
+- ✅ Hardware integration (Barcode scanners, QR codes, Receipt printers)
+- ✅ Offline support with automatic sync
+- ✅ Internationalization (English, Spanish, extensible)
+- ✅ Security & comprehensive audit logging
+- ✅ 30+ automated workflows
+- ✅ Receipt and notification templates
+- ✅ Business hours and holiday management
 - ✅ And much more!
+
+📖 **For complete feature documentation, see [FEATURES.md](./FEATURES.md)**
 
 ---
 
