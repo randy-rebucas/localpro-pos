@@ -39,8 +39,8 @@ export default function RootNotFound() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-12">
-      <div className="max-w-2xl w-full bg-white rounded-lg shadow-lg p-8">
+    <div className="min-h-screen flex items-center justify-center px-4 py-12">
+      <div className="max-w-2xl w-full bg-white border border-gray-300 p-8">
         <div className="text-center mb-8">
           <div className="mb-6">
             <svg
@@ -75,7 +75,7 @@ export default function RootNotFound() {
                 <Link
                   key={tenant.slug}
                   href={`/${tenant.slug}/en`}
-                  className="block w-full bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg p-4 transition-colors"
+                  className="block w-full bg-gray-50 hover:bg-gray-100 p-4 transition-colors"
                 >
                   <div className="flex items-center justify-between">
                     <div>
@@ -107,7 +107,7 @@ export default function RootNotFound() {
                 <p className="text-gray-600 mb-4">{dict?.common?.noStoresAvailable || 'No stores available. Please contact your administrator.'}</p>
                 <Link
                   href="/default/en"
-                  className="inline-block bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 font-medium transition-colors"
+                  className="inline-block bg-blue-600 text-white px-6 py-2 hover:bg-blue-700 font-medium transition-colors"
                 >
                   {dict?.common?.goToDefaultStore || 'Go to Default Store'}
                 </Link>
@@ -117,16 +117,16 @@ export default function RootNotFound() {
         )}
 
         {!loading && tenants.length > 0 && (
-          <div className="mt-6 pt-6 border-t border-gray-200 space-y-3">
+          <div className="mt-6 pt-6 space-y-3">
             <Link
               href="/default/en"
-              className="block w-full bg-blue-600 text-white px-4 py-3 rounded-md hover:bg-blue-700 font-medium transition-colors text-center"
+              className="block w-full bg-blue-600 text-white px-4 py-3 hover:bg-blue-700 font-medium transition-colors text-center"
             >
               {dict?.common?.goToDefaultStore || 'Go to Default Store'}
             </Link>
             <Link
               href="/signup"
-              className="block w-full bg-gray-100 text-gray-700 px-4 py-3 rounded-md hover:bg-gray-200 font-medium transition-colors text-center"
+              className="block w-full bg-gray-100 text-gray-700 px-4 py-3 hover:bg-gray-200 font-medium transition-colors text-center"
             >
               {dict?.common?.createNewStore || 'Create a New Store'}
             </Link>
@@ -134,10 +134,10 @@ export default function RootNotFound() {
         )}
 
         {!loading && tenants.length === 0 && (
-          <div className="mt-6 pt-6 border-t border-gray-200">
+          <div className="mt-6 pt-6">
             <Link
               href="/signup"
-              className="block w-full bg-blue-600 text-white px-4 py-3 rounded-md hover:bg-blue-700 font-medium transition-colors text-center"
+              className="block w-full bg-blue-600 text-white px-4 py-3 hover:bg-blue-700 font-medium transition-colors text-center"
             >
               {dict?.common?.createYourFirstStore || 'Create Your First Store'}
             </Link>

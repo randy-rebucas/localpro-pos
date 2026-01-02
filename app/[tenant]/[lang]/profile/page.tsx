@@ -45,11 +45,11 @@ export default function ProfilePage() {
       setLoading(true);
       const res = await fetch('/api/auth/profile', { credentials: 'include' });
       const data = await res.json();
-      if (data.success) {
-        setProfileInfo(data.data);
+      if (data.success && data.user) {
+        setProfileInfo(data.user);
         setProfileData({
-          name: data.data.name || '',
-          email: data.data.email || '',
+          name: data.user.name || '',
+          email: data.user.email || '',
         });
       } else {
         setMessage({ type: 'error', text: data.error || dict?.common?.failedToLoadProfile || 'Failed to load profile' });

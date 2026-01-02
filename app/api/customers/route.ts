@@ -127,6 +127,23 @@ export async function POST(request: NextRequest) {
       entityId: customer._id.toString(),
       changes: { firstName, lastName, email },
     });
+
+    // Send welcome email (#22 - New Customer Welcome Emails)
+    if (customer.email) {
+      try {
+        const { sendCustomerWelcomeEmail } = await import('@/lib/automations/customer-welcome');
+        sendCustomerWelcomeEmail({
+          customerId: customer._id.toString(),
+          tenantId,
+        }).catch((error) => {
+          // Log error but don't fail customer creation
+          console.error('Failed to send welcome email:', error);
+        });
+      } catch (error) {
+        // Silently fail - welcome email shouldn't block customer creation
+        console.error('Error importing welcome email automation:', error);
+      }
+    }
     
     return NextResponse.json({ success: true, data: customer }, { status: 201 });
   } catch (error: any) {

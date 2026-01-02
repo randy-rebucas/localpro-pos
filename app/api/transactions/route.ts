@@ -436,6 +436,25 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Auto-send receipt email if customerEmail is provided and email notifications are enabled
+    const customerEmail = body.customerEmail;
+    if (customerEmail && tenantSettings?.emailNotifications) {
+      try {
+        // Import and send receipt asynchronously (don't block response)
+        const { sendTransactionReceipt } = await import('@/lib/automations/transaction-receipts');
+        sendTransactionReceipt({
+          transactionId: transaction._id.toString(),
+          customerEmail,
+        }).catch((error) => {
+          // Log error but don't fail the transaction
+          console.error('Failed to send receipt email:', error);
+        });
+      } catch (error) {
+        // Silently fail - receipt sending shouldn't block transaction creation
+        console.error('Error importing receipt automation:', error);
+      }
+    }
+
     return NextResponse.json({ success: true, data: transaction }, { status: 201 });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 400 });

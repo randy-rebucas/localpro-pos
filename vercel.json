@@ -1,0 +1,124 @@
+{
+  "crons": [
+    {
+      "path": "/api/automations/booking-reminders",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/automations/bookings/confirm",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/automations/bookings/no-show",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/automations/low-stock-alerts",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/automations/purchase-orders",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/automations/reports/sales?period=daily",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/automations/reports/sales?period=weekly",
+      "schedule": "0 9 * * 1"
+    },
+    {
+      "path": "/api/automations/reports/sales?period=monthly",
+      "schedule": "0 10 1 * *"
+    },
+    {
+      "path": "/api/automations/transaction-receipts?hoursAgo=24",
+      "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/automations/discounts/manage",
+      "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/automations/attendance/auto-clockout",
+      "schedule": "0 */2 * * *"
+    },
+    {
+      "path": "/api/automations/attendance/violations",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/automations/attendance/break-detection",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/automations/cash-drawer/auto-close",
+      "schedule": "0 22 * * *"
+    },
+    {
+      "path": "/api/automations/cash-drawer/reminders",
+      "schedule": "0 17 * * *"
+    },
+    {
+      "path": "/api/automations/carts/abandoned",
+      "schedule": "0 */12 * * *"
+    },
+    {
+      "path": "/api/automations/products/performance",
+      "schedule": "0 10 * * 1"
+    },
+    {
+      "path": "/api/automations/customers/lifetime-value",
+      "schedule": "0 2 * * 0"
+    },
+    {
+      "path": "/api/automations/sessions/expire",
+      "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/automations/stock/transfer",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/automations/stock/predictive",
+      "schedule": "0 9 * * 1"
+    },
+    {
+      "path": "/api/automations/pricing/dynamic",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/automations/data/archive",
+      "schedule": "0 3 * * 0"
+    },
+    {
+      "path": "/api/automations/backups/create",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/automations/audit-logs/cleanup",
+      "schedule": "0 4 * * 0"
+    },
+    {
+      "path": "/api/automations/sync/multi-branch",
+      "schedule": "0 */4 * * *"
+    },
+    {
+      "path": "/api/automations/security/suspicious-activity",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/automations/analytics/sales-trends?period=daily",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/automations/analytics/sales-trends?period=weekly",
+      "schedule": "0 10 * * 1"
+    },
+    {
+      "path": "/api/automations/analytics/sales-trends?period=monthly",
+      "schedule": "0 11 1 * *"
+    }
+  ]
+}

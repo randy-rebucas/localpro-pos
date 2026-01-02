@@ -43,7 +43,7 @@ export default function ProtectedRoute({
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
           <p className="mt-4 text-gray-600">{dict?.components?.protectedRoute?.loading || dict?.common?.loading || 'Loading...'}</p>
@@ -58,7 +58,7 @@ export default function ProtectedRoute({
 
   if (requiredRoles.length > 0 && !hasRole(requiredRoles)) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-center max-w-md">
           <div className="text-6xl mb-4">🔒</div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">{dict?.components?.protectedRoute?.accessDenied || 'Access Denied'}</h1>
