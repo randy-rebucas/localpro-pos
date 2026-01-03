@@ -84,18 +84,31 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
-    const user = await getCurrentUser(request);
     const t = await getValidationTranslatorFromRequest(request);
-    if (!user) {
-      return NextResponse.json(
-        { success: false, error: t('validation.unauthorized', 'Unauthorized') },
-        { status: 401 }
-      );
+    
+    // Allow cashiers and above OR authenticated customers to create bookings
+    let tenantId: string | null = null;
+    let isCustomer = false;
+    let customerAuth: any = null;
+    
+    try {
+      // Try customer authentication first
+      const { requireCustomerAuth } = await import('@/lib/auth-customer');
+      customerAuth = await requireCustomerAuth(request);
+      tenantId = customerAuth.tenantId;
+      isCustomer = true;
+    } catch {
+      // Fall back to staff authentication
+      const user = await getCurrentUser(request);
+      if (!user) {
+        return NextResponse.json(
+          { success: false, error: t('validation.unauthorized', 'Unauthorized') },
+          { status: 401 }
+        );
+      }
+      await requireRole(request, ['owner', 'admin', 'manager', 'cashier']);
+      tenantId = await getTenantIdFromRequest(request);
     }
-
-    // Allow cashiers and above to create bookings
-    await requireRole(request, ['owner', 'admin', 'manager', 'cashier']);
-    const tenantId = await getTenantIdFromRequest(request);
     
     if (!tenantId) {
       return NextResponse.json(
@@ -105,7 +118,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const {
+    let {
       customerName,
       customerEmail,
       customerPhone,
@@ -117,6 +130,17 @@ export async function POST(request: NextRequest) {
       notes,
       status = 'pending',
     } = body;
+
+    // If customer is authenticated, use their information
+    if (isCustomer && customerAuth) {
+      const Customer = (await import('@/models/Customer')).default;
+      const customer = await Customer.findById(customerAuth.customerId).lean();
+      if (customer) {
+        customerName = customerName || `${customer.firstName} ${customer.lastName}`;
+        customerEmail = customerEmail || customer.email;
+        customerPhone = customerPhone || customer.phone;
+      }
+    }
 
     // Validation
     if (!customerName || !serviceName || !startTime || !duration) {
@@ -170,8 +194,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Verify staff exists if provided
-    if (staffId) {
+    // Verify staff exists if provided (only for staff-created bookings, not customer bookings)
+    if (staffId && !isCustomer) {
       const staff = await User.findOne({ _id: staffId, tenantId, isActive: true });
       if (!staff) {
         return NextResponse.json(
