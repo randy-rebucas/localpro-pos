@@ -1,6 +1,6 @@
 # Sales Reports - User Guide
 
-Complete guide to viewing and analyzing sales reports in LocalPro POS.
+Complete guide to viewing and analyzing sales reports in 1POS.
 
 ## Overview
 

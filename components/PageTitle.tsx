@@ -20,9 +20,9 @@ export default function PageTitle() {
   
   useEffect(() => {
     if (settings?.companyName) {
-      document.title = `${settings.companyName} - POS System`;
+      document.title = `${settings.companyName} - 1POS`;
     } else {
-      document.title = dict?.components?.pageTitle?.posSystem || 'POS System - Point of Sale';
+      document.title = dict?.components?.pageTitle?.posSystem || '1POS - Point of Sale';
     }
   }, [settings?.companyName, dict]);
 

@@ -5,7 +5,7 @@
 export const config = {
   // Database
   mongodb: {
-    uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/pos-system',
+    uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/1pos',
   },
 
   // JWT

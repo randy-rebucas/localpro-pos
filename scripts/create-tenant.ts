@@ -37,7 +37,7 @@ import User from '../models/User';
 import { getDefaultTenantSettings } from '../lib/currency';
 import * as readline from 'readline';
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/pos-system';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/1pos';
 
 interface TenantInput {
   slug: string;

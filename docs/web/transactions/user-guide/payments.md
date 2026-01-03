@@ -1,10 +1,10 @@
 # Payment Methods - User Guide
 
-Complete guide to processing different payment methods in LocalPro POS.
+Complete guide to processing different payment methods in 1POS.
 
 ## Overview
 
-LocalPro POS supports three payment methods:
+1POS supports three payment methods:
 - **Cash** - Physical cash payments
 - **Card** - Credit/debit card payments
 - **Digital** - Digital wallet payments (PayPal, Venmo, etc.)

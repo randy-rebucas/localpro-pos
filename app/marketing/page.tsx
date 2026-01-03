@@ -381,7 +381,7 @@ export default function MarketingPage() {
           </div>
 
           <h1 className="text-6xl md:text-7xl lg:text-8xl font-bold mb-6 animate-fade-in bg-gradient-to-r from-white via-blue-100 to-white bg-clip-text text-transparent">
-            LocalPro POS
+            1POS
           </h1>
           <p className="text-2xl md:text-3xl mb-6 text-blue-50 max-w-3xl mx-auto font-light">
             Transform Your Business Operations
@@ -671,7 +671,7 @@ export default function MarketingPage() {
             Ready to Transform Your Business?
           </h2>
           <p className="text-xl md:text-2xl mb-10 text-blue-100 max-w-2xl mx-auto leading-relaxed">
-            Join thousands of businesses using LocalPro POS to streamline operations, 
+            Join thousands of businesses using 1POS to streamline operations, 
             increase revenue, and scale effortlessly.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
@@ -700,7 +700,7 @@ export default function MarketingPage() {
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
             <div>
-              <h3 className="text-white font-bold text-xl mb-4">LocalPro POS</h3>
+              <h3 className="text-white font-bold text-xl mb-4">1POS</h3>
               <p className="text-gray-400 text-sm leading-relaxed">
                 Enterprise-grade Point of Sale System with 100+ features designed for modern businesses.
               </p>
@@ -731,7 +731,7 @@ export default function MarketingPage() {
             </div>
           </div>
           <div className="border-t border-gray-800 pt-8 text-center">
-            <p className="mb-2 text-gray-400">© 2024 LocalPro POS. All rights reserved.</p>
+            <p className="mb-2 text-gray-400">© 2024 1POS. All rights reserved.</p>
             <p className="text-sm text-gray-500">
               Enterprise-grade Point of Sale System with 100+ features
             </p>

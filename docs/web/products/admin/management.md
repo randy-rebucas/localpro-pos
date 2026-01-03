@@ -1,6 +1,6 @@
 # Product Management - Admin Guide
 
-Complete administrative guide for managing products in LocalPro POS.
+Complete administrative guide for managing products in 1POS.
 
 ## Overview
 

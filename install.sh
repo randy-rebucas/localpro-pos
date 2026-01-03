@@ -111,7 +111,7 @@ if [ ! -f ".env.local" ]; then
         print_info "Creating basic .env.local file..."
         cat > .env.local << EOF
 # MongoDB Connection String
-MONGODB_URI=mongodb://localhost:27017/pos-system
+MONGODB_URI=mongodb://localhost:27017/1pos
 
 # JWT Authentication (CHANGE THIS IN PRODUCTION!)
 JWT_SECRET=$(openssl rand -hex 32)
@@ -169,7 +169,7 @@ echo "--------------------------------"
 if [ -f ".env.local" ]; then
     if grep -q "MONGODB_URI" .env.local; then
         MONGODB_URI=$(grep "MONGODB_URI" .env.local | cut -d '=' -f2 | tr -d '"' | tr -d "'" | xargs)
-        if [ -z "$MONGODB_URI" ] || [ "$MONGODB_URI" = "mongodb://localhost:27017/pos-system" ]; then
+        if [ -z "$MONGODB_URI" ] || [ "$MONGODB_URI" = "mongodb://localhost:27017/1pos" ]; then
             print_warning "MongoDB URI is set to default localhost"
             print_info "Make sure MongoDB is running locally, or update MONGODB_URI in .env.local"
         fi

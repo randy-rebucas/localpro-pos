@@ -1,10 +1,10 @@
 # Mobile API Quick Start Guide
 
-This guide will help you get started with integrating the LocalPro POS API into your mobile application in under 10 minutes.
+This guide will help you get started with integrating the 1POS API into your mobile application in under 10 minutes.
 
 ## Prerequisites
 
-- A deployed LocalPro POS instance (or local development server)
+- A deployed 1POS instance (or local development server)
 - Your tenant slug
 - Valid user credentials (email/password or PIN)
 - Mobile development environment (React Native, Flutter, iOS, Android, etc.)

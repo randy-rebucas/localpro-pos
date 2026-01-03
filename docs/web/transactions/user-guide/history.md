@@ -1,6 +1,6 @@
 # Transaction History - User Guide
 
-Complete guide to viewing and managing transaction history in LocalPro POS.
+Complete guide to viewing and managing transaction history in 1POS.
 
 ## Overview
 

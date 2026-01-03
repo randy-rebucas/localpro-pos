@@ -1,6 +1,6 @@
 # Mobile API Troubleshooting Guide
 
-Common issues and solutions when integrating the LocalPro POS API with mobile applications.
+Common issues and solutions when integrating the 1POS API with mobile applications.
 
 ## Table of Contents
 

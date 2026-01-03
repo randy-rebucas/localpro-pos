@@ -79,7 +79,7 @@ import mongoose from 'mongoose';
 import User from '../models/User';
 import Tenant from '../models/Tenant';
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/pos-system';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/1pos';
 const tenantSlug = process.argv[2] || 'default';
 
 async function resetAdminUsers() {
@@ -222,7 +222,7 @@ async function install() {
       } else {
         // Create default .env.local
         envContent = `# MongoDB Connection String
-MONGODB_URI=mongodb://localhost:27017/pos-system
+MONGODB_URI=mongodb://localhost:27017/1pos
 
 # JWT Authentication Secret (CHANGE THIS IN PRODUCTION!)
 JWT_SECRET=${generateJWTSecret()}

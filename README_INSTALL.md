@@ -80,7 +80,7 @@ Or create it manually with:
 
 ```env
 # MongoDB Connection String
-MONGODB_URI=mongodb://localhost:27017/pos-system
+MONGODB_URI=mongodb://localhost:27017/1pos
 
 # JWT Authentication (CHANGE THIS IN PRODUCTION!)
 JWT_SECRET=your-super-secret-random-string-min-32-chars

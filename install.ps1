@@ -83,7 +83,7 @@ if (-not (Test-Path ".env.local")) {
         $jwtSecret = -join ((48..57) + (65..70) | Get-Random -Count 64 | ForEach-Object {[char]$_})
         $envContent = @"
 # MongoDB Connection String
-MONGODB_URI=mongodb://localhost:27017/pos-system
+MONGODB_URI=mongodb://localhost:27017/1pos
 
 # JWT Authentication (CHANGE THIS IN PRODUCTION!)
 JWT_SECRET=$jwtSecret

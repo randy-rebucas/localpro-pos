@@ -198,7 +198,7 @@
     "onlyCompletedRefundable": "Only completed transactions can be refunded",
     "receipt": "Receipt",
     "thankYou": "Thank you for your business!",
-    "receiptTitle": "POS SYSTEM",
+    "receiptTitle": "1POS",
     "refundReasonPlaceholder": "Reason for refund",
     "refundNotesPlaceholder": "Additional notes",
     "removeItem": "Remove item",
@@ -1063,7 +1063,7 @@
       "retry": "Retry"
     },
     "pageTitle": {
-      "posSystem": "POS System - Point of Sale"
+      "posSystem": "1POS - Point of Sale"
     }
   }
 }

@@ -1,6 +1,6 @@
 # Inventory Management
 
-Complete guide to managing inventory and stock in LocalPro POS.
+Complete guide to managing inventory and stock in 1POS.
 
 ## Overview
 

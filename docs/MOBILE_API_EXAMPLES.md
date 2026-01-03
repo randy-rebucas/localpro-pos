@@ -1,6 +1,6 @@
 # Mobile API Code Examples
 
-Complete, ready-to-use code examples for integrating the LocalPro POS API with various mobile platforms.
+Complete, ready-to-use code examples for integrating the 1POS API with various mobile platforms.
 
 ## Table of Contents
 

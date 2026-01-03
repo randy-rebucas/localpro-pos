@@ -1,10 +1,10 @@
 # Mobile API Authentication
 
-Complete guide to authenticating with the LocalPro POS API from mobile applications.
+Complete guide to authenticating with the 1POS API from mobile applications.
 
 ## Overview
 
-The LocalPro POS API uses **JWT (JSON Web Tokens)** for authentication. After successful login, you receive a token that must be included in all subsequent API requests.
+The 1POS API uses **JWT (JSON Web Tokens)** for authentication. After successful login, you receive a token that must be included in all subsequent API requests.
 
 ## Authentication Methods
 

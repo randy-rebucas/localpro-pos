@@ -1,6 +1,6 @@
 # Documentation Final Summary
 
-Complete summary of all documentation created for LocalPro POS.
+Complete summary of all documentation created for 1POS.
 
 ## 📊 Documentation Statistics
 

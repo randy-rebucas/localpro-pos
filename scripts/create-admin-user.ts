@@ -14,7 +14,7 @@ import mongoose from 'mongoose';
 import User from '../models/User';
 import Tenant from '../models/Tenant';
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/pos-system';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/1pos';
 
 async function createAdminUser() {
   try {

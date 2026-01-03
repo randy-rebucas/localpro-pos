@@ -7,7 +7,7 @@ Complete setup guide for implementing the customer mobile app with Twilio OTP au
 ## Prerequisites
 
 1. **Backend Setup**
-   - LocalPro POS backend running
+   - 1POS backend running
    - MongoDB database configured
    - Environment variables set up
 
@@ -92,7 +92,7 @@ async function testTwilio() {
     }
 
     const message = await client.messages.create({
-      body: 'Test message from LocalPro POS',
+      body: 'Test message from 1POS',
       from: fromPhone,
       to: testPhone,
     });

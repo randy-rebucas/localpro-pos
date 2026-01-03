@@ -1,6 +1,6 @@
 # Complete API Endpoints Reference
 
-Complete list of all API endpoints in the LocalPro POS system, organized by category.
+Complete list of all API endpoints in the 1POS system, organized by category.
 
 **Base URL:** `/api`
 

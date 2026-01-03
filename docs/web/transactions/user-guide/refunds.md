@@ -1,6 +1,6 @@
 # Processing Refunds - User Guide
 
-Complete guide to processing refunds and returns in LocalPro POS.
+Complete guide to processing refunds and returns in 1POS.
 
 ## Overview
 

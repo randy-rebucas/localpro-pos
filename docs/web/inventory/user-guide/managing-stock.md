@@ -1,6 +1,6 @@
 # Managing Stock - User Guide
 
-Complete guide to managing inventory and stock levels in LocalPro POS.
+Complete guide to managing inventory and stock levels in 1POS.
 
 ## Overview
 

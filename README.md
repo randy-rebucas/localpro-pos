@@ -1,4 +1,4 @@
-# LocalPro POS - Enterprise Point of Sale System
+# 1POS - Enterprise Point of Sale System
 
 A comprehensive, enterprise-grade Point of Sale (POS) system built with Next.js 16, MongoDB, Mongoose, and Tailwind CSS. Features multi-tenant architecture, real-time inventory management, advanced reporting, and extensive customization options.
 
@@ -391,7 +391,7 @@ The system supports multiple business types with industry-specific configuration
 
 1. **Clone or navigate to the project directory:**
    ```bash
-   cd localpro-pos
+   cd 1pos
    ```
 
 2. **Install dependencies:**
@@ -407,9 +407,9 @@ The system supports multiple business types with industry-specific configuration
    Create a `.env.local` file in the root directory:
    ```env
    # Database
-   MONGODB_URI=mongodb://localhost:27017/localpro-pos
+   MONGODB_URI=mongodb://localhost:27017/1pos
    # or for MongoDB Atlas
-   MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/localpro-pos
+   MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/1pos
    
    # JWT Authentication (REQUIRED - Change in production!)
    JWT_SECRET=your-super-secret-random-string-min-32-characters
@@ -557,7 +557,7 @@ The system supports multiple business types with industry-specific configuration
 ## 📁 Project Structure
 
 ```
-localpro-pos/
+1pos/
 ├── app/
 │   ├── [tenant]/[lang]/          # Multi-tenant, multi-language routes
 │   │   ├── admin/                 # Admin panel

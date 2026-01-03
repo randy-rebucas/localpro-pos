@@ -15,7 +15,7 @@ import Tenant from '../models/Tenant';
 import User from '../models/User';
 import { getDefaultTenantSettings } from '../lib/currency';
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/pos-system';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/1pos';
 console.log(MONGODB_URI);
 async function createDefaultTenant() {
   try {

@@ -53,7 +53,7 @@ import Transaction from '../models/Transaction';
 import User from '../models/User';
 import { getDefaultTenantSettings } from '../lib/currency';
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/pos-system';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/1pos';
 
 // Collection mapping (Mongoose automatically pluralizes and lowercases model names)
 const COLLECTIONS = {

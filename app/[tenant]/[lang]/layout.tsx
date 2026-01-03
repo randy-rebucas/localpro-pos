@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "POS System - Point of Sale",
+  title: "1POS - Point of Sale",
   description: "Complete POS system with product management and sales tracking",
 };
 
