@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Transaction from '@/models/Transaction';
+import Payment from '@/models/Payment';
 import Product from '@/models/Product';
 import Discount from '@/models/Discount';
 import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
@@ -84,10 +85,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { items, paymentMethod, cashReceived, notes, discountCode, branchId } = data;
+    const { items, paymentMethod, cashReceived, notes, discountCode, branchId, payments } = data;
 
     // Get tenant settings to check feature flags
     const tenantSettings = await getTenantSettingsById(tenantId);
+
+    // Support for multiple payment methods (split payments)
+    // If payments array is provided, use that; otherwise fall back to single paymentMethod
+    const isMultiplePayments = Array.isArray(payments) && payments.length > 0;
+    let finalPaymentMethod = paymentMethod;
+    let finalCashReceived = cashReceived;
+    let finalChange = 0;
 
     // Check if discounts are enabled
     if (discountCode && tenantSettings && tenantSettings.enableDiscounts === false) {
@@ -321,12 +329,39 @@ export async function POST(request: NextRequest) {
     // Calculate final total (subtotal after discount + tax)
     const total = subtotalAfterDiscount + taxAmount;
 
-    // Calculate change for cash payments
-    let change = 0;
-    if (paymentMethod === 'cash' && cashReceived) {
-      change = cashReceived - total;
-      if (change < 0) {
-        return NextResponse.json({ success: false, error: t('validation.insufficientCashReceived', 'Insufficient cash received') }, { status: 400 });
+    // Handle multiple payments (split payments)
+    if (isMultiplePayments) {
+      // Validate that all payments sum to total
+      const paymentsTotal = payments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+      const tolerance = 0.01; // Allow small rounding differences
+      
+      if (Math.abs(paymentsTotal - total) > tolerance) {
+        return NextResponse.json(
+          { success: false, error: t('validation.paymentsMustEqualTotal', `Payments total (${paymentsTotal.toFixed(2)}) must equal transaction total (${total.toFixed(2)})`) },
+          { status: 400 }
+        );
+      }
+
+      // Determine primary payment method (use the first payment or the one with largest amount)
+      const primaryPayment = payments.reduce((prev: any, current: any) => 
+        (current.amount > (prev.amount || 0)) ? current : prev
+      );
+      finalPaymentMethod = primaryPayment.method || 'cash';
+      
+      // Calculate cash totals if any cash payment exists
+      const cashPayments = payments.filter((p: any) => p.method === 'cash');
+      if (cashPayments.length > 0) {
+        finalCashReceived = cashPayments.reduce((sum: number, p: any) => sum + (p.cashReceived || p.amount || 0), 0);
+        finalChange = cashPayments.reduce((sum: number, p: any) => sum + (p.change || 0), 0);
+      }
+    } else {
+      // Single payment method (existing logic)
+      // Calculate change for cash payments
+      if (finalPaymentMethod === 'cash' && finalCashReceived) {
+        finalChange = finalCashReceived - total;
+        if (finalChange < 0) {
+          return NextResponse.json({ success: false, error: t('validation.insufficientCashReceived', 'Insufficient cash received') }, { status: 400 });
+        }
       }
     }
 
@@ -395,9 +430,9 @@ export async function POST(request: NextRequest) {
       discountAmount: discountAmount > 0 ? discountAmount : undefined,
       taxAmount: taxAmount > 0 ? taxAmount : undefined,
       total,
-      paymentMethod,
-      cashReceived: paymentMethod === 'cash' ? cashReceived : undefined,
-      change: paymentMethod === 'cash' ? change : undefined,
+      paymentMethod: finalPaymentMethod,
+      cashReceived: finalPaymentMethod === 'cash' ? finalCashReceived : undefined,
+      change: finalPaymentMethod === 'cash' ? finalChange : undefined,
       status: 'completed',
       userId: user.userId,
       receiptNumber,
@@ -423,6 +458,78 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Create Payment record(s) (if enabled via paymentDetails in body)
+    const paymentRecords = [];
+    if (body.createPaymentRecord !== false) {
+      try {
+        if (isMultiplePayments) {
+          // Create multiple payment records for split payments
+          for (const payment of payments) {
+            const paymentDetails: any = {};
+            
+            if (payment.method === 'cash') {
+              paymentDetails.cashReceived = payment.cashReceived || payment.amount;
+              paymentDetails.change = payment.change || 0;
+            } else if (payment.method === 'card' || payment.method === 'digital') {
+              paymentDetails.provider = payment.provider;
+              paymentDetails.transactionId = payment.transactionId;
+              paymentDetails.cardLast4 = payment.cardLast4;
+              paymentDetails.cardType = payment.cardType;
+              paymentDetails.cardBrand = payment.cardBrand;
+            } else if (payment.method === 'check') {
+              paymentDetails.checkNumber = payment.checkNumber;
+            }
+            
+            if (payment.notes) {
+              paymentDetails.notes = payment.notes;
+            }
+
+            const paymentRecord = await Payment.create({
+              tenantId,
+              transactionId: transaction._id,
+              method: payment.method as 'cash' | 'card' | 'digital' | 'check' | 'other',
+              amount: payment.amount,
+              status: 'completed',
+              details: Object.keys(paymentDetails).length > 0 ? paymentDetails : undefined,
+              processedBy: user.userId,
+              processedAt: new Date(),
+            });
+            
+            paymentRecords.push(paymentRecord);
+          }
+        } else {
+          // Single payment method (existing logic)
+          const paymentDetails: any = {};
+          if (finalPaymentMethod === 'cash') {
+            paymentDetails.cashReceived = finalCashReceived;
+            paymentDetails.change = finalChange;
+          } else if (finalPaymentMethod === 'card' || finalPaymentMethod === 'digital') {
+            paymentDetails.provider = body.paymentProvider;
+            paymentDetails.transactionId = body.paymentTransactionId;
+            paymentDetails.cardLast4 = body.cardLast4;
+            paymentDetails.cardType = body.cardType;
+            paymentDetails.cardBrand = body.cardBrand;
+          }
+
+          const paymentRecord = await Payment.create({
+            tenantId,
+            transactionId: transaction._id,
+            method: finalPaymentMethod as 'cash' | 'card' | 'digital' | 'check' | 'other',
+            amount: total,
+            status: 'completed',
+            details: Object.keys(paymentDetails).length > 0 ? paymentDetails : undefined,
+            processedBy: user.userId,
+            processedAt: new Date(),
+          });
+          
+          paymentRecords.push(paymentRecord);
+        }
+      } catch (paymentError) {
+        // Log error but don't fail transaction - payment record is optional
+        console.error('Failed to create payment record(s):', paymentError);
+      }
+    }
+
     // Create audit log
     await createAuditLog(request, {
       tenantId,
@@ -433,6 +540,9 @@ export async function POST(request: NextRequest) {
         receiptNumber,
         total,
         itemsCount: transactionItems.length,
+        paymentCount: paymentRecords.length,
+        paymentIds: paymentRecords.map((p: any) => p._id.toString()),
+        isMultiplePayments: isMultiplePayments,
       },
     });
 
@@ -455,7 +565,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true, data: transaction }, { status: 201 });
+    // Include payment records in response if created
+    const responseData: any = transaction.toObject ? transaction.toObject() : transaction;
+    if (paymentRecords.length > 0) {
+      responseData.payments = paymentRecords.map((p: any) => ({
+        _id: p._id,
+        method: p.method,
+        amount: p.amount,
+        status: p.status,
+      }));
+    }
+
+    return NextResponse.json({ success: true, data: responseData }, { status: 201 });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 400 });
   }
