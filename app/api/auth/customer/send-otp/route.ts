@@ -35,18 +35,49 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get tenant ID
+    // Get tenant ID - for mobile, tenantSlug is optional
+    // If not provided, try to find from existing customer, otherwise use default
     const Tenant = (await import('@/models/Tenant')).default;
-    const tenant = await Tenant.findOne({ 
-      slug: tenantSlug || 'default', 
-      isActive: true 
-    }).lean();
-    
-    if (!tenant) {
-      return NextResponse.json(
-        { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
-        { status: 404 }
-      );
+    let tenant;
+
+    if (tenantSlug) {
+      // If tenantSlug provided, use it
+      tenant = await Tenant.findOne({ 
+        slug: tenantSlug, 
+        isActive: true 
+      }).lean();
+      
+      if (!tenant) {
+        return NextResponse.json(
+          { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
+          { status: 404 }
+        );
+      }
+    } else {
+      // For mobile: tenantSlug not provided, try to find from existing customer
+      const existingCustomer = await Customer.findOne({
+        phone: normalizedPhone,
+        isActive: true,
+      }).select('tenantId').lean();
+
+      if (existingCustomer) {
+        tenant = await Tenant.findById(existingCustomer.tenantId).lean();
+      }
+
+      // If no customer found or tenant inactive, use default tenant
+      if (!tenant || !tenant.isActive) {
+        tenant = await Tenant.findOne({ 
+          slug: 'default', 
+          isActive: true 
+        }).lean();
+      }
+
+      if (!tenant) {
+        return NextResponse.json(
+          { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
+          { status: 404 }
+        );
+      }
     }
 
     // Check for recent OTP (rate limiting - max 1 per minute)

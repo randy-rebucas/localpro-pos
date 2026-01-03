@@ -46,25 +46,41 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get tenant ID
-    const Tenant = (await import('@/models/Tenant')).default;
-    const tenant = await Tenant.findOne({ 
-      slug: tenantSlug || 'default', 
-      isActive: true 
-    }).lean();
+    // Get tenant ID - for mobile, tenantSlug is optional (can be null)
+    let tenantId = null;
     
-    if (!tenant) {
-      return NextResponse.json(
-        { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
-        { status: 404 }
-      );
+    if (tenantSlug) {
+      const Tenant = (await import('@/models/Tenant')).default;
+      const tenant = await Tenant.findOne({ 
+        slug: tenantSlug, 
+        isActive: true 
+      }).lean();
+      
+      if (!tenant) {
+        return NextResponse.json(
+          { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
+          { status: 404 }
+        );
+      }
+      
+      tenantId = tenant._id;
     }
 
-    // Check if customer with email already exists in this tenant
-    const existingCustomer = await Customer.findOne({
-      tenantId: tenant._id,
+    // Check if customer with email already exists
+    // If tenantId is null, check if email exists with null tenantId
+    // If tenantId is provided, check in that specific tenant
+    const existingCustomerQuery: any = {
       email: email.toLowerCase(),
-    });
+    };
+    
+    if (tenantId) {
+      existingCustomerQuery.tenantId = tenantId;
+    } else {
+      // For null tenantId, check if email exists with null tenantId
+      existingCustomerQuery.tenantId = null;
+    }
+    
+    const existingCustomer = await Customer.findOne(existingCustomerQuery);
 
     if (existingCustomer) {
       return NextResponse.json(
@@ -78,7 +94,7 @@ export async function POST(request: NextRequest) {
 
     // Create new customer
     const customer = await Customer.create({
-      tenantId: tenant._id,
+      tenantId: tenantId, // Can be null for mobile customers
       email: email.toLowerCase(),
       password, // Will be hashed by pre-save hook
       firstName,
@@ -90,7 +106,7 @@ export async function POST(request: NextRequest) {
     // Generate JWT token
     const token = generateCustomerToken({
       customerId: customer._id.toString(),
-      tenantId: tenant._id.toString(),
+      tenantId: tenantId ? tenantId.toString() : null,
       email: customer.email,
       phone: customer.phone,
     });

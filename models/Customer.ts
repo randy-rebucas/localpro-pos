@@ -48,7 +48,7 @@ const CustomerSchema: Schema = new Schema(
     tenantId: {
       type: Schema.Types.ObjectId,
       ref: 'Tenant',
-      required: [true, 'Tenant ID is required'],
+      required: false, // Optional for mobile customers
       index: true,
     },
     firstName: {
@@ -139,12 +139,12 @@ CustomerSchema.methods.comparePassword = async function (candidatePassword: stri
   return bcrypt.compare(candidatePassword, this.password);
 };
 
-// Compound indexes
+// Compound indexes (sparse to allow null tenantId)
 CustomerSchema.index({ tenantId: 1, email: 1 }, { unique: true, sparse: true });
 CustomerSchema.index({ tenantId: 1, phone: 1 }, { sparse: true });
 CustomerSchema.index({ tenantId: 1, facebookId: 1 }, { unique: true, sparse: true });
-CustomerSchema.index({ tenantId: 1, isActive: 1 });
-CustomerSchema.index({ tenantId: 1, tags: 1 });
+CustomerSchema.index({ tenantId: 1, isActive: 1 }, { sparse: true });
+CustomerSchema.index({ tenantId: 1, tags: 1 }, { sparse: true });
 
 // Virtual for full name
 CustomerSchema.virtual('fullName').get(function() {

@@ -28,18 +28,60 @@ export async function POST(request: NextRequest) {
     // Normalize phone number
     const normalizedPhone = phone.replace(/\D/g, '');
 
-    // Get tenant ID
+    // Get tenant ID - for mobile, tenantSlug is optional
+    // If not provided, find tenant from existing customer or OTP record
     const Tenant = (await import('@/models/Tenant')).default;
-    const tenant = await Tenant.findOne({ 
-      slug: tenantSlug || 'default', 
-      isActive: true 
-    }).lean();
-    
-    if (!tenant) {
-      return NextResponse.json(
-        { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
-        { status: 404 }
-      );
+    let tenant;
+
+    if (tenantSlug) {
+      // If tenantSlug provided, use it
+      tenant = await Tenant.findOne({ 
+        slug: tenantSlug, 
+        isActive: true 
+      }).lean();
+      
+      if (!tenant) {
+        return NextResponse.json(
+          { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
+          { status: 404 }
+        );
+      }
+    } else {
+      // For mobile: tenantSlug not provided, try to find from existing customer or OTP
+      // First, check if customer exists with this phone
+      const existingCustomer = await Customer.findOne({
+        phone: normalizedPhone,
+        isActive: true,
+      }).select('tenantId').lean();
+
+      if (existingCustomer) {
+        tenant = await Tenant.findById(existingCustomer.tenantId).lean();
+      } else {
+        // Check if there's an unverified OTP for this phone (across all tenants)
+        const otpRecord = await CustomerOTP.findOne({
+          phone: normalizedPhone,
+          otp,
+          verified: false,
+          expiresAt: { $gt: new Date() },
+        }).select('tenantId').lean();
+
+        if (otpRecord) {
+          tenant = await Tenant.findById(otpRecord.tenantId).lean();
+        } else {
+          // No customer or OTP found, use default tenant
+          tenant = await Tenant.findOne({ 
+            slug: 'default', 
+            isActive: true 
+          }).lean();
+        }
+      }
+
+      if (!tenant || !tenant.isActive) {
+        return NextResponse.json(
+          { success: false, error: t('validation.tenantNotFound', 'Tenant not found or inactive') },
+          { status: 404 }
+        );
+      }
     }
 
     // Find valid OTP

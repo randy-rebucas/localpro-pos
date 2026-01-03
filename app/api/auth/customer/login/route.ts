@@ -31,27 +31,63 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get tenant ID
+    // Get tenant ID - for mobile, tenantSlug is optional
+    // If not provided, find customer by email across all tenants
     const Tenant = (await import('@/models/Tenant')).default;
-    const tenant = await Tenant.findOne({ 
-      slug: tenantSlug || 'default', 
-      isActive: true 
-    }).lean();
-    
-    if (!tenant) {
-      return NextResponse.json(
-        { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
-        { status: 404 }
-      );
+    let tenant;
+    let customer;
+
+    if (tenantSlug) {
+      // If tenantSlug provided, use it
+      tenant = await Tenant.findOne({ 
+        slug: tenantSlug, 
+        isActive: true 
+      }).lean();
+      
+      if (!tenant) {
+        return NextResponse.json(
+          { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
+          { status: 404 }
+        );
+      }
+
+      // Find customer in specified tenant
+      customer = await Customer.findOne({
+        tenantId: tenant._id,
+        email: email.toLowerCase(),
+        isActive: true,
+      }).select('+password');
+    } else {
+      // For mobile: tenantSlug not provided, search for customer across all tenants
+      customer = await Customer.findOne({
+        email: email.toLowerCase(),
+        isActive: true,
+      }).select('+password +tenantId');
+
+      if (customer) {
+        // Customer found, get their tenant (if tenantId is not null)
+        if (customer.tenantId) {
+          tenant = await Tenant.findById(customer.tenantId).lean();
+          if (!tenant || !tenant.isActive) {
+            return NextResponse.json(
+              { success: false, error: t('validation.tenantNotFound', 'Tenant not found or inactive') },
+              { status: 404 }
+            );
+          }
+        } else {
+          // Customer has null tenantId (mobile customer without tenant)
+          tenant = null;
+        }
+      } else {
+        // Customer not found and no tenantSlug provided
+        return NextResponse.json(
+          { success: false, error: t('validation.invalidCredentials', 'Invalid email or password') },
+          { status: 401 }
+        );
+      }
     }
 
-    // Find customer with password field
-    const customer = await Customer.findOne({
-      tenantId: tenant._id,
-      email: email.toLowerCase(),
-      isActive: true,
-    }).select('+password');
-
+    // Customer should be found at this point (handled above)
     if (!customer) {
       return NextResponse.json(
         { success: false, error: t('validation.invalidCredentials', 'Invalid email or password') },
@@ -86,7 +122,7 @@ export async function POST(request: NextRequest) {
     // Generate JWT token
     const token = generateCustomerToken({
       customerId: customer._id.toString(),
-      tenantId: tenant._id.toString(),
+      tenantId: tenant ? tenant._id.toString() : null,
       email: customer.email,
       phone: customer.phone,
     });

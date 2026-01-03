@@ -5,7 +5,7 @@ import Customer from '@/models/Customer';
 
 export interface CustomerJWTPayload {
   customerId: string;
-  tenantId: string;
+  tenantId: string | null;
   phone?: string;
   email?: string;
 }
@@ -38,7 +38,7 @@ export function verifyCustomerToken(token: string): CustomerJWTPayload | null {
  */
 export async function getCurrentCustomer(request: NextRequest): Promise<{
   customerId: string;
-  tenantId: string;
+  tenantId: string | null;
   phone?: string;
   email?: string;
 } | null> {
@@ -61,7 +61,13 @@ export async function getCurrentCustomer(request: NextRequest): Promise<{
       .select('isActive tenantId')
       .lean();
     
-    if (!customer || !customer.isActive || customer.tenantId.toString() !== payload.tenantId) {
+    if (!customer || !customer.isActive) {
+      return null;
+    }
+
+    // Check tenantId match (handle null case)
+    const customerTenantId = customer.tenantId ? customer.tenantId.toString() : null;
+    if (customerTenantId !== payload.tenantId) {
       return null;
     }
 
