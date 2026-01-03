@@ -27,6 +27,12 @@ export const config = {
     cookieSecure: process.env.NODE_ENV === 'production',
   },
 
+  // Facebook Authentication
+  facebook: {
+    appId: process.env.FACEBOOK_APP_ID,
+    appSecret: process.env.FACEBOOK_APP_SECRET,
+  },
+
   // Pagination
   pagination: {
     defaultLimit: 20,

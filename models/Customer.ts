@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
+import bcrypt from 'bcryptjs';
 
 export interface ICustomerAddress {
   street?: string;
@@ -15,15 +16,19 @@ export interface ICustomer extends Document {
   lastName: string;
   email?: string;
   phone?: string;
+  password?: string; // For email/password authentication
+  facebookId?: string; // For Facebook authentication
   addresses?: ICustomerAddress[];
   dateOfBirth?: Date;
   notes?: string;
   tags?: string[]; // For categorization (e.g., "VIP", "Regular", "Wholesale")
   totalSpent?: number; // Total amount spent (calculated)
   lastPurchaseDate?: Date;
+  lastLogin?: Date;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
+  comparePassword(candidatePassword: string): Promise<boolean>;
 }
 
 const CustomerAddressSchema: Schema = new Schema({
@@ -66,6 +71,16 @@ const CustomerSchema: Schema = new Schema(
       type: String,
       trim: true,
     },
+    password: {
+      type: String,
+      minlength: [8, 'Password must be at least 8 characters'],
+      select: false, // Don't return password by default
+    },
+    facebookId: {
+      type: String,
+      index: true,
+      sparse: true, // Allow null values but enforce uniqueness when present
+    },
     addresses: {
       type: [CustomerAddressSchema],
       default: [],
@@ -89,6 +104,9 @@ const CustomerSchema: Schema = new Schema(
     lastPurchaseDate: {
       type: Date,
     },
+    lastLogin: {
+      type: Date,
+    },
     isActive: {
       type: Boolean,
       default: true,
@@ -99,9 +117,32 @@ const CustomerSchema: Schema = new Schema(
   }
 );
 
+// Hash password before saving
+CustomerSchema.pre('save', async function (next) {
+  if (this.isModified('password') && this.password) {
+    try {
+      const salt = await bcrypt.genSalt(10);
+      const password = this.password as string;
+      this.password = await bcrypt.hash(password, salt);
+    } catch (error: any) {
+      return next(error);
+    }
+  }
+  next();
+});
+
+// Method to compare password
+CustomerSchema.methods.comparePassword = async function (candidatePassword: string): Promise<boolean> {
+  if (!this.password) {
+    return false;
+  }
+  return bcrypt.compare(candidatePassword, this.password);
+};
+
 // Compound indexes
 CustomerSchema.index({ tenantId: 1, email: 1 }, { unique: true, sparse: true });
 CustomerSchema.index({ tenantId: 1, phone: 1 }, { sparse: true });
+CustomerSchema.index({ tenantId: 1, facebookId: 1 }, { unique: true, sparse: true });
 CustomerSchema.index({ tenantId: 1, isActive: 1 });
 CustomerSchema.index({ tenantId: 1, tags: 1 });
 

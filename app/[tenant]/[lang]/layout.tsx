@@ -27,12 +27,8 @@ export const viewport: Viewport = {
   maximumScale: 5,
 };
 
-export async function generateStaticParams() {
-  return [
-    { tenant: 'default', lang: 'en' },
-    { tenant: 'default', lang: 'es' },
-  ];
-}
+export const dynamic = 'force-dynamic';
+export const dynamicParams = true;
 
 export default async function RootLayout({
   children,

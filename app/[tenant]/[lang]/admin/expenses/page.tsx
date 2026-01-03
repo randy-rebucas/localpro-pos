@@ -8,6 +8,8 @@ import { getDictionaryClient } from '../../dictionaries-client';
 import Currency from '@/components/Currency';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 
+export const dynamic = 'force-dynamic';
+
 interface Expense {
   _id: string;
   name: string;
