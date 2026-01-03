@@ -128,5 +128,11 @@ export const AuditActions = {
   DISCOUNT_DELETE: 'discount.delete',
   ATTENDANCE_CLOCK_IN: 'attendance.clock_in',
   ATTENDANCE_CLOCK_OUT: 'attendance.clock_out',
+  PAYMENT_CREATE: 'payment.create',
+  PAYMENT_REFUND: 'payment.refund',
+  INVOICE_CREATE: 'invoice.create',
+  INVOICE_UPDATE: 'invoice.update',
+  INVOICE_SEND: 'invoice.send',
+  INVOICE_MARK_PAID: 'invoice.mark_paid',
 } as const;
 

@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Transaction from '@/models/Transaction';
+import Payment from '@/models/Payment';
 import Product from '@/models/Product';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
-import { requireRole } from '@/lib/auth';
+import { requireRole, getCurrentUser } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { updateStock } from '@/lib/stock';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -137,6 +138,41 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       await transaction.save();
     }
 
+    // Create Payment refund record if original payment exists
+    let refundPayment = null;
+    try {
+      const originalPayment = await Payment.findOne({
+        tenantId,
+        transactionId: transaction._id,
+        status: 'completed',
+      });
+
+      if (originalPayment) {
+        const user = await getCurrentUser(request);
+        refundPayment = await Payment.create({
+          tenantId,
+          transactionId: refundTransaction._id,
+          method: originalPayment.method,
+          amount: refundAmount,
+          status: 'refunded',
+          details: originalPayment.details,
+          processedBy: user?.userId,
+          processedAt: new Date(),
+          refundedAt: new Date(),
+          refundReason: body.reason || body.notes || 'Transaction refund',
+        });
+
+        // Mark original payment as refunded
+        originalPayment.status = 'refunded';
+        originalPayment.refundedAt = new Date();
+        originalPayment.refundReason = body.reason || body.notes || 'Transaction refund';
+        await originalPayment.save();
+      }
+    } catch (paymentError) {
+      // Log error but don't fail refund - payment record refund is optional
+      console.error('Failed to create payment refund record:', paymentError);
+    }
+
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.TRANSACTION_REFUND,
@@ -147,6 +183,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         refundAmount,
         itemsRefunded: refundItems.length,
         isFullRefund,
+        refundPaymentId: refundPayment?._id.toString(),
       },
     });
 
@@ -157,6 +194,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         originalTransaction: transaction,
         refundAmount,
         isFullRefund,
+        refundPayment,
       },
     }, { status: 201 });
   } catch (error: any) {
