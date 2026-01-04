@@ -5,7 +5,7 @@ import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { formatNumber, getCurrencySymbol, getDefaultTenantSettings } from '@/lib/currency';
 import Currency from '@/components/Currency';
 
-interface BundleAnalytics {
+export interface BundleAnalytics {
   bundleId: string;
   bundleName: string;
   bundlePrice: number;

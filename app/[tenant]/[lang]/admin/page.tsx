@@ -29,7 +29,7 @@ export default function AdminPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+          <p className="mt-4 text-gray-600">{(dict?.common as Record<string, unknown>)?.loading as string || 'Loading...'}</p>
         </div>
       </div>
     );
@@ -37,8 +37,8 @@ export default function AdminPage() {
 
   const allAdminCards = [
     {
-      title: dict.admin?.users || 'Users',
-      description: dict.admin?.usersDescription || 'Manage system users, roles, and permissions',
+      title: (dict?.admin as Record<string, unknown>)?.users as string || 'Users',
+      description: (dict?.admin as Record<string, unknown>)?.usersDescription as string || 'Manage system users, roles, and permissions',
       href: `/${tenant}/${lang}/admin/users`,
       featureFlag: undefined as keyof typeof settings | undefined,
       icon: (
@@ -49,8 +49,8 @@ export default function AdminPage() {
       color: 'blue',
     },
     {
-      title: dict.admin?.tenants || 'Tenants',
-      description: dict.admin?.tenantsDescription || 'Manage multi-tenant organizations and settings',
+      title: (dict?.admin as Record<string, unknown>)?.tenants as string || 'Tenants',
+      description: (dict?.admin as Record<string, unknown>)?.tenantsDescription as string || 'Manage multi-tenant organizations and settings',
       href: `/${tenant}/${lang}/admin/tenants`,
       featureFlag: undefined as keyof typeof settings | undefined,
       icon: (
@@ -61,8 +61,8 @@ export default function AdminPage() {
       color: 'green',
     },
     {
-      title: dict.admin?.branches || 'Branches',
-      description: dict.admin?.branchesDescription || 'Manage store branches and locations',
+      title: (dict?.admin as Record<string, unknown>)?.branches as string || 'Branches',
+      description: (dict?.admin as Record<string, unknown>)?.branchesDescription as string || 'Manage store branches and locations',
       href: `/${tenant}/${lang}/admin/branches`,
       featureFlag: undefined as keyof typeof settings | undefined,
       icon: (
@@ -74,8 +74,8 @@ export default function AdminPage() {
       color: 'orange',
     },
     {
-      title: dict.admin?.categories || 'Categories',
-      description: dict.admin?.categoriesDescription || 'Manage product categories',
+      title: (dict?.admin as Record<string, unknown>)?.categories as string || 'Categories',
+      description: (dict?.admin as Record<string, unknown>)?.categoriesDescription as string || 'Manage product categories',
       href: `/${tenant}/${lang}/admin/categories`,
       featureFlag: 'enableCategories' as keyof typeof settings,
       icon: (
@@ -86,8 +86,8 @@ export default function AdminPage() {
       color: 'indigo',
     },
     {
-      title: dict.admin?.products || 'Products',
-      description: dict.admin?.productsDescription || 'Manage products, variations, and bundles',
+      title: (dict?.admin as Record<string, unknown>)?.products as string || 'Products',
+      description: (dict?.admin as Record<string, unknown>)?.productsDescription as string || 'Manage products, variations, and bundles',
       href: `/${tenant}/${lang}/admin/products`,
       featureFlag: undefined as keyof typeof settings | undefined,
       icon: (
@@ -98,8 +98,8 @@ export default function AdminPage() {
       color: 'teal',
     },
     {
-      title: dict.admin?.discounts || 'Discounts',
-      description: dict.admin?.discountsDescription || 'Manage discount codes and promotions',
+      title: (dict?.admin as Record<string, unknown>)?.discounts as string || 'Discounts',
+      description: (dict?.admin as Record<string, unknown>)?.discountsDescription as string || 'Manage discount codes and promotions',
       href: `/${tenant}/${lang}/admin/discounts`,
       featureFlag: 'enableDiscounts' as keyof typeof settings,
       icon: (
@@ -110,8 +110,8 @@ export default function AdminPage() {
       color: 'yellow',
     },
     {
-      title: dict.admin?.transactions || 'Transactions',
-      description: dict.admin?.transactionsDescription || 'View and manage all sales transactions',
+      title: (dict?.admin as Record<string, unknown>)?.transactions as string || 'Transactions',
+      description: (dict?.admin as Record<string, unknown>)?.transactionsDescription as string || 'View and manage all sales transactions',
       href: `/${tenant}/${lang}/admin/transactions`,
       icon: (
         <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -121,8 +121,8 @@ export default function AdminPage() {
       color: 'cyan',
     },
     {
-      title: dict.admin?.stockMovements || 'Stock Movements',
-      description: dict.admin?.stockMovementsDescription || 'Track all inventory changes and movements',
+      title: (dict?.admin as Record<string, unknown>)?.stockMovements as string || 'Stock Movements',
+      description: (dict?.admin as Record<string, unknown>)?.stockMovementsDescription as string || 'Track all inventory changes and movements',
       href: `/${tenant}/${lang}/admin/stock-movements`,
       featureFlag: 'enableInventory' as keyof typeof settings,
       icon: (
@@ -133,8 +133,8 @@ export default function AdminPage() {
       color: 'pink',
     },
     {
-      title: dict.admin?.cashDrawer || 'Cash Drawer',
-      description: dict.admin?.cashDrawerDescription || 'Manage and monitor cash drawer operations',
+      title: (dict?.admin as Record<string, unknown>)?.cashDrawer as string || 'Cash Drawer',
+      description: (dict?.admin as Record<string, unknown>)?.cashDrawerDescription as string || 'Manage and monitor cash drawer operations',
       href: `/${tenant}/${lang}/admin/cash-drawer`,
       icon: (
         <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -144,8 +144,8 @@ export default function AdminPage() {
       color: 'emerald',
     },
     {
-      title: dict.admin?.expenses || 'Expenses',
-      description: dict.admin?.expensesDescription || 'Manage and track business expenses',
+      title: (dict?.admin as Record<string, unknown>)?.expenses as string || 'Expenses',
+      description: (dict?.admin as Record<string, unknown>)?.expensesDescription as string || 'Manage and track business expenses',
       href: `/${tenant}/${lang}/admin/expenses`,
       icon: (
         <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -155,8 +155,8 @@ export default function AdminPage() {
       color: 'red',
     },
     {
-      title: dict.admin?.auditLogs || 'Audit Logs',
-      description: dict.admin?.auditLogsDescription || 'View system activity, changes, and user actions',
+      title: (dict?.admin as Record<string, unknown>)?.auditLogs as string || 'Audit Logs',
+      description: (dict?.admin as Record<string, unknown>)?.auditLogsDescription as string || 'View system activity, changes, and user actions',
       href: `/${tenant}/${lang}/admin/audit-logs`,
       icon: (
         <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -166,8 +166,8 @@ export default function AdminPage() {
       color: 'purple',
     },
     {
-      title: dict.admin?.bookings || 'Bookings',
-      description: dict.admin?.bookingsDescription || 'Manage appointments, scheduling, and bookings',
+      title: (dict?.admin as Record<string, unknown>)?.bookings as string || 'Bookings',
+      description: (dict?.admin as Record<string, unknown>)?.bookingsDescription as string || 'Manage appointments, scheduling, and bookings',
       href: `/${tenant}/${lang}/admin/bookings`,
       featureFlag: 'enableBookingScheduling' as keyof typeof settings,
       icon: (
@@ -178,8 +178,8 @@ export default function AdminPage() {
       color: 'violet',
     },
     {
-      title: dict.admin?.bundles || 'Bundles',
-      description: dict.admin?.bundlesDescription || 'Manage product bundles and packages',
+      title: (dict?.admin as Record<string, unknown>)?.bundles as string || 'Bundles',
+      description: (dict?.admin as Record<string, unknown>)?.bundlesDescription as string || 'Manage product bundles and packages',
       href: `/${tenant}/${lang}/admin/bundles`,
       icon: (
         <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -189,8 +189,8 @@ export default function AdminPage() {
       color: 'amber',
     },
     {
-      title: dict.admin?.attendance || 'Attendance',
-      description: dict.admin?.attendanceDescription || 'View and manage employee attendance records',
+      title: (dict?.admin as Record<string, unknown>)?.attendance as string || 'Attendance',
+      description: (dict?.admin as Record<string, unknown>)?.attendanceDescription as string || 'View and manage employee attendance records',
       href: `/${tenant}/${lang}/admin/attendance`,
       icon: (
         <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -200,8 +200,8 @@ export default function AdminPage() {
       color: 'rose',
     },
     {
-      title: dict.admin?.backupReset || 'Backup & Reset',
-      description: dict.admin?.backupResetDescription || 'Backup and reset collection data',
+      title: (dict?.admin as Record<string, unknown>)?.backupReset as string || 'Backup & Reset',
+      description: (dict?.admin as Record<string, unknown>)?.backupResetDescription as string || 'Backup and reset collection data',
       href: `/${tenant}/${lang}/admin/backup-reset`,
       icon: (
         <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -211,8 +211,8 @@ export default function AdminPage() {
       color: 'red',
     },
     {
-      title: dict.admin?.featureFlags || 'Feature Flags',
-      description: dict.admin?.featureFlagsDescription || 'Enable or disable system-wide features',
+      title: (dict?.admin as Record<string, unknown>)?.featureFlags as string || 'Feature Flags',
+      description: (dict?.admin as Record<string, unknown>)?.featureFlagsDescription as string || 'Enable or disable system-wide features',
       href: `/${tenant}/${lang}/admin/feature-flags`,
       icon: (
         <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -222,8 +222,8 @@ export default function AdminPage() {
       color: 'blue',
     },
     {
-      title: dict.admin?.hardwareSettings || 'Hardware Settings',
-      description: dict.admin?.hardwareSettingsDescription || 'Configure printers, scanners, and hardware devices',
+      title: (dict?.admin as Record<string, unknown>)?.hardwareSettings as string || 'Hardware Settings',
+      description: (dict?.admin as Record<string, unknown>)?.hardwareSettingsDescription as string || 'Configure printers, scanners, and hardware devices',
       href: `/${tenant}/${lang}/admin/hardware`,
       icon: (
         <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -233,8 +233,8 @@ export default function AdminPage() {
       color: 'gray',
     },
     {
-      title: dict.admin?.taxRules || 'Tax Rules',
-      description: dict.admin?.taxRulesDescription || 'Configure multiple tax rates and regional rules',
+      title: (dict?.admin as Record<string, unknown>)?.taxRules as string || 'Tax Rules',
+      description: (dict?.admin as Record<string, unknown>)?.taxRulesDescription as string || 'Configure multiple tax rates and regional rules',
       href: `/${tenant}/${lang}/admin/tax-rules`,
       icon: (
         <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -244,8 +244,8 @@ export default function AdminPage() {
       color: 'indigo',
     },
     {
-      title: dict.admin?.businessHours || 'Business Hours',
-      description: dict.admin?.businessHoursDescription || 'Configure weekly schedule and special hours',
+      title: (dict?.admin as Record<string, unknown>)?.businessHours as string || 'Business Hours',
+      description: (dict?.admin as Record<string, unknown>)?.businessHoursDescription as string || 'Configure weekly schedule and special hours',
       href: `/${tenant}/${lang}/admin/business-hours`,
       icon: (
         <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -255,8 +255,8 @@ export default function AdminPage() {
       color: 'orange',
     },
     {
-      title: dict.admin?.holidays || 'Holidays',
-      description: dict.admin?.holidaysDescription || 'Manage holiday calendar and business closures',
+      title: (dict?.admin as Record<string, unknown>)?.holidays as string || 'Holidays',
+      description: (dict?.admin as Record<string, unknown>)?.holidaysDescription as string || 'Manage holiday calendar and business closures',
       href: `/${tenant}/${lang}/admin/holidays`,
       icon: (
         <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -266,8 +266,8 @@ export default function AdminPage() {
       color: 'yellow',
     },
     {
-      title: dict.admin?.multiCurrency || 'Multi-Currency',
-      description: dict.admin?.multiCurrencyDescription || 'Manage exchange rates and API settings',
+      title: (dict?.admin as Record<string, unknown>)?.multiCurrency as string || 'Multi-Currency',
+      description: (dict?.admin as Record<string, unknown>)?.multiCurrencyDescription as string || 'Manage exchange rates and API settings',
       href: `/${tenant}/${lang}/admin/multi-currency`,
       icon: (
         <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -277,8 +277,8 @@ export default function AdminPage() {
       color: 'green',
     },
     {
-      title: dict.admin?.notificationTemplates || 'Notification Templates',
-      description: dict.admin?.notificationTemplatesDescription || 'Customize email and SMS templates',
+      title: (dict?.admin as Record<string, unknown>)?.notificationTemplates as string || 'Notification Templates',
+      description: (dict?.admin as Record<string, unknown>)?.notificationTemplatesDescription as string || 'Customize email and SMS templates',
       href: `/${tenant}/${lang}/admin/notification-templates`,
       icon: (
         <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -288,8 +288,8 @@ export default function AdminPage() {
       color: 'purple',
     },
     {
-      title: dict.admin?.advancedBranding || 'Advanced Branding',
-      description: dict.admin?.advancedBrandingDescription || 'Customize fonts, themes, and CSS',
+      title: (dict?.admin as Record<string, unknown>)?.advancedBranding as string || 'Advanced Branding',
+      description: (dict?.admin as Record<string, unknown>)?.advancedBrandingDescription as string || 'Customize fonts, themes, and CSS',
       href: `/${tenant}/${lang}/admin/advanced-branding`,
       icon: (
         <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -299,8 +299,8 @@ export default function AdminPage() {
       color: 'pink',
     },
     {
-      title: dict.admin?.reports || 'Reports',
-      description: dict.admin?.reportsDescription || 'View detailed reports and analytics',
+      title: (dict?.admin as Record<string, unknown>)?.reports as string || 'Reports',
+      description: (dict?.admin as Record<string, unknown>)?.reportsDescription as string || 'View detailed reports and analytics',
       href: `/${tenant}/${lang}/reports`,
       icon: (
         <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -317,9 +317,9 @@ export default function AdminPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         <div className="mb-6 sm:mb-8">
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
-            {dict.admin?.title || 'Admin Management'}
+            {(dict?.admin as Record<string, unknown>)?.title as string || 'Admin Management'}
           </h1>
-          <p className="text-gray-600">{dict.admin?.subtitle || 'Manage users, tenants, and system settings'}</p>
+          <p className="text-gray-600">{(dict?.admin as Record<string, unknown>)?.subtitle as string || 'Manage users, tenants, and system settings'}</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -358,7 +358,7 @@ export default function AdminPage() {
               <h2 className="text-xl font-bold text-gray-900 mb-2">{card.title}</h2>
               <p className="text-gray-600 text-sm">{card.description}</p>
               <div className="mt-4 flex items-center text-blue-600 font-medium text-sm">
-                <span>{dict.common?.view || 'View'} {card.title}</span>
+                <span>{(dict?.common as Record<string, unknown>)?.view as string || 'View'} {card.title}</span>
                 <svg className="w-4 h-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>

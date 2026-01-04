@@ -50,11 +50,11 @@ export default function DiscountsPage() {
         setDiscounts(data.data);
         setMessage(null);
       } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchDiscounts || 'Failed to fetch discounts' });
+        setMessage({ type: 'error', text: data.error || (dict?.common as Record<string, unknown>)?.failedToFetchDiscounts as string || 'Failed to fetch discounts' });
       }
     } catch (error) {
       console.error('Error fetching discounts:', error);
-      setMessage({ type: 'error', text: dict?.common?.failedToFetchDiscounts || 'Failed to fetch discounts' });
+      setMessage({ type: 'error', text: (dict?.common as Record<string, unknown>)?.failedToFetchDiscounts as string || 'Failed to fetch discounts' });
     } finally {
       setLoading(false);
     }
@@ -67,18 +67,18 @@ export default function DiscountsPage() {
 
   const handleDeleteDiscount = async (discountId: string) => {
     if (!dict) return;
-    if (!confirm(dict.admin?.deleteConfirm || 'Are you sure you want to delete this discount?')) return;
+    if (!confirm((dict?.admin as Record<string, unknown>)?.deleteConfirm as string || 'Are you sure you want to delete this discount?')) return;
     try {
       const res = await fetch(`/api/discounts/${discountId}`, { method: 'DELETE', credentials: 'include' });
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: dict.admin?.deleteSuccess || 'Discount deleted successfully' });
+        setMessage({ type: 'success', text: (dict?.admin as Record<string, unknown>)?.deleteSuccess as string || 'Discount deleted successfully' });
         fetchDiscounts();
       } else {
-        setMessage({ type: 'error', text: data.error || dict.admin?.deleteError || 'Failed to delete discount' });
+        setMessage({ type: 'error', text: data.error || (dict?.admin as Record<string, unknown>)?.deleteError as string || 'Failed to delete discount' });
       }
     } catch {
-      setMessage({ type: 'error', text: dict.admin?.deleteError || 'Failed to delete discount' });
+      setMessage({ type: 'error', text: (dict?.admin as Record<string, unknown>)?.deleteError as string || 'Failed to delete discount' });
     }
   };
 
@@ -92,13 +92,14 @@ export default function DiscountsPage() {
       });
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: `${dict.admin?.discount || 'Discount'} ${!discount.isActive ? (dict.admin?.activated || 'activated') : (dict.admin?.deactivated || 'deactivated')} ${dict.admin?.successfully || 'successfully'}` });
+        const adminDict = dict?.admin as Record<string, unknown>;
+        setMessage({ type: 'success', text: `${adminDict?.discount as string || 'Discount'} ${!discount.isActive ? (adminDict?.activated as string || 'activated') : (adminDict?.deactivated as string || 'deactivated')} ${adminDict?.successfully as string || 'successfully'}` });
         fetchDiscounts();
       } else {
-        setMessage({ type: 'error', text: data.error || dict.admin?.updateError || 'Failed to update discount' });
+        setMessage({ type: 'error', text: data.error || (dict?.admin as Record<string, unknown>)?.updateError as string || 'Failed to update discount' });
       }
     } catch {
-      setMessage({ type: 'error', text: dict.admin?.updateError || 'Failed to update discount' });
+      setMessage({ type: 'error', text: (dict?.admin as Record<string, unknown>)?.updateError as string || 'Failed to update discount' });
     }
   };
 
@@ -114,7 +115,7 @@ export default function DiscountsPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+          <p className="mt-4 text-gray-600">{(dict?.common as Record<string, unknown>)?.loading as string || 'Loading...'}</p>
         </div>
       </div>
     );
@@ -132,14 +133,14 @@ export default function DiscountsPage() {
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
-            {dict?.admin?.backToAdmin || 'Back to Admin'}
+            {(dict?.admin as Record<string, unknown>)?.backToAdmin as string || 'Back to Admin'}
           </Link>
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
-                {dict.admin?.discounts || 'Discounts'}
+                {(dict?.admin as Record<string, unknown>)?.discounts as string || 'Discounts'}
               </h1>
-              <p className="text-gray-600">{dict.admin?.discountsSubtitle || 'Manage discount codes and promotions'}</p>
+              <p className="text-gray-600">{(dict?.admin as Record<string, unknown>)?.discountsSubtitle as string || 'Manage discount codes and promotions'}</p>
             </div>
           </div>
         </div>
@@ -174,7 +175,7 @@ export default function DiscountsPage() {
 
         <div className="bg-white border border-gray-300 p-6">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold text-gray-900">{dict.admin?.discounts || 'Discounts'}</h2>
+            <h2 className="text-xl font-bold text-gray-900">{(dict?.admin as Record<string, unknown>)?.discounts as string || 'Discounts'}</h2>
             {discountsEnabled && (
               <button
                 onClick={() => {
@@ -183,7 +184,7 @@ export default function DiscountsPage() {
                 }}
                 className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
               >
-                {dict.common?.add || 'Add'} {dict.admin?.discount || 'Discount'}
+                {(dict?.common as Record<string, unknown>)?.add as string || 'Add'} {(dict?.admin as Record<string, unknown>)?.discount as string || 'Discount'}
               </button>
             )}
           </div>
@@ -191,14 +192,14 @@ export default function DiscountsPage() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.code || 'Code'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.name || 'Name'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.type || 'Type'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.value || 'Value'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.validPeriod || 'Valid Period'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.usage || 'Usage'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.status || 'Status'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.actions || 'Actions'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict?.admin as Record<string, unknown>)?.code as string || 'Code'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict?.admin as Record<string, unknown>)?.name as string || 'Name'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict?.common as Record<string, unknown>)?.type as string || 'Type'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict?.admin as Record<string, unknown>)?.value as string || 'Value'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict?.admin as Record<string, unknown>)?.validPeriod as string || 'Valid Period'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict?.admin as Record<string, unknown>)?.usage as string || 'Usage'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict?.admin as Record<string, unknown>)?.status as string || 'Status'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict?.common as Record<string, unknown>)?.actions as string || 'Actions'}</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -228,7 +229,7 @@ export default function DiscountsPage() {
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
                         <div>{new Date(discount.validFrom).toLocaleDateString()}</div>
-                        <div className="text-xs">{dict.admin?.to || 'to'} {new Date(discount.validUntil).toLocaleDateString()}</div>
+                        <div className="text-xs">{(dict?.admin as Record<string, unknown>)?.to as string || 'to'} {new Date(discount.validUntil).toLocaleDateString()}</div>
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
                         {discount.usageCount} / {discount.usageLimit || '∞'}
@@ -239,7 +240,7 @@ export default function DiscountsPage() {
                           !discount.isActive ? 'bg-red-100 text-red-800 border-red-300' : 
                           'bg-yellow-100 text-yellow-800 border-yellow-300'
                         }`}>
-                          {isValid ? (dict.admin?.valid || 'Valid') : !discount.isActive ? (dict.admin?.inactive || 'Inactive') : (dict.admin?.expired || 'Expired')}
+                          {isValid ? ((dict?.admin as Record<string, unknown>)?.valid as string || 'Valid') : !discount.isActive ? ((dict?.admin as Record<string, unknown>)?.inactive as string || 'Inactive') : ((dict?.admin as Record<string, unknown>)?.expired as string || 'Expired')}
                         </span>
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
@@ -251,19 +252,19 @@ export default function DiscountsPage() {
                             }}
                             className="text-blue-600 hover:text-blue-900"
                           >
-                            {dict.common?.edit || 'Edit'}
+                            {(dict?.common as Record<string, unknown>)?.edit as string || 'Edit'}
                           </button>
                           <button
                             onClick={() => handleToggleDiscountStatus(discount)}
                             className={discount.isActive ? 'text-orange-600 hover:text-orange-900' : 'text-green-600 hover:text-green-900'}
                           >
-                            {discount.isActive ? (dict.admin?.deactivate || 'Deactivate') : (dict.admin?.activate || 'Activate')}
+                            {discount.isActive ? ((dict?.admin as Record<string, unknown>)?.deactivate as string || 'Deactivate') : ((dict?.admin as Record<string, unknown>)?.activate as string || 'Activate')}
                           </button>
                           <button
                             onClick={() => handleDeleteDiscount(discount._id)}
                             className="text-red-600 hover:text-red-900"
                           >
-                            {dict.common?.delete || 'Delete'}
+                            {(dict?.common as Record<string, unknown>)?.delete as string || 'Delete'}
                           </button>
                         </div>
                       </td>
@@ -273,7 +274,7 @@ export default function DiscountsPage() {
               </tbody>
             </table>
             {discounts.length === 0 && (
-              <div className="text-center py-8 text-gray-500">{dict.common?.noResults || 'No discounts found'}</div>
+              <div className="text-center py-8 text-gray-500">{(dict?.common as Record<string, unknown>)?.noResults as string || 'No discounts found'}</div>
             )}
           </div>
         </div>
@@ -358,10 +359,10 @@ function DiscountModal({
       if (data.success) {
         onSave();
       } else {
-        setError(data.error || dict.admin?.saveError || 'Failed to save discount');
+        setError(data.error || (dict?.admin as Record<string, unknown>)?.saveError as string || 'Failed to save discount');
       }
     } catch {
-      setError(dict.admin?.saveError || 'Failed to save discount');
+      setError((dict?.admin as Record<string, unknown>)?.saveError as string || 'Failed to save discount');
     } finally {
       setSaving(false);
     }
@@ -372,13 +373,13 @@ function DiscountModal({
       <div className="bg-white border border-gray-300 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
-            {discount ? (dict.admin?.editDiscount || 'Edit Discount') : (dict.admin?.addDiscount || 'Add Discount')}
+            {discount ? ((dict?.admin as Record<string, unknown>)?.editDiscount as string || 'Edit Discount') : ((dict?.admin as Record<string, unknown>)?.addDiscount as string || 'Add Discount')}
           </h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.code || 'Code'} *
+                  {(dict?.admin as Record<string, unknown>)?.code as string || 'Code'} *
                 </label>
                 <input
                   type="text"
@@ -386,26 +387,26 @@ function DiscountModal({
                   value={formData.code}
                   onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
-                  placeholder={dict?.admin?.discountCodePlaceholder || 'DISCOUNT10'}
+                  placeholder={(dict?.admin as Record<string, unknown>)?.discountCodePlaceholder as string || 'DISCOUNT10'}
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.common?.type || 'Type'} *
+                  {(dict?.common as Record<string, unknown>)?.type as string || 'Type'} *
                 </label>
                 <select
                   value={formData.type}
                   onChange={(e) => setFormData({ ...formData, type: e.target.value as 'percentage' | 'fixed' })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                 >
-                  <option value="percentage">{dict.admin?.percentage || 'Percentage'}</option>
-                  <option value="fixed">{dict.admin?.fixed || 'Fixed Amount'}</option>
+                  <option value="percentage">{(dict?.admin as Record<string, unknown>)?.percentage as string || 'Percentage'}</option>
+                  <option value="fixed">{(dict?.admin as Record<string, unknown>)?.fixed as string || 'Fixed Amount'}</option>
                 </select>
               </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.name || 'Name'}
+                {(dict?.admin as Record<string, unknown>)?.name as string || 'Name'}
               </label>
               <input
                 type="text"
@@ -416,7 +417,7 @@ function DiscountModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.description || 'Description'}
+                {(dict?.admin as Record<string, unknown>)?.description as string || 'Description'}
               </label>
               <textarea
                 value={formData.description}
@@ -428,7 +429,7 @@ function DiscountModal({
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.value || 'Value'} * {formData.type === 'percentage' ? '(%)' : `(${settings?.currency || 'USD'})`}
+                  {(dict?.admin as Record<string, unknown>)?.value as string || 'Value'} * {formData.type === 'percentage' ? '(%)' : `(${settings?.currency || 'USD'})`}
                 </label>
                 <input
                   type="number"
@@ -443,7 +444,7 @@ function DiscountModal({
               {formData.type === 'percentage' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {dict.admin?.maxDiscount || 'Max Discount Amount'} ({settings?.currencySymbol || '$'})
+                    {(dict?.admin as Record<string, unknown>)?.maxDiscount as string || 'Max Discount Amount'} ({settings?.currencySymbol || '$'})
                   </label>
                   <input
                     type="number"
@@ -459,7 +460,7 @@ function DiscountModal({
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {dict.admin?.minPurchase || 'Min Purchase Amount'} ({settings?.currencySymbol || '$'})
+                    {(dict?.admin as Record<string, unknown>)?.minPurchase as string || 'Min Purchase Amount'} ({settings?.currencySymbol || '$'})
                 </label>
                 <input
                   type="number"
@@ -472,7 +473,7 @@ function DiscountModal({
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.usageLimit || 'Usage Limit'}
+                  {(dict?.admin as Record<string, unknown>)?.usageLimit as string || 'Usage Limit'}
                 </label>
                 <input
                   type="number"
@@ -480,14 +481,14 @@ function DiscountModal({
                   value={formData.usageLimit}
                   onChange={(e) => setFormData({ ...formData, usageLimit: parseInt(e.target.value) || 0 })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
-                  placeholder={dict.admin?.unlimited || 'Unlimited if 0'}
+                  placeholder={(dict?.admin as Record<string, unknown>)?.unlimited as string || 'Unlimited if 0'}
                 />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.validFrom || 'Valid From'} *
+                  {(dict?.admin as Record<string, unknown>)?.validFrom as string || 'Valid From'} *
                 </label>
                 <input
                   type="date"
@@ -499,7 +500,7 @@ function DiscountModal({
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.validUntil || 'Valid Until'} *
+                  {(dict?.admin as Record<string, unknown>)?.validUntil as string || 'Valid Until'} *
                 </label>
                 <input
                   type="date"
@@ -519,7 +520,7 @@ function DiscountModal({
                   className="mr-2"
                 />
                 <span className="text-sm font-medium text-gray-700">
-                  {dict.admin?.active || 'Active'}
+                  {(dict?.admin as Record<string, unknown>)?.active as string || 'Active'}
                 </span>
               </label>
             </div>
@@ -534,14 +535,14 @@ function DiscountModal({
                 onClick={onClose}
                 className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
               >
-                {dict.common?.cancel || 'Cancel'}
+                {(dict?.common as Record<string, unknown>)?.cancel as string || 'Cancel'}
               </button>
               <button
                 type="submit"
                 disabled={saving}
                 className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
               >
-                {saving ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
+                {saving ? ((dict?.common as Record<string, unknown>)?.loading as string || 'Saving...') : ((dict?.common as Record<string, unknown>)?.save as string || 'Save')}
               </button>
             </div>
           </form>

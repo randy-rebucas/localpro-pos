@@ -42,7 +42,7 @@ export default function BusinessHoursAdminPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+          <p className="mt-4 text-gray-600">{(dict?.common as Record<string, unknown>)?.loading as string || 'Loading...'}</p>
         </div>
       </div>
     );
@@ -60,13 +60,13 @@ export default function BusinessHoursAdminPage() {
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
-            {dict?.admin?.backToAdmin || 'Back to Admin'}
+            {(dict?.admin as Record<string, unknown>)?.backToAdmin as string || 'Back to Admin'}
           </Link>
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
-            {dict?.admin?.businessHours || 'Business Hours'}
+            {(dict?.admin as Record<string, unknown>)?.businessHours as string || 'Business Hours'}
           </h1>
           <p className="text-gray-600">
-            {dict?.admin?.businessHoursSubtitle || 'Configure weekly schedule, special hours, and break times. This affects booking availability and business operations.'}
+            {(dict?.admin as Record<string, unknown>)?.businessHoursSubtitle as string || 'Configure weekly schedule, special hours, and break times. This affects booking availability and business operations.'}
           </p>
         </div>
 

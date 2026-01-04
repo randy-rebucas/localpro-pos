@@ -66,7 +66,7 @@ export default function FeatureFlagsPage() {
       if (!current[keys[i]]) {
         current[keys[i]] = {};
       }
-      current = current[keys[i]];
+      current = current[keys[i]] as Record<string, unknown>;
     }
     
     current[keys[keys.length - 1]] = value;
@@ -90,19 +90,19 @@ export default function FeatureFlagsPage() {
 
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: dict?.admin?.featureFlagsSavedSuccess || 'Feature flags saved successfully!' });
+        setMessage({ type: 'success', text: (dict?.admin as Record<string, unknown>)?.featureFlagsSavedSuccess as string || 'Feature flags saved successfully!' });
         setSettings(data.data);
         setTimeout(() => setMessage(null), 3000);
       } else {
         if (res.status === 401 || res.status === 403) {
-          setMessage({ type: 'error', text: dict?.settings?.unauthorized || 'Unauthorized. Please login with admin account.' });
+          setMessage({ type: 'error', text: (dict?.settings as Record<string, unknown>)?.unauthorized as string || 'Unauthorized. Please login with admin account.' });
         } else {
-          setMessage({ type: 'error', text: data.error || dict?.admin?.failedToSaveFeatureFlags || 'Failed to save feature flags' });
+          setMessage({ type: 'error', text: data.error || (dict?.admin as Record<string, unknown>)?.failedToSaveFeatureFlags as string || 'Failed to save feature flags' });
         }
       }
     } catch (error) {
       console.error('Error saving feature flags:', error);
-      setMessage({ type: 'error', text: dict?.admin?.failedToSaveFeatureFlagsConnection || 'Failed to save feature flags. Please check your connection.' });
+      setMessage({ type: 'error', text: (dict?.admin as Record<string, unknown>)?.failedToSaveFeatureFlagsConnection as string || 'Failed to save feature flags. Please check your connection.' });
     } finally {
       setSaving(false);
     }
@@ -113,7 +113,7 @@ export default function FeatureFlagsPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+          <p className="mt-4 text-gray-600">{(dict?.common as Record<string, unknown>)?.loading as string || 'Loading...'}</p>
         </div>
       </div>
     );
@@ -153,13 +153,13 @@ export default function FeatureFlagsPage() {
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
-            {dict?.admin?.backToAdmin || 'Back to Admin'}
+            {(dict?.admin as Record<string, unknown>)?.backToAdmin as string || 'Back to Admin'}
           </Link>
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
-            {dict?.admin?.featureFlags || 'Feature Flags'}
+            {(dict?.admin as Record<string, unknown>)?.featureFlags as string || 'Feature Flags'}
           </h1>
           <p className="text-gray-600">
-            {dict?.admin?.featureFlagsSubtitle || 'Enable or disable system-wide features. Changes affect the entire application.'}
+            {(dict?.admin as Record<string, unknown>)?.featureFlagsSubtitle as string || 'Enable or disable system-wide features. Changes affect the entire application.'}
           </p>
         </div>
 
@@ -198,7 +198,7 @@ export default function FeatureFlagsPage() {
 
         <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8">
                 <section>
-                  <h2 className="text-xl font-bold text-gray-900 mb-5">{dict?.admin?.systemFeatures || 'System Features'}</h2>
+                  <h2 className="text-xl font-bold text-gray-900 mb-5">{(dict?.admin as Record<string, unknown>)?.systemFeatures as string || 'System Features'}</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
                 <input
@@ -210,10 +210,10 @@ export default function FeatureFlagsPage() {
                 />
                 <label htmlFor="enableInventory" className="ml-3 flex-1">
                   <div className="text-sm font-medium text-gray-900">
-                    {dict?.admin?.enableInventoryManagement || 'Enable Inventory Management'}
+                    {(dict?.admin as Record<string, unknown>)?.enableInventoryManagement as string || 'Enable Inventory Management'}
                   </div>
                   <div className="text-xs text-gray-500 mt-1">
-                    {dict?.admin?.enableInventoryManagementDesc || 'Enable real-time stock tracking and inventory management'}
+                    {(dict?.admin as Record<string, unknown>)?.enableInventoryManagementDesc as string || 'Enable real-time stock tracking and inventory management'}
                   </div>
                 </label>
               </div>
@@ -227,10 +227,10 @@ export default function FeatureFlagsPage() {
                 />
                 <label htmlFor="enableCategories" className="ml-3 flex-1">
                   <div className="text-sm font-medium text-gray-900">
-                    {dict?.admin?.enableCategories || 'Enable Categories'}
+                    {(dict?.admin as Record<string, unknown>)?.enableCategories as string || 'Enable Categories'}
                   </div>
                   <div className="text-xs text-gray-500 mt-1">
-                    {dict?.admin?.enableCategoriesDesc || 'Enable product categorization and organization'}
+                    {(dict?.admin as Record<string, unknown>)?.enableCategoriesDesc as string || 'Enable product categorization and organization'}
                   </div>
                 </label>
               </div>
@@ -244,10 +244,10 @@ export default function FeatureFlagsPage() {
                 />
                 <label htmlFor="enableDiscounts" className="ml-3 flex-1">
                   <div className="text-sm font-medium text-gray-900">
-                    {dict?.admin?.enableDiscounts || 'Enable Discounts'}
+                    {(dict?.admin as Record<string, unknown>)?.enableDiscounts as string || 'Enable Discounts'}
                   </div>
                   <div className="text-xs text-gray-500 mt-1">
-                    {dict?.admin?.enableDiscountsDesc || 'Enable discount codes and promotional pricing'}
+                    {(dict?.admin as Record<string, unknown>)?.enableDiscountsDesc as string || 'Enable discount codes and promotional pricing'}
                   </div>
                 </label>
               </div>
@@ -261,10 +261,10 @@ export default function FeatureFlagsPage() {
                 />
                 <label htmlFor="enableLoyaltyProgram" className="ml-3 flex-1">
                   <div className="text-sm font-medium text-gray-900">
-                    {dict?.admin?.enableLoyaltyProgram || 'Enable Loyalty Program'}
+                    {(dict?.admin as Record<string, unknown>)?.enableLoyaltyProgram as string || 'Enable Loyalty Program'}
                   </div>
                   <div className="text-xs text-gray-500 mt-1">
-                    {dict?.admin?.enableLoyaltyProgramDesc || 'Enable customer loyalty points and rewards system'}
+                    {(dict?.admin as Record<string, unknown>)?.enableLoyaltyProgramDesc as string || 'Enable customer loyalty points and rewards system'}
                   </div>
                 </label>
               </div>
@@ -278,10 +278,10 @@ export default function FeatureFlagsPage() {
                 />
                 <label htmlFor="enableCustomerManagement" className="ml-3 flex-1">
                   <div className="text-sm font-medium text-gray-900">
-                    {dict?.admin?.enableCustomerManagement || 'Enable Customer Management'}
+                    {(dict?.admin as Record<string, unknown>)?.enableCustomerManagement as string || 'Enable Customer Management'}
                   </div>
                   <div className="text-xs text-gray-500 mt-1">
-                    {dict?.admin?.enableCustomerManagementDesc || 'Enable customer profiles and history tracking'}
+                    {(dict?.admin as Record<string, unknown>)?.enableCustomerManagementDesc as string || 'Enable customer profiles and history tracking'}
                   </div>
                 </label>
               </div>
@@ -295,10 +295,10 @@ export default function FeatureFlagsPage() {
                 />
                 <label htmlFor="enableBookingScheduling" className="ml-3 flex-1">
                   <div className="text-sm font-medium text-gray-900">
-                    {dict?.admin?.enableBookingScheduling || 'Enable Booking & Scheduling'}
+                    {(dict?.admin as Record<string, unknown>)?.enableBookingScheduling as string || 'Enable Booking & Scheduling'}
                   </div>
                   <div className="text-xs text-gray-500 mt-1">
-                    {dict?.admin?.enableBookingSchedulingDesc || 'Enable appointment booking and scheduling features for salons, cleaners, and service businesses'}
+                    {(dict?.admin as Record<string, unknown>)?.enableBookingSchedulingDesc as string || 'Enable appointment booking and scheduling features for salons, cleaners, and service businesses'}
                   </div>
                 </label>
               </div>
@@ -315,14 +315,14 @@ export default function FeatureFlagsPage() {
               {saving ? (
                 <>
                   <div className="animate-spin h-5 w-5 border-b-2 border-white"></div>
-                  <span>{dict?.settings?.saving || 'Saving...'}</span>
+                  <span>{(dict?.settings as Record<string, unknown>)?.saving as string || 'Saving...'}</span>
                 </>
               ) : (
                 <>
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
-                  <span>{dict?.admin?.saveFeatureFlags || 'Save Feature Flags'}</span>
+                  <span>{(dict?.admin as Record<string, unknown>)?.saveFeatureFlags as string || 'Save Feature Flags'}</span>
                 </>
               )}
             </button>

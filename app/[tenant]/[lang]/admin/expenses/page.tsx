@@ -16,7 +16,7 @@ interface Expense {
   description: string;
   amount: number;
   date: string;
-  paymentMethod: 'cash' | 'card' | 'digital' | 'other';
+  paymentMethod: 'cash' | 'card' | 'digital' | 'check' | 'other';
   receipt?: string;
   notes?: string;
   userId?: {
@@ -73,11 +73,11 @@ export default function ExpensesPage() {
         setExpenseNames(uniqueNames);
         setMessage(null);
       } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchExpenses || 'Failed to fetch expenses' });
+        setMessage({ type: 'error', text: data.error || (dict?.common as Record<string, unknown>)?.failedToFetchExpenses as string || 'Failed to fetch expenses' });
       }
     } catch (error) {
       console.error('Error fetching expenses:', error);
-      setMessage({ type: 'error', text: dict?.common?.failedToFetchExpenses || 'Failed to fetch expenses' });
+      setMessage({ type: 'error', text: (dict?.common as Record<string, unknown>)?.failedToFetchExpenses as string || 'Failed to fetch expenses' });
     } finally {
       setLoading(false);
     }
@@ -86,11 +86,11 @@ export default function ExpensesPage() {
   // Validate date range
   const handleDateFilterChange = (field: 'startDate' | 'endDate', value: string) => {
     if (field === 'endDate' && filters.startDate && value && new Date(filters.startDate) > new Date(value)) {
-      setMessage({ type: 'error', text: dict?.common?.endDateAfterStartDate || 'End date must be after start date' });
+      setMessage({ type: 'error', text: (dict?.common as Record<string, unknown>)?.endDateAfterStartDate as string || 'End date must be after start date' });
       return;
     }
     if (field === 'startDate' && filters.endDate && value && new Date(value) > new Date(filters.endDate)) {
-      setMessage({ type: 'error', text: dict?.common?.startDateBeforeEndDate || 'Start date must be before end date' });
+      setMessage({ type: 'error', text: (dict?.common as Record<string, unknown>)?.startDateBeforeEndDate as string || 'Start date must be before end date' });
       return;
     }
     setFilters({ ...filters, [field]: value });
@@ -109,19 +109,19 @@ export default function ExpensesPage() {
 
   const handleDeleteExpense = async (expenseId: string) => {
     if (!dict) return;
-    if (!confirm(dict.common?.deleteExpenseConfirm || dict.admin?.deleteExpenseConfirm || 'Are you sure you want to delete this expense?')) return;
+    if (!confirm((dict.common as Record<string, unknown>)?.deleteExpenseConfirm as string || (dict.admin as Record<string, unknown>)?.deleteExpenseConfirm as string || 'Are you sure you want to delete this expense?')) return;
     setDeletingId(expenseId);
     try {
       const res = await fetch(`/api/expenses/${expenseId}`, { method: 'DELETE', credentials: 'include' });
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: data.message || dict?.admin?.expenseDeletedSuccess || 'Expense deleted successfully' });
+        setMessage({ type: 'success', text: data.message || (dict?.admin as Record<string, unknown>)?.expenseDeletedSuccess as string || 'Expense deleted successfully' });
         fetchExpenses();
       } else {
-        setMessage({ type: 'error', text: data.error || dict?.admin?.failedToDeleteExpense || 'Failed to delete expense' });
+        setMessage({ type: 'error', text: data.error || (dict?.admin as Record<string, unknown>)?.failedToDeleteExpense as string || 'Failed to delete expense' });
       }
     } catch {
-      setMessage({ type: 'error', text: dict?.admin?.failedToDeleteExpense || 'Failed to delete expense' });
+      setMessage({ type: 'error', text: (dict?.admin as Record<string, unknown>)?.failedToDeleteExpense as string || 'Failed to delete expense' });
     } finally {
       setDeletingId(null);
     }
@@ -134,7 +134,7 @@ export default function ExpensesPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+          <p className="mt-4 text-gray-600">{(dict?.common as Record<string, unknown>)?.loading as string || 'Loading...'}</p>
         </div>
       </div>
     );
@@ -152,14 +152,14 @@ export default function ExpensesPage() {
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
-            {dict?.admin?.backToAdmin || 'Back to Admin'}
+            {(dict?.admin as Record<string, unknown>)?.backToAdmin as string || 'Back to Admin'}
           </Link>
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
-                {dict.admin?.expenses || 'Expenses'}
+                {(dict?.admin as Record<string, unknown>)?.expenses as string || 'Expenses'}
               </h1>
-              <p className="text-gray-600">{dict.admin?.expensesSubtitle || 'Manage and track business expenses'}</p>
+              <p className="text-gray-600">{(dict?.admin as Record<string, unknown>)?.expensesSubtitle as string || 'Manage and track business expenses'}</p>
             </div>
           </div>
         </div>
@@ -182,13 +182,13 @@ export default function ExpensesPage() {
         <div className="bg-white border border-gray-300 p-6 mb-6">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-sm font-medium text-gray-500">{dict.admin?.totalExpenses || 'Total Expenses'}</h3>
+              <h3 className="text-sm font-medium text-gray-500">{(dict?.admin as Record<string, unknown>)?.totalExpenses as string || 'Total Expenses'}</h3>
               <p className="text-3xl font-bold text-gray-900 mt-2">
                 <Currency amount={totalAmount} />
               </p>
             </div>
             <div className="text-right">
-              <p className="text-sm text-gray-500">{dict.admin?.totalRecords || 'Total Records'}</p>
+              <p className="text-sm text-gray-500">{(dict?.admin as Record<string, unknown>)?.totalRecords as string || 'Total Records'}</p>
               <p className="text-2xl font-semibold text-gray-900 mt-2">{expenses.length}</p>
             </div>
           </div>
@@ -196,7 +196,7 @@ export default function ExpensesPage() {
 
         <div className="bg-white border border-gray-300 p-6">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold text-gray-900">{dict.admin?.expenses || 'Expenses'}</h2>
+            <h2 className="text-xl font-bold text-gray-900">{(dict?.admin as Record<string, unknown>)?.expenses as string || 'Expenses'}</h2>
             <button
               onClick={() => {
                 setEditingExpense(null);
@@ -204,27 +204,27 @@ export default function ExpensesPage() {
               }}
               className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
             >
-              {dict.common?.add || 'Add'} {dict.admin?.expense || 'Expense'}
+              {(dict?.common as Record<string, unknown>)?.add as string || 'Add'} {(dict?.admin as Record<string, unknown>)?.expense as string || 'Expense'}
             </button>
           </div>
 
           {/* Filters */}
           <div className="mb-6 p-4 bg-gray-50 border border-gray-300">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-medium text-gray-700">{dict.admin?.filters || 'Filters'}</h3>
+              <h3 className="text-sm font-medium text-gray-700">{(dict?.admin as Record<string, unknown>)?.filters as string || 'Filters'}</h3>
               {(filters.startDate || filters.endDate || filters.name) && (
                 <button
                   onClick={() => setFilters({ startDate: '', endDate: '', name: '' })}
                   className="text-sm text-blue-600 hover:text-blue-800"
                 >
-                  {dict.common?.clearFilters || 'Clear Filters'}
+                  {(dict?.common as Record<string, unknown>)?.clearFilters as string || 'Clear Filters'}
                 </button>
               )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.startDate || 'Start Date'}
+                {(dict?.admin as Record<string, unknown>)?.startDate as string || 'Start Date'}
               </label>
               <input
                 type="date"
@@ -235,7 +235,7 @@ export default function ExpensesPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.endDate || 'End Date'}
+                {(dict?.admin as Record<string, unknown>)?.endDate as string || 'End Date'}
               </label>
               <input
                 type="date"
@@ -246,14 +246,14 @@ export default function ExpensesPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.expenseName || 'Name of Expense'}
+                {(dict?.admin as Record<string, unknown>)?.expenseName as string || 'Name of Expense'}
               </label>
               <select
                 value={filters.name}
                 onChange={(e) => setFilters({ ...filters, name: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 text-sm bg-white"
               >
-                <option value="">{dict.common?.all || 'All Names'}</option>
+                <option value="">{(dict?.common as Record<string, unknown>)?.all as string || 'All Names'}</option>
                 {expenseNames.map((name) => (
                   <option key={name} value={name}>
                     {name}
@@ -268,13 +268,13 @@ export default function ExpensesPage() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.date || 'Date'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.expenseName || 'Name of Expense'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.description || 'Description'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.amount || 'Amount'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.paymentMethod || 'Payment Method'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.user || 'User'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.actions || 'Actions'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict?.admin as Record<string, unknown>)?.date as string || 'Date'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict?.admin as Record<string, unknown>)?.expenseName as string || 'Name of Expense'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict?.admin as Record<string, unknown>)?.description as string || 'Description'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict?.admin as Record<string, unknown>)?.amount as string || 'Amount'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict?.admin as Record<string, unknown>)?.paymentMethod as string || 'Payment Method'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict?.admin as Record<string, unknown>)?.user as string || 'User'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict?.common as Record<string, unknown>)?.actions as string || 'Actions'}</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -309,14 +309,14 @@ export default function ExpensesPage() {
                             }}
                             className="text-blue-600 hover:text-blue-900"
                           >
-                            {dict.common?.edit || 'Edit'}
+                            {(dict?.common as Record<string, unknown>)?.edit as string || 'Edit'}
                           </button>
                           <button
                             onClick={() => handleDeleteExpense(expense._id)}
                             disabled={deletingId === expense._id}
                             className="text-red-600 hover:text-red-900 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            {deletingId === expense._id ? (dict.common?.deleting || 'Deleting...') : (dict.common?.delete || 'Delete')}
+                            {deletingId === expense._id ? ((dict?.common as Record<string, unknown>)?.deleting as string || 'Deleting...') : ((dict?.common as Record<string, unknown>)?.delete as string || 'Delete')}
                           </button>
                         </div>
                       </td>
@@ -326,7 +326,7 @@ export default function ExpensesPage() {
               </tbody>
             </table>
             {expenses.length === 0 && (
-              <div className="text-center py-8 text-gray-500">{dict.common?.noResults || 'No expenses found'}</div>
+              <div className="text-center py-8 text-gray-500">{(dict?.common as Record<string, unknown>)?.noResults as string || 'No expenses found'}</div>
             )}
           </div>
         </div>
@@ -342,7 +342,7 @@ export default function ExpensesPage() {
               fetchExpenses();
               setShowExpenseModal(false);
               setEditingExpense(null);
-              setMessage({ type: 'success', text: editingExpense ? (dict?.common?.expenseUpdatedSuccess || 'Expense updated successfully') : (dict?.common?.expenseCreatedSuccess || 'Expense created successfully') });
+              setMessage({ type: 'success', text: editingExpense ? ((dict?.common as Record<string, unknown>)?.expenseUpdatedSuccess as string || 'Expense updated successfully') : ((dict?.common as Record<string, unknown>)?.expenseCreatedSuccess as string || 'Expense created successfully') });
             }}
             dict={dict}
           />
@@ -473,26 +473,26 @@ function ExpenseModal({
       <div className="bg-white border border-gray-300 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
-            {expense ? (dict.admin?.editExpense || 'Edit Expense') : (dict.admin?.addExpense || 'Add Expense')}
+            {expense ? ((dict?.admin as Record<string, unknown>)?.editExpense as string || 'Edit Expense') : ((dict?.admin as Record<string, unknown>)?.addExpense as string || 'Add Expense')}
           </h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.expenseName || 'Name of Expense'} *
+                  {(dict?.admin as Record<string, unknown>)?.expenseName as string || 'Name of Expense'} *
                 </label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder={dict.admin?.expenseNamePlaceholder || 'Enter expense name (e.g., Office Supplies, Rent, Utilities)'}
+                  placeholder={(dict?.admin as Record<string, unknown>)?.expenseNamePlaceholder as string || 'Enter expense name (e.g., Office Supplies, Rent, Utilities)'}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                   required
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.amount || 'Amount'} *
+                  {(dict?.admin as Record<string, unknown>)?.amount as string || 'Amount'} *
                 </label>
                 <input
                   type="number"
@@ -514,21 +514,21 @@ function ExpenseModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.description || 'Description'} *
+                {(dict?.admin as Record<string, unknown>)?.description as string || 'Description'} *
               </label>
                 <textarea
                   required
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   rows={2}
-                  placeholder={dict?.admin?.expenseDescriptionPlaceholder || 'Enter expense description'}
+                  placeholder={(dict?.admin as Record<string, unknown>)?.expenseDescriptionPlaceholder as string || 'Enter expense description'}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                 />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.date || 'Date'} *
+                  {(dict?.admin as Record<string, unknown>)?.date as string || 'Date'} *
                 </label>
                 <input
                   type="date"
@@ -540,7 +540,7 @@ function ExpenseModal({
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.paymentMethod || 'Payment Method'} *
+                  {(dict?.admin as Record<string, unknown>)?.paymentMethod as string || 'Payment Method'} *
                 </label>
                 <select
                   value={formData.paymentMethod}
@@ -557,19 +557,19 @@ function ExpenseModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.receipt || 'Receipt'} (optional)
+                {(dict?.admin as Record<string, unknown>)?.receipt as string || 'Receipt'} (optional)
               </label>
               <input
                 type="text"
                 value={formData.receipt}
                 onChange={(e) => setFormData({ ...formData, receipt: e.target.value })}
-                placeholder={dict?.admin?.receiptURLPlaceholder || 'Receipt URL or reference'}
+                placeholder={(dict?.admin as Record<string, unknown>)?.receiptURLPlaceholder as string || 'Receipt URL or reference'}
                 className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.notes || 'Notes'} (optional)
+                {(dict?.admin as Record<string, unknown>)?.notes as string || 'Notes'} (optional)
               </label>
               <textarea
                 value={formData.notes}
@@ -589,14 +589,14 @@ function ExpenseModal({
                 onClick={onClose}
                 className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
               >
-                {dict.common?.cancel || 'Cancel'}
+                {(dict?.common as Record<string, unknown>)?.cancel as string || 'Cancel'}
               </button>
               <button
                 type="submit"
                 disabled={saving}
                 className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
               >
-                {saving ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
+                {saving ? ((dict?.common as Record<string, unknown>)?.loading as string || 'Saving...') : ((dict?.common as Record<string, unknown>)?.save as string || 'Save')}
               </button>
             </div>
           </form>

@@ -9,7 +9,7 @@ import Currency from '@/components/Currency';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { showToast } from '@/lib/toast';
 import { useConfirm } from '@/lib/confirm';
-import { getBusinessTypeConfig } from '@/lib/business-types';
+import { getBusinessTypeConfig, BusinessTypeConfig } from '@/lib/business-types';
 import { getBusinessType } from '@/lib/business-type-helpers';
 
 interface Product {
@@ -73,7 +73,7 @@ export default function ProductsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const { settings } = useTenantSettings();
   const { confirm, Dialog } = useConfirm();
-  const [businessTypeConfig, setBusinessTypeConfig] = useState<Record<string, unknown> | null>(null);
+  const [businessTypeConfig, setBusinessTypeConfig] = useState<BusinessTypeConfig | null>(null);
 
   const fetchProducts = useCallback(async () => {
     try {
@@ -83,11 +83,11 @@ export default function ProductsPage() {
         setProducts(data.data);
         setMessage(null);
       } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchProducts || 'Failed to fetch products' });
+        setMessage({ type: 'error', text: data.error || (dict?.common as Record<string, unknown>)?.failedToFetchProducts as string || 'Failed to fetch products' });
       }
     } catch (error) {
       console.error('Error fetching products:', error);
-      setMessage({ type: 'error', text: dict?.common?.failedToFetchProducts || 'Failed to fetch products' });
+      setMessage({ type: 'error', text: (dict?.common as Record<string, unknown>)?.failedToFetchProducts as string || 'Failed to fetch products' });
     } finally {
       setLoading(false);
     }
@@ -124,8 +124,8 @@ export default function ProductsPage() {
   const handleDeleteProduct = async (productId: string) => {
     if (!dict) return;
     const confirmed = await confirm(
-      dict.common?.deleteProductConfirmTitle || 'Delete Product',
-      dict.common?.deleteProductConfirm || 'Are you sure you want to delete this product?',
+      (dict.common as Record<string, unknown>)?.deleteProductConfirmTitle as string || 'Delete Product',
+      (dict.common as Record<string, unknown>)?.deleteProductConfirm as string || 'Are you sure you want to delete this product?',
       { variant: 'danger' }
     );
     if (!confirmed) return;
@@ -154,7 +154,7 @@ export default function ProductsPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+          <p className="mt-4 text-gray-600">{(dict?.common as Record<string, unknown>)?.loading as string || 'Loading...'}</p>
         </div>
       </div>
     );
@@ -173,7 +173,7 @@ export default function ProductsPage() {
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
-            {dict?.admin?.backToAdmin || 'Back to Admin'}
+            {(dict?.admin as Record<string, unknown>)?.backToAdmin as string || 'Back to Admin'}
           </Link>
           <div className="flex items-center justify-between">
             <div>
@@ -320,7 +320,7 @@ function ProductModal({
   onClose: () => void;
   onSave: () => void;
   dict: Record<string, unknown>;
-  businessTypeConfig: Record<string, unknown>;
+  businessTypeConfig: BusinessTypeConfig;
   settings: Record<string, unknown>;
 }) {
   const [formData, setFormData] = useState({

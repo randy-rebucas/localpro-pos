@@ -33,11 +33,11 @@ export default function CategoriesPage() {
         setCategories(data.data);
         setMessage(null);
       } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchCategories || 'Failed to fetch categories' });
+        setMessage({ type: 'error', text: data.error || (dict?.common as Record<string, unknown>)?.failedToFetchCategories as string || 'Failed to fetch categories' });
       }
     } catch (error) {
       console.error('Error fetching categories:', error);
-      setMessage({ type: 'error', text: dict?.common?.failedToFetchCategories || 'Failed to fetch categories' });
+      setMessage({ type: 'error', text: (dict?.common as Record<string, unknown>)?.failedToFetchCategories as string || 'Failed to fetch categories' });
     } finally {
       setLoading(false);
     }
@@ -50,18 +50,18 @@ export default function CategoriesPage() {
 
   const handleDeleteCategory = async (categoryId: string) => {
     if (!dict) return;
-    if (!confirm(dict.common?.deleteCategoryConfirm || dict.admin?.deleteCategoryConfirm || 'Are you sure you want to delete this category?')) return;
+    if (!confirm((dict.common as Record<string, unknown>)?.deleteCategoryConfirm as string || (dict.admin as Record<string, unknown>)?.deleteCategoryConfirm as string || 'Are you sure you want to delete this category?')) return;
     try {
       const res = await fetch(`/api/categories/${categoryId}`, { method: 'DELETE', credentials: 'include' });
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: dict?.common?.categoryDeletedSuccess || 'Category deleted successfully' });
+        setMessage({ type: 'success', text: (dict?.common as Record<string, unknown>)?.categoryDeletedSuccess as string || 'Category deleted successfully' });
         fetchCategories();
       } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToDeleteCategory || 'Failed to delete category' });
+        setMessage({ type: 'error', text: data.error || (dict?.common as Record<string, unknown>)?.failedToDeleteCategory as string || 'Failed to delete category' });
       }
     } catch {
-      setMessage({ type: 'error', text: dict?.common?.failedToDeleteCategory || 'Failed to delete category' });
+      setMessage({ type: 'error', text: (dict?.common as Record<string, unknown>)?.failedToDeleteCategory as string || 'Failed to delete category' });
     }
   };
 
@@ -75,13 +75,14 @@ export default function CategoriesPage() {
       });
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: `Category ${!category.isActive ? (dict?.admin?.activated || 'activated') : (dict?.admin?.deactivated || 'deactivated')} ${dict?.admin?.successfully || 'successfully'}` });
+        const adminDict = dict?.admin as Record<string, unknown>;
+        setMessage({ type: 'success', text: `Category ${!category.isActive ? (adminDict?.activated as string || 'activated') : (adminDict?.deactivated as string || 'deactivated')} ${adminDict?.successfully as string || 'successfully'}` });
         fetchCategories();
       } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToUpdateCategory || 'Failed to update category' });
+        setMessage({ type: 'error', text: data.error || (dict?.common as Record<string, unknown>)?.failedToUpdateCategory as string || 'Failed to update category' });
       }
     } catch {
-      setMessage({ type: 'error', text: dict?.common?.failedToUpdateCategory || 'Failed to update category' });
+      setMessage({ type: 'error', text: (dict?.common as Record<string, unknown>)?.failedToUpdateCategory as string || 'Failed to update category' });
     }
   };
 
@@ -90,7 +91,7 @@ export default function CategoriesPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+          <p className="mt-4 text-gray-600">{(dict?.common as Record<string, unknown>)?.loading as string || 'Loading...'}</p>
         </div>
       </div>
     );
@@ -108,14 +109,14 @@ export default function CategoriesPage() {
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
-            {dict?.admin?.backToAdmin || 'Back to Admin'}
+            {(dict?.admin as Record<string, unknown>)?.backToAdmin as string || 'Back to Admin'}
           </Link>
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
-                {dict.admin?.categories || 'Categories'}
+                {(dict?.admin as Record<string, unknown>)?.categories as string || 'Categories'}
               </h1>
-              <p className="text-gray-600">{dict.admin?.categoriesSubtitle || 'Manage product categories'}</p>
+              <p className="text-gray-600">{(dict?.admin as Record<string, unknown>)?.categoriesSubtitle as string || 'Manage product categories'}</p>
             </div>
           </div>
         </div>
@@ -128,7 +129,7 @@ export default function CategoriesPage() {
 
         <div className="bg-white border border-gray-300 p-6">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold text-gray-900">{dict.admin?.categories || 'Categories'}</h2>
+            <h2 className="text-xl font-bold text-gray-900">{(dict?.admin as Record<string, unknown>)?.categories as string || 'Categories'}</h2>
             <button
               onClick={() => {
                 setEditingCategory(null);
@@ -136,17 +137,17 @@ export default function CategoriesPage() {
               }}
               className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
             >
-              {dict.common?.add || 'Add'} {dict.admin?.category || 'Category'}
+              {(dict?.common as Record<string, unknown>)?.add as string || 'Add'} {(dict?.admin as Record<string, unknown>)?.category as string || 'Category'}
             </button>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.name || 'Name'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.description || 'Description'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.status || 'Status'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.actions || 'Actions'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict?.admin as Record<string, unknown>)?.name as string || 'Name'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict?.admin as Record<string, unknown>)?.description as string || 'Description'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict?.admin as Record<string, unknown>)?.status as string || 'Status'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict?.common as Record<string, unknown>)?.actions as string || 'Actions'}</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -156,7 +157,7 @@ export default function CategoriesPage() {
                     <td className="px-4 py-4 text-sm text-gray-500">{category.description || '-'}</td>
                     <td className="px-4 py-4 whitespace-nowrap">
                       <span className={`px-2 py-1 text-xs font-semibold border ${category.isActive ? 'bg-green-100 text-green-800 border-green-300' : 'bg-red-100 text-red-800 border-red-300'}`}>
-                        {category.isActive ? (dict.admin?.active || 'Active') : (dict.admin?.inactive || 'Inactive')}
+                        {category.isActive ? ((dict?.admin as Record<string, unknown>)?.active as string || 'Active') : ((dict?.admin as Record<string, unknown>)?.inactive as string || 'Inactive')}
                       </span>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
@@ -168,19 +169,19 @@ export default function CategoriesPage() {
                           }}
                           className="text-blue-600 hover:text-blue-900"
                         >
-                          {dict.common?.edit || 'Edit'}
+                          {(dict?.common as Record<string, unknown>)?.edit as string || 'Edit'}
                         </button>
                         <button
                           onClick={() => handleToggleCategoryStatus(category)}
                           className={category.isActive ? 'text-orange-600 hover:text-orange-900' : 'text-green-600 hover:text-green-900'}
                         >
-                          {category.isActive ? (dict.admin?.deactivate || 'Deactivate') : (dict.admin?.activate || 'Activate')}
+                          {category.isActive ? ((dict?.admin as Record<string, unknown>)?.deactivate as string || 'Deactivate') : ((dict?.admin as Record<string, unknown>)?.activate as string || 'Activate')}
                         </button>
                         <button
                           onClick={() => handleDeleteCategory(category._id)}
                           className="text-red-600 hover:text-red-900"
                         >
-                          {dict.common?.delete || 'Delete'}
+                          {(dict?.common as Record<string, unknown>)?.delete as string || 'Delete'}
                         </button>
                       </div>
                     </td>
@@ -189,7 +190,7 @@ export default function CategoriesPage() {
               </tbody>
             </table>
             {categories.length === 0 && (
-              <div className="text-center py-8 text-gray-500">{dict.common?.noResults || 'No categories found'}</div>
+              <div className="text-center py-8 text-gray-500">{(dict?.common as Record<string, unknown>)?.noResults as string || 'No categories found'}</div>
             )}
           </div>
         </div>
@@ -269,12 +270,12 @@ function CategoryModal({
       <div className="bg-white border border-gray-300 max-w-md w-full">
         <div className="p-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
-            {category ? (dict.admin?.editCategory || 'Edit Category') : (dict.admin?.addCategory || 'Add Category')}
+            {category ? ((dict?.admin as Record<string, unknown>)?.editCategory as string || 'Edit Category') : ((dict?.admin as Record<string, unknown>)?.addCategory as string || 'Add Category')}
           </h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.name || 'Name'} *
+                {(dict?.admin as Record<string, unknown>)?.name as string || 'Name'} *
               </label>
               <input
                 type="text"
@@ -286,7 +287,7 @@ function CategoryModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.description || 'Description'} (optional)
+                {(dict?.admin as Record<string, unknown>)?.description as string || 'Description'} (optional)
               </label>
               <textarea
                 value={formData.description}
@@ -306,14 +307,14 @@ function CategoryModal({
                 onClick={onClose}
                 className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
               >
-                {dict.common?.cancel || 'Cancel'}
+                {(dict?.common as Record<string, unknown>)?.cancel as string || 'Cancel'}
               </button>
               <button
                 type="submit"
                 disabled={saving}
                 className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
               >
-                {saving ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
+                {saving ? ((dict?.common as Record<string, unknown>)?.loading as string || 'Saving...') : ((dict?.common as Record<string, unknown>)?.save as string || 'Save')}
               </button>
             </div>
           </form>

@@ -63,7 +63,7 @@ export default function MultiCurrencyPage() {
       if (!current[keys[i]]) {
         current[keys[i]] = {};
       }
-      current = current[keys[i]];
+      current = current[keys[i]] as Record<string, unknown>;
     }
     
     current[keys[keys.length - 1]] = value;
@@ -83,17 +83,17 @@ export default function MultiCurrencyPage() {
       });
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: dict?.admin?.exchangeRatesUpdated || 'Exchange rates updated successfully' });
+        setMessage({ type: 'success', text: (dict?.admin as Record<string, unknown>)?.exchangeRatesUpdated as string || 'Exchange rates updated successfully' });
         updateSetting('multiCurrency', {
           ...settings.multiCurrency,
           exchangeRates: data.data.exchangeRates,
           lastUpdated: new Date(data.data.lastUpdated),
         });
       } else {
-        setMessage({ type: 'error', text: data.error || dict?.admin?.failedToFetchRates || 'Failed to fetch exchange rates' });
+        setMessage({ type: 'error', text: data.error || (dict?.admin as Record<string, unknown>)?.failedToFetchRates as string || 'Failed to fetch exchange rates' });
       }
     } catch (error: unknown) {
-      setMessage({ type: 'error', text: error instanceof Error ? error.message : dict?.admin?.failedToFetchRates || 'Failed to fetch exchange rates' }); 
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : (dict?.admin as Record<string, unknown>)?.failedToFetchRates as string || 'Failed to fetch exchange rates' }); 
     } finally {
       setFetchingRates(false);
     }
@@ -116,19 +116,19 @@ export default function MultiCurrencyPage() {
 
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: dict?.admin?.multiCurrencySaved || 'Multi-currency settings saved successfully!' });
+        setMessage({ type: 'success', text: (dict?.admin as Record<string, unknown>)?.multiCurrencySaved as string || 'Multi-currency settings saved successfully!' });
         setSettings(data.data);
         setTimeout(() => setMessage(null), 3000);
       } else {
         if (res.status === 401 || res.status === 403) {
-          setMessage({ type: 'error', text: dict?.settings?.unauthorized || 'Unauthorized. Please login with admin account.' });
+          setMessage({ type: 'error', text: (dict?.settings as Record<string, unknown>)?.unauthorized as string || 'Unauthorized. Please login with admin account.' });
         } else {
-          setMessage({ type: 'error', text: data.error || dict?.admin?.failedToSaveMultiCurrency || 'Failed to save settings' });
+          setMessage({ type: 'error', text: data.error || (dict?.admin as Record<string, unknown>)?.failedToSaveMultiCurrency as string || 'Failed to save settings' });
         }
       }
     } catch (error) {
       console.error('Error saving multi-currency settings:', error);
-      setMessage({ type: 'error', text: dict?.admin?.failedToSaveMultiCurrencyConnection || 'Failed to save settings. Please check your connection.' });
+      setMessage({ type: 'error', text: (dict?.admin as Record<string, unknown>)?.failedToSaveMultiCurrencyConnection as string || 'Failed to save settings. Please check your connection.' });
     } finally {
       setSaving(false);
     }
@@ -139,7 +139,7 @@ export default function MultiCurrencyPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+          <p className="mt-4 text-gray-600">{(dict?.common as Record<string, unknown>)?.loading as string || 'Loading...'}</p>
         </div>
       </div>
     );
@@ -165,13 +165,13 @@ export default function MultiCurrencyPage() {
             <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
-            {dict?.common?.back || 'Back'} to Admin
+            {(dict?.common as Record<string, unknown>)?.back as string || 'Back'} to Admin
           </Link>
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
-            {dict?.admin?.multiCurrency || 'Multi-Currency Management'}
+            {(dict?.admin as Record<string, unknown>)?.multiCurrency as string || 'Multi-Currency Management'}
           </h1>
           <p className="text-gray-600">
-            {dict?.admin?.multiCurrencyDescription || 'Configure exchange rates and API settings for multi-currency support'}
+            {(dict?.admin as Record<string, unknown>)?.multiCurrencyDescription as string || 'Configure exchange rates and API settings for multi-currency support'}
           </p>
         </div>
 
@@ -190,12 +190,12 @@ export default function MultiCurrencyPage() {
         <div className="bg-white border border-gray-300 p-6 space-y-6">
           <div>
             <h2 className="text-xl font-bold text-gray-900 mb-4">
-              {dict?.admin?.exchangeRateSource || 'Exchange Rate Source'}
+              {(dict?.admin as Record<string, unknown>)?.exchangeRateSource as string || 'Exchange Rate Source'}
             </h2>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {dict?.admin?.exchangeRateSource || 'Exchange Rate Source'}
+                  {(dict?.admin as Record<string, unknown>)?.exchangeRateSource as string || 'Exchange Rate Source'}
                 </label>
                 <select
                   value={multiCurrency.exchangeRateSource || 'manual'}
@@ -204,15 +204,15 @@ export default function MultiCurrencyPage() {
                   }}
                   className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                 >
-                  <option value="manual">{dict?.admin?.manualEntry || 'Manual Entry'}</option>
-                  <option value="api">{dict?.admin?.automaticAPI || 'Automatic (API)'}</option>
+                  <option value="manual">{(dict?.admin as Record<string, unknown>)?.manualEntry as string || 'Manual Entry'}</option>
+                  <option value="api">{(dict?.admin as Record<string, unknown>)?.automaticAPI as string || 'Automatic (API)'}</option>
                 </select>
               </div>
 
               {multiCurrency.exchangeRateSource === 'api' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    {dict?.admin?.exchangeRateApiKey || 'Exchange Rate API Key (Optional)'}
+                    {(dict?.admin as Record<string, unknown>)?.exchangeRateApiKey as string || 'Exchange Rate API Key (Optional)'}
                   </label>
                   <input
                     type="text"
@@ -221,10 +221,10 @@ export default function MultiCurrencyPage() {
                       updateSetting('multiCurrency.exchangeRateApiKey', e.target.value);
                     }}
                     className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
-                    placeholder={dict?.admin?.apiKeyPlaceholder || 'API key for exchange rate service'}
+                    placeholder={(dict?.admin as Record<string, unknown>)?.apiKeyPlaceholder as string || 'API key for exchange rate service'}
                   />
                   <p className="mt-2 text-xs text-gray-500">
-                    {dict?.admin?.apiKeyHint || 'Leave empty to use free tier (exchangerate-api.com)'}
+                    {(dict?.admin as Record<string, unknown>)?.apiKeyHint as string || 'Leave empty to use free tier (exchangerate-api.com)'}
                   </p>
                 </div>
               )}
@@ -235,7 +235,7 @@ export default function MultiCurrencyPage() {
             <div>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-bold text-gray-900">
-                  {dict?.admin?.exchangeRates || 'Exchange Rates'}
+                  {(dict?.admin as Record<string, unknown>)?.exchangeRates as string || 'Exchange Rates'}
                 </h2>
                 <button
                   type="button"
@@ -244,13 +244,13 @@ export default function MultiCurrencyPage() {
                   className="px-4 py-2 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
                 >
                   {fetchingRates 
-                    ? (dict?.admin?.fetching || 'Fetching...') 
-                    : (dict?.admin?.fetchLatestRates || 'Fetch Latest Rates')}
+                    ? ((dict?.admin as Record<string, unknown>)?.fetching as string || 'Fetching...') 
+                    : ((dict?.admin as Record<string, unknown>)?.fetchLatestRates as string || 'Fetch Latest Rates')}
                 </button>
               </div>
               {multiCurrency.lastUpdated && (
                 <p className="text-xs text-gray-500 mb-4">
-                  {dict?.admin?.lastUpdated || 'Last updated'}: {new Date(multiCurrency.lastUpdated).toLocaleString()}
+                  {(dict?.admin as Record<string, unknown>)?.lastUpdated as string || 'Last updated'}: {new Date(multiCurrency.lastUpdated).toLocaleString()}
                 </p>
               )}
               <div className="space-y-2">
@@ -271,7 +271,7 @@ export default function MultiCurrencyPage() {
                           updateSetting('multiCurrency.exchangeRates', newRates);
                         }}
                         className="w-32 px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder={dict?.admin?.ratePlaceholder || 'Rate'}
+                        placeholder={(dict?.admin as Record<string, unknown>)?.ratePlaceholder as string || 'Rate'}
                       />
                     </div>
                   );
@@ -283,7 +283,7 @@ export default function MultiCurrencyPage() {
           {(!multiCurrency.displayCurrencies || multiCurrency.displayCurrencies.length === 0) && (
             <div className="p-4 bg-yellow-50 border border-yellow-300 rounded">
               <p className="text-sm text-yellow-800">
-                {dict?.admin?.noDisplayCurrencies || 'No display currencies configured. Please configure display currencies in Settings → Multi-Currency.'}
+                {(dict?.admin as Record<string, unknown>)?.noDisplayCurrencies as string || 'No display currencies configured. Please configure display currencies in Settings → Multi-Currency.'}
               </p>
             </div>
           )}
@@ -297,14 +297,14 @@ export default function MultiCurrencyPage() {
               {saving ? (
                 <>
                   <div className="animate-spin h-5 w-5 border-b-2 border-white"></div>
-                  <span>{dict?.common?.saving || 'Saving...'}</span>
+                  <span>{(dict?.common as Record<string, unknown>)?.saving as string || 'Saving...'}</span>
                 </>
               ) : (
                 <>
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
-                  <span>{dict?.common?.save || 'Save Settings'}</span>
+                  <span>{(dict?.common as Record<string, unknown>)?.save as string || 'Save Settings'}</span>
                 </>
               )}
             </button>

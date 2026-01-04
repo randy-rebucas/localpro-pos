@@ -122,6 +122,8 @@ export async function POST(request: NextRequest) {
       customerName,
       customerEmail,
       customerPhone,
+    } = body;
+    const {
       serviceName,
       serviceDescription,
       startTime,
