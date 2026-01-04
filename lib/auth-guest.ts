@@ -33,7 +33,7 @@ export function generateGuestToken(payload: GuestJWTPayload): string {
 export function verifyGuestToken(token: string): GuestJWTPayload | null {
   try {
     return jwt.verify(token, JWT_SECRET) as GuestJWTPayload;
-  } catch (error) {
+  } catch {
     return null;
   }
 }

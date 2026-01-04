@@ -30,7 +30,7 @@ export async function GET(
     }
 
     return NextResponse.json({ success: true, data: bundle });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching bundle:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -79,9 +79,9 @@ export async function PUT(
     });
 
     return NextResponse.json({ success: true, data: bundle });
-  } catch (error: any) {
+  } catch (error: unknown) {
     const t = await getValidationTranslatorFromRequest(request);
-    if (error.code === 11000) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 11000) {
       return NextResponse.json(
         { success: false, error: t('validation.bundleSkuExists', 'Bundle with this SKU already exists') },
         { status: 400 }
@@ -125,7 +125,7 @@ export async function DELETE(
     });
 
     return NextResponse.json({ success: true, message: t('validation.bundleDeactivated', 'Bundle deactivated') });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error deleting bundle:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

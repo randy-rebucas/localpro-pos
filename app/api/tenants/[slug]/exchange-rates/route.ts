@@ -39,7 +39,7 @@ export async function GET(
         lastUpdated: multiCurrency.lastUpdated,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching exchange rates:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -92,7 +92,7 @@ export async function POST(
       // Update tenant settings
       tenant.settings.multiCurrency = {
         ...multiCurrency,
-        exchangeRates: rates as any,
+        exchangeRates: rates as Record<string, number>,
         lastUpdated: new Date(),
       };
 
@@ -116,7 +116,7 @@ export async function POST(
       const multiCurrency = tenant.settings.multiCurrency || { enabled: false };
       tenant.settings.multiCurrency = {
         ...multiCurrency,
-        exchangeRates: exchangeRates as any,
+        exchangeRates: exchangeRates as Record<string, number>,
         lastUpdated: new Date(),
       };
 
@@ -133,7 +133,7 @@ export async function POST(
     }
 
     return NextResponse.json({ success: false, error: 'Invalid action' }, { status: 400 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error updating exchange rates:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

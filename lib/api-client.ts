@@ -6,7 +6,7 @@ let isRedirecting = false;
  * Automatically redirects to forbidden page if tenant access is denied
  * IMPORTANT: Skips redirect if already on the forbidden page to prevent infinite loops
  */
-export async function handleApiResponse<T = any>(
+export async function handleApiResponse<T = unknown>(
   response: Response,
   options?: {
     redirectOn403?: boolean;
@@ -31,7 +31,7 @@ export async function handleApiResponse<T = any>(
         // Return a promise that never resolves to prevent further execution
         return new Promise(() => {}) as T;
       }
-    } catch (error) {
+    } catch {
       // If JSON parsing fails, still try to redirect with default (only if not on forbidden page)
       if (defaultRedirect && typeof window !== 'undefined' && !isOnForbiddenPage && !isRedirecting) {
         isRedirecting = true;
@@ -55,7 +55,7 @@ export async function handleApiResponse<T = any>(
 /**
  * Enhanced fetch wrapper that automatically handles 403 responses
  */
-export async function apiFetch<T = any>(
+export async function apiFetch<T = unknown>(
   url: string,
   options?: RequestInit & {
     redirectOn403?: boolean;

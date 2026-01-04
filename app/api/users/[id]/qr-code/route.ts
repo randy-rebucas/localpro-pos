@@ -59,9 +59,9 @@ export async function GET(
         email: user.email,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Get user QR code error:', error);
-    const errorMessage = error.message || 'Failed to get QR code';
+    const errorMessage = error instanceof Error ? error.message : 'Failed to get QR code'; 
     return NextResponse.json(
       { success: false, error: errorMessage },
       { status: error.message === 'Unauthorized' || error.message.includes('Forbidden') ? 403 : 500 }
@@ -121,9 +121,9 @@ export async function POST(
         qrToken: newQrToken,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Regenerate user QR code error:', error);
-    const errorMessage = error.message || 'Failed to regenerate QR code';
+    const errorMessage = error instanceof Error ? error.message : 'Failed to regenerate QR code'; 
     return NextResponse.json(
       { success: false, error: errorMessage },
       { status: error.message === 'Unauthorized' || error.message.includes('Forbidden') ? 403 : 500 }

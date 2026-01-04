@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Customer from '@/models/Customer';
 import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
-import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
@@ -26,7 +25,7 @@ export async function GET(
     }
     
     return NextResponse.json({ success: true, data: customer });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -43,9 +42,10 @@ export async function PATCH(
     try {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
-    } catch (authError: any) {
-      const t = await getValidationTranslatorFromRequest(request);
-      if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
+    } catch (authError: unknown) {
+      if (authError instanceof Error && (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden'))) {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const _t = await getValidationTranslatorFromRequest(request);
         return NextResponse.json(
           { success: false, error: authError.message },
           { status: authError.message.includes('Unauthorized') ? 401 : 403 }
@@ -97,7 +97,7 @@ export async function PATCH(
     });
     
     return NextResponse.json({ success: true, data: customer });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json({ success: false, error: error.message }, { status: 400 });
   }
 }
@@ -114,9 +114,10 @@ export async function DELETE(
     try {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
-    } catch (authError: any) {
-      const t = await getValidationTranslatorFromRequest(request);
-      if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
+    } catch (authError: unknown) {
+      if (authError instanceof Error && (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden'))) {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const _t = await getValidationTranslatorFromRequest(request);
         return NextResponse.json(
           { success: false, error: authError.message },
           { status: authError.message.includes('Unauthorized') ? 401 : 403 }
@@ -145,7 +146,7 @@ export async function DELETE(
     });
     
     return NextResponse.json({ success: true, message: 'Customer deleted' });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json({ success: false, error: error.message }, { status: 400 });
   }
 }

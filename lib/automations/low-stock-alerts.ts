@@ -85,7 +85,7 @@ export async function sendLowStockAlerts(
         const productList = lowStockProducts
           .slice(0, 20) // Limit to 20 products in email
           .map(
-            (product: any) =>
+            (product: { name: string; sku?: string; currentStock?: number; threshold?: number }) =>
               `- ${product.name}${product.sku ? ` (SKU: ${product.sku})` : ''}: ${product.currentStock || 0} units (Threshold: ${product.threshold || threshold})`
           )
           .join('\n');
@@ -121,9 +121,10 @@ This is an automated alert from your POS system.`;
               type: 'email',
             });
             totalProcessed++;
-          } catch (error: any) {
+          } catch (error: unknown) {
             totalFailed++;
-            results.errors?.push(`Email to ${recipientEmail}: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            results.errors?.push(`Email to ${recipientEmail}: ${errorMessage}`);
           }
         }
 
@@ -136,14 +137,16 @@ This is an automated alert from your POS system.`;
               type: 'sms',
             });
             totalProcessed++;
-          } catch (error: any) {
+          } catch (error: unknown) {
             totalFailed++;
-            results.errors?.push(`SMS to ${recipientPhone}: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            results.errors?.push(`SMS to ${recipientPhone}: ${errorMessage}`);
           }
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         totalFailed++;
-        results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        results.errors?.push(`Tenant ${tenant.name}: ${errorMessage}`);
       }
     }
 
@@ -152,10 +155,11 @@ This is an automated alert from your POS system.`;
     results.message = `Processed ${totalProcessed} low stock alerts${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: unknown) {
     results.success = false;
-    results.message = `Error sending low stock alerts: ${error.message}`;
-    results.errors?.push(error.message);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    results.message = `Error sending low stock alerts: ${errorMessage}`;
+    results.errors?.push(errorMessage);
     return results;
   }
 }

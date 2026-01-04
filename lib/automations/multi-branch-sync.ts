@@ -5,8 +5,6 @@
 
 import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
-import Customer from '@/models/Customer';
-import Discount from '@/models/Discount';
 import Branch from '@/models/Branch';
 import Tenant from '@/models/Tenant';
 import { AutomationResult } from './types';
@@ -39,7 +37,6 @@ export async function syncMultiBranchData(
     const syncProducts = options.syncProducts !== false;
     const syncCustomers = options.syncCustomers !== false;
     const syncDiscounts = options.syncDiscounts !== false;
-    const conflictResolution = options.conflictResolution || 'last-write-wins';
 
     // Get tenants to process
     let tenants;
@@ -81,9 +78,10 @@ export async function syncMultiBranchData(
               // Product updates are already tenant-level, so no sync needed
               // Branch stock is intentionally separate
               totalSynced++;
-            } catch (error: any) {
+            } catch (error: unknown) {
               totalFailed++;
-              results.errors?.push(`Product ${product._id}: ${error.message}`);
+              const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+              results.errors?.push(`Product ${product._id}: ${errorMessage}`);
             }
           }
         }
@@ -101,9 +99,10 @@ export async function syncMultiBranchData(
           totalSynced++;
         }
 
-      } catch (error: any) {
+      } catch (error: unknown) {
         totalFailed++;
-        results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        results.errors?.push(`Tenant ${tenant.name}: ${errorMessage}`);
       }
     }
 
@@ -112,10 +111,11 @@ export async function syncMultiBranchData(
     results.message = `Synced ${totalSynced} items${totalFailed > 0 ? `, ${totalFailed} failed` : ''}. Note: Most data is already tenant-level and doesn't require branch sync.`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: unknown) {
     results.success = false;
-    results.message = `Error syncing multi-branch data: ${error.message}`;
-    results.errors?.push(error.message);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    results.message = `Error syncing multi-branch data: ${errorMessage}`;
+    results.errors?.push(errorMessage);
     return results;
   }
 }

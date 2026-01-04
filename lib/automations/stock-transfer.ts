@@ -82,7 +82,7 @@ export async function detectStockImbalances(
             }
 
             // Find branches with low stock and high stock
-            const branchStocks = product.branchStock.map((bs: any) => ({
+            const branchStocks = product.branchStock.map((bs: { branchId: mongoose.Types.ObjectId; stock?: number }) => ({
               branchId: bs.branchId.toString(),
               stock: bs.stock || 0,
             }));
@@ -124,15 +124,15 @@ export async function detectStockImbalances(
                 if (productDoc && productDoc.branchStock) {
                   // Update source branch stock
                   const fromBranchStock = productDoc.branchStock.find(
-                    (bs: any) => bs.branchId.toString() === highStock.branchId
+                    (bs: { branchId: mongoose.Types.ObjectId; stock?: number }) => bs.branchId.toString() === highStock.branchId
                   );
                   if (fromBranchStock) {
-                    fromBranchStock.stock -= transferQuantity;
+                    fromBranchStock.stock = (fromBranchStock.stock || 0) - transferQuantity;
                   }
 
                   // Update destination branch stock
                   const toBranchStock = productDoc.branchStock.find(
-                    (bs: any) => bs.branchId.toString() === lowStock.branchId
+                    (bs: { branchId: mongoose.Types.ObjectId; stock?: number }) => bs.branchId.toString() === lowStock.branchId
                   );
                   if (toBranchStock) {
                     toBranchStock.stock += transferQuantity;
@@ -198,14 +198,16 @@ This is an automated stock transfer request from your POS system.`,
 
               totalTransfers++;
             }
-          } catch (error: any) {
+          } catch (error: unknown) {
             totalFailed++;
-            results.errors?.push(`Product ${product._id}: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            results.errors?.push(`Product ${product._id}: ${errorMessage}`);
           }
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         totalFailed++;
-        results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        results.errors?.push(`Tenant ${tenant.name}: ${errorMessage}`);
       }
     }
 
@@ -214,10 +216,11 @@ This is an automated stock transfer request from your POS system.`,
     results.message = `${autoApprove ? 'Processed' : 'Created'} ${totalTransfers} stock transfers${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: unknown) {
     results.success = false;
-    results.message = `Error detecting stock imbalances: ${error.message}`;
-    results.errors?.push(error.message);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    results.message = `Error detecting stock imbalances: ${errorMessage}`;
+    results.errors?.push(errorMessage);
     return results;
   }
 }

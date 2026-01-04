@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get('endDate');
     const name = searchParams.get('name');
 
-    const query: any = { tenantId };
+    const query: Record<string, unknown> = { tenantId };
     
     if (startDate || endDate) {
       query.date = {};
@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
       .lean();
 
     return NextResponse.json({ success: true, data: expenses });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching expenses:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ success: true, data: expense }, { status: 201 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error creating expense:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 400 });
   }

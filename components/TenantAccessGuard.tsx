@@ -1,7 +1,5 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useRouter, useParams } from 'next/navigation';
 import { useTenantAccess } from '@/hooks/useTenantAccess';
 
 interface TenantAccessGuardProps {
@@ -13,9 +11,7 @@ interface TenantAccessGuardProps {
  * This runs before the page renders to catch unauthorized tenant access
  */
 export default function TenantAccessGuard({ children }: TenantAccessGuardProps) {
-  const router = useRouter();
-  const params = useParams();
-  const { isValid, loading, userTenantSlug, requestedTenantSlug } = useTenantAccess();
+  const { isValid, loading } = useTenantAccess();
 
   // If tenant access is invalid, the hook will redirect to forbidden page
   // We just need to show loading state while checking

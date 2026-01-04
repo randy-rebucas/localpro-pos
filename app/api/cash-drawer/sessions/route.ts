@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const status = searchParams.get('status');
 
-    const query: any = { tenantId };
+    const query: Record<string, unknown> = { tenantId };
     if (status) {
       query.status = status;
     }
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
       .lean();
 
     return NextResponse.json({ success: true, data: sessions });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching cash drawer sessions:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -157,7 +157,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error managing cash drawer session:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 400 });
   }

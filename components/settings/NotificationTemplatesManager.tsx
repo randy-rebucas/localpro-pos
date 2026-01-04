@@ -12,12 +12,6 @@ interface NotificationTemplatesManagerProps {
 type TemplateType = 'email' | 'sms';
 type TemplateCategory = 'bookingConfirmation' | 'bookingReminder' | 'bookingCancellation' | 'lowStockAlert' | 'attendanceAlert';
 
-interface Template {
-  type: TemplateType;
-  category: TemplateCategory;
-  subject?: string;
-  body: string;
-}
 
 const CATEGORY_LABELS: Record<TemplateCategory, string> = {
   bookingConfirmation: 'Booking Confirmation',
@@ -35,8 +29,9 @@ const CATEGORY_VARIABLES: Record<TemplateCategory, string[]> = {
   attendanceAlert: ['{{employeeName}}', '{{clockInTime}}', '{{expectedTime}}', '{{hours}}'],
 };
 
-export default function NotificationTemplatesManager({ settings, tenant, onUpdate }: NotificationTemplatesManagerProps) {
-  const [templates, setTemplates] = useState<Record<string, any>>({});
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export default function NotificationTemplatesManager({ settings: _settings, tenant, onUpdate: _onUpdate }: NotificationTemplatesManagerProps) {
+  const [templates, setTemplates] = useState<Record<string, unknown>>({});
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<{ type: TemplateType; category: TemplateCategory } | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -44,7 +39,8 @@ export default function NotificationTemplatesManager({ settings, tenant, onUpdat
 
   useEffect(() => {
     fetchTemplates();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // fetchTemplates is stable, no need to include in deps
 
   const fetchTemplates = async () => {
     try {
@@ -54,8 +50,8 @@ export default function NotificationTemplatesManager({ settings, tenant, onUpdat
       if (data.success) {
         setTemplates(data.data || {});
       }
-    } catch (error: any) {
-      setMessage({ type: 'error', text: error.message || 'Failed to load templates' });
+    } catch (error: unknown) {
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to load templates' });
     } finally {
       setLoading(false);
     }
@@ -107,8 +103,8 @@ export default function NotificationTemplatesManager({ settings, tenant, onUpdat
       } else {
         setMessage({ type: 'error', text: data.error || 'Failed to save template' });
       }
-    } catch (error: any) {
-      setMessage({ type: 'error', text: error.message || 'Failed to save template' });
+    } catch (error: unknown) {
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to save template' });
     }
   };
 

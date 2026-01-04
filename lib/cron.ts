@@ -16,9 +16,6 @@ import {
   sendLowStockAlerts,
   sendSalesReport,
   sendPendingReceipts,
-  manageDiscountStatus,
-  autoClockOutForgottenSessions,
-  autoCloseCashDrawers,
   sendCashCountReminders,
   detectAttendanceViolations,
   sendAbandonedCartReminders,
@@ -28,7 +25,6 @@ import {
   cleanupAuditLogs,
   analyzeProductPerformance,
   calculateCustomerLifetimeValue,
-  expireInactiveSessions,
   detectStockImbalances,
   predictStockNeeds,
   applyDynamicPricing,
@@ -62,8 +58,8 @@ export function initializeCronJobs() {
     try {
       const result = await sendBookingReminders({ hoursBefore: 24 });
       console.log('✅ Booking reminders:', result.message);
-    } catch (error: any) {
-      console.error('❌ Booking reminders error:', error.message);
+    } catch (error: unknown) {
+      console.error('❌ Booking reminders error:', error instanceof Error ? error.message : 'Unknown error');
     }
   }, {
     timezone: 'UTC',
@@ -75,8 +71,8 @@ export function initializeCronJobs() {
     try {
       const result = await sendLowStockAlerts();
       console.log('✅ Low stock alerts:', result.message);
-    } catch (error: any) {
-      console.error('❌ Low stock alerts error:', error.message);
+    } catch (error: unknown) {
+      console.error('❌ Low stock alerts error:', error instanceof Error ? error.message : 'Unknown error');
     }
   }, {
     timezone: 'UTC',
@@ -88,8 +84,8 @@ export function initializeCronJobs() {
     try {
       const result = await sendSalesReport({ period: 'daily' });
       console.log('✅ Daily sales report:', result.message);
-    } catch (error: any) {
-      console.error('❌ Daily sales report error:', error.message);
+    } catch (error: unknown) {
+      console.error('❌ Daily sales report error:', error instanceof Error ? error.message : 'Unknown error');
     }
   }, {
     timezone: 'UTC',
@@ -101,8 +97,8 @@ export function initializeCronJobs() {
     try {
       const result = await sendSalesReport({ period: 'weekly' });
       console.log('✅ Weekly sales report:', result.message);
-    } catch (error: any) {
-      console.error('❌ Weekly sales report error:', error.message);
+    } catch (error: unknown) {
+      console.error('❌ Weekly sales report error:', error instanceof Error ? error.message : 'Unknown error');
     }
   }, {
     timezone: 'UTC',
@@ -114,8 +110,8 @@ export function initializeCronJobs() {
     try {
       const result = await sendSalesReport({ period: 'monthly' });
       console.log('✅ Monthly sales report:', result.message);
-    } catch (error: any) {
-      console.error('❌ Monthly sales report error:', error.message);
+    } catch (error: unknown) {
+      console.error('❌ Monthly sales report error:', error instanceof Error ? error.message : 'Unknown error');
     }
   }, {
     timezone: 'UTC',
@@ -127,8 +123,8 @@ export function initializeCronJobs() {
     try {
       const result = await sendPendingReceipts({ hoursAgo: 24 });
       console.log('✅ Pending receipts:', result.message);
-    } catch (error: any) {
-      console.error('❌ Pending receipts error:', error.message);
+    } catch (error: unknown) {
+      console.error('❌ Pending receipts error:', error instanceof Error ? error.message : 'Unknown error');
     }
   }, {
     timezone: 'UTC',
@@ -141,8 +137,8 @@ export function initializeCronJobs() {
       const { manageDiscountStatus } = await import('./automations/discount-management');
       const result = await manageDiscountStatus();
       console.log('✅ Discount management:', result.message);
-    } catch (error: any) {
-      console.error('❌ Discount management error:', error.message);
+    } catch (error: unknown) {
+      console.error('❌ Discount management error:', error instanceof Error ? error.message : 'Unknown error');
     }
   }, {
     timezone: 'UTC',
@@ -155,8 +151,8 @@ export function initializeCronJobs() {
       const { autoClockOutForgottenSessions } = await import('./automations/attendance-auto-clockout');
       const result = await autoClockOutForgottenSessions();
       console.log('✅ Auto clock-out:', result.message);
-    } catch (error: any) {
-      console.error('❌ Auto clock-out error:', error.message);
+    } catch (error: unknown) {
+      console.error('❌ Auto clock-out error:', error instanceof Error ? error.message : 'Unknown error');
     }
   }, {
     timezone: 'UTC',
@@ -169,8 +165,8 @@ export function initializeCronJobs() {
       const { autoCloseCashDrawers } = await import('./automations/cash-drawer-closure');
       const result = await autoCloseCashDrawers();
       console.log('✅ Cash drawer auto-close:', result.message);
-    } catch (error: any) {
-      console.error('❌ Cash drawer auto-close error:', error.message);
+    } catch (error: unknown) {
+      console.error('❌ Cash drawer auto-close error:', error instanceof Error ? error.message : 'Unknown error');
     }
   }, {
     timezone: 'UTC',
@@ -182,8 +178,8 @@ export function initializeCronJobs() {
     try {
       const result = await autoConfirmBookings();
       console.log('✅ Booking confirmations:', result.message);
-    } catch (error: any) {
-      console.error('❌ Booking confirmations error:', error.message);
+    } catch (error: unknown) {
+      console.error('❌ Booking confirmations error:', error instanceof Error ? error.message : 'Unknown error');
     }
   }, {
     timezone: 'UTC',
@@ -195,8 +191,8 @@ export function initializeCronJobs() {
     try {
       const result = await detectNoShows({ gracePeriodMinutes: 15 });
       console.log('✅ No-show detection:', result.message);
-    } catch (error: any) {
-      console.error('❌ No-show detection error:', error.message);
+    } catch (error: unknown) {
+      console.error('❌ No-show detection error:', error instanceof Error ? error.message : 'Unknown error');
     }
   }, {
     timezone: 'UTC',
@@ -208,8 +204,8 @@ export function initializeCronJobs() {
     try {
       const result = await sendCashCountReminders({ reminderMinutesBefore: 30 });
       console.log('✅ Cash count reminders:', result.message);
-    } catch (error: any) {
-      console.error('❌ Cash count reminders error:', error.message);
+    } catch (error: unknown) {
+      console.error('❌ Cash count reminders error:', error instanceof Error ? error.message : 'Unknown error');
     }
   }, {
     timezone: 'UTC',
@@ -221,8 +217,8 @@ export function initializeCronJobs() {
     try {
       const result = await detectAttendanceViolations({ lateThresholdMinutes: 15 });
       console.log('✅ Attendance violations:', result.message);
-    } catch (error: any) {
-      console.error('❌ Attendance violations error:', error.message);
+    } catch (error: unknown) {
+      console.error('❌ Attendance violations error:', error instanceof Error ? error.message : 'Unknown error');
     }
   }, {
     timezone: 'UTC',
@@ -234,8 +230,8 @@ export function initializeCronJobs() {
     try {
       const result = await detectBreaks({ inactivityMinutes: 30 });
       console.log('✅ Break detection:', result.message);
-    } catch (error: any) {
-      console.error('❌ Break detection error:', error.message);
+    } catch (error: unknown) {
+      console.error('❌ Break detection error:', error instanceof Error ? error.message : 'Unknown error');
     }
   }, {
     timezone: 'UTC',
@@ -247,8 +243,8 @@ export function initializeCronJobs() {
     try {
       const result = await sendAbandonedCartReminders({ hoursAgo: 24 });
       console.log('✅ Abandoned cart reminders:', result.message);
-    } catch (error: any) {
-      console.error('❌ Abandoned cart reminders error:', error.message);
+    } catch (error: unknown) {
+      console.error('❌ Abandoned cart reminders error:', error instanceof Error ? error.message : 'Unknown error');
     }
   }, {
     timezone: 'UTC',
@@ -260,8 +256,8 @@ export function initializeCronJobs() {
     try {
       const result = await generatePurchaseOrders();
       console.log('✅ Purchase order generation:', result.message);
-    } catch (error: any) {
-      console.error('❌ Purchase order generation error:', error.message);
+    } catch (error: unknown) {
+      console.error('❌ Purchase order generation error:', error instanceof Error ? error.message : 'Unknown error');
     }
   }, {
     timezone: 'UTC',
@@ -273,8 +269,8 @@ export function initializeCronJobs() {
     try {
       const result = await createDatabaseBackup();
       console.log('✅ Database backup:', result.message);
-    } catch (error: any) {
-      console.error('❌ Database backup error:', error.message);
+    } catch (error: unknown) {
+      console.error('❌ Database backup error:', error instanceof Error ? error.message : 'Unknown error');
     }
   }, {
     timezone: 'UTC',
@@ -286,8 +282,8 @@ export function initializeCronJobs() {
     try {
       const result = await cleanupAuditLogs({ retentionYears: 2 });
       console.log('✅ Audit log cleanup:', result.message);
-    } catch (error: any) {
-      console.error('❌ Audit log cleanup error:', error.message);
+    } catch (error: unknown) {
+      console.error('❌ Audit log cleanup error:', error instanceof Error ? error.message : 'Unknown error');
     }
   }, {
     timezone: 'UTC',
@@ -299,8 +295,8 @@ export function initializeCronJobs() {
     try {
       const result = await analyzeProductPerformance({ daysToAnalyze: 30 });
       console.log('✅ Product performance:', result.message);
-    } catch (error: any) {
-      console.error('❌ Product performance error:', error.message);
+    } catch (error: unknown) {
+      console.error('❌ Product performance error:', error instanceof Error ? error.message : 'Unknown error');
     }
   }, {
     timezone: 'UTC',
@@ -312,8 +308,8 @@ export function initializeCronJobs() {
     try {
       const result = await calculateCustomerLifetimeValue();
       console.log('✅ Customer lifetime value:', result.message);
-    } catch (error: any) {
-      console.error('❌ Customer lifetime value error:', error.message);
+    } catch (error: unknown) {
+      console.error('❌ Customer lifetime value error:', error instanceof Error ? error.message : 'Unknown error');
     }
   }, {
     timezone: 'UTC',
@@ -326,8 +322,8 @@ export function initializeCronJobs() {
       const { expireInactiveSessions } = await import('./automations/session-expiration');
       const result = await expireInactiveSessions({ inactivityHours: 24 });
       console.log('✅ Session expiration:', result.message);
-    } catch (error: any) {
-      console.error('❌ Session expiration error:', error.message);
+    } catch (error: unknown) {
+      console.error('❌ Session expiration error:', error instanceof Error ? error.message : 'Unknown error');
     }
   }, {
     timezone: 'UTC',
@@ -339,8 +335,8 @@ export function initializeCronJobs() {
     try {
       const result = await detectStockImbalances({ autoApprove: false });
       console.log('✅ Stock transfer:', result.message);
-    } catch (error: any) {
-      console.error('❌ Stock transfer error:', error.message);
+    } catch (error: unknown) {
+      console.error('❌ Stock transfer error:', error instanceof Error ? error.message : 'Unknown error');
     }
   }, {
     timezone: 'UTC',
@@ -352,8 +348,8 @@ export function initializeCronJobs() {
     try {
       const result = await predictStockNeeds({ analysisDays: 30, predictionDays: 7 });
       console.log('✅ Predictive stock:', result.message);
-    } catch (error: any) {
-      console.error('❌ Predictive stock error:', error.message);
+    } catch (error: unknown) {
+      console.error('❌ Predictive stock error:', error instanceof Error ? error.message : 'Unknown error');
     }
   }, {
     timezone: 'UTC',
@@ -369,8 +365,8 @@ export function initializeCronJobs() {
         enableStockBased: true,
       });
       console.log('✅ Dynamic pricing:', result.message);
-    } catch (error: any) {
-      console.error('❌ Dynamic pricing error:', error.message);
+    } catch (error: unknown) {
+      console.error('❌ Dynamic pricing error:', error instanceof Error ? error.message : 'Unknown error');
     }
   }, {
     timezone: 'UTC',
@@ -382,8 +378,8 @@ export function initializeCronJobs() {
     try {
       const result = await archiveOldData({ archiveYears: 2 });
       console.log('✅ Data archiving:', result.message);
-    } catch (error: any) {
-      console.error('❌ Data archiving error:', error.message);
+    } catch (error: unknown) {
+      console.error('❌ Data archiving error:', error instanceof Error ? error.message : 'Unknown error');
     }
   }, {
     timezone: 'UTC',
@@ -395,8 +391,8 @@ export function initializeCronJobs() {
     try {
       const result = await syncMultiBranchData();
       console.log('✅ Multi-branch sync:', result.message);
-    } catch (error: any) {
-      console.error('❌ Multi-branch sync error:', error.message);
+    } catch (error: unknown) {
+      console.error('❌ Multi-branch sync error:', error instanceof Error ? error.message : 'Unknown error');
     }
   }, {
     timezone: 'UTC',
@@ -408,8 +404,8 @@ export function initializeCronJobs() {
     try {
       const result = await detectSuspiciousActivity();
       console.log('✅ Suspicious activity detection:', result.message);
-    } catch (error: any) {
-      console.error('❌ Suspicious activity detection error:', error.message);
+    } catch (error: unknown) {
+      console.error('❌ Suspicious activity detection error:', error instanceof Error ? error.message : 'Unknown error');
     }
   }, {
     timezone: 'UTC',
@@ -421,8 +417,8 @@ export function initializeCronJobs() {
     try {
       const result = await analyzeSalesTrends({ period: 'daily', comparePeriods: true });
       console.log('✅ Daily sales trend analysis:', result.message);
-    } catch (error: any) {
-      console.error('❌ Daily sales trend analysis error:', error.message);
+    } catch (error: unknown) {
+      console.error('❌ Daily sales trend analysis error:', error instanceof Error ? error.message : 'Unknown error');
     }
   }, {
     timezone: 'UTC',
@@ -434,8 +430,8 @@ export function initializeCronJobs() {
     try {
       const result = await analyzeSalesTrends({ period: 'weekly', comparePeriods: true });
       console.log('✅ Weekly sales trend analysis:', result.message);
-    } catch (error: any) {
-      console.error('❌ Weekly sales trend analysis error:', error.message);
+    } catch (error: unknown) {
+      console.error('❌ Weekly sales trend analysis error:', error instanceof Error ? error.message : 'Unknown error');
     }
   }, {
     timezone: 'UTC',
@@ -447,8 +443,8 @@ export function initializeCronJobs() {
     try {
       const result = await analyzeSalesTrends({ period: 'monthly', comparePeriods: true });
       console.log('✅ Monthly sales trend analysis:', result.message);
-    } catch (error: any) {
-      console.error('❌ Monthly sales trend analysis error:', error.message);
+    } catch (error: unknown) {
+      console.error('❌ Monthly sales trend analysis error:', error instanceof Error ? error.message : 'Unknown error');
     }
   }, {
     timezone: 'UTC',

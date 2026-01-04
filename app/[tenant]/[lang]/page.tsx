@@ -40,13 +40,14 @@ interface Stats {
 
 export default function Dashboard() {
   const params = useParams();
-  const router = useRouter();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _router = useRouter();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es' | 'forbidden';
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('today');
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
   
   // If lang is "forbidden", this route was incorrectly matched
   // Redirect to the forbidden page using hard redirect to prevent loops
@@ -62,6 +63,15 @@ export default function Dashboard() {
     }
   }, [lang, tenant]);
   
+  useEffect(() => {
+    getDictionaryClient(lang).then(setDict);
+  }, [lang]);
+
+  useEffect(() => {
+    fetchStats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [period, tenant]);
+
   // Don't render if lang is "forbidden" (will redirect)
   if (lang === 'forbidden') {
     return (
@@ -73,14 +83,6 @@ export default function Dashboard() {
       </div>
     );
   }
-
-  useEffect(() => {
-    getDictionaryClient(lang).then(setDict);
-  }, [lang]);
-
-  useEffect(() => {
-    fetchStats();
-  }, [period, tenant]);
 
   const fetchStats = async () => {
     // Don't fetch if we're already on the forbidden page
@@ -99,7 +101,7 @@ export default function Dashboard() {
       
       if (data.success && data.data) {
         // Ensure chartData is properly formatted with numeric values
-        const processedChartData = (data.data.chartData || []).map((item: any) => {
+        const processedChartData = (data.data.chartData || []).map((item: { sales?: number | string; transactions?: number | string }) => {
           const salesValue = typeof item.sales === 'number' ? item.sales : parseFloat(String(item.sales)) || 0;
           const transactionsValue = typeof item.transactions === 'number' ? item.transactions : parseInt(String(item.transactions)) || 0;
           return {

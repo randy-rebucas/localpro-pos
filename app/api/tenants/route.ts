@@ -6,12 +6,13 @@ import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getDefaultTenantSettings } from '@/lib/currency';
 
-export async function GET(request: NextRequest) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function GET(_request: NextRequest) {
   try {
     await connectDB();
     const tenants = await Tenant.find({ isActive: true }).select('slug name settings isActive createdAt').lean();
     return NextResponse.json({ success: true, data: tenants });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -66,7 +67,7 @@ export async function POST(request: NextRequest) {
       ...(companyName && { companyName }),
     };
 
-    const tenantData: any = {
+    const tenantData: Record<string, unknown> = {
       slug: slug.toLowerCase(),
       name,
       settings,
@@ -99,7 +100,7 @@ export async function POST(request: NextRequest) {
         entityId: adminUser._id.toString(),
         changes: { email: adminUser.email, role: adminUser.role },
       });
-    } catch (userError: any) {
+    } catch (userError: unknown) {
       // Log error but don't fail tenant creation if user creation fails
       console.error('Failed to create admin user:', userError.message);
     }
@@ -121,8 +122,8 @@ export async function POST(request: NextRequest) {
         note: 'Admin user created automatically. Please change the password after first login.'
       }
     }, { status: 201 });
-  } catch (error: any) {
-    if (error.code === 11000) {
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 11000) {
       const field = Object.keys(error.keyPattern)[0];
       return NextResponse.json(
         { success: false, error: `${field} already exists` },

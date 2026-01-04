@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
       .lean();
 
     return NextResponse.json({ success: true, data: savedCarts });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching saved carts:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
     const savedCart = await SavedCart.create({
       tenantId: tenantObjectId,
       name: name.trim(),
-      items: items.map((item: any) => ({
+      items: items.map((item: { productId: string; name: string; quantity: number; price: number }) => ({
         productId: new mongoose.Types.ObjectId(item.productId),
         name: item.name,
         price: parseFloat(item.price),
@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ success: true, data: savedCart }, { status: 201 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error saving cart:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

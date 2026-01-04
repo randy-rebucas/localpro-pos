@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
-    const query: any = { tenantId };
+    const query: Record<string, unknown> = { tenantId };
     if (search) {
       query.$or = [
         { name: { $regex: search, $options: 'i' } },
@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
       .lean();
 
     return NextResponse.json({ success: true, data: bundles });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching bundles:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -110,9 +110,9 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ success: true, data: bundle }, { status: 201 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     const t = await getValidationTranslatorFromRequest(request);
-    if (error.code === 11000) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 11000) {
       return NextResponse.json(
         { success: false, error: t('validation.bundleSkuExists', 'Bundle with this SKU already exists') },
         { status: 400 }

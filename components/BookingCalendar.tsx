@@ -46,7 +46,7 @@ export default function BookingCalendar({
 }: BookingCalendarProps) {
   const params = useParams();
   const lang = (params?.lang as 'en' | 'es') || 'en';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
   const [currentDate, setCurrentDate] = useState(selectedDate || new Date());
   const [view, setView] = useState<'month' | 'week' | 'day'>('month');
   const { settings } = useTenantSettings();

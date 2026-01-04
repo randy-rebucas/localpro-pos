@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
 
     const result = await expireInactiveSessions({ tenantId, inactivityHours });
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Session expiration error:', error);
     return NextResponse.json({
       success: false,
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
 
     const result = await expireInactiveSessions({ tenantId, inactivityHours });
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Session expiration error:', error);
     return NextResponse.json({
       success: false,

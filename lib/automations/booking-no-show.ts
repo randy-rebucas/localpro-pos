@@ -121,14 +121,16 @@ ${companyName}`;
                 });
               }
             }
-          } catch (error: any) {
+          } catch (error: unknown) {
             totalFailed++;
-            results.errors?.push(`Booking ${booking._id}: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            results.errors?.push(`Booking ${booking._id}: ${errorMessage}`);
           }
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         totalFailed++;
-        results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        results.errors?.push(`Tenant ${tenant.name}: ${errorMessage}`);
       }
     }
 
@@ -137,10 +139,11 @@ ${companyName}`;
     results.message = `Detected ${totalNoShows} no-shows${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: unknown) {
     results.success = false;
-    results.message = `Error detecting no-shows: ${error.message}`;
-    results.errors?.push(error.message);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    results.message = `Error detecting no-shows: ${errorMessage}`;
+    results.errors?.push(errorMessage);
     return results;
   }
 }

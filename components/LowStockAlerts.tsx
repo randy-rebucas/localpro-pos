@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
-import Currency from './Currency';
 
 interface LowStockProduct {
   _id: string;
@@ -27,7 +26,7 @@ export default function LowStockAlerts({
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = (params?.lang as 'en' | 'es') || 'en';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
   const [alerts, setAlerts] = useState<LowStockProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -48,8 +47,8 @@ export default function LowStockAlerts({
       } else {
         setError(data.error || dict?.common?.failedToFetchAlerts || 'Failed to fetch alerts');
       }
-    } catch (err: any) {
-      setError(err.message || dict?.common?.errorFetchingAlerts || 'Error fetching alerts');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : (dict?.common?.errorFetchingAlerts as string) || 'Error fetching alerts');
     } finally {
       setLoading(false);
     }
@@ -62,7 +61,8 @@ export default function LowStockAlerts({
       const interval = setInterval(fetchAlerts, refreshInterval);
       return () => clearInterval(interval);
     }
-  }, [tenant, autoRefresh, refreshInterval]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenant, autoRefresh, refreshInterval]); // fetchAlerts is stable, no need to include
 
   if (loading && alerts.length === 0) {
     return (

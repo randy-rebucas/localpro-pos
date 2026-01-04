@@ -72,8 +72,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         return { success: false, error: data.error || 'Login failed' };
       }
-    } catch (error: any) {
-      return { success: false, error: error.message || 'Login failed' };
+    } catch (error: unknown) {
+      return { success: false, error: error instanceof Error ? error.message : 'Login failed' };
     }
   };
 
@@ -107,8 +107,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         return { success: false, error: data.error || 'Login failed' };
       }
-    } catch (error: any) {
-      return { success: false, error: error.message || 'Login failed' };
+    } catch (error: unknown) {
+      return { success: false, error: error instanceof Error ? error.message : 'Login failed' };
     }
   };
 
@@ -128,8 +128,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         return { success: false, error: data.error || 'Login failed' };
       }
-    } catch (error: any) {
-      return { success: false, error: error.message || 'Login failed' };
+    } catch (error: unknown) {
+      return { success: false, error: error instanceof Error ? error.message : 'Login failed' };
     }
   };
 

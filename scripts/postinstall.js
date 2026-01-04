@@ -6,6 +6,7 @@
  * Checks for .env.local and provides helpful messages
  */
 
+/* eslint-disable @typescript-eslint/no-require-imports */
 const fs = require('fs');
 const path = require('path');
 

@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Navbar from '@/components/Navbar';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 
@@ -16,22 +16,16 @@ interface Category {
 
 export default function CategoriesPage() {
   const params = useParams();
-  const router = useRouter();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
 
-  useEffect(() => {
-    getDictionaryClient(lang).then(setDict);
-    fetchCategories();
-  }, [lang, tenant]);
-
-  const fetchCategories = async () => {
+  const fetchCategories = useCallback(async () => {
     try {
       const res = await fetch('/api/categories', { credentials: 'include' });
       const data = await res.json();
@@ -47,7 +41,12 @@ export default function CategoriesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [dict]);
+
+  useEffect(() => {
+    getDictionaryClient(lang).then(setDict);
+    fetchCategories();
+  }, [lang, tenant, fetchCategories]);
 
   const handleDeleteCategory = async (categoryId: string) => {
     if (!dict) return;
@@ -61,7 +60,7 @@ export default function CategoriesPage() {
       } else {
         setMessage({ type: 'error', text: data.error || dict?.common?.failedToDeleteCategory || 'Failed to delete category' });
       }
-    } catch (error) {
+    } catch {
       setMessage({ type: 'error', text: dict?.common?.failedToDeleteCategory || 'Failed to delete category' });
     }
   };
@@ -81,7 +80,7 @@ export default function CategoriesPage() {
       } else {
         setMessage({ type: 'error', text: data.error || dict?.common?.failedToUpdateCategory || 'Failed to update category' });
       }
-    } catch (error) {
+    } catch {
       setMessage({ type: 'error', text: dict?.common?.failedToUpdateCategory || 'Failed to update category' });
     }
   };
@@ -224,7 +223,7 @@ function CategoryModal({
   category: Category | null;
   onClose: () => void;
   onSave: () => void;
-  dict: any;
+  dict: Record<string, unknown>;
 }) {
   const [formData, setFormData] = useState({
     name: category?.name || '',
@@ -258,7 +257,7 @@ function CategoryModal({
       } else {
         setError(data.error || 'Failed to save category');
       }
-    } catch (error) {
+    } catch {
       setError('Failed to save category');
     } finally {
       setSaving(false);

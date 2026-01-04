@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
         tenantName,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -90,7 +90,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Build update object
-    const updateData: any = {};
+    const updateData: Record<string, unknown> = {};
     
     if (email !== undefined && email !== oldUser.email) {
       if (!validateEmail(email)) {
@@ -209,7 +209,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Track changes (excluding password and PIN details)
-    const changes: Record<string, any> = {};
+    const changes: Record<string, unknown> = {};
     Object.keys(updateData).forEach(key => {
       if (key !== 'password' && key !== 'pin' && oldUser[key as keyof typeof oldUser] !== updateData[key]) {
         changes[key] = {
@@ -246,8 +246,8 @@ export async function PUT(request: NextRequest) {
         qrToken: user.qrToken || null,
       }
     });
-  } catch (error: any) {
-    if (error.code === 11000) {
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 11000) {
       return NextResponse.json(
         { success: false, error: 'User with this email already exists' },
         { status: 400 }

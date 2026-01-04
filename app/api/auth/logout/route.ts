@@ -21,10 +21,10 @@ export async function POST(request: NextRequest) {
     response.cookies.delete('auth-token');
     
     return response;
-  } catch (error: any) {
+  } catch (error: unknown) {
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
-      { success: false, error: error.message || t('validation.logoutFailed', 'Logout failed') },
+      { success: false, error: error instanceof Error ? error.message : t('validation.logoutFailed', 'Logout failed') }, 
       { status: 500 }
     );
   }

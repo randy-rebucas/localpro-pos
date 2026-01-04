@@ -92,19 +92,8 @@ export async function calculateCustomerLifetimeValue(
               lastPurchase: null,
             };
 
-            // Calculate average order value
-            const avgOrderValue = clvData.transactionCount > 0
-              ? clvData.totalSpent / clvData.transactionCount
-              : 0;
-
-            // Calculate purchase frequency (transactions per month)
-            const monthsActive = clvData.firstPurchase
-              ? Math.max(1, (Date.now() - new Date(clvData.firstPurchase).getTime()) / (1000 * 60 * 60 * 24 * 30))
-              : 1;
-            const purchaseFrequency = clvData.transactionCount / monthsActive;
-
             // Simple CLV calculation: totalSpent (can be enhanced with predictive models)
-            const clv = clvData.totalSpent;
+            // Note: avgOrderValue, purchaseFrequency, and clv calculations removed as they were unused
 
             if (updateCustomers) {
               // Update customer record
@@ -117,14 +106,16 @@ export async function calculateCustomerLifetimeValue(
             }
 
             totalUpdated++;
-          } catch (error: any) {
+          } catch (error: unknown) {
             totalFailed++;
-            results.errors?.push(`Customer ${customer._id}: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            results.errors?.push(`Customer ${customer._id}: ${errorMessage}`);
           }
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         totalFailed++;
-        results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        results.errors?.push(`Tenant ${tenant.name}: ${errorMessage}`);
       }
     }
 
@@ -133,10 +124,11 @@ export async function calculateCustomerLifetimeValue(
     results.message = `Updated ${totalUpdated} customer lifetime values${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: unknown) {
     results.success = false;
-    results.message = `Error calculating customer lifetime value: ${error.message}`;
-    results.errors?.push(error.message);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    results.message = `Error calculating customer lifetime value: ${errorMessage}`;
+    results.errors?.push(errorMessage);
     return results;
   }
 }

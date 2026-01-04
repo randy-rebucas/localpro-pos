@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     const method = searchParams.get('method');
     const transactionId = searchParams.get('transactionId');
 
-    const query: any = { tenantId };
+    const query: Record<string, unknown> = { tenantId };
     
     if (status) {
       query.status = status;
@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
         pages: Math.ceil(total / limit),
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -126,7 +126,7 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ success: true, data: payment }, { status: 201 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json({ success: false, error: error.message }, { status: 400 });
   }
 }

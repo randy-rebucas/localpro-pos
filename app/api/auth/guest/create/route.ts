@@ -55,10 +55,10 @@ export async function POST(request: NextRequest) {
     });
 
     return response;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Create guest session error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to create guest session' },
+      { success: false, error: error instanceof Error ? error.message : 'Failed to create guest session' },
       { status: 500 }
     );
   }

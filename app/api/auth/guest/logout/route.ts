@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 /**
  * POST - Logout guest session
  */
-export async function POST(request: NextRequest) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function POST(_request: NextRequest) {
   try {
     const response = NextResponse.json({
       success: true,
@@ -19,10 +20,10 @@ export async function POST(request: NextRequest) {
     });
 
     return response;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Guest logout error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Logout failed' },
+      { success: false, error: error instanceof Error ? error.message : 'Logout failed' },
       { status: 500 }
     );
   }

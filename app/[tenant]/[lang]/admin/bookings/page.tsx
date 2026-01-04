@@ -49,7 +49,7 @@ export default function BookingsPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
 
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,6 +86,7 @@ export default function BookingsPage() {
   useEffect(() => {
     fetchBookings();
     fetchStaff();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterStatus, filterStaff]);
 
   const fetchBookings = async () => {
@@ -116,15 +117,15 @@ export default function BookingsPage() {
           setBookings(data.data || []);
           setMessage(null);
         } else {
-          setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchBookings || 'Failed to fetch bookings' });
+          setMessage({ type: 'error', text: data.error || (dict?.common as Record<string, unknown>)?.failedToFetchBookings as string || 'Failed to fetch bookings' });
         }
       } else {
         const data = await response.json();
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchBookings || 'Failed to fetch bookings' });
+        setMessage({ type: 'error', text: data.error || (dict?.common as Record<string, unknown>)?.failedToFetchBookings as string || 'Failed to fetch bookings' });
       }
     } catch (error) {
       console.error('Failed to fetch bookings:', error);
-      setMessage({ type: 'error', text: dict?.common?.failedToFetchBookings || 'Failed to fetch bookings' });
+      setMessage({ type: 'error', text: (dict?.common as Record<string, unknown>)?.failedToFetchBookings as string || 'Failed to fetch bookings' });
     } finally {
       setLoading(false);
     }
@@ -179,20 +180,20 @@ export default function BookingsPage() {
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          setMessage({ type: 'success', text: dict?.common?.bookingCreatedSuccess || 'Booking created successfully' });
+          setMessage({ type: 'success', text: (dict?.common as Record<string, unknown>)?.bookingCreatedSuccess as string || 'Booking created successfully' });
           await fetchBookings();
           setShowCreateModal(false);
           resetForm();
         } else {
-          setMessage({ type: 'error', text: data.error || dict?.common?.failedToCreateBooking || 'Failed to create booking' });
+          setMessage({ type: 'error', text: data.error || (dict?.common as Record<string, unknown>)?.failedToCreateBooking as string || 'Failed to create booking' });
         }
       } else {
         const error = await response.json();
-        setMessage({ type: 'error', text: error.error || dict?.common?.failedToCreateBooking || 'Failed to create booking' });
+        setMessage({ type: 'error', text: error.error || (dict?.common as Record<string, unknown>)?.failedToCreateBooking as string || 'Failed to create booking' });
       }
     } catch (error) {
       console.error('Failed to create booking:', error);
-      setMessage({ type: 'error', text: dict?.common?.failedToCreateBooking || 'Failed to create booking' });
+      setMessage({ type: 'error', text: (dict?.common as Record<string, unknown>)?.failedToCreateBooking as string || 'Failed to create booking' });
     }
   };
 
@@ -215,26 +216,26 @@ export default function BookingsPage() {
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          setMessage({ type: 'success', text: dict?.common?.bookingUpdatedSuccess || 'Booking updated successfully' });
+          setMessage({ type: 'success', text: (dict?.common as Record<string, unknown>)?.bookingUpdatedSuccess as string || 'Booking updated successfully' });
           await fetchBookings();
           setShowModal(false);
           setSelectedBooking(null);
         } else {
-          setMessage({ type: 'error', text: data.error || dict?.common?.failedToUpdateBooking || 'Failed to update booking' });
+          setMessage({ type: 'error', text: data.error || (dict?.common as Record<string, unknown>)?.failedToUpdateBooking as string || 'Failed to update booking' });
         }
       } else {
         const error = await response.json();
-        setMessage({ type: 'error', text: error.error || dict?.common?.failedToUpdateBooking || 'Failed to update booking' });
+        setMessage({ type: 'error', text: error.error || (dict?.common as Record<string, unknown>)?.failedToUpdateBooking as string || 'Failed to update booking' });
       }
     } catch (error) {
       console.error('Failed to update booking:', error);
-      setMessage({ type: 'error', text: dict?.common?.failedToUpdateBooking || 'Failed to update booking' });
+      setMessage({ type: 'error', text: (dict?.common as Record<string, unknown>)?.failedToUpdateBooking as string || 'Failed to update booking' });
     }
   };
 
   const handleDeleteBooking = async (id: string) => {
     if (!dict) return;
-    if (!confirm(dict.common?.deleteBookingConfirm || 'Are you sure you want to delete this booking?')) {
+    if (!confirm((dict.common as Record<string, unknown>)?.deleteBookingConfirm as string || 'Are you sure you want to delete this booking?')) {
       return;
     }
 
@@ -254,20 +255,20 @@ export default function BookingsPage() {
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          setMessage({ type: 'success', text: dict?.common?.bookingDeletedSuccess || 'Booking deleted successfully' });
+          setMessage({ type: 'success', text: (dict?.common as Record<string, unknown>)?.bookingDeletedSuccess as string || 'Booking deleted successfully' });
           await fetchBookings();
           setShowModal(false);
           setSelectedBooking(null);
         } else {
-          setMessage({ type: 'error', text: data.error || dict?.common?.failedToDeleteBooking || 'Failed to delete booking' });
+          setMessage({ type: 'error', text: data.error || (dict?.common as Record<string, unknown>)?.failedToDeleteBooking as string || 'Failed to delete booking' });
         }
       } else {
         const error = await response.json();
-        setMessage({ type: 'error', text: error.error || dict?.common?.failedToDeleteBooking || 'Failed to delete booking' });
+        setMessage({ type: 'error', text: error.error || (dict?.common as Record<string, unknown>)?.failedToDeleteBooking as string || 'Failed to delete booking' });
       }
     } catch (error) {
       console.error('Failed to delete booking:', error);
-      setMessage({ type: 'error', text: dict?.common?.failedToDeleteBooking || 'Failed to delete booking' });
+      setMessage({ type: 'error', text: (dict?.common as Record<string, unknown>)?.failedToDeleteBooking as string || 'Failed to delete booking' });
     }
   };
 
@@ -288,17 +289,17 @@ export default function BookingsPage() {
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          setMessage({ type: 'success', text: dict?.common?.reminderSentSuccess || 'Reminder sent successfully' });
+          setMessage({ type: 'success', text: (dict?.common as Record<string, unknown>)?.reminderSentSuccess as string || 'Reminder sent successfully' });
         } else {
-          setMessage({ type: 'error', text: data.error || dict?.common?.failedToSendReminder || 'Failed to send reminder' });
+          setMessage({ type: 'error', text: data.error || (dict?.common as Record<string, unknown>)?.failedToSendReminder as string || 'Failed to send reminder' });
         }
       } else {
         const error = await response.json();
-        setMessage({ type: 'error', text: error.error || dict?.common?.failedToSendReminder || 'Failed to send reminder' });
+        setMessage({ type: 'error', text: error.error || (dict?.common as Record<string, unknown>)?.failedToSendReminder as string || 'Failed to send reminder' });
       }
     } catch (error) {
       console.error('Failed to send reminder:', error);
-      setMessage({ type: 'error', text: dict?.common?.failedToSendReminder || 'Failed to send reminder' });
+      setMessage({ type: 'error', text: (dict?.common as Record<string, unknown>)?.failedToSendReminder as string || 'Failed to send reminder' });
     }
   };
 
@@ -369,14 +370,14 @@ export default function BookingsPage() {
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
-            {dict?.admin?.backToAdmin || 'Back to Admin'}
+            {(dict?.admin as Record<string, unknown>)?.backToAdmin as string || 'Back to Admin'}
           </Link>
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
-                {dict?.admin?.bookingScheduling || 'Booking & Scheduling'}
+                {(dict?.admin as Record<string, unknown>)?.bookingScheduling as string || 'Booking & Scheduling'}
               </h1>
-              <p className="text-gray-600">{dict?.admin?.bookingSchedulingDescription || 'Manage appointments and bookings'}</p>
+              <p className="text-gray-600">{(dict?.admin as Record<string, unknown>)?.bookingSchedulingDescription as string || 'Manage appointments and bookings'}</p>
             </div>
             {bookingEnabled && (
               <button
@@ -386,7 +387,7 @@ export default function BookingsPage() {
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
-                {dict?.admin?.newBooking || 'New Booking'}
+                {(dict?.admin as Record<string, unknown>)?.newBooking as string || 'New Booking'}
               </button>
             )}
           </div>
@@ -523,7 +524,7 @@ export default function BookingsPage() {
                       <div className="text-sm text-gray-500">Duration: {booking.duration} min</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {booking.staffName || booking.staffId?.name || dict?.admin?.unassigned || 'Unassigned'}
+                      {booking.staffName || booking.staffId?.name || (dict?.admin as Record<string, unknown>)?.unassigned as string || 'Unassigned'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 py-1 text-xs font-semibold border ${getStatusColor(booking.status)}`}>
@@ -620,7 +621,7 @@ export default function BookingsPage() {
                   }}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                 >
-                  <option value="">{dict?.admin?.unassigned || 'Unassigned'}</option>
+                  <option value="">{(dict?.admin as Record<string, unknown>)?.unassigned as string || 'Unassigned'}</option>
                   {staff.map((s) => (
                     <option key={s._id} value={s._id}>
                       {s.name}
@@ -765,7 +766,7 @@ export default function BookingsPage() {
                   onChange={(e) => setFormData({ ...formData, staffId: e.target.value })}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                 >
-                  <option value="">{dict?.admin?.unassigned || 'Unassigned'}</option>
+                  <option value="">{(dict?.admin as Record<string, unknown>)?.unassigned as string || 'Unassigned'}</option>
                   {staff.map((s) => (
                     <option key={s._id} value={s._id}>
                       {s.name}

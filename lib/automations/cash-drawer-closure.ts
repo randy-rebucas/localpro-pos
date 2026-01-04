@@ -139,7 +139,7 @@ export async function autoCloseCashDrawers(
             // Send summary report to managers
             if (tenantSettings?.emailNotifications && tenantSettings?.email) {
               const companyName = tenantSettings?.companyName || tenant.name || 'Business';
-              const user = session.userId as any;
+              const user = session.userId as { name?: string; email?: string } | null;
               
               const reportHtml = `
 <!DOCTYPE html>
@@ -246,14 +246,16 @@ This is an automated security alert from your POS system.`,
                 });
               }
             }
-          } catch (error: any) {
+          } catch (error: unknown) {
             totalFailed++;
-            results.errors?.push(`Session ${session._id}: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            results.errors?.push(`Session ${session._id}: ${errorMessage}`);
           }
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         totalFailed++;
-        results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        results.errors?.push(`Tenant ${tenant.name}: ${errorMessage}`);
       }
     }
 
@@ -262,10 +264,11 @@ This is an automated security alert from your POS system.`,
     results.message = `Auto-closed ${totalProcessed} cash drawers${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: unknown) {
     results.success = false;
-    results.message = `Error auto-closing cash drawers: ${error.message}`;
-    results.errors?.push(error.message);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    results.message = `Error auto-closing cash drawers: ${errorMessage}`;
+    results.errors?.push(errorMessage);
     return results;
   }
 }

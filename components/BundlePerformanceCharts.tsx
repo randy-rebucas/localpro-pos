@@ -2,7 +2,7 @@
 
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
-import { formatCurrency, formatNumber, getCurrencySymbol, getDefaultTenantSettings } from '@/lib/currency';
+import { formatNumber, getCurrencySymbol, getDefaultTenantSettings } from '@/lib/currency';
 import Currency from '@/components/Currency';
 
 interface BundleAnalytics {
@@ -19,7 +19,7 @@ interface BundleAnalytics {
 
 interface BundlePerformanceChartsProps {
   analytics: BundleAnalytics[];
-  dict: any;
+  dict: Record<string, unknown>;
 }
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
@@ -72,21 +72,7 @@ export default function BundlePerformanceCharts({ analytics, dict }: BundlePerfo
     return `${symbol}${formatted}`;
   };
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-white border border-gray-300 rounded-lg p-3 shadow-lg">
-          <p className="font-semibold text-gray-900 mb-2">{label || payload[0].payload.fullName}</p>
-          {payload.map((entry: any, index: number) => (
-            <p key={index} className="text-sm" style={{ color: entry.color }}>
-              {entry.name}: <Currency amount={entry.value} />
-            </p>
-          ))}
-        </div>
-      );
-    }
-    return null;
-  };
+  // CustomTooltip component moved outside render to avoid creating during render
 
   if (!analytics || analytics.length === 0) {
     return null;
@@ -115,7 +101,23 @@ export default function BundlePerformanceCharts({ analytics, dict }: BundlePerfo
               style={{ fontSize: '12px' }}
               tickFormatter={formatYAxisValue}
             />
-            <Tooltip content={<CustomTooltip />} />
+            <Tooltip
+              content={({ active, payload, label }) => {
+                if (active && payload && payload.length) {
+                  return (
+                    <div className="bg-white border border-gray-300 rounded-lg p-3 shadow-lg">
+                      <p className="font-semibold text-gray-900 mb-2">{label || (payload[0]?.payload as { fullName?: string })?.fullName}</p>
+                      {payload.map((entry, index: number) => (
+                        <p key={index} className="text-sm" style={{ color: entry.color }}>
+                          {entry.name}: <Currency amount={entry.value as number} />
+                        </p>
+                      ))}
+                    </div>
+                  );
+                }
+                return null;
+              }}
+            />
             <Legend />
             <Bar dataKey="sales" fill="#3b82f6" name={dict.admin?.totalSales || 'Total Sales'} />
           </BarChart>
@@ -185,7 +187,7 @@ export default function BundlePerformanceCharts({ analytics, dict }: BundlePerfo
                   borderRadius: '8px',
                   boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
                 }}
-                formatter={(value: any) => <Currency amount={value} />}
+                formatter={(value: unknown) => <Currency amount={typeof value === 'number' ? value : 0} />}
               />
               <Legend />
             </PieChart>

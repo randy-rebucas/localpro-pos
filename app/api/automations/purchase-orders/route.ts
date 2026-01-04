@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
 
     const result = await generatePurchaseOrders({ tenantId, generateDocuments, sendToSuppliers });
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Purchase order generation error:', error);
     return NextResponse.json({
       success: false,
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
 
     const result = await generatePurchaseOrders({ tenantId });
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Purchase order generation error:', error);
     return NextResponse.json({
       success: false,

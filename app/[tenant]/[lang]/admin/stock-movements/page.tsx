@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Navbar from '@/components/Navbar';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
@@ -32,10 +32,9 @@ interface StockMovement {
 
 export default function StockMovementsPage() {
   const params = useParams();
-  const router = useRouter();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
   const [movements, setMovements] = useState<StockMovement[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -49,12 +48,7 @@ export default function StockMovementsPage() {
   const inventoryEnabled = supportsFeature(settings ?? undefined, 'inventory');
   const businessTypeConfig = settings ? getBusinessTypeConfig(getBusinessType(settings)) : null;
 
-  useEffect(() => {
-    getDictionaryClient(lang).then(setDict);
-    fetchMovements();
-  }, [lang, tenant, page, filters]);
-
-  const fetchMovements = async () => {
+  const fetchMovements = useCallback(async () => {
     try {
       let url = `/api/stock-movements?page=${page}&limit=50`;
       if (filters.type) url += `&type=${filters.type}`;
@@ -75,7 +69,12 @@ export default function StockMovementsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, filters.type, filters.productId, dict]);
+
+  useEffect(() => {
+    getDictionaryClient(lang).then(setDict);
+    fetchMovements();
+  }, [lang, tenant, page, filters, fetchMovements]);
 
   const getTypeColor = (type: string) => {
     const colors: Record<string, string> = {
@@ -206,7 +205,7 @@ export default function StockMovementsPage() {
                         )}
                         {movement.variation && (
                           <div className="text-xs text-gray-500">
-                            {Object.entries(movement.variation).filter(([_, v]) => v).map(([k, v]) => `${k}: ${v}`).join(', ')}
+                            {Object.entries(movement.variation).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join(', ')}
                           </div>
                         )}
                       </td>

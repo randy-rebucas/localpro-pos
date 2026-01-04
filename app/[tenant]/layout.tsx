@@ -32,11 +32,11 @@ async function ensureDefaultTenant() {
         },
         isActive: true,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       // If duplicate key error (11000), another parallel process already created it
       // This can happen during build/prerendering when multiple pages are generated in parallel
       // It's safe to ignore this error and continue
-      if (error.code !== 11000) {
+      if (error && typeof error === 'object' && 'code' in error && error.code !== 11000) {
         // Re-throw if it's a different error
         throw error;
       }
@@ -145,7 +145,7 @@ export default async function TenantLayout({
           }
         }
       }
-    } catch (error) {
+    } catch {
       // If auth check fails, allow access (might be unauthenticated user or invalid token)
       // They'll be redirected by ProtectedRoute if needed
       // Silently continue - don't log to avoid noise

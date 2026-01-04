@@ -100,7 +100,8 @@ export async function GET(request: NextRequest) {
       try {
         const lowStock = await getLowStockProducts(tenants[0]._id.toString());
         stats.inventory.lowStockProducts = lowStock.length;
-      } catch (error) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      } catch (_error) {
         // Ignore errors
       }
     }
@@ -166,7 +167,7 @@ export async function GET(request: NextRequest) {
       data: stats,
       timestamp: now.toISOString(),
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Automation status error:', error);
     return NextResponse.json(
       {

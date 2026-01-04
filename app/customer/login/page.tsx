@@ -20,7 +20,6 @@ function CustomerLoginPageContent() {
     createGuestSession,
     isAuthenticated,
     isGuest,
-    canAccess,
     loading: authLoading 
   } = useCustomerAuth();
   

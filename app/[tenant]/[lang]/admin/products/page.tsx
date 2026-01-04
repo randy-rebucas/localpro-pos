@@ -1,15 +1,15 @@
 'use client';
 
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import Navbar from '@/components/Navbar';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 import Currency from '@/components/Currency';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { showToast } from '@/lib/toast';
 import { useConfirm } from '@/lib/confirm';
-import { getBusinessTypeConfig, getAllowedProductTypes } from '@/lib/business-types';
+import { getBusinessTypeConfig } from '@/lib/business-types';
 import { getBusinessType } from '@/lib/business-type-helpers';
 
 interface Product {
@@ -26,7 +26,7 @@ interface Product {
   } | string;
   productType: 'regular' | 'bundle' | 'service';
   hasVariations: boolean;
-  variations?: any[];
+  variations?: Array<Record<string, unknown>>;
   trackInventory: boolean;
   lowStockThreshold?: number;
   createdAt: string;
@@ -61,10 +61,9 @@ interface Category {
 
 export default function ProductsPage() {
   const params = useParams();
-  const router = useRouter();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -74,23 +73,9 @@ export default function ProductsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const { settings } = useTenantSettings();
   const { confirm, Dialog } = useConfirm();
-  const [businessTypeConfig, setBusinessTypeConfig] = useState<any>(null);
+  const [businessTypeConfig, setBusinessTypeConfig] = useState<Record<string, unknown> | null>(null);
 
-  useEffect(() => {
-    getDictionaryClient(lang).then(setDict);
-    fetchProducts();
-    fetchCategories();
-  }, [lang, tenant]);
-
-  useEffect(() => {
-    if (settings) {
-      const businessType = getBusinessType(settings);
-      const config = getBusinessTypeConfig(businessType);
-      setBusinessTypeConfig(config);
-    }
-  }, [settings]);
-
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async () => {
     try {
       const res = await fetch('/api/products', { credentials: 'include' });
       const data = await res.json();
@@ -106,9 +91,9 @@ export default function ProductsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [dict]);
 
-  const fetchCategories = async () => {
+  const fetchCategories = useCallback(async () => {
     try {
       const res = await fetch('/api/categories', { credentials: 'include' });
       const data = await res.json();
@@ -120,7 +105,21 @@ export default function ProductsPage() {
     } catch (error) {
       console.error('Error fetching categories:', error);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    getDictionaryClient(lang).then(setDict);
+    fetchProducts();
+    fetchCategories();
+  }, [lang, tenant, fetchProducts, fetchCategories]);
+
+  useEffect(() => {
+    if (settings) {
+      const businessType = getBusinessType(settings);
+      const config = getBusinessTypeConfig(businessType);
+      setBusinessTypeConfig(config);
+    }
+  }, [settings]);
 
   const handleDeleteProduct = async (productId: string) => {
     if (!dict) return;
@@ -139,7 +138,7 @@ export default function ProductsPage() {
       } else {
         showToast.error(data.error || dict.common?.failedToDeleteProduct || 'Failed to delete product');
       }
-    } catch (error) {
+    } catch {
       showToast.error(dict.common?.failedToDeleteProduct || 'Failed to delete product');
     }
   };
@@ -320,9 +319,9 @@ function ProductModal({
   categories: Category[];
   onClose: () => void;
   onSave: () => void;
-  dict: any;
-  businessTypeConfig: any;
-  settings: any;
+  dict: Record<string, unknown>;
+  businessTypeConfig: Record<string, unknown>;
+  settings: Record<string, unknown>;
 }) {
   const [formData, setFormData] = useState({
     name: product?.name || '',
@@ -438,7 +437,7 @@ function ProductModal({
     try {
       const url = product ? `/api/products/${product._id}` : '/api/products';
       const method = product ? 'PUT' : 'POST';
-      const body: any = {
+      const body: Record<string, unknown> = {
         name: formData.name,
         description: formData.description || undefined,
         price: formData.price,
@@ -497,7 +496,7 @@ function ProductModal({
       } else {
         setError(data.error || 'Failed to save product');
       }
-    } catch (error) {
+    } catch {
       setError('Failed to save product');
     } finally {
       setSaving(false);
@@ -671,7 +670,7 @@ function ProductModal({
                 </label>
                 <select
                   value={formData.productType}
-                  onChange={(e) => setFormData({ ...formData, productType: e.target.value as any })}
+                  onChange={(e) => setFormData({ ...formData, productType: e.target.value as 'product' | 'service' | 'bundle' })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                 >
                   {businessTypeConfig?.productTypes?.map((type: string) => (
@@ -771,7 +770,7 @@ function ProductModal({
                   <label className="block text-sm font-medium text-gray-700 mb-1">Service Type</label>
                   <select
                     value={formData.serviceType}
-                    onChange={(e) => setFormData({ ...formData, serviceType: e.target.value as any })}
+                    onChange={(e) => setFormData({ ...formData, serviceType: e.target.value as string })}
                     className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                   >
                     <option value="wash">Wash</option>

@@ -128,10 +128,11 @@ export async function sendCustomerWelcomeEmail(
     results.message = 'Welcome email sent successfully';
 
     return results;
-  } catch (error: any) {
+  } catch (error: unknown) {
     results.success = false;
-    results.message = `Error sending welcome email: ${error.message}`;
-    results.errors?.push(error.message);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    results.message = `Error sending welcome email: ${errorMessage}`;
+    results.errors?.push(errorMessage);
     results.failed = 1;
     return results;
   }

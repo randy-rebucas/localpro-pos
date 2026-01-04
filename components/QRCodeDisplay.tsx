@@ -14,7 +14,7 @@ interface QRCodeDisplayProps {
 export default function QRCodeDisplay({ qrToken, name, onRegenerate }: QRCodeDisplayProps) {
   const params = useParams();
   const lang = (params?.lang as 'en' | 'es') || 'en';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {

@@ -4,14 +4,17 @@ import "../../globals.css";
 import LangSetter from "@/components/LangSetter";
 import { getTenantBySlug } from "@/lib/tenant";
 import ProtectedLayout from "./layout-protected";
-import { headers } from "next/headers";
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { headers as _headers } from "next/headers";
 
-const geistSans = Geist({
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 });

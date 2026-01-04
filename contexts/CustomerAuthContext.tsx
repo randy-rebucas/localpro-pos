@@ -120,8 +120,8 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
       } else {
         return { success: false, error: data.error || 'Registration failed' };
       }
-    } catch (error: any) {
-      return { success: false, error: error.message || 'Registration failed' };
+    } catch (error: unknown) {
+      return { success: false, error: error instanceof Error ? error.message : 'Registration failed' };
     }
   };
 
@@ -141,8 +141,8 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
       } else {
         return { success: false, error: data.error || 'Login failed' };
       }
-    } catch (error: any) {
-      return { success: false, error: error.message || 'Login failed' };
+    } catch (error: unknown) {
+      return { success: false, error: error instanceof Error ? error.message : 'Login failed' };
     }
   };
 
@@ -165,8 +165,8 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
           retryAfter: data.retryAfter,
         };
       }
-    } catch (error: any) {
-      return { success: false, error: error.message || 'Failed to send OTP' };
+    } catch (error: unknown) {
+      return { success: false, error: error instanceof Error ? error.message : 'Failed to send OTP' };
     }
   };
 
@@ -192,8 +192,8 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
       } else {
         return { success: false, error: data.error || 'OTP verification failed' };
       }
-    } catch (error: any) {
-      return { success: false, error: error.message || 'OTP verification failed' };
+    } catch (error: unknown) {
+      return { success: false, error: error instanceof Error ? error.message : 'OTP verification failed' };
     }
   };
 
@@ -218,8 +218,8 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
       } else {
         return { success: false, error: data.error || 'Failed to create guest session' };
       }
-    } catch (error: any) {
-      return { success: false, error: error.message || 'Failed to create guest session' };
+    } catch (error: unknown) {
+      return { success: false, error: error instanceof Error ? error.message : 'Failed to create guest session' };
     }
   };
 

@@ -9,7 +9,7 @@ import { validatePassword as validatePasswordLib } from '@/lib/validation';
 
 export default function SignupPage() {
   const router = useRouter();
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
   const [formData, setFormData] = useState({
     // Store info
     slug: '',
@@ -26,7 +26,7 @@ export default function SignupPage() {
     phone: '',
     email: '',
   });
-  const [businessTypes, setBusinessTypes] = useState<any[]>([]);
+  const [businessTypes, setBusinessTypes] = useState<Array<{ value: string; label: string }>>([]);
   const [loadingBusinessTypes, setLoadingBusinessTypes] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -88,7 +88,7 @@ export default function SignupPage() {
     if (!dict) return [];
     const t = (key: string, fallback: string) => {
       const keys = key.split('.');
-      let value: any = dict;
+      let value: unknown = dict;
       for (const k of keys) {
         value = value?.[k];
         if (value === undefined) break;
@@ -137,8 +137,8 @@ export default function SignupPage() {
       } else {
         setError(data.error || dict?.signup?.failedToCreateStore || 'Failed to create store. Please try again.');
       }
-    } catch (err: any) {
-      setError(err.message || dict?.signup?.errorOccurred || 'An error occurred. Please try again.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : (dict?.signup?.errorOccurred as string) || 'An error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -262,7 +262,7 @@ export default function SignupPage() {
                   id="businessType"
                   required
                   value={formData.businessType}
-                  onChange={(e) => setFormData({ ...formData, businessType: e.target.value as any })}
+                  onChange={(e) => setFormData({ ...formData, businessType: e.target.value })}
                   className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all"
                 >
                   {businessTypes.map((type) => (

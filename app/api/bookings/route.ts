@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
     const staffId = searchParams.get('staffId');
 
     // Build query
-    const query: any = { tenantId };
+    const query: { tenantId: string; startTime?: { $gte?: Date; $lte?: Date }; status?: string; staffId?: string } = { tenantId };
 
     if (startDate || endDate) {
       query.startTime = {};
@@ -69,10 +69,10 @@ export async function GET(request: NextRequest) {
       .lean();
 
     return NextResponse.json({ success: true, data: bookings });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Get bookings error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to fetch bookings' },
+      { success: false, error: error instanceof Error ? error.message : 'Failed to fetch bookings' },
       { status: 500 }
     );
   }
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
     // Allow cashiers and above OR authenticated customers to create bookings
     let tenantId: string | null = null;
     let isCustomer = false;
-    let customerAuth: any = null;
+    let customerAuth: { customerId: string; tenantId: string | null } | null = null;
     
     try {
       // Try customer authentication first
@@ -264,17 +264,17 @@ export async function POST(request: NextRequest) {
       { success: true, data: bookingData },
       { status: 201 }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Create booking error:', error);
     const t = await getValidationTranslatorFromRequest(request);
-    if (error.code === 11000) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 11000) {
       return NextResponse.json(
         { success: false, error: t('validation.bookingExists', 'Booking already exists') },
         { status: 400 }
       );
     }
     return NextResponse.json(
-      { success: false, error: error.message || t('validation.failedToCreateBooking', 'Failed to create booking') },
+      { success: false, error: error instanceof Error ? error.message : t('validation.failedToCreateBooking', 'Failed to create booking') },
       { status: 500 }
     );
   }

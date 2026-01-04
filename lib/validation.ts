@@ -57,32 +57,44 @@ export function validatePassword(password: string, t?: TranslationFunction): { v
   };
 }
 
+interface ProductValidationData {
+  name?: unknown;
+  price?: unknown;
+  stock?: unknown;
+  sku?: unknown;
+  trackInventory?: unknown;
+  allowOutOfStockSales?: unknown;
+}
+
 /**
  * Validate product data
  */
-export function validateProduct(data: any, t?: TranslationFunction): ValidationError[] {
+export function validateProduct(data: ProductValidationData, t?: TranslationFunction): ValidationError[] {
   const errors: ValidationError[] = [];
   const translate = (key: string, fallback: string) => t ? t(key, fallback) : fallback;
 
-  if (!data.name || data.name.trim().length === 0) {
+  const name = typeof data.name === 'string' ? data.name : '';
+  if (!name || name.trim().length === 0) {
     errors.push({ field: 'name', message: translate('validation.productNameRequired', 'Product name is required'), code: 'productNameRequired' });
-  }
-  if (data.name && data.name.length > 200) {
+  } else if (name.length > 200) {
     errors.push({ field: 'name', message: translate('validation.productNameMaxLength', 'Product name must be less than 200 characters'), code: 'productNameMaxLength' });
   }
-  if (data.price === undefined || data.price === null) {
+  const price = typeof data.price === 'number' ? data.price : (data.price === undefined || data.price === null ? undefined : Number(data.price));
+  if (price === undefined || price === null) {
     errors.push({ field: 'price', message: translate('validation.priceRequired', 'Price is required'), code: 'priceRequired' });
   }
-  if (data.price !== undefined && (isNaN(data.price) || data.price < 0)) {
+  if (price !== undefined && price !== null && (isNaN(price) || price < 0)) {
     errors.push({ field: 'price', message: translate('validation.pricePositive', 'Price must be a positive number'), code: 'pricePositive' });
   }
-  if (data.stock === undefined || data.stock === null) {
+  const stock = typeof data.stock === 'number' ? data.stock : (data.stock === undefined || data.stock === null ? undefined : Number(data.stock));
+  if (stock === undefined || stock === null) {
     errors.push({ field: 'stock', message: translate('validation.stockRequired', 'Stock is required'), code: 'stockRequired' });
   }
-  if (data.stock !== undefined && (!Number.isInteger(data.stock) || data.stock < 0)) {
+  if (stock !== undefined && stock !== null && (!Number.isInteger(stock) || stock < 0)) {
     errors.push({ field: 'stock', message: translate('validation.stockNonNegative', 'Stock must be a non-negative integer'), code: 'stockNonNegative' });
   }
-  if (data.sku && data.sku.length > 50) {
+  const sku = typeof data.sku === 'string' ? data.sku : '';
+  if (sku && sku.length > 50) {
     errors.push({ field: 'sku', message: translate('validation.skuMaxLength', 'SKU must be less than 50 characters'), code: 'skuMaxLength' });
   }
   if (data.trackInventory !== undefined && typeof data.trackInventory !== 'boolean') {
@@ -94,10 +106,16 @@ export function validateProduct(data: any, t?: TranslationFunction): ValidationE
   return errors;
 }
 
+interface TransactionValidationData {
+  items?: Array<{ productId?: unknown; quantity?: unknown }>;
+  paymentMethod?: unknown;
+  cashReceived?: unknown;
+}
+
 /**
  * Validate transaction data
  */
-export function validateTransaction(data: any, t?: TranslationFunction): ValidationError[] {
+export function validateTransaction(data: TransactionValidationData, t?: TranslationFunction): ValidationError[] {
   const errors: ValidationError[] = [];
   const translate = (key: string, fallback: string) => t ? t(key, fallback) : fallback;
 
@@ -105,7 +123,7 @@ export function validateTransaction(data: any, t?: TranslationFunction): Validat
     errors.push({ field: 'items', message: translate('validation.itemsRequired', 'At least one item is required'), code: 'itemsRequired' });
   }
   if (data.items) {
-    data.items.forEach((item: any, index: number) => {
+    data.items.forEach((item, index: number) => {
       if (!item.productId) {
         errors.push({ field: `items[${index}].productId`, message: translate('validation.productIdRequired', 'Product ID is required'), code: 'productIdRequired' });
       }
@@ -114,11 +132,13 @@ export function validateTransaction(data: any, t?: TranslationFunction): Validat
       }
     });
   }
-  if (!data.paymentMethod || !['cash', 'card', 'digital'].includes(data.paymentMethod)) {
+  const paymentMethod = typeof data.paymentMethod === 'string' ? data.paymentMethod : '';
+  if (!paymentMethod || !['cash', 'card', 'digital'].includes(paymentMethod)) {
     errors.push({ field: 'paymentMethod', message: translate('validation.paymentMethodRequired', 'Valid payment method is required'), code: 'paymentMethodRequired' });
   }
-  if (data.paymentMethod === 'cash') {
-    if (!data.cashReceived || data.cashReceived <= 0) {
+  if (paymentMethod === 'cash') {
+    const cashReceived = typeof data.cashReceived === 'number' ? data.cashReceived : (data.cashReceived ? Number(data.cashReceived) : 0);
+    if (!cashReceived || cashReceived <= 0) {
       errors.push({ field: 'cashReceived', message: translate('validation.cashReceivedRequired', 'Cash received is required for cash payments'), code: 'cashReceivedRequired' });
     }
   }
@@ -129,17 +149,23 @@ export function validateTransaction(data: any, t?: TranslationFunction): Validat
 /**
  * Validate tenant data
  */
-export function validateTenant(data: any, t?: TranslationFunction): ValidationError[] {
+interface TenantValidationData {
+  slug?: unknown;
+  name?: unknown;
+}
+
+export function validateTenant(data: TenantValidationData, t?: TranslationFunction): ValidationError[] {
   const errors: ValidationError[] = [];
   const translate = (key: string, fallback: string) => t ? t(key, fallback) : fallback;
 
-  if (!data.slug || data.slug.trim().length === 0) {
+  const slug = typeof data.slug === 'string' ? data.slug : '';
+  if (!slug || slug.trim().length === 0) {
     errors.push({ field: 'slug', message: translate('validation.tenantSlugRequired', 'Tenant slug is required'), code: 'tenantSlugRequired' });
-  }
-  if (data.slug && !/^[a-z0-9-]+$/.test(data.slug)) {
+  } else if (!/^[a-z0-9-]+$/.test(slug)) {
     errors.push({ field: 'slug', message: translate('validation.slugFormat', 'Slug can only contain lowercase letters, numbers, and hyphens'), code: 'slugFormat' });
   }
-  if (!data.name || data.name.trim().length === 0) {
+  const name = typeof data.name === 'string' ? data.name : '';
+  if (!name || name.trim().length === 0) {
     errors.push({ field: 'name', message: translate('validation.tenantNameRequired', 'Tenant name is required'), code: 'tenantNameRequired' });
   }
 
@@ -149,17 +175,23 @@ export function validateTenant(data: any, t?: TranslationFunction): ValidationEr
 /**
  * Validate category data
  */
-export function validateCategory(data: any, t?: TranslationFunction): ValidationError[] {
+interface CategoryValidationData {
+  name?: unknown;
+  description?: unknown;
+}
+
+export function validateCategory(data: CategoryValidationData, t?: TranslationFunction): ValidationError[] {
   const errors: ValidationError[] = [];
   const translate = (key: string, fallback: string) => t ? t(key, fallback) : fallback;
 
-  if (!data.name || data.name.trim().length === 0) {
+  const name = typeof data.name === 'string' ? data.name : '';
+  if (!name || name.trim().length === 0) {
     errors.push({ field: 'name', message: translate('validation.categoryNameRequired', 'Category name is required'), code: 'categoryNameRequired' });
-  }
-  if (data.name && data.name.length > 200) {
+  } else if (name.length > 200) {
     errors.push({ field: 'name', message: translate('validation.categoryNameMaxLength', 'Category name must be less than 200 characters'), code: 'categoryNameMaxLength' });
   }
-  if (data.description && data.description.length > 1000) {
+  const description = typeof data.description === 'string' ? data.description : '';
+  if (description && description.length > 1000) {
     errors.push({ field: 'description', message: translate('validation.descriptionMaxLength', 'Description must be less than 1000 characters'), code: 'descriptionMaxLength' });
   }
 
@@ -176,7 +208,7 @@ export function sanitizeString(input: string): string {
 /**
  * Validate and sanitize input
  */
-export function validateAndSanitize<T extends Record<string, any>>(
+export function validateAndSanitize<T extends Record<string, unknown>>(
   data: T,
   validator: (data: T, t?: TranslationFunction) => ValidationError[],
   t?: TranslationFunction
@@ -184,7 +216,7 @@ export function validateAndSanitize<T extends Record<string, any>>(
   const errors = validator(data, t);
   
   // Sanitize string fields
-  const sanitized = { ...data } as any;
+  const sanitized = { ...data } as Record<string, unknown>;
   Object.keys(sanitized).forEach(key => {
     if (typeof sanitized[key] === 'string') {
       sanitized[key] = sanitizeString(sanitized[key]);
@@ -203,7 +235,7 @@ export function validateAndSanitize<T extends Record<string, any>>(
  * @returns Promise<boolean> - true if PIN is already in use, false otherwise
  */
 export async function isPinDuplicate(
-  tenantId: any,
+  tenantId: string | mongoose.Types.ObjectId,
   candidatePin: string,
   excludeUserId?: string
 ): Promise<boolean> {
@@ -211,7 +243,7 @@ export async function isPinDuplicate(
   const bcrypt = (await import('bcryptjs')).default;
   
   // Get all users in the tenant with PINs (excluding the current user if specified)
-  const query: any = { tenantId, pin: { $exists: true, $ne: null } };
+  const query: Record<string, unknown> = { tenantId, pin: { $exists: true, $ne: null } };
   if (excludeUserId) {
     query._id = { $ne: excludeUserId };
   }

@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { useParams } from 'next/navigation';
 import { ITenantSettings } from '@/models/Tenant';
 import { getDefaultTenantSettings } from '@/lib/currency';
@@ -19,7 +19,7 @@ export function TenantSettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<ITenantSettings | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchSettings = async () => {
+  const fetchSettings = useCallback(async () => {
     try {
       setLoading(true);
       const res = await fetch(`/api/tenants/${tenant}/settings`);
@@ -40,11 +40,11 @@ export function TenantSettingsProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [tenant]);
 
   useEffect(() => {
     fetchSettings();
-  }, [tenant]);
+  }, [fetchSettings]);
 
   // Apply primary color to CSS variables
   useEffect(() => {

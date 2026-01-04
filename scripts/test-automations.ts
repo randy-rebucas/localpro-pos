@@ -21,7 +21,7 @@ interface TestResult {
   name: string;
   success: boolean;
   message: string;
-  data?: any;
+  data?: unknown;
 }
 
 async function testAutomation(name: string, endpoint: string): Promise<TestResult> {
@@ -44,7 +44,7 @@ async function testAutomation(name: string, endpoint: string): Promise<TestResul
     // Check if response is HTML (error page)
     const contentType = response.headers.get('content-type') || '';
     if (contentType.includes('text/html')) {
-      const text = await response.text();
+      await response.text();
       console.log(`   ❌ Server returned HTML (likely 404 or error page)`);
       console.log(`   Status: ${response.status} ${response.statusText}`);
       return {
@@ -74,8 +74,9 @@ async function testAutomation(name: string, endpoint: string): Promise<TestResul
         data,
       };
     }
-  } catch (error: any) {
-    if (error.message.includes('fetch failed') || error.message.includes('ECONNREFUSED')) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : '';
+    if (errorMessage.includes('fetch failed') || errorMessage.includes('ECONNREFUSED')) {
       console.log(`   ❌ Connection Error: Is the server running at ${BASE_URL}?`);
       return {
         name,
@@ -129,9 +130,10 @@ async function main() {
     } else {
       console.log(`   ⚠️  Server responded with status: ${healthCheck.status}`);
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(`   ❌ Cannot connect to server at ${BASE_URL}`);
-    console.error(`   Error: ${error.message}`);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error(`   Error: ${errorMessage}`);
     console.error('\n💡 Make sure your Next.js server is running:');
     console.error('   npm run dev');
     process.exit(1);

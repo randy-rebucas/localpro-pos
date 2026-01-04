@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { ITenantSettings } from '@/models/Tenant';
 
 interface MultiCurrencySettingsProps {
@@ -39,8 +39,8 @@ export default function MultiCurrencySettings({ settings, tenant, onUpdate }: Mu
       } else {
         setMessage({ type: 'error', text: data.error || 'Failed to fetch exchange rates' });
       }
-    } catch (error: any) {
-      setMessage({ type: 'error', text: error.message || 'Failed to fetch exchange rates' });
+    } catch (error: unknown) {
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to fetch exchange rates' });
     } finally {
       setLoading(false);
     }

@@ -34,7 +34,7 @@ export async function GET(
     }
 
     return NextResponse.json({ success: true, data: savedCart });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching saved cart:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -68,7 +68,7 @@ export async function DELETE(
     }
 
     return NextResponse.json({ success: true, message: t('validation.savedCartDeleted', 'Saved cart deleted successfully') });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error deleting saved cart:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

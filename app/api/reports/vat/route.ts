@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
     const report = await getVATReport(tenantId, startDate, endDate, tenant.settings);
 
     return NextResponse.json({ success: true, data: report });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching VAT report:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

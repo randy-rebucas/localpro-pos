@@ -150,10 +150,10 @@ export async function POST(request: NextRequest) {
     });
 
     return response;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Customer login error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Login failed' },
+      { success: false, error: error instanceof Error ? error.message : 'Login failed' },
       { status: 500 }
     );
   }

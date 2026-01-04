@@ -6,7 +6,6 @@
 import connectDB from '@/lib/mongodb';
 import Attendance from '@/models/Attendance';
 import Tenant from '@/models/Tenant';
-import User from '@/models/User';
 import { sendEmail } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { AutomationResult } from './types';
@@ -92,7 +91,7 @@ export async function detectAttendanceViolations(
             const minutesLate = (clockInTime.getTime() - expectedStart.getTime()) / (1000 * 60);
 
             if (minutesLate > lateThresholdMinutes) {
-              const user = attendance.userId as any;
+              const user = attendance.userId as { _id?: string; name?: string; email?: string } | null;
               if (!user) continue;
 
               // Send alert to manager
@@ -121,9 +120,10 @@ This is an automated alert from your POS system.`,
                 totalViolations++;
               }
             }
-          } catch (error: any) {
+          } catch (error: unknown) {
             totalFailed++;
-            results.errors?.push(`Attendance ${attendance._id}: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            results.errors?.push(`Attendance ${attendance._id}: ${errorMessage}`);
           }
         }
 
@@ -131,9 +131,10 @@ This is an automated alert from your POS system.`,
         // This would require a user schedule system, which may not exist
         // For now, we'll skip this check
 
-      } catch (error: any) {
+      } catch (error: unknown) {
         totalFailed++;
-        results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        results.errors?.push(`Tenant ${tenant.name}: ${errorMessage}`);
       }
     }
 
@@ -142,10 +143,11 @@ This is an automated alert from your POS system.`,
     results.message = `Detected ${totalViolations} attendance violations${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: unknown) {
     results.success = false;
-    results.message = `Error detecting attendance violations: ${error.message}`;
-    results.errors?.push(error.message);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    results.message = `Error detecting attendance violations: ${errorMessage}`;
+    results.errors?.push(errorMessage);
     return results;
   }
 }

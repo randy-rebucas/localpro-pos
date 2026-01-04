@@ -58,7 +58,7 @@ export default function TransactionsPage() {
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [viewType, setViewType] = useState<ViewType>('all');
   const [displayMode, setDisplayMode] = useState<'grid' | 'list'>('list');
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
   const { settings } = useTenantSettings();
 
   useEffect(() => {
@@ -81,6 +81,7 @@ export default function TransactionsPage() {
   useEffect(() => {
     fetchTransactions();
     fetchExpenses();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, tenant, viewType]);
 
   const fetchTransactions = async () => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ITenantSettings } from '@/models/Tenant';
 
 interface TaxRule {
@@ -22,23 +22,19 @@ interface TaxRule {
 }
 
 interface TaxRulesManagerProps {
-  settings: ITenantSettings;
+  settings?: ITenantSettings;
   tenant: string;
-  onUpdate: (updates: Partial<ITenantSettings>) => void;
+  onUpdate?: (updates: Partial<ITenantSettings>) => void;
 }
 
-export default function TaxRulesManager({ settings, tenant, onUpdate }: TaxRulesManagerProps) {
+export default function TaxRulesManager({ tenant }: TaxRulesManagerProps) {
   const [rules, setRules] = useState<TaxRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<TaxRule | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  useEffect(() => {
-    fetchRules();
-  }, []);
-
-  const fetchRules = async () => {
+  const fetchRules = useCallback(async () => {
     try {
       setLoading(true);
       const res = await fetch(`/api/tenants/${tenant}/tax-rules`, { credentials: 'include' });
@@ -46,12 +42,16 @@ export default function TaxRulesManager({ settings, tenant, onUpdate }: TaxRules
       if (data.success) {
         setRules(data.data || []);
       }
-    } catch (error: any) {
-      setMessage({ type: 'error', text: error.message || 'Failed to load tax rules' });
+    } catch (error: unknown) {
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to load tax rules' });
     } finally {
       setLoading(false);
     }
-  };
+  }, [tenant]);
+
+  useEffect(() => {
+    fetchRules();
+  }, [fetchRules]);
 
   const handleSave = async (rule: Partial<TaxRule>) => {
     try {
@@ -76,8 +76,8 @@ export default function TaxRulesManager({ settings, tenant, onUpdate }: TaxRules
       } else {
         setMessage({ type: 'error', text: data.error || 'Failed to save tax rule' });
       }
-    } catch (error: any) {
-      setMessage({ type: 'error', text: error.message || 'Failed to save tax rule' });
+    } catch (error: unknown) {
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to save tax rule' });
     }
   };
 
@@ -97,8 +97,8 @@ export default function TaxRulesManager({ settings, tenant, onUpdate }: TaxRules
       } else {
         setMessage({ type: 'error', text: data.error || 'Failed to delete tax rule' });
       }
-    } catch (error: any) {
-      setMessage({ type: 'error', text: error.message || 'Failed to delete tax rule' });
+    } catch (error: unknown) {
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to delete tax rule' });
     }
   };
 
@@ -271,7 +271,7 @@ function TaxRuleForm({
           <label className="block text-sm font-medium text-gray-700 mb-2">Applies To</label>
           <select
             value={appliesTo}
-            onChange={(e) => setAppliesTo(e.target.value as any)}
+            onChange={(e) => setAppliesTo(e.target.value as 'all' | 'products' | 'services' | 'categories')}
             className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           >
             <option value="all">All Products & Services</option>

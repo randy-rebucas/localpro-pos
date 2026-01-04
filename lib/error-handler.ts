@@ -10,24 +10,30 @@ export interface ApiError {
 /**
  * Standardized error handler for API routes
  */
-export function handleApiError(error: any, defaultMessage: string = 'An error occurred'): NextResponse<ApiError> {
+export function handleApiError(error: unknown, defaultMessage: string = 'An error occurred'): NextResponse<ApiError> {
   console.error('API Error:', error);
 
+  // Type guard for error objects
+  const isErrorWithName = (e: unknown): e is { name: string; errors?: unknown; message?: string; code?: number; statusCode?: number } => {
+    return typeof e === 'object' && e !== null && 'name' in e;
+  };
+
   // Validation errors
-  if (error.name === 'ValidationException' && error.errors) {
+  if (isErrorWithName(error) && error.name === 'ValidationException' && 'errors' in error && error.errors) {
     return NextResponse.json(
       {
         success: false,
         error: 'Validation failed',
-        errors: error.errors,
+        errors: error.errors as Array<{ field: string; message: string }>,
       },
       { status: 400 }
     );
   }
 
   // Mongoose validation errors
-  if (error.name === 'ValidationError') {
-    const errors = Object.values(error.errors).map((err: any) => ({
+  if (isErrorWithName(error) && error.name === 'ValidationError' && 'errors' in error && error.errors) {
+    const mongooseErrors = error.errors as Record<string, { path: string; message: string }>;
+    const errors = Object.values(mongooseErrors).map((err) => ({
       field: err.path,
       message: err.message,
     }));
@@ -42,8 +48,11 @@ export function handleApiError(error: any, defaultMessage: string = 'An error oc
   }
 
   // Duplicate key errors
-  if (error.code === 11000) {
-    const field = Object.keys(error.keyPattern || {})[0] || 'field';
+  if (isErrorWithName(error) && 'code' in error && error.code === 11000) {
+    const keyPattern = 'keyPattern' in error && typeof error.keyPattern === 'object' && error.keyPattern !== null
+      ? error.keyPattern as Record<string, unknown>
+      : {};
+    const field = Object.keys(keyPattern)[0] || 'field';
     return NextResponse.json(
       {
         success: false,
@@ -55,7 +64,7 @@ export function handleApiError(error: any, defaultMessage: string = 'An error oc
   }
 
   // Authentication/Authorization errors
-  if (error.message === 'Unauthorized') {
+  if (isErrorWithName(error) && error.message === 'Unauthorized') {
     return NextResponse.json(
       {
         success: false,
@@ -66,7 +75,8 @@ export function handleApiError(error: any, defaultMessage: string = 'An error oc
     );
   }
 
-  if (error.message.includes('Forbidden') || error.message.includes('permissions')) {
+  if (isErrorWithName(error) && error.message && 
+      (error.message.includes('Forbidden') || error.message.includes('permissions'))) {
     return NextResponse.json(
       {
         success: false,
@@ -78,12 +88,14 @@ export function handleApiError(error: any, defaultMessage: string = 'An error oc
   }
 
   // Default error
+  const errorMessage = isErrorWithName(error) && error.message ? error.message : defaultMessage;
+  const statusCode = isErrorWithName(error) && error.statusCode ? error.statusCode : 500;
   return NextResponse.json(
     {
       success: false,
-      error: error.message || defaultMessage,
+      error: errorMessage,
     },
-    { status: error.statusCode || 500 }
+    { status: statusCode }
   );
 }
 

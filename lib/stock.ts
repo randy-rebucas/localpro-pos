@@ -2,7 +2,6 @@ import connectDB from './mongodb';
 import Product from '@/models/Product';
 import ProductBundle from '@/models/ProductBundle';
 import StockMovement from '@/models/StockMovement';
-import { IProductVariation } from '@/models/Product';
 
 export interface StockUpdateOptions {
   transactionId?: string;
@@ -107,7 +106,6 @@ export async function updateStock(
 
   let previousStock: number;
   let newStock: number;
-  let updateField: string = 'stock';
 
   // Handle variations
   if (product.hasVariations && options.variation && product.variations) {
@@ -133,7 +131,6 @@ export async function updateStock(
     }
 
     product.variations[variationIndex].stock = newStock;
-    updateField = `variations.${variationIndex}.stock`;
   }
   // Handle branch-specific stock
   else if (options.branchId && product.branchStock) {
@@ -144,7 +141,7 @@ export async function updateStock(
     if (branchStockIndex === -1) {
       // Create new branch stock entry
       product.branchStock.push({
-        branchId: options.branchId as any,
+        branchId: options.branchId as mongoose.Types.ObjectId,
         stock: quantity,
       });
       previousStock = 0;
@@ -162,7 +159,6 @@ export async function updateStock(
 
       product.branchStock[branchStockIndex].stock = newStock;
     }
-    updateField = `branchStock.${branchStockIndex}.stock`;
   }
   // Handle master stock
   else {
@@ -266,14 +262,14 @@ export async function getStockMovements(
 ) {
   await connectDB();
 
-  const query: any = { productId, tenantId };
+  const query: Record<string, unknown> = { productId, tenantId };
   
   if (options.branchId) {
     query.branchId = options.branchId;
   }
 
   if (options.variation) {
-    const variationQuery: any = {};
+    const variationQuery: Record<string, unknown> = {};
     if (options.variation.size) variationQuery['variation.size'] = options.variation.size;
     if (options.variation.color) variationQuery['variation.color'] = options.variation.color;
     if (options.variation.type) variationQuery['variation.type'] = options.variation.type;
@@ -321,7 +317,7 @@ export async function getLowStockProducts(
   tenantId: string,
   branchId?: string,
   threshold?: number
-): Promise<any[]> {
+): Promise<Array<{ _id: string; name: string; currentStock: number; threshold: number; sku?: string }>> {
   await connectDB();
 
   const products = await Product.find({

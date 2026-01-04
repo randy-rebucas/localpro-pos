@@ -21,7 +21,7 @@ interface StockRefillModalProps {
 export default function StockRefillModal({ product, onClose, onSuccess, lang = 'en' }: StockRefillModalProps) {
   const params = useParams();
   const tenant = (params?.tenant as string) || 'default';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
   const [quantity, setQuantity] = useState('');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);

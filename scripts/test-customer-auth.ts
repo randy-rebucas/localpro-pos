@@ -58,6 +58,7 @@ async function testCustomerAuth() {
     
     // For automated testing, you could read from stdin
     // For now, we'll use a placeholder
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const readline = require('readline');
     const rl = readline.createInterface({
       input: process.stdin,
@@ -146,9 +147,12 @@ async function testCustomerAuth() {
 
     console.log('\n✅ All tests completed successfully!');
 
-  } catch (error: any) {
-    console.error('❌ Test failed:', error.message);
-    console.error(error.stack);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('❌ Test failed:', errorMessage);
+    if (error instanceof Error && error.stack) {
+      console.error(error.stack);
+    }
   }
 }
 

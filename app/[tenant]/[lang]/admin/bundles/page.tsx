@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import Navbar from '@/components/Navbar';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 import Currency from '@/components/Currency';
@@ -55,7 +55,7 @@ interface Product {
   price: number;
   stock: number;
   hasVariations: boolean;
-  variations?: any[];
+  variations?: Array<Record<string, unknown>>;
   sku?: string;
   description?: string;
 }
@@ -67,10 +67,9 @@ interface Category {
 
 export default function BundlesPage() {
   const params = useParams();
-  const router = useRouter();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
   const [bundles, setBundles] = useState<Bundle[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -89,7 +88,7 @@ export default function BundlesPage() {
   const [selectedBundles, setSelectedBundles] = useState<Set<string>>(new Set());
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
-  const [analytics, setAnalytics] = useState<any>(null);
+  const [analytics, setAnalytics] = useState<Record<string, unknown> | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [analyticsStartDate, setAnalyticsStartDate] = useState('');
   const [analyticsEndDate, setAnalyticsEndDate] = useState('');
@@ -97,20 +96,67 @@ export default function BundlesPage() {
   const businessTypeConfig = settings ? getBusinessTypeConfig(getBusinessType(settings)) : null;
   const bundlesAllowed = businessTypeConfig?.productTypes?.includes('bundle') ?? true;
 
-  useEffect(() => {
-    getDictionaryClient(lang).then(setDict);
-    fetchBundles();
-    fetchProducts();
-    fetchCategories();
-    // Set default analytics date range (last 30 days)
-    const end = new Date();
-    const start = new Date();
-    start.setDate(start.getDate() - 30);
-    setAnalyticsEndDate(end.toISOString().split('T')[0]);
-    setAnalyticsStartDate(start.toISOString().split('T')[0]);
-  }, [lang, tenant]);
+  const fetchBundles = useCallback(async () => {
+    try {
+      const params = new URLSearchParams();
+      if (searchTerm) params.append('search', searchTerm);
+      if (filterActive !== null) params.append('isActive', filterActive.toString());
+      if (filterCategory) params.append('categoryId', filterCategory);
+      if (filterMinPrice) params.append('minPrice', filterMinPrice);
+      if (filterMaxPrice) params.append('maxPrice', filterMaxPrice);
+      if (filterStartDate) params.append('startDate', filterStartDate);
+      if (filterEndDate) params.append('endDate', filterEndDate);
+      
+      const res = await fetch(`/api/bundles?${params}`, { credentials: 'include' });
+      const data = await res.json();
+      if (data.success) {
+        setBundles(data.data);
+        setMessage(null);
+      } else {
+        setMessage({ type: 'error', text: data.error || (dict?.common as Record<string, unknown>)?.failedToFetchBundles as string || 'Failed to fetch bundles' });
+      }
+    } catch (error) {
+      console.error('Error fetching bundles:', error);
+      setMessage({ type: 'error', text: (dict?.common as Record<string, unknown>)?.failedToFetchBundles as string || 'Failed to fetch bundles' });
+    } finally {
+      setLoading(false);
+    }
+  }, [searchTerm, filterActive, filterCategory, filterMinPrice, filterMaxPrice, filterStartDate, filterEndDate, dict]);
 
-  const fetchAnalytics = async () => {
+  const fetchProducts = useCallback(async () => {
+    setProductsLoading(true);
+    try {
+      const res = await fetch('/api/products', { credentials: 'include' });
+      const data = await res.json();
+      if (data.success) {
+        setProducts(data.data || []);
+      } else {
+        console.error('Error fetching products:', data.error);
+        setProducts([]);
+      }
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      setProducts([]);
+    } finally {
+      setProductsLoading(false);
+    }
+  }, []);
+
+  const fetchCategories = useCallback(async () => {
+    try {
+      const res = await fetch('/api/categories', { credentials: 'include' });
+      const data = await res.json();
+      if (data.success) {
+        setCategories(data.data);
+      } else {
+        console.error('Error fetching categories:', data.error);
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  }, []);
+
+  const fetchAnalytics = useCallback(async () => {
     if (!analyticsStartDate || !analyticsEndDate) return;
     
     setAnalyticsLoading(true);
@@ -132,82 +178,35 @@ export default function BundlesPage() {
     } finally {
       setAnalyticsLoading(false);
     }
-  };
+  }, [analyticsStartDate, analyticsEndDate, dict]);
+
+  useEffect(() => {
+    getDictionaryClient(lang).then(setDict);
+    fetchBundles();
+    fetchProducts();
+    fetchCategories();
+    // Set default analytics date range (last 30 days)
+    const end = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() - 30);
+    setAnalyticsEndDate(end.toISOString().split('T')[0]);
+    setAnalyticsStartDate(start.toISOString().split('T')[0]);
+  }, [lang, tenant, fetchBundles, fetchProducts, fetchCategories]);
 
   useEffect(() => {
     if (showAnalytics && analyticsStartDate && analyticsEndDate) {
       fetchAnalytics();
     }
-  }, [showAnalytics, analyticsStartDate, analyticsEndDate]);
-
-  const fetchBundles = async () => {
-    try {
-      const params = new URLSearchParams();
-      if (searchTerm) params.append('search', searchTerm);
-      if (filterActive !== null) params.append('isActive', filterActive.toString());
-      if (filterCategory) params.append('categoryId', filterCategory);
-      if (filterMinPrice) params.append('minPrice', filterMinPrice);
-      if (filterMaxPrice) params.append('maxPrice', filterMaxPrice);
-      if (filterStartDate) params.append('startDate', filterStartDate);
-      if (filterEndDate) params.append('endDate', filterEndDate);
-      
-      const res = await fetch(`/api/bundles?${params}`, { credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
-        setBundles(data.data);
-        setMessage(null);
-      } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchBundles || 'Failed to fetch bundles' });
-      }
-    } catch (error) {
-      console.error('Error fetching bundles:', error);
-      setMessage({ type: 'error', text: dict?.common?.failedToFetchBundles || 'Failed to fetch bundles' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchProducts = async () => {
-    setProductsLoading(true);
-    try {
-      const res = await fetch('/api/products', { credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
-        setProducts(data.data || []);
-      } else {
-        console.error('Error fetching products:', data.error);
-        setProducts([]);
-      }
-    } catch (error) {
-      console.error('Error fetching products:', error);
-      setProducts([]);
-    } finally {
-      setProductsLoading(false);
-    }
-  };
-
-  const fetchCategories = async () => {
-    try {
-      const res = await fetch('/api/categories', { credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
-        setCategories(data.data);
-      } else {
-        console.error('Error fetching categories:', data.error);
-      }
-    } catch (error) {
-      console.error('Error fetching categories:', error);
-    }
-  };
+  }, [showAnalytics, analyticsStartDate, analyticsEndDate, fetchAnalytics]);
 
   useEffect(() => {
     if (!loading) {
       fetchBundles();
     }
-  }, [searchTerm, filterActive, filterCategory, filterMinPrice, filterMaxPrice, filterStartDate, filterEndDate]);
+  }, [searchTerm, filterActive, filterCategory, filterMinPrice, filterMaxPrice, filterStartDate, filterEndDate, loading, fetchBundles]);
 
   const handleDeleteBundle = async (bundleId: string) => {
-    if (!confirm(dict?.admin?.deleteBundleConfirm || 'Are you sure you want to delete this bundle?')) return;
+    if (!confirm((dict?.admin as Record<string, unknown>)?.deleteBundleConfirm as string || 'Are you sure you want to delete this bundle?')) return;
     try {
       const res = await fetch(`/api/bundles/${bundleId}`, { method: 'DELETE', credentials: 'include' });
       const data = await res.json();
@@ -215,10 +214,10 @@ export default function BundlesPage() {
         setMessage({ type: 'success', text: dict?.admin?.deleteBundleSuccess || 'Bundle deleted successfully' });
         fetchBundles();
       } else {
-        setMessage({ type: 'error', text: data.error || dict?.admin?.deleteBundleError || 'Failed to delete bundle' });
+        setMessage({ type: 'error', text: data.error || (dict?.admin as Record<string, unknown>)?.deleteBundleError as string || 'Failed to delete bundle' });
       }
-    } catch (error) {
-      setMessage({ type: 'error', text: dict?.admin?.deleteBundleError || 'Failed to delete bundle' });
+    } catch {
+      setMessage({ type: 'error', text: (dict?.admin as Record<string, unknown>)?.deleteBundleError as string || 'Failed to delete bundle' });
     }
   };
 
@@ -232,13 +231,13 @@ export default function BundlesPage() {
       });
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: `Bundle ${!bundle.isActive ? (dict?.admin?.activated || 'activated') : (dict?.admin?.deactivated || 'deactivated')} ${dict?.admin?.successfully || 'successfully'}` });
+        setMessage({ type: 'success', text: `Bundle ${!bundle.isActive ? (dict?.admin?.activated || 'activated') : ((dict?.admin as Record<string, unknown>)?.deactivated as string || 'deactivated')} ${dict?.admin?.successfully || 'successfully'}` });
         fetchBundles();
       } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToUpdateBundle || 'Failed to update bundle' });
+        setMessage({ type: 'error', text: data.error || (dict?.common as Record<string, unknown>)?.failedToUpdateBundle as string || 'Failed to update bundle' });
       }
-    } catch (error) {
-      setMessage({ type: 'error', text: dict?.common?.failedToUpdateBundle || 'Failed to update bundle' });
+    } catch {
+      setMessage({ type: 'error', text: (dict?.common as Record<string, unknown>)?.failedToUpdateBundle as string || 'Failed to update bundle' });
     }
   };
 
@@ -248,7 +247,7 @@ export default function BundlesPage() {
       return;
     }
 
-    const confirmText = dict?.common?.bulkActionBundleConfirm?.replace('{action}', action).replace('{count}', selectedBundles.size.toString()) || `Are you sure you want to ${action} ${selectedBundles.size} bundle(s)?`;
+    const confirmText = (dict?.common as Record<string, unknown>)?.bulkActionBundleConfirm as string?.replace('{action}', action).replace('{count}', selectedBundles.size.toString()) || `Are you sure you want to ${action} ${selectedBundles.size} bundle(s)?`;
     if (!confirm(confirmText)) {
       return;
     }
@@ -271,7 +270,7 @@ export default function BundlesPage() {
       } else {
         setMessage({ type: 'error', text: data.error || `Failed to ${action} bundles` });
       }
-    } catch (error) {
+    } catch {
       setMessage({ type: 'error', text: `Failed to ${action} bundles` });
     }
   };
@@ -325,7 +324,7 @@ export default function BundlesPage() {
     } else if (format === 'excel') {
       downloadExcel(exportData, headers, baseFilename);
     } else if (format === 'pdf') {
-      downloadPDF(exportData, headers, baseFilename, dict.admin?.bundles || 'Bundles');
+      downloadPDF(exportData, headers, baseFilename, (dict.admin as Record<string, unknown>)?.bundle as strings || 'Bundles');
     }
   };
 
@@ -362,14 +361,14 @@ export default function BundlesPage() {
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
-            {dict?.admin?.backToAdmin || 'Back to Admin'}
+            {(dict?.admin as Record<string, unknown>)?.backToAdmin as string || 'Back to Admin'}
           </Link>
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
-                {dict.admin?.bundles || 'Product Bundles'}
+                {(dict.admin as Record<string, unknown>)?.bundle as strings || 'Product Bundles'}
               </h1>
-              <p className="text-gray-600">{dict.admin?.bundlesDescription || 'Manage product bundles and packages'}</p>
+              <p className="text-gray-600">{(dict.admin as Record<string, unknown>)?.bundle as stringsDescription || 'Manage product bundles and packages'}</p>
             </div>
           </div>
         </div>
@@ -405,12 +404,12 @@ export default function BundlesPage() {
         {/* Bundle Analytics Section */}
         <div className="bg-white border border-gray-300 p-6 mb-6">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold text-gray-900">{dict.admin?.bundleAnalytics || 'Bundle Analytics'}</h2>
+            <h2 className="text-xl font-bold text-gray-900">{(dict.admin as Record<string, unknown>)?.bundle as stringAnalytics || 'Bundle Analytics'}</h2>
             <button
               onClick={() => setShowAnalytics(!showAnalytics)}
               className="px-4 py-2 border border-gray-300 hover:bg-gray-50 bg-white"
             >
-              {showAnalytics ? (dict.common?.hide || 'Hide') : (dict.admin?.viewAnalytics || 'View Analytics')}
+              {showAnalytics ? ((dict.common as Record<string, unknown>)?.hide as string || 'Hide') : (dict.admin?.viewAnalytics || 'View Analytics')}
             </button>
           </div>
           {showAnalytics && (
@@ -451,18 +450,18 @@ export default function BundlesPage() {
               {analyticsLoading ? (
                 <div className="text-center py-8">
                   <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-                  <p className="mt-4 text-gray-600">{dict.common?.loading || 'Loading...'}</p>
+                  <p className="mt-4 text-gray-600">{(dict.common as Record<string, unknown>)?.loading as string || 'Loading...'}</p>
                 </div>
               ) : analytics && (
                 <div>
                   {/* Summary Cards */}
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                     <div className="bg-blue-50 border border-blue-200 p-4">
-                      <div className="text-sm text-blue-600 mb-1">{dict.admin?.totalBundles || 'Total Bundles'}</div>
+                      <div className="text-sm text-blue-600 mb-1">{(dict.admin as Record<string, unknown>)?.totalBundles as string || 'Total Bundles'}</div>
                       <div className="text-2xl font-bold text-blue-900">{analytics.summary.totalBundles}</div>
                     </div>
                     <div className="bg-green-50 border border-green-200 p-4">
-                      <div className="text-sm text-green-600 mb-1">{dict.admin?.totalSales || 'Total Sales'}</div>
+                      <div className="text-sm text-green-600 mb-1">{(dict.admin as Record<string, unknown>)?.totalSales as string || 'Total Sales'}</div>
                       <div className="text-2xl font-bold text-green-900">
                         <Currency amount={analytics.summary.totalSales} />
                       </div>
@@ -472,7 +471,7 @@ export default function BundlesPage() {
                       <div className="text-2xl font-bold text-purple-900">{analytics.summary.totalQuantity}</div>
                     </div>
                     <div className="bg-orange-50 border border-orange-200 p-4">
-                      <div className="text-sm text-orange-600 mb-1">{dict.admin?.totalTransactions || 'Transactions'}</div>
+                      <div className="text-sm text-orange-600 mb-1">{(dict.admin as Record<string, unknown>)?.totalTransactions as string || 'Transactions'}</div>
                       <div className="text-2xl font-bold text-orange-900">{analytics.summary.totalTransactions}</div>
                     </div>
                   </div>
@@ -487,16 +486,16 @@ export default function BundlesPage() {
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
                         <tr>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.bundle || 'Bundle'}</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.price || 'Price'}</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.totalSales || 'Total Sales'}</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.quantity || 'Quantity'}</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.transactions || 'Transactions'}</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict.admin as Record<string, unknown>)?.bundle as string || 'Bundle'}</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict.admin as Record<string, unknown>)?.price as string || 'Price'}</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict.admin as Record<string, unknown>)?.totalSales as string || 'Total Sales'}</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict.admin as Record<string, unknown>)?.quantity as string || 'Quantity'}</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict.admin as Record<string, unknown>)?.transactions as string || 'Transactions'}</th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.avgOrderValue || 'Avg Order Value'}</th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {analytics.analytics.map((item: any) => (
+                        {analytics.analytics.map((item: Record<string, unknown>) => (
                           <tr key={item.bundleId}>
                             <td className="px-4 py-4 text-sm font-medium text-gray-900">{item.bundleName}</td>
                             <td className="px-4 py-4 text-sm text-gray-500"><Currency amount={item.bundlePrice} /></td>
@@ -510,7 +509,7 @@ export default function BundlesPage() {
                     </table>
                     {analytics.analytics.length === 0 && (
                       <div className="text-center py-8 text-gray-500">
-                        {dict.admin?.noAnalyticsData || 'No sales data for selected period'}
+                        {(dict.admin as Record<string, unknown>)?.noAnalyticsData as string || 'No sales data for selected period'}
                       </div>
                     )}
                   </div>
@@ -540,15 +539,15 @@ export default function BundlesPage() {
                 }}
                 className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               >
-                <option value="all">{dict.common?.all || 'All'}</option>
-                <option value="true">{dict.admin?.active || 'Active'}</option>
+                <option value="all">{(dict.common as Record<string, unknown>)?.all as string || 'All'}</option>
+                <option value="true">{(dict.admin as Record<string, unknown>)?.active as string || 'Active'}</option>
                 <option value="false">{dict.admin?.inactive || 'Inactive'}</option>
               </select>
               <button
                 onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
                 className="px-4 py-2 border border-gray-300 hover:bg-gray-50 bg-white"
               >
-                {dict.admin?.advancedFilters || 'Advanced Filters'}
+                {(dict.admin as Record<string, unknown>)?.advancedFilters as string || 'Advanced Filters'}
               </button>
               <div className="relative group">
                 <button
@@ -568,13 +567,13 @@ export default function BundlesPage() {
                     onClick={() => handleExport('excel')}
                     className="block w-full text-left px-4 py-2 hover:bg-gray-100 text-sm"
                   >
-                    {dict.admin?.exportExcel || 'Export Excel'}
+                    {(dict.admin as Record<string, unknown>)?.exportExcel as string || 'Export Excel'}
                   </button>
                   <button
                     onClick={() => handleExport('pdf')}
                     className="block w-full text-left px-4 py-2 hover:bg-gray-100 text-sm"
                   >
-                    {dict.admin?.exportPDF || 'Export PDF'}
+                    {(dict.admin as Record<string, unknown>)?.exportPDF as string || 'Export PDF'}
                   </button>
                 </div>
               </div>
@@ -586,7 +585,7 @@ export default function BundlesPage() {
                   }}
                   className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
                 >
-                  {dict.common?.add || 'Add'} {dict.admin?.bundle || 'Bundle'}
+                  {(dict.common as Record<string, unknown>)?.add as string || 'Add'} {(dict.admin as Record<string, unknown>)?.bundle as string || 'Bundle'}
                 </button>
               )}
             </div>
@@ -598,14 +597,14 @@ export default function BundlesPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {dict.admin?.category || 'Category'}
+                    {(dict.admin as Record<string, unknown>)?.category as string || 'Category'}
                   </label>
                   <select
                     value={filterCategory}
                     onChange={(e) => setFilterCategory(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                   >
-                    <option value="">{dict.common?.all || 'All'}</option>
+                    <option value="">{(dict.common as Record<string, unknown>)?.all as string || 'All'}</option>
                     {categories.map((cat) => (
                       <option key={cat._id} value={cat._id}>
                         {cat.name}
@@ -628,7 +627,7 @@ export default function BundlesPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {dict.admin?.maxPrice || 'Max Price'}
+                    {(dict.admin as Record<string, unknown>)?.maxPrice as string || 'Max Price'}
                   </label>
                   <input
                     type="number"
@@ -666,7 +665,7 @@ export default function BundlesPage() {
                     onClick={clearFilters}
                     className="w-full px-4 py-2 border border-gray-300 hover:bg-gray-50 bg-white"
                   >
-                    {dict.common?.clear || 'Clear'}
+                    {(dict.common as Record<string, unknown>)?.clear as string || 'Clear'}
                   </button>
                 </div>
               </div>
@@ -677,26 +676,26 @@ export default function BundlesPage() {
           {selectedBundles.size > 0 && (
             <div className="mb-4 p-3 bg-blue-50 border border-blue-200 flex items-center justify-between">
               <span className="text-sm font-medium text-blue-900">
-                {selectedBundles.size} {dict.admin?.selected || 'selected'}
+                {selectedBundles.size} {(dict.admin as Record<string, unknown>)?.selected as string || 'selected'}
               </span>
               <div className="flex gap-2">
                 <button
                   onClick={() => handleBulkOperation('activate')}
                   className="px-4 py-2 bg-green-600 text-white hover:bg-green-700 text-sm"
                 >
-                  {dict.admin?.bulkActivate || 'Activate Selected'}
+                  {(dict.admin as Record<string, unknown>)?.bulkActivate as string || 'Activate Selected'}
                 </button>
                 <button
                   onClick={() => handleBulkOperation('deactivate')}
                   className="px-4 py-2 bg-yellow-600 text-white hover:bg-yellow-700 text-sm"
                 >
-                  {dict.admin?.bulkDeactivate || 'Deactivate Selected'}
+                  {(dict.admin as Record<string, unknown>)?.bulkDeactivate as string || 'Deactivate Selected'}
                 </button>
                 <button
                   onClick={() => setSelectedBundles(new Set())}
                   className="px-4 py-2 border border-gray-300 hover:bg-gray-50 bg-white text-sm"
                 >
-                  {dict.common?.cancel || 'Cancel'}
+                  {(dict.common as Record<string, unknown>)?.cancel as string || 'Cancel'}
                 </button>
               </div>
             </div>
@@ -715,11 +714,11 @@ export default function BundlesPage() {
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.name || 'Name'}</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.category || 'Category'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.price || 'Price'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.items || 'Items'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.status || 'Status'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.actions || 'Actions'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict.admin as Record<string, unknown>)?.category as string || 'Category'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict.admin as Record<string, unknown>)?.price as string || 'Price'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict.admin as Record<string, unknown>)?.items as string || 'Items'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict.admin as Record<string, unknown>)?.status as string || 'Status'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict.common as Record<string, unknown>)?.actions as string || 'Actions'}</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -747,7 +746,7 @@ export default function BundlesPage() {
                       <Currency amount={bundle.price} />
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {bundle.items.length} {dict.admin?.item || 'item'}{bundle.items.length !== 1 ? 's' : ''}
+                      {bundle.items.length} {(dict.admin as Record<string, unknown>)?.item as string || 'item'}{bundle.items.length !== 1 ? 's' : ''}
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap">
                       <span className={`px-2 py-1 text-xs font-semibold border ${
@@ -755,7 +754,7 @@ export default function BundlesPage() {
                           ? 'bg-green-100 text-green-800 border-green-300'
                           : 'bg-gray-100 text-gray-800 border-gray-300'
                       }`}>
-                        {bundle.isActive ? (dict.admin?.active || 'Active') : (dict.admin?.inactive || 'Inactive')}
+                        {bundle.isActive ? ((dict.admin as Record<string, unknown>)?.active as string || 'Active') : (dict.admin?.inactive || 'Inactive')}
                       </span>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
@@ -773,13 +772,13 @@ export default function BundlesPage() {
                           onClick={() => handleToggleStatus(bundle)}
                           className={`${bundle.isActive ? 'text-yellow-600 hover:text-yellow-900' : 'text-green-600 hover:text-green-900'}`}
                         >
-                          {bundle.isActive ? (dict.admin?.deactivate || 'Deactivate') : (dict.admin?.activate || 'Activate')}
+                          {bundle.isActive ? (dict.admin?.deactivate || 'Deactivate') : ((dict.admin as Record<string, unknown>)?.activate as string || 'Activate')}
                         </button>
                         <button
                           onClick={() => handleDeleteBundle(bundle._id)}
                           className="text-red-600 hover:text-red-900"
                         >
-                          {dict.common?.delete || 'Delete'}
+                          {(dict.common as Record<string, unknown>)?.delete as string || 'Delete'}
                         </button>
                       </div>
                     </td>
@@ -789,7 +788,7 @@ export default function BundlesPage() {
             </table>
             {bundles.length === 0 && (
               <div className="text-center py-8 text-gray-500">
-                {searchTerm || filterActive !== null ? (dict.common?.noResults || 'No bundles found') : (dict.common?.noData || 'No bundles yet')}
+                {searchTerm || filterActive !== null ? ((dict.common as Record<string, unknown>)?.noResults as string || 'No bundles found') : ((dict.common as Record<string, unknown>)?.noData as string || 'No bundles yet')}
               </div>
             )}
           </div>
@@ -833,7 +832,7 @@ function BundleModal({
   categories: Category[];
   onClose: () => void;
   onSave: () => void;
-  dict: any;
+  dict: Record<string, unknown>;
 }) {
   const [formData, setFormData] = useState({
     name: bundle?.name || '',
@@ -973,7 +972,7 @@ function BundleModal({
     );
     
     if (alreadyAdded) {
-      setError(dict?.admin?.productAlreadyInBundle || 'This product is already in the bundle');
+      setError((dict?.admin as Record<string, unknown>)?.productAlreadyInBundle as string || 'This product is already in the bundle');
       setTimeout(() => setError(''), 3000);
       return;
     }
@@ -1036,7 +1035,7 @@ function BundleModal({
         );
         
         if (alreadyAdded) {
-          setError(dict?.admin?.productAlreadyInBundle || 'This product is already in the bundle');
+          setError((dict?.admin as Record<string, unknown>)?.productAlreadyInBundle as string || 'This product is already in the bundle');
           setTimeout(() => setError(''), 3000);
           return;
         }
@@ -1089,7 +1088,7 @@ function BundleModal({
     setError('');
     
     if (formData.items.length === 0) {
-      setError(dict?.admin?.bundleItemsRequired || 'At least one item is required');
+      setError((dict?.admin as Record<string, unknown>)?.bundleItemsRequired as string || 'At least one item is required');
       return;
     }
 
@@ -1125,7 +1124,7 @@ function BundleModal({
       } else {
         setError(data.error || dict?.admin?.saveBundleError || 'Failed to save bundle');
       }
-    } catch (error) {
+    } catch {
       setError(dict?.admin?.saveBundleError || 'Failed to save bundle');
     } finally {
       setSaving(false);
@@ -1137,7 +1136,7 @@ function BundleModal({
       <div className="bg-white border border-gray-300 max-w-3xl w-full max-h-[90vh] overflow-y-auto overflow-x-hidden">
         <div className="p-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
-            {bundle ? (dict.admin?.editBundle || 'Edit Bundle') : (dict.admin?.addBundle || 'Add Bundle')}
+            {bundle ? ((dict.admin as Record<string, unknown>)?.editBundle as string || 'Edit Bundle') : (dict.admin?.addBundle || 'Add Bundle')}
           </h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -1165,7 +1164,7 @@ function BundleModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.description || 'Description'}
+                {(dict.admin as Record<string, unknown>)?.description as string || 'Description'}
               </label>
               <textarea
                 value={formData.description}
@@ -1177,7 +1176,7 @@ function BundleModal({
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.price || 'Price'} *
+                  {(dict.admin as Record<string, unknown>)?.price as string || 'Price'} *
                 </label>
                 <input
                   type="number"
@@ -1191,14 +1190,14 @@ function BundleModal({
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.category || 'Category'}
+                  {(dict.admin as Record<string, unknown>)?.category as string || 'Category'}
                 </label>
                 <select
                   value={typeof formData.categoryId === 'string' ? formData.categoryId : formData.categoryId?._id || ''}
                   onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                 >
-                  <option value="">{dict.common?.none || 'None'}</option>
+                  <option value="">{(dict.common as Record<string, unknown>)?.none as string || 'None'}</option>
                   {categories.map((cat) => (
                     <option key={cat._id} value={cat._id}>
                       {cat.name}
@@ -1211,7 +1210,7 @@ function BundleModal({
             {/* Bundle Items */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                {dict.admin?.bundleItems || 'Bundle Items'} *
+                {(dict.admin as Record<string, unknown>)?.bundle as stringItems || 'Bundle Items'} *
               </label>
               
               {/* Add Item Section */}
@@ -1232,7 +1231,7 @@ function BundleModal({
                         }
                       }}
                       onKeyDown={handleProductSearchKeyDown}
-                      placeholder={dict.admin?.searchProduct || 'Search products...'}
+                      placeholder={(dict.admin as Record<string, unknown>)?.searchProduct as string || 'Search products...'}
                       className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                       autoComplete="off"
                     />
@@ -1244,7 +1243,7 @@ function BundleModal({
                       >
                         {productsLoading ? (
                           <div className="px-4 py-2 text-sm text-gray-500">
-                            {dict.admin?.loadingProducts || 'Loading products...'}
+                            {(dict.admin as Record<string, unknown>)?.loadingProducts as string || 'Loading products...'}
                           </div>
                         ) : products.length === 0 ? (
                           <div className="px-4 py-2 text-sm text-gray-500">
@@ -1264,7 +1263,7 @@ function BundleModal({
                                 type="button"
                                 onClick={() => {
                                   if (isAlreadyAdded) {
-                                    setError(dict?.admin?.productAlreadyInBundle || 'This product is already in the bundle');
+                                    setError((dict?.admin as Record<string, unknown>)?.productAlreadyInBundle as string || 'This product is already in the bundle');
                                     setTimeout(() => setError(''), 3000);
                                     return;
                                   }
@@ -1303,7 +1302,7 @@ function BundleModal({
                           })
                         ) : (
                           <div className="px-4 py-2 text-sm text-gray-500">
-                            {dict.admin?.noProductsFound || 'No products found'}
+                            {(dict.admin as Record<string, unknown>)?.noProductsFound as string || 'No products found'}
                           </div>
                         )}
                       </div>
@@ -1315,7 +1314,7 @@ function BundleModal({
                       min="1"
                       value={itemQuantity}
                       onChange={(e) => setItemQuantity(parseInt(e.target.value) || 1)}
-                      placeholder={dict.admin?.quantity || 'Qty'}
+                      placeholder={(dict.admin as Record<string, unknown>)?.quantity as string || 'Qty'}
                       className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                     />
                   </div>
@@ -1330,7 +1329,7 @@ function BundleModal({
                     }
                     className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed border border-blue-700 transition-colors"
                   >
-                    {dict.common?.add || 'Add'}
+                    {(dict.common as Record<string, unknown>)?.add as string || 'Add'}
                   </button>
                 </div>
               </div>
@@ -1348,13 +1347,13 @@ function BundleModal({
                       onClick={() => handleRemoveItem(index)}
                       className="text-red-600 hover:text-red-900 ml-4"
                     >
-                      {dict.common?.remove || 'Remove'}
+                      {(dict.common as Record<string, unknown>)?.remove as string || 'Remove'}
                     </button>
                   </div>
                 ))}
                 {formData.items.length === 0 && (
                   <div className="text-center py-4 text-gray-500 text-sm">
-                    {dict.admin?.noItems || 'No items added. Add products to create a bundle.'}
+                    {(dict.admin as Record<string, unknown>)?.noItems as string || 'No items added. Add products to create a bundle.'}
                   </div>
                 )}
               </div>
@@ -1369,7 +1368,7 @@ function BundleModal({
                   className="mr-2"
                 />
                 <span className="text-sm font-medium text-gray-700">
-                  {dict.admin?.trackInventory || 'Track Inventory'}
+                  {(dict.admin as Record<string, unknown>)?.trackInventory as string || 'Track Inventory'}
                 </span>
               </label>
             </div>
@@ -1385,14 +1384,14 @@ function BundleModal({
                 onClick={onClose}
                 className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
               >
-                {dict.common?.cancel || 'Cancel'}
+                {(dict.common as Record<string, unknown>)?.cancel as string || 'Cancel'}
               </button>
               <button
                 type="submit"
                 disabled={saving}
                 className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
               >
-                {saving ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
+                {saving ? ((dict.common as Record<string, unknown>)?.loading as string || 'Saving...') : ((dict.common as Record<string, unknown>)?.save as string || 'Save')}
               </button>
             </div>
           </form>

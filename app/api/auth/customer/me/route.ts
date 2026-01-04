@@ -47,10 +47,10 @@ export async function GET(request: NextRequest) {
         lastLogin: customer.lastLogin,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Get customer error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to get customer' },
+      { success: false, error: error instanceof Error ? error.message : 'Failed to get customer' },
       { status: 500 }
     );
   }

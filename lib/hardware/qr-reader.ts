@@ -41,7 +41,7 @@ class QRReaderService {
       
       try {
         await videoElement.play();
-      } catch (playError: any) {
+      } catch (playError: unknown) {
         // Handle AbortError gracefully - this happens when navigation occurs
         // while play() is pending, which is expected behavior
         if (playError.name === 'AbortError' || playError.name === 'NotAllowedError') {
@@ -89,7 +89,7 @@ class QRReaderService {
         // Pause the video element before cleanup to prevent AbortError
         this.videoElement.pause();
         this.videoElement.srcObject = null;
-      } catch (error) {
+      } catch {
         // Ignore errors during cleanup (e.g., if element is already removed)
       }
       this.videoElement = null;
@@ -126,7 +126,7 @@ class QRReaderService {
       if (qrData) {
         this.notifyListeners(qrData);
       }
-    } catch (error) {
+    } catch {
       // Silently fail - scanning is continuous
     }
   }
@@ -135,7 +135,7 @@ class QRReaderService {
     try {
       const code = jsQR(imageData.data, imageData.width, imageData.height);
       return code ? code.data : null;
-    } catch (error) {
+    } catch {
       // Silently fail - scanning is continuous
       return null;
     }

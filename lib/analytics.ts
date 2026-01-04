@@ -176,7 +176,7 @@ export async function getProductPerformance(
   if (!mongoose.models.Product) {
     // The Product model should be registered when imported, but if it's not,
     // we need to ensure it's registered. Accessing Product.modelName forces evaluation.
-    const _ = Product.modelName;
+    void Product.modelName;
   }
   
   const transactions = await Transaction.find({
@@ -194,9 +194,14 @@ export async function getProductPerformance(
   }>();
 
   transactions.forEach(transaction => {
-    transaction.items.forEach((item: any) => {
-      const productId = item.product?._id?.toString() || item.product?.toString();
-      const productName = item.product?.name || item.name || 'Unknown';
+    transaction.items.forEach((item) => {
+      const product = item.product as mongoose.Types.ObjectId | { _id: mongoose.Types.ObjectId; name?: string };
+      const productId = typeof product === 'object' && product !== null && '_id' in product
+        ? product._id.toString()
+        : product?.toString() || '';
+      const productName = typeof product === 'object' && product !== null && 'name' in product
+        ? product.name || item.name || 'Unknown'
+        : item.name || 'Unknown';
       
       const existing = productMap.get(productId) || {
         productId,
@@ -249,12 +254,7 @@ export async function getVATReport(
   // In a real system, you'd have a flag on products/transactions
   const totalSales = transactions.reduce((sum, t) => sum + t.total, 0);
   
-  let vatSales = 0;
-  let nonVatSales = 0;
-  
   if (vatRate > 0) {
-    // Calculate VAT sales (total includes VAT)
-    vatSales = totalSales;
     // Calculate base amount (without VAT)
     const baseAmount = totalSales / (1 + vatRate);
     const vatAmount = totalSales - baseAmount;
@@ -372,10 +372,17 @@ export async function getCashDrawerReports(
 
     const netCash = session.openingAmount + cashSales - cashExpensesTotal - (session.closingAmount || 0);
 
+    const userIdObj = session.userId as mongoose.Types.ObjectId | { _id: mongoose.Types.ObjectId; name?: string; email?: string };
+    const userName = typeof userIdObj === 'object' && userIdObj !== null && 'name' in userIdObj 
+      ? userIdObj.name || 'Unknown'
+      : 'Unknown';
+    
     reports.push({
       sessionId: session._id.toString(),
-      userId: session.userId.toString(),
-      userName: (session.userId as any)?.name || 'Unknown',
+      userId: typeof userIdObj === 'object' && userIdObj !== null && '_id' in userIdObj
+        ? userIdObj._id.toString()
+        : userIdObj.toString(),
+      userName,
       openingTime: session.openingTime,
       closingTime: session.closingTime,
       openingAmount: session.openingAmount,

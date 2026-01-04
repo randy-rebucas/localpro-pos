@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { ITenantSettings } from '@/models/Tenant';
 import Link from 'next/link';
 

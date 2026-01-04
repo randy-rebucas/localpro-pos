@@ -3,7 +3,7 @@
  * Handles syncing offline transactions when connection is restored
  */
 
-import { getOfflineStorage, OfflineTransaction } from './offline-storage';
+import { getOfflineStorage } from './offline-storage';
 
 export interface SyncResult {
   success: boolean;
@@ -58,8 +58,8 @@ class SyncService {
           failed++;
           errors.push({ id: transaction.id, error: errorMsg });
         }
-      } catch (error: any) {
-        const errorMsg = error.message || 'Network error';
+      } catch (error: unknown) {
+        const errorMsg = error instanceof Error ? error.message : 'Network error';
         await storage.markTransactionError(transaction.id, errorMsg);
         failed++;
         errors.push({ id: transaction.id, error: errorMsg });

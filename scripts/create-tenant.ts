@@ -231,7 +231,7 @@ async function createTenant(input: TenantInput) {
     };
 
     // Create tenant
-    const tenantData: any = {
+    const tenantData: Record<string, unknown> = {
       slug: input.slug,
       name: input.name,
       settings,
@@ -257,8 +257,9 @@ async function createTenant(input: TenantInput) {
         tenantId: tenant._id,
         isActive: true,
       });
-    } catch (userError: any) {
-      console.log('\n⚠️  Warning: Failed to create admin user:', userError.message);
+    } catch (userError: unknown) {
+      const errorMessage = userError instanceof Error ? userError.message : 'Unknown error';
+      console.log('\n⚠️  Warning: Failed to create admin user:', errorMessage);
     }
 
     console.log('\n✅ Tenant created successfully!\n');
@@ -296,8 +297,9 @@ async function createTenant(input: TenantInput) {
     console.log(`  3. Configure settings at: http://localhost:3000/${tenant.slug}/${tenant.settings.language}/settings\n`);
 
     await mongoose.disconnect();
-  } catch (error: any) {
-    console.error('\n❌ Error creating tenant:', error.message);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('\n❌ Error creating tenant:', errorMessage);
     
     if (error.code === 11000) {
       const field = Object.keys(error.keyPattern)[0];

@@ -7,7 +7,6 @@ import connectDB from '@/lib/mongodb';
 import Attendance from '@/models/Attendance';
 import CashDrawerSession from '@/models/CashDrawerSession';
 import Tenant from '@/models/Tenant';
-import User from '@/models/User';
 import { sendEmail, sendSMS } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { AutomationResult } from './types';
@@ -76,7 +75,7 @@ export async function sendCashCountReminders(
 
         for (const session of activeSessions) {
           try {
-            const user = session.userId as any;
+            const user = session.userId as { _id?: string; name?: string; email?: string } | null;
             if (!user) continue;
 
             // Estimate shift end time (8 hours from clock-in, or use tenant settings)
@@ -128,14 +127,16 @@ ${companyName}`;
                 totalReminders++;
               }
             }
-          } catch (error: any) {
+          } catch (error: unknown) {
             totalFailed++;
-            results.errors?.push(`Session ${session._id}: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            results.errors?.push(`Session ${session._id}: ${errorMessage}`);
           }
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         totalFailed++;
-        results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        results.errors?.push(`Tenant ${tenant.name}: ${errorMessage}`);
       }
     }
 
@@ -144,10 +145,11 @@ ${companyName}`;
     results.message = `Sent ${totalReminders} cash count reminders${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: unknown) {
     results.success = false;
-    results.message = `Error sending cash count reminders: ${error.message}`;
-    results.errors?.push(error.message);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    results.message = `Error sending cash count reminders: ${errorMessage}`;
+    results.errors?.push(errorMessage);
     return results;
   }
 }

@@ -188,7 +188,7 @@ export async function POST(request: NextRequest) {
     });
 
     return response;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Facebook authentication error:', error);
     
     // Get translator if not already available (in case error occurred before assignment)
@@ -201,7 +201,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Handle duplicate key error
-    if (error.code === 11000) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 11000) {
       return NextResponse.json(
         { success: false, error: t('validation.accountAlreadyExists', 'An account with this Facebook profile already exists') },
         { status: 409 }
@@ -209,7 +209,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { success: false, error: error.message || 'Facebook authentication failed' },
+      { success: false, error: error instanceof Error ? error.message : 'Facebook authentication failed' },
       { status: 500 }
     );
   }

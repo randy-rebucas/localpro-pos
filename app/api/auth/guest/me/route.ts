@@ -23,10 +23,10 @@ export async function GET(request: NextRequest) {
         type: 'guest',
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Get guest error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to get guest session' },
+      { success: false, error: error instanceof Error ? error.message : 'Failed to get guest session' },
       { status: 500 }
     );
   }

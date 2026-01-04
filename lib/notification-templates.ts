@@ -245,7 +245,7 @@ export function validateNotificationTemplate(template: string): { valid: boolean
     }
 
     return { valid: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       valid: false,
       error: error.message || 'Invalid template',

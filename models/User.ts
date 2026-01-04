@@ -89,7 +89,7 @@ UserSchema.pre('save', async function (next) {
       const salt = await bcrypt.genSalt(10);
       const password = this.password as string;
       this.password = await bcrypt.hash(password, salt);
-    } catch (error: any) {
+    } catch (error: unknown) {
       return next(error);
     }
   }
@@ -100,7 +100,7 @@ UserSchema.pre('save', async function (next) {
       const salt = await bcrypt.genSalt(10);
       const pin = this.pin as string;
       this.pin = await bcrypt.hash(pin, salt);
-    } catch (error: any) {
+    } catch (error: unknown) {
       return next(error);
     }
   }

@@ -77,9 +77,10 @@ export async function cleanupAuditLogs(
           });
           totalDeleted += deleteResult.deletedCount || 0;
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         totalFailed++;
-        results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        results.errors?.push(`Tenant ${tenant.name}: ${errorMessage}`);
       }
     }
 
@@ -88,10 +89,11 @@ export async function cleanupAuditLogs(
     results.message = `${options.archive ? 'Archived' : 'Deleted'} ${totalDeleted} audit logs${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: unknown) {
     results.success = false;
-    results.message = `Error cleaning up audit logs: ${error.message}`;
-    results.errors?.push(error.message);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    results.message = `Error cleaning up audit logs: ${errorMessage}`;
+    results.errors?.push(errorMessage);
     return results;
   }
 }

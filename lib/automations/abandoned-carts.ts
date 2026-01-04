@@ -7,7 +7,6 @@ import connectDB from '@/lib/mongodb';
 import SavedCart from '@/models/SavedCart';
 import Transaction from '@/models/Transaction';
 import Tenant from '@/models/Tenant';
-import User from '@/models/User';
 import { sendEmail } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { AutomationResult } from './types';
@@ -77,7 +76,7 @@ export async function sendAbandonedCartReminders(
 
         for (const cart of abandonedCarts) {
           try {
-            const user = cart.userId as any;
+            const user = cart.userId as { email?: string } | null;
             if (!user || !user.email) {
               continue; // Skip if no user or email
             }
@@ -162,14 +161,16 @@ export async function sendAbandonedCartReminders(
             });
 
             totalReminders++;
-          } catch (error: any) {
+          } catch (error: unknown) {
             totalFailed++;
-            results.errors?.push(`Cart ${cart._id}: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            results.errors?.push(`Cart ${cart._id}: ${errorMessage}`);
           }
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         totalFailed++;
-        results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        results.errors?.push(`Tenant ${tenant.name}: ${errorMessage}`);
       }
     }
 
@@ -178,10 +179,11 @@ export async function sendAbandonedCartReminders(
     results.message = `Sent ${totalReminders} abandoned cart reminders${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: unknown) {
     results.success = false;
-    results.message = `Error sending abandoned cart reminders: ${error.message}`;
-    results.errors?.push(error.message);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    results.message = `Error sending abandoned cart reminders: ${errorMessage}`;
+    results.errors?.push(errorMessage);
     return results;
   }
 }

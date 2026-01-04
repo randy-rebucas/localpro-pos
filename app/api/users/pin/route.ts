@@ -58,9 +58,9 @@ export async function PUT(request: NextRequest) {
       success: true,
       message: 'PIN updated successfully',
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Update PIN error:', error);
-    const errorMessage = error.message || 'Failed to update PIN';
+    const errorMessage = error instanceof Error ? error.message : 'Failed to update PIN'; 
     return NextResponse.json(
       { success: false, error: errorMessage },
       { status: error.message === 'Unauthorized' ? 401 : 500 }
@@ -82,9 +82,9 @@ export async function DELETE(request: NextRequest) {
       success: true,
       message: 'PIN removed successfully',
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Delete PIN error:', error);
-    const errorMessage = error.message || 'Failed to remove PIN';
+    const errorMessage = error instanceof Error ? error.message : 'Failed to remove PIN'; 
     return NextResponse.json(
       { success: false, error: errorMessage },
       { status: error.message === 'Unauthorized' ? 401 : 500 }

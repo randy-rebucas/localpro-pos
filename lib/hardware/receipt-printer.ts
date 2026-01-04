@@ -4,8 +4,10 @@
  */
 
 // Web API types (available in browsers that support these APIs)
-// Using any for browser APIs that may not have complete type definitions
+// Using eslint-disable for browser APIs that may not have complete type definitions
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type USBDevice = any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SerialPort = any;
 
 export interface PrinterConfig {
@@ -66,6 +68,7 @@ class ReceiptPrinterService {
 
     try {
       if (this.config.type === 'usb' && 'usb' in navigator) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const device = await (navigator as any).usb.requestDevice({
           filters: this.config.vendorId && this.config.productId
             ? [{ vendorId: this.config.vendorId, productId: this.config.productId }]
@@ -77,6 +80,7 @@ class ReceiptPrinterService {
         this.device = device;
         return true;
       } else if (this.config.type === 'serial' && 'serial' in navigator) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const port = await (navigator as any).serial.requestPort();
         await port.open({ baudRate: 9600 });
         this.device = port;
@@ -162,14 +166,14 @@ class ReceiptPrinterService {
     try {
       if (this.config?.type === 'browser') {
         // Fallback to browser print dialog
-        return this.printViaBrowser(data);
+        return await this.printViaBrowser(data);
       }
 
       if (!this.device && this.config && this.config.type !== 'network') {
         const connected = await this.connect();
         if (!connected) {
           console.warn('Could not connect to printer, falling back to browser print');
-          return this.printViaBrowser(data);
+          return await this.printViaBrowser(data);
         }
       }
 
@@ -252,7 +256,7 @@ class ReceiptPrinterService {
       // Check if printer is connected before attempting to send commands
       if (!this.device || !this.config) {
         console.warn('Printer not connected, falling back to browser print');
-        return this.printViaBrowser(data);
+        return await this.printViaBrowser(data);
       }
 
       // Send all commands
@@ -264,7 +268,7 @@ class ReceiptPrinterService {
     } catch (error) {
       console.error('Print error:', error);
       // Fallback to browser print
-      return this.printViaBrowser(data);
+      return await this.printViaBrowser(data);
     }
   }
 
@@ -291,7 +295,8 @@ class ReceiptPrinterService {
     }
   }
 
-  private async buildEscPosCommands(data: ReceiptData): Promise<Uint8Array> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  private async buildEscPosCommands(_data: ReceiptData): Promise<Uint8Array> {
     const commands: Uint8Array[] = [];
     // Same command building as printReceipt but return as single array
     // (Implementation similar to printReceipt method)
@@ -310,13 +315,13 @@ class ReceiptPrinterService {
     return combined;
   }
 
-  private printViaBrowser(data: ReceiptData): boolean {
+  private async printViaBrowser(data: ReceiptData): Promise<boolean> {
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
       return false;
     }
 
-    const html = this.generateReceiptHTML(data);
+    const html = await this.generateReceiptHTML(data);
     printWindow.document.write(html);
     printWindow.document.close();
     printWindow.focus();
@@ -328,13 +333,18 @@ class ReceiptPrinterService {
     return true;
   }
 
-  private generateReceiptHTML(data: ReceiptData): string {
+  private async generateReceiptHTML(data: ReceiptData): Promise<string> {
     // If custom template is provided, use it
     if (data.template) {
       try {
         // Import template rendering function dynamically to avoid circular dependencies
-        const { renderReceiptTemplate } = require('@/lib/receipt-templates');
-        return renderReceiptTemplate(data.template, data);
+        const { renderReceiptTemplate } = await import('@/lib/receipt-templates');
+        // Convert to the expected ReceiptData type (time is required in receipt-templates)
+        const templateData: import('@/lib/receipt-templates').ReceiptData = {
+          ...data,
+          time: data.time || new Date().toLocaleTimeString(),
+        };
+        return renderReceiptTemplate(data.template, templateData);
       } catch (error) {
         console.error('Error rendering receipt template:', error);
         // Fall through to default template

@@ -3,8 +3,6 @@
  * Handles multiple tax rates based on region, product type, category, etc.
  */
 
-import { ITenantSettings } from '@/models/Tenant';
-
 export interface TaxRule {
   id: string;
   name: string;

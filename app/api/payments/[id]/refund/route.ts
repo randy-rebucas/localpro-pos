@@ -11,7 +11,8 @@ export async function POST(
   try {
     await connectDB();
     const tenantAccess = await requireTenantAccess(request);
-    const { tenantId, user } = tenantAccess;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { tenantId, user: _user } = tenantAccess;
     const { id: paymentId } = await params;
     
     const { refundReason } = await request.json();
@@ -58,7 +59,7 @@ export async function POST(
     });
 
     return NextResponse.json({ success: true, data: payment });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json({ success: false, error: error.message }, { status: 400 });
   }
 }

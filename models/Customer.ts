@@ -124,7 +124,7 @@ CustomerSchema.pre('save', async function (next) {
       const salt = await bcrypt.genSalt(10);
       const password = this.password as string;
       this.password = await bcrypt.hash(password, salt);
-    } catch (error: any) {
+    } catch (error: unknown) {
       return next(error);
     }
   }

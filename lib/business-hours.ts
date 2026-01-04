@@ -3,8 +3,6 @@
  * Handles business hours, special hours, and holiday checking
  */
 
-import { ITenantSettings } from '@/models/Tenant';
-
 export interface BusinessHours {
   timezone?: string;
   schedule?: {
@@ -166,7 +164,6 @@ function checkTimeRange(date: Date, openTime: string, closeTime: string): { isOp
  */
 export function getHolidayForDate(date: Date, holidays: Holiday[]): Holiday | null {
   const dateStr = formatDateString(date);
-  const year = date.getFullYear();
   const month = date.getMonth() + 1;
   const day = date.getDate();
   const dayOfWeek = date.getDay();
@@ -224,7 +221,7 @@ export function getNextOpenTime(
   businessHours?: BusinessHours,
   holidays?: Holiday[]
 ): Date | null {
-  let checkDate = new Date(fromDate);
+  const checkDate = new Date(fromDate);
   let attempts = 0;
   const maxAttempts = 365; // Prevent infinite loop
 

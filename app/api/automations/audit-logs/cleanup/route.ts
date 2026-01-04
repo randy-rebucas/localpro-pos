@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
 
     const result = await cleanupAuditLogs({ tenantId, retentionYears, archive });
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Audit log cleanup error:', error);
     return NextResponse.json({
       success: false,
@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
 
     const result = await cleanupAuditLogs({ tenantId, retentionYears, archive });
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Audit log cleanup error:', error);
     return NextResponse.json({
       success: false,

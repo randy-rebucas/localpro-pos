@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     const result = await manageDiscountStatus({ tenantId });
 
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Discount management automation error:', error);
     return NextResponse.json(
       {
@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
     const result = await manageDiscountStatus({ tenantId });
 
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Discount management automation error:', error);
     return NextResponse.json(
       {

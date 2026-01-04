@@ -9,7 +9,7 @@ export default function OfflineIndicator() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = (params?.lang as 'en' | 'es') || 'en';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
   const { isOnline, isSyncing, lastSyncResult, sync } = useNetworkStatus(tenant);
 
   useEffect(() => {
@@ -23,8 +23,11 @@ export default function OfflineIndicator() {
 
   useEffect(() => {
     if (lastSyncResult && lastSyncResult.synced > 0) {
-      setShowSyncResult(true);
-      const timer = setTimeout(() => setShowSyncResult(false), 5000);
+      // Use setTimeout to avoid setState in effect
+      const timer = setTimeout(() => {
+        setShowSyncResult(true);
+        setTimeout(() => setShowSyncResult(false), 5000);
+      }, 0);
       return () => clearTimeout(timer);
     }
   }, [lastSyncResult]);

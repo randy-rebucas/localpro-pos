@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Navbar from '@/components/Navbar';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 import Currency from '@/components/Currency';
@@ -29,10 +29,9 @@ interface Expense {
 
 export default function ExpensesPage() {
   const params = useParams();
-  const router = useRouter();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -54,32 +53,10 @@ export default function ExpensesPage() {
     name: '',
   });
   const [expenseNames, setExpenseNames] = useState<string[]>([]);
-  const { settings } = useTenantSettings();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { settings: _settings } = useTenantSettings();
 
-  useEffect(() => {
-    getDictionaryClient(lang).then(setDict);
-    fetchExpenses();
-  }, [lang, tenant]);
-
-  useEffect(() => {
-    fetchExpenses();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.startDate, filters.endDate, filters.name]);
-
-  // Validate date range
-  const handleDateFilterChange = (field: 'startDate' | 'endDate', value: string) => {
-    if (field === 'endDate' && filters.startDate && value && new Date(filters.startDate) > new Date(value)) {
-      setMessage({ type: 'error', text: dict?.common?.endDateAfterStartDate || 'End date must be after start date' });
-      return;
-    }
-    if (field === 'startDate' && filters.endDate && value && new Date(value) > new Date(filters.endDate)) {
-      setMessage({ type: 'error', text: dict?.common?.startDateBeforeEndDate || 'Start date must be before end date' });
-      return;
-    }
-    setFilters({ ...filters, [field]: value });
-  };
-
-  const fetchExpenses = async () => {
+  const fetchExpenses = useCallback(async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
@@ -104,7 +81,29 @@ export default function ExpensesPage() {
     } finally {
       setLoading(false);
     }
+  }, [filters.startDate, filters.endDate, filters.name, dict]);
+
+  // Validate date range
+  const handleDateFilterChange = (field: 'startDate' | 'endDate', value: string) => {
+    if (field === 'endDate' && filters.startDate && value && new Date(filters.startDate) > new Date(value)) {
+      setMessage({ type: 'error', text: dict?.common?.endDateAfterStartDate || 'End date must be after start date' });
+      return;
+    }
+    if (field === 'startDate' && filters.endDate && value && new Date(value) > new Date(filters.endDate)) {
+      setMessage({ type: 'error', text: dict?.common?.startDateBeforeEndDate || 'Start date must be before end date' });
+      return;
+    }
+    setFilters({ ...filters, [field]: value });
   };
+
+  useEffect(() => {
+    getDictionaryClient(lang).then(setDict);
+    fetchExpenses();
+  }, [lang, tenant, fetchExpenses]);
+
+  useEffect(() => {
+    fetchExpenses();
+  }, [filters.startDate, filters.endDate, filters.name, fetchExpenses]);
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -121,7 +120,7 @@ export default function ExpensesPage() {
       } else {
         setMessage({ type: 'error', text: data.error || dict?.admin?.failedToDeleteExpense || 'Failed to delete expense' });
       }
-    } catch (error) {
+    } catch {
       setMessage({ type: 'error', text: dict?.admin?.failedToDeleteExpense || 'Failed to delete expense' });
     } finally {
       setDeletingId(null);
@@ -362,7 +361,7 @@ function ExpenseModal({
   expense: Expense | null;
   onClose: () => void;
   onSave: () => void;
-  dict: any;
+  dict: Record<string, unknown>;
 }) {
   const getInitialFormData = () => ({
     name: expense?.name || '',
@@ -461,8 +460,8 @@ function ExpenseModal({
       } else {
         setError(data.error || 'Failed to save expense');
       }
-    } catch (error: any) {
-      setError(error.message || 'Failed to save expense. Please try again.');
+    } catch (error: unknown) {
+      setError(error instanceof Error ? error.message : 'Failed to save expense. Please try again.'); 
     } finally {
       setSaving(false);
     }
@@ -545,7 +544,7 @@ function ExpenseModal({
                 </label>
                 <select
                   value={formData.paymentMethod}
-                  onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value as any })}
+                  onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value as 'cash' | 'card' | 'digital' | 'check' | 'other' })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                   required
                 >

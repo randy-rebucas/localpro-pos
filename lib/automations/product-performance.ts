@@ -69,8 +69,8 @@ export async function analyzeProductPerformance(
         // Get all products
         const products = await Product.find({ tenantId, trackInventory: true }).lean();
 
-        const slowMovingProducts: any[] = [];
-        const topPerformers: any[] = [];
+        const slowMovingProducts: Array<{ productId: string; name: string; sales: number; revenue: number }> = [];
+        const topPerformers: Array<{ productId: string; name: string; sales: number; revenue: number }> = [];
 
         for (const product of products) {
           try {
@@ -137,7 +137,7 @@ export async function analyzeProductPerformance(
                 revenue,
               });
             }
-          } catch (error: any) {
+          } catch {
             // Skip product on error
           }
         }
@@ -191,9 +191,10 @@ This is an automated product performance report from your POS system.`;
 
           totalAlerts++;
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         totalFailed++;
-        results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        results.errors?.push(`Tenant ${tenant.name}: ${errorMessage}`);
       }
     }
 
@@ -202,10 +203,11 @@ This is an automated product performance report from your POS system.`;
     results.message = `Sent ${totalAlerts} product performance alerts${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: unknown) {
     results.success = false;
-    results.message = `Error analyzing product performance: ${error.message}`;
-    results.errors?.push(error.message);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    results.message = `Error analyzing product performance: ${errorMessage}`;
+    results.errors?.push(errorMessage);
     return results;
   }
 }

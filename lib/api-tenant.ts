@@ -57,7 +57,7 @@ export async function getTenantIdFromRequest(request: NextRequest): Promise<stri
               tenantSlug = tenant.slug;
             }
           }
-        } catch (e) {
+        } catch {
           // If we can't get the slug, try to get it from the tenant ID
           try {
             const Tenant = (await import('@/models/Tenant')).default;
@@ -66,7 +66,7 @@ export async function getTenantIdFromRequest(request: NextRequest): Promise<stri
             if (tenant && tenant.slug) {
               tenantSlug = tenant.slug;
             }
-          } catch (err) {
+          } catch {
             // Fallback to default - will redirect to /default/forbidden
           }
         }
@@ -126,7 +126,7 @@ async function getTenantIdFromRequestParams(request: NextRequest): Promise<strin
           }
         }
       }
-    } catch (e) {
+    } catch {
       // Invalid referer URL, continue
     }
   }
@@ -184,7 +184,7 @@ export async function getTenantSlugFromRequest(request: NextRequest): Promise<st
           if (tenant) return tenant.slug;
         }
       }
-    } catch (e) {
+    } catch {
       // Invalid referer URL, continue
     }
   }
@@ -237,7 +237,7 @@ export async function requireTenantAccess(request: NextRequest): Promise<{
       if (tenant && tenant.slug) {
         tenantSlug = tenant.slug;
       }
-    } catch (err) {
+    } catch {
       // Fallback to default
     }
     
@@ -258,7 +258,7 @@ export async function requireTenantAccess(request: NextRequest): Promise<{
  * Helper function to handle TenantAccessViolationError in API routes
  * Returns a NextResponse with 403 status and redirect information
  */
-export function handleTenantAccessViolation(error: unknown, request: NextRequest): NextResponse {
+export function handleTenantAccessViolation(error: unknown): NextResponse {
   if (error instanceof TenantAccessViolationError) {
     const redirectUrl = `/${error.tenantSlug}/forbidden`;
     return NextResponse.json(

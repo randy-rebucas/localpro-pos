@@ -4,8 +4,6 @@
  */
 
 import connectDB from '@/lib/mongodb';
-import Transaction from '@/models/Transaction';
-import Tenant from '@/models/Tenant';
 import { AutomationResult } from './types';
 
 export interface OfflineSyncOptions {
@@ -19,7 +17,8 @@ export interface OfflineSyncOptions {
  * This is a framework that can be extended based on your offline storage implementation
  */
 export async function syncOfflineTransactions(
-  options: OfflineSyncOptions = {}
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _options: OfflineSyncOptions = {}
 ): Promise<AutomationResult> {
   await connectDB();
 
@@ -40,10 +39,11 @@ export async function syncOfflineTransactions(
     results.processed = 0;
 
     return results;
-  } catch (error: any) {
+  } catch (error: unknown) {
     results.success = false;
-    results.message = `Error syncing offline transactions: ${error.message}`;
-    results.errors?.push(error.message);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    results.message = `Error syncing offline transactions: ${errorMessage}`;
+    results.errors?.push(errorMessage);
     return results;
   }
 }

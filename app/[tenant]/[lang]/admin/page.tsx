@@ -9,10 +9,11 @@ import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 
 export default function AdminPage() {
   const params = useParams();
-  const router = useRouter();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _router = useRouter();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
   const { settings } = useTenantSettings();
 

@@ -12,7 +12,7 @@ interface ChartDataPoint {
 
 interface SalesChartProps {
   data: ChartDataPoint[];
-  dict: any;
+  dict: Record<string, unknown>;
 }
 
 export default function SalesChart({ data, dict }: SalesChartProps) {
@@ -97,7 +97,7 @@ export default function SalesChart({ data, dict }: SalesChartProps) {
               borderRadius: '0px',
               boxShadow: 'none'
             }}
-            formatter={(value: any) => {
+            formatter={(value: unknown) => {
               const numValue = typeof value === 'number' ? value : parseFloat(String(value));
               return formatCurrency(numValue, tenantSettings);
             }}

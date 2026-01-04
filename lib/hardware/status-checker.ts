@@ -4,9 +4,6 @@
  */
 
 import { hardwareService } from './index';
-import { receiptPrinterService } from './receipt-printer';
-import { barcodeScannerService } from './barcode-scanner';
-import { qrReaderService } from './qr-reader';
 
 export interface DeviceStatus {
   name: string;
@@ -76,7 +73,7 @@ class HardwareStatusChecker {
     return this.statusCache;
   }
 
-  private async checkPrinter(printerConfig: any): Promise<DeviceStatus> {
+  private async checkPrinter(printerConfig: Record<string, unknown>): Promise<DeviceStatus> {
     if (!printerConfig) {
       return {
         name: 'Receipt Printer',
@@ -150,12 +147,12 @@ class HardwareStatusChecker {
             message: 'Browser print dialog available',
           };
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         name: 'Receipt Printer',
         type: 'printer',
         status: 'error',
-        message: error.message || 'Unknown error',
+        message: error instanceof Error ? error.message : 'Unknown error',
       };
     }
   }
@@ -168,25 +165,25 @@ class HardwareStatusChecker {
 
       try {
         // Note: CORS will likely block this, but we can try
-        const response = await fetch(`http://${ip}:${port}`, {
+        await fetch(`http://${ip}:${port}`, {
           method: 'GET',
           signal: controller.signal,
           mode: 'no-cors',
-        } as any);
+        } as RequestInit);
         clearTimeout(timeoutId);
         return { connected: true, message: 'Printer reachable' };
-      } catch (error) {
+      } catch {
         clearTimeout(timeoutId);
         // Even if fetch fails, the printer might be reachable (CORS issue)
         // We'll assume it's configured correctly
         return { connected: true, message: 'Printer configured (connection test limited by browser)' };
       }
-    } catch (error: any) {
-      return { connected: false, message: error.message || 'Cannot reach printer' };
+    } catch (error: unknown) {
+      return { connected: false, message: error instanceof Error ? error.message : 'Cannot reach printer' };
     }
   }
 
-  private checkBarcodeScanner(scannerConfig: any): DeviceStatus {
+  private checkBarcodeScanner(scannerConfig: Record<string, unknown>): DeviceStatus {
     if (!scannerConfig || !scannerConfig.enabled) {
       return {
         name: 'Barcode Scanner',
@@ -206,7 +203,7 @@ class HardwareStatusChecker {
     };
   }
 
-  private checkQRReader(qrConfig: any): DeviceStatus {
+  private checkQRReader(qrConfig: Record<string, unknown>): DeviceStatus {
     if (!qrConfig || !qrConfig.enabled) {
       return {
         name: 'QR Code Reader',
@@ -234,7 +231,7 @@ class HardwareStatusChecker {
     };
   }
 
-  private checkCashDrawer(drawerConfig: any, printerConfig: any): DeviceStatus {
+  private checkCashDrawer(drawerConfig: Record<string, unknown>, printerConfig: Record<string, unknown>): DeviceStatus {
     if (!drawerConfig || !drawerConfig.enabled) {
       return {
         name: 'Cash Drawer',
@@ -271,7 +268,7 @@ class HardwareStatusChecker {
     };
   }
 
-  private checkTouchscreen(touchscreenConfig: any): DeviceStatus {
+  private checkTouchscreen(touchscreenConfig: Record<string, unknown>): DeviceStatus {
     const hasTouch = hardwareService.isTouchscreen();
     
     if (!touchscreenConfig || !touchscreenConfig.enabled) {
@@ -323,8 +320,8 @@ class HardwareStatusChecker {
               ? 'Test receipt sent successfully' 
               : 'Failed to send test receipt' 
           };
-        } catch (error: any) {
-          return { success: false, message: error.message || 'Print test failed' };
+        } catch (error: unknown) {
+          return { success: false, message: error instanceof Error ? error.message : 'Print test failed' };
         }
 
       case 'cash-drawer':
@@ -336,8 +333,8 @@ class HardwareStatusChecker {
               ? 'Cash drawer opened' 
               : 'Failed to open cash drawer' 
           };
-        } catch (error: any) {
-          return { success: false, message: error.message || 'Cash drawer test failed' };
+        } catch (error: unknown) {
+          return { success: false, message: error instanceof Error ? error.message : 'Cash drawer test failed' };
         }
 
       case 'barcode-scanner':

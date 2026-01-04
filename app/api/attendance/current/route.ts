@@ -39,11 +39,11 @@ export async function GET(request: NextRequest) {
         currentHours: roundedHours,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Get current attendance error:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
-      { success: false, error: error.message || t('validation.failedToGetCurrentAttendance', 'Failed to get current attendance') },
+      { success: false, error: error instanceof Error ? error.message : t('validation.failedToGetCurrentAttendance', 'Failed to get current attendance') }, 
       { status: error.message === 'Unauthorized' ? 401 : 500 }
     );
   }

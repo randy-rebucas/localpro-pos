@@ -15,13 +15,14 @@ export default function BusinessHoursManager({ settings, tenant, onUpdate }: Bus
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [schedule, setSchedule] = useState<Record<string, any>>({});
-  const [specialHours, setSpecialHours] = useState<Array<any>>([]);
+  const [schedule, setSchedule] = useState<Record<string, { enabled: boolean; openTime: string; closeTime: string }>>({});
+  const [specialHours, setSpecialHours] = useState<Array<{ date: string; enabled: boolean; openTime: string; closeTime: string; note: string }>>([]);
   const [timezone, setTimezone] = useState('');
 
   useEffect(() => {
     fetchBusinessHours();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // fetchBusinessHours is stable, no need to include in deps
 
   const fetchBusinessHours = async () => {
     try {
@@ -34,8 +35,8 @@ export default function BusinessHoursManager({ settings, tenant, onUpdate }: Bus
         setSpecialHours(hours.specialHours || []);
         setTimezone(hours.timezone || settings.timezone || 'UTC');
       }
-    } catch (error: any) {
-      setMessage({ type: 'error', text: error.message || 'Failed to load business hours' });
+    } catch (error: unknown) {
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to load business hours' });
     } finally {
       setLoading(false);
     }
@@ -59,14 +60,14 @@ export default function BusinessHoursManager({ settings, tenant, onUpdate }: Bus
       } else {
         setMessage({ type: 'error', text: data.error || 'Failed to save business hours' });
       }
-    } catch (error: any) {
-      setMessage({ type: 'error', text: error.message || 'Failed to save business hours' });
+    } catch (error: unknown) {
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to save business hours' });
     } finally {
       setSaving(false);
     }
   };
 
-  const updateDaySchedule = (day: string, updates: any) => {
+  const updateDaySchedule = (day: string, updates: Partial<{ enabled: boolean; openTime: string; closeTime: string }>) => {
     setSchedule({
       ...schedule,
       [day]: {
@@ -89,7 +90,7 @@ export default function BusinessHoursManager({ settings, tenant, onUpdate }: Bus
     ]);
   };
 
-  const updateSpecialHour = (index: number, updates: any) => {
+  const updateSpecialHour = (index: number, updates: Partial<{ date: string; enabled: boolean; openTime: string; closeTime: string; note: string }>) => {
     const updated = [...specialHours];
     updated[index] = { ...updated[index], ...updates };
     setSpecialHours(updated);

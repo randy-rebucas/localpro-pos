@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Navbar from '@/components/Navbar';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 import Currency from '@/components/Currency';
@@ -30,10 +30,9 @@ interface Discount {
 
 export default function DiscountsPage() {
   const params = useParams();
-  const router = useRouter();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
   const [discounts, setDiscounts] = useState<Discount[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -43,12 +42,7 @@ export default function DiscountsPage() {
   const discountsEnabled = supportsFeature(settings ?? undefined, 'discounts');
   const businessTypeConfig = settings ? getBusinessTypeConfig(getBusinessType(settings)) : null;
 
-  useEffect(() => {
-    getDictionaryClient(lang).then(setDict);
-    fetchDiscounts();
-  }, [lang, tenant]);
-
-  const fetchDiscounts = async () => {
+  const fetchDiscounts = useCallback(async () => {
     try {
       const res = await fetch('/api/discounts', { credentials: 'include' });
       const data = await res.json();
@@ -64,7 +58,12 @@ export default function DiscountsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [dict]);
+
+  useEffect(() => {
+    getDictionaryClient(lang).then(setDict);
+    fetchDiscounts();
+  }, [lang, tenant, fetchDiscounts]);
 
   const handleDeleteDiscount = async (discountId: string) => {
     if (!dict) return;
@@ -78,7 +77,7 @@ export default function DiscountsPage() {
       } else {
         setMessage({ type: 'error', text: data.error || dict.admin?.deleteError || 'Failed to delete discount' });
       }
-    } catch (error) {
+    } catch {
       setMessage({ type: 'error', text: dict.admin?.deleteError || 'Failed to delete discount' });
     }
   };
@@ -98,7 +97,7 @@ export default function DiscountsPage() {
       } else {
         setMessage({ type: 'error', text: data.error || dict.admin?.updateError || 'Failed to update discount' });
       }
-    } catch (error) {
+    } catch {
       setMessage({ type: 'error', text: dict.admin?.updateError || 'Failed to update discount' });
     }
   };
@@ -308,7 +307,7 @@ function DiscountModal({
   discount: Discount | null;
   onClose: () => void;
   onSave: () => void;
-  dict: any;
+  dict: Record<string, unknown>;
 }) {
   const [formData, setFormData] = useState({
     code: discount?.code || '',
@@ -361,7 +360,7 @@ function DiscountModal({
       } else {
         setError(data.error || dict.admin?.saveError || 'Failed to save discount');
       }
-    } catch (error) {
+    } catch {
       setError(dict.admin?.saveError || 'Failed to save discount');
     } finally {
       setSaving(false);
@@ -396,7 +395,7 @@ function DiscountModal({
                 </label>
                 <select
                   value={formData.type}
-                  onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
+                  onChange={(e) => setFormData({ ...formData, type: e.target.value as 'percentage' | 'fixed' })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                 >
                   <option value="percentage">{dict.admin?.percentage || 'Percentage'}</option>

@@ -124,9 +124,9 @@ export async function POST(request: NextRequest) {
     });
 
     return response;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('PIN login error:', error);
-    const errorMessage = error.message || 'Login failed';
+    const errorMessage = error instanceof Error ? error.message : 'Login failed'; 
     return NextResponse.json(
       { success: false, error: errorMessage },
       { status: 500 }

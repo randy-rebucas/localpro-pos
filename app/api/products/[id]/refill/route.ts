@@ -82,7 +82,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         newStock: product.stock,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error.message === 'Product not found') {
       return NextResponse.json({ success: false, error: error.message }, { status: 404 });
     }

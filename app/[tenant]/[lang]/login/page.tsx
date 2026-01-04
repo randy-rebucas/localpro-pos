@@ -16,12 +16,13 @@ export default function LoginPage() {
   const tenant = (params?.tenant as string) || 'default';
   const lang = (params?.lang as 'en' | 'es') || 'en';
   const { login, loginPIN, loginQR, isAuthenticated, loading: authLoading } = useAuth();
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
   
   const [loginMethod, setLoginMethod] = useState<LoginMethod>('email');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [pin, setPin] = useState('');
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [loggingIn, setLoggingIn] = useState(false);
   const [showQRScanner, setShowQRScanner] = useState(false);

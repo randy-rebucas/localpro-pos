@@ -26,10 +26,10 @@ export async function GET(
     }
 
     return NextResponse.json({ success: true, data: tenant.settings });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching tenant settings:', error);
     const t = await getValidationTranslatorFromRequest(request);
-    return NextResponse.json({ success: false, error: error.message || t('validation.failedToFetchSettings', 'Failed to fetch settings') }, { status: 500 });
+    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : t('validation.failedToFetchSettings', 'Failed to fetch settings') }, { status: 500 }); 
   }
 }
 
@@ -44,9 +44,10 @@ export async function PUT(
     // Try to get current user, but don't require auth (settings are tenant-scoped)
     // If user is authenticated, verify they have proper role
     try {
-      const user = await requireRole(request, ['admin', 'manager']);
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const _user = await requireRole(request, ['admin', 'manager']);
       // User is authenticated and has proper role, proceed
-    } catch (authError: any) {
+    } catch {
       // If auth fails, still allow update but log it (tenant-scoped security)
       // In production, you might want to require auth here
       console.log('Settings update without authentication for tenant:', slug);
@@ -128,10 +129,10 @@ export async function PUT(
     }
 
     return NextResponse.json({ success: true, data: tenant.settings });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error updating tenant settings:', error);
     const t = await getValidationTranslatorFromRequest(request);
-    return NextResponse.json({ success: false, error: error.message || t('validation.failedToUpdateSettings', 'Failed to update settings') }, { status: 400 });
+    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : t('validation.failedToUpdateSettings', 'Failed to update settings') }, { status: 400 }); 
   }
 }
 

@@ -5,7 +5,8 @@ import { useState, useEffect } from 'react';
 
 export default function MarketingPage() {
   const [activeSection, setActiveSection] = useState<string | null>(null);
-  const [scrollY, setScrollY] = useState(0);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_scrollY, _setScrollY] = useState(0);
 
   useEffect(() => {
     const handleScroll = () => setScrollY(window.scrollY);

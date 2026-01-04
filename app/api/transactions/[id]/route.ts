@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Transaction from '@/models/Transaction';
 import Product from '@/models/Product';
-import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
-import { requireAuth, requireRole } from '@/lib/auth';
+import { requireTenantAccess } from '@/lib/api-tenant';
+import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { updateStock } from '@/lib/stock';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -16,9 +16,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     try {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
-    } catch (authError: any) {
-      const t = await getValidationTranslatorFromRequest(request);
-      if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
+    } catch (authError: unknown) {
+      if (authError instanceof Error && (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden'))) {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const _t = await getValidationTranslatorFromRequest(request);
         return NextResponse.json(
           { success: false, error: authError.message },
           { status: authError.message.includes('Unauthorized') ? 401 : 403 }
@@ -27,7 +28,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       throw authError;
     }
     const { id } = await params;
-    const t = await getValidationTranslatorFromRequest(request);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const _t = await getValidationTranslatorFromRequest(request);
     
     const transaction = await Transaction.findOne({ _id: id, tenantId })
       .populate('items.product', 'name sku')
@@ -39,7 +41,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
     
     return NextResponse.json({ success: true, data: transaction });
-  } catch (error: any) {
+  } catch (error: unknown) {
     const t = await getValidationTranslatorFromRequest(request);
     if (error.message === 'Unauthorized') {
       return NextResponse.json({ success: false, error: t('validation.unauthorized', 'Unauthorized') }, { status: 401 });
@@ -58,9 +60,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       tenantId = tenantAccess.tenantId;
       // Also check role
       await requireRole(request, ['admin', 'manager']);
-    } catch (authError: any) {
-      const t = await getValidationTranslatorFromRequest(request);
-      if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
+    } catch (authError: unknown) {
+      if (authError instanceof Error && (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden'))) {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const _t = await getValidationTranslatorFromRequest(request);
         return NextResponse.json(
           { success: false, error: authError.message },
           { status: authError.message.includes('Unauthorized') ? 401 : 403 }
@@ -117,7 +120,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     return NextResponse.json({ success: true, data: transaction });
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error.message === 'Unauthorized' || error.message.includes('Forbidden')) {
       return NextResponse.json(
         { success: false, error: error.message },

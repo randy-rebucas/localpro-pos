@@ -22,9 +22,8 @@ export default function HardwareStatusChecker({
   sidebar = false,
 }: HardwareStatusProps) {
   const params = useParams();
-  const tenant = params.tenant as string;
   const lang = (params?.lang as 'en' | 'es') || 'en';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
   const [status, setStatus] = useState<HardwareStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [testing, setTesting] = useState<string | null>(null);
@@ -65,8 +64,8 @@ export default function HardwareStatusChecker({
       }
       // Refresh status after test
       setTimeout(checkStatus, 1000);
-    } catch (error: any) {
-      showToast.error(error.message || dict?.common?.testFailed || 'Test failed');
+    } catch (error: unknown) {
+      showToast.error(error instanceof Error ? error.message : (dict?.common?.testFailed as string) || 'Test failed');
     } finally {
       setTesting(null);
     }

@@ -73,11 +73,11 @@ export async function POST(
       message: 'Reminder sent successfully',
       results,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Send reminder error:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
-      { success: false, error: error.message || t('validation.failedToSendReminder', 'Failed to send reminder') },
+      { success: false, error: error instanceof Error ? error.message : t('validation.failedToSendReminder', 'Failed to send reminder') }, 
       { status: 500 }
     );
   }

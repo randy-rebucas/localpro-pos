@@ -29,7 +29,8 @@ export function proxy(request: NextRequest) {
   
   // If path starts with a tenant slug pattern (not a locale or known path)
   if (pathParts.length >= 2) {
-    const firstPart = pathParts[0];
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const _firstPart = pathParts[0];
     const secondPart = pathParts[1];
     
     // Check if it's already in tenant/lang format

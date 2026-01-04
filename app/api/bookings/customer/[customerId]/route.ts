@@ -37,8 +37,7 @@ export async function GET(
     const endDate = searchParams.get('endDate');
 
     // Build query
-    const query: any = {
-      tenantId: customer.tenantId,
+    const query: Record<string, unknown> = { tenantId: customer.tenantId,
       $or: [
         { customerEmail: customer.email },
         { customerPhone: customer.phone },
@@ -70,7 +69,7 @@ export async function GET(
       success: true,
       data: bookings,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Get customer bookings error:', error);
     
     if (error.message === 'Unauthorized') {
@@ -81,7 +80,7 @@ export async function GET(
     }
 
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to fetch bookings' },
+      { success: false, error: error instanceof Error ? error.message : 'Failed to fetch bookings' }, 
       { status: 500 }
     );
   }

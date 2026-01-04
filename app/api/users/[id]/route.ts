@@ -29,7 +29,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
     
     return NextResponse.json({ success: true, data: user });
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error.message === 'Unauthorized' || error.message.includes('Forbidden')) {
       return NextResponse.json(
         { success: false, error: error.message },
@@ -62,7 +62,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     // Build update object
-    const updateData: any = {};
+    const updateData: Record<string, unknown> = {};
     
     if (email !== undefined) {
       if (!validateEmail(email)) {
@@ -120,7 +120,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     // Track changes
-    const changes: Record<string, any> = {};
+    const changes: Record<string, unknown> = {};
     Object.keys(updateData).forEach(key => {
       if (key !== 'password' && oldUser[key as keyof typeof oldUser] !== updateData[key]) {
         changes[key] = {
@@ -142,8 +142,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     });
     
     return NextResponse.json({ success: true, data: user });
-  } catch (error: any) {
-    if (error.code === 11000) {
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 11000) {
       return NextResponse.json(
         { success: false, error: 'User with this email already exists' },
         { status: 400 }
@@ -187,7 +187,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     });
     
     return NextResponse.json({ success: true, data: {} });
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error.message === 'Unauthorized' || error.message.includes('Forbidden')) {
       return NextResponse.json(
         { success: false, error: error.message },

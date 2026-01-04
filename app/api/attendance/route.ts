@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '50');
 
     // Build query
-    const query: any = { tenantId: user.tenantId };
+    const query: { tenantId: string; userId?: string; clockIn?: { $gte?: Date; $lte?: Date }; clockOut?: { $exists: boolean } } = { tenantId: user.tenantId };
 
     // If userId is provided and user is manager+, allow viewing other users
     if (userId && (user.role === 'owner' || user.role === 'admin' || user.role === 'manager')) {
@@ -51,11 +51,11 @@ export async function GET(request: NextRequest) {
       success: true,
       data: attendances,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Get attendance error:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
-      { success: false, error: error.message || t('validation.failedToGetAttendance', 'Failed to get attendance') },
+      { success: false, error: error instanceof Error ? error.message : t('validation.failedToGetAttendance', 'Failed to get attendance') }, 
       { status: error.message === 'Unauthorized' ? 401 : 500 }
     );
   }
@@ -151,11 +151,11 @@ export async function POST(request: NextRequest) {
         data: activeSession,
       });
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Attendance error:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
-      { success: false, error: error.message || t('validation.failedToProcessAttendance', 'Failed to process attendance') },
+      { success: false, error: error instanceof Error ? error.message : t('validation.failedToProcessAttendance', 'Failed to process attendance') }, 
       { status: error.message === 'Unauthorized' ? 401 : 500 }
     );
   }

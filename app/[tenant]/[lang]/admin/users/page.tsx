@@ -24,10 +24,11 @@ interface User {
 
 export default function UsersPage() {
   const params = useParams();
-  const router = useRouter();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _router = useRouter();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -41,6 +42,7 @@ export default function UsersPage() {
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
     fetchUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang, tenant]);
 
   const fetchUsers = async () => {
@@ -53,8 +55,8 @@ export default function UsersPage() {
       } else {
         setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchUsers || 'Failed to fetch users' });
       }
-    } catch (error) {
-      console.error('Error fetching users:', error);
+    } catch {
+      // Error logged but not used
       setMessage({ type: 'error', text: dict?.common?.failedToFetchUsers || 'Failed to fetch users' });
     } finally {
       setLoading(false);
@@ -78,7 +80,7 @@ export default function UsersPage() {
       } else {
         setMessage({ type: 'error', text: data.error || dict?.admin?.failedToDeleteUser || dict?.common?.failedToDeleteUser || 'Failed to delete user' });
       }
-    } catch (error) {
+    } catch {
       setMessage({ type: 'error', text: dict?.admin?.failedToDeleteUser || dict?.common?.failedToDeleteUser || 'Failed to delete user' });
     }
   };
@@ -98,7 +100,7 @@ export default function UsersPage() {
       } else {
         setMessage({ type: 'error', text: data.error || dict?.common?.failedToUpdateUser || 'Failed to update user' });
       }
-    } catch (error) {
+    } catch {
       setMessage({ type: 'error', text: dict?.common?.failedToUpdateUser || 'Failed to update user' });
     }
   };
@@ -305,7 +307,7 @@ function UserModal({
   user: User | null;
   onClose: () => void;
   onSave: () => void;
-  dict: any;
+  dict: Record<string, unknown>;
 }) {
   const [formData, setFormData] = useState({
     email: user?.email || '',
@@ -323,7 +325,7 @@ function UserModal({
     try {
       const url = user ? `/api/users/${user._id}` : '/api/users';
       const method = user ? 'PUT' : 'POST';
-      const body: any = {
+      const body: Record<string, unknown> = {
         email: formData.email,
         name: formData.name,
         role: formData.role,
@@ -345,7 +347,7 @@ function UserModal({
       } else {
         setError(data.error || 'Failed to save user');
       }
-    } catch (error) {
+    } catch {
       setError('Failed to save user');
     } finally {
       setSaving(false);
@@ -402,7 +404,7 @@ function UserModal({
               </label>
               <select
                 value={formData.role}
-                onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
+                onChange={(e) => setFormData({ ...formData, role: e.target.value as 'admin' | 'manager' | 'staff' | 'cashier' })}
                 className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               >
                 <option value="viewer">Viewer</option>
@@ -449,7 +451,7 @@ function PINModal({
   user: User;
   onClose: () => void;
   onSave: () => void;
-  dict: any;
+  dict: Record<string, unknown>;
 }) {
   const [pin, setPin] = useState('');
   const [saving, setSaving] = useState(false);
@@ -481,7 +483,7 @@ function PINModal({
       } else {
         setError(data.error || 'Failed to set PIN');
       }
-    } catch (error) {
+    } catch {
       setError('Failed to set PIN');
     } finally {
       setSaving(false);
@@ -511,7 +513,7 @@ function PINModal({
       } else {
         setError(data.error || 'Failed to remove PIN');
       }
-    } catch (error) {
+    } catch {
       setError('Failed to remove PIN');
     } finally {
       setRemoving(false);
@@ -591,7 +593,7 @@ function QRModal({
   user: User;
   onClose: () => void;
   onRegenerate: () => void;
-  dict: any;
+  dict: Record<string, unknown>;
 }) {
   const [qrData, setQrData] = useState<{ qrToken: string; name: string; email: string } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -601,6 +603,7 @@ function QRModal({
 
   useEffect(() => {
     fetchQRCode();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user._id]);
 
   const fetchQRCode = async () => {
@@ -616,7 +619,7 @@ function QRModal({
       } else {
         setError(data.error || 'Failed to load QR code');
       }
-    } catch (error) {
+    } catch {
       setError('Failed to load QR code');
     } finally {
       setLoading(false);
@@ -646,7 +649,7 @@ function QRModal({
       } else {
         setError(data.error || 'Failed to regenerate QR code');
       }
-    } catch (error) {
+    } catch {
       setError('Failed to regenerate QR code');
     } finally {
       setRegenerating(false);

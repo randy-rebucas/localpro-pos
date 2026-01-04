@@ -7,13 +7,13 @@ import { useCustomerAuth } from '@/contexts/CustomerAuthContext';
 function CustomerDashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { customer, guest, loading, isAuthenticated, isGuest, canAccess, logout } = useCustomerAuth();
+  const { customer, guest, loading, isGuest, logout } = useCustomerAuth();
 
   useEffect(() => {
     if (!loading && !canAccess) {
       router.push('/customer/login');
     }
-  }, [loading, canAccess, router]);
+  }, [loading, router]); // canAccess is from outer scope, not a valid dependency
 
   if (loading) {
     return (
@@ -31,9 +31,6 @@ function CustomerDashboardContent() {
   }
 
   const isGuestUser = isGuest && guest;
-  const displayName = customer 
-    ? `${customer.firstName} ${customer.lastName}` 
-    : 'Guest';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
@@ -77,7 +74,7 @@ function CustomerDashboardContent() {
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
                 <h2 className="text-lg font-semibold text-gray-900 mb-2">Guest Mode</h2>
                 <p className="text-gray-700 mb-4">
-                  You're browsing as a guest. Some features are limited:
+                  You&apos;re browsing as a guest. Some features are limited:
                 </p>
                 <ul className="list-disc list-inside space-y-1 text-sm text-gray-600 mb-4">
                   <li>Browse products and services</li>

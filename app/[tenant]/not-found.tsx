@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
 
 export default function TenantNotFound() {
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
 
   useEffect(() => {
     getDictionaryClient('en').then(setDict);

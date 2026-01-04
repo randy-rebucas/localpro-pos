@@ -30,7 +30,7 @@ export async function GET(
     }
 
     return NextResponse.json({ success: true, data: expense });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -78,7 +78,7 @@ export async function PUT(
     });
 
     return NextResponse.json({ success: true, data: expense });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error updating expense:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 400 });
   }
@@ -104,7 +104,8 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: t('validation.expenseNotFound', 'Expense not found') }, { status: 404 });
     }
 
-    const oldData = expense.toObject();
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const _oldData = expense.toObject();
     await expense.deleteOne();
 
     await createAuditLog(request, {
@@ -116,7 +117,7 @@ export async function DELETE(
     });
 
     return NextResponse.json({ success: true, message: t('validation.expenseDeleted', 'Expense deleted successfully') });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error deleting expense:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

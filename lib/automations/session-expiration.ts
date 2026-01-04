@@ -89,14 +89,16 @@ export async function expireInactiveSessions(
               // For now, we'll track it in results
               totalExpired++;
             }
-          } catch (error: any) {
+          } catch (error: unknown) {
             totalFailed++;
-            results.errors?.push(`User ${user._id}: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            results.errors?.push(`User ${user._id}: ${errorMessage}`);
           }
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         totalFailed++;
-        results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        results.errors?.push(`Tenant ${tenant.name}: ${errorMessage}`);
       }
     }
 
@@ -105,9 +107,10 @@ export async function expireInactiveSessions(
     results.message = `Found ${totalExpired} expired sessions${totalFailed > 0 ? `, ${totalFailed} failed` : ''}. Note: JWT tokens require a blacklist system for full session expiration.`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: unknown) {
     results.success = false;
-    results.message = `Error checking session expiration: ${error.message}`;
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    results.message = `Error checking session expiration: ${errorMessage}`;
     results.errors?.push(error.message);
     return results;
   }

@@ -182,7 +182,7 @@ export async function sendSalesReport(
         </tr>
       </thead>
       <tbody>
-        ${report.salesByDay.map((item: any) => `
+        ${report.salesByDay.map((item: { date: string; sales?: number; transactions?: number }) => `
         <tr>
           <td>${new Date(item.date).toLocaleDateString()}</td>
           <td style="text-align: right;">${item.sales?.toFixed(2) || '0.00'}</td>
@@ -211,9 +211,10 @@ export async function sendSalesReport(
         });
 
         totalProcessed++;
-      } catch (error: any) {
+      } catch (error: unknown) {
         totalFailed++;
-        results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        results.errors?.push(`Tenant ${tenant.name}: ${errorMessage}`);
       }
     }
 
@@ -222,10 +223,11 @@ export async function sendSalesReport(
     results.message = `Processed ${totalProcessed} reports${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: unknown) {
     results.success = false;
-    results.message = `Error sending reports: ${error.message}`;
-    results.errors?.push(error.message);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    results.message = `Error sending reports: ${errorMessage}`;
+    results.errors?.push(errorMessage);
     return results;
   }
 }

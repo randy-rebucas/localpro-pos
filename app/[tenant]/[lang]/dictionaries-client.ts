@@ -1,13 +1,15 @@
 'use client';
 
-type DictionaryLoader = () => Promise<any>;
+// Dictionary type - using Record for nested structure
+type Dictionary = Record<string, Record<string, string | Record<string, string>>>;
+type DictionaryLoader = () => Promise<Dictionary>;
 
 const dictionaries: Record<'en' | 'es', DictionaryLoader> = {
   en: async () => {
     try {
-      const module = await import('./dictionaries/en.json');
+      const dictModule = await import('./dictionaries/en.json');
       // JSON imports in Next.js can be the default export or the module itself
-      return module.default || module;
+      return dictModule.default || dictModule;
     } catch (error) {
       console.error('Error loading English dictionary:', error);
       throw error;
@@ -15,19 +17,19 @@ const dictionaries: Record<'en' | 'es', DictionaryLoader> = {
   },
   es: async () => {
     try {
-      const module = await import('./dictionaries/es.json');
+      const dictModule = await import('./dictionaries/es.json');
       // JSON imports in Next.js can be the default export or the module itself
-      return module.default || module;
+      return dictModule.default || dictModule;
     } catch (error) {
       console.error('Error loading Spanish dictionary:', error);
       // Fallback to English if Spanish fails
-      const module = await import('./dictionaries/en.json');
-      return module.default || module;
+      const dictModule = await import('./dictionaries/en.json');
+      return dictModule.default || dictModule;
     }
   },
 };
 
-export const getDictionaryClient = async (locale: 'en' | 'es'): Promise<any> => {
+export const getDictionaryClient = async (locale: 'en' | 'es'): Promise<Dictionary> => {
   // Validate locale
   if (locale !== 'en' && locale !== 'es') {
     console.warn(`Invalid locale "${locale}", falling back to English`);

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import Navbar from '@/components/Navbar';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -49,7 +49,7 @@ export default function AttendancePage() {
   const router = useRouter();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
   const [attendances, setAttendances] = useState<Attendance[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,6 +58,16 @@ export default function AttendancePage() {
   const [endDate, setEndDate] = useState('');
   const [currentSessions, setCurrentSessions] = useState<Attendance[]>([]);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const fetchUsers = useCallback(async () => {
+    try {
+      const res = await fetch('/api/users', { credentials: 'include' });
+      const data = await res.json();
+      if (data.success) setUsers(data.data);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    }
+  }, []);
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -68,31 +78,9 @@ export default function AttendancePage() {
     start.setDate(start.getDate() - 30);
     setEndDate(end.toISOString().split('T')[0]);
     setStartDate(start.toISOString().split('T')[0]);
-  }, [lang, tenant]);
+  }, [lang, tenant, fetchUsers]);
 
-  useEffect(() => {
-    if (startDate && endDate) {
-      fetchAttendances();
-    }
-  }, [startDate, endDate, selectedUserId]);
-
-  useEffect(() => {
-    if (users.length > 0) {
-      fetchCurrentSessions();
-    }
-  }, [users]);
-
-  const fetchUsers = async () => {
-    try {
-      const res = await fetch('/api/users', { credentials: 'include' });
-      const data = await res.json();
-      if (data.success) setUsers(data.data);
-    } catch (error) {
-      console.error('Error fetching users:', error);
-    }
-  };
-
-  const fetchAttendances = async () => {
+  const fetchAttendances = useCallback(async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
@@ -107,17 +95,17 @@ export default function AttendancePage() {
         setAttendances(data.data);
         setMessage(null);
       } else {
-        setMessage({ type: 'error', text: data.error || dict?.admin?.fetchError || 'Failed to fetch attendance records' });
+        setMessage({ type: 'error', text: data.error || (dict?.admin as Record<string, unknown>)?.fetchError as string || 'Failed to fetch attendance records' });
       }
     } catch (error) {
       console.error('Error fetching attendance:', error);
-      setMessage({ type: 'error', text: dict?.admin?.fetchError || 'Failed to fetch attendance records' });
+      setMessage({ type: 'error', text: (dict?.admin as Record<string, unknown>)?.fetchError as string || 'Failed to fetch attendance records' });
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedUserId, startDate, endDate, dict]);
 
-  const fetchCurrentSessions = async () => {
+  const fetchCurrentSessions = useCallback(async () => {
     try {
       // Fetch all users and check their current sessions
       const sessions: Attendance[] = [];
@@ -128,7 +116,7 @@ export default function AttendancePage() {
           if (data.success && data.data) {
             sessions.push({ ...data.data, userId: user });
           }
-        } catch (error) {
+        } catch {
           // Skip if error fetching for this user
         }
       }
@@ -136,7 +124,19 @@ export default function AttendancePage() {
     } catch (error) {
       console.error('Error fetching current sessions:', error);
     }
-  };
+  }, [users]);
+
+  useEffect(() => {
+    if (startDate && endDate) {
+      fetchAttendances();
+    }
+  }, [startDate, endDate, selectedUserId, fetchAttendances]);
+
+  useEffect(() => {
+    if (users.length > 0) {
+      fetchCurrentSessions();
+    }
+  }, [users, fetchCurrentSessions]);
 
   const formatHours = (hours?: number) => {
     if (!hours) return '-';
@@ -190,7 +190,7 @@ export default function AttendancePage() {
     } else if (format === 'excel') {
       downloadExcel(exportData, headers, baseFilename);
     } else if (format === 'pdf') {
-      downloadPDF(exportData, headers, baseFilename, dict.admin?.attendance || 'Attendance Records');
+      downloadPDF(exportData, headers, baseFilename, (dict?.admin as Record<string, unknown>)?.attendance as string || 'Attendance Records');
     }
   };
 
@@ -217,14 +217,14 @@ export default function AttendancePage() {
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
-            {dict?.admin?.backToAdmin || 'Back to Admin'}
+            {(dict?.admin as Record<string, unknown>)?.backToAdmin as string || 'Back to Admin'}
           </Link>
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
-                {dict.admin?.attendance || 'Attendance Management'}
+                {(dict?.admin as Record<string, unknown>)?.attendance as string || 'Attendance Management'}
               </h1>
-              <p className="text-gray-600">{dict.admin?.attendanceDescription || 'View and manage employee attendance records'}</p>
+              <p className="text-gray-600">{(dict?.admin as Record<string, unknown>)?.attendanceDescription as string || 'View and manage employee attendance records'}</p>
             </div>
           </div>
         </div>
@@ -239,7 +239,7 @@ export default function AttendancePage() {
         {currentSessions.length > 0 && (
           <div className="mb-6 bg-blue-50 border-2 border-blue-300 p-6">
             <h2 className="text-lg font-bold text-blue-900 mb-4">
-              {dict.admin?.currentlyClockedIn || 'Currently Clocked In'}
+              {(dict?.admin as Record<string, unknown>)?.currentlyClockedIn as string || 'Currently Clocked In'}
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {currentSessions.map((session) => {
@@ -252,10 +252,10 @@ export default function AttendancePage() {
                   <div key={session._id} className="bg-white border border-blue-300 p-4">
                     <div className="font-semibold text-gray-900">{userName}</div>
                     <div className="text-sm text-gray-600 mt-1">
-                      {dict.admin?.clockedInAt || 'Clocked in'}: {clockInTime.toLocaleString()}
+                      {(dict?.admin as Record<string, unknown>)?.clockedInAt as string || 'Clocked in'}: {clockInTime.toLocaleString()}
                     </div>
                     <div className="text-sm font-medium text-blue-600 mt-2">
-                      {dict.admin?.currentHours || 'Current hours'}: {hours.toFixed(2)}h
+                      {(dict?.admin as Record<string, unknown>)?.currentHours as string || 'Current hours'}: {hours.toFixed(2)}h
                     </div>
                   </div>
                 );
@@ -268,16 +268,16 @@ export default function AttendancePage() {
         <div className="bg-white border border-yellow-300 p-6 mb-6">
           <div className="flex justify-between items-center">
             <div>
-              <h2 className="text-lg font-bold text-gray-900 mb-1">{dict.admin?.attendanceNotifications || 'Attendance Notifications'}</h2>
+              <h2 className="text-lg font-bold text-gray-900 mb-1">{(dict?.admin as Record<string, unknown>)?.attendanceNotifications as string || 'Attendance Notifications'}</h2>
               <p className="text-sm text-gray-600">
-                {dict.admin?.attendanceNotificationsDesc || 'View alerts for late arrivals and missing clock-outs'}
+                {(dict?.admin as Record<string, unknown>)?.attendanceNotificationsDesc as string || 'View alerts for late arrivals and missing clock-outs'}
               </p>
             </div>
             <button
               onClick={() => router.push(`/${tenant}/${lang}/admin/attendance/notifications`)}
               className="px-4 py-2 border border-gray-300 hover:bg-gray-50 bg-white"
             >
-              {dict.admin?.viewNotifications || 'View Notifications'}
+              {(dict?.admin as Record<string, unknown>)?.viewNotifications as string || 'View Notifications'}
             </button>
           </div>
         </div>
@@ -287,14 +287,14 @@ export default function AttendancePage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                {dict.admin?.employee || 'Employee'}
+                {(dict?.admin as Record<string, unknown>)?.employee as string || 'Employee'}
               </label>
               <select
                 value={selectedUserId}
                 onChange={(e) => setSelectedUserId(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               >
-                <option value="">{dict.common?.all || 'All Employees'}</option>
+                <option value="">{(dict?.common as Record<string, unknown>)?.all as string || 'All Employees'}</option>
                 {users.map((user) => (
                   <option key={user._id} value={user._id}>
                     {user.name} ({user.email})
@@ -304,7 +304,7 @@ export default function AttendancePage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                {dict.reports?.startDate || 'Start Date'}
+                {(dict?.reports as Record<string, unknown>)?.startDate as string || 'Start Date'}
               </label>
               <input
                 type="date"
@@ -315,7 +315,7 @@ export default function AttendancePage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                {dict.reports?.endDate || 'End Date'}
+                {(dict?.reports as Record<string, unknown>)?.endDate as string || 'End Date'}
               </label>
               <input
                 type="date"
@@ -330,26 +330,26 @@ export default function AttendancePage() {
                   onClick={() => handleExport('csv')}
                   className="px-4 py-2 border border-gray-300 hover:bg-gray-50 bg-white font-medium"
                 >
-                  {dict.admin?.export || 'Export'} ▼
+                  {(dict?.admin as Record<string, unknown>)?.export as string || 'Export'} ▼
                 </button>
                 <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-300 shadow-lg hidden group-hover:block z-10">
                   <button
                     onClick={() => handleExport('csv')}
                     className="block w-full text-left px-4 py-2 hover:bg-gray-100 text-sm"
                   >
-                    {dict.admin?.exportCSV || 'Export CSV'}
+                    {(dict?.admin as Record<string, unknown>)?.exportCSV as string || 'Export CSV'}
                   </button>
                   <button
                     onClick={() => handleExport('excel')}
                     className="block w-full text-left px-4 py-2 hover:bg-gray-100 text-sm"
                   >
-                    {dict.admin?.exportExcel || 'Export Excel'}
+                    {(dict?.admin as Record<string, unknown>)?.exportExcel as string || 'Export Excel'}
                   </button>
                   <button
                     onClick={() => handleExport('pdf')}
                     className="block w-full text-left px-4 py-2 hover:bg-gray-100 text-sm"
                   >
-                    {dict.admin?.exportPDF || 'Export PDF'}
+                    {(dict?.admin as Record<string, unknown>)?.exportPDF as string || 'Export PDF'}
                   </button>
                 </div>
               </div>
@@ -357,7 +357,7 @@ export default function AttendancePage() {
                 onClick={fetchAttendances}
                 className="w-full px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
               >
-                {dict.common?.search || 'Search'}
+                {(dict?.common as Record<string, unknown>)?.search as string || 'Search'}
               </button>
             </div>
           </div>
@@ -366,15 +366,15 @@ export default function AttendancePage() {
         {/* Statistics */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="bg-white border border-gray-300 p-6">
-            <div className="text-sm text-gray-600 mb-1">{dict.admin?.totalRecords || 'Total Records'}</div>
+            <div className="text-sm text-gray-600 mb-1">{(dict?.admin as Record<string, unknown>)?.totalRecords as string || 'Total Records'}</div>
             <div className="text-2xl font-bold text-gray-900">{attendances.length}</div>
           </div>
           <div className="bg-white border border-gray-300 p-6">
-            <div className="text-sm text-gray-600 mb-1">{dict.admin?.totalHours || 'Total Hours'}</div>
+            <div className="text-sm text-gray-600 mb-1">{(dict?.admin as Record<string, unknown>)?.totalHours as string || 'Total Hours'}</div>
             <div className="text-2xl font-bold text-gray-900">{formatHours(calculateTotalHours())}</div>
           </div>
           <div className="bg-white border border-gray-300 p-6">
-            <div className="text-sm text-gray-600 mb-1">{dict.admin?.averageHours || 'Average Hours/Record'}</div>
+            <div className="text-sm text-gray-600 mb-1">{(dict?.admin as Record<string, unknown>)?.averageHours as string || 'Average Hours/Record'}</div>
             <div className="text-2xl font-bold text-gray-900">
               {attendances.length > 0 ? formatHours(calculateTotalHours() / attendances.length) : '-'}
             </div>
@@ -385,7 +385,7 @@ export default function AttendancePage() {
         {attendances.length > 0 && (
           <div className="bg-white border border-gray-300 p-6 mb-6">
             <h2 className="text-xl font-bold text-gray-900 mb-4">
-              {dict.admin?.attendanceTrends || 'Attendance Trends'}
+              {(dict?.admin as Record<string, unknown>)?.attendanceTrends as string || 'Attendance Trends'}
             </h2>
             <AttendanceTrendsCharts attendances={attendances} dict={dict} />
           </div>
@@ -396,19 +396,19 @@ export default function AttendancePage() {
           {loading ? (
             <div className="text-center py-8">
               <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-              <p className="mt-4 text-gray-600">{dict.common?.loading || 'Loading...'}</p>
+              <p className="mt-4 text-gray-600">{(dict?.common as Record<string, unknown>)?.loading as string || 'Loading...'}</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.employee || 'Employee'}</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.clockIn || 'Clock In'}</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.clockOut || 'Clock Out'}</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.break || 'Break'}</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.totalHours || 'Total Hours'}</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.notes || 'Notes'}</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict?.admin as Record<string, unknown>)?.employee as string || 'Employee'}</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict?.admin as Record<string, unknown>)?.clockIn as string || 'Clock In'}</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict?.admin as Record<string, unknown>)?.clockOut as string || 'Clock Out'}</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict?.admin as Record<string, unknown>)?.break as string || 'Break'}</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict?.admin as Record<string, unknown>)?.totalHours as string || 'Total Hours'}</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict?.admin as Record<string, unknown>)?.notes as string || 'Notes'}</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -431,7 +431,7 @@ export default function AttendancePage() {
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
                           {clockOut ? clockOut.toLocaleString() : (
-                            <span className="text-green-600 font-semibold">{dict.admin?.active || 'Active'}</span>
+                            <span className="text-green-600 font-semibold">{(dict?.admin as Record<string, unknown>)?.active as string || 'Active'}</span>
                           )}
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -440,7 +440,7 @@ export default function AttendancePage() {
                               {breakStart.toLocaleTimeString()} - {breakEnd.toLocaleTimeString()}
                             </span>
                           ) : breakStart ? (
-                            <span className="text-yellow-600">{dict.admin?.onBreak || 'On Break'}</span>
+                            <span className="text-yellow-600">{(dict?.admin as Record<string, unknown>)?.onBreak as string || 'On Break'}</span>
                           ) : (
                             '-'
                           )}
@@ -462,7 +462,7 @@ export default function AttendancePage() {
               </table>
               {attendances.length === 0 && (
                 <div className="text-center py-8 text-gray-500">
-                  {dict.common?.noData || 'No attendance records found'}
+                  {(dict?.common as Record<string, unknown>)?.noData as string || 'No attendance records found'}
                 </div>
               )}
             </div>

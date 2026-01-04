@@ -20,7 +20,7 @@ import mongoose from 'mongoose';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 // Map collection names to their models
-const COLLECTION_MODELS: Record<string, any> = {
+const COLLECTION_MODELS: Record<string, unknown> = {
   products: Product,
   transactions: Transaction,
   categories: Category,
@@ -70,7 +70,7 @@ export async function GET(
       );
     }
 
-    const backup: Record<string, any[]> = {};
+    const backup: Record<string, unknown[]> = {};
     const counts: Record<string, number> = {};
 
     // Export data from each collection
@@ -110,7 +110,7 @@ export async function GET(
         'Content-Disposition': `attachment; filename="backup-${slug}-${new Date().toISOString().split('T')[0]}.json"`,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error.message === 'Unauthorized' || error.message.includes('Forbidden')) {
       return NextResponse.json(
         { success: false, error: error.message },
@@ -193,7 +193,7 @@ export async function POST(
         results,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error.message === 'Unauthorized' || error.message.includes('Forbidden')) {
       return NextResponse.json(
         { success: false, error: error.message },
@@ -258,7 +258,7 @@ export async function PUT(
       // Restore documents
       if (Array.isArray(documents) && documents.length > 0) {
         // Replace tenantId with current tenant's ID and convert _id strings to ObjectIds
-        const documentsToInsert = documents.map((doc: any) => {
+        const documentsToInsert = documents.map((doc: unknown) => {
           const newDoc = { ...doc };
           // Remove _id to let MongoDB create new ones (or keep if you want to preserve IDs)
           delete newDoc._id;
@@ -272,7 +272,7 @@ export async function PUT(
           });
           // Handle nested ObjectIds in arrays (like items.product in transactions)
           if (newDoc.items && Array.isArray(newDoc.items)) {
-            newDoc.items = newDoc.items.map((item: any) => {
+            newDoc.items = newDoc.items.map((item: unknown) => {
               if (item.product && typeof item.product === 'string' && mongoose.Types.ObjectId.isValid(item.product)) {
                 item.product = new mongoose.Types.ObjectId(item.product);
               }
@@ -309,7 +309,7 @@ export async function PUT(
         results,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error.message === 'Unauthorized' || error.message.includes('Forbidden')) {
       return NextResponse.json(
         { success: false, error: error.message },

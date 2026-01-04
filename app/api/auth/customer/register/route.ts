@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
     // Check if customer with email already exists
     // If tenantId is null, check if email exists with null tenantId
     // If tenantId is provided, check in that specific tenant
-    const existingCustomerQuery: any = {
+    const existingCustomerQuery: { email: string; tenantId?: unknown } = {
       email: email.toLowerCase(),
     };
     
@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
     });
 
     return response;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Customer registration error:', error);
     
     // Get translator if not already available (in case error occurred before assignment)

@@ -30,7 +30,7 @@ export async function GET(
       success: true,
       data: tenant.settings.taxRules || [],
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching tax rules:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -93,7 +93,7 @@ export async function POST(
       success: true,
       data: newRule,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error creating tax rule:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -133,7 +133,7 @@ export async function PUT(
     }
 
     const taxRules = tenant.settings.taxRules || [];
-    const ruleIndex = taxRules.findIndex((r: any) => r.id === id);
+    const ruleIndex = taxRules.findIndex((r: unknown) => r.id === id);
 
     if (ruleIndex === -1) {
       return NextResponse.json({ success: false, error: 'Tax rule not found' }, { status: 404 });
@@ -149,7 +149,7 @@ export async function PUT(
       success: true,
       data: taxRules[ruleIndex],
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error updating tax rule:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -185,7 +185,7 @@ export async function DELETE(
     }
 
     const taxRules = tenant.settings.taxRules || [];
-    const filtered = taxRules.filter((r: any) => r.id !== id);
+    const filtered = taxRules.filter((r: unknown) => r.id !== id);
 
     if (filtered.length === taxRules.length) {
       return NextResponse.json({ success: false, error: 'Tax rule not found' }, { status: 404 });
@@ -196,7 +196,7 @@ export async function DELETE(
     await tenant.save();
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error deleting tax rule:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

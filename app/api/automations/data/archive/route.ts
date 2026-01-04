@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
 
     const result = await archiveOldData({ tenantId, archiveYears, collections });
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Data archiving error:', error);
     return NextResponse.json({
       success: false,
@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
 
     const result = await archiveOldData({ tenantId, archiveYears, collections });
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Data archiving error:', error);
     return NextResponse.json({
       success: false,

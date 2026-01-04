@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
 import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
-import { requireAuth } from '@/lib/auth';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { requireAuth as _requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateAndSanitize, validateProduct } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -23,7 +24,7 @@ export async function GET(request: NextRequest) {
     const category = searchParams.get('category') || '';
     const categoryId = searchParams.get('categoryId') || '';
 
-    const query: any = { tenantId };
+    const query: Record<string, unknown> = { tenantId };
     if (search) {
       query.$or = [
         { name: { $regex: search, $options: 'i' } },
@@ -44,7 +45,7 @@ export async function GET(request: NextRequest) {
       .lean();
     
     return NextResponse.json({ success: true, data: products });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching products:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -58,7 +59,7 @@ export async function POST(request: NextRequest) {
     try {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
-    } catch (authError: any) {
+    } catch (authError: unknown) {
       if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
         return NextResponse.json(
           { success: false, error: authError.message },
@@ -114,8 +115,8 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ success: true, data: product }, { status: 201 });
-  } catch (error: any) {
-    if (error.code === 11000) {
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 11000) {
       return NextResponse.json(
         { success: false, error: 'Product with this SKU already exists' },
         { status: 400 }

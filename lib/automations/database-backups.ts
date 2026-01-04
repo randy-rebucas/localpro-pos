@@ -43,7 +43,7 @@ export async function createDatabaseBackup(
     // Ensure backup directory exists
     try {
       await fs.mkdir(backupDir, { recursive: true });
-    } catch (error) {
+    } catch {
       // Directory might already exist
     }
 
@@ -55,7 +55,7 @@ export async function createDatabaseBackup(
 
     // Get all collections
     const collections = await db.listCollections().toArray();
-    const backupData: Record<string, any[]> = {};
+    const backupData: Record<string, unknown[]> = {};
 
     // Export each collection
     for (const collectionInfo of collections) {
@@ -101,7 +101,7 @@ export async function createDatabaseBackup(
           });
         }
       }
-    } catch (error) {
+    } catch {
       // Ignore rotation errors
     }
 
@@ -112,10 +112,11 @@ export async function createDatabaseBackup(
     // This would require AWS S3, Azure Blob, or similar integration
 
     return results;
-  } catch (error: any) {
+  } catch (error: unknown) {
     results.success = false;
-    results.message = `Error creating backup: ${error.message}`;
-    results.errors?.push(error.message);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    results.message = `Error creating backup: ${errorMessage}`;
+    results.errors?.push(errorMessage);
     results.failed = 1;
     return results;
   }

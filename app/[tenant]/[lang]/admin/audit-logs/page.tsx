@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Navbar from '@/components/Navbar';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 
@@ -17,10 +17,10 @@ interface AuditLog {
   action: string;
   entityType: string;
   entityId?: string;
-  changes?: Record<string, any>;
+  changes?: Record<string, unknown>;
   ipAddress?: string;
   userAgent?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   createdAt: string;
 }
 
@@ -31,10 +31,9 @@ interface User {
 
 export default function AuditLogsPage() {
   const params = useParams();
-  const router = useRouter();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,18 +53,7 @@ export default function AuditLogsPage() {
     pages: 0,
   });
 
-  useEffect(() => {
-    getDictionaryClient(lang).then(setDict);
-    fetchUsers();
-    fetchAuditLogs();
-  }, [lang, tenant]);
-
-  useEffect(() => {
-    fetchAuditLogs();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auditFilters.action, auditFilters.entityType, auditFilters.userId, auditFilters.startDate, auditFilters.endDate, auditPagination.page]);
-
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       const res = await fetch('/api/users', { credentials: 'include' });
       const data = await res.json();
@@ -77,9 +65,9 @@ export default function AuditLogsPage() {
       console.error('Error fetching users:', error);
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchAuditLogs = async () => {
+  const fetchAuditLogs = useCallback(async () => {
     setAuditLoading(true);
     try {
       const params = new URLSearchParams({
@@ -99,15 +87,25 @@ export default function AuditLogsPage() {
         setAuditLogs(data.data);
         setAuditPagination(data.pagination);
       } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchAuditLogs || 'Failed to fetch audit logs' });
+        setMessage({ type: 'error', text: data.error || (dict?.common as Record<string, unknown>)?.failedToFetchAuditLogs as string || 'Failed to fetch audit logs' });
       }
     } catch (error) {
       console.error('Error fetching audit logs:', error);
-      setMessage({ type: 'error', text: dict?.common?.failedToFetchAuditLogs || 'Failed to fetch audit logs' });
+      setMessage({ type: 'error', text: (dict?.common as Record<string, unknown>)?.failedToFetchAuditLogs as string || 'Failed to fetch audit logs' });
     } finally {
       setAuditLoading(false);
     }
-  };
+  }, [auditFilters, auditPagination.page, auditPagination.limit, dict]);
+
+  useEffect(() => {
+    getDictionaryClient(lang).then(setDict);
+    fetchUsers();
+    fetchAuditLogs();
+  }, [lang, tenant, fetchUsers, fetchAuditLogs]);
+
+  useEffect(() => {
+    fetchAuditLogs();
+  }, [auditFilters.action, auditFilters.entityType, auditFilters.userId, auditFilters.startDate, auditFilters.endDate, auditPagination.page, fetchAuditLogs]);
 
   const handleAuditFilterChange = (key: string, value: string) => {
     setAuditFilters({ ...auditFilters, [key]: value });
@@ -123,7 +121,7 @@ export default function AuditLogsPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+          <p className="mt-4 text-gray-600">{(dict?.common as Record<string, unknown>)?.loading as string || 'Loading...'}</p>
         </div>
       </div>
     );
@@ -141,14 +139,14 @@ export default function AuditLogsPage() {
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
-            {dict?.admin?.backToAdmin || 'Back to Admin'}
+            {(dict?.admin as Record<string, unknown>)?.backToAdmin as string || 'Back to Admin'}
           </Link>
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
-                {dict.admin?.auditLogs || 'Audit Logs'}
+                {(dict?.admin as Record<string, unknown>)?.auditLogs as string || 'Audit Logs'}
               </h1>
-              <p className="text-gray-600">{dict.admin?.auditLogsSubtitle || 'View system activity and changes'}</p>
+              <p className="text-gray-600">{(dict?.admin as Record<string, unknown>)?.auditLogsSubtitle as string || 'View system activity and changes'}</p>
             </div>
           </div>
         </div>
@@ -161,13 +159,13 @@ export default function AuditLogsPage() {
 
         <div className="bg-white border border-gray-300 p-6">
           <div className="mb-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">{dict.admin?.auditLogs || 'Audit Logs'}</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">{(dict?.admin as Record<string, unknown>)?.auditLogs as string || 'Audit Logs'}</h2>
             
             {/* Filters */}
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-4 p-4 bg-gray-50 border border-gray-300">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.action || 'Action'}
+                  {(dict?.admin as Record<string, unknown>)?.action as string || 'Action'}
                 </label>
                 <select
                   value={auditFilters.action}
@@ -185,7 +183,7 @@ export default function AuditLogsPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.entityType || 'Entity Type'}
+                  {(dict?.admin as Record<string, unknown>)?.entityType as string || 'Entity Type'}
                 </label>
                 <input
                   type="text"
@@ -197,7 +195,7 @@ export default function AuditLogsPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.user || 'User'}
+                  {(dict?.admin as Record<string, unknown>)?.user as string || 'User'}
                 </label>
                 <select
                   value={auditFilters.userId}
@@ -214,7 +212,7 @@ export default function AuditLogsPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.startDate || 'Start Date'}
+                  {(dict?.admin as Record<string, unknown>)?.startDate as string || 'Start Date'}
                 </label>
                 <input
                   type="date"
@@ -225,7 +223,7 @@ export default function AuditLogsPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.endDate || 'End Date'}
+                  {(dict?.admin as Record<string, unknown>)?.endDate as string || 'End Date'}
                 </label>
                 <input
                   type="date"
@@ -240,7 +238,7 @@ export default function AuditLogsPage() {
             {auditLoading ? (
               <div className="text-center py-8">
                 <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-                <p className="mt-2 text-gray-600">{dict.common?.loading || 'Loading...'}</p>
+                <p className="mt-2 text-gray-600">{(dict?.common as Record<string, unknown>)?.loading as string || 'Loading...'}</p>
               </div>
             ) : (
               <>
@@ -249,19 +247,19 @@ export default function AuditLogsPage() {
                     <thead className="bg-gray-50">
                       <tr>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          {dict.admin?.timestamp || 'Timestamp'}
+                          {(dict?.admin as Record<string, unknown>)?.timestamp as string || 'Timestamp'}
                         </th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          {dict.admin?.user || 'User'}
+                          {(dict?.admin as Record<string, unknown>)?.user as string || 'User'}
                         </th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          {dict.admin?.action || 'Action'}
+                          {(dict?.admin as Record<string, unknown>)?.action as string || 'Action'}
                         </th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          {dict.admin?.entityType || 'Entity Type'}
+                          {(dict?.admin as Record<string, unknown>)?.entityType as string || 'Entity Type'}
                         </th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          {dict.admin?.entityId || 'Entity ID'}
+                          {(dict?.admin as Record<string, unknown>)?.entityId as string || 'Entity ID'}
                         </th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                           IP Address
@@ -311,7 +309,7 @@ export default function AuditLogsPage() {
                 </div>
                 {auditLogs.length === 0 && !auditLoading && (
                   <div className="text-center py-8 text-gray-500">
-                    {dict.common?.noResults || 'No audit logs found'}
+                    {(dict?.common as Record<string, unknown>)?.noResults as string || 'No audit logs found'}
                   </div>
                 )}
 
@@ -319,9 +317,9 @@ export default function AuditLogsPage() {
                 {auditPagination.pages > 1 && (
                   <div className="mt-6 flex items-center justify-between">
                     <div className="text-sm text-gray-700">
-                      {dict.admin?.showing || 'Showing'} {(auditPagination.page - 1) * auditPagination.limit + 1} {dict.admin?.to || 'to'}{' '}
-                      {Math.min(auditPagination.page * auditPagination.limit, auditPagination.total)} {dict.admin?.of || 'of'}{' '}
-                      {auditPagination.total} {dict.admin?.results || 'results'}
+                      {(dict?.admin as Record<string, unknown>)?.showing as string || 'Showing'} {(auditPagination.page - 1) * auditPagination.limit + 1} {(dict?.admin as Record<string, unknown>)?.to as string || 'to'}{' '}
+                      {Math.min(auditPagination.page * auditPagination.limit, auditPagination.total)} {(dict?.admin as Record<string, unknown>)?.of as string || 'of'}{' '}
+                      {auditPagination.total} {(dict?.admin as Record<string, unknown>)?.results as string || 'results'}
                     </div>
                     <div className="flex gap-2">
                       <button
@@ -329,14 +327,14 @@ export default function AuditLogsPage() {
                         disabled={auditPagination.page === 1}
                         className="px-4 py-2 border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed bg-white"
                       >
-                        {dict.common?.previous || 'Previous'}
+                        {(dict?.common as Record<string, unknown>)?.previous as string || 'Previous'}
                       </button>
                       <button
                         onClick={() => handleAuditPageChange(auditPagination.page + 1)}
                         disabled={auditPagination.page >= auditPagination.pages}
                         className="px-4 py-2 border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed bg-white"
                       >
-                        {dict.common?.next || 'Next'}
+                        {(dict?.common as Record<string, unknown>)?.next as string || 'Next'}
                       </button>
                     </div>
                   </div>

@@ -43,7 +43,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     });
 
     return NextResponse.json({ success: true, data: updatedProduct });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error toggling product pin:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

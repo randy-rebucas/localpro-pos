@@ -52,8 +52,9 @@ async function applyDefaultsToTenant(tenantSlug: string, businessType?: string) 
     });
     
     return true;
-  } catch (error: any) {
-    console.error(`Error applying defaults to "${tenantSlug}":`, error.message);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error(`Error applying defaults to "${tenantSlug}":`, errorMessage);
     return false;
   }
 }
@@ -82,8 +83,9 @@ async function applyDefaultsToAllTenants() {
     }
     
     console.log(`\n✅ Completed: ${successCount} tenants updated, ${skipCount} skipped`);
-  } catch (error: any) {
-    console.error('Error applying defaults:', error.message);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Error applying defaults:', errorMessage);
     process.exit(1);
   }
 }

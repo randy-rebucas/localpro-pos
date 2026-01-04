@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Navbar from '@/components/Navbar';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 import Currency from '@/components/Currency';
@@ -25,23 +25,18 @@ interface CashDrawerSession {
 
 export default function CashDrawerPage() {
   const params = useParams();
-  const router = useRouter();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
   const [sessions, setSessions] = useState<CashDrawerSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedSession, setSelectedSession] = useState<CashDrawerSession | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const { settings } = useTenantSettings();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { settings: _settings } = useTenantSettings();
 
-  useEffect(() => {
-    getDictionaryClient(lang).then(setDict);
-    fetchSessions();
-  }, [lang, tenant, statusFilter]);
-
-  const fetchSessions = async () => {
+  const fetchSessions = useCallback(async () => {
     try {
       let url = '/api/cash-drawer/sessions';
       if (statusFilter) url += `?status=${statusFilter}`;
@@ -60,7 +55,12 @@ export default function CashDrawerPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [statusFilter, dict]);
+
+  useEffect(() => {
+    getDictionaryClient(lang).then(setDict);
+    fetchSessions();
+  }, [lang, tenant, statusFilter, fetchSessions]);
 
   if (!dict || loading) {
     return (
@@ -209,7 +209,7 @@ function CashDrawerDetailModal({
 }: {
   session: CashDrawerSession;
   onClose: () => void;
-  dict: any;
+  dict: Record<string, unknown>;
 }) {
   const userName = typeof session.userId === 'object' ? session.userId.name : 'Unknown';
   const userEmail = typeof session.userId === 'object' ? session.userId.email : '';

@@ -25,10 +25,12 @@ export async function GET(request: NextRequest) {
     if (!mongoose.models.Product) {
       // Force model registration by accessing the model's modelName property
       // This ensures the Product module's registration code has run
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const _productName = Product.modelName;
     }
     if (!mongoose.models.Transaction) {
       // Force model registration by accessing the model's modelName property
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const _transactionName = Transaction.modelName;
     }
 
@@ -44,7 +46,7 @@ export async function GET(request: NextRequest) {
     const performance = await getProductPerformance(tenantId, startDate, endDate, limit);
 
     return NextResponse.json({ success: true, data: performance });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching product performance:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

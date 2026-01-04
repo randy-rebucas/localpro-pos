@@ -3,7 +3,6 @@ import connectDB from '@/lib/mongodb';
 import CustomerOTP from '@/models/CustomerOTP';
 import Customer from '@/models/Customer';
 import { sendSMS } from '@/lib/notifications';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 /**
@@ -144,10 +143,10 @@ export async function POST(request: NextRequest) {
       message: t('validation.otpSent', 'OTP sent successfully'),
       // Don't send OTP in response for security
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Send OTP error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to send OTP' },
+      { success: false, error: error instanceof Error ? error.message : 'Failed to send OTP' },
       { status: 500 }
     );
   }

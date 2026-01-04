@@ -22,7 +22,7 @@ interface SecurityViolation {
 }
 
 export default function ForbiddenPage() {
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
   const [userInfo, setUserInfo] = useState<UserInfo>({
     userId: null,
     tenantSlug: null,

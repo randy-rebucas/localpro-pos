@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
       success: true,
       data: businessTypes,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
       { success: false, error: error.message },
       { status: 500 }

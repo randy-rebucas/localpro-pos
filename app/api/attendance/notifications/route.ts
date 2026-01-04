@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Attendance from '@/models/Attendance';
-import User from '@/models/User';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
-import { sendEmail } from '@/lib/notifications';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 /**
@@ -40,10 +38,10 @@ export async function GET(request: NextRequest) {
       .lean();
 
     const now = new Date();
-    const notifications: any[] = [];
+    const notifications: unknown[] = [];
 
     // Check for missing clock-outs (sessions that are too long)
-    activeSessions.forEach((session: any) => {
+    activeSessions.forEach((session: { _id: string; userId: { _id: string; name: string; email: string }; clockIn: Date }) => {
       const clockInTime = new Date(session.clockIn);
       const hoursSinceClockIn = (now.getTime() - clockInTime.getTime()) / (1000 * 60 * 60);
 
@@ -77,7 +75,7 @@ export async function GET(request: NextRequest) {
     // Parse expected start time (HH:MM format)
     const [expectedHour, expectedMinute] = expectedStartTime.split(':').map(Number);
 
-    todayAttendances.forEach((attendance: any) => {
+    todayAttendances.forEach((attendance: { clockIn: Date; userId: { _id: string; name: string; email: string } }) => {
       const clockInTime = new Date(attendance.clockIn);
       const expectedClockIn = new Date(clockInTime);
       expectedClockIn.setHours(expectedHour, expectedMinute, 0, 0);
@@ -119,7 +117,7 @@ export async function GET(request: NextRequest) {
         },
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching attendance notifications:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -149,8 +147,10 @@ export async function POST(request: NextRequest) {
     }
     
     const searchParams = request.nextUrl.searchParams;
-    const expectedStartTime = searchParams.get('expectedStartTime') || '09:00';
-    const maxHoursWithoutClockOut = parseFloat(searchParams.get('maxHoursWithoutClockOut') || '12');
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const _expectedStartTime = searchParams.get('expectedStartTime') || '09:00';
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const _maxHoursWithoutClockOut = parseFloat(searchParams.get('maxHoursWithoutClockOut') || '12');
     
     // Import the sendAttendanceNotification function
     const { sendAttendanceNotification } = await import('@/lib/notifications');
@@ -182,9 +182,9 @@ export async function POST(request: NextRequest) {
             results.failed++;
             results.errors.push(`Failed to send email to ${notification.userEmail}`);
           }
-        } catch (error: any) {
+        } catch (error: unknown) {
           results.failed++;
-          results.errors.push(`Error sending to ${notification.userEmail}: ${error.message}`);
+          results.errors.push(`Error sending to ${notification.userEmail}: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       } else {
         results.failed++;
@@ -202,7 +202,7 @@ export async function POST(request: NextRequest) {
         errors: results.errors.length > 0 ? results.errors : undefined,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error sending attendance notifications:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

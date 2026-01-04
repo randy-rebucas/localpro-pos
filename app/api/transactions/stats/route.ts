@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
         startDate = new Date(0);
     }
 
-    const matchQuery: any = {
+    const matchQuery: Record<string, unknown> = {
       tenantId: tenantObjectId,
       status: 'completed',
       createdAt: { $gte: startDate, $lte: endDate },
@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
     ]);
 
     // Time-series data for chart
-    let timeSeriesGroup: any;
+    let timeSeriesGroup: Record<string, unknown>;
     let dateFormat: string;
     
     if (period === 'today') {
@@ -129,7 +129,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Get expense statistics for the same period
-    const expenseQuery: any = {
+    const expenseQuery: Record<string, unknown> = {
       tenantId: tenantObjectId,
       date: { $gte: startDate, $lte: endDate },
     };
@@ -156,12 +156,12 @@ export async function GET(request: NextRequest) {
     };
 
     return NextResponse.json({ success: true, data: result });
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Handle tenant access violations with redirect
     if (error instanceof TenantAccessViolationError) {
       return handleTenantAccessViolation(error, request);
     }
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Failed to get stats' }, { status: 500 });
   }
 }
 

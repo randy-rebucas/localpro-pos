@@ -22,7 +22,7 @@ export interface BusinessTypeConfig {
   productTypes: ('regular' | 'bundle' | 'service')[];
   requiredFields: string[];
   optionalFields: string[];
-  defaultSettings: Record<string, any>;
+  defaultSettings: Record<string, unknown>;
 }
 
 export const BUSINESS_TYPE_CONFIGS: Record<BusinessType, BusinessTypeConfig> = {
@@ -177,7 +177,7 @@ export function getAllowedProductTypes(businessType?: string): ('regular' | 'bun
  * Validate product against business type requirements
  */
 export function validateProductForBusinessType(
-  product: any,
+  product: Record<string, unknown>,
   businessType?: string
 ): { valid: boolean; errors: string[] } {
   const config = getBusinessTypeConfig(businessType);
@@ -204,7 +204,7 @@ export function validateProductForBusinessType(
 /**
  * Apply business type defaults to tenant settings
  */
-export function applyBusinessTypeDefaults(settings: any, businessType?: string): any {
+export function applyBusinessTypeDefaults(settings: Record<string, unknown>, businessType?: string): Record<string, unknown> {
   const config = getBusinessTypeConfig(businessType);
   const defaults = config.defaultSettings;
   

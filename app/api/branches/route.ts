@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const isActive = searchParams.get('isActive');
 
-    const query: any = { tenantId };
+    const query: Record<string, unknown> = { tenantId };
     if (isActive !== null) {
       query.isActive = isActive === 'true';
     }
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
       .lean();
 
     return NextResponse.json({ success: true, data: branches });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching branches:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -74,9 +74,9 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ success: true, data: branch }, { status: 201 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     const t = await getValidationTranslatorFromRequest(request);
-    if (error.code === 11000) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 11000) {
       return NextResponse.json(
         { success: false, error: t('validation.branchCodeExists', 'Branch with this code already exists') },
         { status: 400 }

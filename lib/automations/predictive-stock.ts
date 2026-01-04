@@ -67,7 +67,7 @@ export async function predictStockNeeds(
           trackInventory: true,
         }).lean();
 
-        const predictions: any[] = [];
+        const predictions: Array<{ productId: string; productName: string; currentStock: number; predictedDemand: number; suggestedReorderQuantity: number; sku?: string; avgDailySales?: number; predictedNeeds?: number; daysUntilThreshold?: number }> = [];
 
         for (const product of products) {
           try {
@@ -137,7 +137,7 @@ export async function predictStockNeeds(
                 suggestedReorderQuantity,
               });
             }
-          } catch (error: any) {
+          } catch {
             // Skip product on error
           }
         }
@@ -148,9 +148,9 @@ export async function predictStockNeeds(
           const predictionsList = predictions.slice(0, 20).map(p => 
             `- ${p.productName}${p.sku ? ` (SKU: ${p.sku})` : ''}
   Current Stock: ${p.currentStock}
-  Avg Daily Sales: ${p.avgDailySales}
-  Predicted Needs (${predictionDays} days): ${p.predictedNeeds}
-  Days Until Threshold: ${p.daysUntilThreshold}
+  Avg Daily Sales: ${p.avgDailySales || 0}
+  Predicted Needs (${predictionDays} days): ${p.predictedNeeds || 0}
+  Days Until Threshold: ${p.daysUntilThreshold || 0}
   Suggested Reorder: ${p.suggestedReorderQuantity} units`
           ).join('\n\n');
 
@@ -177,9 +177,10 @@ This is an automated predictive analysis from your POS system.`;
 
           totalPredictions += predictions.length;
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         totalFailed++;
-        results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        results.errors?.push(`Tenant ${tenant.name}: ${errorMessage}`);
       }
     }
 
@@ -188,10 +189,11 @@ This is an automated predictive analysis from your POS system.`;
     results.message = `Generated ${totalPredictions} stock predictions${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: unknown) {
     results.success = false;
-    results.message = `Error predicting stock needs: ${error.message}`;
-    results.errors?.push(error.message);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    results.message = `Error predicting stock needs: ${errorMessage}`;
+    results.errors?.push(errorMessage);
     return results;
   }
 }

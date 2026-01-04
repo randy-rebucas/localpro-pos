@@ -1,11 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Navbar from '@/components/Navbar';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
-import { useAuth } from '@/contexts/AuthContext';
 
 interface Branch {
   _id: string;
@@ -37,10 +36,9 @@ interface User {
 
 export default function BranchesPage() {
   const params = useParams();
-  const router = useRouter();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,13 +46,7 @@ export default function BranchesPage() {
   const [showBranchModal, setShowBranchModal] = useState(false);
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
 
-  useEffect(() => {
-    getDictionaryClient(lang).then(setDict);
-    fetchBranches();
-    fetchUsers();
-  }, [lang, tenant]);
-
-  const fetchBranches = async () => {
+  const fetchBranches = useCallback(async () => {
     try {
       const res = await fetch('/api/branches', { credentials: 'include' });
       const data = await res.json();
@@ -62,17 +54,17 @@ export default function BranchesPage() {
         setBranches(data.data);
         setMessage(null);
       } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchBranches || 'Failed to fetch branches' });
+        setMessage({ type: 'error', text: data.error || (dict?.common as Record<string, unknown>)?.failedToFetchBranches as string || 'Failed to fetch branches' });
       }
     } catch (error) {
       console.error('Error fetching branches:', error);
-      setMessage({ type: 'error', text: dict?.common?.failedToFetchBranches || 'Failed to fetch branches' });
+      setMessage({ type: 'error', text: (dict?.common as Record<string, unknown>)?.failedToFetchBranches as string || 'Failed to fetch branches' });
     } finally {
       setLoading(false);
     }
-  };
+  }, [dict]);
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       const res = await fetch('/api/users', { credentials: 'include' });
       const data = await res.json();
@@ -84,22 +76,28 @@ export default function BranchesPage() {
     } catch (error) {
       console.error('Error fetching users:', error);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    getDictionaryClient(lang).then(setDict);
+    fetchBranches();
+    fetchUsers();
+  }, [lang, tenant, fetchBranches, fetchUsers]);
 
   const handleDeleteBranch = async (branchId: string) => {
     if (!dict) return;
-    if (!confirm(dict.common?.deactivateBranchConfirm || dict.admin?.deactivateBranchConfirm || 'Are you sure you want to deactivate this branch?')) return;
+    if (!confirm((dict.common as Record<string, unknown>)?.deactivateBranchConfirm as string || (dict.admin as Record<string, unknown>)?.deactivateBranchConfirm as string || 'Are you sure you want to deactivate this branch?')) return;
     try {
       const res = await fetch(`/api/branches/${branchId}`, { method: 'DELETE', credentials: 'include' });
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: dict?.common?.branchDeactivatedSuccess || 'Branch deactivated successfully' });
+        setMessage({ type: 'success', text: (dict?.common as Record<string, unknown>)?.branchDeactivatedSuccess as string || 'Branch deactivated successfully' });
         fetchBranches();
       } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToDeactivateBranch || 'Failed to deactivate branch' });
+        setMessage({ type: 'error', text: data.error || (dict?.common as Record<string, unknown>)?.failedToDeactivateBranch as string || 'Failed to deactivate branch' });
       }
-    } catch (error) {
-      setMessage({ type: 'error', text: dict?.common?.failedToDeactivateBranch || 'Failed to deactivate branch' });
+    } catch {
+      setMessage({ type: 'error', text: (dict?.common as Record<string, unknown>)?.failedToDeactivateBranch as string || 'Failed to deactivate branch' });
     }
   };
 
@@ -113,13 +111,13 @@ export default function BranchesPage() {
       });
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: `Branch ${!branch.isActive ? (dict?.admin?.activated || 'activated') : (dict?.admin?.deactivated || 'deactivated')} ${dict?.admin?.successfully || 'successfully'}` });
+        setMessage({ type: 'success', text: `Branch ${!branch.isActive ? ((dict?.admin as Record<string, unknown>)?.activated as string || 'activated') : ((dict?.admin as Record<string, unknown>)?.deactivated as string || 'deactivated')} ${(dict?.admin as Record<string, unknown>)?.successfully as string || 'successfully'}` });
         fetchBranches();
       } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToUpdateBranch || 'Failed to update branch' });
+        setMessage({ type: 'error', text: data.error || (dict?.common as Record<string, unknown>)?.failedToUpdateBranch as string || 'Failed to update branch' });
       }
-    } catch (error) {
-      setMessage({ type: 'error', text: dict?.common?.failedToUpdateBranch || 'Failed to update branch' });
+    } catch {
+      setMessage({ type: 'error', text: (dict?.common as Record<string, unknown>)?.failedToUpdateBranch as string || 'Failed to update branch' });
     }
   };
 
@@ -128,7 +126,7 @@ export default function BranchesPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+          <p className="mt-4 text-gray-600">{(dict?.common as Record<string, unknown>)?.loading as string || 'Loading...'}</p>
         </div>
       </div>
     );
@@ -146,14 +144,14 @@ export default function BranchesPage() {
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
-            {dict?.admin?.backToAdmin || 'Back to Admin'}
+            {(dict?.admin as Record<string, unknown>)?.backToAdmin as string || 'Back to Admin'}
           </Link>
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
-                {dict.admin?.branches || 'Branches'}
+                {(dict.admin as Record<string, unknown>)?.branches as string || 'Branches'}
               </h1>
-              <p className="text-gray-600">{dict.admin?.branchesSubtitle || 'Manage store branches and locations'}</p>
+              <p className="text-gray-600">{(dict.admin as Record<string, unknown>)?.branchesSubtitle as string || 'Manage store branches and locations'}</p>
             </div>
           </div>
         </div>
@@ -166,7 +164,7 @@ export default function BranchesPage() {
 
         <div className="bg-white border border-gray-300 p-6">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold text-gray-900">{dict.admin?.branches || 'Branches'}</h2>
+            <h2 className="text-xl font-bold text-gray-900">{(dict.admin as Record<string, unknown>)?.branches as string || 'Branches'}</h2>
             <button
               onClick={() => {
                 setEditingBranch(null);
@@ -174,19 +172,19 @@ export default function BranchesPage() {
               }}
               className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
             >
-              {dict.common?.add || 'Add'} {dict.admin?.branch || 'Branch'}
+              {(dict.common as Record<string, unknown>)?.add as string || 'Add'} {(dict.admin as Record<string, unknown>)?.branch as string || 'Branch'}
             </button>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.name || 'Name'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.code || 'Code'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.address || 'Address'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.manager || 'Manager'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.status || 'Status'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.actions || 'Actions'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict.admin as Record<string, unknown>)?.name as string || 'Name'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict.admin as Record<string, unknown>)?.code as string || 'Code'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict.admin as Record<string, unknown>)?.address as string || 'Address'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict.admin as Record<string, unknown>)?.manager as string || 'Manager'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict.admin as Record<string, unknown>)?.status as string || 'Status'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict.common as Record<string, unknown>)?.actions as string || 'Actions'}</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -205,7 +203,7 @@ export default function BranchesPage() {
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{managerName}</td>
                       <td className="px-4 py-4 whitespace-nowrap">
                         <span className={`px-2 py-1 text-xs font-semibold border ${branch.isActive ? 'bg-green-100 text-green-800 border-green-300' : 'bg-red-100 text-red-800 border-red-300'}`}>
-                          {branch.isActive ? (dict.admin?.active || 'Active') : (dict.admin?.inactive || 'Inactive')}
+                          {branch.isActive ? ((dict.admin as Record<string, unknown>)?.active as string || 'Active') : ((dict.admin as Record<string, unknown>)?.inactive as string || 'Inactive')}
                         </span>
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
@@ -217,19 +215,19 @@ export default function BranchesPage() {
                             }}
                             className="text-blue-600 hover:text-blue-900"
                           >
-                            {dict.common?.edit || 'Edit'}
+                            {(dict.common as Record<string, unknown>)?.edit as string || 'Edit'}
                           </button>
                           <button
                             onClick={() => handleToggleBranchStatus(branch)}
                             className={branch.isActive ? 'text-orange-600 hover:text-orange-900' : 'text-green-600 hover:text-green-900'}
                           >
-                            {branch.isActive ? (dict.admin?.deactivate || 'Deactivate') : (dict.admin?.activate || 'Activate')}
+                            {branch.isActive ? ((dict.admin as Record<string, unknown>)?.deactivate as string || 'Deactivate') : ((dict.admin as Record<string, unknown>)?.activate as string || 'Activate')}
                           </button>
                           <button
                             onClick={() => handleDeleteBranch(branch._id)}
                             className="text-red-600 hover:text-red-900"
                           >
-                            {dict.common?.delete || 'Delete'}
+                            {(dict.common as Record<string, unknown>)?.delete as string || 'Delete'}
                           </button>
                         </div>
                       </td>
@@ -239,7 +237,7 @@ export default function BranchesPage() {
               </tbody>
             </table>
             {branches.length === 0 && (
-              <div className="text-center py-8 text-gray-500">{dict.common?.noResults || 'No branches found'}</div>
+              <div className="text-center py-8 text-gray-500">{(dict.common as Record<string, unknown>)?.noResults as string || 'No branches found'}</div>
             )}
           </div>
         </div>
@@ -276,7 +274,7 @@ function BranchModal({
   users: User[];
   onClose: () => void;
   onSave: () => void;
-  dict: any;
+  dict: Record<string, unknown>;
 }) {
   const [formData, setFormData] = useState({
     name: branch?.name || '',
@@ -304,7 +302,7 @@ function BranchModal({
     try {
       const url = branch ? `/api/branches/${branch._id}` : '/api/branches';
       const method = branch ? 'PUT' : 'POST';
-      const body: any = {
+      const body: Record<string, unknown> = {
         name: formData.name,
         code: formData.code || undefined,
         address: formData.address.street || formData.address.city ? formData.address : undefined,
@@ -326,7 +324,7 @@ function BranchModal({
       } else {
         setError(data.error || 'Failed to save branch');
       }
-    } catch (error) {
+    } catch {
       setError('Failed to save branch');
     } finally {
       setSaving(false);
@@ -338,13 +336,13 @@ function BranchModal({
       <div className="bg-white border border-gray-300 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
-            {branch ? (dict.admin?.editBranch || 'Edit Branch') : (dict.admin?.addBranch || 'Add Branch')}
+            {branch ? ((dict.admin as Record<string, unknown>)?.editBranch as string || 'Edit Branch') : ((dict.admin as Record<string, unknown>)?.addBranch as string || 'Add Branch')}
           </h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.name || 'Name'} *
+                  {(dict.admin as Record<string, unknown>)?.name as string || 'Name'} *
                 </label>
                 <input
                   type="text"
@@ -356,20 +354,20 @@ function BranchModal({
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.code || 'Code'} (optional)
+                  {(dict.admin as Record<string, unknown>)?.code as string || 'Code'} (optional)
                 </label>
                 <input
                   type="text"
                   value={formData.code}
                   onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
-                  placeholder={dict?.admin?.branchCodePlaceholder || 'BR001'}
+                  placeholder={(dict?.admin as Record<string, unknown>)?.branchCodePlaceholder as string || 'BR001'}
                 />
               </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.address || 'Address'}
+                {(dict.admin as Record<string, unknown>)?.address as string || 'Address'}
               </label>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <input
@@ -377,42 +375,42 @@ function BranchModal({
                   value={formData.address.street}
                   onChange={(e) => setFormData({ ...formData, address: { ...formData.address, street: e.target.value } })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
-                  placeholder={dict?.admin?.streetPlaceholder || 'Street'}
+                  placeholder={(dict?.admin as Record<string, unknown>)?.streetPlaceholder as string || 'Street'}
                 />
                 <input
                   type="text"
                   value={formData.address.city}
                   onChange={(e) => setFormData({ ...formData, address: { ...formData.address, city: e.target.value } })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
-                  placeholder={dict?.admin?.cityPlaceholder || 'City'}
+                  placeholder={(dict?.admin as Record<string, unknown>)?.cityPlaceholder as string || 'City'}
                 />
                 <input
                   type="text"
                   value={formData.address.state}
                   onChange={(e) => setFormData({ ...formData, address: { ...formData.address, state: e.target.value } })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
-                  placeholder={dict?.admin?.statePlaceholder || 'State'}
+                  placeholder={(dict?.admin as Record<string, unknown>)?.statePlaceholder as string || 'State'}
                 />
                 <input
                   type="text"
                   value={formData.address.zipCode}
                   onChange={(e) => setFormData({ ...formData, address: { ...formData.address, zipCode: e.target.value } })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
-                  placeholder={dict?.admin?.zipPlaceholder || 'ZIP Code'}
+                  placeholder={(dict?.admin as Record<string, unknown>)?.zipPlaceholder as string || 'ZIP Code'}
                 />
                 <input
                   type="text"
                   value={formData.address.country}
                   onChange={(e) => setFormData({ ...formData, address: { ...formData.address, country: e.target.value } })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
-                  placeholder={dict?.admin?.countryPlaceholder || 'Country'}
+                  placeholder={(dict?.admin as Record<string, unknown>)?.countryPlaceholder as string || 'Country'}
                 />
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.phone || 'Phone'}
+                  {(dict.admin as Record<string, unknown>)?.phone as string || 'Phone'}
                 </label>
                 <input
                   type="tel"
@@ -423,7 +421,7 @@ function BranchModal({
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.email || 'Email'}
+                  {(dict.admin as Record<string, unknown>)?.email as string || 'Email'}
                 </label>
                 <input
                   type="email"
@@ -435,14 +433,14 @@ function BranchModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.manager || 'Manager'} (optional)
+                {(dict.admin as Record<string, unknown>)?.manager as string || 'Manager'} (optional)
               </label>
               <select
                 value={formData.managerId}
                 onChange={(e) => setFormData({ ...formData, managerId: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               >
-                <option value="">{dict.common?.select || 'Select Manager'}</option>
+                <option value="">{(dict.common as Record<string, unknown>)?.select as string || 'Select Manager'}</option>
                 {users.map((u) => (
                   <option key={u._id} value={u._id}>
                     {u.name} ({u.email})
@@ -461,14 +459,14 @@ function BranchModal({
                 onClick={onClose}
                 className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
               >
-                {dict.common?.cancel || 'Cancel'}
+                {(dict.common as Record<string, unknown>)?.cancel as string || 'Cancel'}
               </button>
               <button
                 type="submit"
                 disabled={saving}
                 className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
               >
-                {saving ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
+                {saving ? ((dict.common as Record<string, unknown>)?.loading as string || 'Saving...') : ((dict.common as Record<string, unknown>)?.save as string || 'Save')}
               </button>
             </div>
           </form>

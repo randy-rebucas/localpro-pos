@@ -30,7 +30,7 @@ export async function GET(
       success: true,
       data: tenant.settings.businessHours || {},
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching business hours:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -75,7 +75,7 @@ export async function PUT(
       success: true,
       data: tenant.settings.businessHours,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error updating business hours:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

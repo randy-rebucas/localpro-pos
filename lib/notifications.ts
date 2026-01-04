@@ -128,7 +128,7 @@ export async function sendEmail(options: NotificationOptions): Promise<boolean> 
       message: options.message.substring(0, 200) + (options.message.length > 200 ? '...' : ''),
     });
     return true;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Failed to send email:', error);
     return false;
   }
@@ -211,7 +211,7 @@ export async function sendSMS(options: NotificationOptions): Promise<boolean> {
       message: options.message.substring(0, 160) + (options.message.length > 160 ? '...' : ''),
     });
     return true;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Failed to send SMS:', error);
     return false;
   }
@@ -301,8 +301,6 @@ export async function sendBookingConfirmation(
       smsMessage = `Hi ${data.customerName}, your booking for ${data.serviceName} is confirmed for ${formattedDate} at ${formattedTime}. See you soon!`;
     }
   }
-
-  const message = emailMessage || smsMessage;
 
   // Send email if email is provided and email notifications are enabled
   if (data.customerEmail && tenantSettings.emailNotifications) {
@@ -412,8 +410,6 @@ export async function sendBookingReminder(
       smsMessage = `Reminder: You have a booking for ${data.serviceName} on ${formattedDate} at ${formattedTime}. See you soon!`;
     }
   }
-
-  const message = emailMessage || smsMessage;
 
   // Send email if email is provided and email notifications are enabled
   if (data.customerEmail && tenantSettings.emailNotifications) {

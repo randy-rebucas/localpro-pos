@@ -5,6 +5,7 @@
  * Run with: npm run install:full or npm run setup
  */
 
+/* eslint-disable @typescript-eslint/no-require-imports */
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
@@ -101,8 +102,9 @@ async function resetAdminUsers() {
     
     console.log('Deleted ' + result.deletedCount + ' admin user(s) for tenant "' + tenantSlug + '"');
     await mongoose.disconnect();
-  } catch (error: any) {
-    console.error('Error resetting admin users:', error.message);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Error resetting admin users:', errorMessage);
     process.exit(1);
   }
 }
@@ -118,7 +120,7 @@ resetAdminUsers();
         cwd: process.cwd()
       });
       logSuccess(`Admin users reset for tenant: ${tenantSlug}`);
-    } catch (error) {
+    } catch {
       logWarning(`Failed to reset admin users: ${error.message}`);
       logInfo('Continuing with installation...');
     } finally {
@@ -126,7 +128,7 @@ resetAdminUsers();
       if (fs.existsSync(resetScriptPath)) {
         try {
           fs.unlinkSync(resetScriptPath);
-        } catch (cleanupError) {
+        } catch {
           // Ignore cleanup errors
         }
       }
@@ -280,7 +282,7 @@ DEFAULT_TENANT_SLUG=default
     try {
       execSync('npm run build', { stdio: 'inherit' });
       logSuccess('Application built successfully');
-    } catch (error) {
+    } catch {
       logWarning('Build failed, but installation continues...');
       logInfo('You can build later with: npm run build');
     }
@@ -303,7 +305,7 @@ DEFAULT_TENANT_SLUG=default
         try {
           execSync('npx tsx scripts/create-default-tenant.ts', { stdio: 'inherit' });
           logSuccess('Default tenant created');
-        } catch (error) {
+        } catch {
           logWarning('Failed to create default tenant (may already exist)');
         }
         
@@ -328,7 +330,7 @@ DEFAULT_TENANT_SLUG=default
               stdio: 'inherit' 
             });
             logSuccess('Admin user created successfully');
-          } catch (error) {
+          } catch {
             logWarning('Failed to create admin user');
           }
         }

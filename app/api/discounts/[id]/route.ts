@@ -24,7 +24,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const body = await request.json();
-    const updates: any = {};
+    const updates: Partial<{ name: string; code: string; description: string; type: string; value: number; minPurchaseAmount: number; maxDiscountAmount: number; usageLimit: number; validFrom: Date; validUntil: Date; isActive: boolean }> = {};
 
     if (body.name !== undefined) updates.name = body.name;
     if (body.description !== undefined) updates.description = body.description;
@@ -62,8 +62,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     });
 
     return NextResponse.json({ success: true, data: discount });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+  } catch (error: unknown) {
+    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Failed to update discount' }, { status: 400 });
   }
 }
 
@@ -95,8 +95,8 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     });
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+  } catch (error: unknown) {
+    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Failed to update discount' }, { status: 400 });
   }
 }
 

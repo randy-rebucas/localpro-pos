@@ -66,7 +66,7 @@ export async function analyzeSalesTrends(
 
         const now = new Date();
         let currentPeriodStart: Date;
-        let currentPeriodEnd: Date = now;
+        const currentPeriodEnd: Date = now;
         let previousPeriodStart: Date;
         let previousPeriodEnd: Date;
 
@@ -202,9 +202,10 @@ This is an automated sales trend analysis from your POS system.`;
         }
 
         totalAnalyses++;
-      } catch (error: any) {
+      } catch (error: unknown) {
         totalFailed++;
-        results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        results.errors?.push(`Tenant ${tenant.name}: ${errorMessage}`);
       }
     }
 
@@ -213,10 +214,11 @@ This is an automated sales trend analysis from your POS system.`;
     results.message = `Generated ${totalAnalyses} sales trend analyses${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: unknown) {
     results.success = false;
-    results.message = `Error analyzing sales trends: ${error.message}`;
-    results.errors?.push(error.message);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    results.message = `Error analyzing sales trends: ${errorMessage}`;
+    results.errors?.push(errorMessage);
     return results;
   }
 }

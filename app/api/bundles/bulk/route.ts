@@ -60,7 +60,7 @@ export async function PUT(request: NextRequest) {
       message: `${result.modifiedCount} bundle(s) ${action}d successfully`,
       modifiedCount: result.modifiedCount,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error in bulk bundle operation:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

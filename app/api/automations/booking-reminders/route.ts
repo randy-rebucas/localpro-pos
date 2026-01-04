@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Booking reminders automation error:', error);
     return NextResponse.json(
       {
@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
     });
 
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Booking reminders automation error:', error);
     return NextResponse.json(
       {

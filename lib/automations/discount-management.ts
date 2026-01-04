@@ -92,7 +92,6 @@ export async function manageDiscountStatus(
 
             // Send notification if enabled
             if (tenantSettings?.emailNotifications && tenantSettings?.email) {
-              const companyName = tenantSettings?.companyName || tenant.name || 'Business';
               await sendEmail({
                 to: tenantSettings.email,
                 subject: `Discount Activated: ${discount.code}`,
@@ -102,7 +101,7 @@ export async function manageDiscountStatus(
                 // Don't fail if email fails
               });
             }
-          } catch (error: any) {
+          } catch (error: unknown) {
             totalFailed++;
             results.errors?.push(`Activate discount ${discount.code}: ${error.message}`);
           }
@@ -116,7 +115,6 @@ export async function manageDiscountStatus(
 
             // Send notification if enabled
             if (tenantSettings?.emailNotifications && tenantSettings?.email) {
-              const companyName = tenantSettings?.companyName || tenant.name || 'Business';
               const reason = discount.validUntil < now
                 ? 'expired (validUntil date passed)'
                 : 'reached usage limit';
@@ -130,7 +128,7 @@ export async function manageDiscountStatus(
                 // Don't fail if email fails
               });
             }
-          } catch (error: any) {
+          } catch (error: unknown) {
             totalFailed++;
             results.errors?.push(`Deactivate discount ${discount.code}: ${error.message}`);
           }
@@ -177,9 +175,10 @@ This is an automated alert from your POS system.`,
             });
           }
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         totalFailed++;
-        results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        results.errors?.push(`Tenant ${tenant.name}: ${errorMessage}`);
       }
     }
 
@@ -188,10 +187,11 @@ This is an automated alert from your POS system.`,
     results.message = `Activated ${totalActivated} discounts, deactivated ${totalDeactivated} discounts${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: unknown) {
     results.success = false;
-    results.message = `Error managing discount status: ${error.message}`;
-    results.errors?.push(error.message);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    results.message = `Error managing discount status: ${errorMessage}`;
+    results.errors?.push(errorMessage);
     return results;
   }
 }

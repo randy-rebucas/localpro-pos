@@ -153,9 +153,10 @@ This is an automated security alert from your POS system.`,
 
           totalAlerts++;
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         totalFailed++;
-        results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        results.errors?.push(`Tenant ${tenant.name}: ${errorMessage}`);
       }
     }
 
@@ -164,10 +165,11 @@ This is an automated security alert from your POS system.`,
     results.message = `Detected ${totalAlerts} suspicious activity patterns${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: unknown) {
     results.success = false;
-    results.message = `Error detecting suspicious activity: ${error.message}`;
-    results.errors?.push(error.message);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    results.message = `Error detecting suspicious activity: ${errorMessage}`;
+    results.errors?.push(errorMessage);
     return results;
   }
 }

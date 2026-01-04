@@ -15,7 +15,7 @@ export default function Navbar() {
   const lang = params?.lang as 'en' | 'es' || 'en';
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
   const { user, logout, isAuthenticated, hasRole } = useAuth();
   const { settings } = useTenantSettings();
   const primaryColor = settings?.primaryColor || '#2563eb';
@@ -27,9 +27,20 @@ export default function Navbar() {
 
   // Close drawer when route changes
   useEffect(() => {
-    setDrawerOpen(false);
-    setUserMenuOpen(false);
-  }, [pathname]);
+    // Use setTimeout to avoid setState in effect
+    if (drawerOpen || userMenuOpen) {
+      const timer = setTimeout(() => {
+        if (drawerOpen) {
+          setDrawerOpen(false);
+        }
+        if (userMenuOpen) {
+          setUserMenuOpen(false);
+        }
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]); // Only depend on pathname - we want to close drawer/menu when route changes, not when state changes
 
   // Prevent body scroll when drawer is open
   useEffect(() => {
@@ -79,7 +90,7 @@ export default function Navbar() {
     ...conditionalNavItems.filter(item => {
       if (!item.featureFlag) return true;
       if (!settings) return true; // Show by default if settings not loaded yet
-      return (settings as any)[item.featureFlag] !== false; // Show if enabled or undefined (default enabled)
+      return (settings as Record<string, unknown>)[item.featureFlag] !== false; // Show if enabled or undefined (default enabled)
     }),
   ];
 

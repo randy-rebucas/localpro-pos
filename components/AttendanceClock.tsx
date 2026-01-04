@@ -16,7 +16,7 @@ interface AttendanceSession {
 export default function AttendanceClock() {
   const params = useParams();
   const lang = (params?.lang as 'en' | 'es') || 'en';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
   const { user, isAuthenticated } = useAuth();
   const [session, setSession] = useState<AttendanceSession | null>(null);
   const [loading, setLoading] = useState(false);
@@ -67,7 +67,8 @@ export default function AttendanceClock() {
 
   useEffect(() => {
     fetchCurrentSession();
-  }, [isAuthenticated]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]); // fetchCurrentSession is stable, no need to include in deps
 
   const handleClockIn = async () => {
     setLoading(true);
@@ -93,8 +94,8 @@ export default function AttendanceClock() {
       } else {
         setError(data.error || dict?.common?.failedToClockIn || 'Failed to clock in');
       }
-    } catch (err: any) {
-      setError(err.message || dict?.common?.failedToClockIn || 'Failed to clock in');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : (dict?.common?.failedToClockIn as string) || 'Failed to clock in');
     } finally {
       setLoading(false);
     }
@@ -124,8 +125,8 @@ export default function AttendanceClock() {
       } else {
         setError(data.error || dict?.common?.failedToClockOut || 'Failed to clock out');
       }
-    } catch (err: any) {
-      setError(err.message || dict?.common?.failedToClockOut || 'Failed to clock out');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : (dict?.common?.failedToClockOut as string) || 'Failed to clock out');
     } finally {
       setLoading(false);
     }

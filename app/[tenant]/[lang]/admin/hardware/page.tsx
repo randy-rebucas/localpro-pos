@@ -14,7 +14,7 @@ export default function HardwareAdminPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState<ITenantSettings | null>(null);
@@ -23,6 +23,7 @@ export default function HardwareAdminPage() {
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
     fetchSettings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang, tenant]);
 
   // Sync hardware config to hardware service when settings change

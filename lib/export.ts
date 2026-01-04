@@ -5,7 +5,7 @@
 /**
  * Convert array of objects to CSV string
  */
-export function arrayToCSV(data: any[], headers: string[]): string {
+export function arrayToCSV(data: Record<string, unknown>[], headers: string[]): string {
   if (!data || data.length === 0) {
     return headers.join(',');
   }
@@ -34,7 +34,7 @@ export function arrayToCSV(data: any[], headers: string[]): string {
 /**
  * Get nested value from object using dot notation
  */
-function getNestedValue(obj: any, path: string): any {
+function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
   const keys = path.split('.');
   let value = obj;
   for (const key of keys) {
@@ -70,7 +70,7 @@ export function downloadCSV(csv: string, filename: string): void {
  * Export data to Excel format (XLSX)
  * Requires: npm install xlsx
  */
-export async function downloadExcel(data: any[], headers: string[], filename: string): Promise<void> {
+export async function downloadExcel(data: Record<string, unknown>[], headers: string[], filename: string): Promise<void> {
   try {
     const XLSX = await import('xlsx');
     
@@ -107,7 +107,7 @@ export async function downloadExcel(data: any[], headers: string[], filename: st
  * Requires: npm install jspdf
  */
 export async function downloadPDF(
-  data: any[], 
+  data: Record<string, unknown>[], 
   headers: string[], 
   filename: string,
   title?: string
@@ -150,7 +150,7 @@ export async function downloadPDF(
     
     // Data rows
     doc.setFont(undefined, 'normal');
-    data.forEach((row, rowIndex) => {
+    data.forEach((row) => {
       // Check if we need a new page
       if (y > pageHeight - 20) {
         doc.addPage();

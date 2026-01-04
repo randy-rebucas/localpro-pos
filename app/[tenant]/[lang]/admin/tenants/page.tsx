@@ -26,19 +26,22 @@ interface Tenant {
 
 export default function TenantsPage() {
   const params = useParams();
-  const router = useRouter();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _router = useRouter();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [message, _setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showTenantModal, setShowTenantModal] = useState(false);
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
     fetchTenants();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang, tenant]);
 
   const fetchTenants = async () => {
@@ -196,7 +199,7 @@ function TenantModal({
   tenant: Tenant | null;
   onClose: () => void;
   onSave: () => void;
-  dict: any;
+  dict: Record<string, unknown>;
 }) {
   const [formData, setFormData] = useState({
     slug: tenant?.slug || '',
@@ -212,7 +215,7 @@ function TenantModal({
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [businessTypes, setBusinessTypes] = useState<any[]>([]);
+  const [businessTypes, setBusinessTypes] = useState<Array<Record<string, unknown>>>([]);
   const [loadingBusinessTypes, setLoadingBusinessTypes] = useState(true);
   const [businessTypeWarning, setBusinessTypeWarning] = useState<string | null>(null);
 
@@ -247,7 +250,7 @@ function TenantModal({
       }
       const url = `/api/tenants/${tenant.slug}`;
       const method = 'PUT';
-      const body: any = {
+      const body: Record<string, unknown> = {
         name: formData.name,
         settings: {
           currency: formData.currency,
@@ -274,7 +277,7 @@ function TenantModal({
       } else {
         setError(data.error || dict?.admin?.failedToSaveTenant || 'Failed to save tenant');
       }
-    } catch (error) {
+    } catch {
       setError(dict?.admin?.failedToSaveTenant || 'Failed to save tenant');
     } finally {
       setSaving(false);

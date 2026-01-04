@@ -57,8 +57,7 @@ export async function GET(request: NextRequest) {
     endDate.setHours(23, 59, 59, 999);
 
     // Get existing bookings for the date
-    const query: any = {
-      tenantId,
+    const query: Record<string, unknown> = { tenantId,
       startTime: { $gte: selectedDate, $lte: endDate },
       status: { $in: ['pending', 'confirmed'] },
     };
@@ -111,11 +110,11 @@ export async function GET(request: NextRequest) {
         slotInterval,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Get time slots error:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
-      { success: false, error: error.message || t('validation.failedToFetchTimeSlots', 'Failed to fetch time slots') },
+      { success: false, error: error instanceof Error ? error.message : t('validation.failedToFetchTimeSlots', 'Failed to fetch time slots') }, 
       { status: 500 }
     );
   }

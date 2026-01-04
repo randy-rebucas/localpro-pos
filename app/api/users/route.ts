@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
-import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
+import { requireTenantAccess } from '@/lib/api-tenant';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateEmail, validatePassword } from '@/lib/validation';
@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
       tenantId = tenantAccess.tenantId;
       // Also check role
       await requireRole(request, ['admin', 'manager']);
-    } catch (authError: any) {
+    } catch (authError: unknown) {
       if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
         return NextResponse.json(
           { success: false, error: authError.message },
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
       .lean();
 
     return NextResponse.json({ success: true, data: users });
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error.message === 'Unauthorized' || error.message.includes('Forbidden')) {
       return NextResponse.json(
         { success: false, error: error.message },
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
       tenantId = tenantAccess.tenantId;
       // Also check role
       await requireRole(request, ['admin', 'manager']);
-    } catch (authError: any) {
+    } catch (authError: unknown) {
       t = await getValidationTranslatorFromRequest(request);
       if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
         return NextResponse.json(
@@ -119,11 +119,12 @@ export async function POST(request: NextRequest) {
     });
 
     const userResponse = user.toObject();
-    const { password: _, ...userWithoutPassword } = userResponse;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password: _password, ...userWithoutPassword } = userResponse;
 
     return NextResponse.json({ success: true, data: userWithoutPassword }, { status: 201 });
-  } catch (error: any) {
-    if (error.code === 11000) {
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 11000) {
       return NextResponse.json(
         { success: false, error: 'User with this email already exists' },
         { status: 400 }

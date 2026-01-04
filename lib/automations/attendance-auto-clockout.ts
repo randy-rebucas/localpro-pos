@@ -6,7 +6,6 @@
 import connectDB from '@/lib/mongodb';
 import Attendance from '@/models/Attendance';
 import Tenant from '@/models/Tenant';
-import User from '@/models/User';
 import { sendEmail } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { AutomationResult } from './types';
@@ -135,7 +134,7 @@ export async function autoClockOutForgottenSessions(
               totalProcessed++;
 
               // Send notification to employee and manager
-              const user = session.userId as any;
+              const user = session.userId as { email?: string; name?: string } | null;
               if (user?.email && tenantSettings?.emailNotifications) {
                 const companyName = tenantSettings?.companyName || tenant.name || 'Business';
                 await sendEmail({
@@ -179,14 +178,16 @@ Please review this attendance record.`,
                 });
               }
             }
-          } catch (error: any) {
+          } catch (error: unknown) {
             totalFailed++;
-            results.errors?.push(`Session ${session._id}: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            results.errors?.push(`Session ${session._id}: ${errorMessage}`);
           }
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         totalFailed++;
-        results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        results.errors?.push(`Tenant ${tenant.name}: ${errorMessage}`);
       }
     }
 
@@ -195,7 +196,7 @@ Please review this attendance record.`,
     results.message = `Auto-clocked out ${totalProcessed} sessions${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: unknown) {
     results.success = false;
     results.message = `Error auto-clocking out sessions: ${error.message}`;
     results.errors?.push(error.message);

@@ -37,7 +37,7 @@ export default function RealTimeStockTracker({
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = (params?.lang as 'en' | 'es') || 'en';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
   const [connected, setConnected] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);

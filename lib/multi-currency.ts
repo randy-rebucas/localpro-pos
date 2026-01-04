@@ -4,7 +4,7 @@
  */
 
 import { ITenantSettings } from '@/models/Tenant';
-import { formatCurrency, formatNumber } from './currency';
+import { formatCurrency } from './currency';
 
 export interface ExchangeRateResponse {
   base: string;

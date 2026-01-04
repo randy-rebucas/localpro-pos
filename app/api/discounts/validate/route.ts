@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
         finalTotal: Math.max(0, subtotal - discountAmount),
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

@@ -14,5 +14,5 @@ export interface TenantAutomationConfig {
   tenantId: string;
   tenantSlug: string;
   enabled: boolean;
-  settings?: Record<string, any>;
+  settings?: Record<string, unknown>;
 }

@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     const bundleId = searchParams.get('bundleId');
 
     // Build date query
-    const dateQuery: any = {};
+    const dateQuery: { $gte?: Date; $lte?: Date } = {};
     if (startDate) dateQuery.$gte = new Date(startDate);
     if (endDate) {
       const end = new Date(endDate);
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get all transactions in the date range
-    const transactionQuery: any = { tenantId, status: 'completed' };
+    const transactionQuery: { tenantId: string; status: string; createdAt?: { $gte?: Date; $lte?: Date } } = { tenantId, status: 'completed' };
     if (Object.keys(dateQuery).length > 0) {
       transactionQuery.createdAt = dateQuery;
     }
@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
       .lean();
 
     // Get all bundles
-    const bundleQuery: any = { tenantId };
+    const bundleQuery: { tenantId: string; _id?: unknown } = { tenantId };
     if (bundleId) bundleQuery._id = bundleId;
     const bundles = await ProductBundle.find(bundleQuery)
       .select('_id name price')
@@ -55,9 +55,9 @@ export async function GET(request: NextRequest) {
 
       // Filter transactions that include this bundle
       transactions.forEach(transaction => {
-        transaction.items.forEach((item: any) => {
+        transaction.items.forEach((item: { bundleId?: unknown; subtotal: number; quantity: number }) => {
           // Check if item has bundleId (stored but not in schema)
-          const itemBundleId = (item as any).bundleId;
+          const itemBundleId = item.bundleId;
           if (itemBundleId && itemBundleId.toString() === bundle._id.toString()) {
             totalSales += item.subtotal;
             totalQuantity += item.quantity;
@@ -93,8 +93,8 @@ export async function GET(request: NextRequest) {
       totalTransactions: new Set(
         transactions.flatMap(t => 
           t.items
-            .filter((item: any) => (item as any).bundleId)
-            .map((item: any) => t._id.toString())
+            .filter((item: { bundleId?: unknown }) => item.bundleId)
+            .map(() => t._id.toString())
         )
       ).size,
     };
@@ -110,7 +110,7 @@ export async function GET(request: NextRequest) {
         },
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching bundle analytics:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

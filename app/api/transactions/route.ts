@@ -5,7 +5,6 @@ import Payment from '@/models/Payment';
 import Product from '@/models/Product';
 import Discount from '@/models/Discount';
 import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
-import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateAndSanitize, validateTransaction } from '@/lib/validation';
 import { generateReceiptNumber } from '@/lib/receipt';
@@ -49,7 +48,7 @@ export async function GET(request: NextRequest) {
         pages: Math.ceil(total / limit),
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -64,7 +63,7 @@ export async function POST(request: NextRequest) {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
       user = tenantAccess.user;
-    } catch (authError: any) {
+    } catch (authError: unknown) {
       if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
         return NextResponse.json(
           { success: false, error: authError.message },
@@ -332,7 +331,7 @@ export async function POST(request: NextRequest) {
     // Handle multiple payments (split payments)
     if (isMultiplePayments) {
       // Validate that all payments sum to total
-      const paymentsTotal = payments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+      const paymentsTotal = payments.reduce((sum: number, p: { amount?: number }) => sum + (p.amount || 0), 0);
       const tolerance = 0.01; // Allow small rounding differences
       
       if (Math.abs(paymentsTotal - total) > tolerance) {
@@ -343,16 +342,16 @@ export async function POST(request: NextRequest) {
       }
 
       // Determine primary payment method (use the first payment or the one with largest amount)
-      const primaryPayment = payments.reduce((prev: any, current: any) => 
-        (current.amount > (prev.amount || 0)) ? current : prev
+      const primaryPayment = payments.reduce((prev: { amount?: number; method?: string }, current: { amount?: number; method?: string }) => 
+        ((current.amount || 0) > (prev.amount || 0)) ? current : prev
       );
-      finalPaymentMethod = primaryPayment.method || 'cash';
+      finalPaymentMethod = (primaryPayment.method as 'cash' | 'card' | 'digital' | 'check' | 'other') || 'cash';
       
       // Calculate cash totals if any cash payment exists
-      const cashPayments = payments.filter((p: any) => p.method === 'cash');
+      const cashPayments = payments.filter((p: { method?: string }) => p.method === 'cash');
       if (cashPayments.length > 0) {
-        finalCashReceived = cashPayments.reduce((sum: number, p: any) => sum + (p.cashReceived || p.amount || 0), 0);
-        finalChange = cashPayments.reduce((sum: number, p: any) => sum + (p.change || 0), 0);
+        finalCashReceived = cashPayments.reduce((sum: number, p: { cashReceived?: number; amount?: number }) => sum + (p.cashReceived || p.amount || 0), 0);
+        finalChange = cashPayments.reduce((sum: number, p: { change?: number }) => sum + (p.change || 0), 0);
       }
     } else {
       // Single payment method (existing logic)
@@ -409,11 +408,11 @@ export async function POST(request: NextRequest) {
             );
           }
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Stock update is critical - fail the entire transaction
-        console.error(`CRITICAL: Error updating stock for item ${productId || bundleId}:`, error.message || error);
+        console.error(`CRITICAL: Error updating stock for item ${productId}${bundleId ? ` bundle ${bundleId}` : ''}:`, error instanceof Error ? error.message : 'Unknown error');
         console.error('Full error:', error);
-        throw new Error(`Failed to update stock for ${productId || bundleId}: ${error.message || error}`);
+        throw new Error(`Failed to update stock for ${productId}${bundleId ? ` bundle ${bundleId}` : ''}: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     }
 
@@ -465,7 +464,7 @@ export async function POST(request: NextRequest) {
         if (isMultiplePayments) {
           // Create multiple payment records for split payments
           for (const payment of payments) {
-            const paymentDetails: any = {};
+            const paymentDetails: Record<string, unknown> = {};
             
             if (payment.method === 'cash') {
               paymentDetails.cashReceived = payment.cashReceived || payment.amount;
@@ -499,7 +498,7 @@ export async function POST(request: NextRequest) {
           }
         } else {
           // Single payment method (existing logic)
-          const paymentDetails: any = {};
+          const paymentDetails: Record<string, unknown> = {};
           if (finalPaymentMethod === 'cash') {
             paymentDetails.cashReceived = finalCashReceived;
             paymentDetails.change = finalChange;
@@ -541,7 +540,7 @@ export async function POST(request: NextRequest) {
         total,
         itemsCount: transactionItems.length,
         paymentCount: paymentRecords.length,
-        paymentIds: paymentRecords.map((p: any) => p._id.toString()),
+        paymentIds: paymentRecords.map((p: { _id: { toString: () => string } }) => p._id.toString()),
         isMultiplePayments: isMultiplePayments,
       },
     });
@@ -566,9 +565,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Include payment records in response if created
-    const responseData: any = transaction.toObject ? transaction.toObject() : transaction;
+    const responseData: Record<string, unknown> = transaction.toObject ? transaction.toObject() : (transaction as Record<string, unknown>);
     if (paymentRecords.length > 0) {
-      responseData.payments = paymentRecords.map((p: any) => ({
+      responseData.payments = paymentRecords.map((p: unknown) => ({
         _id: p._id,
         method: p.method,
         amount: p.amount,
@@ -577,7 +576,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true, data: responseData }, { status: 201 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json({ success: false, error: error.message }, { status: 400 });
   }
 }

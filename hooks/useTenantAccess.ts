@@ -63,7 +63,7 @@ export function useTenantAccess(): TenantAccessCheck {
           // Couldn't get user info - assume valid for now
           setIsValid(true);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Error checking tenant access:', err);
         // On error, assume valid to avoid blocking legitimate access
         setIsValid(true);

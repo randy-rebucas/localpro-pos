@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import User from '@/models/User';
 import bcrypt from 'bcryptjs';
 
@@ -10,12 +11,12 @@ import bcrypt from 'bcryptjs';
  * @returns Promise<boolean> - true if PIN is already in use, false otherwise
  */
 export async function isPinDuplicate(
-  tenantId: any,
+  tenantId: string | mongoose.Types.ObjectId,
   candidatePin: string,
   excludeUserId?: string
 ): Promise<boolean> {
   // Get all users in the tenant with PINs (excluding the current user if specified)
-  const query: any = { tenantId, pin: { $exists: true, $ne: null } };
+  const query: Record<string, unknown> = { tenantId, pin: { $exists: true, $ne: null } };
   if (excludeUserId) {
     query._id = { $ne: excludeUserId };
   }

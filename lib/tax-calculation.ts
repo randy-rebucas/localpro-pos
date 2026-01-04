@@ -1,7 +1,5 @@
 import TaxRule from '@/models/TaxRule';
 import Tenant, { ITenantSettings } from '@/models/Tenant';
-import Product from '@/models/Product';
-import { ITenant } from '@/models/Tenant';
 
 /**
  * Calculate tax amount for a transaction

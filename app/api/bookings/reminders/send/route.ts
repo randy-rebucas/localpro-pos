@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
           bookingId: booking._id.toString(),
           success: true,
         });
-      } catch (error: any) {
+      } catch (error: unknown) {
         results.failed++;
         results.details.push({
           bookingId: booking._id.toString(),
@@ -103,11 +103,11 @@ export async function POST(request: NextRequest) {
       message: `Processed ${results.total} bookings`,
       results,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Send reminders error:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
-      { success: false, error: error.message || t('validation.failedToSendReminders', 'Failed to send reminders') },
+      { success: false, error: error instanceof Error ? error.message : t('validation.failedToSendReminders', 'Failed to send reminders') }, 
       { status: 500 }
     );
   }

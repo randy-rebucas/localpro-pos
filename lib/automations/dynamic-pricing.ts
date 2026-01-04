@@ -7,9 +7,7 @@ import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
 import Transaction from '@/models/Transaction';
 import Tenant from '@/models/Tenant';
-import { getTenantSettingsById } from '@/lib/tenant';
 import { AutomationResult } from './types';
-import mongoose from 'mongoose';
 
 export interface DynamicPricingOptions {
   tenantId?: string;
@@ -56,7 +54,6 @@ export async function applyDynamicPricing(
     for (const tenant of tenants) {
       try {
         const tenantId = tenant._id.toString();
-        const tenantSettings = await getTenantSettingsById(tenantId);
 
         // Get products
         const products = await Product.find({ tenantId }).lean();
@@ -104,14 +101,16 @@ export async function applyDynamicPricing(
               });
               totalUpdated++;
             }
-          } catch (error: any) {
+          } catch (error: unknown) {
             totalFailed++;
-            results.errors?.push(`Product ${product._id}: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            results.errors?.push(`Product ${product._id}: ${errorMessage}`);
           }
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         totalFailed++;
-        results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        results.errors?.push(`Tenant ${tenant.name}: ${errorMessage}`);
       }
     }
 
@@ -120,10 +119,11 @@ export async function applyDynamicPricing(
     results.message = `Updated ${totalUpdated} product prices${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: unknown) {
     results.success = false;
-    results.message = `Error applying dynamic pricing: ${error.message}`;
-    results.errors?.push(error.message);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    results.message = `Error applying dynamic pricing: ${errorMessage}`;
+    results.errors?.push(errorMessage);
     return results;
   }
 }

@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     const summary = await getProfitLossSummary(tenantId, startDate, endDate);
 
     return NextResponse.json({ success: true, data: summary });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching profit & loss summary:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

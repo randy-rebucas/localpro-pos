@@ -28,7 +28,7 @@ export function generateCustomerToken(payload: CustomerJWTPayload): string {
 export function verifyCustomerToken(token: string): CustomerJWTPayload | null {
   try {
     return jwt.verify(token, JWT_SECRET) as CustomerJWTPayload;
-  } catch (error) {
+  } catch {
     return null;
   }
 }

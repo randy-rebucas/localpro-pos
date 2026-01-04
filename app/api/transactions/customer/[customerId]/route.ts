@@ -41,8 +41,7 @@ export async function GET(
     const limit = Math.min(parseInt(searchParams.get('limit') || '20', 10), 100);
 
     // Build query
-    const query: any = {
-      tenantId: customer.tenantId,
+    const query: Record<string, unknown> = { tenantId: customer.tenantId,
       $or: [
         { customerEmail: customer.email },
         { customerPhone: customer.phone },
@@ -85,7 +84,7 @@ export async function GET(
         pages: Math.ceil(total / limit),
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Get customer transactions error:', error);
     
     if (error.message === 'Unauthorized') {
@@ -96,7 +95,7 @@ export async function GET(
     }
 
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to fetch transactions' },
+      { success: false, error: error instanceof Error ? error.message : 'Failed to fetch transactions' }, 
       { status: 500 }
     );
   }

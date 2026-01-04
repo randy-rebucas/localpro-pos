@@ -13,7 +13,7 @@ interface Attendance {
 
 interface AttendanceTrendsChartsProps {
   attendances: Attendance[];
-  dict: any;
+  dict: Record<string, unknown>;
 }
 
 export default function AttendanceTrendsCharts({ attendances, dict }: AttendanceTrendsChartsProps) {
@@ -87,23 +87,7 @@ export default function AttendanceTrendsCharts({ attendances, dict }: Attendance
     return `${h}h ${m}m`;
   };
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-white border border-gray-300 rounded-lg p-3 shadow-lg">
-          <p className="font-semibold text-gray-900 mb-2">{label || payload[0].payload.fullName}</p>
-          {payload.map((entry: any, index: number) => (
-            <p key={index} className="text-sm" style={{ color: entry.color }}>
-              {entry.name}: {entry.name.toLowerCase().includes('hours') 
-                ? formatHours(entry.value)
-                : entry.value}
-            </p>
-          ))}
-        </div>
-      );
-    }
-    return null;
-  };
+  // CustomTooltip moved inline to avoid creating component during render
 
   return (
     <div className="space-y-6 mb-6">
@@ -129,7 +113,25 @@ export default function AttendanceTrendsCharts({ attendances, dict }: Attendance
                 style={{ fontSize: '12px' }}
                 tickFormatter={(value) => `${value}h`}
               />
-              <Tooltip content={<CustomTooltip />} />
+              <Tooltip
+                content={({ active, payload, label }) => {
+                  if (active && payload && payload.length) {
+                    return (
+                      <div className="bg-white border border-gray-300 rounded-lg p-3 shadow-lg">
+                        <p className="font-semibold text-gray-900 mb-2">{label || (payload[0]?.payload as { fullName?: string })?.fullName}</p>
+                        {payload.map((entry, index: number) => (
+                          <p key={index} className="text-sm" style={{ color: entry.color }}>
+                            {entry.name}: {entry.name?.toLowerCase().includes('hours') 
+                              ? formatHours(entry.value as number)
+                              : entry.value}
+                          </p>
+                        ))}
+                      </div>
+                    );
+                  }
+                  return null;
+                }}
+              />
               <Legend />
               <Line
                 type="monotone"
@@ -203,7 +205,25 @@ export default function AttendanceTrendsCharts({ attendances, dict }: Attendance
                 style={{ fontSize: '12px' }}
                 tickFormatter={(value) => `${value}h`}
               />
-              <Tooltip content={<CustomTooltip />} />
+              <Tooltip
+                content={({ active, payload, label }) => {
+                  if (active && payload && payload.length) {
+                    return (
+                      <div className="bg-white border border-gray-300 rounded-lg p-3 shadow-lg">
+                        <p className="font-semibold text-gray-900 mb-2">{label || (payload[0]?.payload as { fullName?: string })?.fullName}</p>
+                        {payload.map((entry, index: number) => (
+                          <p key={index} className="text-sm" style={{ color: entry.color }}>
+                            {entry.name}: {entry.name?.toLowerCase().includes('hours') 
+                              ? formatHours(entry.value as number)
+                              : entry.value}
+                          </p>
+                        ))}
+                      </div>
+                    );
+                  }
+                  return null;
+                }}
+              />
               <Legend />
               <Bar dataKey="hours" fill="#8b5cf6" name={dict.admin?.totalHours || 'Total Hours'} />
             </BarChart>

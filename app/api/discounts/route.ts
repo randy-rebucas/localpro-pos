@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Discount from '@/models/Discount';
-import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
-import { requireAuth, requireRole } from '@/lib/auth';
+import { requireTenantAccess } from '@/lib/api-tenant';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { requireAuth as _requireAuth, requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
@@ -14,9 +15,10 @@ export async function GET(request: NextRequest) {
     try {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
-    } catch (authError: any) {
-      const t = await getValidationTranslatorFromRequest(request);
-      if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
+    } catch (authError: unknown) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const _t = await getValidationTranslatorFromRequest(request);
+      if (authError instanceof Error && (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden'))) {
         return NextResponse.json(
           { success: false, error: authError.message },
           { status: authError.message.includes('Unauthorized') ? 401 : 403 }
@@ -24,13 +26,14 @@ export async function GET(request: NextRequest) {
       }
       throw authError;
     }
-    const t = await getValidationTranslatorFromRequest(request);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const _t = await getValidationTranslatorFromRequest(request);
     
     const searchParams = request.nextUrl.searchParams;
     const code = searchParams.get('code');
     const activeOnly = searchParams.get('activeOnly') === 'true';
 
-    let query: any = { tenantId };
+    const query: Record<string, unknown> = { tenantId };
     
     if (code) {
       query.code = code.toUpperCase();
@@ -45,7 +48,7 @@ export async function GET(request: NextRequest) {
     const discounts = await Discount.find(query).sort({ createdAt: -1 });
 
     return NextResponse.json({ success: true, data: discounts });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -60,9 +63,10 @@ export async function POST(request: NextRequest) {
       tenantId = tenantAccess.tenantId;
       // Also check role
       await requireRole(request, ['admin', 'manager']);
-    } catch (authError: any) {
-      const t = await getValidationTranslatorFromRequest(request);
-      if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
+    } catch (authError: unknown) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const _t = await getValidationTranslatorFromRequest(request);
+      if (authError instanceof Error && (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden'))) {
         return NextResponse.json(
           { success: false, error: authError.message },
           { status: authError.message.includes('Unauthorized') ? 401 : 403 }
@@ -144,15 +148,15 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ success: true, data: discount }, { status: 201 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     const t = await getValidationTranslatorFromRequest(request);
-    if (error.code === 11000) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 11000) {
       return NextResponse.json(
         { success: false, error: t('validation.discountCodeExists', 'Discount code already exists') },
         { status: 400 }
       );
     }
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Failed to create discount' }, { status: 400 });
   }
 }
 

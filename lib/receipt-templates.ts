@@ -145,13 +145,13 @@ export function renderReceiptTemplate(template: string, data: ReceiptData): stri
 
   // Replace simple variables {{variable}}
   html = html.replace(/\{\{(\w+)\}\}/g, (match, key) => {
-    const value = (data as any)[key];
+    const value = (data as Record<string, unknown>)[key];
     return value !== undefined && value !== null ? String(value) : '';
   });
 
   // Handle {{#if condition}} blocks
   html = html.replace(/\{\{#if\s+(\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g, (match, condition, content) => {
-    const value = (data as any)[condition];
+    const value = (data as Record<string, unknown>)[condition];
     if (value && value !== false && value !== '' && value !== 0) {
       // Recursively process nested content
       return processTemplateContent(content, data);
@@ -161,7 +161,7 @@ export function renderReceiptTemplate(template: string, data: ReceiptData): stri
 
   // Handle {{#each array}} blocks
   html = html.replace(/\{\{#each\s+(\w+)\}\}([\s\S]*?)\{\{\/each\}\}/g, (match, arrayKey, content) => {
-    const array = (data as any)[arrayKey];
+    const array = (data as Record<string, unknown>)[arrayKey];
     if (Array.isArray(array)) {
       return array.map((item, index) => {
         // Create a context with item properties and index
@@ -178,7 +178,7 @@ export function renderReceiptTemplate(template: string, data: ReceiptData): stri
 /**
  * Process template content recursively
  */
-function processTemplateContent(content: string, data: any): string {
+function processTemplateContent(content: string, data: Record<string, unknown>): string {
   let processed = content;
 
   // Replace variables
@@ -242,7 +242,7 @@ export function validateTemplate(html: string): { valid: boolean; error?: string
     }
 
     return { valid: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       valid: false,
       error: error.message || 'Invalid template',

@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
       failedLoginThreshold,
     });
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Suspicious activity detection error:', error);
     return NextResponse.json({
       success: false,
@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
       failedLoginThreshold,
     });
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Suspicious activity detection error:', error);
     return NextResponse.json({
       success: false,

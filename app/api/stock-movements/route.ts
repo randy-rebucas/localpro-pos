@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1');
     const skip = (page - 1) * limit;
 
-    const query: any = { tenantId };
+    const query: Record<string, unknown> = { tenantId };
     if (productId) {
       query.productId = productId;
     }
@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
         pages: Math.ceil(total / limit),
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

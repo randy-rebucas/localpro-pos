@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
       : baseSettings;
 
     // Create tenant
-    const tenantData: any = {
+    const tenantData: Record<string, unknown> = {
       slug: slug.toLowerCase(),
       name,
       settings,
@@ -152,8 +152,8 @@ export async function POST(request: NextRequest) {
         message: t('validation.storeCreatedSuccess', 'Store created successfully! You can now login with your admin credentials.')
       }
     }, { status: 201 });
-  } catch (error: any) {
-    if (error.code === 11000) {
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 11000) {
       const field = Object.keys(error.keyPattern)[0];
       return NextResponse.json(
         { success: false, error: `${field} already exists` },

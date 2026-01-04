@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Category from '@/models/Category';
 import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
-import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateAndSanitize, validateCategory } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -21,7 +20,7 @@ export async function GET(request: NextRequest) {
       .lean();
 
     return NextResponse.json({ success: true, data: categories });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -34,7 +33,7 @@ export async function POST(request: NextRequest) {
     try {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
-    } catch (authError: any) {
+    } catch (authError: unknown) {
       if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
         return NextResponse.json(
           { success: false, error: authError.message },
@@ -69,8 +68,8 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ success: true, data: category }, { status: 201 });
-  } catch (error: any) {
-    if (error.code === 11000) {
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 11000) {
       return NextResponse.json(
         { success: false, error: 'Category with this name already exists' },
         { status: 400 }

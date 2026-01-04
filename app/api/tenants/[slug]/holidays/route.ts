@@ -30,7 +30,7 @@ export async function GET(
       success: true,
       data: tenant.settings.holidays || [],
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching holidays:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -88,7 +88,7 @@ export async function POST(
     }
 
     const holidays = tenant.settings.holidays || [];
-    const newHoliday: any = {
+    const newHoliday: { id: string; name: string; date: Date; recurringPattern?: string; isRecurring?: boolean } = {
       id: `holiday_${Date.now()}`,
       name,
       type,
@@ -115,11 +115,11 @@ export async function POST(
     try {
       await tenant.save();
       console.log('Holiday saved successfully:', newHoliday);
-    } catch (saveError: any) {
+    } catch (saveError: unknown) {
       console.error('Error saving holiday to database:', saveError);
       return NextResponse.json({ 
         success: false, 
-        error: `Failed to save holiday: ${saveError.message || 'Database error'}` 
+        error: `Failed to save holiday: ${saveError instanceof Error ? saveError.message : 'Database error'}` 
       }, { status: 500 });
     }
 
@@ -127,7 +127,7 @@ export async function POST(
       success: true,
       data: newHoliday,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error creating holiday:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -163,7 +163,7 @@ export async function PUT(
     }
 
     const holidays = tenant.settings.holidays || [];
-    const holidayIndex = holidays.findIndex((h: any) => h.id === id);
+    const holidayIndex = holidays.findIndex((h: unknown) => h.id === id);
 
     if (holidayIndex === -1) {
       return NextResponse.json({ success: false, error: 'Holiday not found' }, { status: 404 });
@@ -177,11 +177,11 @@ export async function PUT(
     try {
       await tenant.save();
       console.log('Holiday updated successfully:', holidays[holidayIndex]);
-    } catch (saveError: any) {
+    } catch (saveError: unknown) {
       console.error('Error saving holiday update to database:', saveError);
       return NextResponse.json({ 
         success: false, 
-        error: `Failed to update holiday: ${saveError.message || 'Database error'}` 
+        error: `Failed to update holiday: ${saveError instanceof Error ? saveError.message : 'Database error'}` 
       }, { status: 500 });
     }
 
@@ -189,7 +189,7 @@ export async function PUT(
       success: true,
       data: holidays[holidayIndex],
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error updating holiday:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -225,7 +225,7 @@ export async function DELETE(
     }
 
     const holidays = tenant.settings.holidays || [];
-    const filtered = holidays.filter((h: any) => h.id !== id);
+    const filtered = holidays.filter((h: unknown) => h.id !== id);
 
     if (filtered.length === holidays.length) {
       return NextResponse.json({ success: false, error: 'Holiday not found' }, { status: 404 });
@@ -237,16 +237,16 @@ export async function DELETE(
     try {
       await tenant.save();
       console.log('Holiday deleted successfully');
-    } catch (saveError: any) {
+    } catch (saveError: unknown) {
       console.error('Error saving holiday deletion to database:', saveError);
       return NextResponse.json({ 
         success: false, 
-        error: `Failed to delete holiday: ${saveError.message || 'Database error'}` 
+        error: `Failed to delete holiday: ${saveError instanceof Error ? saveError.message : 'Database error'}` 
       }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error deleting holiday:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

@@ -4,7 +4,6 @@
  */
 
 import connectDB from '@/lib/mongodb';
-import Transaction from '@/models/Transaction';
 import Tenant from '@/models/Tenant';
 import { AutomationResult } from './types';
 import mongoose from 'mongoose';
@@ -60,8 +59,7 @@ export async function archiveOldData(
         const db = mongoose.connection.db;
         if (!db) continue;
 
-        // Create archive collection if it doesn't exist
-        const archiveCollectionName = `${collections[0]}_archive`;
+        // Archive collections
 
         for (const collectionName of collections) {
           try {
@@ -92,14 +90,16 @@ export async function archiveOldData(
             });
 
             totalArchived += oldDocuments.length;
-          } catch (error: any) {
+          } catch (error: unknown) {
             totalFailed++;
-            results.errors?.push(`Collection ${collectionName}: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            results.errors?.push(`Collection ${collectionName}: ${errorMessage}`);
           }
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         totalFailed++;
-        results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        results.errors?.push(`Tenant ${tenant.name}: ${errorMessage}`);
       }
     }
 
@@ -108,10 +108,11 @@ export async function archiveOldData(
     results.message = `Archived ${totalArchived} records${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: unknown) {
     results.success = false;
-    results.message = `Error archiving data: ${error.message}`;
-    results.errors?.push(error.message);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    results.message = `Error archiving data: ${errorMessage}`;
+    results.errors?.push(errorMessage);
     return results;
   }
 }

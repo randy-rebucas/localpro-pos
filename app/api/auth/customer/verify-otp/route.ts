@@ -3,7 +3,6 @@ import connectDB from '@/lib/mongodb';
 import CustomerOTP from '@/models/CustomerOTP';
 import Customer from '@/models/Customer';
 import { generateCustomerToken } from '@/lib/auth-customer';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 /**
@@ -180,10 +179,10 @@ export async function POST(request: NextRequest) {
     });
 
     return response;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Verify OTP error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to verify OTP' },
+      { success: false, error: error instanceof Error ? error.message : 'Failed to verify OTP' },
       { status: 500 }
     );
   }

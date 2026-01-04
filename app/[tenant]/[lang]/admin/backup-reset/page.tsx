@@ -10,7 +10,7 @@ export default function BackupResetPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [selectedCollections, setSelectedCollections] = useState<string[]>([]);
@@ -33,7 +33,7 @@ export default function BackupResetPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+          <p className="mt-4 text-gray-600">Loading...</p>
         </div>
       </div>
     );
@@ -51,7 +51,7 @@ export default function BackupResetPage() {
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
-            {dict?.admin?.backToAdmin || 'Back to Admin'}
+            {(dict?.admin as Record<string, unknown>)?.backToAdmin as string || 'Back to Admin'}
           </Link>
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
             Collection Backup & Reset
@@ -86,7 +86,7 @@ export default function BackupResetPage() {
                 <button
                   onClick={async () => {
                     if (selectedCollections.length === 0) {
-                      setMessage({ type: 'error', text: dict?.common?.selectAtLeastOneCollection || 'Please select at least one collection to backup.' });
+                      setMessage({ type: 'error', text: (dict?.common as Record<string, unknown>)?.selectAtLeastOneCollection as string || 'Please select at least one collection to backup.' });
                       return;
                     }
 
@@ -105,9 +105,9 @@ export default function BackupResetPage() {
                       if (!res.ok) {
                         const data = await res.json();
                         if (res.status === 401 || res.status === 403) {
-                          setMessage({ type: 'error', text: dict?.common?.unauthorizedBackup || 'Unauthorized. Only admins can backup collections.' });
+                          setMessage({ type: 'error', text: (dict?.common as Record<string, unknown>)?.unauthorizedBackup as string || 'Unauthorized. Only admins can backup collections.' });
                         } else {
-                          setMessage({ type: 'error', text: data.error || dict?.common?.failedToCreateBackup || 'Failed to create backup' });
+                          setMessage({ type: 'error', text: data.error || (dict?.common as Record<string, unknown>)?.failedToCreateBackup as string || 'Failed to create backup' });
                         }
                         return;
                       }
@@ -126,7 +126,7 @@ export default function BackupResetPage() {
                       setMessage({ type: 'success', text: `Backup created successfully for ${selectedCollections.length} collection(s)` });
                     } catch (error) {
                       console.error('Error creating backup:', error);
-                      setMessage({ type: 'error', text: dict?.common?.failedToCreateBackup || 'Failed to create backup. Please check your connection.' });
+                      setMessage({ type: 'error', text: (dict?.common as Record<string, unknown>)?.failedToCreateBackup as string || 'Failed to create backup. Please check your connection.' });
                     } finally {
                       setBackingUp(false);
                     }
@@ -217,14 +217,14 @@ export default function BackupResetPage() {
                 <button
                   onClick={async () => {
                     if (!restoreFile) {
-                      setMessage({ type: 'error', text: dict?.common?.selectBackupFile || 'Please select a backup file to restore.' });
+                      setMessage({ type: 'error', text: (dict?.common as Record<string, unknown>)?.selectBackupFile as string || 'Please select a backup file to restore.' });
                       return;
                     }
 
                     const clearExisting = (document.getElementById('clearExisting') as HTMLInputElement)?.checked || false;
 
                     if (clearExisting && !confirm(
-                      dict?.common?.clearExistingDataConfirm || 
+                      (dict?.common as Record<string, unknown>)?.clearExistingDataConfirm as string || 
                       'Are you sure you want to clear existing data before restoring?\n\n' +
                       'This will delete all current data in the collections being restored!'
                     )) {
@@ -240,13 +240,13 @@ export default function BackupResetPage() {
                       let backupData;
                       try {
                         backupData = JSON.parse(fileContent);
-                      } catch (e) {
-                        setMessage({ type: 'error', text: dict?.common?.invalidBackupFormat || 'Invalid backup file format. Please select a valid JSON backup file.' });
+                      } catch {
+                        setMessage({ type: 'error', text: (dict?.common as Record<string, unknown>)?.invalidBackupFormat as string || 'Invalid backup file format. Please select a valid JSON backup file.' });
                         return;
                       }
 
                       if (!backupData.collections) {
-                        setMessage({ type: 'error', text: dict?.common?.invalidBackupFile || 'Invalid backup file. Missing collections data.' });
+                        setMessage({ type: 'error', text: (dict?.common as Record<string, unknown>)?.invalidBackupFile as string || 'Invalid backup file. Missing collections data.' });
                         return;
                       }
 
@@ -269,14 +269,14 @@ export default function BackupResetPage() {
                         if (fileInput) fileInput.value = '';
                       } else {
                         if (res.status === 401 || res.status === 403) {
-                          setMessage({ type: 'error', text: dict?.common?.unauthorizedRestore || 'Unauthorized. Only admins can restore collections.' });
+                          setMessage({ type: 'error', text: (dict?.common as Record<string, unknown>)?.unauthorizedRestore as string || 'Unauthorized. Only admins can restore collections.' });
                         } else {
-                          setMessage({ type: 'error', text: data.error || dict?.common?.failedToRestoreBackup || 'Failed to restore backup' });
+                          setMessage({ type: 'error', text: data.error || (dict?.common as Record<string, unknown>)?.failedToRestoreBackup as string || 'Failed to restore backup' });
                         }
                       }
                     } catch (error) {
                       console.error('Error restoring backup:', error);
-                      setMessage({ type: 'error', text: dict?.common?.failedToRestoreBackup || 'Failed to restore backup. Please check your connection.' });
+                      setMessage({ type: 'error', text: (dict?.common as Record<string, unknown>)?.failedToRestoreBackup as string || 'Failed to restore backup. Please check your connection.' });
                     } finally {
                       setRestoring(false);
                     }
@@ -372,11 +372,11 @@ export default function BackupResetPage() {
                   <button
                     onClick={async () => {
                       if (selectedCollections.length === 0) {
-                        setMessage({ type: 'error', text: dict?.common?.selectAtLeastOneCollectionReset || 'Please select at least one collection to reset.' });
+                        setMessage({ type: 'error', text: (dict?.common as Record<string, unknown>)?.selectAtLeastOneCollectionReset as string || 'Please select at least one collection to reset.' });
                         return;
                       }
 
-                      const resetConfirmText = dict?.common?.resetCollectionsConfirm
+                      const resetConfirmText = ((dict?.common as Record<string, unknown>)?.resetCollectionsConfirm as string)
                         ?.replace('{count}', selectedCollections.length.toString())
                         ?.replace('{collections}', selectedCollections.join(', ')) ||
                         `Are you sure you want to reset ${selectedCollections.length} collection(s)?\n\n` +
@@ -407,14 +407,14 @@ export default function BackupResetPage() {
                           setSelectedCollections([]);
                         } else {
                           if (res.status === 401 || res.status === 403) {
-                            setMessage({ type: 'error', text: dict?.common?.unauthorizedReset || 'Unauthorized. Only admins can reset collections.' });
+                            setMessage({ type: 'error', text: (dict?.common as Record<string, unknown>)?.unauthorizedReset as string || 'Unauthorized. Only admins can reset collections.' });
                           } else {
-                            setMessage({ type: 'error', text: data.error || dict?.common?.failedToResetCollections || 'Failed to reset collections' });
+                            setMessage({ type: 'error', text: data.error || (dict?.common as Record<string, unknown>)?.failedToResetCollections as string || 'Failed to reset collections' });
                           }
                         }
                       } catch (error) {
                         console.error('Error resetting collections:', error);
-                        setMessage({ type: 'error', text: dict?.common?.failedToResetCollections || 'Failed to reset collections. Please check your connection.' });
+                        setMessage({ type: 'error', text: (dict?.common as Record<string, unknown>)?.failedToResetCollections as string || 'Failed to reset collections. Please check your connection.' });
                       } finally {
                         setResetting(false);
                       }

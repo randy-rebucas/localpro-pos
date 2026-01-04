@@ -38,12 +38,12 @@ export async function GET(request: NextRequest) {
         email: userDoc.email,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Get QR code error:', error);
-    const errorMessage = error.message || 'Failed to get QR code';
+    const errorMessage = error instanceof Error ? error.message : 'Failed to get QR code'; 
     return NextResponse.json(
       { success: false, error: errorMessage },
-      { status: error.message === 'Unauthorized' ? 401 : 500 }
+      { status: error instanceof Error && error.message === 'Unauthorized' ? 401 : 500 }
     );
   }
 }
@@ -52,11 +52,9 @@ export async function GET(request: NextRequest) {
  * POST - Generate or regenerate QR code token for current user
  */
 export async function POST(request: NextRequest) {
-  let t: (key: string, fallback: string) => string;
   try {
     const user = await requireAuth(request);
     await connectDB();
-    t = await getValidationTranslatorFromRequest(request);
 
     // Generate new QR token (or create if doesn't exist)
     const newQrToken = user.userId + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 15);
@@ -69,12 +67,12 @@ export async function POST(request: NextRequest) {
         qrToken: newQrToken,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Generate/Regenerate QR code error:', error);
-    const errorMessage = error.message || 'Failed to generate QR code';
+    const errorMessage = error instanceof Error ? error.message : 'Failed to generate QR code'; 
     return NextResponse.json(
       { success: false, error: errorMessage },
-      { status: error.message === 'Unauthorized' ? 401 : 500 }
+      { status: error instanceof Error && error.message === 'Unauthorized' ? 401 : 500 }
     );
   }
 }

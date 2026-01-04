@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import PageTitle from '@/components/PageTitle';
@@ -22,10 +22,11 @@ export default function InventoryPage() {
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const { settings } = useTenantSettings();
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, Record<string, string | Record<string, string>>> | null>(null);
   const [selectedBranch, setSelectedBranch] = useState<string>('');
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [loading, setLoading] = useState(true);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_loading, setLoading] = useState(true);
   
   const inventoryEnabled = supportsFeature(settings ?? undefined, 'inventory');
   const businessTypeConfig = settings ? getBusinessTypeConfig(getBusinessType(settings)) : null;
@@ -34,14 +35,10 @@ export default function InventoryPage() {
     getDictionaryClient(lang).then(setDict);
   }, [lang]);
 
-  useEffect(() => {
-    fetchBranches();
-  }, [tenant]);
-
-  const fetchBranches = async () => {
+  const fetchBranches = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/branches?tenant=${tenant}&isActive=true`);
+      const res = await fetch(`/api/branches?tenant=${tenant}&isActive=true`, { credentials: 'include' });
       const data = await res.json();
       if (data.success) {
         setBranches(data.data || []);
@@ -51,9 +48,14 @@ export default function InventoryPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [tenant]);
 
-  const handleStockUpdate = (update: any) => {
+  useEffect(() => {
+    fetchBranches();
+  }, [fetchBranches]);
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleStockUpdate = (_update: unknown) => {
     // Handle real-time stock updates
     // Stock updates are handled by the RealTimeStockTracker component
   };

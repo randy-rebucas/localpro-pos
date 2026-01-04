@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
 import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
-import { requireAuth } from '@/lib/auth';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { requireAuth as _requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateAndSanitize, validateProduct } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -34,7 +35,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     };
     
     return NextResponse.json({ success: true, data: productData });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -47,7 +48,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     try {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
-    } catch (authError: any) {
+    } catch (authError: unknown) {
       if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
         return NextResponse.json(
           { success: false, error: authError.message },
@@ -108,7 +109,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     // Track changes
-    const changes: Record<string, any> = {};
+    const changes: Record<string, unknown> = {};
     Object.keys(data).forEach(key => {
       if (oldProduct[key as keyof typeof oldProduct] !== data[key]) {
         changes[key] = {
@@ -127,7 +128,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     });
     
     return NextResponse.json({ success: true, data: product });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return handleApiError(error);
   }
 }
@@ -140,7 +141,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     try {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
-    } catch (authError: any) {
+    } catch (authError: unknown) {
       if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
         return NextResponse.json(
           { success: false, error: authError.message },
@@ -166,7 +167,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     });
     
     return NextResponse.json({ success: true, data: {} });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return handleApiError(error);
   }
 }

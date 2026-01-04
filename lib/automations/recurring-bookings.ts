@@ -4,8 +4,6 @@
  */
 
 import connectDB from '@/lib/mongodb';
-import Booking from '@/models/Booking';
-import Tenant from '@/models/Tenant';
 import { AutomationResult } from './types';
 
 export interface RecurringBookingOptions {
@@ -19,7 +17,8 @@ export interface RecurringBookingOptions {
  * This is a placeholder implementation that can be extended
  */
 export async function generateRecurringBookings(
-  options: RecurringBookingOptions = {}
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _options: RecurringBookingOptions = {}
 ): Promise<AutomationResult> {
   await connectDB();
 
@@ -40,10 +39,11 @@ export async function generateRecurringBookings(
     results.processed = 0;
 
     return results;
-  } catch (error: any) {
+  } catch (error: unknown) {
     results.success = false;
-    results.message = `Error generating recurring bookings: ${error.message}`;
-    results.errors?.push(error.message);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    results.message = `Error generating recurring bookings: ${errorMessage}`;
+    results.errors?.push(errorMessage);
     return results;
   }
 }

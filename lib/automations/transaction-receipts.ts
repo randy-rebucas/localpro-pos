@@ -5,7 +5,6 @@
 
 import connectDB from '@/lib/mongodb';
 import Transaction from '@/models/Transaction';
-import Tenant from '@/models/Tenant';
 import { sendEmail } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { formatDate, formatTime } from '@/lib/formatting';
@@ -164,10 +163,11 @@ ${itemsList}
     results.message = 'Receipt sent successfully';
 
     return results;
-  } catch (error: any) {
+  } catch (error: unknown) {
     results.success = false;
-    results.message = `Error sending receipt: ${error.message}`;
-    results.errors?.push(error.message);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    results.message = `Error sending receipt: ${errorMessage}`;
+    results.errors?.push(errorMessage);
     results.failed = 1;
     return results;
   }
@@ -197,7 +197,7 @@ export async function sendPendingReceipts(
     // Find transactions without receipt email sent
     // Note: We'll need to add a field to track if receipt was sent
     // For now, we'll check transactions with customer email in notes
-    const query: any = {
+    const query: Record<string, unknown> = {
       createdAt: { $gte: since },
       status: 'completed',
     };
@@ -232,9 +232,10 @@ export async function sendPendingReceipts(
         } else {
           failed++;
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         failed++;
-        results.errors?.push(`Transaction ${transaction._id}: ${error.message}`);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        results.errors?.push(`Transaction ${transaction._id}: ${errorMessage}`);
       }
     }
 
@@ -243,9 +244,10 @@ export async function sendPendingReceipts(
     results.message = `Processed ${processed} receipts${failed > 0 ? `, ${failed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: unknown) {
     results.success = false;
-    results.message = `Error processing pending receipts: ${error.message}`;
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    results.message = `Error processing pending receipts: ${errorMessage}`;
     results.errors?.push(error.message);
     return results;
   }

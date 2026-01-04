@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
 
     const result = await calculateCustomerLifetimeValue({ tenantId, updateCustomers });
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Customer lifetime value calculation error:', error);
     return NextResponse.json({
       success: false,
@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
 
     const result = await calculateCustomerLifetimeValue({ tenantId, updateCustomers });
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Customer lifetime value calculation error:', error);
     return NextResponse.json({
       success: false,

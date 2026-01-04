@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { hardwareService } from '@/lib/hardware';
 
 interface BarcodeScannerProps {
@@ -9,7 +9,7 @@ interface BarcodeScannerProps {
 }
 
 export default function BarcodeScanner({ onScan, enabled = true }: BarcodeScannerProps) {
-  const [isActive, setIsActive] = useState(enabled);
+  const [isActive] = useState(enabled);
 
   useEffect(() => {
     if (!isActive) return;

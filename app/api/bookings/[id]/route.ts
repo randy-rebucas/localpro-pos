@@ -5,7 +5,7 @@ import User from '@/models/User';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireRole, getCurrentUser } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
-import { sendBookingConfirmation, sendBookingCancellation, sendBookingReminder } from '@/lib/notifications';
+import { sendBookingConfirmation, sendBookingCancellation } from '@/lib/notifications';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { getTenantSettingsById } from '@/lib/tenant';
 
@@ -48,11 +48,11 @@ export async function GET(
     }
 
     return NextResponse.json({ success: true, data: booking });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Get booking error:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
-      { success: false, error: error.message || t('validation.failedToFetchBooking', 'Failed to fetch booking') },
+      { success: false, error: error instanceof Error ? error.message : t('validation.failedToFetchBooking', 'Failed to fetch booking') }, 
       { status: 500 }
     );
   }
@@ -172,7 +172,7 @@ export async function PUT(
     }
 
     // Update booking
-    const updateData: any = {};
+    const updateData: Record<string, unknown> = {};
     if (customerName !== undefined) updateData.customerName = customerName;
     if (customerEmail !== undefined) updateData.customerEmail = customerEmail;
     if (customerPhone !== undefined) updateData.customerPhone = customerPhone;
@@ -236,11 +236,11 @@ export async function PUT(
     });
 
     return NextResponse.json({ success: true, data: updatedBooking });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Update booking error:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
-      { success: false, error: error.message || t('validation.failedToUpdateBooking', 'Failed to update booking') },
+      { success: false, error: error instanceof Error ? error.message : t('validation.failedToUpdateBooking', 'Failed to update booking') }, 
       { status: 500 }
     );
   }
@@ -314,11 +314,11 @@ export async function DELETE(
     });
 
     return NextResponse.json({ success: true, message: t('validation.bookingDeleted', 'Booking deleted successfully') });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Delete booking error:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
-      { success: false, error: error.message || t('validation.failedToDeleteBooking', 'Failed to delete booking') },
+      { success: false, error: error instanceof Error ? error.message : t('validation.failedToDeleteBooking', 'Failed to delete booking') }, 
       { status: 500 }
     );
   }

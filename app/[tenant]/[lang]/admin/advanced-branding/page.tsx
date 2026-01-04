@@ -11,7 +11,7 @@ export default function AdvancedBrandingPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState<ITenantSettings | null>(null);
@@ -20,6 +20,7 @@ export default function AdvancedBrandingPage() {
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
     fetchSettings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang, tenant]);
 
   const fetchSettings = async () => {
@@ -40,18 +41,18 @@ export default function AdvancedBrandingPage() {
     }
   };
 
-  const updateSetting = (path: string, value: any) => {
+  const updateSetting = (path: string, value: unknown) => {
     if (!settings) return;
     
     const keys = path.split('.');
     const newSettings = JSON.parse(JSON.stringify(settings));
-    let current: any = newSettings;
+    let current: Record<string, unknown> = newSettings;
     
     for (let i = 0; i < keys.length - 1; i++) {
       if (!current[keys[i]]) {
         current[keys[i]] = {};
       }
-      current = current[keys[i]];
+      current = current[keys[i]] as Record<string, unknown>;
     }
     
     current[keys[keys.length - 1]] = value;
@@ -75,19 +76,19 @@ export default function AdvancedBrandingPage() {
 
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: dict?.admin?.advancedBrandingSaved || 'Advanced branding settings saved successfully!' });
+        setMessage({ type: 'success', text: (dict?.admin as Record<string, unknown>)?.advancedBrandingSaved as string || 'Advanced branding settings saved successfully!' });
         setSettings(data.data);
         setTimeout(() => setMessage(null), 3000);
       } else {
         if (res.status === 401 || res.status === 403) {
-          setMessage({ type: 'error', text: dict?.settings?.unauthorized || 'Unauthorized. Please login with admin account.' });
+          setMessage({ type: 'error', text: (dict?.settings as Record<string, unknown>)?.unauthorized as string || 'Unauthorized. Please login with admin account.' });
         } else {
-          setMessage({ type: 'error', text: data.error || dict?.admin?.failedToSaveAdvancedBranding || 'Failed to save settings' });
+          setMessage({ type: 'error', text: data.error || (dict?.admin as Record<string, unknown>)?.failedToSaveAdvancedBranding as string || 'Failed to save settings' });
         }
       }
     } catch (error) {
       console.error('Error saving advanced branding settings:', error);
-      setMessage({ type: 'error', text: dict?.admin?.failedToSaveAdvancedBrandingConnection || 'Failed to save settings. Please check your connection.' });
+      setMessage({ type: 'error', text: (dict?.admin as Record<string, unknown>)?.failedToSaveAdvancedBrandingConnection as string || 'Failed to save settings. Please check your connection.' });
     } finally {
       setSaving(false);
     }
@@ -98,7 +99,7 @@ export default function AdvancedBrandingPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+          <p className="mt-4 text-gray-600">{(dict?.common as Record<string, unknown>)?.loading as string || 'Loading...'}</p>
         </div>
       </div>
     );
@@ -110,7 +111,7 @@ export default function AdvancedBrandingPage() {
         <Navbar />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
           <div className="bg-red-50 border-2 border-red-300 p-5 sm:p-6">
-            <h2 className="text-xl font-bold text-red-800 mb-2">{dict?.settings?.failedToLoad || 'Failed to Load Settings'}</h2>
+            <h2 className="text-xl font-bold text-red-800 mb-2">{(dict?.settings as Record<string, unknown>)?.failedToLoad as string || 'Failed to Load Settings'}</h2>
             <p className="text-red-700 mb-4">
               {message?.text || 'Unable to load tenant settings. Please check your connection and try again.'}
             </p>
@@ -118,7 +119,7 @@ export default function AdvancedBrandingPage() {
               onClick={fetchSettings}
               className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 font-medium transition-colors border border-red-700"
             >
-              {dict?.settings?.retry || 'Retry'}
+              {(dict?.settings as Record<string, unknown>)?.retry as string || 'Retry'}
             </button>
           </div>
         </div>
@@ -138,13 +139,13 @@ export default function AdvancedBrandingPage() {
             <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
-            {dict?.common?.back || 'Back'} to Admin
+            {(dict?.common as Record<string, unknown>)?.back as string || 'Back'} to Admin
           </Link>
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
-            {dict?.admin?.advancedBranding || 'Advanced Branding'}
+            {(dict?.admin as Record<string, unknown>)?.advancedBranding as string || 'Advanced Branding'}
           </h1>
           <p className="text-gray-600">
-            {dict?.admin?.advancedBrandingDescription || 'Customize fonts, themes, and CSS for advanced branding control'}
+            {(dict?.admin as Record<string, unknown>)?.advancedBrandingDescription as string || 'Customize fonts, themes, and CSS for advanced branding control'}
           </p>
         </div>
 
@@ -163,12 +164,12 @@ export default function AdvancedBrandingPage() {
         <div className="bg-white border border-gray-300 p-6 space-y-8">
           <div>
             <h2 className="text-xl font-bold text-gray-900 mb-5">
-              {dict?.settings?.advancedBranding || 'Advanced Branding'}
+              {(dict?.settings as Record<string, unknown>)?.advancedBranding as string || 'Advanced Branding'}
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict?.admin?.fontSource || 'Font Source'}
+                  {(dict?.admin as Record<string, unknown>)?.fontSource as string || 'Font Source'}
                 </label>
                 <select
                   value={settings.advancedBranding?.fontSource || 'system'}
@@ -181,14 +182,14 @@ export default function AdvancedBrandingPage() {
                   }}
                   className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                 >
-                  <option value="system">{dict?.admin?.systemFont || 'System Font'}</option>
-                  <option value="google">{dict?.admin?.googleFont || 'Google Font'}</option>
-                  <option value="custom">{dict?.admin?.customFont || 'Custom Font'}</option>
+                  <option value="system">{(dict?.admin as Record<string, unknown>)?.systemFont as string || 'System Font'}</option>
+                  <option value="google">{(dict?.admin as Record<string, unknown>)?.googleFont as string || 'Google Font'}</option>
+                  <option value="custom">{(dict?.admin as Record<string, unknown>)?.customFont as string || 'Custom Font'}</option>
                 </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict?.admin?.fontFamilyName || 'Font Family Name'}
+                  {(dict?.admin as Record<string, unknown>)?.fontFamilyName as string || 'Font Family Name'}
                 </label>
                 <input
                   type="text"
@@ -198,13 +199,13 @@ export default function AdvancedBrandingPage() {
                     fontFamily: e.target.value,
                   })}
                   className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
-                  placeholder={dict?.admin?.fontFamilyPlaceholder || 'e.g., Roboto, Inter, Arial'}
+                  placeholder={(dict?.admin as Record<string, unknown>)?.fontFamilyPlaceholder as string || 'e.g., Roboto, Inter, Arial'}
                 />
               </div>
               {settings.advancedBranding?.fontSource === 'google' && (
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {dict?.admin?.googleFontURL || 'Google Font URL'}
+                    {(dict?.admin as Record<string, unknown>)?.googleFontURL as string || 'Google Font URL'}
                   </label>
                   <input
                     type="url"
@@ -214,14 +215,14 @@ export default function AdvancedBrandingPage() {
                       googleFontUrl: e.target.value,
                     })}
                     className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
-                    placeholder={dict?.admin?.googleFontURLPlaceholder || 'https://fonts.googleapis.com/css2?family=Roboto'}
+                    placeholder={(dict?.admin as Record<string, unknown>)?.googleFontURLPlaceholder as string || 'https://fonts.googleapis.com/css2?family=Roboto'}
                   />
                 </div>
               )}
               {settings.advancedBranding?.fontSource === 'custom' && (
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {dict?.admin?.customFontURL || 'Custom Font URL'}
+                    {(dict?.admin as Record<string, unknown>)?.customFontURL as string || 'Custom Font URL'}
                   </label>
                   <input
                     type="url"
@@ -231,13 +232,13 @@ export default function AdvancedBrandingPage() {
                       customFontUrl: e.target.value,
                     })}
                     className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
-                    placeholder={dict?.admin?.customFontURLPlaceholder || 'https://example.com/fonts/custom-font.woff2'}
+                    placeholder={(dict?.admin as Record<string, unknown>)?.customFontURLPlaceholder as string || 'https://example.com/fonts/custom-font.woff2'}
                   />
                 </div>
               )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict?.admin?.theme || 'Theme'}
+                  {(dict?.admin as Record<string, unknown>)?.theme as string || 'Theme'}
                 </label>
                 <select
                   value={settings.advancedBranding?.theme || 'light'}
@@ -247,15 +248,15 @@ export default function AdvancedBrandingPage() {
                   })}
                   className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                 >
-                  <option value="light">{dict?.admin?.light || 'Light'}</option>
-                  <option value="dark">{dict?.admin?.dark || 'Dark'}</option>
-                  <option value="auto">{dict?.admin?.autoSystem || 'Auto (System)'}</option>
-                  <option value="custom">{dict?.admin?.custom || 'Custom'}</option>
+                  <option value="light">{(dict?.admin as Record<string, unknown>)?.light as string || 'Light'}</option>
+                  <option value="dark">{(dict?.admin as Record<string, unknown>)?.dark as string || 'Dark'}</option>
+                  <option value="auto">{(dict?.admin as Record<string, unknown>)?.autoSystem as string || 'Auto (System)'}</option>
+                  <option value="custom">{(dict?.admin as Record<string, unknown>)?.custom as string || 'Custom'}</option>
                 </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict?.admin?.borderRadius || 'Border Radius'}
+                  {(dict?.admin as Record<string, unknown>)?.borderRadius as string || 'Border Radius'}
                 </label>
                 <select
                   value={settings.advancedBranding?.borderRadius || 'md'}
@@ -265,18 +266,18 @@ export default function AdvancedBrandingPage() {
                   })}
                   className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                 >
-                  <option value="none">{dict?.admin?.none || 'None'}</option>
-                  <option value="sm">{dict?.admin?.small || 'Small'}</option>
-                  <option value="md">{dict?.admin?.medium || 'Medium'}</option>
-                  <option value="lg">{dict?.admin?.large || 'Large'}</option>
-                  <option value="xl">{dict?.admin?.extraLarge || 'Extra Large'}</option>
-                  <option value="custom">{dict?.admin?.custom || 'Custom'}</option>
+                  <option value="none">{(dict?.admin as Record<string, unknown>)?.none as string || 'None'}</option>
+                  <option value="sm">{(dict?.admin as Record<string, unknown>)?.small as string || 'Small'}</option>
+                  <option value="md">{(dict?.admin as Record<string, unknown>)?.medium as string || 'Medium'}</option>
+                  <option value="lg">{(dict?.admin as Record<string, unknown>)?.large as string || 'Large'}</option>
+                  <option value="xl">{(dict?.admin as Record<string, unknown>)?.extraLarge as string || 'Extra Large'}</option>
+                  <option value="custom">{(dict?.admin as Record<string, unknown>)?.custom as string || 'Custom'}</option>
                 </select>
               </div>
               {settings.advancedBranding?.borderRadius === 'custom' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {dict?.admin?.customBorderRadius || 'Custom Border Radius'}
+                    {(dict?.admin as Record<string, unknown>)?.customBorderRadius as string || 'Custom Border Radius'}
                   </label>
                   <input
                     type="text"
@@ -286,14 +287,14 @@ export default function AdvancedBrandingPage() {
                       customBorderRadius: e.target.value,
                     })}
                     className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
-                    placeholder={dict?.admin?.customBorderRadiusPlaceholder || 'e.g., 8px, 0.5rem, 12px 8px'}
+                    placeholder={(dict?.admin as Record<string, unknown>)?.customBorderRadiusPlaceholder as string || 'e.g., 8px, 0.5rem, 12px 8px'}
                   />
                 </div>
               )}
               {settings.advancedBranding?.theme === 'custom' && (
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {dict?.admin?.customCSS || 'Custom CSS'}
+                    {(dict?.admin as Record<string, unknown>)?.customCSS as string || 'Custom CSS'}
                   </label>
                   <textarea
                     value={settings.advancedBranding?.customTheme?.css || ''}
@@ -306,10 +307,10 @@ export default function AdvancedBrandingPage() {
                     })}
                     rows={10}
                     className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white font-mono text-sm"
-                    placeholder={dict?.admin?.customCSSPlaceholder || ':root { --primary-color: #2563eb; }'}
+                    placeholder={(dict?.admin as Record<string, unknown>)?.customCSSPlaceholder as string || ':root { --primary-color: #2563eb; }'}
                   />
                   <p className="mt-2 text-xs text-gray-500">
-                    {dict?.admin?.customCSSHint || 'Add custom CSS variables or styles. Use CSS variables for better theme integration.'}
+                    {(dict?.admin as Record<string, unknown>)?.customCSSHint as string || 'Add custom CSS variables or styles. Use CSS variables for better theme integration.'}
                   </p>
                 </div>
               )}
@@ -325,14 +326,14 @@ export default function AdvancedBrandingPage() {
               {saving ? (
                 <>
                   <div className="animate-spin h-5 w-5 border-b-2 border-white"></div>
-                  <span>{dict?.common?.saving || 'Saving...'}</span>
+                  <span>{(dict?.common as Record<string, unknown>)?.saving as string || 'Saving...'}</span>
                 </>
               ) : (
                 <>
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
-                  <span>{dict?.common?.save || 'Save Settings'}</span>
+                  <span>{(dict?.common as Record<string, unknown>)?.save as string || 'Save Settings'}</span>
                 </>
               )}
             </button>
