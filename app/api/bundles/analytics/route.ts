@@ -92,8 +92,8 @@ export async function GET(request: NextRequest) {
       totalQuantity: analytics.reduce((sum, a) => sum + a.totalQuantity, 0),
       totalTransactions: new Set(
         transactions.flatMap(t => 
-          t.items
-            .filter((item: { bundleId?: unknown }) => item.bundleId)
+          (Array.isArray(t.items) ? t.items : [])
+            .filter((item) => (item as { bundleId?: unknown }).bundleId != null && (item as { bundleId?: unknown }).bundleId !== undefined)
             .map(() => t._id.toString())
         )
       ).size,
@@ -112,6 +112,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error: unknown) {
     console.error('Error fetching bundle analytics:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Failed to fetch bundle analytics';
+    return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
   }
 }

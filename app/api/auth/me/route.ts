@@ -32,7 +32,8 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error: unknown) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Failed to get user information';
+    return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
   }
 }
 

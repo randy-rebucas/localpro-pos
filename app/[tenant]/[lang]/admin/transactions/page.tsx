@@ -63,12 +63,12 @@ export default function TransactionsPage() {
         setTotalPages(data.pagination?.pages || 1);
         setMessage(null);
       } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchTransactions || 'Failed to fetch transactions' });
+        setMessage({ type: 'error', text: data.error || (dict?.common as Record<string, unknown>)?.failedToFetchTransactions as string || 'Failed to fetch transactions' });
         setTransactions([]);
       }
     } catch (error) {
       console.error('Error fetching transactions:', error);
-      setMessage({ type: 'error', text: dict?.common?.failedToFetchTransactions || 'Failed to fetch transactions' });
+      setMessage({ type: 'error', text: (dict?.common as Record<string, unknown>)?.failedToFetchTransactions as string || 'Failed to fetch transactions' });
       setTransactions([]);
     } finally {
       setLoading(false);
@@ -80,7 +80,7 @@ export default function TransactionsPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+          <p className="mt-4 text-gray-600">{(dict?.common as Record<string, unknown>)?.loading as string || 'Loading...'}</p>
         </div>
       </div>
     );
@@ -98,14 +98,14 @@ export default function TransactionsPage() {
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
-            {dict?.admin?.backToAdmin || 'Back to Admin'}
+            {(dict?.admin as Record<string, unknown>)?.backToAdmin as string || 'Back to Admin'}
           </Link>
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
-                {dict.admin?.transactions || 'Transactions'}
+                {(dict.admin as Record<string, unknown>)?.transactions as string || 'Transactions'}
               </h1>
-              <p className="text-gray-600">{dict.admin?.transactionsSubtitle || 'View and manage all sales transactions'}</p>
+              <p className="text-gray-600">{(dict.admin as Record<string, unknown>)?.transactionsSubtitle as string || 'View and manage all sales transactions'}</p>
             </div>
           </div>
         </div>
@@ -129,7 +129,7 @@ export default function TransactionsPage() {
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Payment</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.actions || 'Actions'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict.common as Record<string, unknown>)?.actions as string || 'Actions'}</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -180,7 +180,7 @@ export default function TransactionsPage() {
                         onClick={() => setSelectedTransaction(transaction)}
                         className="text-blue-600 hover:text-blue-900"
                       >
-                        {dict.common?.view || 'View'}
+                        {(dict.common as Record<string, unknown>)?.view as string || 'View'}
                       </button>
                     </td>
                   </tr>
@@ -188,7 +188,7 @@ export default function TransactionsPage() {
               </tbody>
             </table>
             {transactions.length === 0 && (
-              <div className="text-center py-8 text-gray-500">{dict.common?.noResults || 'No transactions found'}</div>
+              <div className="text-center py-8 text-gray-500">{(dict.common as Record<string, unknown>)?.noResults as string || 'No transactions found'}</div>
             )}
           </div>
           {totalPages > 1 && (
@@ -241,7 +241,7 @@ function TransactionDetailModal({
         <div className="p-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-bold text-gray-900">
-              {dict.admin?.transactionDetails || 'Transaction Details'}
+              {(dict.admin as Record<string, unknown>)?.transactionDetails as string || 'Transaction Details'}
             </h2>
             <button
               onClick={onClose}
@@ -333,7 +333,7 @@ function TransactionDetailModal({
               onClick={onClose}
               className="px-4 py-2 bg-gray-200 text-gray-700 hover:bg-gray-300 border border-gray-400"
             >
-              {dict.common?.close || 'Close'}
+              {(dict.common as Record<string, unknown>)?.close as string || 'Close'}
             </button>
           </div>
         </div>

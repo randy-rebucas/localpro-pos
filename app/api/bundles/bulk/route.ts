@@ -62,6 +62,7 @@ export async function PUT(request: NextRequest) {
     });
   } catch (error: unknown) {
     console.error('Error in bulk bundle operation:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Failed to process bulk bundles';
+    return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
   }
 }

@@ -21,7 +21,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ success: true, data: categories });
   } catch (error: unknown) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Failed to fetch categories';
+    return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
   }
 }
 
@@ -34,10 +35,11 @@ export async function POST(request: NextRequest) {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
     } catch (authError: unknown) {
-      if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
+      const authErrorMessage = authError instanceof Error ? authError.message : 'Authentication error';
+      if (authErrorMessage.includes('Unauthorized') || authErrorMessage.includes('Forbidden')) {
         return NextResponse.json(
-          { success: false, error: authError.message },
-          { status: authError.message.includes('Unauthorized') ? 401 : 403 }
+          { success: false, error: authErrorMessage },
+          { status: authErrorMessage.includes('Unauthorized') ? 401 : 403 }
         );
       }
       throw authError;
@@ -75,7 +77,8 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+    const errorMessage = error instanceof Error ? error.message : 'Failed to create category';
+    return NextResponse.json({ success: false, error: errorMessage }, { status: 400 });
   }
 }
 

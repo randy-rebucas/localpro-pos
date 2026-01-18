@@ -16,7 +16,7 @@ export default function ProfilePage() {
   const lang = params.lang as 'en' | 'es';
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { user: _user } = useAuth();
-  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
+  const [dict, setDict] = useState<any>(null);
   const [profileData, setProfileData] = useState({
     name: '',
     email: '',
@@ -291,7 +291,7 @@ export default function ProfilePage() {
                         {dict?.profile?.role || 'Role'}
                       </label>
                       <div className="px-4 py-3 bg-gray-50 border-2 border-gray-300 text-gray-700 capitalize">
-                        {profileInfo.role}
+                        {typeof profileInfo.role === 'string' ? profileInfo.role : 'N/A'}
                       </div>
                     </div>
                     <div>
@@ -299,7 +299,7 @@ export default function ProfilePage() {
                         {dict?.profile?.memberSince || 'Member Since'}
                       </label>
                       <div className="px-4 py-3 bg-gray-50 border-2 border-gray-300 text-gray-700">
-                        {profileInfo.createdAt ? new Date(profileInfo.createdAt).toLocaleDateString() : 'N/A'}
+                        {profileInfo.createdAt ? new Date(typeof profileInfo.createdAt === 'string' || typeof profileInfo.createdAt === 'number' ? profileInfo.createdAt : Date.now()).toLocaleDateString() : 'N/A'}
                       </div>
                     </div>
                   </div>
@@ -437,7 +437,7 @@ export default function ProfilePage() {
 
               {showPinSection && (
                 <form onSubmit={handlePinUpdate} className="space-y-6">
-                  {profileInfo?.hasPin && (
+                  {profileInfo && (typeof profileInfo.hasPin === 'boolean' ? profileInfo.hasPin : Boolean(profileInfo.hasPin)) && (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         {dict?.profile?.currentPin || 'Current PIN'}
@@ -448,7 +448,7 @@ export default function ProfilePage() {
                         pattern="[0-9]*"
                         value={pinData.currentPin}
                         onChange={(e) => setPinData({ ...pinData, currentPin: e.target.value.replace(/\D/g, '') })}
-                        required={profileInfo?.hasPin}
+                        required={profileInfo ? (typeof profileInfo.hasPin === 'boolean' ? profileInfo.hasPin : Boolean(profileInfo.hasPin)) : false}
                         maxLength={8}
                         className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                         placeholder={dict?.profile?.currentPinPlaceholder || 'Enter current PIN'}
@@ -543,8 +543,8 @@ export default function ProfilePage() {
               {profileInfo?.qrToken ? (
                 <div className="flex justify-center">
                   <QRCodeDisplay
-                    qrToken={profileInfo.qrToken}
-                    name={profileInfo.name}
+                    qrToken={typeof profileInfo.qrToken === 'string' ? profileInfo.qrToken : ''}
+                    name={typeof profileInfo.name === 'string' ? profileInfo.name : ''}
                     onRegenerate={handleRegenerateQR}
                   />
                 </div>

@@ -42,9 +42,10 @@ export async function GET(request: NextRequest) {
   } catch (error: unknown) {
     console.error('Get current attendance error:', error);
     const t = await getValidationTranslatorFromRequest(request);
+    const errorMessage = error instanceof Error ? error.message : t('validation.failedToGetCurrentAttendance', 'Failed to get current attendance');
     return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : t('validation.failedToGetCurrentAttendance', 'Failed to get current attendance') }, 
-      { status: error.message === 'Unauthorized' ? 401 : 500 }
+      { success: false, error: errorMessage }, 
+      { status: errorMessage === 'Unauthorized' ? 401 : 500 }
     );
   }
 }

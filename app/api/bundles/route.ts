@@ -40,18 +40,20 @@ export async function GET(request: NextRequest) {
       query.categoryId = categoryId;
     }
     if (minPrice || maxPrice) {
-      query.price = {};
-      if (minPrice) query.price.$gte = parseFloat(minPrice);
-      if (maxPrice) query.price.$lte = parseFloat(maxPrice);
+      const priceFilter: { $gte?: number; $lte?: number } = {};
+      if (minPrice) priceFilter.$gte = parseFloat(minPrice);
+      if (maxPrice) priceFilter.$lte = parseFloat(maxPrice);
+      query.price = priceFilter;
     }
     if (startDate || endDate) {
-      query.createdAt = {};
-      if (startDate) query.createdAt.$gte = new Date(startDate);
+      const dateFilter: { $gte?: Date; $lte?: Date } = {};
+      if (startDate) dateFilter.$gte = new Date(startDate);
       if (endDate) {
         const end = new Date(endDate);
         end.setHours(23, 59, 59, 999);
-        query.createdAt.$lte = end;
+        dateFilter.$lte = end;
       }
+      query.createdAt = dateFilter;
     }
 
     const bundles = await ProductBundle.find(query)
@@ -63,7 +65,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: true, data: bundles });
   } catch (error: unknown) {
     console.error('Error fetching bundles:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Failed to fetch bundles';
+    return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
   }
 }
 
@@ -119,7 +122,8 @@ export async function POST(request: NextRequest) {
       );
     }
     console.error('Error creating bundle:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+    const errorMessage = error instanceof Error ? error.message : 'Failed to create bundle';
+    return NextResponse.json({ success: false, error: errorMessage }, { status: 400 });
   }
 }
 

@@ -61,7 +61,8 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error: unknown) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Failed to update profile';
+    return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
   }
 }
 
@@ -253,7 +254,8 @@ export async function PUT(request: NextRequest) {
         { status: 400 }
       );
     }
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Failed to update profile';
+    return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
   }
 }
 

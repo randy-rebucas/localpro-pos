@@ -20,7 +20,9 @@
     "type": "Tipo",
     "switchStore": "Cambiar Tienda",
     "logout": "Cerrar Sesión",
-    "login": "Iniciar Sesión"
+    "login": "Iniciar Sesión",
+    "productDeletedSuccess": "Producto eliminado exitosamente",
+    "failedToDeleteProduct": "Error al eliminar producto"
   },
   "nav": {
     "dashboard": "Panel",

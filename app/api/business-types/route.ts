@@ -32,8 +32,9 @@ export async function GET(request: NextRequest) {
       data: businessTypes,
     });
   } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Failed to fetch business types';
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }

@@ -50,7 +50,7 @@ export default function POSPage() {
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'digital'>('cash');
   const [cashReceived, setCashReceived] = useState('');
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
+  const [dict, setDict] = useState<any>(null);
   const { isOnline } = useNetworkStatus(tenant);
   const { settings } = useTenantSettings();
   const [showQRScanner, setShowQRScanner] = useState(false);
@@ -102,23 +102,23 @@ export default function POSPage() {
         // Enter fullscreen
         if (document.documentElement.requestFullscreen) {
           await document.documentElement.requestFullscreen();
-        } else if ((document.documentElement as { webkitRequestFullscreen?: () => Promise<void> }).webkitRequestFullscreen) {
-          await (document.documentElement as { webkitRequestFullscreen: () => Promise<void> }).webkitRequestFullscreen();
-        } else if ((document.documentElement as { mozRequestFullScreen?: () => Promise<void> }).mozRequestFullScreen) {
-          await (document.documentElement as { mozRequestFullScreen: () => Promise<void> }).mozRequestFullScreen();
-        } else if ((document.documentElement as { msRequestFullscreen?: () => Promise<void> }).msRequestFullscreen) {
-          await (document.documentElement as { msRequestFullscreen: () => Promise<void> }).msRequestFullscreen();
+        } else if ((document.documentElement as unknown as { webkitRequestFullscreen?: () => Promise<void> }).webkitRequestFullscreen) {
+          await (document.documentElement as unknown as { webkitRequestFullscreen: () => Promise<void> }).webkitRequestFullscreen();
+        } else if ((document.documentElement as unknown as { mozRequestFullScreen?: () => Promise<void> }).mozRequestFullScreen) {
+          await (document.documentElement as unknown as { mozRequestFullScreen: () => Promise<void> }).mozRequestFullScreen();
+        } else if ((document.documentElement as unknown as { msRequestFullscreen?: () => Promise<void> }).msRequestFullscreen) {
+          await (document.documentElement as unknown as { msRequestFullscreen: () => Promise<void> }).msRequestFullscreen();
         }
       } else {
         // Exit fullscreen
         if (document.exitFullscreen) {
           await document.exitFullscreen();
-        } else if ((document as { webkitExitFullscreen?: () => Promise<void> }).webkitExitFullscreen) {
-          await (document as { webkitExitFullscreen: () => Promise<void> }).webkitExitFullscreen();
-        } else if ((document as { mozCancelFullScreen?: () => Promise<void> }).mozCancelFullScreen) {
-          await (document as { mozCancelFullScreen: () => Promise<void> }).mozCancelFullScreen();
-        } else if ((document as { msExitFullscreen?: () => Promise<void> }).msExitFullscreen) {
-          await (document as { msExitFullscreen: () => Promise<void> }).msExitFullscreen();
+        } else if ((document as unknown as { webkitExitFullscreen?: () => Promise<void> }).webkitExitFullscreen) {
+          await (document as unknown as { webkitExitFullscreen: () => Promise<void> }).webkitExitFullscreen();
+        } else if ((document as unknown as { mozCancelFullScreen?: () => Promise<void> }).mozCancelFullScreen) {
+          await (document as unknown as { mozCancelFullScreen: () => Promise<void> }).mozCancelFullScreen();
+        } else if ((document as unknown as { msExitFullscreen?: () => Promise<void> }).msExitFullscreen) {
+          await (document as unknown as { msExitFullscreen: () => Promise<void> }).msExitFullscreen();
         }
       }
     } catch (error) {
@@ -652,7 +652,7 @@ export default function POSPage() {
     }
   };
 
-  const loadCart = async (savedCart: { items: Array<{ productId: { toString: () => string }; name: string; price: number; quantity: number }> }) => {
+  const loadCart = async (savedCart: { items: Array<{ productId: { toString: () => string }; name: string; price: number; quantity: number }>; discountCode?: string; discountAmount?: number }) => {
     if (!dict) return;
     
     if (cart.length > 0) {
@@ -668,12 +668,12 @@ export default function POSPage() {
 
     try {
       // Restore cart items
-      const restoredCart = savedCart.items.map((item: { productId: { toString: () => string }; name: string; price: number; quantity: number }) => ({
+      const restoredCart = savedCart.items.map((item: { productId: { toString: () => string }; name: string; price: number; quantity: number; stock?: number }) => ({
         productId: item.productId.toString(),
         name: item.name,
         price: item.price,
         quantity: item.quantity,
-        stock: item.stock,
+        stock: item.stock ?? 0,
       }));
 
       setCart(restoredCart);
@@ -747,7 +747,7 @@ export default function POSPage() {
         // Update cache with the new data - convert to CachedProduct format
         const storage = await getOfflineStorage();
         const cached = await storage.getCachedProducts(tenant);
-        const updatedCache = cached.map((p: { _id: string; pinned?: boolean }) => {
+        const updatedCache = cached.map((p) => {
           if (p._id === productId) {
             return { ...p, pinned: newPinnedStatus };
           }
@@ -776,25 +776,32 @@ export default function POSPage() {
   const printReceipt = async (transaction: Record<string, unknown>) => {
     if (!settings) return;
 
+    const receiptNumber = typeof transaction.receiptNumber === 'string' ? transaction.receiptNumber : (typeof transaction._id === 'string' ? transaction._id.slice(-8) : 'N/A');
+    const date = typeof transaction.date === 'string' ? transaction.date : formatDateTime(new Date(typeof transaction.createdAt === 'string' || typeof transaction.createdAt === 'number' ? transaction.createdAt : Date.now()), settings || getDefaultTenantSettings());
+    const items = Array.isArray(transaction.items) ? transaction.items : [];
+    const subtotal = typeof transaction.subtotal === 'number' ? transaction.subtotal : (typeof transaction.total === 'number' ? transaction.total : 0);
+    const total = typeof transaction.total === 'number' ? transaction.total : 0;
+    const discountAmount = typeof transaction.discountAmount === 'number' ? transaction.discountAmount : undefined;
+    
     const receiptData = {
       storeName: settings.companyName,
       address: settings.address ? 
         `${settings.address.street || ''}, ${settings.address.city || ''}, ${settings.address.state || ''} ${settings.address.zipCode || ''}`.trim() : 
         undefined,
       phone: settings.phone,
-      receiptNumber: transaction.receiptNumber || transaction._id?.slice(-8) || 'N/A',
-      date: transaction.date || formatDateTime(new Date(transaction.createdAt || Date.now()), settings || getDefaultTenantSettings()),
-      items: transaction.items || [],
-      subtotal: transaction.subtotal || transaction.total,
-      discountCode: transaction.discountCode,
-      discountAmount: transaction.discountAmount,
+      receiptNumber,
+      date,
+      items,
+      subtotal,
+      discount: discountAmount,
+      discountAmount,
       tax: settings.taxEnabled && settings.taxRate ? 
-        ((transaction.subtotal || transaction.total) - (transaction.discountAmount || 0)) * (settings.taxRate / 100) : 
+        (subtotal - (discountAmount || 0)) * (settings.taxRate / 100) : 
         undefined,
-      total: transaction.total,
-      paymentMethod: transaction.paymentMethod,
-      cashReceived: transaction.cashReceived,
-      change: transaction.change,
+      total,
+      paymentMethod: typeof transaction.paymentMethod === 'string' ? transaction.paymentMethod : 'cash',
+      cashReceived: typeof transaction.cashReceived === 'number' ? transaction.cashReceived : undefined,
+      change: typeof transaction.change === 'number' ? transaction.change : undefined,
       footer: settings.receiptFooter,
     };
 
@@ -1406,12 +1413,12 @@ export default function POSPage() {
               <div>
                 <div className="mb-5 p-4 bg-gray-50 border border-gray-300">
                   <div className="text-sm text-gray-600 mb-1">{dict.pos.receiptNumber}</div>
-                  <div className="font-semibold text-lg">{refundTransaction.receiptNumber || refundTransaction._id}</div>
+                  <div className="font-semibold text-lg">{typeof refundTransaction.receiptNumber === 'string' ? refundTransaction.receiptNumber : (typeof refundTransaction._id === 'string' ? refundTransaction._id : 'N/A')}</div>
                   <div className="text-sm text-gray-600 mt-2">
-                    {formatDateTime(new Date(refundTransaction.createdAt), settings || getDefaultTenantSettings())}
+                    {formatDateTime(new Date(typeof refundTransaction.createdAt === 'string' || typeof refundTransaction.createdAt === 'number' ? refundTransaction.createdAt : Date.now()), settings || getDefaultTenantSettings())}
                   </div>
                   <div className="text-sm text-gray-600">
-                    {dict.common.total}: <Currency amount={refundTransaction.total} />
+                    {dict.common.total}: <Currency amount={typeof refundTransaction.total === 'number' ? refundTransaction.total : 0} />
                   </div>
                 </div>
 
@@ -1420,7 +1427,7 @@ export default function POSPage() {
                     {dict.pos.selectItemsToRefund}
                   </label>
                   <div className="space-y-3 max-h-64 overflow-y-auto border border-gray-300 p-3">
-                    {refundTransaction.items.map((item: { product: { toString: () => string }; name: string; quantity: number; price: number }) => {
+                    {(Array.isArray(refundTransaction.items) ? refundTransaction.items : []).map((item: { product: { toString: () => string }; name: string; quantity: number; price: number }) => {
                       const productId = item.product.toString();
                       const maxQty = item.quantity;
                       const currentQty = refundItems[productId] || 0;
@@ -1643,24 +1650,24 @@ export default function POSPage() {
               <div className="space-y-3">
                 {savedCarts.map((savedCart) => (
                   <div
-                    key={savedCart._id}
+                    key={typeof savedCart._id === 'string' ? savedCart._id : String(savedCart._id || Math.random())}
                     className="border-2 border-gray-300 p-4 hover:border-blue-500 transition-colors"
                   >
                     <div className="flex justify-between items-start mb-3">
                       <div className="flex-1">
-                        <h3 className="font-semibold text-gray-900 text-lg mb-1">{savedCart.name}</h3>
+                        <h3 className="font-semibold text-gray-900 text-lg mb-1">{typeof savedCart.name === 'string' ? savedCart.name : 'Unnamed Cart'}</h3>
                         <p className="text-sm text-gray-500">
-                          {formatDateTime(new Date(savedCart.createdAt), settings || getDefaultTenantSettings())}
+                          {formatDateTime(new Date(typeof savedCart.createdAt === 'string' || typeof savedCart.createdAt === 'number' ? savedCart.createdAt : Date.now()), settings || getDefaultTenantSettings())}
                         </p>
                         <p className="text-sm text-gray-600 mt-2">
-                          {savedCart.items.length} {savedCart.items.length === 1 ? (dict.pos?.item || 'item') : (dict.pos?.items || 'items')}
+                          {Array.isArray(savedCart.items) ? savedCart.items.length : 0} {(Array.isArray(savedCart.items) ? savedCart.items.length : 0) === 1 ? (dict.pos?.item || 'item') : (dict.pos?.items || 'items')}
                         </p>
                       </div>
                       <div className="text-right">
                         <div className="font-bold text-lg text-blue-600 mb-2">
-                          <Currency amount={savedCart.total} />
+                          <Currency amount={typeof savedCart.total === 'number' ? savedCart.total : 0} />
                         </div>
-                        {savedCart.discountCode && (
+                        {typeof savedCart.discountCode === 'string' && savedCart.discountCode && (
                           <div className="text-xs text-green-600">
                             {dict.pos?.discount || 'Discount'}: {savedCart.discountCode}
                           </div>
@@ -1669,13 +1676,13 @@ export default function POSPage() {
                     </div>
                     <div className="flex gap-2">
                       <button
-                        onClick={() => loadCart(savedCart)}
+                        onClick={() => loadCart(savedCart as { items: Array<{ productId: { toString: () => string }; name: string; price: number; quantity: number }>; discountCode?: string; discountAmount?: number })}
                         className="flex-1 px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium transition-colors border border-blue-700"
                       >
                         {dict.pos?.loadCart || 'Load Cart'}
                       </button>
                       <button
-                        onClick={() => deleteSavedCart(savedCart._id)}
+                        onClick={() => deleteSavedCart(typeof savedCart._id === 'string' ? savedCart._id : String(savedCart._id || ''))}
                         className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 font-medium transition-colors border border-red-700"
                         title={dict.pos?.deleteCart || 'Delete Cart'}
                       >

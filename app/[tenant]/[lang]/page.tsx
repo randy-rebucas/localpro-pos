@@ -47,7 +47,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('today');
-  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
+  const [dict, setDict] = useState<any>(null);
   
   // If lang is "forbidden", this route was incorrectly matched
   // Redirect to the forbidden page using hard redirect to prevent loops
@@ -64,7 +64,9 @@ export default function Dashboard() {
   }, [lang, tenant]);
   
   useEffect(() => {
-    getDictionaryClient(lang).then(setDict);
+    if (lang !== 'forbidden') {
+      getDictionaryClient(lang).then(setDict);
+    }
   }, [lang]);
 
   useEffect(() => {
@@ -95,13 +97,13 @@ export default function Dashboard() {
       const res = await fetch(`/api/transactions/stats?period=${period}&tenant=${tenant}`);
       
       // Handle API response (automatically redirects on 403)
-      const data = await handleApiResponse(res, {
+      const data = await handleApiResponse<{ success: boolean; data?: Stats }>(res, {
         defaultRedirect: `/${tenant}/forbidden`
       });
       
       if (data.success && data.data) {
         // Ensure chartData is properly formatted with numeric values
-        const processedChartData = (data.data.chartData || []).map((item: { sales?: number | string; transactions?: number | string }) => {
+        const processedChartData = (data.data.chartData || []).map((item: { date?: string; sales?: number | string; transactions?: number | string }) => {
           const salesValue = typeof item.sales === 'number' ? item.sales : parseFloat(String(item.sales)) || 0;
           const transactionsValue = typeof item.transactions === 'number' ? item.transactions : parseInt(String(item.transactions)) || 0;
           return {
@@ -130,7 +132,7 @@ export default function Dashboard() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+          <p className="mt-4 text-gray-600">Loading...</p>
         </div>
       </div>
     );

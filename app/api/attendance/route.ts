@@ -54,9 +54,10 @@ export async function GET(request: NextRequest) {
   } catch (error: unknown) {
     console.error('Get attendance error:', error);
     const t = await getValidationTranslatorFromRequest(request);
+    const errorMessage = error instanceof Error ? error.message : t('validation.failedToGetAttendance', 'Failed to get attendance');
     return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : t('validation.failedToGetAttendance', 'Failed to get attendance') }, 
-      { status: error.message === 'Unauthorized' ? 401 : 500 }
+      { success: false, error: errorMessage }, 
+      { status: errorMessage === 'Unauthorized' ? 401 : 500 }
     );
   }
 }
@@ -154,9 +155,10 @@ export async function POST(request: NextRequest) {
   } catch (error: unknown) {
     console.error('Attendance error:', error);
     const t = await getValidationTranslatorFromRequest(request);
+    const errorMessage = error instanceof Error ? error.message : t('validation.failedToProcessAttendance', 'Failed to process attendance');
     return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : t('validation.failedToProcessAttendance', 'Failed to process attendance') }, 
-      { status: error.message === 'Unauthorized' ? 401 : 500 }
+      { success: false, error: errorMessage }, 
+      { status: errorMessage === 'Unauthorized' ? 401 : 500 }
     );
   }
 }

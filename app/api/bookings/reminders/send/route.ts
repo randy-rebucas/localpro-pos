@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
         results.details.push({
           bookingId: booking._id.toString(),
           success: false,
-          error: error.message,
+          error: error instanceof Error ? error.message : 'Unknown error',
         });
       }
     }

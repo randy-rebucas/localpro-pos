@@ -38,23 +38,32 @@ export default function TenantsPage() {
   const [showTenantModal, setShowTenantModal] = useState(false);
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
 
+
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
     fetchTenants();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang, tenant]);
 
+  // If super-admin (admin tenant), fetch all tenants
   const fetchTenants = async () => {
     try {
-      // Fetch current tenant only (tenant-level admin)
-      const res = await fetch(`/api/tenants/${tenant}`, { credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
-        // Set as single-item array for consistency with existing UI
-        setTenants([data.data]);
+      let res, data;
+      if (tenant === 'admin') {
+        res = await fetch('/api/tenants', { credentials: 'include' });
+        data = await res.json();
+        if (data.success) {
+          setTenants(data.data);
+        }
+      } else {
+        res = await fetch(`/api/tenants/${tenant}`, { credentials: 'include' });
+        data = await res.json();
+        if (data.success) {
+          setTenants([data.data]);
+        }
       }
     } catch (error) {
-      console.error('Error fetching tenant:', error);
+      console.error('Error fetching tenant(s):', error);
     } finally {
       setLoading(false);
     }
@@ -66,7 +75,7 @@ export default function TenantsPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+          <p className="mt-4 text-gray-600">{(dict?.common as Record<string, unknown>)?.loading as string || 'Loading...'}</p>
         </div>
       </div>
     );
@@ -84,14 +93,14 @@ export default function TenantsPage() {
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
-            {dict?.admin?.backToAdmin || 'Back to Admin'}
+            {(dict?.admin as Record<string, unknown>)?.backToAdmin as string || 'Back to Admin'}
           </Link>
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
-                {dict.admin?.tenants || 'Tenants'}
+                {(dict.admin as Record<string, unknown>)?.tenants as string || 'Tenants'}
               </h1>
-              <p className="text-gray-600">{dict.admin?.tenantsSubtitle || 'View and manage your organization settings'}</p>
+              <p className="text-gray-600">{(dict.admin as Record<string, unknown>)?.tenantsSubtitle as string || 'View and manage your organization settings'}</p>
             </div>
           </div>
         </div>
@@ -104,7 +113,7 @@ export default function TenantsPage() {
 
         <div className="bg-white border border-gray-300 p-6">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold text-gray-900">{dict.admin?.tenantInfo || 'Tenant Information'}</h2>
+            <h2 className="text-xl font-bold text-gray-900">{(dict.admin as Record<string, unknown>)?.tenantInfo as string || 'Tenant Information'}</h2>
             {tenants.length > 0 && (
               <button
                 onClick={() => {
@@ -113,7 +122,7 @@ export default function TenantsPage() {
                 }}
                 className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
               >
-                {dict.common?.edit || 'Edit'} {dict.admin?.settings || 'Settings'}
+                {(dict.common as Record<string, unknown>)?.edit as string || 'Edit'} {(dict.admin as Record<string, unknown>)?.settings as string || 'Settings'}
               </button>
             )}
           </div>
@@ -121,12 +130,12 @@ export default function TenantsPage() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.name || 'Name'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.slug || 'Slug'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.businessType || 'Business Type'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.currency || 'Currency'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.status || 'Status'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.actions || 'Actions'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict.admin as Record<string, unknown>)?.name as string || 'Name'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict.admin as Record<string, unknown>)?.slug as string || 'Slug'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict.admin as Record<string, unknown>)?.businessType as string || 'Business Type'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict.admin as Record<string, unknown>)?.currency as string || 'Currency'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict.admin as Record<string, unknown>)?.status as string || 'Status'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict.common as Record<string, unknown>)?.actions as string || 'Actions'}</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -146,7 +155,7 @@ export default function TenantsPage() {
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{tenantItem.settings.currency}</td>
                     <td className="px-4 py-4 whitespace-nowrap">
                       <span className={`px-2 py-1 text-xs font-semibold border ${tenantItem.isActive ? 'bg-green-100 text-green-800 border-green-300' : 'bg-red-100 text-red-800 border-red-300'}`}>
-                        {tenantItem.isActive ? (dict.admin?.active || 'Active') : (dict.admin?.inactive || 'Inactive')}
+                        {tenantItem.isActive ? ((dict.admin as Record<string, unknown>)?.active as string || 'Active') : ((dict.admin as Record<string, unknown>)?.inactive as string || 'Inactive')}
                       </span>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
@@ -157,7 +166,7 @@ export default function TenantsPage() {
                         }}
                         className="text-blue-600 hover:text-blue-900"
                       >
-                        {dict.common?.edit || 'Edit'}
+                        {(dict.common as Record<string, unknown>)?.edit as string || 'Edit'}
                       </button>
                     </td>
                   </tr>
@@ -165,7 +174,7 @@ export default function TenantsPage() {
               </tbody>
             </table>
             {tenants.length === 0 && (
-              <div className="text-center py-8 text-gray-500">{dict.common?.noData || 'No tenant information available'}</div>
+              <div className="text-center py-8 text-gray-500">{(dict.common as Record<string, unknown>)?.noData as string || 'No tenant information available'}</div>
             )}
           </div>
         </div>
@@ -212,6 +221,12 @@ function TenantModal({
     phone: tenant?.settings.phone || '',
     companyName: tenant?.settings.companyName || '',
     businessType: tenant?.settings.businessType || 'general',
+    // Admin-only fields
+    subscriptionPlan: (tenant as any)?.subscriptionPlan || 'starter',
+    subscriptionStatus: (tenant as any)?.subscriptionStatus || 'trial',
+    subscriptionPrice: (tenant as any)?.subscriptionPrice || 0,
+    subscriptionTrialEndsAt: (tenant as any)?.subscriptionTrialEndsAt ? new Date((tenant as any).subscriptionTrialEndsAt).toISOString().slice(0, 16) : '',
+    subscriptionEndsAt: (tenant as any)?.subscriptionEndsAt ? new Date((tenant as any).subscriptionEndsAt).toISOString().slice(0, 16) : '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -245,7 +260,7 @@ function TenantModal({
     try {
       // Tenant-level: only allow editing current tenant
       if (!tenant) {
-        setError(dict?.admin?.cannotEditTenant || 'Cannot edit: tenant information not available');
+        setError((dict?.admin as Record<string, unknown>)?.cannotEditTenant as string || 'Cannot edit: tenant information not available');
         return;
       }
       const url = `/api/tenants/${tenant.slug}`;
@@ -263,6 +278,14 @@ function TenantModal({
       };
       if (formData.domain) body.domain = formData.domain;
       if (formData.subdomain) body.subdomain = formData.subdomain;
+      // Admin-only: allow plan override, expiry, etc. if editing as super-admin
+      // if (params.tenant === 'admin') {
+        body.subscriptionPlan = formData.subscriptionPlan;
+        body.subscriptionStatus = formData.subscriptionStatus;
+        body.subscriptionPrice = Number(formData.subscriptionPrice);
+        body.subscriptionTrialEndsAt = formData.subscriptionTrialEndsAt ? new Date(formData.subscriptionTrialEndsAt) : null;
+        body.subscriptionEndsAt = formData.subscriptionEndsAt ? new Date(formData.subscriptionEndsAt) : null;
+      // }
 
       const res = await fetch(url, {
         method,
@@ -275,10 +298,10 @@ function TenantModal({
       if (data.success) {
         onSave();
       } else {
-        setError(data.error || dict?.admin?.failedToSaveTenant || 'Failed to save tenant');
+        setError(data.error || (dict?.admin as Record<string, unknown>)?.failedToSaveTenant as string || 'Failed to save tenant');
       }
     } catch {
-      setError(dict?.admin?.failedToSaveTenant || 'Failed to save tenant');
+      setError((dict?.admin as Record<string, unknown>)?.failedToSaveTenant as string || 'Failed to save tenant');
     } finally {
       setSaving(false);
     }
@@ -289,12 +312,70 @@ function TenantModal({
       <div className="bg-white border border-gray-300 max-w-md w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
-            {tenant ? (dict.admin?.editTenant || 'Edit Tenant') : (dict.admin?.addTenant || 'Add Tenant')}
+            {tenant ? ((dict.admin as Record<string, unknown>)?.editTenant as string || 'Edit Tenant') : ((dict.admin as Record<string, unknown>)?.addTenant as string || 'Add Tenant')}
           </h2>
           <form onSubmit={handleSubmit} className="space-y-4">
+                        {/* Admin-only controls for plan/expiry override */}
+                        {/* {params.tenant === 'admin' && (
+                          <>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Subscription Plan</label>
+                              <select
+                                value={formData.subscriptionPlan}
+                                onChange={e => setFormData({ ...formData, subscriptionPlan: e.target.value })}
+                                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                              >
+                                <option value="starter">Starter</option>
+                                <option value="pro">Pro</option>
+                                <option value="business">Business</option>
+                                <option value="enterprise">Enterprise</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Subscription Status</label>
+                              <select
+                                value={formData.subscriptionStatus}
+                                onChange={e => setFormData({ ...formData, subscriptionStatus: e.target.value })}
+                                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                              >
+                                <option value="trial">Trial</option>
+                                <option value="active">Active</option>
+                                <option value="expired">Expired</option>
+                                <option value="cancelled">Cancelled</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Subscription Price (₱/mo)</label>
+                              <input
+                                type="number"
+                                value={formData.subscriptionPrice}
+                                onChange={e => setFormData({ ...formData, subscriptionPrice: e.target.value })}
+                                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Trial Ends At</label>
+                              <input
+                                type="datetime-local"
+                                value={formData.subscriptionTrialEndsAt}
+                                onChange={e => setFormData({ ...formData, subscriptionTrialEndsAt: e.target.value })}
+                                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Subscription Ends At</label>
+                              <input
+                                type="datetime-local"
+                                value={formData.subscriptionEndsAt}
+                                onChange={e => setFormData({ ...formData, subscriptionEndsAt: e.target.value })}
+                                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                              />
+                            </div>
+                          </>
+                        )} */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.name || 'Name'}
+                {(dict.admin as Record<string, unknown>)?.name as string || 'Name'}
               </label>
               <input
                 type="text"
@@ -306,7 +387,7 @@ function TenantModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.domain || 'Domain'} (optional)
+                {(dict.admin as Record<string, unknown>)?.domain as string || 'Domain'} (optional)
               </label>
               <input
                 type="text"
@@ -317,7 +398,7 @@ function TenantModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.subdomain || 'Subdomain'} (optional)
+                {(dict.admin as Record<string, unknown>)?.subdomain as string || 'Subdomain'} (optional)
               </label>
               <input
                 type="text"
@@ -328,7 +409,7 @@ function TenantModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.currency || 'Currency'}
+                {(dict.admin as Record<string, unknown>)?.currency as string || 'Currency'}
               </label>
               <input
                 type="text"
@@ -341,7 +422,7 @@ function TenantModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.language || 'Language'}
+                {(dict.admin as Record<string, unknown>)?.language as string || 'Language'}
               </label>
               <select
                 value={formData.language}
@@ -354,7 +435,7 @@ function TenantModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.businessType || 'Business Type'} <span className="text-red-500">*</span>
+                {(dict.admin as Record<string, unknown>)?.businessType as string || 'Business Type'} <span className="text-red-500">*</span>
               </label>
               {loadingBusinessTypes ? (
                 <div className="w-full px-3 py-2 border border-gray-300 bg-gray-50 flex items-center gap-2">
@@ -379,8 +460,8 @@ function TenantModal({
                     className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                   >
                     {businessTypes.map((type) => (
-                      <option key={type.type} value={type.type}>
-                        {type.name}
+                      <option key={type.type as string} value={type.type as string}>
+                        {type.name as string}
                       </option>
                     ))}
                   </select>
@@ -397,10 +478,10 @@ function TenantModal({
                   {formData.businessType && !loadingBusinessTypes && (
                     <div className="mt-2 p-3 bg-blue-50 border border-blue-200">
                       <p className="text-xs text-blue-900 font-medium mb-1">
-                        {businessTypes.find((t) => t.type === formData.businessType)?.name || 'Business Type'}
+                        {(businessTypes.find((t) => t.type === formData.businessType)?.name as string) || 'Business Type'}
                       </p>
                       <p className="text-xs text-blue-700">
-                        {businessTypes.find((t) => t.type === formData.businessType)?.description || ''}
+                        {(businessTypes.find((t) => t.type === formData.businessType)?.description as string) || ''}
                       </p>
                     </div>
                   )}
@@ -409,7 +490,7 @@ function TenantModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.email || 'Email'} (optional)
+                {(dict.admin as Record<string, unknown>)?.email as string || 'Email'} (optional)
               </label>
               <input
                 type="email"
@@ -420,7 +501,7 @@ function TenantModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.phone || 'Phone'} (optional)
+                {(dict.admin as Record<string, unknown>)?.phone as string || 'Phone'} (optional)
               </label>
               <input
                 type="tel"
@@ -431,7 +512,7 @@ function TenantModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.companyName || 'Company Name'} (optional)
+                {(dict.admin as Record<string, unknown>)?.companyName as string || 'Company Name'} (optional)
               </label>
               <input
                 type="text"
@@ -451,14 +532,14 @@ function TenantModal({
                 onClick={onClose}
                 className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
               >
-                {dict.common?.cancel || 'Cancel'}
+                {(dict.common as Record<string, unknown>)?.cancel as string || 'Cancel'}
               </button>
               <button
                 type="submit"
                 disabled={saving}
                 className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
               >
-                {saving ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
+                {saving ? ((dict.common as Record<string, unknown>)?.loading as string || 'Saving...') : ((dict.common as Record<string, unknown>)?.save as string || 'Save')}
               </button>
             </div>
           </form>

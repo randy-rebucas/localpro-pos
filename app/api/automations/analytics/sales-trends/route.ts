@@ -24,10 +24,10 @@ export async function POST(request: NextRequest) {
     console.error('Sales trend analysis error:', error);
     return NextResponse.json({
       success: false,
-      message: `Error: ${error.message}`,
+      message: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
       processed: 0,
       failed: 0,
-      errors: [error.message],
+      errors: [error instanceof Error ? error.message : 'Unknown error'],
     }, { status: 500 });
   }
 }
@@ -53,10 +53,10 @@ export async function GET(request: NextRequest) {
     console.error('Sales trend analysis error:', error);
     return NextResponse.json({
       success: false,
-      message: `Error: ${error.message}`,
+      message: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
       processed: 0,
       failed: 0,
-      errors: [error.message],
+      errors: [error instanceof Error ? error.message : 'Unknown error'],
     }, { status: 500 });
   }
 }

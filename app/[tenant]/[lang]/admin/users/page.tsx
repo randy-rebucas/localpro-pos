@@ -53,11 +53,11 @@ export default function UsersPage() {
         setUsers(data.data);
         setMessage(null);
       } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchUsers || 'Failed to fetch users' });
+        setMessage({ type: 'error', text: data.error || (dict?.common as Record<string, unknown>)?.failedToFetchUsers as string || 'Failed to fetch users' });
       }
     } catch {
       // Error logged but not used
-      setMessage({ type: 'error', text: dict?.common?.failedToFetchUsers || 'Failed to fetch users' });
+      setMessage({ type: 'error', text: (dict?.common as Record<string, unknown>)?.failedToFetchUsers as string || 'Failed to fetch users' });
     } finally {
       setLoading(false);
     }
@@ -66,8 +66,8 @@ export default function UsersPage() {
   const handleDeleteUser = async (userId: string) => {
     if (!dict) return;
     const confirmed = await confirm(
-      dict.common?.deleteUserConfirmTitle || 'Delete User',
-      dict.common?.deleteUserConfirm || 'Are you sure you want to delete this user?',
+      (dict.common as Record<string, unknown>)?.deleteUserConfirmTitle as string || 'Delete User',
+      (dict.common as Record<string, unknown>)?.deleteUserConfirm as string || 'Are you sure you want to delete this user?',
       { variant: 'danger' }
     );
     if (!confirmed) return;
@@ -75,13 +75,13 @@ export default function UsersPage() {
       const res = await fetch(`/api/users/${userId}`, { method: 'DELETE', credentials: 'include' });
       const data = await res.json();
       if (data.success) {
-        showToast.success(dict?.admin?.userDeletedSuccess || dict?.common?.userDeletedSuccess || 'User deleted successfully');
+        showToast.success((dict?.admin as Record<string, unknown>)?.userDeletedSuccess as string || (dict?.common as Record<string, unknown>)?.userDeletedSuccess as string || 'User deleted successfully');
         fetchUsers();
       } else {
-        setMessage({ type: 'error', text: data.error || dict?.admin?.failedToDeleteUser || dict?.common?.failedToDeleteUser || 'Failed to delete user' });
+        setMessage({ type: 'error', text: data.error || (dict?.admin as Record<string, unknown>)?.failedToDeleteUser as string || (dict?.common as Record<string, unknown>)?.failedToDeleteUser as string || 'Failed to delete user' });
       }
     } catch {
-      setMessage({ type: 'error', text: dict?.admin?.failedToDeleteUser || dict?.common?.failedToDeleteUser || 'Failed to delete user' });
+      setMessage({ type: 'error', text: (dict?.admin as Record<string, unknown>)?.failedToDeleteUser as string || (dict?.common as Record<string, unknown>)?.failedToDeleteUser as string || 'Failed to delete user' });
     }
   };
 
@@ -95,13 +95,13 @@ export default function UsersPage() {
       });
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: `User ${!user.isActive ? (dict?.admin?.activated || 'activated') : (dict?.admin?.deactivated || 'deactivated')} ${dict?.admin?.successfully || 'successfully'}` });
+        setMessage({ type: 'success', text: `User ${!user.isActive ? ((dict?.admin as Record<string, unknown>)?.activated as string || 'activated') : ((dict?.admin as Record<string, unknown>)?.deactivated as string || 'deactivated')} ${(dict?.admin as Record<string, unknown>)?.successfully as string || 'successfully'}` });
         fetchUsers();
       } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToUpdateUser || 'Failed to update user' });
+        setMessage({ type: 'error', text: data.error || (dict?.common as Record<string, unknown>)?.failedToUpdateUser as string || 'Failed to update user' });
       }
     } catch {
-      setMessage({ type: 'error', text: dict?.common?.failedToUpdateUser || 'Failed to update user' });
+      setMessage({ type: 'error', text: (dict?.common as Record<string, unknown>)?.failedToUpdateUser as string || 'Failed to update user' });
     }
   };
 
@@ -110,7 +110,7 @@ export default function UsersPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+          <p className="mt-4 text-gray-600">{(dict?.common as Record<string, unknown>)?.loading as string || 'Loading...'}</p>
         </div>
       </div>
     );
@@ -129,14 +129,14 @@ export default function UsersPage() {
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
-            {dict?.admin?.backToAdmin || 'Back to Admin'}
+            {(dict?.admin as Record<string, unknown>)?.backToAdmin as string || 'Back to Admin'}
           </Link>
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
-                {dict.admin?.users || 'Users'}
+                {(dict.admin as Record<string, unknown>)?.users as string || 'Users'}
               </h1>
-              <p className="text-gray-600">{dict.admin?.usersSubtitle || 'Manage system users and their permissions'}</p>
+              <p className="text-gray-600">{(dict.admin as Record<string, unknown>)?.usersSubtitle as string || 'Manage system users and their permissions'}</p>
             </div>
           </div>
         </div>
@@ -149,7 +149,7 @@ export default function UsersPage() {
 
         <div className="bg-white border border-gray-300 p-6">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold text-gray-900">{dict.admin?.users || 'Users'}</h2>
+            <h2 className="text-xl font-bold text-gray-900">{(dict.admin as Record<string, unknown>)?.users as string || 'Users'}</h2>
             <button
               onClick={() => {
                 setEditingUser(null);
@@ -157,19 +157,19 @@ export default function UsersPage() {
               }}
               className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
             >
-              {dict.common?.add || 'Add'} {dict.admin?.user || 'User'}
+              {(dict.common as Record<string, unknown>)?.add as string || 'Add'} {(dict.admin as Record<string, unknown>)?.user as string || 'User'}
             </button>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.name || 'Name'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.email || 'Email'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.role || 'Role'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.status || 'Status'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict.admin as Record<string, unknown>)?.name as string || 'Name'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict.admin as Record<string, unknown>)?.email as string || 'Email'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict.admin as Record<string, unknown>)?.role as string || 'Role'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict.admin as Record<string, unknown>)?.status as string || 'Status'}</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">PIN/QR</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.actions || 'Actions'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict.common as Record<string, unknown>)?.actions as string || 'Actions'}</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -184,7 +184,7 @@ export default function UsersPage() {
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap">
                       <span className={`px-2 py-1 text-xs font-semibold border ${user.isActive ? 'bg-green-100 text-green-800 border-green-300' : 'bg-red-100 text-red-800 border-red-300'}`}>
-                        {user.isActive ? (dict.admin?.active || 'Active') : (dict.admin?.inactive || 'Inactive')}
+                        {user.isActive ? ((dict.admin as Record<string, unknown>)?.active as string || 'Active') : ((dict.admin as Record<string, unknown>)?.inactive as string || 'Inactive')}
                       </span>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm">
@@ -195,7 +195,7 @@ export default function UsersPage() {
                             setShowPINModal(true);
                           }}
                           className="text-purple-600 hover:text-purple-900 text-xs"
-                          title={dict?.admin?.managePIN || 'Manage PIN'}
+                          title={(dict?.admin as Record<string, unknown>)?.managePIN as string || 'Manage PIN'}
                         >
                           PIN
                         </button>
@@ -205,7 +205,7 @@ export default function UsersPage() {
                             setShowQRModal(true);
                           }}
                           className="text-indigo-600 hover:text-indigo-900 text-xs"
-                          title={dict?.admin?.viewQRCode || 'View QR Code'}
+                          title={(dict?.admin as Record<string, unknown>)?.viewQRCode as string || 'View QR Code'}
                         >
                           QR
                         </button>
@@ -220,20 +220,20 @@ export default function UsersPage() {
                           }}
                           className="text-blue-600 hover:text-blue-900"
                         >
-                          {dict.common?.edit || 'Edit'}
+                          {(dict.common as Record<string, unknown>)?.edit as string || 'Edit'}
                         </button>
                         <button
                           onClick={() => handleToggleUserStatus(user)}
                           className={user.isActive ? 'text-orange-600 hover:text-orange-900' : 'text-green-600 hover:text-green-900'}
                         >
-                          {user.isActive ? (dict.admin?.deactivate || 'Deactivate') : (dict.admin?.activate || 'Activate')}
+                          {user.isActive ? ((dict.admin as Record<string, unknown>)?.deactivate as string || 'Deactivate') : ((dict.admin as Record<string, unknown>)?.activate as string || 'Activate')}
                         </button>
                         {currentUser?._id !== user._id && (
                           <button
                             onClick={() => handleDeleteUser(user._id)}
                             className="text-red-600 hover:text-red-900"
                           >
-                            {dict.common?.delete || 'Delete'}
+                            {(dict.common as Record<string, unknown>)?.delete as string || 'Delete'}
                           </button>
                         )}
                       </div>
@@ -243,7 +243,7 @@ export default function UsersPage() {
               </tbody>
             </table>
             {users.length === 0 && (
-              <div className="text-center py-8 text-gray-500">{dict.common?.noResults || 'No users found'}</div>
+              <div className="text-center py-8 text-gray-500">{(dict.common as Record<string, unknown>)?.noResults as string || 'No users found'}</div>
             )}
           </div>
         </div>
@@ -359,12 +359,12 @@ function UserModal({
       <div className="bg-white border border-gray-300 max-w-md w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
-            {user ? (dict.admin?.editUser || 'Edit User') : (dict.admin?.addUser || 'Add User')}
+            {user ? ((dict.admin as Record<string, unknown>)?.editUser as string || 'Edit User') : ((dict.admin as Record<string, unknown>)?.addUser as string || 'Add User')}
           </h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.email || 'Email'}
+                {(dict.admin as Record<string, unknown>)?.email as string || 'Email'}
               </label>
               <input
                 type="email"
@@ -376,7 +376,7 @@ function UserModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.name || 'Name'}
+                {(dict.admin as Record<string, unknown>)?.name as string || 'Name'}
               </label>
               <input
                 type="text"
@@ -388,7 +388,7 @@ function UserModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.password || 'Password'} {user && '(leave blank to keep current)'}
+                {(dict.admin as Record<string, unknown>)?.password as string || 'Password'} {user && '(leave blank to keep current)'}
               </label>
               <input
                 type="password"
@@ -400,11 +400,11 @@ function UserModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.role || 'Role'}
+                {(dict.admin as Record<string, unknown>)?.role as string || 'Role'}
               </label>
               <select
                 value={formData.role}
-                onChange={(e) => setFormData({ ...formData, role: e.target.value as 'admin' | 'manager' | 'staff' | 'cashier' })}
+                onChange={(e) => setFormData({ ...formData, role: e.target.value as 'admin' | 'owner' | 'manager' | 'cashier' | 'viewer' })}
                 className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               >
                 <option value="viewer">Viewer</option>
@@ -425,14 +425,14 @@ function UserModal({
                 onClick={onClose}
                 className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
               >
-                {dict.common?.cancel || 'Cancel'}
+                {(dict.common as Record<string, unknown>)?.cancel as string || 'Cancel'}
               </button>
               <button
                 type="submit"
                 disabled={saving}
                 className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
               >
-                {saving ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
+                {saving ? ((dict.common as Record<string, unknown>)?.loading as string || 'Saving...') : ((dict.common as Record<string, unknown>)?.save as string || 'Save')}
               </button>
             </div>
           </form>
@@ -493,8 +493,8 @@ function PINModal({
   const handleRemovePIN = async () => {
     if (!dict) return;
     const confirmed = await confirm(
-      dict.common?.removePINConfirmTitle || 'Remove PIN',
-      dict.common?.removePINConfirm || dict.admin?.removePINConfirm || 'Are you sure you want to remove the PIN for this user?',
+      (dict.common as Record<string, unknown>)?.removePINConfirmTitle as string || 'Remove PIN',
+      (dict.common as Record<string, unknown>)?.removePINConfirm as string || (dict.admin as Record<string, unknown>)?.removePINConfirm as string || 'Are you sure you want to remove the PIN for this user?',
       { variant: 'warning' }
     );
     if (!confirmed) return;
@@ -567,7 +567,7 @@ function PINModal({
                 onClick={onClose}
                 className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
               >
-                {dict.common?.cancel || 'Cancel'}
+                {(dict.common as Record<string, unknown>)?.cancel as string || 'Cancel'}
               </button>
               <button
                 type="submit"
@@ -629,8 +629,8 @@ function QRModal({
   const handleRegenerate = async () => {
     if (!dict) return;
     const confirmed = await confirm(
-      dict.common?.regenerateQRConfirmTitle || 'Regenerate QR Code',
-      dict.common?.regenerateQRConfirm || dict.admin?.regenerateQRConfirm || 'Are you sure you want to regenerate the QR code? The old QR code will no longer work.',
+      (dict.common as Record<string, unknown>)?.regenerateQRConfirmTitle as string || 'Regenerate QR Code',
+      (dict.common as Record<string, unknown>)?.regenerateQRConfirm as string || (dict.admin as Record<string, unknown>)?.regenerateQRConfirm as string || 'Are you sure you want to regenerate the QR code? The old QR code will no longer work.',
       { variant: 'warning' }
     );
     if (!confirmed) return;
@@ -699,7 +699,7 @@ function QRModal({
                   onClick={onClose}
                   className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 border border-blue-700"
                 >
-                  {dict.common?.close || 'Close'}
+                  {(dict.common as Record<string, unknown>)?.close as string || 'Close'}
                 </button>
               </div>
             </div>

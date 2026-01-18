@@ -18,9 +18,21 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
     
-    return NextResponse.json({ success: true, data: tenant });
+    // Expose subscription info only once
+      const { subscription, ...rest } = tenant;
+    return NextResponse.json({
+      success: true,
+      data: {
+        ...rest,
+          subscription,
+      },
+    });
   } catch (error: unknown) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    const errorMessage =
+      typeof error === 'object' && error !== null && 'message' in error
+        ? (error as { message: string }).message
+        : String(error);
+    return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
   }
 }
 
@@ -32,7 +44,18 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const t = await getValidationTranslatorFromRequest(request);
     
     const body = await request.json();
-    const { name, domain, subdomain, isActive, settings } = body;
+    const { 
+      name, 
+      domain, 
+      subdomain, 
+      isActive, 
+      settings,
+      subscriptionPlan, 
+      subscriptionPrice, 
+      subscriptionStatus, 
+      subscriptionTrialEndsAt, 
+      subscriptionEndsAt
+    } = body;
 
     const oldTenant = await Tenant.findOne({ slug }).lean();
     if (!oldTenant) {
@@ -46,11 +69,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         return NextResponse.json(
           { success: false, error: t('validation.nameRequired', 'Name is required') },
           { status: 400 }
-        );
-      }
-      updateData.name = name.trim();
-    }
-    
+      subscription 
     if (domain !== undefined) {
       updateData.domain = domain.trim() || null;
     }
@@ -64,6 +83,32 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
     
     if (settings !== undefined) {
+          // Subscription plan logic
+          if (subscriptionPlan !== undefined) {
+            // Only allow valid plans
+            const validPlans = ['starter', 'pro', 'business', 'enterprise'];
+            if (!validPlans.includes(subscriptionPlan)) {
+              return NextResponse.json({ success: false, error: 'Invalid subscription plan' }, { status: 400 });
+            }
+            updateData.subscriptionPlan = subscriptionPlan;
+          }
+          if (subscriptionPrice !== undefined) {
+            updateData.subscriptionPrice = subscriptionPrice;
+          }
+          if (subscriptionStatus !== undefined) {
+            // Only allow valid statuses
+            const validStatuses = ['trial', 'active', 'expired', 'cancelled'];
+            if (!validStatuses.includes(subscriptionStatus)) {
+              return NextResponse.json({ success: false, error: 'Invalid subscription status' }, { status: 400 });
+            }
+            updateData.subscriptionStatus = subscriptionStatus;
+          }
+          if (subscriptionTrialEndsAt !== undefined) {
+            updateData.subscriptionTrialEndsAt = subscriptionTrialEndsAt;
+          }
+          if (subscriptionEndsAt !== undefined) {
+            updateData.subscriptionEndsAt = subscriptionEndsAt;
+          }
       // Check if business type is being changed
       const currentBusinessType = oldTenant.settings?.businessType;
       const newBusinessType = settings.businessType;
@@ -111,16 +156,24 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       changes,
     });
     
-    return NextResponse.json({ success: true, data: tenant });
+    // Expose subscription info only once in response
+    const { subscriptionPlan, subscriptionPrice, subscriptionStatus, subscriptionTrialEndsAt, subscriptionEndsAt, ...rest } = tenant.toObject();
+    return NextResponse.json({
+      success: true,
+      data: {
+        ...rest,
+        subscriptionPlan,
+        subscriptionPrice,
+        subscriptionStatus,
+        subscriptionTrialEndsAt,
+        subscriptionEndsAt,
+      },
+    const { subscription: updatedSubscription, ...rest } = tenant.toObject();
   } catch (error: unknown) {
     const t = await getValidationTranslatorFromRequest(request);
     if (error && typeof error === 'object' && 'code' in error && error.code === 11000) {
       const field = Object.keys(error.keyPattern)[0];
-      const errorMsg = t('validation.fieldAlreadyExists', '{field} already exists').replace('{field}', field);
-      return NextResponse.json(
-        { success: false, error: errorMsg },
-        { status: 400 }
-      );
+        subscription: updatedSubscription,
     }
     if (error.message === 'Unauthorized' || error.message.includes('Forbidden')) {
       return NextResponse.json(

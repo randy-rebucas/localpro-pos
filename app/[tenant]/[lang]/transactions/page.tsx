@@ -58,7 +58,7 @@ export default function TransactionsPage() {
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [viewType, setViewType] = useState<ViewType>('all');
   const [displayMode, setDisplayMode] = useState<'grid' | 'list'>('list');
-  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
+  const [dict, setDict] = useState<any>(null);
   const { settings } = useTenantSettings();
 
   useEffect(() => {

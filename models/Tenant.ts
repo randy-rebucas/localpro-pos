@@ -71,7 +71,7 @@ export interface ITenantSettings {
   enableLoyaltyProgram?: boolean;
   enableCustomerManagement?: boolean;
   enableBookingScheduling?: boolean;
-  
+  enableMultiCurrency?: boolean;
   // Hardware Configuration
   hardwareConfig?: {
     printer?: {
@@ -216,6 +216,13 @@ export interface ITenant extends Document {
   domain?: string;
   subdomain?: string;
   settings: ITenantSettings;
+  subscription: {
+    plan: 'starter' | 'pro' | 'business' | 'enterprise';
+    price: number;
+    status: 'trial' | 'active' | 'expired' | 'cancelled';
+    trialEndsAt?: Date;
+    endsAt?: Date;
+  };
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -414,6 +421,10 @@ const TenantSchema: Schema = new Schema(
         default: false,
       },
       enableBookingScheduling: {
+        type: Boolean,
+        default: false,
+      },
+      enableMultiCurrency: {
         type: Boolean,
         default: false,
       },
@@ -617,6 +628,29 @@ const TenantSchema: Schema = new Schema(
     isActive: {
       type: Boolean,
       default: true,
+    },
+    // Subscription object
+    subscription: {
+      plan: {
+        type: String,
+        enum: ['starter', 'pro', 'business', 'enterprise'],
+        default: 'starter',
+      },
+      price: {
+        type: Number,
+        default: 999,
+      },
+      status: {
+        type: String,
+        enum: ['trial', 'active', 'expired', 'cancelled'],
+        default: 'trial',
+      },
+      trialEndsAt: {
+        type: Date,
+      },
+      endsAt: {
+        type: Date,
+      },
     },
   },
   {

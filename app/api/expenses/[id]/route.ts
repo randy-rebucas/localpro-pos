@@ -31,7 +31,8 @@ export async function GET(
 
     return NextResponse.json({ success: true, data: expense });
   } catch (error: unknown) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Failed to fetch expense';
+    return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
   }
 }
 
@@ -80,7 +81,8 @@ export async function PUT(
     return NextResponse.json({ success: true, data: expense });
   } catch (error: unknown) {
     console.error('Error updating expense:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+    const errorMessage = error instanceof Error ? error.message : 'Failed to update expense';
+    return NextResponse.json({ success: false, error: errorMessage }, { status: 400 });
   }
 }
 
@@ -119,7 +121,8 @@ export async function DELETE(
     return NextResponse.json({ success: true, message: t('validation.expenseDeleted', 'Expense deleted successfully') });
   } catch (error: unknown) {
     console.error('Error deleting expense:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Failed to delete expense';
+    return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
   }
 }
 

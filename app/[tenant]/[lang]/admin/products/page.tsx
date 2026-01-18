@@ -133,13 +133,13 @@ export default function ProductsPage() {
       const res = await fetch(`/api/products/${productId}`, { method: 'DELETE', credentials: 'include' });
       const data = await res.json();
       if (data.success) {
-        showToast.success(dict.common?.productDeletedSuccess || 'Product deleted successfully');
+        showToast.success((dict.common as Record<string, unknown>)?.productDeletedSuccess as string || 'Product deleted successfully');
         fetchProducts();
       } else {
-        showToast.error(data.error || dict.common?.failedToDeleteProduct || 'Failed to delete product');
+        showToast.error(data.error || (dict.common as Record<string, unknown>)?.failedToDeleteProduct as string || 'Failed to delete product');
       }
     } catch {
-      showToast.error(dict.common?.failedToDeleteProduct || 'Failed to delete product');
+      showToast.error((dict.common as Record<string, unknown>)?.failedToDeleteProduct as string || 'Failed to delete product');
     }
   };
 
@@ -178,9 +178,9 @@ export default function ProductsPage() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
-                {dict.admin?.products || 'Products'}
+                {(dict.admin as Record<string, unknown>)?.products as string || 'Products'}
               </h1>
-              <p className="text-gray-600">{dict.admin?.productsSubtitle || 'Manage products, variations, and bundles'}</p>
+              <p className="text-gray-600">{(dict.admin as Record<string, unknown>)?.productsSubtitle as string || 'Manage products, variations, and bundles'}</p>
             </div>
           </div>
         </div>
@@ -196,7 +196,7 @@ export default function ProductsPage() {
             <div className="flex-1 max-w-md">
               <input
                 type="text"
-                placeholder={dict.common?.search || 'Search products...'}
+                placeholder={(dict.common as Record<string, unknown>)?.search as string || 'Search products...'}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
@@ -209,20 +209,20 @@ export default function ProductsPage() {
               }}
               className="ml-4 px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
             >
-              {dict.common?.add || 'Add'} {dict.admin?.product || 'Product'}
+              {(dict.common as Record<string, unknown>)?.add as string || 'Add'} {(dict.admin as Record<string, unknown>)?.product as string || 'Product'}
             </button>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.name || 'Name'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict.admin as Record<string, unknown>)?.name as string || 'Name'}</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.category || 'Category'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.price || 'Price'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.stock || 'Stock'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.type || 'Type'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.actions || 'Actions'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict.admin as Record<string, unknown>)?.category as string || 'Category'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict.admin as Record<string, unknown>)?.price as string || 'Price'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict.admin as Record<string, unknown>)?.stock as string || 'Stock'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict.common as Record<string, unknown>)?.type as string || 'Type'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{(dict.common as Record<string, unknown>)?.actions as string || 'Actions'}</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -261,13 +261,13 @@ export default function ProductsPage() {
                           }}
                           className="text-blue-600 hover:text-blue-900"
                         >
-                          {dict.common?.edit || 'Edit'}
+                          {(dict.common as Record<string, unknown>)?.edit as string || 'Edit'}
                         </button>
                         <button
                           onClick={() => handleDeleteProduct(product._id)}
                           className="text-red-600 hover:text-red-900"
                         >
-                          {dict.common?.delete || 'Delete'}
+                          {(dict.common as Record<string, unknown>)?.delete as string || 'Delete'}
                         </button>
                       </div>
                     </td>
@@ -277,7 +277,7 @@ export default function ProductsPage() {
             </table>
             {filteredProducts.length === 0 && (
               <div className="text-center py-8 text-gray-500">
-                {searchTerm ? (dict.common?.noResults || 'No products found') : (dict.common?.noData || 'No products yet')}
+                {searchTerm ? ((dict.common as Record<string, unknown>)?.noResults as string || 'No products found') : ((dict.common as Record<string, unknown>)?.noData as string || 'No products yet')}
               </div>
             )}
           </div>
@@ -298,7 +298,7 @@ export default function ProductsPage() {
             }}
             dict={dict}
             businessTypeConfig={businessTypeConfig}
-            settings={settings}
+            settings={settings as Record<string, unknown> | null}
           />
         )}
       </div>
@@ -320,8 +320,8 @@ function ProductModal({
   onClose: () => void;
   onSave: () => void;
   dict: Record<string, unknown>;
-  businessTypeConfig: BusinessTypeConfig;
-  settings: Record<string, unknown>;
+  businessTypeConfig: BusinessTypeConfig | null;
+  settings: Record<string, unknown> | null;
 }) {
   const [formData, setFormData] = useState({
     name: product?.name || '',
@@ -450,7 +450,7 @@ function ProductModal({
       };
 
       // Add restaurant-specific fields
-      if (settings?.businessType?.toLowerCase() === 'restaurant') {
+      if ((settings?.businessType as string)?.toLowerCase() === 'restaurant') {
         if (formData.allergens && formData.allergens.length > 0) {
           body.allergens = formData.allergens;
         }
@@ -463,7 +463,7 @@ function ProductModal({
       }
 
       // Add laundry-specific fields
-      if (settings?.businessType?.toLowerCase() === 'laundry') {
+      if ((settings?.businessType as string)?.toLowerCase() === 'laundry') {
         body.serviceType = formData.serviceType;
         body.weightBased = formData.weightBased;
         body.pickupDelivery = formData.pickupDelivery;
@@ -473,7 +473,7 @@ function ProductModal({
       }
 
       // Add service-specific fields
-      if (settings?.businessType?.toLowerCase() === 'service') {
+      if ((settings?.businessType as string)?.toLowerCase() === 'service') {
         if (formData.serviceDuration) {
           body.serviceDuration = formData.serviceDuration;
         }
@@ -508,7 +508,7 @@ function ProductModal({
       <div className="bg-white border border-gray-300 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
-            {product ? (dict.admin?.editProduct || 'Edit Product') : (dict.admin?.addProduct || 'Add Product')}
+            {product ? ((dict.admin as Record<string, unknown>)?.editProduct as string || 'Edit Product') : ((dict.admin as Record<string, unknown>)?.addProduct as string || 'Add Product')}
           </h2>
           {businessTypeConfig && (
             <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded">
@@ -529,7 +529,7 @@ function ProductModal({
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.name || 'Name'} *
+                  {(dict.admin as Record<string, unknown>)?.name as string || 'Name'} *
                 </label>
                 <input
                   type="text"
@@ -554,7 +554,7 @@ function ProductModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.description || 'Description'}
+                {(dict.admin as Record<string, unknown>)?.description as string || 'Description'}
               </label>
               <textarea
                 value={formData.description}
@@ -566,7 +566,7 @@ function ProductModal({
             <div className={`grid gap-4 ${businessTypeConfig?.defaultFeatures?.enableInventory !== false ? 'grid-cols-3' : 'grid-cols-1'}`}>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.price || 'Price'} *
+                  {(dict.admin as Record<string, unknown>)?.price as string || 'Price'} *
                 </label>
                 <input
                   type="number"
@@ -581,7 +581,7 @@ function ProductModal({
               {businessTypeConfig?.defaultFeatures?.enableInventory !== false && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {dict.admin?.stock || 'Stock'}
+                    {(dict.admin as Record<string, unknown>)?.stock as string || 'Stock'}
                   </label>
                   <input
                     type="number"
@@ -596,7 +596,7 @@ function ProductModal({
               {businessTypeConfig?.defaultFeatures?.enableInventory !== false && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {dict.admin?.lowStockThreshold || 'Low Stock Threshold'}
+                    {(dict.admin as Record<string, unknown>)?.lowStockThreshold as string || 'Low Stock Threshold'}
                   </label>
                   <input
                     type="number"
@@ -611,7 +611,7 @@ function ProductModal({
             <div className="grid grid-cols-2 gap-4">
               <div className="relative">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.category || 'Category'}
+                  {(dict.admin as Record<string, unknown>)?.category as string || 'Category'}
                 </label>
                 <div ref={categoryInputRef} className="relative">
                   <input
@@ -632,7 +632,7 @@ function ProductModal({
                       }
                     }}
                     onFocus={() => setShowCategorySuggestions(true)}
-                    placeholder={dict.admin?.searchCategory || 'Type to search categories...'}
+                    placeholder={(dict.admin as Record<string, unknown>)?.searchCategory as string || 'Type to search categories...'}
                     className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                   />
                   {showCategorySuggestions && filteredCategories.length > 0 && (
@@ -659,31 +659,31 @@ function ProductModal({
                       ref={categoryListRef}
                       className="absolute z-50 w-full mt-1 bg-white border border-gray-300 p-4 text-sm text-gray-500"
                     >
-                      {dict.admin?.noCategoryFound || 'No category found'}
+                      {(dict.admin as Record<string, unknown>)?.noCategoryFound as string || 'No category found'}
                     </div>
                   )}
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.common?.type || 'Type'} {businessTypeConfig && `(${businessTypeConfig.name})`}
+                  {(dict.common as Record<string, unknown>)?.type as string || 'Type'} {businessTypeConfig && `(${businessTypeConfig.name})`}
                 </label>
                 <select
                   value={formData.productType}
-                  onChange={(e) => setFormData({ ...formData, productType: e.target.value as 'product' | 'service' | 'bundle' })}
+                  onChange={(e) => setFormData({ ...formData, productType: e.target.value as 'regular' | 'service' | 'bundle' })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                 >
                   {businessTypeConfig?.productTypes?.map((type: string) => (
                     <option key={type} value={type}>
-                      {type === 'regular' ? (dict.admin?.regular || 'Regular') : 
-                       type === 'bundle' ? (dict.admin?.bundle || 'Bundle') : 
-                       (dict.admin?.service || 'Service')}
+                      {type === 'regular' ? ((dict.admin as Record<string, unknown>)?.regular as string || 'Regular') : 
+                       type === 'bundle' ? ((dict.admin as Record<string, unknown>)?.bundle as string || 'Bundle') : 
+                       ((dict.admin as Record<string, unknown>)?.service as string || 'Service')}
                     </option>
                   )) || (
                     <>
-                      <option value="regular">{dict.admin?.regular || 'Regular'}</option>
-                      <option value="bundle">{dict.admin?.bundle || 'Bundle'}</option>
-                      <option value="service">{dict.admin?.service || 'Service'}</option>
+                      <option value="regular">{(dict.admin as Record<string, unknown>)?.regular as string || 'Regular'}</option>
+                      <option value="bundle">{(dict.admin as Record<string, unknown>)?.bundle as string || 'Bundle'}</option>
+                      <option value="service">{(dict.admin as Record<string, unknown>)?.service as string || 'Service'}</option>
                     </>
                   )}
                 </select>
@@ -704,14 +704,14 @@ function ProductModal({
                     className="mr-2"
                   />
                   <span className="text-sm font-medium text-gray-700">
-                    {dict.admin?.trackInventory || 'Track Inventory'}
+                    {(dict.admin as Record<string, unknown>)?.trackInventory as string || 'Track Inventory'}
                   </span>
                 </label>
               </div>
             )}
 
             {/* Restaurant-specific fields */}
-            {settings?.businessType?.toLowerCase() === 'restaurant' && (
+            {(settings?.businessType as string)?.toLowerCase() === 'restaurant' && (
               <div className="space-y-4 pt-4 border-t border-gray-200">
                 <h3 className="text-lg font-semibold text-gray-900">Restaurant Information</h3>
                 
@@ -762,7 +762,7 @@ function ProductModal({
             )}
 
             {/* Laundry-specific fields */}
-            {settings?.businessType?.toLowerCase() === 'laundry' && (
+            {(settings?.businessType as string)?.toLowerCase() === 'laundry' && (
               <div className="space-y-4 pt-4 border-t border-gray-200">
                 <h3 className="text-lg font-semibold text-gray-900">Laundry Service Information</h3>
                 
@@ -770,7 +770,7 @@ function ProductModal({
                   <label className="block text-sm font-medium text-gray-700 mb-1">Service Type</label>
                   <select
                     value={formData.serviceType}
-                    onChange={(e) => setFormData({ ...formData, serviceType: e.target.value as string })}
+                    onChange={(e) => setFormData({ ...formData, serviceType: e.target.value as 'wash' | 'dry-clean' | 'press' | 'repair' | 'other' })}
                     className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                   >
                     <option value="wash">Wash</option>
@@ -820,7 +820,7 @@ function ProductModal({
             )}
 
             {/* Service-specific fields */}
-            {settings?.businessType?.toLowerCase() === 'service' && (
+            {(settings?.businessType as string)?.toLowerCase() === 'service' && (
               <div className="space-y-4 pt-4 border-t border-gray-200">
                 <h3 className="text-lg font-semibold text-gray-900">Service Information</h3>
                 
@@ -873,14 +873,14 @@ function ProductModal({
                 onClick={onClose}
                 className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
               >
-                {dict.common?.cancel || 'Cancel'}
+                {(dict.common as Record<string, unknown>)?.cancel as string || 'Cancel'}
               </button>
               <button
                 type="submit"
                 disabled={saving}
                 className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
               >
-                {saving ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
+                {saving ? ((dict.common as Record<string, unknown>)?.loading as string || 'Saving...') : ((dict.common as Record<string, unknown>)?.save as string || 'Save')}
               </button>
             </div>
           </form>

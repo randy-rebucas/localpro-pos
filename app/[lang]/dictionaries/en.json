@@ -20,7 +20,9 @@
     "type": "Type",
     "switchStore": "Switch Store",
     "logout": "Logout",
-    "login": "Login"
+    "login": "Login",
+    "productDeletedSuccess": "Product deleted successfully",
+    "failedToDeleteProduct": "Failed to delete product"
   },
   "nav": {
     "dashboard": "Dashboard",

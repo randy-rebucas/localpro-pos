@@ -12,12 +12,117 @@ import { detectLocation, getCurrencySymbolForCode } from '@/lib/location-detecti
 import MultiCurrencyDisplaySettings from '@/components/settings/MultiCurrencyDisplaySettings';
 import ReceiptTemplatesManager from '@/components/settings/ReceiptTemplatesManager';
 
+import { useContext } from 'react';
+import { AuthContext, type AuthContextType } from '../../../../contexts/AuthContext';
+import { format } from 'date-fns';
+
+// Subscription summary badge colors
+const badgeColors = {
+  active: 'bg-green-100 text-green-800 border-green-300',
+  trial: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+  expired: 'bg-red-100 text-red-800 border-red-300',
+  cancelled: 'bg-gray-100 text-gray-800 border-gray-300',
+};
+
+interface SubscriptionSummaryProps {
+  subscription: {
+    plan: string;
+    price: number;
+    status: 'trial' | 'active' | 'expired' | 'cancelled';
+    trialEndsAt?: string;
+    expiresAt?: string;
+  } | null;
+  dict: any;
+  onUpgrade?: () => void;
+  onDowngrade?: () => void;
+}
+
+function SubscriptionSummary({ subscription, dict, onUpgrade, onDowngrade }: SubscriptionSummaryProps) {
+  if (!subscription) return null;
+  const { plan, price, status, trialEndsAt, expiresAt } = subscription;
+  let badge, badgeText;
+  if (status === 'trial') {
+    badge = badgeColors.trial;
+    badgeText = dict?.subscription?.trialBadge || 'Trial';
+  } else if (status === 'active') {
+    badge = badgeColors.active;
+    badgeText = dict?.subscription?.activeBadge || 'Active';
+  } else if (status === 'expired') {
+    badge = badgeColors.expired;
+    badgeText = dict?.subscription?.expiredBadge || 'Expired';
+  } else {
+    badge = badgeColors.cancelled;
+    badgeText = dict?.subscription?.cancelledBadge || 'Cancelled';
+  }
+  return (
+    <div className="mb-6 sm:mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-3 mb-1">
+            <span className="text-lg font-semibold text-gray-900">{dict?.subscription?.currentPlan || 'Current Plan'}:</span>
+            <span className="inline-block px-3 py-1 rounded-full border text-sm font-medium {badge}">{plan}</span>
+            <span className="inline-block px-3 py-1 rounded-full border text-sm font-medium {badge}">{badgeText}</span>
+          </div>
+          <div className="flex items-center gap-4 text-gray-700 text-sm">
+            <span>
+              {dict?.subscription?.priceLabel || 'Monthly Price'}: <span className="font-semibold">{price ? `$${price}/mo` : dict?.subscription?.free || 'Free'}</span>
+            </span>
+            {status === 'trial' && trialEndsAt && (
+              <span className="inline-block px-2 py-1 rounded bg-yellow-50 text-yellow-800 border border-yellow-200">
+                {dict?.subscription?.trialEnds || 'Trial ends'}: {format(new Date(trialEndsAt), 'PPP')}
+              </span>
+            )}
+            {status === 'active' && expiresAt && (
+              <span className="inline-block px-2 py-1 rounded bg-green-50 text-green-800 border border-green-200">
+                {dict?.subscription?.renews || 'Renews'}: {format(new Date(expiresAt), 'PPP')}
+              </span>
+            )}
+            {status === 'expired' && expiresAt && (
+              <span className="inline-block px-2 py-1 rounded bg-red-50 text-red-800 border border-red-200">
+                {dict?.subscription?.expiredOn || 'Expired on'}: {format(new Date(expiresAt), 'PPP')}
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="flex gap-2">
+          {onUpgrade && (
+            <button onClick={onUpgrade} className="px-4 py-2 bg-blue-600 text-white rounded font-medium hover:bg-blue-700 transition-colors">
+              {dict?.subscription?.upgrade || 'Upgrade'}
+            </button>
+          )}
+          {onDowngrade && (
+            <button onClick={onDowngrade} className="px-4 py-2 bg-gray-200 text-gray-800 rounded font-medium hover:bg-gray-300 transition-colors">
+              {dict?.subscription?.downgrade || 'Downgrade'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const params = useParams();
   const router = useRouter();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
+  const [dict, setDict] = useState<any>(null);
+  const { user } = useContext(AuthContext) as AuthContextType;
+  const [subscription, setSubscription] = useState<any>(null);
+    // Fetch subscription info
+    const fetchSubscription = async () => {
+      try {
+        const res = await fetch(`/api/tenants/${tenant}/subscription`);
+        const data = await res.json();
+        if (data.success) setSubscription(data.data);
+      } catch (err) {
+        setSubscription(null);
+      }
+    };
+
+    useEffect(() => {
+      fetchSubscription();
+    }, [tenant]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState<ITenantSettings | null>(null);
@@ -256,7 +361,7 @@ export default function SettingsPage() {
       if (!current[keys[i]]) {
         current[keys[i]] = {};
       }
-      current = current[keys[i]];
+      current = current[keys[i]] as Record<string, unknown>;
     }
     
     current[keys[keys.length - 1]] = value;
@@ -270,7 +375,7 @@ export default function SettingsPage() {
       setBusinessTypeWarning(null);
     }
     
-    setSettings(newSettings);
+    setSettings(newSettings as unknown as ITenantSettings);
   };
 
   if (!dict || loading) {
@@ -311,6 +416,13 @@ export default function SettingsPage() {
     <div className="min-h-screen bg-gray-50">
       <Navbar />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        {/* Subscription summary at the top */}
+        <SubscriptionSummary
+          subscription={subscription}
+          dict={dict}
+          onUpgrade={() => {/* TODO: open upgrade dialog or redirect */}}
+          onDowngrade={() => {/* TODO: open downgrade dialog or redirect */}}
+        />
         <div className="mb-6 sm:mb-8">
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
             {dict?.settings?.title || 'Store Settings'}
@@ -1083,25 +1195,29 @@ export default function SettingsPage() {
                           className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                         >
                           {businessTypes.map((type) => (
-                            <option key={type.type} value={type.type}>
-                              {type.name}
+                            <option key={typeof type.type === 'string' ? type.type : String(type.type || '')} value={typeof type.type === 'string' ? type.type : String(type.type || '')}>
+                              {typeof type.name === 'string' ? type.name : ''}
                             </option>
                           ))}
                         </select>
-                        {settings.businessType && !loadingBusinessTypes && (
+                        {settings.businessType && !loadingBusinessTypes && (() => {
+                          const foundType = businessTypes.find((t) => typeof t.type === 'string' && t.type === settings.businessType);
+                          const typeName = typeof foundType?.name === 'string' ? foundType.name : 'Business Type';
+                          const typeDescription = typeof foundType?.description === 'string' ? foundType.description : '';
+                          return (
                           <div className="mt-3 p-4 bg-blue-50 border-2 border-blue-200">
                             <p className="text-sm text-blue-900 font-medium mb-2">
-                              {businessTypes.find((t) => t.type === settings.businessType)?.name || 'Business Type'}
+                              {typeName}
                             </p>
                             <p className="text-xs text-blue-700 mb-3">
-                              {businessTypes.find((t) => t.type === settings.businessType)?.description || ''}
+                              {typeDescription}
                             </p>
                             <div className="mt-3 pt-3 border-t border-blue-300">
                               <p className="text-xs font-medium text-blue-900 mb-2">Default Features:</p>
                               <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                                {businessTypes.find((t) => t.type === settings.businessType)?.defaultFeatures && Object.entries(
-                                  businessTypes.find((t) => t.type === settings.businessType)?.defaultFeatures || {}
-                                ).map(([feature, enabled]) => (
+                                {(() => {
+                                  const defaultFeatures = foundType?.defaultFeatures;
+                                  return defaultFeatures && typeof defaultFeatures === 'object' && !Array.isArray(defaultFeatures) ? Object.entries(defaultFeatures as Record<string, unknown>).map(([feature, enabled]) => (
                                   <div key={feature} className="flex items-center gap-2">
                                     <svg
                                       className={`w-4 h-4 ${enabled ? 'text-green-600' : 'text-gray-400'}`}
@@ -1119,11 +1235,13 @@ export default function SettingsPage() {
                                       {feature.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
                                     </span>
                                   </div>
-                                ))}
+                                )) : null;
+                                })()}
                               </div>
                             </div>
                           </div>
-                        )}
+                          );
+                        })()}
                       </>
                     )}
                   </div>

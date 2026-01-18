@@ -25,7 +25,19 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({ success: true, data: tenant.settings });
+    // Expose subscription info for UI
+    const { subscriptionPlan, subscriptionPrice, subscriptionStatus, subscriptionTrialEndsAt, subscriptionEndsAt } = tenant;
+    return NextResponse.json({
+      success: true,
+      data: {
+        ...tenant.settings,
+        subscriptionPlan,
+        subscriptionPrice,
+        subscriptionStatus,
+        subscriptionTrialEndsAt,
+        subscriptionEndsAt,
+      },
+    });
   } catch (error: unknown) {
     console.error('Error fetching tenant settings:', error);
     const t = await getValidationTranslatorFromRequest(request);

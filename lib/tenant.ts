@@ -21,8 +21,17 @@ export interface TenantInfo {
 export async function getTenantSettingsById(tenantId: string): Promise<ITenantSettings | null> {
   try {
     await connectDB();
-    const tenant = await Tenant.findById(tenantId).select('settings').lean();
-    return tenant?.settings || null;
+    // Also select subscriptionPlan
+    const tenant = await Tenant.findById(tenantId).select('settings subscriptionPlan').lean();
+    if (!tenant) return null;
+    const settings = tenant.settings || {};
+    // Enforce feature flags based on subscription plan
+    if (tenant.subscriptionPlan === 'starter') {
+      settings.enableDiscounts = false;
+      settings.enableBookingScheduling = false;
+      settings.enableMultiCurrency = false;
+    }
+    return settings;
   } catch (error) {
     console.error('Error fetching tenant settings:', error);
     return null;

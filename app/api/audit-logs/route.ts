@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get('endDate');
 
     // Build query
-    const query: { tenantId: string; action?: string; entityType?: string; createdAt?: { $gte?: Date; $lte?: Date } } = { tenantId: user.tenantId };
+    const query: { tenantId: string; action?: string; entityType?: string; userId?: string; createdAt?: { $gte?: Date; $lte?: Date } } = { tenantId: user.tenantId };
 
     if (action) {
       query.action = action;
@@ -81,9 +81,10 @@ export async function GET(request: NextRequest) {
   } catch (error: unknown) {
     console.error('Get audit logs error:', error);
     const t = await getValidationTranslatorFromRequest(request);
+    const errorMessage = error instanceof Error ? error.message : t('validation.failedToFetchAuditLogs', 'Failed to fetch audit logs');
     return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : t('validation.failedToFetchAuditLogs', 'Failed to fetch audit logs') }, 
-      { status: error.message === 'Unauthorized' ? 401 : 500 }
+      { success: false, error: errorMessage }, 
+      { status: errorMessage === 'Unauthorized' ? 401 : 500 }
     );
   }
 }

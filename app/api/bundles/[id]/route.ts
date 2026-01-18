@@ -32,7 +32,8 @@ export async function GET(
     return NextResponse.json({ success: true, data: bundle });
   } catch (error: unknown) {
     console.error('Error fetching bundle:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Failed to fetch bundle';
+    return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
   }
 }
 
@@ -88,7 +89,8 @@ export async function PUT(
       );
     }
     console.error('Error updating bundle:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+    const errorMessage = error instanceof Error ? error.message : 'Failed to update bundle';
+    return NextResponse.json({ success: false, error: errorMessage }, { status: 400 });
   }
 }
 
@@ -127,7 +129,8 @@ export async function DELETE(
     return NextResponse.json({ success: true, message: t('validation.bundleDeactivated', 'Bundle deactivated') });
   } catch (error: unknown) {
     console.error('Error deleting bundle:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Failed to delete bundle';
+    return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
   }
 }
 

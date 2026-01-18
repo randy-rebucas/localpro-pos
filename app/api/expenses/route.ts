@@ -25,9 +25,10 @@ export async function GET(request: NextRequest) {
     const query: Record<string, unknown> = { tenantId };
     
     if (startDate || endDate) {
-      query.date = {};
-      if (startDate) query.date.$gte = new Date(startDate);
-      if (endDate) query.date.$lte = new Date(endDate);
+      const dateFilter: { $gte?: Date; $lte?: Date } = {};
+      if (startDate) dateFilter.$gte = new Date(startDate);
+      if (endDate) dateFilter.$lte = new Date(endDate);
+      query.date = dateFilter;
     }
 
     if (name) {

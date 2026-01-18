@@ -61,11 +61,11 @@ export default function StockMovementsPage() {
         setTotalPages(data.pagination?.pages || 1);
         setMessage(null);
       } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchStockMovements || 'Failed to fetch stock movements' });
+        setMessage({ type: 'error', text: data.error || (dict?.common as Record<string, unknown>)?.failedToFetchStockMovements as string || 'Failed to fetch stock movements' });
       }
     } catch (error) {
       console.error('Error fetching stock movements:', error);
-      setMessage({ type: 'error', text: dict?.common?.failedToFetchStockMovements || 'Failed to fetch stock movements' });
+      setMessage({ type: 'error', text: (dict?.common as Record<string, unknown>)?.failedToFetchStockMovements as string || 'Failed to fetch stock movements' });
     } finally {
       setLoading(false);
     }
@@ -93,7 +93,7 @@ export default function StockMovementsPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+          <p className="mt-4 text-gray-600">{(dict?.common as Record<string, unknown>)?.loading as string || 'Loading...'}</p>
         </div>
       </div>
     );
@@ -111,14 +111,14 @@ export default function StockMovementsPage() {
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
-            {dict?.admin?.backToAdmin || 'Back to Admin'}
+            {(dict?.admin as Record<string, unknown>)?.backToAdmin as string || 'Back to Admin'}
           </Link>
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
-                {dict.admin?.stockMovements || 'Stock Movements'}
+                {(dict.admin as Record<string, unknown>)?.stockMovements as string || 'Stock Movements'}
               </h1>
-              <p className="text-gray-600">{dict.admin?.stockMovementsSubtitle || 'Track all inventory changes and movements'}</p>
+              <p className="text-gray-600">{(dict.admin as Record<string, unknown>)?.stockMovementsSubtitle as string || 'Track all inventory changes and movements'}</p>
             </div>
           </div>
         </div>
@@ -237,7 +237,7 @@ export default function StockMovementsPage() {
               </tbody>
             </table>
             {movements.length === 0 && (
-              <div className="text-center py-8 text-gray-500">{dict.common?.noResults || 'No stock movements found'}</div>
+              <div className="text-center py-8 text-gray-500">{(dict.common as Record<string, unknown>)?.noResults as string || 'No stock movements found'}</div>
             )}
           </div>
           {totalPages > 1 && (

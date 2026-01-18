@@ -51,13 +51,14 @@ export async function GET(
 
     // Add date range filter
     if (startDate || endDate) {
-      query.startTime = {};
+      const timeFilter: { $gte?: Date; $lte?: Date } = {};
       if (startDate) {
-        query.startTime.$gte = new Date(startDate);
+        timeFilter.$gte = new Date(startDate);
       }
       if (endDate) {
-        query.startTime.$lte = new Date(endDate);
+        timeFilter.$lte = new Date(endDate);
       }
+      query.startTime = timeFilter;
     }
 
     const bookings = await Booking.find(query)
@@ -72,7 +73,8 @@ export async function GET(
   } catch (error: unknown) {
     console.error('Get customer bookings error:', error);
     
-    if (error.message === 'Unauthorized') {
+    const errorMessage = error instanceof Error ? error.message : 'Failed to fetch bookings';
+    if (errorMessage === 'Unauthorized') {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
@@ -80,7 +82,7 @@ export async function GET(
     }
 
     return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : 'Failed to fetch bookings' }, 
+      { success: false, error: errorMessage }, 
       { status: 500 }
     );
   }

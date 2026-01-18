@@ -37,7 +37,7 @@ export default function ProductsPage() {
   const [isRefillModalOpen, setIsRefillModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [refillingProduct, setRefillingProduct] = useState<Product | null>(null);
-  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
+  const [dict, setDict] = useState<any>(null);
   const [displayMode, setDisplayMode] = useState<'grid' | 'list'>('grid');
   const { confirm, Dialog: ConfirmDialog } = useConfirm();
   const { settings } = useTenantSettings();

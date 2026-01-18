@@ -26,7 +26,8 @@ export async function GET(
     
     return NextResponse.json({ success: true, data: customer });
   } catch (error: unknown) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Failed to fetch customer';
+    return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
   }
 }
 
@@ -98,7 +99,8 @@ export async function PATCH(
     
     return NextResponse.json({ success: true, data: customer });
   } catch (error: unknown) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+    const errorMessage = error instanceof Error ? error.message : 'Failed to update customer';
+    return NextResponse.json({ success: false, error: errorMessage }, { status: 400 });
   }
 }
 
@@ -147,6 +149,7 @@ export async function DELETE(
     
     return NextResponse.json({ success: true, message: 'Customer deleted' });
   } catch (error: unknown) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+    const errorMessage = error instanceof Error ? error.message : 'Failed to update customer';
+    return NextResponse.json({ success: false, error: errorMessage }, { status: 400 });
   }
 }

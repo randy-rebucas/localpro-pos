@@ -146,16 +146,17 @@ export async function POST(request: NextRequest) {
       // Keep default fallback translator
     }
     
-    // Handle duplicate key error
-    if (error.code === 11000) {
+    // Handle duplicate key error (MongoDB duplicate key error)
+    if (error && typeof error === 'object' && 'code' in error && error.code === 11000) {
       return NextResponse.json(
         { success: false, error: t('validation.emailAlreadyExists', 'An account with this email already exists') },
         { status: 409 }
       );
     }
 
+    const errorMessage = error instanceof Error ? error.message : 'Registration failed';
     return NextResponse.json(
-      { success: false, error: error.message || 'Registration failed' },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }

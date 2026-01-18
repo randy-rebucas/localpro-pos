@@ -41,17 +41,17 @@ export async function GET(request: NextRequest) {
     const notifications: unknown[] = [];
 
     // Check for missing clock-outs (sessions that are too long)
-    activeSessions.forEach((session: { _id: string; userId: { _id: string; name: string; email: string }; clockIn: Date }) => {
+    activeSessions.forEach((session) => {
       const clockInTime = new Date(session.clockIn);
       const hoursSinceClockIn = (now.getTime() - clockInTime.getTime()) / (1000 * 60 * 60);
 
       if (hoursSinceClockIn > maxHoursWithoutClockOut) {
         notifications.push({
           type: 'missing_clock_out',
-          userId: session.userId._id || session.userId,
-          userName: typeof session.userId === 'object' ? session.userId.name : 'Unknown',
-          userEmail: typeof session.userId === 'object' ? session.userId.email : null,
-          attendanceId: session._id,
+          userId: (session.userId && typeof session.userId === 'object' && '_id' in session.userId ? session.userId._id : session.userId)?.toString() || session.userId?.toString(),
+          userName: (session.userId && typeof session.userId === 'object' && 'name' in session.userId && typeof session.userId.name === 'string') ? session.userId.name : 'Unknown',
+          userEmail: (session.userId && typeof session.userId === 'object' && 'email' in session.userId && typeof session.userId.email === 'string') ? session.userId.email : null,
+          attendanceId: session._id.toString(),
           clockInTime: session.clockIn,
           hoursSinceClockIn: hoursSinceClockIn.toFixed(2),
           message: `Employee has been clocked in for ${hoursSinceClockIn.toFixed(1)} hours without clocking out`,
@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
     // Parse expected start time (HH:MM format)
     const [expectedHour, expectedMinute] = expectedStartTime.split(':').map(Number);
 
-    todayAttendances.forEach((attendance: { clockIn: Date; userId: { _id: string; name: string; email: string } }) => {
+    todayAttendances.forEach((attendance) => {
       const clockInTime = new Date(attendance.clockIn);
       const expectedClockIn = new Date(clockInTime);
       expectedClockIn.setHours(expectedHour, expectedMinute, 0, 0);
@@ -86,10 +86,10 @@ export async function GET(request: NextRequest) {
         if (minutesLate > 15) {
           notifications.push({
             type: 'late_arrival',
-            userId: attendance.userId._id || attendance.userId,
-            userName: typeof attendance.userId === 'object' ? attendance.userId.name : 'Unknown',
-            userEmail: typeof attendance.userId === 'object' ? attendance.userId.email : null,
-            attendanceId: attendance._id,
+            userId: (attendance.userId && typeof attendance.userId === 'object' && '_id' in attendance.userId ? attendance.userId._id : attendance.userId)?.toString() || attendance.userId?.toString(),
+            userName: (attendance.userId && typeof attendance.userId === 'object' && 'name' in attendance.userId && typeof attendance.userId.name === 'string') ? attendance.userId.name : 'Unknown',
+            userEmail: (attendance.userId && typeof attendance.userId === 'object' && 'email' in attendance.userId && typeof attendance.userId.email === 'string') ? attendance.userId.email : null,
+            attendanceId: attendance._id.toString(),
             clockInTime: attendance.clockIn,
             expectedTime: expectedClockIn,
             minutesLate: Math.round(minutesLate),
@@ -102,8 +102,8 @@ export async function GET(request: NextRequest) {
     // Count by type
     const summary = {
       total: notifications.length,
-      missingClockOut: notifications.filter(n => n.type === 'missing_clock_out').length,
-      lateArrivals: notifications.filter(n => n.type === 'late_arrival').length,
+      missingClockOut: notifications.filter((n): n is { type: 'missing_clock_out' } => typeof n === 'object' && n !== null && 'type' in n && n.type === 'missing_clock_out').length,
+      lateArrivals: notifications.filter((n): n is { type: 'late_arrival' } => typeof n === 'object' && n !== null && 'type' in n && n.type === 'late_arrival').length,
     };
 
     return NextResponse.json({
@@ -119,7 +119,8 @@ export async function GET(request: NextRequest) {
     });
   } catch (error: unknown) {
     console.error('Error fetching attendance notifications:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Failed to fetch attendance notifications';
+    return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
   }
 }
 
@@ -204,6 +205,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: unknown) {
     console.error('Error sending attendance notifications:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Failed to send attendance notifications';
+    return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
   }
 }

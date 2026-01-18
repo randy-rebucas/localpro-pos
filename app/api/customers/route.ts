@@ -55,7 +55,8 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error: unknown) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Failed to fetch customers';
+    return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
   }
 }
 
@@ -70,10 +71,11 @@ export async function POST(request: NextRequest) {
     } catch (authError: unknown) {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const _t = await getValidationTranslatorFromRequest(request);
-      if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
+      const authErrorMessage = authError instanceof Error ? authError.message : 'Authentication error';
+      if (authErrorMessage.includes('Unauthorized') || authErrorMessage.includes('Forbidden')) {
         return NextResponse.json(
-          { success: false, error: authError.message },
-          { status: authError.message.includes('Unauthorized') ? 401 : 403 }
+          { success: false, error: authErrorMessage },
+          { status: authErrorMessage.includes('Unauthorized') ? 401 : 403 }
         );
       }
       throw authError;
@@ -149,6 +151,7 @@ export async function POST(request: NextRequest) {
     
     return NextResponse.json({ success: true, data: customer }, { status: 201 });
   } catch (error: unknown) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+    const errorMessage = error instanceof Error ? error.message : 'Failed to create customer';
+    return NextResponse.json({ success: false, error: errorMessage }, { status: 400 });
   }
 }
