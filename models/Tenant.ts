@@ -97,12 +97,29 @@ export interface ITenantSettings {
   };
 }
 
+
+export type SubscriptionPlan = 'starter' | 'pro' | 'business' | 'enterprise';
+
+export interface ISubscription {
+  plan: SubscriptionPlan;
+  price: number;
+  currency: string;
+  status: 'active' | 'trialing' | 'past_due' | 'canceled' | 'expired';
+  startedAt: Date;
+  expiresAt: Date;
+  renewalDate?: Date;
+  trialEndsAt?: Date;
+  features?: string[];
+  notes?: string;
+}
+
 export interface ITenant extends Document {
   slug: string;
   name: string;
   domain?: string;
   subdomain?: string;
   settings: ITenantSettings;
+  subscription: ISubscription;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -110,6 +127,41 @@ export interface ITenant extends Document {
 
 const TenantSchema: Schema = new Schema(
   {
+        subscription: {
+          plan: {
+            type: String,
+            enum: ['starter', 'pro', 'business', 'enterprise'],
+            required: true,
+            default: 'starter',
+          },
+          price: {
+            type: Number,
+            required: true,
+            default: 999,
+          },
+          currency: {
+            type: String,
+            required: true,
+            default: 'PHP',
+          },
+          status: {
+            type: String,
+            enum: ['active', 'trialing', 'past_due', 'canceled', 'expired'],
+            default: 'active',
+          },
+          startedAt: {
+            type: Date,
+            default: Date.now,
+          },
+          expiresAt: {
+            type: Date,
+            required: true,
+          },
+          renewalDate: Date,
+          trialEndsAt: Date,
+          features: [String],
+          notes: String,
+        },
     slug: {
       type: String,
       required: [true, 'Tenant slug is required'],

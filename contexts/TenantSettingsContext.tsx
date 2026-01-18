@@ -2,13 +2,17 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { useParams } from 'next/navigation';
-import { ITenantSettings } from '@/models/Tenant';
+import { ITenantSettings, ISubscription, SubscriptionPlan } from '@/models/Tenant';
+import { getPlanByKey } from '@/lib/tenant';
+
 import { getDefaultTenantSettings } from '@/lib/currency';
 
 interface TenantSettingsContextType {
   settings: ITenantSettings | null;
   loading: boolean;
   refreshSettings: () => Promise<void>;
+  subscription?: ISubscription | null;
+  plan?: any | null;
 }
 
 const TenantSettingsContext = createContext<TenantSettingsContextType | undefined>(undefined);
@@ -17,6 +21,8 @@ export function TenantSettingsProvider({ children }: { children: ReactNode }) {
   const params = useParams();
   const tenant = (params?.tenant as string) || 'default';
   const [settings, setSettings] = useState<ITenantSettings | null>(null);
+  const [subscription, setSubscription] = useState<ISubscription | null>(null);
+  const [plan, setPlan] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchSettings = async () => {
@@ -29,9 +35,18 @@ export function TenantSettingsProvider({ children }: { children: ReactNode }) {
         // Merge with defaults to ensure all fields exist
         const defaultSettings = getDefaultTenantSettings();
         setSettings({ ...defaultSettings, ...data.data });
+        if (data.tenant && data.tenant.subscription) {
+          setSubscription(data.tenant.subscription);
+          setPlan(getPlanByKey(data.tenant.subscription.plan));
+        } else {
+          setSubscription(null);
+          setPlan(null);
+        }
       } else {
         // Use defaults if fetch fails
         setSettings(getDefaultTenantSettings());
+        setSubscription(null);
+        setPlan(null);
       }
     } catch (error) {
       console.error('Error fetching tenant settings:', error);
@@ -78,7 +93,7 @@ export function TenantSettingsProvider({ children }: { children: ReactNode }) {
   }, [settings?.primaryColor]);
 
   return (
-    <TenantSettingsContext.Provider value={{ settings, loading, refreshSettings: fetchSettings }}>
+    <TenantSettingsContext.Provider value={{ settings, loading, refreshSettings: fetchSettings, subscription, plan }}>
       {children}
     </TenantSettingsContext.Provider>
   );

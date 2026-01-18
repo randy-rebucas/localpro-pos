@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import FeatureGate from '@/components/FeatureGate';
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '../dictionaries-client';
 import Currency from '@/components/Currency';
@@ -320,19 +321,58 @@ export default function ReportsPage() {
           <div className="bg-white border border-gray-300 overflow-hidden mb-6">
             <div className="border-b border-gray-200">
               <nav className="flex overflow-x-auto" aria-label={dict?.common?.tabs || 'Tabs'}>
-                {(['sales', 'products', 'vat', 'profit-loss', 'cash-drawer'] as const).map((tab) => (
+                <button
+                  onClick={() => setActiveTab('sales')}
+                  className={`px-6 py-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                    activeTab === 'sales'
+                      ? 'border-blue-600 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  {dict.reports?.tabs?.sales || 'Sales'}
+                </button>
+                <FeatureGate feature="advanced-reports">
                   <button
-                    key={tab}
-                    onClick={() => setActiveTab(tab)}
+                    onClick={() => setActiveTab('products')}
                     className={`px-6 py-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                      activeTab === tab
+                      activeTab === 'products'
                         ? 'border-blue-600 text-blue-600'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                     }`}
                   >
-                    {dict.reports?.tabs?.[tab] || tab.replace('-', ' ')}
+                    {dict.reports?.tabs?.products || 'Products'}
                   </button>
-                ))}
+                  <button
+                    onClick={() => setActiveTab('vat')}
+                    className={`px-6 py-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                      activeTab === 'vat'
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    {dict.reports?.tabs?.vat || 'VAT'}
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('profit-loss')}
+                    className={`px-6 py-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                      activeTab === 'profit-loss'
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    {dict.reports?.tabs?.['profit-loss'] || 'Profit & Loss'}
+                  </button>
+                </FeatureGate>
+                <button
+                  onClick={() => setActiveTab('cash-drawer')}
+                  className={`px-6 py-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                    activeTab === 'cash-drawer'
+                      ? 'border-blue-600 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  {dict.reports?.tabs?.['cash-drawer'] || 'Cash Drawer'}
+                </button>
               </nav>
             </div>
 
