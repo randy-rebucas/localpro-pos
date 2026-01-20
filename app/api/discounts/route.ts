@@ -5,6 +5,7 @@ import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth, requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { checkFeatureAccess } from '@/lib/subscription';
 
 export async function GET(request: NextRequest) {
   try {
@@ -51,7 +52,17 @@ export async function POST(request: NextRequest) {
     if (!tenantId) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
-    
+
+    // Check if discounts feature is enabled in subscription
+    try {
+      await checkFeatureAccess(tenantId.toString(), 'enableDiscounts');
+    } catch (featureError: any) {
+      return NextResponse.json(
+        { success: false, error: featureError.message },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const {
       code,

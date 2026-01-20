@@ -13,6 +13,7 @@ import ProductBundle from '@/models/ProductBundle';
 import StockMovement from '@/models/StockMovement';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { getTenantSettingsById } from '@/lib/tenant';
+import { SubscriptionService } from '@/lib/subscription';
 
 export async function GET(request: NextRequest) {
   try {
@@ -389,6 +390,23 @@ export async function POST(request: NextRequest) {
         itemsCount: transactionItems.length,
       },
     });
+
+    // Update subscription usage
+    try {
+      const currentTransactionCount = await Transaction.countDocuments({
+        tenantId,
+        createdAt: {
+          $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1), // Start of current month
+          $lt: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1) // Start of next month
+        }
+      });
+      await SubscriptionService.updateUsage(tenantId.toString(), {
+        transactions: currentTransactionCount
+      });
+    } catch (usageError) {
+      console.error('Failed to update subscription usage:', usageError);
+      // Don't fail the request if usage update fails
+    }
 
     return NextResponse.json({ success: true, data: transaction }, { status: 201 });
   } catch (error: any) {

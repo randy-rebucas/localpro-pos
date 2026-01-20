@@ -6,6 +6,7 @@ import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateEmail, validatePassword } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { checkSubscriptionLimit, SubscriptionService } from '@/lib/subscription';
 
 export async function GET(request: NextRequest) {
   try {
@@ -81,6 +82,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check subscription limits
+    const currentUserCount = await User.countDocuments({ tenantId, isActive: true });
+    try {
+      await checkSubscriptionLimit(tenantId.toString(), 'maxUsers', currentUserCount);
+    } catch (limitError: any) {
+      return NextResponse.json(
+        { success: false, error: limitError.message },
+        { status: 403 }
+      );
+    }
+
     const user = await User.create({
       email: email.toLowerCase(),
       password,
@@ -96,6 +108,16 @@ export async function POST(request: NextRequest) {
       entityId: user._id.toString(),
       changes: { email, name, role: user.role },
     });
+
+    // Update subscription usage
+    try {
+      await SubscriptionService.updateUsage(tenantId.toString(), {
+        users: currentUserCount + 1
+      });
+    } catch (usageError) {
+      console.error('Failed to update subscription usage:', usageError);
+      // Don't fail the request if usage update fails
+    }
 
     const userResponse = user.toObject();
     const { password: _, ...userWithoutPassword } = userResponse;

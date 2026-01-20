@@ -41,6 +41,7 @@ interface SubscriptionStatus {
     currentTransactions: number;
   };
   billingCycle: 'monthly' | 'yearly';
+  trialEndDate?: Date;
   nextBillingDate?: Date;
 }
 
