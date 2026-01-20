@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getDictionaryClient } from '../dictionaries-client';
-import { Users, Building, Package, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
+import { showToast } from '@/lib/toast';
+import { Users, Building, Package, CheckCircle, Clock, AlertTriangle, ArrowUp, Star, Zap, CreditCard, Loader2 } from 'lucide-react';
 
 interface SubscriptionPlan {
   _id: string;
@@ -45,14 +46,7 @@ export default function SubscriptionPage() {
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPlan, setSelectedPlan] = useState<string>('');
-  const [showContactForm, setShowContactForm] = useState(false);
-
-  useEffect(() => {
-    getDictionaryClient(lang).then((d) => {
-      setDict(d);
-      loadPlans();
-    });
-  }, [lang]);
+  const [upgrading, setUpgrading] = useState(false);
 
   const loadPlans = async () => {
     try {
@@ -70,16 +64,54 @@ export default function SubscriptionPage() {
     }
   };
 
+  useEffect(() => {
+    getDictionaryClient(lang).then(setDict);
+    loadPlans();
+  }, [lang]);
+
   const handlePlanSelect = (planId: string) => {
     setSelectedPlan(planId);
-    setShowContactForm(true);
   };
 
-  const handleContactSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    // In a real app, this would send an email or create a support ticket
-    alert('Thank you for your interest! Our sales team will contact you within 24 hours to complete your subscription setup.');
-    router.push(`/${tenant}/${lang}`);
+  const handleUpgrade = async (planId: string, billingCycle: 'monthly' | 'yearly' = 'monthly') => {
+    const selectedPlanData = plans.find(p => p._id === planId);
+    if (!selectedPlanData) return;
+
+    setUpgrading(true);
+    try {
+      // Create PayPal payment
+      const response = await fetch('/api/paypal/create-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          planId: planId,
+          billingCycle: billingCycle,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Store plan data for later use
+        localStorage.setItem('paypal_subscription_plan', JSON.stringify({
+          planId,
+          billingCycle,
+          amount: data.data.amount,
+          currency: data.data.currency,
+        }));
+
+        // Redirect to PayPal
+        window.location.href = data.data.paypalOrder.links.find((link: any) => link.rel === 'approve').href;
+      } else {
+        showToast.error(data.error || 'Failed to create payment');
+      }
+    } catch (error) {
+      console.error('Error creating payment:', error);
+      showToast.error('Failed to initiate payment');
+    } finally {
+      setUpgrading(false);
+    }
   };
 
   if (!dict || loading) {
@@ -96,192 +128,170 @@ export default function SubscriptionPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="py-6">
-            <div className="flex items-center space-x-3">
-              <AlertTriangle className="h-8 w-8 text-amber-600" />
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">Upgrade Your Account</h1>
-                <p className="text-gray-600">Your trial has expired. Choose a plan to continue using all features.</p>
-              </div>
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 py-6">
+          <div className="flex items-center space-x-3">
+            <ArrowUp className="h-6 w-6 text-blue-600" />
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">
+                {dict?.subscription?.upgradeTitle || 'Upgrade Your Subscription'}
+              </h1>
+              <p className="text-gray-600 mt-1">
+                {dict?.subscription?.upgradeMessage || 'Choose a plan that fits your business needs and upgrade today.'}
+              </p>
             </div>
           </div>
         </div>
       </div>
 
       {/* Plans */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold text-gray-900 mb-4">Choose Your Plan</h2>
-          <p className="text-xl text-gray-600">Select the perfect plan for your business needs</p>
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <div className="text-center mb-8">
+          <h2 className="text-xl font-bold text-gray-900 mb-2">
+            {dict?.subscription?.choosePlanTitle || 'Choose Your Plan'}
+          </h2>
+          <p className="text-sm text-gray-600">
+            {dict?.subscription?.choosePlanSubtitle || 'Select the perfect plan for your growing business'}
+          </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {plans.filter(plan => plan.tier !== 'enterprise').map((plan) => (
             <div
               key={plan._id}
-              className={`bg-white rounded-lg shadow-md p-6 border-2 transition-all duration-200 ${
+              className={`bg-white rounded-lg shadow-md border-2 transition-all duration-200 ${
                 selectedPlan === plan._id
                   ? 'border-blue-500 shadow-lg'
                   : 'border-gray-200 hover:border-gray-300'
               }`}
             >
-              <div className="text-center mb-6">
-                <h3 className="text-xl font-bold text-gray-900">{plan.name}</h3>
-                <div className="mt-4">
-                  <span className="text-4xl font-bold">₱{plan.price.monthly}</span>
-                  <span className="text-gray-600">/month</span>
+              <div className="p-6">
+                <div className="text-center mb-6">
+                  <h3 className="text-lg font-semibold text-gray-900">{plan.name}</h3>
+                  <div className="mt-4">
+                    <span className="text-3xl font-bold text-gray-900">₱{plan.price.monthly}</span>
+                    <span className="text-sm text-gray-600">/month</span>
+                  </div>
                 </div>
+
+                <ul className="space-y-3 mb-6">
+                  <li className="flex items-center">
+                    <Users className="h-4 w-4 text-green-600 mr-3 flex-shrink-0" />
+                    <span className="text-sm text-gray-600">
+                      {plan.features.maxUsers === -1 ? 'Unlimited' : plan.features.maxUsers} users
+                    </span>
+                  </li>
+                  <li className="flex items-center">
+                    <Building className="h-4 w-4 text-green-600 mr-3 flex-shrink-0" />
+                    <span className="text-sm text-gray-600">
+                      {plan.features.maxBranches === -1 ? 'Unlimited' : plan.features.maxBranches} branches
+                    </span>
+                  </li>
+                  <li className="flex items-center">
+                    <Package className="h-4 w-4 text-green-600 mr-3 flex-shrink-0" />
+                    <span className="text-sm text-gray-600">
+                      {plan.features.maxProducts === -1 ? 'Unlimited' : plan.features.maxProducts} products
+                    </span>
+                  </li>
+                  {plan.features.enableDiscounts && (
+                    <li className="flex items-center">
+                      <CheckCircle className="h-4 w-4 text-green-600 mr-3 flex-shrink-0" />
+                      <span className="text-sm text-gray-600">Discounts & Promotions</span>
+                    </li>
+                  )}
+                </ul>
+
+                {selectedPlan === plan._id ? (
+                  <div className="space-y-3">
+                    <div className="text-sm font-medium text-gray-700">Choose Billing Cycle:</div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        onClick={() => handleUpgrade(plan._id, 'monthly')}
+                        disabled={upgrading}
+                        className="px-3 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                      >
+                        {upgrading ? (
+                          <Loader2 className="h-4 w-4 animate-spin mx-auto" />
+                        ) : (
+                          <>
+                            <div>₱{plan.price.monthly}</div>
+                            <div className="text-xs opacity-90">Monthly</div>
+                          </>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => handleUpgrade(plan._id, 'yearly')}
+                        disabled={upgrading}
+                        className="px-3 py-2 bg-green-600 text-white rounded text-sm font-medium hover:bg-green-700 disabled:opacity-50 transition-colors"
+                      >
+                        {upgrading ? (
+                          <Loader2 className="h-4 w-4 animate-spin mx-auto" />
+                        ) : (
+                          <>
+                            <div>₱{(plan.price.monthly * 12 * 0.9).toFixed(0)}</div>
+                            <div className="text-xs opacity-90">Yearly (10% off)</div>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => setSelectedPlan('')}
+                      className="w-full px-3 py-2 bg-gray-100 text-gray-700 rounded text-sm font-medium hover:bg-gray-200 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => handlePlanSelect(plan._id)}
+                    className="w-full px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700 transition-colors"
+                  >
+                    Select Plan
+                  </button>
+                )}
               </div>
-
-              <ul className="space-y-3 mb-6">
-                <li className="flex items-center">
-                  <Users className="h-4 w-4 text-green-600 mr-2 flex-shrink-0" />
-                  <span className="text-sm">
-                    {plan.features.maxUsers === -1 ? 'Unlimited' : plan.features.maxUsers} users
-                  </span>
-                </li>
-                <li className="flex items-center">
-                  <Building className="h-4 w-4 text-green-600 mr-2 flex-shrink-0" />
-                  <span className="text-sm">
-                    {plan.features.maxBranches === -1 ? 'Unlimited' : plan.features.maxBranches} branches
-                  </span>
-                </li>
-                <li className="flex items-center">
-                  <Package className="h-4 w-4 text-green-600 mr-2 flex-shrink-0" />
-                  <span className="text-sm">
-                    {plan.features.maxProducts === -1 ? 'Unlimited' : plan.features.maxProducts} products
-                  </span>
-                </li>
-                {plan.features.enableDiscounts && (
-                  <li className="flex items-center">
-                    <CheckCircle className="h-4 w-4 text-green-600 mr-2 flex-shrink-0" />
-                    <span className="text-sm">Discounts & Promotions</span>
-                  </li>
-                )}
-                {plan.features.enableLoyaltyProgram && (
-                  <li className="flex items-center">
-                    <CheckCircle className="h-4 w-4 text-green-600 mr-2 flex-shrink-0" />
-                    <span className="text-sm">Loyalty Program</span>
-                  </li>
-                )}
-                {plan.features.enableCustomerManagement && (
-                  <li className="flex items-center">
-                    <CheckCircle className="h-4 w-4 text-green-600 mr-2 flex-shrink-0" />
-                    <span className="text-sm">Customer Management</span>
-                  </li>
-                )}
-                {plan.features.enableBookingScheduling && (
-                  <li className="flex items-center">
-                    <CheckCircle className="h-4 w-4 text-green-600 mr-2 flex-shrink-0" />
-                    <span className="text-sm">Booking & Scheduling</span>
-                  </li>
-                )}
-                {plan.features.prioritySupport && (
-                  <li className="flex items-center">
-                    <CheckCircle className="h-4 w-4 text-green-600 mr-2 flex-shrink-0" />
-                    <span className="text-sm">Priority Support</span>
-                  </li>
-                )}
-              </ul>
-
-              <button
-                onClick={() => handlePlanSelect(plan._id)}
-                className={`w-full py-2 px-4 rounded-md font-medium transition-colors ${
-                  selectedPlan === plan._id
-                    ? 'bg-blue-600 text-white hover:bg-blue-700'
-                    : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
-                }`}
-              >
-                {selectedPlan === plan._id ? 'Selected' : 'Select Plan'}
-              </button>
             </div>
           ))}
         </div>
 
+        {/* Trust indicators */}
+        <div className="mt-12 text-center">
+          <p className="text-sm text-gray-500 mb-6">Trusted by businesses worldwide</p>
+          <div className="flex justify-center items-center space-x-8">
+            <div className="flex items-center space-x-2">
+              <CheckCircle className="h-5 w-5 text-green-600" />
+              <span className="text-sm font-medium text-gray-600">Secure Payments</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <CheckCircle className="h-5 w-5 text-green-600" />
+              <span className="text-sm font-medium text-gray-600">30-Day Money Back</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <CheckCircle className="h-5 w-5 text-green-600" />
+              <span className="text-sm font-medium text-gray-600">24/7 Support</span>
+            </div>
+          </div>
+        </div>
+
         {/* Enterprise Plan */}
-        <div className="mt-8 text-center">
-          <div className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg p-8 text-white">
-            <h3 className="text-2xl font-bold mb-2">Enterprise</h3>
-            <p className="text-lg mb-4">Custom solutions for chains and LGUs</p>
-            <p className="text-sm opacity-90 mb-6">
-              Unlimited users, branches, and products with dedicated support
-            </p>
-            <button
-              onClick={() => handlePlanSelect('enterprise')}
-              className="bg-white text-purple-600 px-6 py-3 rounded-md font-medium hover:bg-gray-100 transition-colors"
-            >
-              Contact Sales
-            </button>
+        <div className="mt-8">
+          <div className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg p-6 text-white">
+            <div className="text-center">
+              <h3 className="text-xl font-bold mb-2">Enterprise</h3>
+              <p className="text-sm mb-4">Custom solutions for chains and LGUs</p>
+              <p className="text-xs opacity-90 mb-6">
+                Unlimited users, branches, and products with dedicated support
+              </p>
+              <button
+                onClick={() => handlePlanSelect('enterprise')}
+                className="px-6 py-2 bg-white text-purple-600 rounded text-sm font-medium hover:bg-gray-50 transition-colors"
+              >
+                Contact Sales
+              </button>
+            </div>
           </div>
         </div>
       </div>
-
-      {/* Contact Form Modal */}
-      {showContactForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h3 className="text-xl font-bold mb-4">Contact Our Sales Team</h3>
-            <p className="text-gray-600 mb-6">
-              Thank you for choosing {plans.find(p => p._id === selectedPlan)?.name || 'our service'}!
-              Our sales team will contact you within 24 hours to complete your subscription setup.
-            </p>
-
-            <form onSubmit={handleContactSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Full Name</label>
-                <input
-                  type="text"
-                  required
-                  className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Your full name"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Email</label>
-                <input
-                  type="email"
-                  required
-                  className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="your.email@company.com"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Phone (Optional)</label>
-                <input
-                  type="tel"
-                  className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="+63 xxx xxx xxxx"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Message</label>
-                <textarea
-                  rows={3}
-                  className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Tell us about your business needs..."
-                />
-              </div>
-              <div className="flex justify-end space-x-3">
-                <button
-                  type="button"
-                  onClick={() => setShowContactForm(false)}
-                  className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                >
-                  Send Message
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
