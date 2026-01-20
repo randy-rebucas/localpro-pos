@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { getDictionaryClient } from '../dictionaries-client';
 import Link from 'next/link';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { useSubscription } from '@/contexts/SubscriptionContext';
 
 export default function AdminPage() {
   const params = useParams();
@@ -15,6 +16,7 @@ export default function AdminPage() {
   const [dict, setDict] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const { settings } = useTenantSettings();
+  const { subscriptionStatus } = useSubscription();
 
   useEffect(() => {
     getDictionaryClient(lang).then((d) => {
@@ -199,6 +201,18 @@ export default function AdminPage() {
       color: 'rose',
     },
     {
+      title: dict.admin?.subscriptions || 'Subscriptions',
+      description: dict.admin?.subscriptionsDescription || 'Manage subscription plans and billing',
+      href: `/${tenant}/${lang}/admin/subscriptions`,
+      featureFlag: undefined as keyof typeof settings | undefined,
+      icon: (
+        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      ),
+      color: 'emerald',
+    },
+    {
       title: dict.admin?.reports || 'Reports',
       description: dict.admin?.reportsDescription || 'View detailed reports and analytics',
       href: `/${tenant}/${lang}/reports`,
@@ -212,7 +226,7 @@ export default function AdminPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div>
       <Navbar />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         <div className="mb-6 sm:mb-8">
@@ -222,11 +236,64 @@ export default function AdminPage() {
           <p className="text-gray-600">{dict.admin?.subtitle || 'Manage users, tenants, and system settings'}</p>
         </div>
 
+        {/* Subscription Usage Summary */}
+        {subscriptionStatus && (
+          <div className="col-span-full mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Subscription Usage</h2>
+                  <p className="text-sm text-gray-600">{subscriptionStatus.planName} Plan</p>
+                </div>
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                  subscriptionStatus.isActive
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-red-100 text-red-800'
+                }`}>
+                  {subscriptionStatus.isActive ? "Active" : "Inactive"}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-blue-600">{subscriptionStatus.usage.currentUsers}</div>
+                  <div className="text-xs text-gray-500">
+                    Users ({subscriptionStatus.limits.maxUsers === -1 ? '∞' : subscriptionStatus.limits.maxUsers})
+                  </div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-600">{subscriptionStatus.usage.currentBranches}</div>
+                  <div className="text-xs text-gray-500">
+                    Branches ({subscriptionStatus.limits.maxBranches === -1 ? '∞' : subscriptionStatus.limits.maxBranches})
+                  </div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-orange-600">{subscriptionStatus.usage.currentProducts}</div>
+                  <div className="text-xs text-gray-500">
+                    Products ({subscriptionStatus.limits.maxProducts === -1 ? '∞' : subscriptionStatus.limits.maxProducts})
+                  </div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-purple-600">{subscriptionStatus.usage.currentTransactions}</div>
+                  <div className="text-xs text-gray-500">
+                    Transactions ({subscriptionStatus.limits.maxTransactions === -1 ? '∞' : subscriptionStatus.limits.maxTransactions})
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {allAdminCards
             .filter(card => {
               if (!card.featureFlag) return true;
               if (!settings) return true; // Show by default if settings not loaded yet
+
+              // Check subscription features first
+              if (subscriptionStatus && !subscriptionStatus.features[card.featureFlag]) {
+                return false; // Hide if subscription doesn't support this feature
+              }
+
               return settings[card.featureFlag] !== false; // Show if enabled or undefined (default enabled)
             })
             .map((card, index) => (

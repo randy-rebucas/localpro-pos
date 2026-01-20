@@ -11,6 +11,7 @@
     "setup": "node scripts/install.js",
     "tenant:create": "tsx scripts/create-tenant.ts",
     "tenant:default": "tsx scripts/create-default-tenant.ts",
+    "subscription:plans": "tsx scripts/create-subscription-plans.ts",
     "reset:collections": "tsx scripts/reset-collections.ts"
   },
   "dependencies": {
@@ -22,6 +23,7 @@
     "jsonwebtoken": "^9.0.2",
     "jspdf": "^2.5.2",
     "jsqr": "^1.4.0",
+    "lucide-react": "^0.562.0",
     "mongoose": "^8.20.0",
     "negotiator": "^1.0.0",
     "next": "16.0.10",
