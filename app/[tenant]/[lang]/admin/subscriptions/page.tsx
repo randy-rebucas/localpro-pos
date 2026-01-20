@@ -198,9 +198,9 @@ export default function SubscriptionsPage() {
             </div>
         );
     }
-
+    // max-w-7xl mx-auto flex items-center justify-between
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 max-w-7xl mx-auto">
             <div className="flex justify-between items-center">
                 <div>
                     <h1 className="text-3xl font-bold">Subscriptions</h1>

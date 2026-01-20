@@ -41,6 +41,7 @@ export interface SubscriptionStatus {
     currentTransactions: number;
   };
   billingCycle: 'monthly' | 'yearly';
+  trialEndDate?: Date;
   nextBillingDate?: Date;
 }
 
@@ -53,7 +54,7 @@ export class SubscriptionService {
       await connectDB();
 
       const subscription = await Subscription.findOne({ tenantId })
-        .populate('planId')
+        .populate('planId', 'name tier price features')
         .lean();
 
       if (!subscription) {
@@ -70,6 +71,7 @@ export class SubscriptionService {
         isTrialExpired: subscription.trialEndDate ? now > subscription.trialEndDate : false,
         planName: plan.name,
         billingCycle: subscription.billingCycle,
+        trialEndDate: subscription.trialEndDate,
         nextBillingDate: subscription.nextBillingDate,
         limits: {
           maxUsers: plan.features.maxUsers,

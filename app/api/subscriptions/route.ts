@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
 
     const subscriptions = await Subscription.find(query)
       .populate('tenantId', 'slug name')
-      .populate('planId', 'name tier price')
+      .populate('planId', 'name tier price features')
       .sort({ createdAt: -1 })
       .lean();
 
@@ -40,10 +40,12 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
+
+    // Only admins can create subscriptions (tenants cannot create their own subscriptions)
     await requireRole(request, ['admin']);
 
     const body = await request.json();
-    const { tenantId, planId, billingCycle = 'monthly', isTrial = true } = body;
+    const { tenantId, planId, billingCycle = 'monthly', isTrial = false } = body;
 
     if (!tenantId || !planId) {
       return NextResponse.json(

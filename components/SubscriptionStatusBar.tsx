@@ -14,7 +14,7 @@ export function SubscriptionStatusBar() {
   if (loading) {
     return (
       <div className="bg-blue-50 border-b border-blue-200 px-4 py-3">
-        <div className="max-w-7xl mx-auto flex items-center">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="animate-pulse flex items-center space-x-3">
             <div className="w-5 h-5 bg-blue-300 rounded"></div>
             <div className="h-4 bg-blue-300 rounded w-48"></div>
@@ -73,13 +73,17 @@ export function SubscriptionStatusBar() {
     }
 
     if (subscriptionStatus.isTrial && !subscriptionStatus.isTrialExpired) {
-      const daysLeft = Math.ceil((subscriptionStatus.trialEndDate!.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+      const trialEndDate = subscriptionStatus.trialEndDate ? new Date(subscriptionStatus.trialEndDate) : null;
+      const daysLeft = trialEndDate
+        ? Math.ceil((trialEndDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+        : 0;
+
       return {
         bgColor: 'bg-blue-50',
         borderColor: 'border-blue-200',
         icon: <Clock className="w-5 h-5 text-blue-600" />,
         title: 'Trial Period',
-        description: `${daysLeft} days remaining in your trial.`,
+        description: `${Math.max(0, daysLeft)} days remaining in your trial.`,
         badge: <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Trial</span>,
         action: 'Upgrade Now',
         actionVariant: 'outline' as const,
@@ -106,7 +110,7 @@ export function SubscriptionStatusBar() {
       icon: <CheckCircle className="w-5 h-5 text-green-600" />,
       title: `Active: ${subscriptionStatus.planName} Plan`,
       description: subscriptionStatus.nextBillingDate
-        ? `Next billing: ${subscriptionStatus.nextBillingDate.toLocaleDateString()}`
+        ? `Next billing: ${new Date(subscriptionStatus.nextBillingDate).toLocaleDateString()}`
         : 'Subscription active',
       badge: <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Active</span>,
       action: 'Manage',

@@ -5,6 +5,7 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import { TenantSettingsProvider } from '@/contexts/TenantSettingsContext';
 import { SubscriptionProvider } from '@/contexts/SubscriptionContext';
 import { SubscriptionStatusBar } from '@/components/SubscriptionStatusBar';
+import { SubscriptionGuard } from '@/components/SubscriptionGuard';
 
 /**
  * Admin Layout
@@ -20,8 +21,10 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     <TenantSettingsProvider>
       <SubscriptionProvider>
         <ProtectedRoute requiredRoles={['owner', 'admin', 'manager']}>
-          <SubscriptionStatusBar />
-          {children}
+          <SubscriptionGuard>
+            <SubscriptionStatusBar />
+            {children}
+          </SubscriptionGuard>
         </ProtectedRoute>
       </SubscriptionProvider>
     </TenantSettingsProvider>
