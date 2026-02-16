@@ -88,14 +88,6 @@ export async function POST(request: NextRequest) {
 
     const { items, paymentMethod, cashReceived, notes, discountCode, branchId, payments } = data;
 
-    // Explicitly type items as an array
-    const typedItems: Array<{
-      productId?: string;
-      quantity: number;
-      variation?: any;
-      bundleId?: string;
-    }> = Array.isArray(items) ? items : [];
-
     // Get tenant settings to check feature flags
     const tenantSettings = await getTenantSettingsById(tenantId);
 
@@ -322,12 +314,39 @@ export async function POST(request: NextRequest) {
     // Calculate total after discount and tax
     const total = Math.max(0, subtotalAfterDiscount + taxAmount);
 
-    // Calculate change for cash payments
-    let change = 0;
-    if (paymentMethod === 'cash' && cashReceived) {
-      change = Number(cashReceived) - total;
-      if (change < 0) {
-        return NextResponse.json({ success: false, error: t('validation.insufficientCashReceived', 'Insufficient cash received') }, { status: 400 });
+    // Handle multiple payments (split payments)
+    if (isMultiplePayments) {
+      // Validate that all payments sum to total
+      const paymentsTotal = payments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+      const tolerance = 0.01; // Allow small rounding differences
+      
+      if (Math.abs(paymentsTotal - total) > tolerance) {
+        return NextResponse.json(
+          { success: false, error: t('validation.paymentsMustEqualTotal', `Payments total (${paymentsTotal.toFixed(2)}) must equal transaction total (${total.toFixed(2)})`) },
+          { status: 400 }
+        );
+      }
+
+      // Determine primary payment method (use the first payment or the one with largest amount)
+      const primaryPayment = payments.reduce((prev: any, current: any) => 
+        (current.amount > (prev.amount || 0)) ? current : prev
+      );
+      finalPaymentMethod = primaryPayment.method || 'cash';
+      
+      // Calculate cash totals if any cash payment exists
+      const cashPayments = payments.filter((p: any) => p.method === 'cash');
+      if (cashPayments.length > 0) {
+        finalCashReceived = cashPayments.reduce((sum: number, p: any) => sum + (p.cashReceived || p.amount || 0), 0);
+        finalChange = cashPayments.reduce((sum: number, p: any) => sum + (p.change || 0), 0);
+      }
+    } else {
+      // Single payment method (existing logic)
+      // Calculate change for cash payments
+      if (finalPaymentMethod === 'cash' && finalCashReceived) {
+        finalChange = finalCashReceived - total;
+        if (finalChange < 0) {
+          return NextResponse.json({ success: false, error: t('validation.insufficientCashReceived', 'Insufficient cash received') }, { status: 400 });
+        }
       }
     }
 
@@ -529,7 +548,18 @@ export async function POST(request: NextRequest) {
       // Don't fail the request if usage update fails
     }
 
-    return NextResponse.json({ success: true, data: transaction }, { status: 201 });
+    // Include payment records in response if created
+    const responseData: any = transaction.toObject ? transaction.toObject() : transaction;
+    if (paymentRecords.length > 0) {
+      responseData.payments = paymentRecords.map((p: any) => ({
+        _id: p._id,
+        method: p.method,
+        amount: p.amount,
+        status: p.status,
+      }));
+    }
+
+    return NextResponse.json({ success: true, data: responseData }, { status: 201 });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 400 });
   }
