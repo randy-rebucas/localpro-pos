@@ -24,10 +24,11 @@ export async function GET(request: NextRequest) {
 
     const query: any = { tenantId };
     if (search) {
+      const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
-        { sku: { $regex: search, $options: 'i' } },
+        { name: { $regex: escapedSearch, $options: 'i' } },
+        { description: { $regex: escapedSearch, $options: 'i' } },
+        { sku: { $regex: escapedSearch, $options: 'i' } },
       ];
     }
     if (category) {
@@ -43,9 +44,9 @@ export async function GET(request: NextRequest) {
       .lean();
     
     return NextResponse.json({ success: true, data: products });
-  } catch (error: any) {
-    console.error('Error fetching products:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (_error: unknown) {
+    console.error('Error fetching products:', _error);
+    return NextResponse.json({ success: false, error: 'Failed to fetch products' }, { status: 500 });
   }
 }
 
@@ -74,9 +75,9 @@ export async function POST(request: NextRequest) {
     const currentProductCount = await Product.countDocuments({ tenantId, isActive: true });
     try {
       await checkSubscriptionLimit(tenantId.toString(), 'maxProducts', currentProductCount);
-    } catch (limitError: any) {
+    } catch (limitError: unknown) {
       return NextResponse.json(
-        { success: false, error: limitError.message },
+        { success: false, error: (limitError as Error).message },
         { status: 403 }
       );
     }
@@ -102,15 +103,15 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true, data: product }, { status: 201 });
-  } catch (error: any) {
-    if (error.code === 11000) {
+  } catch (error: unknown) {
+    if ((error as Record<string, unknown>).code === 11000) {
       return NextResponse.json(
         { success: false, error: 'Product with this SKU already exists' },
         { status: 400 }
       );
     }
     console.error('Error creating product:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+    return NextResponse.json({ success: false, error: 'Failed to create product' }, { status: 400 });
   }
 }
 

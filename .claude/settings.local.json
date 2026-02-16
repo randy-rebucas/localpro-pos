@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(find:*)",
+      "Bash(npx next lint:*)",
+      "Bash(npx next:*)",
+      "Bash(pnpm run lint)",
+      "Bash(pnpm run lint:*)",
+      "Bash(npx eslint:*)"
+    ]
+  }
+}

@@ -14,8 +14,10 @@ export default function PaymentSuccessPage() {
   const [dict, setDict] = useState<any>(null);
   const [activating, setActivating] = useState(true);
   const [success, setSuccess] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const orderId = searchParams.get('orderId');
+  // Accept both 'orderId' and 'token' as PayPal order ID
+  const orderId = searchParams.get('orderId') || searchParams.get('token');
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -25,18 +27,30 @@ export default function PaymentSuccessPage() {
   const activateSubscription = async () => {
     if (!orderId) {
       setActivating(false);
+      setErrorMsg('Missing PayPal order ID.');
+      return;
+    }
+
+    let planId: string | null = null;
+    let billingCycle: string | null = null;
+    // Try to get plan data from localStorage
+    const planData = localStorage.getItem('paypal_subscription_plan');
+    if (planData) {
+      const parsed = JSON.parse(planData);
+      planId = parsed.planId;
+      billingCycle = parsed.billingCycle;
+    } else {
+      // Fallback: get from URL
+      planId = searchParams.get('planId');
+      billingCycle = searchParams.get('billingCycle') || 'monthly';
+    }
+    if (!planId) {
+      setErrorMsg('Plan ID not found in localStorage or URL.');
+      setActivating(false);
       return;
     }
 
     try {
-      // Extract plan information from localStorage or URL params
-      const planData = localStorage.getItem('paypal_subscription_plan');
-      if (!planData) {
-        throw new Error('Plan data not found');
-      }
-
-      const { planId, billingCycle } = JSON.parse(planData);
-
       // Activate the subscription
       const response = await fetch('/api/subscriptions/activate', {
         method: 'POST',
@@ -48,22 +62,20 @@ export default function PaymentSuccessPage() {
           paypalOrderId: orderId,
         }),
       });
-
       const data = await response.json();
-
       if (data.success) {
         setSuccess(true);
-        // Clear stored plan data
+        setErrorMsg(null);
         localStorage.removeItem('paypal_subscription_plan');
-        // Refresh subscription context
-        window.location.reload();
+        // Instead of reload, redirect to dashboard
+        router.replace(`/${tenant}/${lang}/admin`);
+        return;
       } else {
+        setErrorMsg(data.error || 'Unknown backend error.');
         throw new Error(data.error);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error activating subscription:', error);
-      // Redirect to failure page
-      router.push(`/${tenant}/${lang}/subscription/payment-failed`);
     } finally {
       setActivating(false);
     }
@@ -107,6 +119,9 @@ export default function PaymentSuccessPage() {
             </div>
             <h1 className="text-2xl font-bold text-gray-900 mb-2">Activation Failed</h1>
             <p className="text-gray-600 mb-6">There was an issue activating your subscription. Please contact support.</p>
+            {errorMsg && (
+              <div className="text-xs text-red-500 mb-4 break-all">{errorMsg}</div>
+            )}
             <button
               onClick={() => router.push(`/${tenant}/${lang}/subscription`)}
               className="w-full bg-gray-600 text-white py-2 px-4 rounded-md hover:bg-gray-700 font-medium"

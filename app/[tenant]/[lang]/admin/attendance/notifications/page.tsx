@@ -23,9 +23,9 @@ export default function AttendanceNotificationsPage() {
   const router = useRouter();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, Record<string, string>> | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [summary, setSummary] = useState<any>(null);
+  const [summary, setSummary] = useState<{ total: number; missingClockOut: number; lateArrivals: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [expectedStartTime, setExpectedStartTime] = useState('09:00');
@@ -37,6 +37,7 @@ export default function AttendanceNotificationsPage() {
     getDictionaryClient(lang).then(setDict);
     loadDefaultSettings();
     fetchNotifications();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang, tenant]);
 
   const loadDefaultSettings = async () => {

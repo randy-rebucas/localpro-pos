@@ -27,7 +27,7 @@ export default function CashDrawerPage() {
   const router = useRouter();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, Record<string, string>> | null>(null);
   const [sessions, setSessions] = useState<CashDrawerSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedSession, setSelectedSession] = useState<CashDrawerSession | null>(null);
@@ -35,6 +35,7 @@ export default function CashDrawerPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const { settings } = useTenantSettings();
 
+   
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
     fetchSessions();
@@ -205,7 +206,7 @@ function CashDrawerDetailModal({
 }: {
   session: CashDrawerSession;
   onClose: () => void;
-  dict: any;
+  dict: Record<string, Record<string, string>> | null;
 }) {
   const userName = typeof session.userId === 'object' ? session.userId.name : 'Unknown';
   const userEmail = typeof session.userId === 'object' ? session.userId.email : '';

@@ -10,16 +10,15 @@ export async function GET(request: NextRequest) {
   try {
     await connectDB();
 
+    // Require admin role to list subscriptions
+    await requireRole(request, ['admin']);
+
     // Get query parameters
     const { searchParams } = new URL(request.url);
-    const tenantId = searchParams.get('tenantId');
     const status = searchParams.get('status');
 
-    let query: any = {};
-
-    if (tenantId) {
-      query.tenantId = tenantId;
-    }
+    // tenantId is never user-supplied to prevent IDOR
+    const query: Record<string, unknown> = {};
 
     if (status) {
       query.status = status;
@@ -32,8 +31,14 @@ export async function GET(request: NextRequest) {
       .lean();
 
     return NextResponse.json({ success: true, data: subscriptions });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    if ((error as Error).message === 'Unauthorized' || (error as Error).message.includes('Forbidden')) {
+      return NextResponse.json(
+        { success: false, error: (error as Error).message },
+        { status: (error as Error).message === 'Unauthorized' ? 401 : 403 }
+      );
+    }
+    return NextResponse.json({ success: false, error: 'Failed to fetch subscriptions' }, { status: 500 });
   }
 }
 
@@ -86,7 +91,7 @@ export async function POST(request: NextRequest) {
     }
 
     const now = new Date();
-    const subscriptionData: any = {
+    const subscriptionData: Record<string, unknown> = {
       tenantId,
       planId,
       status: isTrial ? 'trial' : 'active',
@@ -148,13 +153,13 @@ export async function POST(request: NextRequest) {
       success: true,
       data: populatedSubscription
     }, { status: 201 });
-  } catch (error: any) {
-    if (error.code === 11000) {
+  } catch (error: unknown) {
+    if ((error as Record<string, unknown>).code === 11000) {
       return NextResponse.json(
         { success: false, error: 'Tenant already has a subscription' },
         { status: 400 }
       );
     }
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+    return NextResponse.json({ success: false, error: (error as Error).message }, { status: 400 });
   }
 }

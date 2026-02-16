@@ -12,8 +12,8 @@ export async function GET(request: NextRequest) {
       .lean();
 
     return NextResponse.json({ success: true, data: plans });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (_error: unknown) {
+    return NextResponse.json({ success: false, error: 'Failed to fetch plans' }, { status: 500 });
   }
 }
 
@@ -74,13 +74,13 @@ export async function POST(request: NextRequest) {
     const plan = await SubscriptionPlan.create(planData);
 
     return NextResponse.json({ success: true, data: plan }, { status: 201 });
-  } catch (error: any) {
-    if (error.code === 11000) {
+  } catch (error: unknown) {
+    if ((error as Record<string, unknown>).code === 11000) {
       return NextResponse.json(
         { success: false, error: 'Plan tier already exists' },
         { status: 400 }
       );
     }
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+    return NextResponse.json({ success: false, error: 'Failed to create plan' }, { status: 400 });
   }
 }

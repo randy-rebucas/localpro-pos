@@ -44,7 +44,7 @@ export default function BookingsPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, Record<string, string>> | null>(null);
 
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,6 +78,7 @@ export default function BookingsPage() {
   useEffect(() => {
     fetchBookings();
     fetchStaff();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterStatus, filterStaff]);
 
   const fetchBookings = async () => {

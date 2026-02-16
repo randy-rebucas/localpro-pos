@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb';
 import SubscriptionPlan from '@/models/SubscriptionPlan';
 import { requireAuth } from '@/lib/auth';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { getTenantSlugFromRequest } from '@/lib/api-tenant';
 import { createSubscriptionPayment } from '@/lib/paypal';
 
 export async function POST(request: NextRequest) {
@@ -12,6 +13,7 @@ export async function POST(request: NextRequest) {
     // Require authentication
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
+    const tenantSlug = await getTenantSlugFromRequest(request);
 
     if (!tenantId) {
       return NextResponse.json(
@@ -45,7 +47,7 @@ export async function POST(request: NextRequest) {
       : plan.price.monthly;
 
     // Create PayPal payment order
-    const paypalOrder = await createSubscriptionPayment(planId, amount, plan.price.currency);
+    const paypalOrder = await createSubscriptionPayment(planId, amount, plan.price.currency, tenantSlug, 'en', billingCycle);
 
     return NextResponse.json({
       success: true,
@@ -59,10 +61,10 @@ export async function POST(request: NextRequest) {
       },
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error creating PayPal payment:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to create payment' },
+      { success: false, error: (error as Error).message || 'Failed to create payment' },
       { status: 500 }
     );
   }

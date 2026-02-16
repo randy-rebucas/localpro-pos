@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { getDictionaryClient } from '../dictionaries-client';
 import Link from 'next/link';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { getDefaultTenantSettings } from '@/lib/currency';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 
 export default function AdminPage() {
@@ -13,9 +14,11 @@ export default function AdminPage() {
   const router = useRouter();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, Record<string, string>> | null>(null);
   const [loading, setLoading] = useState(true);
   const { settings } = useTenantSettings();
+  const tenantSettings = settings || getDefaultTenantSettings();
+  const primaryColor = tenantSettings.primaryColor || '#2563eb';
   const { subscriptionStatus } = useSubscription();
 
   useEffect(() => {
@@ -29,7 +32,10 @@ export default function AdminPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+          <div
+            className="inline-block animate-spin h-8 w-8 border-b-2 rounded-full"
+            style={{ borderColor: primaryColor, borderBottomColor: 'transparent' }}
+          ></div>
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
@@ -238,7 +244,13 @@ export default function AdminPage() {
 
         {/* Subscription Usage Summary */}
         {subscriptionStatus && (
-          <div className="col-span-full mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
+          <div
+            className="col-span-full mb-6 bg-gradient-to-r rounded-lg"
+            style={{
+              background: `linear-gradient(to right, ${primaryColor}11, #a5b4fc22)`,
+              border: `1px solid ${primaryColor}55`,
+            }}
+          >
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <div>
@@ -255,7 +267,7 @@ export default function AdminPage() {
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-blue-600">{subscriptionStatus.usage.currentUsers}</div>
+                  <div className="text-2xl font-bold" style={{ color: primaryColor }}>{subscriptionStatus.usage.currentUsers}</div>
                   <div className="text-xs text-gray-500">
                     Users ({subscriptionStatus.limits.maxUsers === -1 ? '∞' : subscriptionStatus.limits.maxUsers})
                   </div>
@@ -300,30 +312,24 @@ export default function AdminPage() {
             <Link
               key={index}
               href={card.href}
-              className="bg-white border border-gray-300 p-6 hover:border-blue-500 transition-all duration-200"
+              className="bg-white border border-gray-300 p-6 transition-all duration-200"
+              style={{
+                borderColor: primaryColor,
+                ...(card.color === 'blue' && { boxShadow: `0 0 0 2px ${primaryColor}33` }),
+              }}
             >
-              <div className={`inline-flex p-3 border mb-4 ${
-                card.color === 'blue' ? 'bg-blue-100 text-blue-600' :
-                card.color === 'green' ? 'bg-green-100 text-green-600' :
-                card.color === 'orange' ? 'bg-orange-100 text-orange-600' :
-                card.color === 'indigo' ? 'bg-indigo-100 text-indigo-600' :
-                card.color === 'red' ? 'bg-red-100 text-red-600' :
-                card.color === 'teal' ? 'bg-teal-100 text-teal-600' :
-                card.color === 'yellow' ? 'bg-yellow-100 text-yellow-600' :
-                card.color === 'cyan' ? 'bg-cyan-100 text-cyan-600' :
-                card.color === 'pink' ? 'bg-pink-100 text-pink-600' :
-                card.color === 'emerald' ? 'bg-emerald-100 text-emerald-600' :
-                card.color === 'violet' ? 'bg-violet-100 text-violet-600' :
-                card.color === 'amber' ? 'bg-amber-100 text-amber-600' :
-                card.color === 'rose' ? 'bg-rose-100 text-rose-600' :
-                card.color === 'slate' ? 'bg-slate-100 text-slate-600' :
-                'bg-purple-100 text-purple-600'
-              }`}>
+              <div
+                className={`inline-flex p-3 border mb-4`}
+                style={card.color === 'blue'
+                  ? { background: `${primaryColor}11`, color: primaryColor, borderColor: primaryColor }
+                  : {}}
+              >
                 {card.icon}
               </div>
               <h2 className="text-xl font-bold text-gray-900 mb-2">{card.title}</h2>
               <p className="text-gray-600 text-sm">{card.description}</p>
-              <div className="mt-4 flex items-center text-blue-600 font-medium text-sm">
+              <div className="mt-4 flex items-center font-medium text-sm"
+                style={card.color === 'blue' ? { color: primaryColor } : {}}>
                 <span>{dict.common?.view || 'View'} {card.title}</span>
                 <svg className="w-4 h-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />

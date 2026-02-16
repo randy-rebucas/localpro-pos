@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     const code = searchParams.get('code');
     const activeOnly = searchParams.get('activeOnly') === 'true';
 
-    let query: any = { tenantId };
+    const query: any = { tenantId };
     
     if (code) {
       query.code = code.toUpperCase();

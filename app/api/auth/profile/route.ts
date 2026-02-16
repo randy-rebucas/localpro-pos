@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
 
     // Generate QR token if it doesn't exist
     if (!user.qrToken) {
-      const newQrToken = currentUser.userId + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 15);
+      const newQrToken = require('crypto').randomBytes(32).toString('hex');
       await User.findByIdAndUpdate(currentUser.userId, { qrToken: newQrToken });
       user = await User.findById(currentUser.userId).select('-password').lean();
       
@@ -51,8 +51,8 @@ export async function GET(request: NextRequest) {
         qrToken: user.qrToken || null,
       },
     });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (_error: unknown) {
+    return NextResponse.json({ success: false, error: 'Failed to fetch profile' }, { status: 500 });
   }
 }
 
@@ -81,7 +81,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Build update object
-    const updateData: any = {};
+    const updateData: Record<string, unknown> = {};
     
     if (email !== undefined && email !== oldUser.email) {
       if (!validateEmail(email)) {
@@ -200,7 +200,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Track changes (excluding password and PIN details)
-    const changes: Record<string, any> = {};
+    const changes: Record<string, unknown> = {};
     Object.keys(updateData).forEach(key => {
       if (key !== 'password' && key !== 'pin' && oldUser[key as keyof typeof oldUser] !== updateData[key]) {
         changes[key] = {
@@ -237,14 +237,14 @@ export async function PUT(request: NextRequest) {
         qrToken: user.qrToken || null,
       }
     });
-  } catch (error: any) {
-    if (error.code === 11000) {
+  } catch (error: unknown) {
+    if ((error as Record<string, unknown>).code === 11000) {
       return NextResponse.json(
         { success: false, error: 'User with this email already exists' },
         { status: 400 }
       );
     }
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Failed to update profile' }, { status: 500 });
   }
 }
 

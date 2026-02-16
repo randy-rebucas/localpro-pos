@@ -4,8 +4,6 @@ import { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import { useParams, useRouter } from 'next/navigation';
 import { getDictionaryClient } from '../../dictionaries-client';
-import { useAuth } from '@/contexts/AuthContext';
-
 interface Branch {
   _id: string;
   name: string;
@@ -39,7 +37,7 @@ export default function BranchesPage() {
   const router = useRouter();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, Record<string, string>> | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,6 +49,7 @@ export default function BranchesPage() {
     getDictionaryClient(lang).then(setDict);
     fetchBranches();
     fetchUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang, tenant]);
 
   const fetchBranches = async () => {
@@ -97,7 +96,7 @@ export default function BranchesPage() {
       } else {
         setMessage({ type: 'error', text: data.error || dict?.common?.failedToDeactivateBranch || 'Failed to deactivate branch' });
       }
-    } catch (error) {
+    } catch {
       setMessage({ type: 'error', text: dict?.common?.failedToDeactivateBranch || 'Failed to deactivate branch' });
     }
   };
@@ -117,7 +116,7 @@ export default function BranchesPage() {
       } else {
         setMessage({ type: 'error', text: data.error || dict?.common?.failedToUpdateBranch || 'Failed to update branch' });
       }
-    } catch (error) {
+    } catch {
       setMessage({ type: 'error', text: dict?.common?.failedToUpdateBranch || 'Failed to update branch' });
     }
   };
@@ -272,7 +271,7 @@ function BranchModal({
   users: User[];
   onClose: () => void;
   onSave: () => void;
-  dict: any;
+  dict: Record<string, Record<string, string>> | null;
 }) {
   const [formData, setFormData] = useState({
     name: branch?.name || '',
@@ -300,7 +299,7 @@ function BranchModal({
     try {
       const url = branch ? `/api/branches/${branch._id}` : '/api/branches';
       const method = branch ? 'PUT' : 'POST';
-      const body: any = {
+      const body: Record<string, unknown> = {
         name: formData.name,
         code: formData.code || undefined,
         address: formData.address.street || formData.address.city ? formData.address : undefined,
@@ -322,7 +321,7 @@ function BranchModal({
       } else {
         setError(data.error || 'Failed to save branch');
       }
-    } catch (error) {
+    } catch {
       setError('Failed to save branch');
     } finally {
       setSaving(false);

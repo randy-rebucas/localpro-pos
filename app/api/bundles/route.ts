@@ -27,10 +27,11 @@ export async function GET(request: NextRequest) {
 
     const query: any = { tenantId };
     if (search) {
+      const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
-        { sku: { $regex: search, $options: 'i' } },
+        { name: { $regex: escapedSearch, $options: 'i' } },
+        { description: { $regex: escapedSearch, $options: 'i' } },
+        { sku: { $regex: escapedSearch, $options: 'i' } },
       ];
     }
     if (isActive !== null && isActive !== '') {
@@ -61,9 +62,9 @@ export async function GET(request: NextRequest) {
       .lean();
 
     return NextResponse.json({ success: true, data: bundles });
-  } catch (error: any) {
-    console.error('Error fetching bundles:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (_error: unknown) {
+    console.error('Error fetching bundles:', _error);
+    return NextResponse.json({ success: false, error: 'Failed to fetch bundles' }, { status: 500 });
   }
 }
 
@@ -110,16 +111,16 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ success: true, data: bundle }, { status: 201 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     const t = await getValidationTranslatorFromRequest(request);
-    if (error.code === 11000) {
+    if ((error as Record<string, unknown>).code === 11000) {
       return NextResponse.json(
         { success: false, error: t('validation.bundleSkuExists', 'Bundle with this SKU already exists') },
         { status: 400 }
       );
     }
     console.error('Error creating bundle:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+    return NextResponse.json({ success: false, error: 'Failed to create bundle' }, { status: 400 });
   }
 }
 

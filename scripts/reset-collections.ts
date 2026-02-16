@@ -97,7 +97,7 @@ async function getCollectionCounts(tenantId?: mongoose.Types.ObjectId) {
   
   for (const [name, model] of Object.entries(COLLECTIONS)) {
     try {
-      const mongooseModel = model as any;
+      const mongooseModel = model as mongoose.Model<any>;
       if (tenantId && 'tenantId' in model.schema.paths) {
         counts[name] = await mongooseModel.countDocuments({ tenantId });
       } else {
@@ -132,7 +132,7 @@ async function cleanCollections(
     }
     
     const model = COLLECTIONS[collectionName];
-    const mongooseModel = model as any;
+    const mongooseModel = model as mongoose.Model<any>;
     
     try {
       let deleteResult;
@@ -142,7 +142,7 @@ async function cleanCollections(
         deleteResult = await mongooseModel.deleteMany({});
       }
       results[collectionName] = { deleted: deleteResult.deletedCount || 0 };
-    } catch (error: any) {
+    } catch (error: unknown) {
       results[collectionName] = { 
         deleted: 0, 
         error: error.message 
@@ -248,7 +248,7 @@ async function createDefaultStore(createAdmin = false) {
         console.log(`  Tenant ID: ${tenant._id}`);
         console.log('');
         console.log('⚠️  IMPORTANT: Please change the admin password after first login!');
-      } catch (userError: any) {
+      } catch (userError: unknown) {
         console.log('');
         console.log('⚠️  Warning: Failed to create admin user:', userError.message);
         console.log(`  Tenant: ${tenant.name} (${tenant.slug})`);
@@ -256,7 +256,7 @@ async function createDefaultStore(createAdmin = false) {
     }
 
     return tenant;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('✗ Error creating default store:', error.message);
     throw error;
   }
@@ -350,7 +350,7 @@ async function createDemoTenant() {
         createdCategories.push(category);
       }
       console.log(`✓ Created ${createdCategories.length} demo categories`);
-    } catch (catError: any) {
+    } catch (catError: unknown) {
       console.log('⚠️  Warning: Failed to create demo categories:', catError.message);
     }
 
@@ -391,7 +391,7 @@ async function createDemoTenant() {
         createdProducts.push(product);
       }
       console.log(`✓ Created ${createdProducts.length} demo products`);
-    } catch (prodError: any) {
+    } catch (prodError: unknown) {
       console.log('⚠️  Warning: Failed to create demo products:', prodError.message);
     }
 
@@ -401,7 +401,7 @@ async function createDemoTenant() {
     console.log(`  Admin login: admin@demo.local / Admindemo123!`);
 
     return demoTenant;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('✗ Error creating demo tenant:', error.message);
     throw error;
   }
@@ -553,7 +553,7 @@ async function resetCollections() {
         await createDefaultStore(createAdmin);
         console.log('');
         console.log('✓ Default store setup complete');
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.log('');
         console.log('⚠️  Warning: Failed to create default store:', error.message);
       }
@@ -563,7 +563,7 @@ async function resetCollections() {
     if (shouldCreateDemoTenant) {
       try {
         await createDemoTenant();
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.log('');
         console.log('⚠️  Warning: Failed to create demo tenant:', error.message);
       }
@@ -571,7 +571,7 @@ async function resetCollections() {
     
     await mongoose.disconnect();
     console.log('✓ Disconnected from MongoDB');
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('✗ Error resetting collections:', error.message);
     if (mongoose.connection.readyState === 1) {
       await mongoose.disconnect();

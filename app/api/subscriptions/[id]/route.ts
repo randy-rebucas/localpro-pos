@@ -7,12 +7,13 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDB();
+    const { id } = await params;
 
-    const subscription = await Subscription.findById(params.id)
+    const subscription = await Subscription.findById(id)
       .populate('tenantId', 'slug name settings')
       .populate('planId', 'name tier price features')
       .lean();
@@ -32,16 +33,17 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDB();
     await requireRole(request, ['admin']);
+    const { id } = await params;
 
     const body = await request.json();
     const { status, billingCycle, autoRenew, planId } = body;
 
-    const subscription = await Subscription.findById(params.id);
+    const subscription = await Subscription.findById(id);
     if (!subscription) {
       return NextResponse.json(
         { success: false, error: 'Subscription not found' },
@@ -87,7 +89,7 @@ export async function PUT(
     }
 
     const updatedSubscription = await Subscription.findByIdAndUpdate(
-      params.id,
+      id,
       changes,
       { new: true }
     ).populate('tenantId', 'slug name')
@@ -109,13 +111,14 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDB();
     await requireRole(request, ['admin']);
+    const { id } = await params;
 
-    const subscription = await Subscription.findById(params.id);
+    const subscription = await Subscription.findById(id);
     if (!subscription) {
       return NextResponse.json(
         { success: false, error: 'Subscription not found' },
@@ -128,7 +131,7 @@ export async function DELETE(
       $unset: { subscriptionId: 1 }
     });
 
-    await Subscription.findByIdAndDelete(params.id);
+    await Subscription.findByIdAndDelete(id);
 
     await createAuditLog(request, {
       tenantId: subscription.tenantId,

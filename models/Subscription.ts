@@ -193,6 +193,7 @@ SubscriptionSchema.virtual('isTrialExpired').get(function() {
 });
 
 // Method to check if subscription allows a feature
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 SubscriptionSchema.methods.canUseFeature = function(featureName: string): boolean {
   // This will be populated with the plan data when needed
   // For now, return true for basic features during trial
@@ -210,13 +211,14 @@ SubscriptionSchema.methods.canUseFeature = function(featureName: string): boolea
 };
 
 // Method to check if subscription exceeds limits
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 SubscriptionSchema.methods.checkLimits = function(usage: {
   users?: number;
   branches?: number;
   products?: number;
   transactions?: number;
 }): { exceeded: boolean; limits: string[] } {
-  const limits: string[] = [];
+  // const limits: string[] = [];
 
   // During trial, no limits
   if (this.status === 'trial' && !this.isTrialExpired) {

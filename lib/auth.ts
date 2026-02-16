@@ -10,7 +10,17 @@ export interface JWTPayload {
   role: string;
 }
 
-const JWT_SECRET: string = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const JWT_SECRET: string = (() => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('FATAL: JWT_SECRET environment variable is required in production');
+    }
+    console.warn('WARNING: JWT_SECRET not set. Using insecure default for development only.');
+    return 'dev-only-insecure-secret-do-not-use-in-production';
+  }
+  return secret;
+})();
 
 /**
  * Generate JWT token for user

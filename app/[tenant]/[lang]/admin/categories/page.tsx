@@ -18,13 +18,14 @@ export default function CategoriesPage() {
   const router = useRouter();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, Record<string, string>> | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
 
+   
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
     fetchCategories();
@@ -60,7 +61,7 @@ export default function CategoriesPage() {
       } else {
         setMessage({ type: 'error', text: data.error || dict?.common?.failedToDeleteCategory || 'Failed to delete category' });
       }
-    } catch (error) {
+    } catch (_error) {
       setMessage({ type: 'error', text: dict?.common?.failedToDeleteCategory || 'Failed to delete category' });
     }
   };
@@ -80,7 +81,7 @@ export default function CategoriesPage() {
       } else {
         setMessage({ type: 'error', text: data.error || dict?.common?.failedToUpdateCategory || 'Failed to update category' });
       }
-    } catch (error) {
+    } catch (_error) {
       setMessage({ type: 'error', text: dict?.common?.failedToUpdateCategory || 'Failed to update category' });
     }
   };
@@ -220,7 +221,7 @@ function CategoryModal({
   category: Category | null;
   onClose: () => void;
   onSave: () => void;
-  dict: any;
+  dict: Record<string, Record<string, string>> | null;
 }) {
   const [formData, setFormData] = useState({
     name: category?.name || '',
@@ -254,7 +255,7 @@ function CategoryModal({
       } else {
         setError(data.error || 'Failed to save category');
       }
-    } catch (error) {
+    } catch (_error) {
       setError('Failed to save category');
     } finally {
       setSaving(false);

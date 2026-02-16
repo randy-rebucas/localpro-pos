@@ -155,103 +155,143 @@ export default function SubscriptionPage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 items-stretch">
           {plans.filter(plan => plan.tier !== 'enterprise').map((plan) => (
             <div
               key={plan._id}
-              className={`bg-white rounded-lg shadow-md border-2 transition-all duration-200 ${
+              className={`flex flex-col h-full bg-white rounded-lg shadow-md border-2 transition-all duration-200 ${
                 selectedPlan === plan._id
                   ? 'border-blue-500 shadow-lg'
                   : 'border-gray-200 hover:border-gray-300'
               }`}
             >
-              <div className="p-6">
-                <div className="text-center mb-6">
-                  <h3 className="text-lg font-semibold text-gray-900">{plan.name}</h3>
-                  <div className="mt-4">
-                    <span className="text-3xl font-bold text-gray-900">₱{plan.price.monthly}</span>
-                    <span className="text-sm text-gray-600">/month</span>
+              <div className="flex-1 flex flex-col p-6 justify-between">
+                <div>
+                  <div className="text-center mb-6">
+                    <h3 className="text-lg font-semibold text-gray-900">{plan.name}</h3>
+                    <div className="mt-4">
+                      <span className="text-3xl font-bold text-gray-900">₱{plan.price.monthly}</span>
+                      <span className="text-sm text-gray-600">/month</span>
+                    </div>
                   </div>
-                </div>
-
-                <ul className="space-y-3 mb-6">
-                  <li className="flex items-center">
-                    <Users className="h-4 w-4 text-green-600 mr-3 flex-shrink-0" />
-                    <span className="text-sm text-gray-600">
-                      {plan.features.maxUsers === -1 ? 'Unlimited' : plan.features.maxUsers} users
-                    </span>
-                  </li>
-                  <li className="flex items-center">
-                    <Building className="h-4 w-4 text-green-600 mr-3 flex-shrink-0" />
-                    <span className="text-sm text-gray-600">
-                      {plan.features.maxBranches === -1 ? 'Unlimited' : plan.features.maxBranches} branches
-                    </span>
-                  </li>
-                  <li className="flex items-center">
-                    <Package className="h-4 w-4 text-green-600 mr-3 flex-shrink-0" />
-                    <span className="text-sm text-gray-600">
-                      {plan.features.maxProducts === -1 ? 'Unlimited' : plan.features.maxProducts} products
-                    </span>
-                  </li>
-                  {plan.features.enableDiscounts && (
+                  <ul className="space-y-3 mb-6">
                     <li className="flex items-center">
-                      <CheckCircle className="h-4 w-4 text-green-600 mr-3 flex-shrink-0" />
-                      <span className="text-sm text-gray-600">Discounts & Promotions</span>
+                      <Users className="h-4 w-4 text-green-600 mr-3 flex-shrink-0" />
+                      <span className="text-sm text-gray-600">
+                        {plan.features.maxUsers === -1 ? 'Unlimited' : plan.features.maxUsers} users
+                      </span>
                     </li>
-                  )}
-                </ul>
-
-                {selectedPlan === plan._id ? (
-                  <div className="space-y-3">
-                    <div className="text-sm font-medium text-gray-700">Choose Billing Cycle:</div>
-                    <div className="grid grid-cols-2 gap-3">
+                    <li className="flex items-center">
+                      <Building className="h-4 w-4 text-green-600 mr-3 flex-shrink-0" />
+                      <span className="text-sm text-gray-600">
+                        {plan.features.maxBranches === -1 ? 'Unlimited' : plan.features.maxBranches} branches
+                      </span>
+                    </li>
+                    <li className="flex items-center">
+                      <Package className="h-4 w-4 text-green-600 mr-3 flex-shrink-0" />
+                      <span className="text-sm text-gray-600">
+                        {plan.features.maxProducts === -1 ? 'Unlimited' : plan.features.maxProducts} products
+                      </span>
+                    </li>
+                    {plan.features.enableDiscounts && (
+                      <li className="flex items-center">
+                        <CheckCircle className="h-4 w-4 text-green-600 mr-3 flex-shrink-0" />
+                        <span className="text-sm text-gray-600">Discounts & Promotions</span>
+                      </li>
+                    )}
+                  </ul>
+                </div>
+                <div>
+                  {selectedPlan === plan._id ? (
+                    <div className="space-y-3">
+                      <div className="text-sm font-medium text-gray-700">Choose Billing Cycle:</div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <button
+                          onClick={() => handleUpgrade(plan._id, 'monthly')}
+                          disabled={upgrading}
+                          className="px-3 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                        >
+                          {upgrading ? (
+                            <Loader2 className="h-4 w-4 animate-spin mx-auto" />
+                          ) : (
+                            <>
+                              <div>₱{plan.price.monthly}</div>
+                              <div className="text-xs opacity-90">Monthly</div>
+                            </>
+                          )}
+                        </button>
+                        <button
+                          onClick={() => handleUpgrade(plan._id, 'yearly')}
+                          disabled={upgrading}
+                          className="px-3 py-2 bg-green-600 text-white rounded text-sm font-medium hover:bg-green-700 disabled:opacity-50 transition-colors"
+                        >
+                          {upgrading ? (
+                            <Loader2 className="h-4 w-4 animate-spin mx-auto" />
+                          ) : (
+                            <>
+                              <div>₱{(plan.price.monthly * 12 * 0.9).toFixed(0)}</div>
+                              <div className="text-xs opacity-90">Yearly (10% off)</div>
+                            </>
+                          )}
+                        </button>
+                      </div>
                       <button
-                        onClick={() => handleUpgrade(plan._id, 'monthly')}
-                        disabled={upgrading}
-                        className="px-3 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                        onClick={() => setSelectedPlan('')}
+                        className="w-full px-3 py-2 bg-gray-100 text-gray-700 rounded text-sm font-medium hover:bg-gray-200 transition-colors"
                       >
-                        {upgrading ? (
-                          <Loader2 className="h-4 w-4 animate-spin mx-auto" />
-                        ) : (
-                          <>
-                            <div>₱{plan.price.monthly}</div>
-                            <div className="text-xs opacity-90">Monthly</div>
-                          </>
-                        )}
-                      </button>
-                      <button
-                        onClick={() => handleUpgrade(plan._id, 'yearly')}
-                        disabled={upgrading}
-                        className="px-3 py-2 bg-green-600 text-white rounded text-sm font-medium hover:bg-green-700 disabled:opacity-50 transition-colors"
-                      >
-                        {upgrading ? (
-                          <Loader2 className="h-4 w-4 animate-spin mx-auto" />
-                        ) : (
-                          <>
-                            <div>₱{(plan.price.monthly * 12 * 0.9).toFixed(0)}</div>
-                            <div className="text-xs opacity-90">Yearly (10% off)</div>
-                          </>
-                        )}
+                        Cancel
                       </button>
                     </div>
+                  ) : (
                     <button
-                      onClick={() => setSelectedPlan('')}
-                      className="w-full px-3 py-2 bg-gray-100 text-gray-700 rounded text-sm font-medium hover:bg-gray-200 transition-colors"
+                      onClick={() => handlePlanSelect(plan._id)}
+                      className="w-full px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700 transition-colors"
                     >
-                      Cancel
+                      Select Plan
                     </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => handlePlanSelect(plan._id)}
-                    className="w-full px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700 transition-colors"
-                  >
-                    Select Plan
-                  </button>
-                )}
+                  )}
+                </div>
               </div>
             </div>
           ))}
+
+          {/* Enterprise Plan Card */}
+          <div className="flex flex-col h-full bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg shadow-md border-2 border-purple-600 text-white">
+            <div className="flex-1 flex flex-col p-6 justify-between">
+              <div>
+                <div className="text-center mb-6">
+                  <h3 className="text-lg font-semibold">Enterprise</h3>
+                  <div className="mt-4">
+                    <span className="text-3xl font-bold">Custom Pricing</span>
+                    <span className="text-sm">/month</span>
+                  </div>
+                </div>
+                <ul className="space-y-3 mb-6">
+                  <li className="flex items-center">
+                    <Star className="h-4 w-4 text-yellow-300 mr-3 flex-shrink-0" />
+                    <span className="text-sm">Unlimited users, branches, products</span>
+                  </li>
+                  <li className="flex items-center">
+                    <Zap className="h-4 w-4 text-yellow-300 mr-3 flex-shrink-0" />
+                    <span className="text-sm">Dedicated support & integrations</span>
+                  </li>
+                  <li className="flex items-center">
+                    <CreditCard className="h-4 w-4 text-yellow-300 mr-3 flex-shrink-0" />
+                    <span className="text-sm">Custom billing & account manager</span>
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <button
+                  onClick={() => window.location.href = `mailto:admin@localpro.asia?subject=Enterprise%20Plan%20Inquiry&body=Please%20contact%20me%20regarding%20the%20Enterprise%20plan.`}
+                  className="w-full px-4 py-2 bg-white text-purple-600 rounded text-sm font-medium hover:bg-gray-50 transition-colors"
+                >
+                  Contact Us
+                </button>
+              </div>
+            </div>
+          </div>
+       
         </div>
 
         {/* Trust indicators */}
@@ -273,24 +313,7 @@ export default function SubscriptionPage() {
           </div>
         </div>
 
-        {/* Enterprise Plan */}
-        <div className="mt-8">
-          <div className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg p-6 text-white">
-            <div className="text-center">
-              <h3 className="text-xl font-bold mb-2">Enterprise</h3>
-              <p className="text-sm mb-4">Custom solutions for chains and LGUs</p>
-              <p className="text-xs opacity-90 mb-6">
-                Unlimited users, branches, and products with dedicated support
-              </p>
-              <button
-                onClick={() => handlePlanSelect('enterprise')}
-                className="px-6 py-2 bg-white text-purple-600 rounded text-sm font-medium hover:bg-gray-50 transition-colors"
-              >
-                Contact Sales
-              </button>
-            </div>
-          </div>
-        </div>
+        {/* Enterprise Plan removed from below, now in main grid above */}
       </div>
     </div>
   );

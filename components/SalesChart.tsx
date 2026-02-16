@@ -104,12 +104,12 @@ export default function SalesChart({ data, dict }: SalesChartProps) {
             labelFormatter={(label) => `${dict.dashboard?.date || 'Date'}: ${label}`}
           />
           <Legend />
-          <Line 
-            type="monotone" 
-            dataKey="sales" 
-            stroke="#2563eb" 
+          <Line
+            type="monotone"
+            dataKey="sales"
+            stroke={tenantSettings.primaryColor || '#2563eb'}
             strokeWidth={2}
-            dot={{ fill: '#2563eb', r: 4 }}
+            dot={{ fill: tenantSettings.primaryColor || '#2563eb', r: 4 }}
             activeDot={{ r: 6 }}
             name={dict.dashboard?.totalSales || 'Total Sales'}
           />

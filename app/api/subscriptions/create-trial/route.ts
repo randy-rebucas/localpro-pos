@@ -3,32 +3,15 @@ import connectDB from '@/lib/mongodb';
 import Subscription from '@/models/Subscription';
 import SubscriptionPlan from '@/models/SubscriptionPlan';
 import Tenant from '@/models/Tenant';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { requireAuth } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
 
-    const body = await request.json();
-    const { tenantSlug } = body;
-
-    if (!tenantSlug) {
-      return NextResponse.json(
-        { success: false, error: 'Tenant slug is required' },
-        { status: 400 }
-      );
-    }
-
-    // Find the tenant by slug
-    const tenant = await Tenant.findOne({ slug: tenantSlug });
-    if (!tenant) {
-      return NextResponse.json(
-        { success: false, error: 'Tenant not found' },
-        { status: 404 }
-      );
-    }
-
-    const tenantId = tenant._id.toString();
+    // Require authentication to create a trial
+    const user = await requireAuth(request);
+    const tenantId = user.tenantId;
 
     // Check if tenant already has an active subscription
     const existingSubscription = await Subscription.findOne({
@@ -67,7 +50,7 @@ export async function POST(request: NextRequest) {
       isTrial: true,
       autoRenew: true,
       usage: {
-        currentUsers: 1, // Admin user
+        currentUsers: 1,
         currentBranches: 1,
         currentProducts: 0,
         currentTransactions: 0,
@@ -88,10 +71,16 @@ export async function POST(request: NextRequest) {
       message: '14-day trial subscription created successfully'
     }, { status: 201 });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
+    if ((error as Error).message === 'Unauthorized') {
+      return NextResponse.json(
+        { success: false, error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
     console.error('Error creating trial subscription:', error);
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: 'Failed to create trial subscription' },
       { status: 500 }
     );
   }

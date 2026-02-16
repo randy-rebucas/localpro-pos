@@ -42,7 +42,7 @@ async function createDefaultTenant() {
     };
 
     // Create tenant first (following tenant signup route hierarchy)
-    const tenantData: any = {
+    const tenantData = {
       slug: 'default',
       name: 'Default Store',
       settings,
@@ -57,7 +57,7 @@ async function createDefaultTenant() {
     const adminName = 'Administrator';
     
     try {
-      const adminUser = await User.create({
+      await User.create({
         email: adminEmail.toLowerCase(),
         password: adminPassword,
         name: adminName,
@@ -65,7 +65,6 @@ async function createDefaultTenant() {
         tenantId: tenant._id,
         isActive: true,
       });
-      
       console.log('Default tenant created:', tenant);
       console.log('\n✅ Admin User Created for Default Store:');
       console.log(`  Email:       ${adminEmail}`);
@@ -74,9 +73,14 @@ async function createDefaultTenant() {
       console.log(`  Tenant:      ${tenant.name} (${tenant.slug})`);
       console.log(`  Tenant ID:   ${tenant._id}`);
       console.log('\n⚠️  IMPORTANT: Please change the admin password after first login!');
-    } catch (userError: any) {
+    } catch (userError: unknown) {
       console.log('Default tenant created:', tenant);
-      console.log('\n⚠️  Warning: Failed to create admin user:', userError.message);
+      if (userError && typeof userError === 'object' && 'message' in userError) {
+        // @ts-expect-error: message might exist
+        console.log('\n⚠️  Warning: Failed to create admin user:', userError.message);
+      } else {
+        console.log('\n⚠️  Warning: Failed to create admin user:', userError);
+      }
     }
     
     await mongoose.disconnect();
