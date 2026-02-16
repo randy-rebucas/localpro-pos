@@ -68,18 +68,21 @@ export default function AttendancePage() {
     start.setDate(start.getDate() - 30);
     setEndDate(end.toISOString().split('T')[0]);
     setStartDate(start.toISOString().split('T')[0]);
+     
   }, [lang, tenant]);
 
   useEffect(() => {
     if (startDate && endDate) {
       fetchAttendances();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startDate, endDate, selectedUserId]);
 
   useEffect(() => {
     if (users.length > 0) {
       fetchCurrentSessions();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [users]);
 
   const fetchUsers = async () => {
@@ -128,7 +131,7 @@ export default function AttendancePage() {
           if (data.success && data.data) {
             sessions.push({ ...data.data, userId: user });
           }
-        } catch (error) {
+        } catch {
           // Skip if error fetching for this user
         }
       }

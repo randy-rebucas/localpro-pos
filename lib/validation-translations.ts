@@ -18,14 +18,18 @@ export async function getValidationTranslator(lang: 'en' | 'es' = 'en'): Promise
     return (key: string, fallback: string) => {
       // Support nested keys like 'validation.passwordMinLength'
       const keys = key.split('.');
-      let value: any = dict;
+      let value: unknown = dict;
       for (const k of keys) {
-        value = value?.[k];
-        if (value === undefined) break;
+        if (typeof value === 'object' && value !== null && k in value) {
+          value = (value as Record<string, unknown>)[k];
+        } else {
+          value = undefined;
+          break;
+        }
       }
-      return value || fallback;
+      return (typeof value === 'string' && value) ? value : fallback;
     };
-  } catch (error) {
+  } catch {
     // If dictionary fails to load, return fallback function
     return (key: string, fallback: string) => fallback;
   }
@@ -41,7 +45,7 @@ export async function getValidationTranslatorFromTenant(tenantSlug: string): Pro
     const tenant = await getTenantBySlug(tenantSlug);
     const lang = (tenant?.settings?.language || 'en') as 'en' | 'es';
     return await getValidationTranslator(lang);
-  } catch (error) {
+  } catch {
     return await getValidationTranslator('en');
   }
 }
@@ -74,7 +78,7 @@ export async function getValidationTranslatorFromRequest(request: Request): Prom
     }
     
     return await getValidationTranslator(lang);
-  } catch (error) {
+  } catch {
     return await getValidationTranslator('en');
   }
 }

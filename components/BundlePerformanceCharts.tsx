@@ -22,11 +22,13 @@ interface BundlePerformanceChartsProps {
   dict: any;
 }
 
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
+const DEFAULT_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
 export default function BundlePerformanceCharts({ analytics, dict }: BundlePerformanceChartsProps) {
   const { settings } = useTenantSettings();
   const tenantSettings = settings || getDefaultTenantSettings();
+  const primaryColor = tenantSettings.primaryColor || '#3b82f6';
+  const COLORS = [primaryColor, ...DEFAULT_COLORS.filter(c => c !== primaryColor)].slice(0, 8);
 
   // Prepare data for charts - limit to top 10 for readability
   const topBundles = analytics.slice(0, 10);
@@ -117,7 +119,7 @@ export default function BundlePerformanceCharts({ analytics, dict }: BundlePerfo
             />
             <Tooltip content={<CustomTooltip />} />
             <Legend />
-            <Bar dataKey="sales" fill="#3b82f6" name={dict.admin?.totalSales || 'Total Sales'} />
+            <Bar dataKey="sales" fill={primaryColor} name={dict.admin?.totalSales || 'Total Sales'} />
           </BarChart>
         </ResponsiveContainer>
       </div>

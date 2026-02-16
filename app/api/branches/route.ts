@@ -5,6 +5,7 @@ import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { checkSubscriptionLimit, SubscriptionService } from '@/lib/subscription';
 
 export async function GET(request: NextRequest) {
   try {
@@ -54,6 +55,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: t('validation.branchNameRequired', 'Branch name is required') }, { status: 400 });
     }
 
+    // Check subscription limits
+    const currentBranchCount = await Branch.countDocuments({ tenantId, isActive: true });
+    try {
+      await checkSubscriptionLimit(tenantId.toString(), 'maxBranches', currentBranchCount);
+    } catch (limitError: any) {
+      return NextResponse.json(
+        { success: false, error: limitError.message },
+        { status: 403 }
+      );
+    }
+
     const branch = await Branch.create({
       tenantId,
       name,
@@ -72,6 +84,16 @@ export async function POST(request: NextRequest) {
       entityId: branch._id.toString(),
       changes: body,
     });
+
+    // Update subscription usage
+    try {
+      await SubscriptionService.updateUsage(tenantId.toString(), {
+        branches: currentBranchCount + 1
+      });
+    } catch (usageError) {
+      console.error('Failed to update subscription usage:', usageError);
+      // Don't fail the request if usage update fails
+    }
 
     return NextResponse.json({ success: true, data: branch }, { status: 201 });
   } catch (error: any) {

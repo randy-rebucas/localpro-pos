@@ -6,10 +6,10 @@ export interface IAuditLog extends Document {
   action: string;
   entityType: string;
   entityId?: string;
-  changes?: Record<string, any>;
+  changes?: Record<string, unknown>;
   ipAddress?: string;
   userAgent?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   createdAt: Date;
 }
 

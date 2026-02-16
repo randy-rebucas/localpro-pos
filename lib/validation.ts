@@ -7,7 +7,6 @@ export interface ValidationError {
   message: string;
   code?: string; // Error code for translation
 }
-
 export type TranslationFunction = (key: string, fallback: string) => string;
 
 export class ValidationException extends Error {
@@ -38,6 +37,9 @@ export function validatePassword(password: string, t?: TranslationFunction): { v
   if (password.length < 8) {
     errors.push(translate('validation.passwordMinLength', 'Password must be at least 8 characters'));
   }
+  if (password.length > 128) {
+    errors.push(translate('validation.passwordMaxLength', 'Password must be less than 128 characters'));
+  }
   if (!/[A-Z]/.test(password)) {
     errors.push(translate('validation.passwordUppercase', 'Password must contain at least one uppercase letter'));
   }
@@ -60,29 +62,33 @@ export function validatePassword(password: string, t?: TranslationFunction): { v
 /**
  * Validate product data
  */
-export function validateProduct(data: any, t?: TranslationFunction): ValidationError[] {
+export function validateProduct(data: Record<string, unknown>, t?: TranslationFunction): ValidationError[] {
   const errors: ValidationError[] = [];
   const translate = (key: string, fallback: string) => t ? t(key, fallback) : fallback;
 
-  if (!data.name || data.name.trim().length === 0) {
+  const name = typeof data.name === 'string' ? data.name : '';
+  if (!name || name.trim().length === 0) {
     errors.push({ field: 'name', message: translate('validation.productNameRequired', 'Product name is required'), code: 'productNameRequired' });
   }
-  if (data.name && data.name.length > 200) {
+  if (name && name.length > 200) {
     errors.push({ field: 'name', message: translate('validation.productNameMaxLength', 'Product name must be less than 200 characters'), code: 'productNameMaxLength' });
   }
-  if (data.price === undefined || data.price === null) {
+  const price = typeof data.price === 'number' ? data.price : null;
+  if (price === undefined || price === null) {
     errors.push({ field: 'price', message: translate('validation.priceRequired', 'Price is required'), code: 'priceRequired' });
   }
-  if (data.price !== undefined && (isNaN(data.price) || data.price < 0)) {
+  if (price !== undefined && price !== null && (isNaN(price) || price < 0)) {
     errors.push({ field: 'price', message: translate('validation.pricePositive', 'Price must be a positive number'), code: 'pricePositive' });
   }
-  if (data.stock === undefined || data.stock === null) {
+  const stock = typeof data.stock === 'number' ? data.stock : null;
+  if (stock === undefined || stock === null) {
     errors.push({ field: 'stock', message: translate('validation.stockRequired', 'Stock is required'), code: 'stockRequired' });
   }
-  if (data.stock !== undefined && (!Number.isInteger(data.stock) || data.stock < 0)) {
+  if (stock !== undefined && stock !== null && (!Number.isInteger(stock) || stock < 0)) {
     errors.push({ field: 'stock', message: translate('validation.stockNonNegative', 'Stock must be a non-negative integer'), code: 'stockNonNegative' });
   }
-  if (data.sku && data.sku.length > 50) {
+  const sku = typeof data.sku === 'string' ? data.sku : '';
+  if (sku && sku.length > 50) {
     errors.push({ field: 'sku', message: translate('validation.skuMaxLength', 'SKU must be less than 50 characters'), code: 'skuMaxLength' });
   }
   if (data.trackInventory !== undefined && typeof data.trackInventory !== 'boolean') {
@@ -97,72 +103,75 @@ export function validateProduct(data: any, t?: TranslationFunction): ValidationE
 /**
  * Validate transaction data
  */
-export function validateTransaction(data: any, t?: TranslationFunction): ValidationError[] {
+export function validateTransaction(data: Record<string, unknown>, t?: TranslationFunction): ValidationError[] {
   const errors: ValidationError[] = [];
   const translate = (key: string, fallback: string) => t ? t(key, fallback) : fallback;
 
-  if (!data.items || !Array.isArray(data.items) || data.items.length === 0) {
+  const items = Array.isArray(data.items) ? data.items as Array<Record<string, unknown>> : [];
+  if (!items || items.length === 0) {
     errors.push({ field: 'items', message: translate('validation.itemsRequired', 'At least one item is required'), code: 'itemsRequired' });
   }
-  if (data.items) {
-    data.items.forEach((item: any, index: number) => {
-      if (!item.productId) {
-        errors.push({ field: `items[${index}].productId`, message: translate('validation.productIdRequired', 'Product ID is required'), code: 'productIdRequired' });
-      }
-      if (!item.quantity || item.quantity <= 0) {
-        errors.push({ field: `items[${index}].quantity`, message: translate('validation.quantityGreaterThanZero', 'Quantity must be greater than 0'), code: 'quantityGreaterThanZero' });
-      }
-    });
-  }
-  if (!data.paymentMethod || !['cash', 'card', 'digital'].includes(data.paymentMethod)) {
+  items.forEach((item, index: number) => {
+    if (!item.productId) {
+      errors.push({ field: `items[${index}].productId`, message: translate('validation.productIdRequired', 'Product ID is required'), code: 'productIdRequired' });
+    }
+    const quantity = typeof item.quantity === 'number' ? item.quantity : null;
+    if (!quantity || quantity <= 0) {
+      errors.push({ field: `items[${index}].quantity`, message: translate('validation.quantityGreaterThanZero', 'Quantity must be greater than 0'), code: 'quantityGreaterThanZero' });
+    }
+  });
+  const paymentMethod = typeof data.paymentMethod === 'string' ? data.paymentMethod : '';
+  if (!paymentMethod || !['cash', 'card', 'digital'].includes(paymentMethod)) {
     errors.push({ field: 'paymentMethod', message: translate('validation.paymentMethodRequired', 'Valid payment method is required'), code: 'paymentMethodRequired' });
   }
-  if (data.paymentMethod === 'cash') {
-    if (!data.cashReceived || data.cashReceived <= 0) {
+  if (paymentMethod === 'cash') {
+    const cashReceived = typeof data.cashReceived === 'number' ? data.cashReceived : null;
+    if (!cashReceived || cashReceived <= 0) {
       errors.push({ field: 'cashReceived', message: translate('validation.cashReceivedRequired', 'Cash received is required for cash payments'), code: 'cashReceivedRequired' });
     }
   }
-
   return errors;
 }
 
 /**
  * Validate tenant data
  */
-export function validateTenant(data: any, t?: TranslationFunction): ValidationError[] {
+export function validateTenant(data: Record<string, unknown>, t?: TranslationFunction): ValidationError[] {
   const errors: ValidationError[] = [];
   const translate = (key: string, fallback: string) => t ? t(key, fallback) : fallback;
 
-  if (!data.slug || data.slug.trim().length === 0) {
+  const slug = typeof data.slug === 'string' ? data.slug : '';
+  if (!slug || slug.trim().length === 0) {
     errors.push({ field: 'slug', message: translate('validation.tenantSlugRequired', 'Tenant slug is required'), code: 'tenantSlugRequired' });
   }
-  if (data.slug && !/^[a-z0-9-]+$/.test(data.slug)) {
+  if (slug && !/^[a-z0-9-]+$/.test(slug)) {
     errors.push({ field: 'slug', message: translate('validation.slugFormat', 'Slug can only contain lowercase letters, numbers, and hyphens'), code: 'slugFormat' });
   }
-  if (!data.name || data.name.trim().length === 0) {
+  const name = typeof data.name === 'string' ? data.name : '';
+  if (!name || name.trim().length === 0) {
     errors.push({ field: 'name', message: translate('validation.tenantNameRequired', 'Tenant name is required'), code: 'tenantNameRequired' });
   }
-
   return errors;
 }
 
 /**
  * Validate category data
  */
-export function validateCategory(data: any, t?: TranslationFunction): ValidationError[] {
+export function validateCategory(data: Record<string, unknown>, t?: TranslationFunction): ValidationError[] {
   const errors: ValidationError[] = [];
   const translate = (key: string, fallback: string) => t ? t(key, fallback) : fallback;
 
-  if (!data.name || data.name.trim().length === 0) {
+  const name = typeof data.name === 'string' ? data.name : '';
+  if (!name || name.trim().length === 0) {
     errors.push({ field: 'name', message: translate('validation.categoryNameRequired', 'Category name is required'), code: 'categoryNameRequired' });
   }
-  if (data.name && data.name.length > 200) {
+  if (name && name.length > 200) {
     errors.push({ field: 'name', message: translate('validation.categoryNameMaxLength', 'Category name must be less than 200 characters'), code: 'categoryNameMaxLength' });
   }
-  if (data.description && data.description.length > 1000) {
+  const description = typeof data.description === 'string' ? data.description : '';
+  if (description && description.length > 1000) {
     errors.push({ field: 'description', message: translate('validation.descriptionMaxLength', 'Description must be less than 1000 characters'), code: 'descriptionMaxLength' });
   }
-
   return errors;
 }
 
@@ -170,27 +179,30 @@ export function validateCategory(data: any, t?: TranslationFunction): Validation
  * Sanitize string input
  */
 export function sanitizeString(input: string): string {
-  return input.trim().replace(/[<>]/g, '');
+  return input
+    .trim()
+    .replace(/[<>]/g, '')
+    .replace(/javascript:/gi, '')
+    .replace(/on\w+\s*=/gi, '')
+    .replace(/&(?!amp;|lt;|gt;|quot;|#\d+;)/g, '&amp;');
 }
 
 /**
  * Validate and sanitize input
  */
-export function validateAndSanitize<T extends Record<string, any>>(
+export function validateAndSanitize<T extends Record<string, unknown>>(
   data: T,
   validator: (data: T, t?: TranslationFunction) => ValidationError[],
   t?: TranslationFunction
 ): { data: T; errors: ValidationError[] } {
   const errors = validator(data, t);
-  
   // Sanitize string fields
-  const sanitized = { ...data } as any;
+  const sanitized: Record<string, unknown> = { ...data };
   Object.keys(sanitized).forEach(key => {
     if (typeof sanitized[key] === 'string') {
-      sanitized[key] = sanitizeString(sanitized[key]);
+      sanitized[key] = sanitizeString(sanitized[key] as string);
     }
   });
-
   return { data: sanitized as T, errors };
 }
 
@@ -203,23 +215,20 @@ export function validateAndSanitize<T extends Record<string, any>>(
  * @returns Promise<boolean> - true if PIN is already in use, false otherwise
  */
 export async function isPinDuplicate(
-  tenantId: any,
+  tenantId: string,
   candidatePin: string,
   excludeUserId?: string
 ): Promise<boolean> {
   const User = (await import('@/models/User')).default;
   const bcrypt = (await import('bcryptjs')).default;
-  
   // Get all users in the tenant with PINs (excluding the current user if specified)
-  const query: any = { tenantId, pin: { $exists: true, $ne: null } };
+  const query: Record<string, unknown> = { tenantId, pin: { $exists: true, $ne: null } };
   if (excludeUserId) {
     query._id = { $ne: excludeUserId };
   }
-  
   const users = await User.find(query).select('+pin').lean();
-  
   // Compare candidate PIN with each hashed PIN
-  for (const user of users) {
+  for (const user of users as Array<{ pin?: string }>) {
     if (user.pin) {
       const isMatch = await bcrypt.compare(candidatePin, user.pin);
       if (isMatch) {
@@ -227,6 +236,5 @@ export async function isPinDuplicate(
       }
     }
   }
-  
   return false; // PIN is not in use
 }

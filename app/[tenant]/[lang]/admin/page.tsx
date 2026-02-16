@@ -6,6 +6,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { getDictionaryClient } from '../dictionaries-client';
 import Link from 'next/link';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { getDefaultTenantSettings } from '@/lib/currency';
+import { useSubscription } from '@/contexts/SubscriptionContext';
 
 export default function AdminPage() {
   const params = useParams();
@@ -15,6 +17,9 @@ export default function AdminPage() {
   const [dict, setDict] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const { settings } = useTenantSettings();
+  const tenantSettings = settings || getDefaultTenantSettings();
+  const primaryColor = tenantSettings.primaryColor || '#2563eb';
+  const { subscriptionStatus } = useSubscription();
 
   useEffect(() => {
     getDictionaryClient(lang).then((d) => {
@@ -27,7 +32,10 @@ export default function AdminPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+          <div
+            className="inline-block animate-spin h-8 w-8 border-b-2 rounded-full"
+            style={{ borderColor: primaryColor, borderBottomColor: 'transparent' }}
+          ></div>
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
@@ -199,103 +207,16 @@ export default function AdminPage() {
       color: 'rose',
     },
     {
-      title: dict.admin?.backupReset || 'Backup & Reset',
-      description: dict.admin?.backupResetDescription || 'Backup and reset collection data',
-      href: `/${tenant}/${lang}/admin/backup-reset`,
+      title: dict.admin?.subscriptions || 'Subscriptions',
+      description: dict.admin?.subscriptionsDescription || 'Manage subscription plans and billing',
+      href: `/${tenant}/${lang}/admin/subscriptions`,
+      featureFlag: undefined as keyof typeof settings | undefined,
       icon: (
         <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
       ),
-      color: 'red',
-    },
-    {
-      title: dict.admin?.featureFlags || 'Feature Flags',
-      description: dict.admin?.featureFlagsDescription || 'Enable or disable system-wide features',
-      href: `/${tenant}/${lang}/admin/feature-flags`,
-      icon: (
-        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-        </svg>
-      ),
-      color: 'blue',
-    },
-    {
-      title: dict.admin?.hardwareSettings || 'Hardware Settings',
-      description: dict.admin?.hardwareSettingsDescription || 'Configure printers, scanners, and hardware devices',
-      href: `/${tenant}/${lang}/admin/hardware`,
-      icon: (
-        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-        </svg>
-      ),
-      color: 'gray',
-    },
-    {
-      title: dict.admin?.taxRules || 'Tax Rules',
-      description: dict.admin?.taxRulesDescription || 'Configure multiple tax rates and regional rules',
-      href: `/${tenant}/${lang}/admin/tax-rules`,
-      icon: (
-        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
-      ),
-      color: 'indigo',
-    },
-    {
-      title: dict.admin?.businessHours || 'Business Hours',
-      description: dict.admin?.businessHoursDescription || 'Configure weekly schedule and special hours',
-      href: `/${tenant}/${lang}/admin/business-hours`,
-      icon: (
-        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      ),
-      color: 'orange',
-    },
-    {
-      title: dict.admin?.holidays || 'Holidays',
-      description: dict.admin?.holidaysDescription || 'Manage holiday calendar and business closures',
-      href: `/${tenant}/${lang}/admin/holidays`,
-      icon: (
-        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-        </svg>
-      ),
-      color: 'yellow',
-    },
-    {
-      title: dict.admin?.multiCurrency || 'Multi-Currency',
-      description: dict.admin?.multiCurrencyDescription || 'Manage exchange rates and API settings',
-      href: `/${tenant}/${lang}/admin/multi-currency`,
-      icon: (
-        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      ),
-      color: 'green',
-    },
-    {
-      title: dict.admin?.notificationTemplates || 'Notification Templates',
-      description: dict.admin?.notificationTemplatesDescription || 'Customize email and SMS templates',
-      href: `/${tenant}/${lang}/admin/notification-templates`,
-      icon: (
-        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-        </svg>
-      ),
-      color: 'purple',
-    },
-    {
-      title: dict.admin?.advancedBranding || 'Advanced Branding',
-      description: dict.admin?.advancedBrandingDescription || 'Customize fonts, themes, and CSS',
-      href: `/${tenant}/${lang}/admin/advanced-branding`,
-      icon: (
-        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
-        </svg>
-      ),
-      color: 'pink',
+      color: 'emerald',
     },
     {
       title: dict.admin?.reports || 'Reports',
@@ -311,7 +232,7 @@ export default function AdminPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div>
       <Navbar />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         <div className="mb-6 sm:mb-8">
@@ -321,42 +242,94 @@ export default function AdminPage() {
           <p className="text-gray-600">{dict.admin?.subtitle || 'Manage users, tenants, and system settings'}</p>
         </div>
 
+        {/* Subscription Usage Summary */}
+        {subscriptionStatus && (
+          <div
+            className="col-span-full mb-6 bg-gradient-to-r rounded-lg"
+            style={{
+              background: `linear-gradient(to right, ${primaryColor}11, #a5b4fc22)`,
+              border: `1px solid ${primaryColor}55`,
+            }}
+          >
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">{dict.admin?.subscriptionUsage || 'Subscription Usage'}</h2>
+                  <p className="text-sm text-gray-600">{subscriptionStatus.planName} {dict.admin?.plan || 'Plan'}</p>
+                </div>
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                  subscriptionStatus.isActive
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-red-100 text-red-800'
+                }`}>
+                  {subscriptionStatus.isActive ? (dict.admin?.active || "Active") : (dict.admin?.inactive || "Inactive")}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="text-center">
+                  <div className="text-2xl font-bold" style={{ color: primaryColor }}>{subscriptionStatus.usage.currentUsers}</div>
+                  <div className="text-xs text-gray-500">
+                    {dict.admin?.users || 'Users'} ({subscriptionStatus.limits.maxUsers === -1 ? '∞' : subscriptionStatus.limits.maxUsers})
+                  </div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-600">{subscriptionStatus.usage.currentBranches}</div>
+                  <div className="text-xs text-gray-500">
+                    {dict.admin?.branches || 'Branches'} ({subscriptionStatus.limits.maxBranches === -1 ? '∞' : subscriptionStatus.limits.maxBranches})
+                  </div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-orange-600">{subscriptionStatus.usage.currentProducts}</div>
+                  <div className="text-xs text-gray-500">
+                    {dict.admin?.products || 'Products'} ({subscriptionStatus.limits.maxProducts === -1 ? '∞' : subscriptionStatus.limits.maxProducts})
+                  </div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-purple-600">{subscriptionStatus.usage.currentTransactions}</div>
+                  <div className="text-xs text-gray-500">
+                    {dict.admin?.transactions || 'Transactions'} ({subscriptionStatus.limits.maxTransactions === -1 ? '∞' : subscriptionStatus.limits.maxTransactions})
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {allAdminCards
             .filter(card => {
               if (!card.featureFlag) return true;
               if (!settings) return true; // Show by default if settings not loaded yet
+
+              // Check subscription features first
+              if (subscriptionStatus && !subscriptionStatus.features[card.featureFlag]) {
+                return false; // Hide if subscription doesn't support this feature
+              }
+
               return settings[card.featureFlag] !== false; // Show if enabled or undefined (default enabled)
             })
             .map((card, index) => (
             <Link
               key={index}
               href={card.href}
-              className="bg-white border border-gray-300 p-6 hover:border-blue-500 transition-all duration-200"
+              className="bg-white border border-gray-300 p-6 transition-all duration-200"
+              style={{
+                borderColor: primaryColor,
+                ...(card.color === 'blue' && { boxShadow: `0 0 0 2px ${primaryColor}33` }),
+              }}
             >
-              <div className={`inline-flex p-3 border mb-4 ${
-                card.color === 'blue' ? 'bg-blue-100 text-blue-600' :
-                card.color === 'green' ? 'bg-green-100 text-green-600' :
-                card.color === 'orange' ? 'bg-orange-100 text-orange-600' :
-                card.color === 'indigo' ? 'bg-indigo-100 text-indigo-600' :
-                card.color === 'red' ? 'bg-red-100 text-red-600' :
-                card.color === 'teal' ? 'bg-teal-100 text-teal-600' :
-                card.color === 'yellow' ? 'bg-yellow-100 text-yellow-600' :
-                card.color === 'cyan' ? 'bg-cyan-100 text-cyan-600' :
-                card.color === 'pink' ? 'bg-pink-100 text-pink-600' :
-                card.color === 'emerald' ? 'bg-emerald-100 text-emerald-600' :
-                card.color === 'violet' ? 'bg-violet-100 text-violet-600' :
-                card.color === 'amber' ? 'bg-amber-100 text-amber-600' :
-                card.color === 'rose' ? 'bg-rose-100 text-rose-600' :
-                card.color === 'slate' ? 'bg-slate-100 text-slate-600' :
-                card.color === 'gray' ? 'bg-gray-100 text-gray-600' :
-                'bg-purple-100 text-purple-600'
-              }`}>
+              <div
+                className={`inline-flex p-3 border mb-4`}
+                style={card.color === 'blue'
+                  ? { background: `${primaryColor}11`, color: primaryColor, borderColor: primaryColor }
+                  : {}}
+              >
                 {card.icon}
               </div>
               <h2 className="text-xl font-bold text-gray-900 mb-2">{card.title}</h2>
               <p className="text-gray-600 text-sm">{card.description}</p>
-              <div className="mt-4 flex items-center text-blue-600 font-medium text-sm">
+              <div className="mt-4 flex items-center font-medium text-sm"
+                style={card.color === 'blue' ? { color: primaryColor } : {}}>
                 <span>{dict.common?.view || 'View'} {card.title}</span>
                 <svg className="w-4 h-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />

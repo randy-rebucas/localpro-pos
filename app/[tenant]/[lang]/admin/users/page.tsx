@@ -405,11 +405,11 @@ function UserModal({
                 onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
                 className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               >
-                <option value="viewer">Viewer</option>
-                <option value="cashier">Cashier</option>
-                <option value="manager">Manager</option>
-                <option value="admin">Admin</option>
-                <option value="owner">Owner</option>
+                <option value="viewer">{dict.admin?.viewer || 'Viewer'}</option>
+                <option value="cashier">{dict.admin?.cashier || 'Cashier'}</option>
+                <option value="manager">{dict.admin?.manager || 'Manager'}</option>
+                <option value="admin">{dict.admin?.adminRole || 'Admin'}</option>
+                <option value="owner">{dict.admin?.owner || 'Owner'}</option>
               </select>
             </div>
             {error && (
@@ -462,7 +462,7 @@ function PINModal({
     setError('');
     
     if (!pin || !/^\d{4,8}$/.test(pin)) {
-      setError('PIN must be 4-8 digits');
+      setError(dict?.admin?.pinDigits || 'PIN must be 4-8 digits');
       return;
     }
 
@@ -524,12 +524,12 @@ function PINModal({
       <div className="bg-white border border-gray-300 max-w-md w-full">
         <div className="p-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
-            Manage PIN for {user.name}
+            {dict?.admin?.managePINFor || 'Manage PIN for'} {user.name}
           </h2>
           <form onSubmit={handleSetPIN} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                PIN (4-8 digits)
+                {dict?.admin?.pinDigits || 'PIN (4-8 digits)'}
               </label>
               <input
                 type="text"
@@ -558,7 +558,7 @@ function PINModal({
                 disabled={removing}
                 className="px-4 py-2 border border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-50 bg-white"
               >
-                {removing ? 'Removing...' : 'Remove PIN'}
+                {removing ? (dict?.admin?.removing || 'Removing...') : (dict?.admin?.removePIN || 'Remove PIN')}
               </button>
               <button
                 type="button"
@@ -572,7 +572,7 @@ function PINModal({
                 disabled={saving}
                 className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
               >
-                {saving ? 'Saving...' : 'Set PIN'}
+                {saving ? (dict?.common?.saving || 'Saving...') : (dict?.admin?.setPIN || 'Set PIN')}
               </button>
             </div>
           </form>
@@ -659,7 +659,7 @@ function QRModal({
         <div className="bg-white border border-gray-300 p-6">
           <div className="text-center">
             <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-            <p className="mt-4 text-gray-600">Loading QR code...</p>
+            <p className="mt-4 text-gray-600">{dict?.admin?.loadingQRCode || 'Loading QR code...'}</p>
           </div>
         </div>
       </div>

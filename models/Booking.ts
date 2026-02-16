@@ -135,7 +135,7 @@ BookingSchema.pre('save', async function(this: IBooking, next) {
       if (staff && staff.name) {
         this.staffName = staff.name;
       }
-    } catch (error) {
+    } catch {
       // Ignore error, staffName will remain undefined
     }
   }

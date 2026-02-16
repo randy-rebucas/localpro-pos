@@ -86,6 +86,7 @@ export default function BookingsPage() {
   useEffect(() => {
     fetchBookings();
     fetchStaff();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterStatus, filterStaff]);
 
   const fetchBookings = async () => {
@@ -351,7 +352,7 @@ export default function BookingsPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">Loading bookings...</p>
+          <p className="mt-4 text-gray-600">{dict?.admin?.loadingBookings || 'Loading bookings...'}</p>
         </div>
       </div>
     );
@@ -361,35 +362,22 @@ export default function BookingsPage() {
     <div className="min-h-screen bg-gray-50">
       <Navbar />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        <div className="mb-6">
-          <Link
-            href={`/${tenant}/${lang}/admin`}
-            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium mb-4 transition-colors"
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
+              {dict?.admin?.bookings || 'Booking & Scheduling'}
+            </h1>
+            <p className="text-gray-600">{dict?.admin?.bookingsSubtitle || 'Manage appointments and bookings'}</p>
+          </div>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 transition-colors flex items-center gap-2 border border-blue-700"
           >
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
-            {dict?.admin?.backToAdmin || 'Back to Admin'}
-          </Link>
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
-                {dict?.admin?.bookingScheduling || 'Booking & Scheduling'}
-              </h1>
-              <p className="text-gray-600">{dict?.admin?.bookingSchedulingDescription || 'Manage appointments and bookings'}</p>
-            </div>
-            {bookingEnabled && (
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 transition-colors flex items-center gap-2 border border-blue-700"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                {dict?.admin?.newBooking || 'New Booking'}
-              </button>
-            )}
-          </div>
+            {dict?.admin?.newBooking || 'New Booking'}
+          </button>
         </div>
 
         {message && (
@@ -427,11 +415,11 @@ export default function BookingsPage() {
             onChange={(e) => setFilterStatus(e.target.value)}
             className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
           >
-            <option value="all">All Status</option>
-            <option value="pending">Pending</option>
-            <option value="confirmed">Confirmed</option>
-            <option value="completed">Completed</option>
-            <option value="cancelled">Cancelled</option>
+            <option value="all">{dict?.admin?.allStatuses || 'All Statuses'}</option>
+            <option value="pending">{dict?.admin?.pending || 'Pending'}</option>
+            <option value="confirmed">{dict?.admin?.confirmed || 'Confirmed'}</option>
+            <option value="completed">{dict?.admin?.completed || 'Completed'}</option>
+            <option value="cancelled">{dict?.admin?.cancelled || 'Cancelled'}</option>
             <option value="no-show">No Show</option>
           </select>
           <select
@@ -439,7 +427,7 @@ export default function BookingsPage() {
             onChange={(e) => setFilterStaff(e.target.value)}
             className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
           >
-            <option value="all">All Staff</option>
+            <option value="all">{dict?.admin?.allStaff || 'All Staff'}</option>
             {staff.map((s) => (
               <option key={s._id} value={s._id}>
                 {s.name}
@@ -474,29 +462,29 @@ export default function BookingsPage() {
         {/* Bookings List */}
         <div className="bg-white border border-gray-300 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">All Bookings</h2>
+            <h2 className="text-lg font-semibold text-gray-900">{dict?.admin?.allBookings || 'All Bookings'}</h2>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Customer
+                    {dict?.admin?.customerName || 'Customer'}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Service
+                    {dict?.admin?.serviceName || 'Service'}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date & Time
+                    {dict?.admin?.dateTime || 'Date & Time'}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Staff
+                    {dict?.admin?.staff || 'Staff'}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
+                    {dict?.admin?.status || 'Status'}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
+                    {dict?.common?.actions || 'Actions'}
                   </th>
                 </tr>
               </thead>
@@ -520,14 +508,14 @@ export default function BookingsPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">{formatDateTime(booking.startTime)}</div>
-                      <div className="text-sm text-gray-500">Duration: {booking.duration} min</div>
+                      <div className="text-sm text-gray-500">{dict?.admin?.duration || 'Duration'}: {booking.duration} min</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {booking.staffName || booking.staffId?.name || dict?.admin?.unassigned || 'Unassigned'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 py-1 text-xs font-semibold border ${getStatusColor(booking.status)}`}>
-                        {booking.status}
+                        {dict?.admin?.[booking.status] || booking.status}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -539,14 +527,14 @@ export default function BookingsPage() {
                           }}
                           className="text-blue-600 hover:text-blue-900"
                         >
-                          View
+                          {dict?.common?.view || 'View'}
                         </button>
                         {booking.status === 'pending' || booking.status === 'confirmed' ? (
                           <button
                             onClick={() => handleSendReminder(booking._id)}
                             className="text-green-600 hover:text-green-900"
                           >
-                            Remind
+                            {dict?.admin?.remind || 'Remind'}
                           </button>
                         ) : null}
                       </div>
@@ -557,7 +545,7 @@ export default function BookingsPage() {
             </table>
             {bookings.length === 0 && (
               <div className="text-center py-12 text-gray-500">
-                No bookings found
+                {dict?.admin?.noBookingsFound || 'No bookings found'}
               </div>
             )}
           </div>
@@ -569,7 +557,7 @@ export default function BookingsPage() {
         <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white border border-gray-300 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Booking Details</h3>
+              <h3 className="text-lg font-semibold text-gray-900">{dict?.admin?.bookingDetails || 'Booking Details'}</h3>
               <button
                 onClick={() => {
                   setShowModal(false);
