@@ -126,27 +126,27 @@ export default function StockMovementsPage() {
               onChange={(e) => setFilters({ ...filters, type: e.target.value })}
               className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
             >
-              <option value="">All Types</option>
-              <option value="sale">Sale</option>
-              <option value="purchase">Purchase</option>
-              <option value="adjustment">Adjustment</option>
-              <option value="return">Return</option>
-              <option value="damage">Damage</option>
-              <option value="transfer">Transfer</option>
+              <option value="">{dict.admin?.allTypes || 'All Types'}</option>
+              <option value="sale">{dict.admin?.sale || 'Sale'}</option>
+              <option value="purchase">{dict.admin?.purchase || 'Purchase'}</option>
+              <option value="adjustment">{dict.admin?.adjustment || 'Adjustment'}</option>
+              <option value="return">{dict.admin?.returnType || 'Return'}</option>
+              <option value="damage">{dict.admin?.damageType || 'Damage'}</option>
+              <option value="transfer">{dict.admin?.transferType || 'Transfer'}</option>
             </select>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Quantity</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stock Change</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Transaction</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Notes</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.date || 'Date'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.product || 'Product'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.type || 'Type'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.quantity || 'Quantity'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.stockChange || 'Stock Change'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.user || 'User'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.transaction || 'Transaction'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.notes || 'Notes'}</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -178,7 +178,14 @@ export default function StockMovementsPage() {
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap">
                         <span className={`px-2 py-1 text-xs font-semibold border ${getTypeColor(movement.type)}`}>
-                          {movement.type}
+                          {({
+                            sale: dict.admin?.sale || 'Sale',
+                            purchase: dict.admin?.purchase || 'Purchase',
+                            adjustment: dict.admin?.adjustment || 'Adjustment',
+                            return: dict.admin?.returnType || 'Return',
+                            damage: dict.admin?.damageType || 'Damage',
+                            transfer: dict.admin?.transferType || 'Transfer',
+                          } as Record<string, string>)[movement.type] || movement.type}
                         </span>
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
@@ -214,17 +221,17 @@ export default function StockMovementsPage() {
                 disabled={page === 1}
                 className="px-4 py-2 border border-gray-300 disabled:opacity-50 bg-white"
               >
-                Previous
+                {dict.common?.previous || 'Previous'}
               </button>
               <span className="px-4 py-2 text-sm text-gray-700">
-                Page {page} of {totalPages}
+                {dict.admin?.page || 'Page'} {page} / {totalPages}
               </span>
               <button
                 onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
                 className="px-4 py-2 border border-gray-300 disabled:opacity-50 bg-white"
               >
-                Next
+                {dict.common?.next || 'Next'}
               </button>
             </div>
           )}

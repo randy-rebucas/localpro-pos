@@ -76,8 +76,7 @@ async function createDefaultTenant() {
     } catch (userError: unknown) {
       console.log('Default tenant created:', tenant);
       if (userError && typeof userError === 'object' && 'message' in userError) {
-        // @ts-expect-error: message might exist
-        console.log('\n⚠️  Warning: Failed to create admin user:', userError.message);
+        console.log('\n⚠️  Warning: Failed to create admin user:', (userError as { message: string }).message);
       } else {
         console.log('\n⚠️  Warning: Failed to create admin user:', userError);
       }

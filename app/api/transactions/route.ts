@@ -76,6 +76,14 @@ export async function POST(request: NextRequest) {
 
     const { items, paymentMethod, cashReceived, notes, discountCode, branchId } = data;
 
+    // Explicitly type items as an array
+    const typedItems: Array<{
+      productId?: string;
+      quantity: number;
+      variation?: any;
+      bundleId?: string;
+    }> = Array.isArray(items) ? items : [];
+
     // Get tenant settings to check feature flags
     const tenantSettings = await getTenantSettingsById(tenantId);
 
@@ -91,7 +99,7 @@ export async function POST(request: NextRequest) {
     const transactionItems = [];
     let subtotal = 0;
 
-    for (const item of items) {
+    for (const item of typedItems) {
       const { productId, quantity, variation, bundleId } = item;
 
       // Handle bundles
@@ -116,7 +124,7 @@ export async function POST(request: NextRequest) {
               bundleItem.productId.toString(),
               tenantId,
               {
-                branchId,
+                branchId: typeof branchId === 'string' ? branchId : undefined,
                 variation: bundleItem.variation,
               }
             );
@@ -154,7 +162,7 @@ export async function POST(request: NextRequest) {
       else {
         const product = await Product.findOne({ _id: productId, tenantId });
         if (!product) {
-          const errorMsg = t('validation.productNotFoundInTransaction', 'Product {productId} not found').replace('{productId}', productId);
+          const errorMsg = t('validation.productNotFoundInTransaction', 'Product {productId} not found').replace('{productId}', String(productId));
           return NextResponse.json({ success: false, error: errorMsg }, { status: 404 });
         }
 
@@ -163,8 +171,11 @@ export async function POST(request: NextRequest) {
         const allowOutOfStockSales = product.allowOutOfStockSales === true;
         
         if (trackInventory && !allowOutOfStockSales) {
-          const availableStock = await getProductStock(productId, tenantId, {
-            branchId,
+          if (!productId) {
+            return NextResponse.json({ success: false, error: t('validation.productIdMissing', 'Product ID is missing') }, { status: 400 });
+          }
+          const availableStock = await getProductStock(productId as string, tenantId, {
+            branchId: typeof branchId === 'string' ? branchId : undefined,
             variation,
           });
 
@@ -218,7 +229,7 @@ export async function POST(request: NextRequest) {
     if (discountCode) {
       const discount = await Discount.findOne({
         tenantId,
-        code: discountCode.toUpperCase(),
+        code: typeof discountCode === 'string' ? discountCode.toUpperCase() : '',
         isActive: true,
       });
 
@@ -281,7 +292,7 @@ export async function POST(request: NextRequest) {
     // Calculate change for cash payments
     let change = 0;
     if (paymentMethod === 'cash' && cashReceived) {
-      change = cashReceived - total;
+      change = Number(cashReceived) - total;
       if (change < 0) {
         return NextResponse.json({ success: false, error: t('validation.insufficientCashReceived', 'Insufficient cash received') }, { status: 400 });
       }
@@ -289,7 +300,7 @@ export async function POST(request: NextRequest) {
 
     // Update stock BEFORE creating transaction (critical - must succeed)
     // Use the original items array to get productId and quantity
-    for (const item of items) {
+    for (const item of typedItems) {
       const { productId, quantity, variation, bundleId } = item;
 
       // Skip if no productId (shouldn't happen, but safety check)
@@ -308,7 +319,7 @@ export async function POST(request: NextRequest) {
             'sale',
             {
               userId: user.userId,
-              branchId,
+              branchId: typeof branchId === 'string' ? branchId : undefined,
               reason: 'Transaction sale - bundle',
             }
           );
@@ -324,7 +335,7 @@ export async function POST(request: NextRequest) {
               'sale',
               {
                 userId: user.userId,
-                branchId,
+                branchId: typeof branchId === 'string' ? branchId : undefined,
                 variation,
                 reason: 'Transaction sale',
               }
@@ -360,7 +371,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Update stock movements with transaction ID (now that transaction exists)
-    for (const item of items) {
+    for (const item of typedItems) {
       const { productId, bundleId } = item;
       if (productId || bundleId) {
         // Update the stock movement records with transaction ID

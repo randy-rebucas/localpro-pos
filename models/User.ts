@@ -84,7 +84,7 @@ UserSchema.pre('save', async function (next) {
       const password = this.password as string;
       this.password = await bcrypt.hash(password, salt);
     } catch (error: unknown) {
-      return next(error);
+      return next(error as Error);
     }
   }
   
@@ -95,7 +95,7 @@ UserSchema.pre('save', async function (next) {
       const pin = this.pin as string;
       this.pin = await bcrypt.hash(pin, salt);
     } catch (error: unknown) {
-      return next(error);
+      return next(error as Error);
     }
   }
   

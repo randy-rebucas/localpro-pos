@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import { useParams, useRouter } from 'next/navigation';
 import { getDictionaryClient } from '../../../dictionaries-client';
+// Removed incorrect dict import
 
 interface Notification {
   type: 'missing_clock_out' | 'late_arrival';
@@ -23,8 +24,8 @@ export default function AttendanceNotificationsPage() {
   const router = useRouter();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<Record<string, Record<string, string>> | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [dict, setDict] = useState<any>(null);
   const [summary, setSummary] = useState<{ total: number; missingClockOut: number; lateArrivals: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -32,13 +33,18 @@ export default function AttendanceNotificationsPage() {
   const [maxHours, setMaxHours] = useState('12');
   const [sending, setSending] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
+  
+  useEffect(() => {
+    getDictionaryClient(lang).then((d) => setDict(d));
+  }, [lang]);
 
   useEffect(() => {
-    getDictionaryClient(lang).then(setDict);
-    loadDefaultSettings();
-    fetchNotifications();
+    if (dict) {
+      loadDefaultSettings();
+      fetchNotifications();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lang, tenant]);
+  }, [dict]);
 
   const loadDefaultSettings = async () => {
     try {
@@ -81,16 +87,16 @@ export default function AttendanceNotificationsPage() {
       if (data.success) {
         setMessage({ 
           type: 'success', 
-          text: dict.admin?.settingsSaved || 'Settings saved as default' 
+          text: dict && dict.admin?.settingsSaved ? dict.admin.settingsSaved : 'Settings saved as default' 
         });
         // Clear message after 3 seconds
         setTimeout(() => setMessage(null), 3000);
       } else {
-        setMessage({ type: 'error', text: data.error || dict.admin?.failedToSaveSettings || 'Failed to save settings' });
+        setMessage({ type: 'error', text: data.error || (dict && dict.admin?.failedToSaveSettings ? dict.admin.failedToSaveSettings : 'Failed to save settings') });
       }
     } catch (error) {
       console.error('Error saving settings:', error);
-      setMessage({ type: 'error', text: dict.admin?.failedToSaveSettings || 'Failed to save settings' });
+      setMessage({ type: 'error', text: dict && dict.admin?.failedToSaveSettings ? dict.admin.failedToSaveSettings : 'Failed to save settings' });
     } finally {
       setSavingSettings(false);
     }
@@ -122,17 +128,17 @@ export default function AttendanceNotificationsPage() {
 
   const handleSendEmails = async () => {
     if (notifications.length === 0) {
-      setMessage({ type: 'error', text: dict.admin?.noNotificationsToSend || 'No notifications to send' });
+      setMessage({ type: 'error', text: dict && dict.admin?.noNotificationsToSend ? dict.admin.noNotificationsToSend : 'No notifications to send' });
       return;
     }
 
     const notificationsWithEmail = notifications.filter(n => n.userEmail);
     if (notificationsWithEmail.length === 0) {
-      setMessage({ type: 'error', text: dict.admin?.noEmailsToSend || 'No email addresses found for notifications' });
+      setMessage({ type: 'error', text: dict && dict.admin?.noEmailsToSend ? dict.admin.noEmailsToSend : 'No email addresses found for notifications' });
       return;
     }
 
-    if (!confirm(dict.admin?.confirmSendEmails?.replace('{count}', notificationsWithEmail.length.toString()) || `Send emails to ${notificationsWithEmail.length} recipient(s)?`)) {
+    if (!confirm(dict && dict.admin?.confirmSendEmails ? dict.admin.confirmSendEmails.replace('{count}', notificationsWithEmail.length.toString()) : `Send emails to ${notificationsWithEmail.length} recipient(s)?`)) {
       return;
     }
 
@@ -153,14 +159,14 @@ export default function AttendanceNotificationsPage() {
       if (data.success) {
         setMessage({ 
           type: 'success', 
-          text: data.message || dict.admin?.emailsSentSuccessfully || 'Emails sent successfully' 
+          text: data.message || (dict && dict.admin?.emailsSentSuccessfully ? dict.admin.emailsSentSuccessfully : 'Emails sent successfully') 
         });
       } else {
-        setMessage({ type: 'error', text: data.error || dict.admin?.failedToSendEmails || 'Failed to send emails' });
+        setMessage({ type: 'error', text: data.error || (dict && dict.admin?.failedToSendEmails ? dict.admin.failedToSendEmails : 'Failed to send emails') });
       }
     } catch (error) {
       console.error('Error sending emails:', error);
-      setMessage({ type: 'error', text: dict.admin?.failedToSendEmails || 'Failed to send emails' });
+      setMessage({ type: 'error', text: dict && dict.admin?.failedToSendEmails ? dict.admin.failedToSendEmails : 'Failed to send emails' });
     } finally {
       setSending(false);
     }
@@ -171,7 +177,7 @@ export default function AttendanceNotificationsPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+          <p className="mt-4 text-gray-600">Loading...</p>
         </div>
       </div>
     );

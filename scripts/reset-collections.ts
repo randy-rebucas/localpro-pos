@@ -145,7 +145,7 @@ async function cleanCollections(
     } catch (error: unknown) {
       results[collectionName] = { 
         deleted: 0, 
-        error: error.message 
+        error: typeof error === 'object' && error !== null && 'message' in error ? (error as { message: string }).message : String(error)
       };
     }
   }
@@ -250,14 +250,14 @@ async function createDefaultStore(createAdmin = false) {
         console.log('⚠️  IMPORTANT: Please change the admin password after first login!');
       } catch (userError: unknown) {
         console.log('');
-        console.log('⚠️  Warning: Failed to create admin user:', userError.message);
+        console.log('⚠️  Warning: Failed to create admin user:', typeof userError === 'object' && userError !== null && 'message' in userError ? (userError as { message: string }).message : String(userError));
         console.log(`  Tenant: ${tenant.name} (${tenant.slug})`);
       }
     }
 
     return tenant;
   } catch (error: unknown) {
-    console.error('✗ Error creating default store:', error.message);
+    console.error('✗ Error creating default store:', typeof error === 'object' && error !== null && 'message' in error ? (error as { message: string }).message : String(error));
     throw error;
   }
 }
@@ -351,7 +351,7 @@ async function createDemoTenant() {
       }
       console.log(`✓ Created ${createdCategories.length} demo categories`);
     } catch (catError: unknown) {
-      console.log('⚠️  Warning: Failed to create demo categories:', catError.message);
+      console.log('⚠️  Warning: Failed to create demo categories:', typeof catError === 'object' && catError !== null && 'message' in catError ? (catError as { message: string }).message : String(catError));
     }
 
     // Create demo products
@@ -392,7 +392,7 @@ async function createDemoTenant() {
       }
       console.log(`✓ Created ${createdProducts.length} demo products`);
     } catch (prodError: unknown) {
-      console.log('⚠️  Warning: Failed to create demo products:', prodError.message);
+      console.log('⚠️  Warning: Failed to create demo products:', typeof prodError === 'object' && prodError !== null && 'message' in prodError ? (prodError as { message: string }).message : String(prodError));
     }
 
     console.log('');
@@ -402,7 +402,7 @@ async function createDemoTenant() {
 
     return demoTenant;
   } catch (error: unknown) {
-    console.error('✗ Error creating demo tenant:', error.message);
+    console.error('✗ Error creating demo tenant:', typeof error === 'object' && error !== null && 'message' in error ? (error as { message: string }).message : String(error));
     throw error;
   }
 }
@@ -555,7 +555,7 @@ async function resetCollections() {
         console.log('✓ Default store setup complete');
       } catch (error: unknown) {
         console.log('');
-        console.log('⚠️  Warning: Failed to create default store:', error.message);
+        console.log('⚠️  Warning: Failed to create default store:', typeof error === 'object' && error !== null && 'message' in error ? (error as { message: string }).message : String(error));
       }
     }
 
@@ -565,14 +565,14 @@ async function resetCollections() {
         await createDemoTenant();
       } catch (error: unknown) {
         console.log('');
-        console.log('⚠️  Warning: Failed to create demo tenant:', error.message);
+        console.log('⚠️  Warning: Failed to create demo tenant:', typeof error === 'object' && error !== null && 'message' in error ? (error as { message: string }).message : String(error));
       }
     }
     
     await mongoose.disconnect();
     console.log('✓ Disconnected from MongoDB');
   } catch (error: unknown) {
-    console.error('✗ Error resetting collections:', error.message);
+    console.error('✗ Error resetting collections:', typeof error === 'object' && error !== null && 'message' in error ? (error as { message: string }).message : String(error));
     if (mongoose.connection.readyState === 1) {
       await mongoose.disconnect();
     }

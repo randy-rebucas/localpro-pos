@@ -128,7 +128,7 @@ export default function SubscriptionsPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin mx-auto" />
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
     );
@@ -154,7 +154,7 @@ export default function SubscriptionsPage() {
             {/* Current Subscription */}
             <div className="bg-white border border-gray-300 rounded-lg overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-200">
-                <h2 className="text-lg font-semibold text-gray-900">Current Subscription</h2>
+                <h2 className="text-lg font-semibold text-gray-900">{dict?.admin?.currentSubscription || 'Current Subscription'}</h2>
               </div>
               <div className="p-6">
                 {subscription ? (
@@ -165,7 +165,7 @@ export default function SubscriptionsPage() {
                         <div className="flex items-center">
                           <CreditCard className="h-8 w-8 text-blue-600" />
                           <div className="ml-3">
-                            <p className="text-sm font-medium text-gray-600">Plan</p>
+                            <p className="text-sm font-medium text-gray-600">{dict?.admin?.plan || 'Plan'}</p>
                             <p className="text-lg font-semibold text-gray-900">{subscription.planId?.name}</p>
                           </div>
                         </div>
@@ -174,7 +174,7 @@ export default function SubscriptionsPage() {
                         <div className="flex items-center">
                           <Clock className="h-8 w-8 text-green-600" />
                           <div className="ml-3">
-                            <p className="text-sm font-medium text-gray-600">Status</p>
+                            <p className="text-sm font-medium text-gray-600">{dict?.admin?.status || 'Status'}</p>
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                               subscription.status === 'active'
                                 ? 'bg-green-100 text-green-800'
@@ -182,7 +182,15 @@ export default function SubscriptionsPage() {
                                 ? 'bg-blue-100 text-blue-800'
                                 : 'bg-red-100 text-red-800'
                             }`}>
-                              {subscription.status.charAt(0).toUpperCase() + subscription.status.slice(1)}
+                              {
+                                {
+                                  active: dict?.admin?.active || 'Active',
+                                  inactive: dict?.admin?.inactive || 'Inactive',
+                                  trial: dict?.admin?.trial || 'Trial',
+                                  suspended: dict?.admin?.suspended || 'Suspended',
+                                  cancelled: subscription.status.charAt(0).toUpperCase() + subscription.status.slice(1),
+                                }[subscription.status] || (subscription.status.charAt(0).toUpperCase() + subscription.status.slice(1))
+                              }
                             </span>
                           </div>
                         </div>
@@ -191,7 +199,7 @@ export default function SubscriptionsPage() {
                         <div className="flex items-center">
                           <Receipt className="h-8 w-8 text-purple-600" />
                           <div className="ml-3">
-                            <p className="text-sm font-medium text-gray-600">Billing Cycle</p>
+                            <p className="text-sm font-medium text-gray-600">{dict?.admin?.billingCycle || 'Billing Cycle'}</p>
                             <p className="text-lg font-semibold text-gray-900 capitalize">{subscription.billingCycle}</p>
                           </div>
                         </div>
@@ -200,32 +208,32 @@ export default function SubscriptionsPage() {
 
                     {/* Usage Limits */}
                     <div className="border-t border-gray-200 pt-6">
-                      <h3 className="text-md font-semibold text-gray-900 mb-4">Usage Limits</h3>
+                      <h3 className="text-md font-semibold text-gray-900 mb-4">{dict?.admin?.usageLimits || 'Usage Limits'}</h3>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div className="text-center">
                           <Users className="h-6 w-6 mx-auto mb-2 text-blue-600" />
-                          <p className="text-sm text-gray-600">Users</p>
+                          <p className="text-sm text-gray-600">{dict?.admin?.users || 'Users'}</p>
                           <p className="text-lg font-semibold">
                             {subscription.usage.currentUsers} / {subscription.planId?.features.maxUsers === -1 ? '∞' : subscription.planId?.features.maxUsers}
                           </p>
                         </div>
                         <div className="text-center">
                           <Building className="h-6 w-6 mx-auto mb-2 text-green-600" />
-                          <p className="text-sm text-gray-600">Branches</p>
+                          <p className="text-sm text-gray-600">{dict?.admin?.branches || 'Branches'}</p>
                           <p className="text-lg font-semibold">
                             {subscription.usage.currentBranches} / {subscription.planId?.features.maxBranches === -1 ? '∞' : subscription.planId?.features.maxBranches}
                           </p>
                         </div>
                         <div className="text-center">
                           <Package className="h-6 w-6 mx-auto mb-2 text-purple-600" />
-                          <p className="text-sm text-gray-600">Products</p>
+                          <p className="text-sm text-gray-600">{dict?.admin?.products || 'Products'}</p>
                           <p className="text-lg font-semibold">
                             {subscription.usage.currentProducts} / {subscription.planId?.features.maxProducts === -1 ? '∞' : subscription.planId?.features.maxProducts}
                           </p>
                         </div>
                         <div className="text-center">
                           <Receipt className="h-6 w-6 mx-auto mb-2 text-orange-600" />
-                          <p className="text-sm text-gray-600">Transactions</p>
+                          <p className="text-sm text-gray-600">{dict?.admin?.transactions || 'Transactions'}</p>
                           <p className="text-lg font-semibold">
                             {subscription.usage.currentTransactions} / {subscription.planId?.features.maxTransactions === -1 ? '∞' : subscription.planId?.features.maxTransactions}
                           </p>

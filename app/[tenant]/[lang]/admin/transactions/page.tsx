@@ -114,14 +114,14 @@ export default function TransactionsPage() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Receipt #</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Items</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Subtotal</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Discount</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Payment</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.receiptNumber || 'Receipt #'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.transactions?.date || dict.admin?.date || 'Date'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.transactions?.items || 'Items'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.subtotal || 'Subtotal'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.discount || 'Discount'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.total || 'Total'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.transactions?.payment || 'Payment'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.status || 'Status'}</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.actions || 'Actions'}</th>
                 </tr>
               </thead>
@@ -135,7 +135,7 @@ export default function TransactionsPage() {
                       {new Date(transaction.createdAt).toLocaleString()}
                     </td>
                     <td className="px-4 py-4 text-sm text-gray-500">
-                      {transaction.items.length} {transaction.items.length === 1 ? 'item' : 'items'}
+                      {transaction.items.length} {transaction.items.length === 1 ? (dict.transactions?.item || 'item') : (dict.transactions?.items || 'items')}
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                       <Currency amount={transaction.subtotal} />
@@ -156,7 +156,7 @@ export default function TransactionsPage() {
                         {transaction.paymentMethod}
                       </span>
                       {transaction.paymentMethod === 'cash' && transaction.change !== undefined && (
-                        <div className="text-xs text-gray-500 mt-1">Change: <Currency amount={transaction.change} /></div>
+                        <div className="text-xs text-gray-500 mt-1">{dict.transactions?.change || dict.admin?.change || 'Change'}: <Currency amount={transaction.change} /></div>
                       )}
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap">
@@ -165,7 +165,10 @@ export default function TransactionsPage() {
                         transaction.status === 'refunded' ? 'bg-orange-100 text-orange-800' :
                         'bg-red-100 text-red-800'
                       }`}>
-                        {transaction.status}
+                        {transaction.status === 'completed' ? (dict.transactions?.completed || dict.admin?.completed || 'completed') :
+                         transaction.status === 'cancelled' ? (dict.transactions?.cancelled || dict.admin?.cancelled || 'cancelled') :
+                         transaction.status === 'refunded' ? (dict.transactions?.refunded || 'refunded') :
+                         transaction.status}
                       </span>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
@@ -191,17 +194,17 @@ export default function TransactionsPage() {
                 disabled={page === 1}
                 className="px-4 py-2 border border-gray-300 disabled:opacity-50 bg-white"
               >
-                Previous
+                {dict.transactions?.previous || dict.common?.previous || 'Previous'}
               </button>
               <span className="px-4 py-2 text-sm text-gray-700">
-                Page {page} of {totalPages}
+                {dict.transactions?.page || dict.admin?.page || 'Page'} {page} {dict.transactions?.of || dict.admin?.of || 'of'} {totalPages}
               </span>
               <button
                 onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
                 className="px-4 py-2 border border-gray-300 disabled:opacity-50 bg-white"
               >
-                Next
+                {dict.transactions?.next || dict.common?.next || 'Next'}
               </button>
             </div>
           )}
@@ -248,32 +251,35 @@ function TransactionDetailModal({
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-medium text-gray-500">Receipt Number</label>
+                <label className="text-sm font-medium text-gray-500">{dict.admin?.receiptNumber || 'Receipt Number'}</label>
                 <div className="text-lg font-mono">{transaction.receiptNumber || '-'}</div>
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-500">Date</label>
+                <label className="text-sm font-medium text-gray-500">{dict.transactions?.date || dict.admin?.date || 'Date'}</label>
                 <div className="text-lg">{new Date(transaction.createdAt).toLocaleString()}</div>
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-500">Status</label>
+                <label className="text-sm font-medium text-gray-500">{dict.admin?.status || 'Status'}</label>
                 <div>
                   <span className={`px-2 py-1 text-xs font-semibold border ${
                     transaction.status === 'completed' ? 'bg-green-100 text-green-800 border-green-300' :
                     transaction.status === 'refunded' ? 'bg-orange-100 text-orange-800 border-orange-300' :
                     'bg-red-100 text-red-800 border-red-300'
                   }`}>
-                    {transaction.status}
+                    {transaction.status === 'completed' ? (dict.transactions?.completed || dict.admin?.completed || 'completed') :
+                     transaction.status === 'cancelled' ? (dict.transactions?.cancelled || dict.admin?.cancelled || 'cancelled') :
+                     transaction.status === 'refunded' ? (dict.transactions?.refunded || 'refunded') :
+                     transaction.status}
                   </span>
                 </div>
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-500">Payment Method</label>
+                <label className="text-sm font-medium text-gray-500">{dict.transactions?.payment || 'Payment Method'}</label>
                 <div className="text-lg capitalize">{transaction.paymentMethod}</div>
               </div>
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-500 mb-2 block">Items</label>
+              <label className="text-sm font-medium text-gray-500 mb-2 block">{dict.transactions?.items || 'Items'}</label>
               <div className="border border-gray-300 divide-y">
                 {transaction.items.map((item, idx) => (
                   <div key={idx} className="p-3 flex justify-between">
@@ -288,7 +294,7 @@ function TransactionDetailModal({
             </div>
             <div className="border-t pt-4 space-y-2">
               <div className="flex justify-between">
-                <span className="text-gray-600">Subtotal:</span>
+                <span className="text-gray-600">{dict.admin?.subtotal || 'Subtotal'}:</span>
                 <span className="font-medium"><Currency amount={transaction.subtotal} /></span>
               </div>
               {transaction.discountAmount && (

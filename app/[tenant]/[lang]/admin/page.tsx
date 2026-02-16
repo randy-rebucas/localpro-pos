@@ -14,7 +14,7 @@ export default function AdminPage() {
   const router = useRouter();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<Record<string, Record<string, string>> | null>(null);
+  const [dict, setDict] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const { settings } = useTenantSettings();
   const tenantSettings = settings || getDefaultTenantSettings();
@@ -254,40 +254,40 @@ export default function AdminPage() {
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Subscription Usage</h2>
-                  <p className="text-sm text-gray-600">{subscriptionStatus.planName} Plan</p>
+                  <h2 className="text-lg font-semibold text-gray-900">{dict.admin?.subscriptionUsage || 'Subscription Usage'}</h2>
+                  <p className="text-sm text-gray-600">{subscriptionStatus.planName} {dict.admin?.plan || 'Plan'}</p>
                 </div>
                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                   subscriptionStatus.isActive
                     ? 'bg-green-100 text-green-800'
                     : 'bg-red-100 text-red-800'
                 }`}>
-                  {subscriptionStatus.isActive ? "Active" : "Inactive"}
+                  {subscriptionStatus.isActive ? (dict.admin?.active || "Active") : (dict.admin?.inactive || "Inactive")}
                 </span>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="text-center">
                   <div className="text-2xl font-bold" style={{ color: primaryColor }}>{subscriptionStatus.usage.currentUsers}</div>
                   <div className="text-xs text-gray-500">
-                    Users ({subscriptionStatus.limits.maxUsers === -1 ? '∞' : subscriptionStatus.limits.maxUsers})
+                    {dict.admin?.users || 'Users'} ({subscriptionStatus.limits.maxUsers === -1 ? '∞' : subscriptionStatus.limits.maxUsers})
                   </div>
                 </div>
                 <div className="text-center">
                   <div className="text-2xl font-bold text-green-600">{subscriptionStatus.usage.currentBranches}</div>
                   <div className="text-xs text-gray-500">
-                    Branches ({subscriptionStatus.limits.maxBranches === -1 ? '∞' : subscriptionStatus.limits.maxBranches})
+                    {dict.admin?.branches || 'Branches'} ({subscriptionStatus.limits.maxBranches === -1 ? '∞' : subscriptionStatus.limits.maxBranches})
                   </div>
                 </div>
                 <div className="text-center">
                   <div className="text-2xl font-bold text-orange-600">{subscriptionStatus.usage.currentProducts}</div>
                   <div className="text-xs text-gray-500">
-                    Products ({subscriptionStatus.limits.maxProducts === -1 ? '∞' : subscriptionStatus.limits.maxProducts})
+                    {dict.admin?.products || 'Products'} ({subscriptionStatus.limits.maxProducts === -1 ? '∞' : subscriptionStatus.limits.maxProducts})
                   </div>
                 </div>
                 <div className="text-center">
                   <div className="text-2xl font-bold text-purple-600">{subscriptionStatus.usage.currentTransactions}</div>
                   <div className="text-xs text-gray-500">
-                    Transactions ({subscriptionStatus.limits.maxTransactions === -1 ? '∞' : subscriptionStatus.limits.maxTransactions})
+                    {dict.admin?.transactions || 'Transactions'} ({subscriptionStatus.limits.maxTransactions === -1 ? '∞' : subscriptionStatus.limits.maxTransactions})
                   </div>
                 </div>
               </div>
