@@ -17,7 +17,6 @@ export default function LoginPage() {
   const lang = (params?.lang as 'en' | 'es') || 'en';
   const { login, loginPIN, loginQR, isAuthenticated, loading: authLoading } = useAuth();
   const [dict, setDict] = useState<any>(null);
-  
   const [loginMethod, setLoginMethod] = useState<LoginMethod>('email');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

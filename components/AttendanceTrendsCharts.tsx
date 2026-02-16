@@ -1,6 +1,9 @@
 'use client';
 
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { getDefaultTenantSettings } from '@/lib/currency';
+import { formatDate } from '@/lib/formatting';
 
 interface Attendance {
   _id: string;
@@ -17,13 +20,17 @@ interface AttendanceTrendsChartsProps {
 }
 
 export default function AttendanceTrendsCharts({ attendances, dict }: AttendanceTrendsChartsProps) {
+  const { settings } = useTenantSettings();
+  const tenantSettings = settings || getDefaultTenantSettings();
+  const primaryColor = tenantSettings.primaryColor || '#3b82f6';
+
   // Process data for daily hours chart
   const dailyHoursMap = new Map<string, number>();
   const dailyCountMap = new Map<string, number>();
 
   attendances.forEach(attendance => {
     if (attendance.totalHours) {
-      const date = new Date(attendance.clockIn).toLocaleDateString();
+      const date = formatDate(new Date(attendance.clockIn), tenantSettings);
       const currentHours = dailyHoursMap.get(date) || 0;
       dailyHoursMap.set(date, currentHours + attendance.totalHours);
       
@@ -134,9 +141,9 @@ export default function AttendanceTrendsCharts({ attendances, dict }: Attendance
               <Line
                 type="monotone"
                 dataKey="hours"
-                stroke="#3b82f6"
+                stroke={primaryColor}
                 strokeWidth={2}
-                dot={{ fill: '#3b82f6', r: 4 }}
+                dot={{ fill: primaryColor, r: 4 }}
                 activeDot={{ r: 6 }}
                 name={dict.admin?.totalHours || 'Total Hours'}
               />

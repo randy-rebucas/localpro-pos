@@ -1,0 +1,232 @@
+{
+  "info": {
+    "_postman_id": "localpro-pos-client-api-2026-full",
+    "name": "LocalPro POS Client API (Full)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Comprehensive Postman collection for LocalPro POS client-side API endpoints, including authentication, booking, profile, address management, and password reset."
+  },
+  "item": [
+    {
+      "name": "Auth - Register",
+      "request": {
+        "method": "POST",
+        "header": [ { "key": "Content-Type", "value": "application/json" } ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john@example.com\",\n  \"password\": \"password123\",\n  \"tenantId\": \"tenant123\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/auth/register", "host": ["{{baseUrl}}"], "path": ["api", "auth", "register"] }
+      }
+    },
+    {
+      "name": "Auth - Login",
+      "request": {
+        "method": "POST",
+        "header": [ { "key": "Content-Type", "value": "application/json" } ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"john@example.com\",\n  \"password\": \"password123\",\n  \"tenantId\": \"tenant123\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] }
+      }
+    },
+    {
+      "name": "Auth - Logout",
+      "request": {
+        "method": "POST",
+        "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+        "url": { "raw": "{{baseUrl}}/api/auth/logout", "host": ["{{baseUrl}}"], "path": ["api", "auth", "logout"] }
+      }
+    },
+    {
+      "name": "Auth - Reset Password",
+      "request": {
+        "method": "POST",
+        "header": [ { "key": "Content-Type", "value": "application/json" } ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"john@example.com\",\n  \"tenantId\": \"tenant123\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/auth/reset-password", "host": ["{{baseUrl}}"], "path": ["api", "auth", "reset-password"] }
+      }
+    },
+    {
+      "name": "List Services",
+      "request": {
+        "method": "GET",
+        "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+        "url": {
+          "raw": "{{baseUrl}}/api/services?tenantId={{tenantId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "services"],
+          "query": [ { "key": "tenantId", "value": "{{tenantId}}" } ]
+        }
+      }
+    },
+    {
+      "name": "Get Booking Availability",
+      "request": {
+        "method": "GET",
+        "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+        "url": {
+          "raw": "{{baseUrl}}/api/booking/availability?tenantId={{tenantId}}&serviceId={{serviceId}}&date={{date}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "booking", "availability"],
+          "query": [
+            { "key": "tenantId", "value": "{{tenantId}}" },
+            { "key": "serviceId", "value": "{{serviceId}}" },
+            { "key": "date", "value": "{{date}}" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Create Booking",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"tenantId\": \"{{tenantId}}\",\n  \"userId\": \"{{userId}}\",\n  \"serviceId\": \"{{serviceId}}\",\n  \"pickup\": {\n    \"date\": \"2026-02-15\",\n    \"time\": \"10:00\"\n  },\n  \"delivery\": {\n    \"date\": \"2026-02-16\",\n    \"time\": \"14:00\"\n  },\n  \"location\": {\n    \"type\": \"current\",\n    \"address\": \"123 Main St\",\n    \"lat\": 40.7128,\n    \"lng\": -74.0060\n  },\n  \"paymentMethod\": \"cash\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/booking", "host": ["{{baseUrl}}"], "path": ["api", "booking"] }
+      }
+    },
+    {
+      "name": "List User Bookings",
+      "request": {
+        "method": "GET",
+        "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+        "url": {
+          "raw": "{{baseUrl}}/api/booking?userId={{userId}}&tenantId={{tenantId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "booking"],
+          "query": [
+            { "key": "userId", "value": "{{userId}}" },
+            { "key": "tenantId", "value": "{{tenantId}}" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Profile - Get",
+      "request": {
+        "method": "GET",
+        "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+        "url": {
+          "raw": "{{baseUrl}}/api/client/profile?userId={{userId}}&tenantId={{tenantId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "client", "profile"],
+          "query": [
+            { "key": "userId", "value": "{{userId}}" },
+            { "key": "tenantId", "value": "{{tenantId}}" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Profile - Update",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john@example.com\",\n  \"phone\": \"+1234567890\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/client/profile?userId={{userId}}&tenantId={{tenantId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "client", "profile"],
+          "query": [
+            { "key": "userId", "value": "{{userId}}" },
+            { "key": "tenantId", "value": "{{tenantId}}" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Address - Add",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"userId\": \"{{userId}}\",\n  \"tenantId\": \"{{tenantId}}\",\n  \"address\": \"123 Main St\",\n  \"city\": \"New York\",\n  \"state\": \"NY\",\n  \"zipCode\": \"10001\",\n  \"country\": \"USA\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/client/address",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "client", "address"]
+        }
+      }
+    },
+    {
+      "name": "Address - Edit",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"address\": \"456 Park Ave\",\n  \"city\": \"New York\",\n  \"state\": \"NY\",\n  \"zipCode\": \"10022\",\n  \"country\": \"USA\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/client/address/{{addressId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "client", "address", "{{addressId}}"]
+        }
+      }
+    },
+    {
+      "name": "Address - Delete",
+      "request": {
+        "method": "DELETE",
+        "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+        "url": {
+          "raw": "{{baseUrl}}/api/client/address/{{addressId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "client", "address", "{{addressId}}"]
+        }
+      }
+    },
+    {
+      "name": "Auth - Change Password",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"oldPassword\": \"password123\",\n  \"newPassword\": \"newpassword456\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/change-password",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "auth", "change-password"]
+        }
+      }
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "tenantId", "value": "tenant123" },
+    { "key": "userId", "value": "user456" },
+    { "key": "serviceId", "value": "service789" },
+    { "key": "date", "value": "2026-02-15" },
+    { "key": "token", "value": "" },
+    { "key": "addressId", "value": "address123" }
+  ]
+}

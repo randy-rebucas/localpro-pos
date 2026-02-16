@@ -26,6 +26,7 @@ export default function CategoriesPage() {
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
 
+   
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
     fetchCategories();
@@ -61,7 +62,7 @@ export default function CategoriesPage() {
       } else {
         setMessage({ type: 'error', text: data.error || dict?.common?.failedToDeleteCategory || 'Failed to delete category' });
       }
-    } catch (error) {
+    } catch (_error) {
       setMessage({ type: 'error', text: dict?.common?.failedToDeleteCategory || 'Failed to delete category' });
     }
   };
@@ -81,7 +82,7 @@ export default function CategoriesPage() {
       } else {
         setMessage({ type: 'error', text: data.error || dict?.common?.failedToUpdateCategory || 'Failed to update category' });
       }
-    } catch (error) {
+    } catch (_error) {
       setMessage({ type: 'error', text: dict?.common?.failedToUpdateCategory || 'Failed to update category' });
     }
   };
@@ -224,7 +225,7 @@ function CategoryModal({
   category: Category | null;
   onClose: () => void;
   onSave: () => void;
-  dict: any;
+  dict: Record<string, Record<string, string>> | null;
 }) {
   const [formData, setFormData] = useState({
     name: category?.name || '',
@@ -258,7 +259,7 @@ function CategoryModal({
       } else {
         setError(data.error || 'Failed to save category');
       }
-    } catch (error) {
+    } catch (_error) {
       setError('Failed to save category');
     } finally {
       setSaving(false);
@@ -270,12 +271,14 @@ function CategoryModal({
       <div className="bg-white border border-gray-300 max-w-md w-full">
         <div className="p-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
-            {category ? (dict.admin?.editCategory || 'Edit Category') : (dict.admin?.addCategory || 'Add Category')}
+            {category
+              ? (dict?.admin?.editCategory || 'Edit Category')
+              : (dict?.admin?.addCategory || 'Add Category')}
           </h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.name || 'Name'} *
+                {dict?.admin?.name || 'Name'} *
               </label>
               <input
                 type="text"
@@ -287,7 +290,7 @@ function CategoryModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.description || 'Description'} (optional)
+                {dict?.admin?.description || 'Description'} (optional)
               </label>
               <textarea
                 value={formData.description}
@@ -307,14 +310,14 @@ function CategoryModal({
                 onClick={onClose}
                 className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
               >
-                {dict.common?.cancel || 'Cancel'}
+                {(dict?.common?.cancel) || 'Cancel'}
               </button>
               <button
                 type="submit"
                 disabled={saving}
                 className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
               >
-                {saving ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
+                {saving ? (dict?.common?.loading || 'Saving...') : (dict?.common?.save || 'Save')}
               </button>
             </div>
           </form>

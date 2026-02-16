@@ -9,10 +9,18 @@ import { getDefaultTenantSettings } from '@/lib/currency';
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
+    // Require admin role to list all tenants
+    await requireRole(request, ['admin']);
     const tenants = await Tenant.find({ isActive: true }).select('slug name settings isActive createdAt').lean();
     return NextResponse.json({ success: true, data: tenants });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    if ((error as Error).message === 'Unauthorized' || (error as Error).message.includes('Forbidden')) {
+      return NextResponse.json(
+        { success: false, error: (error as Error).message },
+        { status: (error as Error).message === 'Unauthorized' ? 401 : 403 }
+      );
+    }
+    return NextResponse.json({ success: false, error: 'Failed to fetch tenants' }, { status: 500 });
   }
 }
 
@@ -66,7 +74,7 @@ export async function POST(request: NextRequest) {
       ...(companyName && { companyName }),
     };
 
-    const tenantData: any = {
+    const tenantData: Record<string, unknown> = {
       slug: slug.toLowerCase(),
       name,
       settings,
@@ -79,8 +87,9 @@ export async function POST(request: NextRequest) {
     const tenant = await Tenant.create(tenantData);
 
     // Automatically create admin user for the tenant
+    const crypto = require('crypto');
     const adminEmail = `admin@${tenant.slug}.local`;
-    const adminPassword = `Admin${tenant.slug}123!`;
+    const adminPassword = crypto.randomBytes(16).toString('base64url');
     
     try {
       const adminUser = await User.create({
@@ -99,9 +108,9 @@ export async function POST(request: NextRequest) {
         entityId: adminUser._id.toString(),
         changes: { email: adminUser.email, role: adminUser.role },
       });
-    } catch (userError: any) {
+    } catch (userError: unknown) {
       // Log error but don't fail tenant creation if user creation fails
-      console.error('Failed to create admin user:', userError.message);
+      console.error('Failed to create admin user:', (userError as Error).message);
     }
 
     await createAuditLog(request, {
@@ -121,21 +130,21 @@ export async function POST(request: NextRequest) {
         note: 'Admin user created automatically. Please change the password after first login.'
       }
     }, { status: 201 });
-  } catch (error: any) {
-    if (error.code === 11000) {
-      const field = Object.keys(error.keyPattern)[0];
+  } catch (error: unknown) {
+    if ((error as Record<string, unknown>).code === 11000) {
+      const field = Object.keys((error as Record<string, Record<string, unknown>>).keyPattern)[0];
       return NextResponse.json(
         { success: false, error: `${field} already exists` },
         { status: 400 }
       );
     }
-    if (error.message === 'Unauthorized' || error.message.includes('Forbidden')) {
+    if ((error as Error).message === 'Unauthorized' || (error as Error).message.includes('Forbidden')) {
       return NextResponse.json(
-        { success: false, error: error.message },
-        { status: error.message === 'Unauthorized' ? 401 : 403 }
+        { success: false, error: (error as Error).message },
+        { status: (error as Error).message === 'Unauthorized' ? 401 : 403 }
       );
     }
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+    return NextResponse.json({ success: false, error: (error as Error).message }, { status: 400 });
   }
 }
 

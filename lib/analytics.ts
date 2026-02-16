@@ -250,7 +250,7 @@ export async function getVATReport(
   const totalSales = transactions.reduce((sum, t) => sum + t.total, 0);
   
   let vatSales = 0;
-  let nonVatSales = 0;
+  const nonVatSales = 0;
   
   if (vatRate > 0) {
     // Calculate VAT sales (total includes VAT)

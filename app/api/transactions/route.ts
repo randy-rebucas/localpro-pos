@@ -14,6 +14,7 @@ import ProductBundle from '@/models/ProductBundle';
 import StockMovement from '@/models/StockMovement';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { getTenantSettingsById } from '@/lib/tenant';
+import { SubscriptionService } from '@/lib/subscription';
 import { calculateTax } from '@/lib/tax-calculation';
 
 export async function GET(request: NextRequest) {
@@ -87,6 +88,14 @@ export async function POST(request: NextRequest) {
 
     const { items, paymentMethod, cashReceived, notes, discountCode, branchId, payments } = data;
 
+    // Explicitly type items as an array
+    const typedItems: Array<{
+      productId?: string;
+      quantity: number;
+      variation?: any;
+      bundleId?: string;
+    }> = Array.isArray(items) ? items : [];
+
     // Get tenant settings to check feature flags
     const tenantSettings = await getTenantSettingsById(tenantId);
 
@@ -109,7 +118,7 @@ export async function POST(request: NextRequest) {
     const transactionItems = [];
     let subtotal = 0;
 
-    for (const item of items) {
+    for (const item of typedItems) {
       const { productId, quantity, variation, bundleId } = item;
 
       // Handle bundles
@@ -134,7 +143,7 @@ export async function POST(request: NextRequest) {
               bundleItem.productId.toString(),
               tenantId,
               {
-                branchId,
+                branchId: typeof branchId === 'string' ? branchId : undefined,
                 variation: bundleItem.variation,
               }
             );
@@ -172,7 +181,7 @@ export async function POST(request: NextRequest) {
       else {
         const product = await Product.findOne({ _id: productId, tenantId });
         if (!product) {
-          const errorMsg = t('validation.productNotFoundInTransaction', 'Product {productId} not found').replace('{productId}', productId);
+          const errorMsg = t('validation.productNotFoundInTransaction', 'Product {productId} not found').replace('{productId}', String(productId));
           return NextResponse.json({ success: false, error: errorMsg }, { status: 404 });
         }
 
@@ -181,8 +190,11 @@ export async function POST(request: NextRequest) {
         const allowOutOfStockSales = product.allowOutOfStockSales === true;
         
         if (trackInventory && !allowOutOfStockSales) {
-          const availableStock = await getProductStock(productId, tenantId, {
-            branchId,
+          if (!productId) {
+            return NextResponse.json({ success: false, error: t('validation.productIdMissing', 'Product ID is missing') }, { status: 400 });
+          }
+          const availableStock = await getProductStock(productId as string, tenantId, {
+            branchId: typeof branchId === 'string' ? branchId : undefined,
             variation,
           });
 
@@ -235,7 +247,7 @@ export async function POST(request: NextRequest) {
     if (discountCode) {
       const discount = await Discount.findOne({
         tenantId,
-        code: discountCode.toUpperCase(),
+        code: typeof discountCode === 'string' ? discountCode.toUpperCase() : '',
         isActive: true,
       });
 
@@ -295,79 +307,33 @@ export async function POST(request: NextRequest) {
     // Calculate subtotal after discount
     const subtotalAfterDiscount = Math.max(0, subtotal - discountAmount);
 
-    // Prepare items for tax calculation
-    const taxItems = [];
-    for (const item of transactionItems) {
-      const originalItem = items.find((i: typeof items[0]) => i.productId === item.product.toString());
-      if (originalItem?.bundleId) {
-        const bundle = await ProductBundle.findById(originalItem.bundleId).lean();
-        taxItems.push({
-          productId: originalItem.bundleId,
-          productType: 'bundle' as const,
-          categoryId: bundle?.categoryId?.toString(),
-        });
-      } else {
-        const product = await Product.findById(item.product).lean();
-        taxItems.push({
-          productId: item.product.toString(),
-          productType: product?.productType || 'regular',
-          categoryId: product?.categoryId?.toString(),
-        });
-      }
+    // Calculate tax (if applicable)
+    let taxAmount = 0;
+    if (typeof calculateTax === 'function') {
+      const taxItems = transactionItems.map((item: any) => ({
+        productId: item.product ? item.product.toString() : undefined,
+        productType: item.bundleId ? 'bundle' as 'bundle' : 'regular' as 'regular',
+        categoryId: item.categoryId ? item.categoryId.toString() : undefined,
+      }));
+      const taxResult = await calculateTax(tenantId, subtotalAfterDiscount, taxItems, tenantSettings ?? undefined);
+      taxAmount = taxResult.taxAmount;
     }
 
-    // Calculate tax
-    const taxCalculation = await calculateTax(
-      tenantId,
-      subtotalAfterDiscount,
-      taxItems,
-      tenantSettings ?? undefined
-    );
+    // Calculate total after discount and tax
+    const total = Math.max(0, subtotalAfterDiscount + taxAmount);
 
-    const taxAmount = taxCalculation.taxAmount;
-
-    // Calculate final total (subtotal after discount + tax)
-    const total = subtotalAfterDiscount + taxAmount;
-
-    // Handle multiple payments (split payments)
-    if (isMultiplePayments) {
-      // Validate that all payments sum to total
-      const paymentsTotal = payments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
-      const tolerance = 0.01; // Allow small rounding differences
-      
-      if (Math.abs(paymentsTotal - total) > tolerance) {
-        return NextResponse.json(
-          { success: false, error: t('validation.paymentsMustEqualTotal', `Payments total (${paymentsTotal.toFixed(2)}) must equal transaction total (${total.toFixed(2)})`) },
-          { status: 400 }
-        );
-      }
-
-      // Determine primary payment method (use the first payment or the one with largest amount)
-      const primaryPayment = payments.reduce((prev: any, current: any) => 
-        (current.amount > (prev.amount || 0)) ? current : prev
-      );
-      finalPaymentMethod = primaryPayment.method || 'cash';
-      
-      // Calculate cash totals if any cash payment exists
-      const cashPayments = payments.filter((p: any) => p.method === 'cash');
-      if (cashPayments.length > 0) {
-        finalCashReceived = cashPayments.reduce((sum: number, p: any) => sum + (p.cashReceived || p.amount || 0), 0);
-        finalChange = cashPayments.reduce((sum: number, p: any) => sum + (p.change || 0), 0);
-      }
-    } else {
-      // Single payment method (existing logic)
-      // Calculate change for cash payments
-      if (finalPaymentMethod === 'cash' && finalCashReceived) {
-        finalChange = finalCashReceived - total;
-        if (finalChange < 0) {
-          return NextResponse.json({ success: false, error: t('validation.insufficientCashReceived', 'Insufficient cash received') }, { status: 400 });
-        }
+    // Calculate change for cash payments
+    let change = 0;
+    if (paymentMethod === 'cash' && cashReceived) {
+      change = Number(cashReceived) - total;
+      if (change < 0) {
+        return NextResponse.json({ success: false, error: t('validation.insufficientCashReceived', 'Insufficient cash received') }, { status: 400 });
       }
     }
 
     // Update stock BEFORE creating transaction (critical - must succeed)
     // Use the original items array to get productId and quantity
-    for (const item of items) {
+    for (const item of typedItems) {
       const { productId, quantity, variation, bundleId } = item;
 
       // Skip if no productId (shouldn't happen, but safety check)
@@ -386,7 +352,7 @@ export async function POST(request: NextRequest) {
             'sale',
             {
               userId: user.userId,
-              branchId,
+              branchId: typeof branchId === 'string' ? branchId : undefined,
               reason: 'Transaction sale - bundle',
             }
           );
@@ -402,7 +368,7 @@ export async function POST(request: NextRequest) {
               'sale',
               {
                 userId: user.userId,
-                branchId,
+                branchId: typeof branchId === 'string' ? branchId : undefined,
                 variation,
                 reason: 'Transaction sale',
               }
@@ -440,7 +406,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Update stock movements with transaction ID (now that transaction exists)
-    for (const item of items) {
+    for (const item of typedItems) {
       const { productId, bundleId } = item;
       if (productId || bundleId) {
         // Update the stock movement records with transaction ID
@@ -546,37 +512,24 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Auto-send receipt email if customerEmail is provided and email notifications are enabled
-    const customerEmail = body.customerEmail;
-    if (customerEmail && tenantSettings?.emailNotifications) {
-      try {
-        // Import and send receipt asynchronously (don't block response)
-        const { sendTransactionReceipt } = await import('@/lib/automations/transaction-receipts');
-        sendTransactionReceipt({
-          transactionId: transaction._id.toString(),
-          customerEmail,
-        }).catch((error) => {
-          // Log error but don't fail the transaction
-          console.error('Failed to send receipt email:', error);
-        });
-      } catch (error) {
-        // Silently fail - receipt sending shouldn't block transaction creation
-        console.error('Error importing receipt automation:', error);
-      }
+    // Update subscription usage
+    try {
+      const currentTransactionCount = await Transaction.countDocuments({
+        tenantId,
+        createdAt: {
+          $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1), // Start of current month
+          $lt: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1) // Start of next month
+        }
+      });
+      await SubscriptionService.updateUsage(tenantId.toString(), {
+        transactions: currentTransactionCount
+      });
+    } catch (usageError) {
+      console.error('Failed to update subscription usage:', usageError);
+      // Don't fail the request if usage update fails
     }
 
-    // Include payment records in response if created
-    const responseData: any = transaction.toObject ? transaction.toObject() : transaction;
-    if (paymentRecords.length > 0) {
-      responseData.payments = paymentRecords.map((p: any) => ({
-        _id: p._id,
-        method: p.method,
-        amount: p.amount,
-        status: p.status,
-      }));
-    }
-
-    return NextResponse.json({ success: true, data: responseData }, { status: 201 });
+    return NextResponse.json({ success: true, data: transaction }, { status: 201 });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 400 });
   }

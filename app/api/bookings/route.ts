@@ -8,6 +8,7 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { sendBookingConfirmation } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { checkFeatureAccess } from '@/lib/subscription';
 
 /**
  * GET - Get all bookings for a tenant
@@ -114,6 +115,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
         { status: 404 }
+      );
+    }
+
+    // Check if booking scheduling feature is enabled in subscription
+    try {
+      await checkFeatureAccess(tenantId.toString(), 'enableBookingScheduling');
+    } catch (featureError: any) {
+      return NextResponse.json(
+        { success: false, error: featureError.message },
+        { status: 403 }
       );
     }
 

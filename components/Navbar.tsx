@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react';
 import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { useSubscription } from '@/contexts/SubscriptionContext';
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -18,6 +19,16 @@ export default function Navbar() {
   const [dict, setDict] = useState<any>(null);
   const { user, logout, isAuthenticated, hasRole } = useAuth();
   const { settings } = useTenantSettings();
+
+  // Subscription context may not be available outside admin areas
+  let subscriptionStatus = null;
+  try {
+    const subscriptionContext = useSubscription();
+    subscriptionStatus = subscriptionContext.subscriptionStatus;
+  } catch (error) {
+    // SubscriptionProvider not available, subscriptionStatus remains null
+  }
+
   const primaryColor = settings?.primaryColor || '#2563eb';
   const isAdmin = user && (user.role === 'admin' || hasRole(['admin']));
 
@@ -435,6 +446,62 @@ export default function Navbar() {
                     {dict?.common?.switchStore || 'Switch Store'}
                   </Link>
                 </div>
+
+                {/* Subscription Details - Only show if subscription context is available */}
+                {subscriptionStatus && (
+                  <>
+                    <div className="border-t border-gray-200 my-2" />
+                    <div className="p-2">
+                      <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium text-gray-900">
+                            {dict?.common?.subscription || 'Subscription'}
+                          </span>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                            subscriptionStatus.isActive
+                              ? 'bg-green-100 text-green-800'
+                              : subscriptionStatus.isTrial && !subscriptionStatus.isTrialExpired
+                              ? 'bg-blue-100 text-blue-800'
+                              : 'bg-red-100 text-red-800'
+                          }`}>
+                            {subscriptionStatus.isActive
+                              ? dict?.common?.active || 'Active'
+                              : subscriptionStatus.isTrial && !subscriptionStatus.isTrialExpired
+                              ? dict?.common?.trial || 'Trial'
+                              : dict?.common?.expired || 'Expired'
+                            }
+                          </span>
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          <div className="font-medium">{subscriptionStatus.planName}</div>
+                          {subscriptionStatus.isTrial && subscriptionStatus.trialEndDate && (
+                            <div className="text-xs mt-1">
+                              {subscriptionStatus.isTrialExpired
+                                ? (dict?.common?.trialExpired || 'Trial expired')
+                                : `${Math.ceil((new Date(subscriptionStatus.trialEndDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} ${dict?.common?.daysLeft || 'days left'}`
+                              }
+                            </div>
+                          )}
+                          {subscriptionStatus.nextBillingDate && !subscriptionStatus.isTrial && (
+                            <div className="text-xs mt-1">
+                              {dict?.common?.nextBilling || 'Next billing'}: {new Date(subscriptionStatus.nextBillingDate).toLocaleDateString()}
+                            </div>
+                          )}
+                        </div>
+                        {isAdmin && (
+                          <Link
+                            href={`/${tenant}/${lang}/admin/subscriptions`}
+                            onClick={() => setDrawerOpen(false)}
+                            className="mt-2 block w-full text-center px-3 py-1.5 text-xs font-medium text-blue-600 hover:text-blue-500 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded transition-colors"
+                          >
+                            {dict?.common?.manageSubscription || 'Manage Subscription'}
+                          </Link>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+
                 <div className="border-t border-gray-200 my-2" />
                 <div className="p-2">
                   <button

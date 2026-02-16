@@ -7,6 +7,9 @@ import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '../dictionaries-client';
 import Currency from '@/components/Currency';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+
+const DEFAULT_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 interface SalesReport {
   period: string;
@@ -84,12 +87,13 @@ interface CashDrawerReport {
   netCash: number;
 }
 
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
-
 export default function ReportsPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
+  const { settings } = useTenantSettings();
+  const primaryColor = settings?.primaryColor || '#3b82f6';
+  const COLORS = [primaryColor, ...DEFAULT_COLORS.filter(c => c !== primaryColor)].slice(0, 5);
   const [dict, setDict] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'sales' | 'products' | 'vat' | 'profit-loss' | 'cash-drawer'>('sales');
@@ -283,7 +287,7 @@ export default function ReportsPage() {
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                  className="px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-[var(--primary-color)] focus:border-[var(--primary-color)] transition-all bg-white"
                 />
               </div>
               <div>
@@ -294,7 +298,7 @@ export default function ReportsPage() {
                   type="date"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                  className="px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-[var(--primary-color)] focus:border-[var(--primary-color)] transition-all bg-white"
                 />
               </div>
               {activeTab === 'sales' && (
@@ -305,7 +309,7 @@ export default function ReportsPage() {
                   <select
                     value={period}
                     onChange={(e) => setPeriod(e.target.value as any)}
-                    className="px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                    className="px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-[var(--primary-color)] focus:border-[var(--primary-color)] transition-all bg-white"
                   >
                     <option value="daily">{dict.reports?.daily || 'Daily'}</option>
                     <option value="weekly">{dict.reports?.weekly || 'Weekly'}</option>
@@ -326,9 +330,10 @@ export default function ReportsPage() {
                     onClick={() => setActiveTab(tab)}
                     className={`px-6 py-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
                       activeTab === tab
-                        ? 'border-blue-600 text-blue-600'
+                        ? 'border-transparent text-gray-900'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                     }`}
+                    style={activeTab === tab ? { borderBottomColor: primaryColor, color: primaryColor } : undefined}
                   >
                     {dict.reports?.tabs?.[tab] || tab.replace('-', ' ')}
                   </button>
@@ -340,14 +345,14 @@ export default function ReportsPage() {
             <div className="p-5 sm:p-6 lg:p-8">
               {loading ? (
                 <div className="flex items-center justify-center py-12">
-                  <div className="animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+                  <div className="animate-spin h-8 w-8 border-b-2" style={{ borderBottomColor: primaryColor }}></div>
                   <span className="ml-3 text-gray-600">{dict?.common?.loading || 'Loading...'}</span>
                 </div>
               ) : (
                 <>
                   {activeTab === 'sales' && (
                     salesReport ? (
-                      <SalesReportView report={salesReport} dict={dict} />
+                      <SalesReportView report={salesReport} dict={dict} primaryColor={primaryColor} colors={COLORS} />
                     ) : (
                       <div className="text-center py-16">
                         <svg className="mx-auto h-16 w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -359,7 +364,7 @@ export default function ReportsPage() {
                   )}
                   {activeTab === 'products' && (
                     productPerformance.length > 0 ? (
-                      <ProductPerformanceView data={productPerformance} dict={dict} />
+                      <ProductPerformanceView data={productPerformance} dict={dict} primaryColor={primaryColor} />
                     ) : (
                       <div className="text-center py-16">
                         <svg className="mx-auto h-16 w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -371,7 +376,7 @@ export default function ReportsPage() {
                   )}
                   {activeTab === 'vat' && (
                     vatReport ? (
-                      <VATReportView report={vatReport} dict={dict} />
+                      <VATReportView report={vatReport} dict={dict} primaryColor={primaryColor} />
                     ) : (
                       <div className="text-center py-16">
                         <svg className="mx-auto h-16 w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -383,7 +388,7 @@ export default function ReportsPage() {
                   )}
                   {activeTab === 'profit-loss' && (
                     profitLoss ? (
-                      <ProfitLossView summary={profitLoss} dict={dict} />
+                      <ProfitLossView summary={profitLoss} dict={dict} primaryColor={primaryColor} colors={COLORS} />
                     ) : (
                       <div className="text-center py-16">
                         <svg className="mx-auto h-16 w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -406,7 +411,7 @@ export default function ReportsPage() {
   );
 }
 
-function SalesReportView({ report, dict }: { report: SalesReport; dict: any }) {
+function SalesReportView({ report, dict, primaryColor, colors }: { report: SalesReport; dict: any; primaryColor: string; colors: string[] }) {
   const paymentMethodData = [
     { name: dict.pos?.cash || 'Cash', value: report.salesByPaymentMethod.cash },
     { name: dict.pos?.card || 'Card', value: report.salesByPaymentMethod.card },
@@ -462,7 +467,7 @@ function SalesReportView({ report, dict }: { report: SalesReport; dict: any }) {
                   }}
                 />
                 <Legend />
-                <Line type="monotone" dataKey="sales" stroke="#3b82f6" strokeWidth={2} name={dict.reports?.sales || 'Sales'} />
+                <Line type="monotone" dataKey="sales" stroke={primaryColor} strokeWidth={2} name={dict.reports?.sales || 'Sales'} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -485,12 +490,12 @@ function SalesReportView({ report, dict }: { report: SalesReport; dict: any }) {
                 dataKey="value"
               >
                 {paymentMethodData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
                 ))}
               </Pie>
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: '#fff', 
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#fff',
                   border: '1px solid #e5e7eb',
                   borderRadius: '8px',
                   boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
@@ -504,7 +509,7 @@ function SalesReportView({ report, dict }: { report: SalesReport; dict: any }) {
   );
 }
 
-function ProductPerformanceView({ data, dict }: { data: ProductPerformance[]; dict: any }) {
+function ProductPerformanceView({ data, dict, primaryColor }: { data: ProductPerformance[]; dict: any; primaryColor: string }) {
   return (
     <div className="space-y-6">
       <div className="bg-white border border-gray-300 p-5 sm:p-6">
@@ -525,7 +530,7 @@ function ProductPerformanceView({ data, dict }: { data: ProductPerformance[]; di
               }}
             />
             <Legend />
-            <Bar dataKey="totalRevenue" fill="#3b82f6" name={dict.reports?.revenue || 'Revenue'} />
+            <Bar dataKey="totalRevenue" fill={primaryColor} name={dict.reports?.revenue || 'Revenue'} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -578,7 +583,7 @@ function ProductPerformanceView({ data, dict }: { data: ProductPerformance[]; di
   );
 }
 
-function VATReportView({ report, dict }: { report: VATReport; dict: any }) {
+function VATReportView({ report, dict, primaryColor }: { report: VATReport; dict: any; primaryColor: string }) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
@@ -633,7 +638,7 @@ function VATReportView({ report, dict }: { report: VATReport; dict: any }) {
               fill="#8884d8"
               dataKey="value"
             >
-              <Cell fill="#3b82f6" />
+              <Cell fill={primaryColor} />
               <Cell fill="#10b981" />
             </Pie>
             <Tooltip 
@@ -651,7 +656,7 @@ function VATReportView({ report, dict }: { report: VATReport; dict: any }) {
   );
 }
 
-function ProfitLossView({ summary, dict }: { summary: ProfitLossSummary; dict: any }) {
+function ProfitLossView({ summary, dict, primaryColor, colors }: { summary: ProfitLossSummary; dict: any; primaryColor: string; colors: string[] }) {
   const expenseData = summary.expenses.byCategory.map((cat) => ({
     name: cat.category,
     value: cat.amount,
@@ -719,7 +724,7 @@ function ProfitLossView({ summary, dict }: { summary: ProfitLossSummary; dict: a
                 boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
               }}
             />
-            <Bar dataKey="value" fill="#3b82f6" />
+            <Bar dataKey="value" fill={primaryColor} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -743,12 +748,12 @@ function ProfitLossView({ summary, dict }: { summary: ProfitLossSummary; dict: a
                 dataKey="value"
               >
                 {expenseData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
                 ))}
               </Pie>
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: '#fff', 
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#fff',
                   border: '1px solid #e5e7eb',
                   borderRadius: '8px',
                   boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'

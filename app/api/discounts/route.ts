@@ -5,6 +5,7 @@ import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
 import { requireAuth, requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { checkFeatureAccess } from '@/lib/subscription';
 
 export async function GET(request: NextRequest) {
   try {
@@ -30,7 +31,7 @@ export async function GET(request: NextRequest) {
     const code = searchParams.get('code');
     const activeOnly = searchParams.get('activeOnly') === 'true';
 
-    let query: any = { tenantId };
+    const query: any = { tenantId };
     
     if (code) {
       query.code = code.toUpperCase();
@@ -70,8 +71,19 @@ export async function POST(request: NextRequest) {
       }
       throw authError;
     }
+
+    // Check if discounts feature is enabled in subscription
+    try {
+      await checkFeatureAccess(tenantId.toString(), 'enableDiscounts');
+    } catch (featureError: any) {
+      return NextResponse.json(
+        { success: false, error: featureError.message },
+        { status: 403 }
+      );
+    }
+
     const t = await getValidationTranslatorFromRequest(request);
-    
+
     const body = await request.json();
     const {
       code,

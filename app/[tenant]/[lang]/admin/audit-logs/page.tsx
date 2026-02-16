@@ -17,10 +17,10 @@ interface AuditLog {
   action: string;
   entityType: string;
   entityId?: string;
-  changes?: Record<string, any>;
+  changes?: Record<string, unknown>;
   ipAddress?: string;
   userAgent?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   createdAt: string;
 }
 
@@ -58,6 +58,7 @@ export default function AuditLogsPage() {
     getDictionaryClient(lang).then(setDict);
     fetchUsers();
     fetchAuditLogs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang, tenant]);
 
   useEffect(() => {

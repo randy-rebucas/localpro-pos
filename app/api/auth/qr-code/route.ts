@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
 
     // Generate QR token if it doesn't exist
     if (!userDoc.qrToken) {
-      const newQrToken = user.userId + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 15);
+      const newQrToken = require('crypto').randomBytes(32).toString('hex');
       await User.findByIdAndUpdate(user.userId, { qrToken: newQrToken });
       userDoc.qrToken = newQrToken;
     }
@@ -38,12 +38,12 @@ export async function GET(request: NextRequest) {
         email: userDoc.email,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Get QR code error:', error);
-    const errorMessage = error.message || 'Failed to get QR code';
+    const errorMessage = (error as Error).message || 'Failed to get QR code';
     return NextResponse.json(
       { success: false, error: errorMessage },
-      { status: error.message === 'Unauthorized' ? 401 : 500 }
+      { status: (error as Error).message === 'Unauthorized' ? 401 : 500 }
     );
   }
 }
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
     t = await getValidationTranslatorFromRequest(request);
 
     // Generate new QR token (or create if doesn't exist)
-    const newQrToken = user.userId + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 15);
+    const newQrToken = require('crypto').randomBytes(32).toString('hex');
     
     await User.findByIdAndUpdate(user.userId, { qrToken: newQrToken });
 
@@ -69,12 +69,12 @@ export async function POST(request: NextRequest) {
         qrToken: newQrToken,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Generate/Regenerate QR code error:', error);
-    const errorMessage = error.message || 'Failed to generate QR code';
+    const errorMessage = (error as Error).message || 'Failed to generate QR code';
     return NextResponse.json(
       { success: false, error: errorMessage },
-      { status: error.message === 'Unauthorized' ? 401 : 500 }
+      { status: (error as Error).message === 'Unauthorized' ? 401 : 500 }
     );
   }
 }

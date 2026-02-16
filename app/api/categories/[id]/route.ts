@@ -64,9 +64,9 @@ export async function PUT(
 
     const oldData = category.toObject();
 
-    if (data.name) category.name = data.name;
-    if (data.description !== undefined) category.description = data.description;
-    if (data.isActive !== undefined) category.isActive = data.isActive;
+    if (Object.prototype.hasOwnProperty.call(data, 'name') && typeof data.name === 'string') category.name = data.name;
+    if (Object.prototype.hasOwnProperty.call(data, 'description') && (typeof data.description === 'string' || typeof data.description === 'undefined')) category.description = data.description;
+    if (Object.prototype.hasOwnProperty.call(data, 'isActive') && typeof data.isActive === 'boolean') category.isActive = data.isActive;
 
     await category.save();
 

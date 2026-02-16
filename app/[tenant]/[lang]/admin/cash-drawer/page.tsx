@@ -36,6 +36,7 @@ export default function CashDrawerPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const { settings } = useTenantSettings();
 
+   
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
     fetchSessions();
@@ -110,23 +111,23 @@ export default function CashDrawerPage() {
               onChange={(e) => setStatusFilter(e.target.value)}
               className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
             >
-              <option value="">All Sessions</option>
-              <option value="open">Open Sessions</option>
-              <option value="closed">Closed Sessions</option>
+              <option value="">{dict.admin?.allSessions || 'All Sessions'}</option>
+              <option value="open">{dict.admin?.openSessions || 'Open Sessions'}</option>
+              <option value="closed">{dict.admin?.closedSessions || 'Closed Sessions'}</option>
             </select>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Opening Time</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Opening Amount</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Closing Time</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Expected Amount</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Closing Amount</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Difference</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.user || 'User'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.openingTime || 'Opening Time'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.openingAmount || 'Opening Amount'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.closingTime || 'Closing Time'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.expectedAmount || 'Expected Amount'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.closingAmount || 'Closing Amount'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.difference || 'Difference'}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.status || 'Status'}</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.actions || 'Actions'}</th>
                 </tr>
               </thead>
@@ -159,8 +160,8 @@ export default function CashDrawerPage() {
                         {difference !== null ? (
                           <span className={difference >= 0 ? 'text-green-600' : 'text-red-600'}>
                             {difference >= 0 ? '+' : ''}<Currency amount={Math.abs(difference)} />
-                            {session.shortage && <div className="text-xs text-red-600">Shortage: <Currency amount={session.shortage} /></div>}
-                            {session.overage && <div className="text-xs text-green-600">Overage: <Currency amount={session.overage} /></div>}
+                            {session.shortage && <div className="text-xs text-red-600">{dict.admin?.shortage || 'Shortage'}: <Currency amount={session.shortage} /></div>}
+                            {session.overage && <div className="text-xs text-green-600">{dict.admin?.overage || 'Overage'}: <Currency amount={session.overage} /></div>}
                           </span>
                         ) : '-'}
                       </td>
@@ -168,7 +169,7 @@ export default function CashDrawerPage() {
                         <span className={`px-2 py-1 text-xs font-semibold border ${
                           session.status === 'open' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
                         }`}>
-                          {session.status}
+                          {session.status === 'open' ? (dict.admin?.open || 'Open') : (dict.admin?.closed || 'Closed')}
                         </span>
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
@@ -209,7 +210,7 @@ function CashDrawerDetailModal({
 }: {
   session: CashDrawerSession;
   onClose: () => void;
-  dict: any;
+  dict: Record<string, Record<string, string>> | null;
 }) {
   const userName = typeof session.userId === 'object' ? session.userId.name : 'Unknown';
   const userEmail = typeof session.userId === 'object' ? session.userId.email : '';
@@ -220,7 +221,7 @@ function CashDrawerDetailModal({
         <div className="p-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-bold text-gray-900">
-              {dict.admin?.cashDrawerDetails || 'Cash Drawer Session Details'}
+              {dict?.admin?.cashDrawerDetails || 'Cash Drawer Session Details'}
             </h2>
             <button
               onClick={onClose}
@@ -234,29 +235,29 @@ function CashDrawerDetailModal({
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-medium text-gray-500">User</label>
+                <label className="text-sm font-medium text-gray-500">{dict?.admin?.user || 'User'}</label>
                 <div className="text-lg">{userName}</div>
                 {userEmail && <div className="text-sm text-gray-500">{userEmail}</div>}
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-500">Status</label>
+                <label className="text-sm font-medium text-gray-500">{dict?.admin?.status || 'Status'}</label>
                 <div>
                   <span className={`px-2 py-1 text-xs font-semibold border ${
                     session.status === 'open' ? 'bg-green-100 text-green-800 border-green-300' : 'bg-gray-100 text-gray-800 border-gray-300'
                   }`}>
-                    {session.status}
+                    {session.status === 'open' ? (dict?.admin?.open || 'Open') : (dict?.admin?.closed || 'Closed')}
                   </span>
                 </div>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-medium text-gray-500">Opening Time</label>
+                <label className="text-sm font-medium text-gray-500">{dict?.admin?.openingTime || 'Opening Time'}</label>
                 <div className="text-lg">{new Date(session.openingTime).toLocaleString()}</div>
               </div>
               {session.closingTime && (
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Closing Time</label>
+                  <label className="text-sm font-medium text-gray-500">{dict?.admin?.closingTime || 'Closing Time'}</label>
                   <div className="text-lg">{new Date(session.closingTime).toLocaleString()}</div>
                 </div>
               )}
@@ -312,7 +313,7 @@ function CashDrawerDetailModal({
               onClick={onClose}
               className="px-4 py-2 bg-gray-200 text-gray-700 hover:bg-gray-300 border border-gray-400"
             >
-              {dict.common?.close || 'Close'}
+              {dict?.common?.close || 'Close'}
             </button>
           </div>
         </div>

@@ -5,8 +5,6 @@ import Navbar from '@/components/Navbar';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
-import { useAuth } from '@/contexts/AuthContext';
-
 interface Branch {
   _id: string;
   name: string;
@@ -40,7 +38,7 @@ export default function BranchesPage() {
   const router = useRouter();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<Record<string, any> | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,7 +50,9 @@ export default function BranchesPage() {
     getDictionaryClient(lang).then(setDict);
     fetchBranches();
     fetchUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang, tenant]);
+  
 
   const fetchBranches = async () => {
     try {
@@ -98,7 +98,7 @@ export default function BranchesPage() {
       } else {
         setMessage({ type: 'error', text: data.error || dict?.common?.failedToDeactivateBranch || 'Failed to deactivate branch' });
       }
-    } catch (error) {
+    } catch {
       setMessage({ type: 'error', text: dict?.common?.failedToDeactivateBranch || 'Failed to deactivate branch' });
     }
   };
@@ -118,7 +118,7 @@ export default function BranchesPage() {
       } else {
         setMessage({ type: 'error', text: data.error || dict?.common?.failedToUpdateBranch || 'Failed to update branch' });
       }
-    } catch (error) {
+    } catch {
       setMessage({ type: 'error', text: dict?.common?.failedToUpdateBranch || 'Failed to update branch' });
     }
   };
@@ -128,7 +128,7 @@ export default function BranchesPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+          <p className="mt-4 text-gray-600">Loading...</p>
         </div>
       </div>
     );
@@ -276,7 +276,7 @@ function BranchModal({
   users: User[];
   onClose: () => void;
   onSave: () => void;
-  dict: any;
+  dict: Record<string, Record<string, string>> | null;
 }) {
   const [formData, setFormData] = useState({
     name: branch?.name || '',
@@ -304,7 +304,7 @@ function BranchModal({
     try {
       const url = branch ? `/api/branches/${branch._id}` : '/api/branches';
       const method = branch ? 'PUT' : 'POST';
-      const body: any = {
+      const body: Record<string, unknown> = {
         name: formData.name,
         code: formData.code || undefined,
         address: formData.address.street || formData.address.city ? formData.address : undefined,
@@ -326,7 +326,7 @@ function BranchModal({
       } else {
         setError(data.error || 'Failed to save branch');
       }
-    } catch (error) {
+    } catch {
       setError('Failed to save branch');
     } finally {
       setSaving(false);
@@ -338,13 +338,13 @@ function BranchModal({
       <div className="bg-white border border-gray-300 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
-            {branch ? (dict.admin?.editBranch || 'Edit Branch') : (dict.admin?.addBranch || 'Add Branch')}
+            {branch ? (dict?.admin?.editBranch || 'Edit Branch') : (dict?.admin?.addBranch || 'Add Branch')}
           </h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.name || 'Name'} *
+                  {dict?.admin?.name || 'Name'} *
                 </label>
                 <input
                   type="text"
@@ -356,7 +356,7 @@ function BranchModal({
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.code || 'Code'} (optional)
+                  {dict?.admin?.code || 'Code'} (optional)
                 </label>
                 <input
                   type="text"
@@ -369,7 +369,7 @@ function BranchModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.address || 'Address'}
+                {dict?.admin?.address || 'Address'}
               </label>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <input
@@ -412,7 +412,7 @@ function BranchModal({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.phone || 'Phone'}
+                  {dict?.admin?.phone || 'Phone'}
                 </label>
                 <input
                   type="tel"
@@ -423,7 +423,7 @@ function BranchModal({
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.email || 'Email'}
+                  {dict?.admin?.email || 'Email'}
                 </label>
                 <input
                   type="email"
@@ -435,14 +435,14 @@ function BranchModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.manager || 'Manager'} (optional)
+                {dict?.admin?.manager || 'Manager'} (optional)
               </label>
               <select
                 value={formData.managerId}
                 onChange={(e) => setFormData({ ...formData, managerId: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               >
-                <option value="">{dict.common?.select || 'Select Manager'}</option>
+                <option value="">{dict?.common?.select || 'Select Manager'}</option>
                 {users.map((u) => (
                   <option key={u._id} value={u._id}>
                     {u.name} ({u.email})
@@ -461,14 +461,14 @@ function BranchModal({
                 onClick={onClose}
                 className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
               >
-                {dict.common?.cancel || 'Cancel'}
+                {dict?.common?.cancel || 'Cancel'}
               </button>
               <button
                 type="submit"
                 disabled={saving}
                 className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
               >
-                {saving ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
+                {saving ? (dict?.common?.loading || 'Saving...') : (dict?.common?.save || 'Save')}
               </button>
             </div>
           </form>
