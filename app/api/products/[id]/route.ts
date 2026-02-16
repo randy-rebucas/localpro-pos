@@ -76,7 +76,20 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       const oldProduct = await Product.findOne({ _id: id, tenantId }).lean();
       if (oldProduct) {
         const mergedData = { ...oldProduct, ...data };
-        const businessValidation = validateProductForBusiness(mergedData, tenantSettings);
+        // Remove Mongoose internals before validation
+        const {
+          _id,
+          tenantId,
+          __v,
+          createdAt,
+          updatedAt,
+          collection,
+          db,
+          isNew,
+          errors: docErrors,
+          ...plainProduct
+        } = mergedData as any;
+        const businessValidation = validateProductForBusiness(plainProduct, tenantSettings);
         if (!businessValidation.valid) {
           return NextResponse.json(
             {
