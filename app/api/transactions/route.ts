@@ -5,7 +5,6 @@ import Payment from '@/models/Payment';
 import Product from '@/models/Product';
 import Discount from '@/models/Discount';
 import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
-import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateAndSanitize, validateTransaction } from '@/lib/validation';
 import { generateReceiptNumber } from '@/lib/receipt';
@@ -16,6 +15,53 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 import { getTenantSettingsById } from '@/lib/tenant';
 import { SubscriptionService } from '@/lib/subscription';
 import { calculateTax } from '@/lib/tax-calculation';
+
+interface VariationInput {
+  size?: string;
+  color?: string;
+  type?: string;
+}
+
+interface TransactionItemInput {
+  productId?: string;
+  quantity: number;
+  variation?: VariationInput;
+  bundleId?: string;
+}
+
+interface PaymentInput {
+  method: 'cash' | 'card' | 'digital' | 'check' | 'other';
+  amount: number;
+  cashReceived?: number;
+  change?: number;
+  provider?: string;
+  transactionId?: string;
+  cardLast4?: string;
+  cardType?: string;
+  cardBrand?: string;
+  checkNumber?: string;
+  notes?: string;
+}
+
+interface TransactionInput {
+  items: TransactionItemInput[];
+  paymentMethod: string;
+  cashReceived?: number;
+  notes?: string;
+  discountCode?: string;
+  branchId?: string;
+  payments?: PaymentInput[];
+}
+
+interface TransactionItemRecord {
+  product: unknown;
+  name: string;
+  price: number;
+  quantity: number;
+  subtotal: number;
+  bundleId?: unknown;
+  categoryId?: string;
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -50,8 +96,9 @@ export async function GET(request: NextRequest) {
         pages: Math.ceil(total / limit),
       },
     });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Internal server error';
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
 
@@ -65,11 +112,12 @@ export async function POST(request: NextRequest) {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
       user = tenantAccess.user;
-    } catch (authError: any) {
-      if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
+    } catch (authError: unknown) {
+      const authMessage = authError instanceof Error ? authError.message : '';
+      if (authMessage.includes('Unauthorized') || authMessage.includes('Forbidden')) {
         return NextResponse.json(
-          { success: false, error: authError.message },
-          { status: authError.message.includes('Unauthorized') ? 401 : 403 }
+          { success: false, error: authMessage },
+          { status: authMessage.includes('Unauthorized') ? 401 : 403 }
         );
       }
       throw authError;
@@ -86,7 +134,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { items, paymentMethod, cashReceived, notes, discountCode, branchId, payments } = data;
+    const { items, paymentMethod, cashReceived, notes, discountCode, branchId, payments } = data as unknown as TransactionInput;
 
     // Get tenant settings to check feature flags
     const tenantSettings = await getTenantSettingsById(tenantId);
@@ -107,10 +155,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate and process items
-    const transactionItems = [];
+    const transactionItems: TransactionItemRecord[] = [];
     let subtotal = 0;
 
-    for (const item of typedItems) {
+    for (const item of items) {
       const { productId, quantity, variation, bundleId } = item;
 
       // Handle bundles
@@ -302,9 +350,9 @@ export async function POST(request: NextRequest) {
     // Calculate tax (if applicable)
     let taxAmount = 0;
     if (typeof calculateTax === 'function') {
-      const taxItems = transactionItems.map((item: any) => ({
-        productId: item.product ? item.product.toString() : undefined,
-        productType: item.bundleId ? 'bundle' as 'bundle' : 'regular' as 'regular',
+      const taxItems = transactionItems.map((item) => ({
+        productId: item.product ? String(item.product) : undefined,
+        productType: item.bundleId ? ('bundle' as const) : ('regular' as const),
         categoryId: item.categoryId ? item.categoryId.toString() : undefined,
       }));
       const taxResult = await calculateTax(tenantId, subtotalAfterDiscount, taxItems, tenantSettings ?? undefined);
@@ -317,9 +365,9 @@ export async function POST(request: NextRequest) {
     // Handle multiple payments (split payments)
     if (isMultiplePayments) {
       // Validate that all payments sum to total
-      const paymentsTotal = payments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+      const paymentsTotal = payments.reduce((sum: number, p: PaymentInput) => sum + (p.amount || 0), 0);
       const tolerance = 0.01; // Allow small rounding differences
-      
+
       if (Math.abs(paymentsTotal - total) > tolerance) {
         return NextResponse.json(
           { success: false, error: t('validation.paymentsMustEqualTotal', `Payments total (${paymentsTotal.toFixed(2)}) must equal transaction total (${total.toFixed(2)})`) },
@@ -328,16 +376,16 @@ export async function POST(request: NextRequest) {
       }
 
       // Determine primary payment method (use the first payment or the one with largest amount)
-      const primaryPayment = payments.reduce((prev: any, current: any) => 
+      const primaryPayment = payments.reduce((prev: PaymentInput, current: PaymentInput) =>
         (current.amount > (prev.amount || 0)) ? current : prev
       );
       finalPaymentMethod = primaryPayment.method || 'cash';
-      
+
       // Calculate cash totals if any cash payment exists
-      const cashPayments = payments.filter((p: any) => p.method === 'cash');
+      const cashPayments = payments.filter((p: PaymentInput) => p.method === 'cash');
       if (cashPayments.length > 0) {
-        finalCashReceived = cashPayments.reduce((sum: number, p: any) => sum + (p.cashReceived || p.amount || 0), 0);
-        finalChange = cashPayments.reduce((sum: number, p: any) => sum + (p.change || 0), 0);
+        finalCashReceived = cashPayments.reduce((sum: number, p: PaymentInput) => sum + (p.cashReceived || p.amount || 0), 0);
+        finalChange = cashPayments.reduce((sum: number, p: PaymentInput) => sum + (p.change || 0), 0);
       }
     } else {
       // Single payment method (existing logic)
@@ -352,7 +400,7 @@ export async function POST(request: NextRequest) {
 
     // Update stock BEFORE creating transaction (critical - must succeed)
     // Use the original items array to get productId and quantity
-    for (const item of typedItems) {
+    for (const item of items) {
       const { productId, quantity, variation, bundleId } = item;
 
       // Skip if no productId (shouldn't happen, but safety check)
@@ -394,11 +442,12 @@ export async function POST(request: NextRequest) {
             );
           }
         }
-      } catch (error: any) {
+      } catch (stockError: unknown) {
         // Stock update is critical - fail the entire transaction
-        console.error(`CRITICAL: Error updating stock for item ${productId || bundleId}:`, error.message || error);
-        console.error('Full error:', error);
-        throw new Error(`Failed to update stock for ${productId || bundleId}: ${error.message || error}`);
+        const stockMessage = stockError instanceof Error ? stockError.message : String(stockError);
+        console.error(`CRITICAL: Error updating stock for item ${productId || bundleId}:`, stockMessage);
+        console.error('Full error:', stockError);
+        throw new Error(`Failed to update stock for ${productId || bundleId}: ${stockMessage}`);
       }
     }
 
@@ -425,7 +474,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Update stock movements with transaction ID (now that transaction exists)
-    for (const item of typedItems) {
+    for (const item of items) {
       const { productId, bundleId } = item;
       if (productId || bundleId) {
         // Update the stock movement records with transaction ID
@@ -450,7 +499,7 @@ export async function POST(request: NextRequest) {
         if (isMultiplePayments) {
           // Create multiple payment records for split payments
           for (const payment of payments) {
-            const paymentDetails: any = {};
+            const paymentDetails: Record<string, unknown> = {};
             
             if (payment.method === 'cash') {
               paymentDetails.cashReceived = payment.cashReceived || payment.amount;
@@ -484,7 +533,7 @@ export async function POST(request: NextRequest) {
           }
         } else {
           // Single payment method (existing logic)
-          const paymentDetails: any = {};
+          const paymentDetails: Record<string, unknown> = {};
           if (finalPaymentMethod === 'cash') {
             paymentDetails.cashReceived = finalCashReceived;
             paymentDetails.change = finalChange;
@@ -526,7 +575,7 @@ export async function POST(request: NextRequest) {
         total,
         itemsCount: transactionItems.length,
         paymentCount: paymentRecords.length,
-        paymentIds: paymentRecords.map((p: any) => p._id.toString()),
+        paymentIds: paymentRecords.map((p: { _id: { toString(): string } }) => p._id.toString()),
         isMultiplePayments: isMultiplePayments,
       },
     });
@@ -549,9 +598,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Include payment records in response if created
-    const responseData: any = transaction.toObject ? transaction.toObject() : transaction;
+    const responseData = transaction.toObject ? transaction.toObject() : transaction;
     if (paymentRecords.length > 0) {
-      responseData.payments = paymentRecords.map((p: any) => ({
+      (responseData as unknown as Record<string, unknown>).payments = paymentRecords.map((p: { _id: unknown; method: string; amount: number; status: string }) => ({
         _id: p._id,
         method: p.method,
         amount: p.amount,
@@ -560,8 +609,9 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true, data: responseData }, { status: 201 });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Transaction failed';
+    return NextResponse.json({ success: false, error: message }, { status: 400 });
   }
 }
 

@@ -8,7 +8,8 @@
       "Bash(pnpm run lint)",
       "Bash(pnpm run lint:*)",
       "Bash(npx eslint:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(npm run lint)"
     ]
   }
 }
