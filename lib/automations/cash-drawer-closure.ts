@@ -139,7 +139,7 @@ export async function autoCloseCashDrawers(
             // Send summary report to managers
             if (tenantSettings?.emailNotifications && tenantSettings?.email) {
               const companyName = tenantSettings?.companyName || tenant.name || 'Business';
-              const user = session.userId as any;
+              const user = session.userId as any; // eslint-disable-line @typescript-eslint/no-explicit-any
               
               const reportHtml = `
 <!DOCTYPE html>
@@ -246,12 +246,12 @@ This is an automated security alert from your POS system.`,
                 });
               }
             }
-          } catch (error: any) {
+          } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             totalFailed++;
             results.errors?.push(`Session ${session._id}: ${error.message}`);
           }
         }
-      } catch (error: any) {
+      } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         totalFailed++;
         results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
       }
@@ -262,7 +262,7 @@ This is an automated security alert from your POS system.`,
     results.message = `Auto-closed ${totalProcessed} cash drawers${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     results.success = false;
     results.message = `Error auto-closing cash drawers: ${error.message}`;
     results.errors?.push(error.message);

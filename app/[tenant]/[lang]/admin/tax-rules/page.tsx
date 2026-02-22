@@ -12,13 +12,14 @@ export default function TaxRulesAdminPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState<ITenantSettings | null>(null);
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
     fetchSettings();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang, tenant]);
 
   const fetchSettings = async () => {

@@ -7,7 +7,7 @@ import connectDB from '@/lib/mongodb';
 import Attendance from '@/models/Attendance';
 import CashDrawerSession from '@/models/CashDrawerSession';
 import Tenant from '@/models/Tenant';
-import User from '@/models/User';
+import User from '@/models/User'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { sendEmail, sendSMS } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { AutomationResult } from './types';
@@ -76,7 +76,7 @@ export async function sendCashCountReminders(
 
         for (const session of activeSessions) {
           try {
-            const user = session.userId as any;
+            const user = session.userId as any; // eslint-disable-line @typescript-eslint/no-explicit-any
             if (!user) continue;
 
             // Estimate shift end time (8 hours from clock-in, or use tenant settings)
@@ -128,12 +128,12 @@ ${companyName}`;
                 totalReminders++;
               }
             }
-          } catch (error: any) {
+          } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             totalFailed++;
             results.errors?.push(`Session ${session._id}: ${error.message}`);
           }
         }
-      } catch (error: any) {
+      } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         totalFailed++;
         results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
       }
@@ -144,7 +144,7 @@ ${companyName}`;
     results.message = `Sent ${totalReminders} cash count reminders${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     results.success = false;
     results.message = `Error sending cash count reminders: ${error.message}`;
     results.errors?.push(error.message);

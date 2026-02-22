@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState } from 'react'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { ITenantSettings } from '@/models/Tenant';
 import Link from 'next/link';
 

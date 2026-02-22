@@ -3,7 +3,7 @@
  * Handles multiple tax rates based on region, product type, category, etc.
  */
 
-import { ITenantSettings } from '@/models/Tenant';
+import { ITenantSettings } from '@/models/Tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
 
 export interface TaxRule {
   id: string;

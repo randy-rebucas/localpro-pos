@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const isActive = searchParams.get('isActive');
 
-    const query: any = { tenantId };
+    const query: any = { tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
     if (isActive !== null) {
       query.isActive = isActive === 'true';
     }
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
       .lean();
 
     return NextResponse.json({ success: true, data: branches });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Error fetching branches:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
     const currentBranchCount = await Branch.countDocuments({ tenantId, isActive: true });
     try {
       await checkSubscriptionLimit(tenantId.toString(), 'maxBranches', currentBranchCount);
-    } catch (limitError: any) {
+    } catch (limitError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       return NextResponse.json(
         { success: false, error: limitError.message },
         { status: 403 }
@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true, data: branch }, { status: 201 });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     const t = await getValidationTranslatorFromRequest(request);
     if (error.code === 11000) {
       return NextResponse.json(

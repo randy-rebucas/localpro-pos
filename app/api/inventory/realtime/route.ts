@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
         const encoder = new TextEncoder();
 
         // Send initial connection message
-        const send = (data: any) => {
+        const send = (data: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
           const message = `data: ${JSON.stringify(data)}\n\n`;
           controller.enqueue(encoder.encode(message));
         };
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
         
         const pollInterval = setInterval(async () => {
           try {
-            const query: any = {
+            const query: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
               tenantId,
               createdAt: { $gt: lastCheck },
             };
@@ -110,7 +110,7 @@ export async function GET(request: NextRequest) {
         'X-Accel-Buffering': 'no', // Disable buffering in nginx
       },
     });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Error setting up real-time stock tracking:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return new Response(t('validation.internalServerError', 'Internal server error'), { status: 500 });

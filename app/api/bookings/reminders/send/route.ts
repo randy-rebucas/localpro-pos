@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
           bookingId: booking._id.toString(),
           success: true,
         });
-      } catch (error: any) {
+      } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         results.failed++;
         results.details.push({
           bookingId: booking._id.toString(),
@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
       message: `Processed ${results.total} bookings`,
       results,
     });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Send reminders error:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(

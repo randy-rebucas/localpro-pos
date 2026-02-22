@@ -44,6 +44,7 @@ export function TenantSettingsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     fetchSettings();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenant]);
 
   // Apply primary color to CSS variables

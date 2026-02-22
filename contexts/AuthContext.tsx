@@ -72,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         return { success: false, error: data.error || 'Login failed' };
       }
-    } catch (error: any) {
+    } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       return { success: false, error: error.message || 'Login failed' };
     }
   };
@@ -107,7 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         return { success: false, error: data.error || 'Login failed' };
       }
-    } catch (error: any) {
+    } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       return { success: false, error: error.message || 'Login failed' };
     }
   };
@@ -128,7 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         return { success: false, error: data.error || 'Login failed' };
       }
-    } catch (error: any) {
+    } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       return { success: false, error: error.message || 'Login failed' };
     }
   };

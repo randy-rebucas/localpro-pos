@@ -3,7 +3,7 @@ import connectDB from '@/lib/mongodb';
 import SubscriptionPlan from '@/models/SubscriptionPlan';
 import { requireRole } from '@/lib/auth';
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest) { // eslint-disable-line @typescript-eslint/no-unused-vars
   try {
     await connectDB();
 

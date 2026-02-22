@@ -16,7 +16,7 @@ export default function Navbar() {
   const lang = params?.lang as 'en' | 'es' || 'en';
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const { user, logout, isAuthenticated, hasRole } = useAuth();
   const { settings } = useTenantSettings();
 
@@ -90,6 +90,7 @@ export default function Navbar() {
     ...conditionalNavItems.filter(item => {
       if (!item.featureFlag) return true;
       if (!settings) return true; // Show by default if settings not loaded yet
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return (settings as any)[item.featureFlag] !== false; // Show if enabled or undefined (default enabled)
     }),
   ];

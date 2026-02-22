@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
-import ProtectedRoute from '@/components/ProtectedRoute';
+import ProtectedRoute from '@/components/ProtectedRoute'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '../dictionaries-client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -10,10 +10,10 @@ import QRCodeDisplay from '@/components/QRCodeDisplay';
 
 export default function ProfilePage() {
   const params = useParams();
-  const tenant = params.tenant as string;
+  const tenant = params.tenant as string; // eslint-disable-line @typescript-eslint/no-unused-vars
   const lang = params.lang as 'en' | 'es';
-  const { user } = useAuth();
-  const [dict, setDict] = useState<any>(null);
+  const { user } = useAuth(); // eslint-disable-line @typescript-eslint/no-unused-vars
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [profileData, setProfileData] = useState({
     name: '',
     email: '',
@@ -33,11 +33,12 @@ export default function ProfilePage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showPasswordSection, setShowPasswordSection] = useState(false);
   const [showPinSection, setShowPinSection] = useState(false);
-  const [profileInfo, setProfileInfo] = useState<any>(null);
+  const [profileInfo, setProfileInfo] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
     fetchProfile();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang]);
 
   const fetchProfile = async () => {

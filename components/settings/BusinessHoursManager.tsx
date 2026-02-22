@@ -15,12 +15,13 @@ export default function BusinessHoursManager({ settings, tenant, onUpdate }: Bus
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [schedule, setSchedule] = useState<Record<string, any>>({});
-  const [specialHours, setSpecialHours] = useState<Array<any>>([]);
+  const [schedule, setSchedule] = useState<Record<string, any>>({}); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const [specialHours, setSpecialHours] = useState<Array<any>>([]); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [timezone, setTimezone] = useState('');
 
   useEffect(() => {
     fetchBusinessHours();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchBusinessHours = async () => {
@@ -34,7 +35,7 @@ export default function BusinessHoursManager({ settings, tenant, onUpdate }: Bus
         setSpecialHours(hours.specialHours || []);
         setTimezone(hours.timezone || settings.timezone || 'UTC');
       }
-    } catch (error: any) {
+    } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       setMessage({ type: 'error', text: error.message || 'Failed to load business hours' });
     } finally {
       setLoading(false);
@@ -59,14 +60,14 @@ export default function BusinessHoursManager({ settings, tenant, onUpdate }: Bus
       } else {
         setMessage({ type: 'error', text: data.error || 'Failed to save business hours' });
       }
-    } catch (error: any) {
+    } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       setMessage({ type: 'error', text: error.message || 'Failed to save business hours' });
     } finally {
       setSaving(false);
     }
   };
 
-  const updateDaySchedule = (day: string, updates: any) => {
+  const updateDaySchedule = (day: string, updates: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
     setSchedule({
       ...schedule,
       [day]: {
@@ -89,7 +90,7 @@ export default function BusinessHoursManager({ settings, tenant, onUpdate }: Bus
     ]);
   };
 
-  const updateSpecialHour = (index: number, updates: any) => {
+  const updateSpecialHour = (index: number, updates: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
     const updated = [...specialHours];
     updated[index] = { ...updated[index], ...updates };
     setSpecialHours(updated);

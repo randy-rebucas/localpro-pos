@@ -6,7 +6,7 @@
 import connectDB from '@/lib/mongodb';
 import Attendance from '@/models/Attendance';
 import Tenant from '@/models/Tenant';
-import User from '@/models/User';
+import User from '@/models/User'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { sendEmail } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { AutomationResult } from './types';
@@ -135,7 +135,7 @@ export async function autoClockOutForgottenSessions(
               totalProcessed++;
 
               // Send notification to employee and manager
-              const user = session.userId as any;
+              const user = session.userId as any; // eslint-disable-line @typescript-eslint/no-explicit-any
               if (user?.email && tenantSettings?.emailNotifications) {
                 const companyName = tenantSettings?.companyName || tenant.name || 'Business';
                 await sendEmail({
@@ -179,12 +179,12 @@ Please review this attendance record.`,
                 });
               }
             }
-          } catch (error: any) {
+          } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             totalFailed++;
             results.errors?.push(`Session ${session._id}: ${error.message}`);
           }
         }
-      } catch (error: any) {
+      } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         totalFailed++;
         results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
       }
@@ -195,7 +195,7 @@ Please review this attendance record.`,
     results.message = `Auto-clocked out ${totalProcessed} sessions${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     results.success = false;
     results.message = `Error auto-clocking out sessions: ${error.message}`;
     results.errors?.push(error.message);

@@ -59,7 +59,7 @@ export async function GET(
         email: user.email,
       },
     });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Get user QR code error:', error);
     const errorMessage = error.message || 'Failed to get QR code';
     return NextResponse.json(
@@ -121,7 +121,7 @@ export async function POST(
         qrToken: newQrToken,
       },
     });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Regenerate user QR code error:', error);
     const errorMessage = error.message || 'Failed to regenerate QR code';
     return NextResponse.json(

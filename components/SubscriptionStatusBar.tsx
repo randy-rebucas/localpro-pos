@@ -1,7 +1,7 @@
 'use client';
 
 import { useSubscription } from '@/contexts/SubscriptionContext';
-import { AlertTriangle, CheckCircle, Clock, XCircle, Crown } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Clock, XCircle, Crown } from 'lucide-react'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 

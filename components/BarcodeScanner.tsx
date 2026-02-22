@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { hardwareService } from '@/lib/hardware';
 
 interface BarcodeScannerProps {
@@ -9,7 +9,7 @@ interface BarcodeScannerProps {
 }
 
 export default function BarcodeScanner({ onScan, enabled = true }: BarcodeScannerProps) {
-  const [isActive, setIsActive] = useState(enabled);
+  const [isActive, setIsActive] = useState(enabled); // eslint-disable-line @typescript-eslint/no-unused-vars
 
   useEffect(() => {
     if (!isActive) return;

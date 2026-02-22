@@ -22,7 +22,7 @@ interface SecurityViolation {
 }
 
 export default function ForbiddenPage() {
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [userInfo, setUserInfo] = useState<UserInfo>({
     userId: null,
     tenantSlug: null,

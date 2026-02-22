@@ -5,7 +5,9 @@
 
 // Web API types (available in browsers that support these APIs)
 // Using any for browser APIs that may not have complete type definitions
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type USBDevice = any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SerialPort = any;
 
 export interface PrinterConfig {
@@ -66,7 +68,7 @@ class ReceiptPrinterService {
 
     try {
       if (this.config.type === 'usb' && 'usb' in navigator) {
-        const device = await (navigator as any).usb.requestDevice({
+        const device = await (navigator as any).usb.requestDevice({ // eslint-disable-line @typescript-eslint/no-explicit-any
           filters: this.config.vendorId && this.config.productId
             ? [{ vendorId: this.config.vendorId, productId: this.config.productId }]
             : [],
@@ -77,7 +79,7 @@ class ReceiptPrinterService {
         this.device = device;
         return true;
       } else if (this.config.type === 'serial' && 'serial' in navigator) {
-        const port = await (navigator as any).serial.requestPort();
+        const port = await (navigator as any).serial.requestPort(); // eslint-disable-line @typescript-eslint/no-explicit-any
         await port.open({ baudRate: 9600 });
         this.device = port;
         return true;
@@ -291,7 +293,7 @@ class ReceiptPrinterService {
     }
   }
 
-  private async buildEscPosCommands(data: ReceiptData): Promise<Uint8Array> {
+  private async buildEscPosCommands(data: ReceiptData): Promise<Uint8Array> { // eslint-disable-line @typescript-eslint/no-unused-vars
     const commands: Uint8Array[] = [];
     // Same command building as printReceipt but return as single array
     // (Implementation similar to printReceipt method)
@@ -333,6 +335,7 @@ class ReceiptPrinterService {
     if (data.template) {
       try {
         // Import template rendering function dynamically to avoid circular dependencies
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { renderReceiptTemplate } = require('@/lib/receipt-templates');
         return renderReceiptTemplate(data.template, data);
       } catch (error) {

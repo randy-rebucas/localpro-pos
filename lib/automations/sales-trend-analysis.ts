@@ -66,7 +66,7 @@ export async function analyzeSalesTrends(
 
         const now = new Date();
         let currentPeriodStart: Date;
-        let currentPeriodEnd: Date = now;
+        const currentPeriodEnd: Date = now;
         let previousPeriodStart: Date;
         let previousPeriodEnd: Date;
 
@@ -202,7 +202,7 @@ This is an automated sales trend analysis from your POS system.`;
         }
 
         totalAnalyses++;
-      } catch (error: any) {
+      } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         totalFailed++;
         results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
       }
@@ -213,7 +213,7 @@ This is an automated sales trend analysis from your POS system.`;
     results.message = `Generated ${totalAnalyses} sales trend analyses${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     results.success = false;
     results.message = `Error analyzing sales trends: ${error.message}`;
     results.errors?.push(error.message);

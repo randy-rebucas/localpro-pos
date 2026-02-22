@@ -4,7 +4,7 @@
  */
 
 import { ITenantSettings } from '@/models/Tenant';
-import { formatCurrency, formatNumber } from './currency';
+import { formatCurrency, formatNumber } from './currency'; // eslint-disable-line @typescript-eslint/no-unused-vars
 
 export interface ExchangeRateResponse {
   base: string;

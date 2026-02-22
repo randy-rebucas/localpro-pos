@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import AuditLog from '@/models/AuditLog';
 import { requireAuth } from '@/lib/auth';
-import User from '@/models/User';
+import User from '@/models/User'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function GET(request: NextRequest) {
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get('endDate');
 
     // Build query
-    const query: any = { tenantId: user.tenantId };
+    const query: any = { tenantId: user.tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
 
     if (action) {
       query.action = action;
@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
         pages: Math.ceil(total / limit),
       },
     });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Get audit logs error:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(

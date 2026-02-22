@@ -31,7 +31,7 @@ export async function GET(
       success: true,
       data: tenant.settings.notificationTemplates || {},
     });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Error fetching notification templates:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -96,7 +96,7 @@ export async function PUT(
       success: true,
       data: templates,
     });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Error updating notification template:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

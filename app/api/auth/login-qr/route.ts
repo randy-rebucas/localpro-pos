@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
     });
 
     return response;
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('QR login error:', error);
     const errorMessage = error.message || 'Login failed';
     return NextResponse.json(

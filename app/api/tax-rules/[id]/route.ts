@@ -26,7 +26,7 @@ export async function GET(
     }
     
     return NextResponse.json({ success: true, data: taxRule });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -38,7 +38,7 @@ export async function PATCH(
   try {
     await connectDB();
     const { id } = await params;
-    const user = await requireAuth(request);
+    const user = await requireAuth(request); // eslint-disable-line @typescript-eslint/no-unused-vars
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
     
@@ -84,7 +84,7 @@ export async function PATCH(
     });
     
     return NextResponse.json({ success: true, data: taxRule });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return NextResponse.json({ success: false, error: error.message }, { status: 400 });
   }
 }
@@ -96,7 +96,7 @@ export async function DELETE(
   try {
     await connectDB();
     const { id } = await params;
-    const user = await requireAuth(request);
+    const user = await requireAuth(request); // eslint-disable-line @typescript-eslint/no-unused-vars
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
     
@@ -119,7 +119,7 @@ export async function DELETE(
     });
     
     return NextResponse.json({ success: true, message: 'Tax rule deleted' });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return NextResponse.json({ success: false, error: error.message }, { status: 400 });
   }
 }

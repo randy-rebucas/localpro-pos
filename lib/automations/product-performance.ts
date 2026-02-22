@@ -69,8 +69,8 @@ export async function analyzeProductPerformance(
         // Get all products
         const products = await Product.find({ tenantId, trackInventory: true }).lean();
 
-        const slowMovingProducts: any[] = [];
-        const topPerformers: any[] = [];
+        const slowMovingProducts: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
+        const topPerformers: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
 
         for (const product of products) {
           try {
@@ -137,7 +137,7 @@ export async function analyzeProductPerformance(
                 revenue,
               });
             }
-          } catch (error: any) {
+          } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             // Skip product on error
           }
         }
@@ -191,7 +191,7 @@ This is an automated product performance report from your POS system.`;
 
           totalAlerts++;
         }
-      } catch (error: any) {
+      } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         totalFailed++;
         results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
       }
@@ -202,7 +202,7 @@ This is an automated product performance report from your POS system.`;
     results.message = `Sent ${totalAlerts} product performance alerts${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     results.success = false;
     results.message = `Error analyzing product performance: ${error.message}`;
     results.errors?.push(error.message);

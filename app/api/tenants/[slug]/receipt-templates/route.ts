@@ -37,7 +37,7 @@ export async function GET(
         default: defaultTemplateId,
       },
     });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Error fetching receipt templates:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -113,7 +113,7 @@ export async function POST(
       success: true,
       data: newTemplate,
     });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Error creating receipt template:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -200,7 +200,7 @@ export async function PUT(
       success: true,
       data: templates[templateIndex],
     });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Error updating receipt template:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -256,7 +256,7 @@ export async function DELETE(
     await tenant.save();
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Error deleting receipt template:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

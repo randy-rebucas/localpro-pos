@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
     let isPasswordValid = false;
     try {
       isPasswordValid = await bcrypt.compare(password, user.password);
-    } catch (bcryptError: any) {
+    } catch (bcryptError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       console.error('Bcrypt comparison error:', bcryptError);
       return NextResponse.json(
         { success: false, error: t('validation.invalidCredentials', 'Invalid credentials') },
@@ -155,7 +155,7 @@ export async function POST(request: NextRequest) {
     });
 
     return response;
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Login error:', error);
     const errorMessage = error.message || 'Login failed';
     return NextResponse.json(

@@ -55,7 +55,7 @@ export async function createDatabaseBackup(
 
     // Get all collections
     const collections = await db.listCollections().toArray();
-    const backupData: Record<string, any[]> = {};
+    const backupData: Record<string, any[]> = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
 
     // Export each collection
     for (const collectionInfo of collections) {
@@ -112,7 +112,7 @@ export async function createDatabaseBackup(
     // This would require AWS S3, Azure Blob, or similar integration
 
     return results;
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     results.success = false;
     results.message = `Error creating backup: ${error.message}`;
     results.errors?.push(error.message);

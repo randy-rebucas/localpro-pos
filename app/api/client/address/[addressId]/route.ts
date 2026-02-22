@@ -42,7 +42,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     const { label, street, city, state, zipCode, country, isDefault } = body;
 
-    const updates: Record<string, any> = {};
+    const updates: Record<string, any> = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
     if (label !== undefined) updates.label = label;
     if (street !== undefined) updates.street = street;
     if (city !== undefined) updates.city = city;
@@ -83,7 +83,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     });
 
     return NextResponse.json({ success: true, data: updatedAddress });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     if (error.message === 'Unauthorized') {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
@@ -148,7 +148,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     });
 
     return NextResponse.json({ success: true, message: t('validation.addressDeleted', 'Address deleted successfully') });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     if (error.message === 'Unauthorized') {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }

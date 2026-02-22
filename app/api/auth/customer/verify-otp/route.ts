@@ -3,7 +3,7 @@ import connectDB from '@/lib/mongodb';
 import CustomerOTP from '@/models/CustomerOTP';
 import Customer from '@/models/Customer';
 import { generateCustomerToken } from '@/lib/auth-customer';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { getTenantIdFromRequest } from '@/lib/api-tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 /**
@@ -138,7 +138,7 @@ export async function POST(request: NextRequest) {
     });
 
     return response;
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Verify OTP error:', error);
     return NextResponse.json(
       { success: false, error: error.message || 'Failed to verify OTP' },

@@ -41,7 +41,7 @@ class QRReaderService {
       
       try {
         await videoElement.play();
-      } catch (playError: any) {
+      } catch (playError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         // Handle AbortError gracefully - this happens when navigation occurs
         // while play() is pending, which is expected behavior
         if (playError.name === 'AbortError' || playError.name === 'NotAllowedError') {

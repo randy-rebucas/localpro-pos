@@ -5,6 +5,30 @@ import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { formatDate } from '@/lib/formatting';
 
+const formatHours = (value: number) => {
+  const h = Math.floor(value);
+  const m = Math.round((value - h) * 60);
+  return `${h}h ${m}m`;
+};
+
+const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ color: string; name: string; value: number; payload: { fullName: string } }>; label?: string }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-white border border-gray-300 rounded-lg p-3 shadow-lg">
+        <p className="font-semibold text-gray-900 mb-2">{label || payload[0].payload.fullName}</p>
+        {payload.map((entry, index: number) => (
+          <p key={index} className="text-sm" style={{ color: entry.color }}>
+            {entry.name}: {entry.name.toLowerCase().includes('hours')
+              ? formatHours(entry.value)
+              : entry.value}
+          </p>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
+
 interface Attendance {
   _id: string;
   userId: string | { _id: string; name: string; email: string };
@@ -16,7 +40,7 @@ interface Attendance {
 
 interface AttendanceTrendsChartsProps {
   attendances: Attendance[];
-  dict: any;
+  dict: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
 export default function AttendanceTrendsCharts({ attendances, dict }: AttendanceTrendsChartsProps) {
@@ -87,30 +111,6 @@ export default function AttendanceTrendsCharts({ attendances, dict }: Attendance
   if (attendances.length === 0) {
     return null;
   }
-
-  const formatHours = (value: number) => {
-    const h = Math.floor(value);
-    const m = Math.round((value - h) * 60);
-    return `${h}h ${m}m`;
-  };
-
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-white border border-gray-300 rounded-lg p-3 shadow-lg">
-          <p className="font-semibold text-gray-900 mb-2">{label || payload[0].payload.fullName}</p>
-          {payload.map((entry: any, index: number) => (
-            <p key={index} className="text-sm" style={{ color: entry.color }}>
-              {entry.name}: {entry.name.toLowerCase().includes('hours') 
-                ? formatHours(entry.value)
-                : entry.value}
-            </p>
-          ))}
-        </div>
-      );
-    }
-    return null;
-  };
 
   return (
     <div className="space-y-6 mb-6">

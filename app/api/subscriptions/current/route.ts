@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
     await connectDB();
 
     // Require authentication
-    const user = await requireAuth(request);
+    const user = await requireAuth(request); // eslint-disable-line @typescript-eslint/no-unused-vars
     const tenantId = await getTenantIdFromRequest(request);
 
     if (!tenantId) {
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
       data: subscription,
     });
 
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Error fetching current subscription:', error);
     return NextResponse.json(
       { success: false, error: error.message },

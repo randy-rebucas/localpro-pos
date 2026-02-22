@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useEffect, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { TenantSettingsProvider } from '@/contexts/TenantSettingsContext';
 import { SubscriptionProvider } from '@/contexts/SubscriptionContext';

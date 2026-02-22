@@ -22,9 +22,9 @@ export default function HardwareStatusChecker({
   sidebar = false,
 }: HardwareStatusProps) {
   const params = useParams();
-  const tenant = params.tenant as string;
+  const tenant = params.tenant as string; // eslint-disable-line @typescript-eslint/no-unused-vars
   const lang = (params?.lang as 'en' | 'es') || 'en';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [status, setStatus] = useState<HardwareStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [testing, setTesting] = useState<string | null>(null);
@@ -65,7 +65,7 @@ export default function HardwareStatusChecker({
       }
       // Refresh status after test
       setTimeout(checkStatus, 1000);
-    } catch (error: any) {
+    } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       showToast.error(error.message || dict?.common?.testFailed || 'Test failed');
     } finally {
       setTesting(null);

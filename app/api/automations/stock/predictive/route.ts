@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
 
     const result = await predictStockNeeds({ tenantId, analysisDays, predictionDays });
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Predictive stock error:', error);
     return NextResponse.json({
       success: false,
@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
 
     const result = await predictStockNeeds({ tenantId, analysisDays, predictionDays });
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Predictive stock error:', error);
     return NextResponse.json({
       success: false,

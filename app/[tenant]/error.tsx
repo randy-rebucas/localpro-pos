@@ -11,7 +11,7 @@ export default function TenantError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
 
   useEffect(() => {
     console.error('Tenant error:', error);

@@ -231,7 +231,7 @@ async function createTenant(input: TenantInput) {
     };
 
     // Create tenant
-    const tenantData: any = {
+    const tenantData: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
       slug: input.slug,
       name: input.name,
       settings,
@@ -257,7 +257,7 @@ async function createTenant(input: TenantInput) {
         tenantId: tenant._id,
         isActive: true,
       });
-    } catch (userError: any) {
+    } catch (userError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       console.log('\n⚠️  Warning: Failed to create admin user:', userError.message);
     }
 
@@ -296,7 +296,7 @@ async function createTenant(input: TenantInput) {
     console.log(`  3. Configure settings at: http://localhost:3000/${tenant.slug}/${tenant.settings.language}/settings\n`);
 
     await mongoose.disconnect();
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('\n❌ Error creating tenant:', error.message);
     
     if (error.code === 11000) {

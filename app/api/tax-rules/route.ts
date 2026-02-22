@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const isActive = searchParams.get('isActive');
     
-    const query: any = { tenantId };
+    const query: any = { tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
     if (isActive !== null) {
       query.isActive = isActive === 'true';
     }
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
       .lean();
     
     return NextResponse.json({ success: true, data: taxRules });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
-    const user = await requireAuth(request);
+    const user = await requireAuth(request); // eslint-disable-line @typescript-eslint/no-unused-vars
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
     
@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
     });
     
     return NextResponse.json({ success: true, data: taxRule }, { status: 201 });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return NextResponse.json({ success: false, error: error.message }, { status: 400 });
   }
 }

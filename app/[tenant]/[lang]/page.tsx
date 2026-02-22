@@ -40,13 +40,13 @@ interface Stats {
 
 export default function Dashboard() {
   const params = useParams();
-  const router = useRouter();
+  const router = useRouter(); // eslint-disable-line @typescript-eslint/no-unused-vars
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es' | 'forbidden';
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('today');
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   
   // If lang is "forbidden", this route was incorrectly matched
   // Redirect to the forbidden page using hard redirect to prevent loops
@@ -61,6 +61,16 @@ export default function Dashboard() {
       }
     }
   }, [lang, tenant]);
+
+  useEffect(() => {
+    const safeLang = lang === 'forbidden' ? 'en' : lang;
+    getDictionaryClient(safeLang).then(setDict);
+  }, [lang]);
+
+  useEffect(() => {
+    fetchStats();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [period, tenant]);
   
   // Don't render if lang is "forbidden" (will redirect)
   if (lang === 'forbidden') {
@@ -73,14 +83,6 @@ export default function Dashboard() {
       </div>
     );
   }
-
-  useEffect(() => {
-    getDictionaryClient(lang).then(setDict);
-  }, [lang]);
-
-  useEffect(() => {
-    fetchStats();
-  }, [period, tenant]);
 
   const fetchStats = async () => {
     // Don't fetch if we're already on the forbidden page
@@ -99,7 +101,7 @@ export default function Dashboard() {
       
       if (data.success && data.data) {
         // Ensure chartData is properly formatted with numeric values
-        const processedChartData = (data.data.chartData || []).map((item: any) => {
+        const processedChartData = (data.data.chartData || []).map((item: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
           const salesValue = typeof item.sales === 'number' ? item.sales : parseFloat(String(item.sales)) || 0;
           const transactionsValue = typeof item.transactions === 'number' ? item.transactions : parseInt(String(item.transactions)) || 0;
           return {

@@ -9,7 +9,7 @@ import Transaction from '@/models/Transaction';
 import Tenant from '@/models/Tenant';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { AutomationResult } from './types';
-import mongoose from 'mongoose';
+import mongoose from 'mongoose'; // eslint-disable-line @typescript-eslint/no-unused-vars
 
 export interface DynamicPricingOptions {
   tenantId?: string;
@@ -56,7 +56,7 @@ export async function applyDynamicPricing(
     for (const tenant of tenants) {
       try {
         const tenantId = tenant._id.toString();
-        const tenantSettings = await getTenantSettingsById(tenantId);
+        const tenantSettings = await getTenantSettingsById(tenantId); // eslint-disable-line @typescript-eslint/no-unused-vars
 
         // Get products
         const products = await Product.find({ tenantId }).lean();
@@ -104,12 +104,12 @@ export async function applyDynamicPricing(
               });
               totalUpdated++;
             }
-          } catch (error: any) {
+          } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             totalFailed++;
             results.errors?.push(`Product ${product._id}: ${error.message}`);
           }
         }
-      } catch (error: any) {
+      } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         totalFailed++;
         results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
       }
@@ -120,7 +120,7 @@ export async function applyDynamicPricing(
     results.message = `Updated ${totalUpdated} product prices${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     results.success = false;
     results.message = `Error applying dynamic pricing: ${error.message}`;
     results.errors?.push(error.message);

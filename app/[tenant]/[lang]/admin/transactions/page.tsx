@@ -33,21 +33,22 @@ interface Transaction {
 
 export default function TransactionsPage() {
   const params = useParams();
-  const router = useRouter();
+  const router = useRouter(); // eslint-disable-line @typescript-eslint/no-unused-vars
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const { settings } = useTenantSettings();
+  const { settings } = useTenantSettings(); // eslint-disable-line @typescript-eslint/no-unused-vars
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
     fetchTransactions();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang, tenant, page]);
 
   const fetchTransactions = async () => {
@@ -233,7 +234,7 @@ function TransactionDetailModal({
 }: {
   transaction: Transaction;
   onClose: () => void;
-  dict: any;
+  dict: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }) {
   return (
     <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">

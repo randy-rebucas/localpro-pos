@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true, data: user });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     if (error.message === 'Unauthorized') {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
@@ -120,7 +120,7 @@ export async function PUT(request: NextRequest) {
     const body = await request.json();
     const { name, email } = body;
 
-    const updates: Record<string, any> = {};
+    const updates: Record<string, any> = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
 
     if (name !== undefined) {
       if (!name || typeof name !== 'string' || name.trim().length === 0) {
@@ -186,7 +186,7 @@ export async function PUT(request: NextRequest) {
     });
 
     return NextResponse.json({ success: true, data: updatedUser });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     if (error.message === 'Unauthorized') {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }

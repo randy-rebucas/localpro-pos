@@ -19,7 +19,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
     
     return NextResponse.json({ success: true, data: tenant });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -39,7 +39,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
-    const updateData: any = {};
+    const updateData: any = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
     
     if (name !== undefined) {
       if (!name.trim()) {
@@ -90,7 +90,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     // Track changes
-    const changes: Record<string, any> = {};
+    const changes: Record<string, any> = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
     Object.keys(updateData).forEach(key => {
       if (key !== 'settings' && oldTenant[key as keyof typeof oldTenant] !== updateData[key]) {
         changes[key] = {
@@ -112,7 +112,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     });
     
     return NextResponse.json({ success: true, data: tenant });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     const t = await getValidationTranslatorFromRequest(request);
     if (error.code === 11000) {
       const field = Object.keys(error.keyPattern)[0];
@@ -156,7 +156,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     });
     
     return NextResponse.json({ success: true, data: {} });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     if (error.message === 'Unauthorized' || error.message.includes('Forbidden')) {
       return NextResponse.json(
         { success: false, error: error.message },

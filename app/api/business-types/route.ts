@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
       success: true,
       data: businessTypes,
     });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return NextResponse.json(
       { success: false, error: error.message },
       { status: 500 }

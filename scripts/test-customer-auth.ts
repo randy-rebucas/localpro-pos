@@ -8,6 +8,7 @@
  */
 
 import 'dotenv/config';
+import readline from 'readline';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
 const TENANT_SLUG = 'default';
@@ -58,7 +59,6 @@ async function testCustomerAuth() {
     
     // For automated testing, you could read from stdin
     // For now, we'll use a placeholder
-    const readline = require('readline');
     const rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
@@ -146,7 +146,7 @@ async function testCustomerAuth() {
 
     console.log('\n✅ All tests completed successfully!');
 
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('❌ Test failed:', error.message);
     console.error(error.stack);
   }

@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
       : baseSettings;
 
     // Create tenant
-    const tenantData: any = {
+    const tenantData: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
       slug: slug.toLowerCase(),
       name,
       settings,
@@ -152,7 +152,7 @@ export async function POST(request: NextRequest) {
         message: t('validation.storeCreatedSuccess', 'Store created successfully! You can now login with your admin credentials.')
       }
     }, { status: 201 });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     if (error.code === 11000) {
       const field = Object.keys(error.keyPattern)[0];
       return NextResponse.json(

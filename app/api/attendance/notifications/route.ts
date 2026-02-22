@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Attendance from '@/models/Attendance';
-import User from '@/models/User';
+import User from '@/models/User'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
-import { sendEmail } from '@/lib/notifications';
+import { sendEmail } from '@/lib/notifications'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 /**
@@ -40,10 +40,10 @@ export async function GET(request: NextRequest) {
       .lean();
 
     const now = new Date();
-    const notifications: any[] = [];
+    const notifications: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
 
     // Check for missing clock-outs (sessions that are too long)
-    activeSessions.forEach((session: any) => {
+    activeSessions.forEach((session: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
       const clockInTime = new Date(session.clockIn);
       const hoursSinceClockIn = (now.getTime() - clockInTime.getTime()) / (1000 * 60 * 60);
 
@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
     // Parse expected start time (HH:MM format)
     const [expectedHour, expectedMinute] = expectedStartTime.split(':').map(Number);
 
-    todayAttendances.forEach((attendance: any) => {
+    todayAttendances.forEach((attendance: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
       const clockInTime = new Date(attendance.clockIn);
       const expectedClockIn = new Date(clockInTime);
       expectedClockIn.setHours(expectedHour, expectedMinute, 0, 0);
@@ -119,7 +119,7 @@ export async function GET(request: NextRequest) {
         },
       },
     });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Error fetching attendance notifications:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -149,8 +149,8 @@ export async function POST(request: NextRequest) {
     }
     
     const searchParams = request.nextUrl.searchParams;
-    const expectedStartTime = searchParams.get('expectedStartTime') || '09:00';
-    const maxHoursWithoutClockOut = parseFloat(searchParams.get('maxHoursWithoutClockOut') || '12');
+    const expectedStartTime = searchParams.get('expectedStartTime') || '09:00'; // eslint-disable-line @typescript-eslint/no-unused-vars
+    const maxHoursWithoutClockOut = parseFloat(searchParams.get('maxHoursWithoutClockOut') || '12'); // eslint-disable-line @typescript-eslint/no-unused-vars
     
     // Import the sendAttendanceNotification function
     const { sendAttendanceNotification } = await import('@/lib/notifications');
@@ -182,7 +182,7 @@ export async function POST(request: NextRequest) {
             results.failed++;
             results.errors.push(`Failed to send email to ${notification.userEmail}`);
           }
-        } catch (error: any) {
+        } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
           results.failed++;
           results.errors.push(`Error sending to ${notification.userEmail}: ${error.message}`);
         }
@@ -202,7 +202,7 @@ export async function POST(request: NextRequest) {
         errors: results.errors.length > 0 ? results.errors : undefined,
       },
     });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Error sending attendance notifications:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

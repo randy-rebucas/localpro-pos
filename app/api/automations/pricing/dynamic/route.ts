@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
 
     const result = await applyDynamicPricing({ tenantId, enableTimeBased, enableDemandBased, enableStockBased });
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Dynamic pricing error:', error);
     return NextResponse.json({
       success: false,
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
 
     const result = await applyDynamicPricing({ tenantId, enableTimeBased, enableDemandBased, enableStockBased });
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Dynamic pricing error:', error);
     return NextResponse.json({
       success: false,

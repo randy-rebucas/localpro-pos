@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 import { requireAuth } from '@/lib/auth';
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest) {
 
     // Generate QR token if it doesn't exist
     if (!userDoc.qrToken) {
-      const newQrToken = require('crypto').randomBytes(32).toString('hex');
+      const newQrToken = crypto.randomBytes(32).toString('hex');
       await User.findByIdAndUpdate(user.userId, { qrToken: newQrToken });
       userDoc.qrToken = newQrToken;
     }
@@ -56,10 +57,10 @@ export async function POST(request: NextRequest) {
   try {
     const user = await requireAuth(request);
     await connectDB();
-    t = await getValidationTranslatorFromRequest(request);
+    t = await getValidationTranslatorFromRequest(request); // eslint-disable-line @typescript-eslint/no-unused-vars
 
     // Generate new QR token (or create if doesn't exist)
-    const newQrToken = require('crypto').randomBytes(32).toString('hex');
+    const newQrToken = crypto.randomBytes(32).toString('hex');
     
     await User.findByIdAndUpdate(user.userId, { qrToken: newQrToken });
 

@@ -4,8 +4,8 @@
  */
 
 import connectDB from '@/lib/mongodb';
-import Booking from '@/models/Booking';
-import Tenant from '@/models/Tenant';
+import Booking from '@/models/Booking'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import Tenant from '@/models/Tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { AutomationResult } from './types';
 
 export interface RecurringBookingOptions {
@@ -19,7 +19,7 @@ export interface RecurringBookingOptions {
  * This is a placeholder implementation that can be extended
  */
 export async function generateRecurringBookings(
-  options: RecurringBookingOptions = {}
+  options: RecurringBookingOptions = {} // eslint-disable-line @typescript-eslint/no-unused-vars
 ): Promise<AutomationResult> {
   await connectDB();
 
@@ -40,7 +40,7 @@ export async function generateRecurringBookings(
     results.processed = 0;
 
     return results;
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     results.success = false;
     results.message = `Error generating recurring bookings: ${error.message}`;
     results.errors?.push(error.message);

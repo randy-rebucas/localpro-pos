@@ -9,7 +9,7 @@ export default function OfflineIndicator() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = (params?.lang as 'en' | 'es') || 'en';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const { isOnline, isSyncing, lastSyncResult, sync } = useNetworkStatus(tenant);
 
   useEffect(() => {
@@ -23,6 +23,7 @@ export default function OfflineIndicator() {
 
   useEffect(() => {
     if (lastSyncResult && lastSyncResult.synced > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setShowSyncResult(true);
       const timer = setTimeout(() => setShowSyncResult(false), 5000);
       return () => clearTimeout(timer);

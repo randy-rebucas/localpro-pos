@@ -15,10 +15,10 @@ declare global {
   var mongoose: MongooseCache | undefined;
 }
 
-const cached: MongooseCache = (globalThis as any).mongoose || { conn: null, promise: null };
+const cached: MongooseCache = (globalThis as any).mongoose || { conn: null, promise: null }; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-if (!(globalThis as any).mongoose) {
-  (globalThis as any).mongoose = cached;
+if (!(globalThis as any).mongoose) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  (globalThis as any).mongoose = cached; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
 async function connectDB(): Promise<typeof mongoose> {

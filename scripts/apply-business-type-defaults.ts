@@ -52,7 +52,7 @@ async function applyDefaultsToTenant(tenantSlug: string, businessType?: string) 
     });
     
     return true;
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error(`Error applying defaults to "${tenantSlug}":`, error.message);
     return false;
   }
@@ -82,7 +82,7 @@ async function applyDefaultsToAllTenants() {
     }
     
     console.log(`\n✅ Completed: ${successCount} tenants updated, ${skipCount} skipped`);
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Error applying defaults:', error.message);
     process.exit(1);
   }

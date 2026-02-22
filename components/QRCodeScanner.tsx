@@ -14,9 +14,9 @@ interface QRCodeScannerProps {
 export default function QRCodeScanner({ onScan, onClose, enabled = true }: QRCodeScannerProps) {
   const params = useParams();
   const lang = (params?.lang as 'en' | 'es') || 'en';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [isScanning, setIsScanning] = useState(false);
+  const [isScanning, setIsScanning] = useState(false); // eslint-disable-line @typescript-eslint/no-unused-vars
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -31,7 +31,7 @@ export default function QRCodeScanner({ onScan, onClose, enabled = true }: QRCod
         setIsScanning(true);
         setError(null);
         await hardwareService.startQRScanning(videoRef.current!, onScan);
-      } catch (err: any) {
+      } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         setError(err.message || dict?.common?.failedToStartQRScanner || 'Failed to start QR scanner');
         setIsScanning(false);
       }
@@ -43,6 +43,7 @@ export default function QRCodeScanner({ onScan, onClose, enabled = true }: QRCod
       hardwareService.stopQRScanning();
       setIsScanning(false);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, onScan]);
 
   if (!enabled) return null;

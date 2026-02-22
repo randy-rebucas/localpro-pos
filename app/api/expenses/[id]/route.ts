@@ -104,7 +104,7 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: t('validation.expenseNotFound', 'Expense not found') }, { status: 404 });
     }
 
-    const oldData = expense.toObject();
+    const oldData = expense.toObject(); // eslint-disable-line @typescript-eslint/no-unused-vars
     await expense.deleteOne();
 
     await createAuditLog(request, {

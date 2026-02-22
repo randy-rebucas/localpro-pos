@@ -153,7 +153,7 @@ This is an automated security alert from your POS system.`,
 
           totalAlerts++;
         }
-      } catch (error: any) {
+      } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         totalFailed++;
         results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
       }
@@ -164,7 +164,7 @@ This is an automated security alert from your POS system.`,
     results.message = `Detected ${totalAlerts} suspicious activity patterns${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     results.success = false;
     results.message = `Error detecting suspicious activity: ${error.message}`;
     results.errors?.push(error.message);

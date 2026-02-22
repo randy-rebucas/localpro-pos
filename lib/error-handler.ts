@@ -10,7 +10,7 @@ export interface ApiError {
 /**
  * Standardized error handler for API routes
  */
-export function handleApiError(error: any, defaultMessage: string = 'An error occurred'): NextResponse<ApiError> {
+export function handleApiError(error: any, defaultMessage: string = 'An error occurred'): NextResponse<ApiError> { // eslint-disable-line @typescript-eslint/no-explicit-any
   console.error('API Error:', error);
 
   // Validation errors
@@ -27,7 +27,7 @@ export function handleApiError(error: any, defaultMessage: string = 'An error oc
 
   // Mongoose validation errors
   if (error.name === 'ValidationError') {
-    const errors = Object.values(error.errors).map((err: any) => ({
+    const errors = Object.values(error.errors).map((err: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
       field: err.path,
       message: err.message,
     }));

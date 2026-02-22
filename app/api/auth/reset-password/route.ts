@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
       // Mode 2: Token-based password reset
       return await handleTokenReset(request, body, t);
     }
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return NextResponse.json(
       { success: false, error: error.message || 'Password reset failed' },
       { status: 500 }
@@ -157,8 +157,8 @@ async function handleTokenReset(
   }
 
   // Verify reset token and expiry
-  const storedToken = (user as any).resetToken;
-  const tokenExpiry = (user as any).resetTokenExpiry;
+  const storedToken = (user as any).resetToken; // eslint-disable-line @typescript-eslint/no-explicit-any
+  const tokenExpiry = (user as any).resetTokenExpiry; // eslint-disable-line @typescript-eslint/no-explicit-any
 
   if (!storedToken || !tokenExpiry) {
     return NextResponse.json(
@@ -177,8 +177,8 @@ async function handleTokenReset(
 
   // Update password and clear reset token
   user.password = newPassword;
-  (user as any).resetToken = undefined;
-  (user as any).resetTokenExpiry = undefined;
+  (user as any).resetToken = undefined; // eslint-disable-line @typescript-eslint/no-explicit-any
+  (user as any).resetTokenExpiry = undefined; // eslint-disable-line @typescript-eslint/no-explicit-any
   await user.save();
 
   await createAuditLog(request, {

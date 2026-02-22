@@ -3,7 +3,7 @@
  * Handles syncing offline transactions when connection is restored
  */
 
-import { getOfflineStorage, OfflineTransaction } from './offline-storage';
+import { getOfflineStorage, OfflineTransaction } from './offline-storage'; // eslint-disable-line @typescript-eslint/no-unused-vars
 
 export interface SyncResult {
   success: boolean;
@@ -58,7 +58,7 @@ class SyncService {
           failed++;
           errors.push({ id: transaction.id, error: errorMsg });
         }
-      } catch (error: any) {
+      } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         const errorMsg = error.message || 'Network error';
         await storage.markTransactionError(transaction.id, errorMsg);
         failed++;

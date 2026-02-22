@@ -41,7 +41,7 @@ export async function GET(
     const limit = Math.min(parseInt(searchParams.get('limit') || '20', 10), 100);
 
     // Build query
-    const query: any = {
+    const query: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
       tenantId: customer.tenantId,
       $or: [
         { customerEmail: customer.email },
@@ -85,7 +85,7 @@ export async function GET(
         pages: Math.ceil(total / limit),
       },
     });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Get customer transactions error:', error);
     
     if (error.message === 'Unauthorized') {

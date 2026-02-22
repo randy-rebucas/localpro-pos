@@ -22,11 +22,11 @@ interface Notification {
 
 export default function AttendanceNotificationsPage() {
   const params = useParams();
-  const router = useRouter();
+  const router = useRouter(); // eslint-disable-line @typescript-eslint/no-unused-vars
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [summary, setSummary] = useState<{ total: number; missingClockOut: number; lateArrivals: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);

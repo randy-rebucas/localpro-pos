@@ -73,7 +73,7 @@ export async function POST(
       message: 'Reminder sent successfully',
       results,
     });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Send reminder error:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(

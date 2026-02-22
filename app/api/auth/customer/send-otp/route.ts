@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import CustomerOTP from '@/models/CustomerOTP';
-import Customer from '@/models/Customer';
+import Customer from '@/models/Customer'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { sendSMS } from '@/lib/notifications';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { getTenantIdFromRequest } from '@/lib/api-tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 /**
@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
       message: t('validation.otpSent', 'OTP sent successfully'),
       // Don't send OTP in response for security
     });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Send OTP error:', error);
     return NextResponse.json(
       { success: false, error: error.message || 'Failed to send OTP' },

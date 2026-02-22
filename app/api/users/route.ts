@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
-import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
+import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateEmail, validatePassword } from '@/lib/validation';
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
       tenantId = tenantAccess.tenantId;
       // Also check role
       await requireRole(request, ['admin', 'manager']);
-    } catch (authError: any) {
+    } catch (authError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
         return NextResponse.json(
           { success: false, error: authError.message },
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
       .lean();
 
     return NextResponse.json({ success: true, data: users });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     if (error.message === 'Unauthorized' || error.message.includes('Forbidden')) {
       return NextResponse.json(
         { success: false, error: error.message },
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
       tenantId = tenantAccess.tenantId;
       // Also check role
       await requireRole(request, ['admin', 'manager']);
-    } catch (authError: any) {
+    } catch (authError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       t = await getValidationTranslatorFromRequest(request);
       if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
         return NextResponse.json(
@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
     const currentUserCount = await User.countDocuments({ tenantId, isActive: true });
     try {
       await checkSubscriptionLimit(tenantId.toString(), 'maxUsers', currentUserCount);
-    } catch (limitError: any) {
+    } catch (limitError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       return NextResponse.json(
         { success: false, error: limitError.message },
         { status: 403 }
@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
     const { password: _, ...userWithoutPassword } = userResponse;
 
     return NextResponse.json({ success: true, data: userWithoutPassword }, { status: 201 });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     if (error.code === 11000) {
       return NextResponse.json(
         { success: false, error: 'User with this email already exists' },

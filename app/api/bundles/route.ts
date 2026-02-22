@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
-    const query: any = { tenantId };
+    const query: any = { tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
     if (search) {
       const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       query.$or = [

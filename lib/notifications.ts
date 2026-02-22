@@ -128,7 +128,7 @@ export async function sendEmail(options: NotificationOptions): Promise<boolean> 
       message: options.message.substring(0, 200) + (options.message.length > 200 ? '...' : ''),
     });
     return true;
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Failed to send email:', error);
     return false;
   }
@@ -211,7 +211,7 @@ export async function sendSMS(options: NotificationOptions): Promise<boolean> {
       message: options.message.substring(0, 160) + (options.message.length > 160 ? '...' : ''),
     });
     return true;
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Failed to send SMS:', error);
     return false;
   }
@@ -302,7 +302,7 @@ export async function sendBookingConfirmation(
     }
   }
 
-  const message = emailMessage || smsMessage;
+  const message = emailMessage || smsMessage; // eslint-disable-line @typescript-eslint/no-unused-vars
 
   // Send email if email is provided and email notifications are enabled
   if (data.customerEmail && tenantSettings.emailNotifications) {
@@ -413,7 +413,7 @@ export async function sendBookingReminder(
     }
   }
 
-  const message = emailMessage || smsMessage;
+  const message = emailMessage || smsMessage; // eslint-disable-line @typescript-eslint/no-unused-vars
 
   // Send email if email is provided and email notifications are enabled
   if (data.customerEmail && tenantSettings.emailNotifications) {

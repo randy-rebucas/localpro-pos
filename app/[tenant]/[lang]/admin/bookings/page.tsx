@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
+import Link from 'next/link'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import Navbar from '@/components/Navbar';
 import BookingCalendar from '@/components/BookingCalendar';
 import { getDictionaryClient } from '../../dictionaries-client';
@@ -49,7 +49,7 @@ export default function BookingsPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
 
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);

@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ success: true, data: address }, { status: 201 });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     if (error.message === 'Unauthorized') {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }

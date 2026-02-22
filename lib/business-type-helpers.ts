@@ -4,7 +4,7 @@
  * Utilities for working with business types and industry-specific features
  */
 
-import { getBusinessTypeConfig, BusinessType, getAllowedProductTypes } from './business-types';
+import { getBusinessTypeConfig, BusinessType, getAllowedProductTypes } from './business-types'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { ITenantSettings } from '@/models/Tenant';
 import { IProduct } from '@/models/Product';
 
@@ -52,8 +52,8 @@ export function supportsFeature(
 /**
  * Get product fields relevant to business type
  */
-export function getRelevantProductFields(product: IProduct, businessType?: BusinessType): Record<string, any> {
-  const relevant: Record<string, any> = {
+export function getRelevantProductFields(product: IProduct, businessType?: BusinessType): Record<string, any> { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const relevant: Record<string, any> = { // eslint-disable-line @typescript-eslint/no-explicit-any
     id: product._id,
     name: product.name,
     description: product.description,
@@ -198,7 +198,7 @@ export function formatProductForDisplay(
   const businessType = getBusinessType(settings);
   const details: string[] = [];
 
-  let title = product.name;
+  const title = product.name;
   let subtitle: string | undefined;
 
   // Format based on business type

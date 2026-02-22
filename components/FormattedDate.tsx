@@ -1,7 +1,7 @@
 'use client';
 
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
-import { formatDate, formatTime, formatDateTime } from '@/lib/formatting';
+import { formatDate, formatTime, formatDateTime } from '@/lib/formatting'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getDefaultTenantSettings } from '@/lib/currency';
 
 interface FormattedDateProps {

@@ -1,0 +1,1415 @@
+
+> pos-system@0.1.0 lint
+> eslint
+
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\admin\advanced-branding\page.tsx
+  14:36  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+  23:6   warning  React Hook useEffect has a missing dependency: 'fetchSettings'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  43:47  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+  48:18  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\admin\attendance\notifications\page.tsx
+  25:9   warning  'router' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  29:36  warning  Unexpected any. Specify a different type                                           @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\admin\attendance\page.tsx
+  52:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\admin\audit-logs\page.tsx
+  34:9   warning  'router' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  37:36  warning  Unexpected any. Specify a different type                                           @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\admin\backup-reset\page.tsx
+  13:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\admin\bookings\page.tsx
+   5:8   warning  'Link' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  52:36  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\admin\branches\page.tsx
+  38:9   warning  'router' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  41:51  warning  Unexpected any. Specify a different type                                           @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\admin\bundles\page.tsx
+   58:16  warning  Unexpected any. Specify a different type                                                                                         @typescript-eslint/no-explicit-any
+   70:9   warning  'router' is assigned a value but never used. Allowed unused vars must match /^_/u                                                @typescript-eslint/no-unused-vars
+   73:36  warning  Unexpected any. Specify a different type                                                                                         @typescript-eslint/no-explicit-any
+   92:46  warning  Unexpected any. Specify a different type                                                                                         @typescript-eslint/no-explicit-any
+  111:6   warning  React Hook useEffect has a missing dependency: 'fetchBundles'. Either include it or remove the dependency array                  react-hooks/exhaustive-deps
+  141:6   warning  React Hook useEffect has a missing dependency: 'fetchAnalytics'. Either include it or remove the dependency array                react-hooks/exhaustive-deps
+  207:6   warning  React Hook useEffect has missing dependencies: 'fetchBundles' and 'loading'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+  499:57  warning  Unexpected any. Specify a different type                                                                                         @typescript-eslint/no-explicit-any
+  836:9   warning  Unexpected any. Specify a different type                                                                                         @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\admin\business-hours\page.tsx
+  15:36  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+  22:6   warning  React Hook useEffect has a missing dependency: 'fetchSettings'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\admin\cash-drawer\page.tsx
+  28:9   warning  'router' is assigned a value but never used. Allowed unused vars must match /^_/u                                 @typescript-eslint/no-unused-vars
+  31:36  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+  37:11  warning  'settings' is assigned a value but never used. Allowed unused vars must match /^_/u                               @typescript-eslint/no-unused-vars
+  43:6   warning  React Hook useEffect has a missing dependency: 'fetchSessions'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\admin\categories\page.tsx
+  19:9   warning  'router' is assigned a value but never used. Allowed unused vars must match /^_/u                                   @typescript-eslint/no-unused-vars
+  22:36  warning  Unexpected any. Specify a different type                                                                            @typescript-eslint/no-explicit-any
+  33:6   warning  React Hook useEffect has a missing dependency: 'fetchCategories'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\admin\discounts\page.tsx
+   33:9   warning  'router' is assigned a value but never used. Allowed unused vars must match /^_/u                                  @typescript-eslint/no-unused-vars
+   36:36  warning  Unexpected any. Specify a different type                                                                           @typescript-eslint/no-explicit-any
+   49:6   warning  React Hook useEffect has a missing dependency: 'fetchDiscounts'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  311:9   warning  Unexpected any. Specify a different type                                                                           @typescript-eslint/no-explicit-any
+  399:87  warning  Unexpected any. Specify a different type                                                                           @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\admin\expenses\page.tsx
+   30:9   warning  'router' is assigned a value but never used. Allowed unused vars must match /^_/u                                 @typescript-eslint/no-unused-vars
+   33:36  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+   55:11  warning  'settings' is assigned a value but never used. Allowed unused vars must match /^_/u                               @typescript-eslint/no-unused-vars
+   60:6   warning  React Hook useEffect has a missing dependency: 'fetchExpenses'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  363:9   warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+  462:21  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+  546:96  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\admin\feature-flags\page.tsx
+  17:36  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+  28:6   warning  React Hook useEffect has a missing dependency: 'fetchSettings'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  57:47  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+  62:18  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\admin\hardware\page.tsx
+  17:36  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+  26:6   warning  React Hook useEffect has a missing dependency: 'fetchSettings'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\admin\holidays\page.tsx
+  15:36  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+  22:6   warning  React Hook useEffect has a missing dependency: 'fetchSettings'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\admin\layout.tsx
+  3:21  warning  'useEffect' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  3:32  warning  'useState' is defined but never used. Allowed unused vars must match /^_/u   @typescript-eslint/no-unused-vars
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\admin\multi-currency\page.tsx
+  14:36  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+  24:6   warning  React Hook useEffect has a missing dependency: 'fetchSettings'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  54:47  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+  59:18  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+  94:21  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\admin\notification-templates\page.tsx
+  15:36  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+  22:6   warning  React Hook useEffect has a missing dependency: 'fetchSettings'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\admin\page.tsx
+  14:9   warning  'router' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  17:36  warning  Unexpected any. Specify a different type                                           @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\admin\products\page.tsx
+   12:33  warning  'getAllowedProductTypes' is defined but never used. Allowed unused vars must match /^_/u                          @typescript-eslint/no-unused-vars
+   29:16  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+   64:9   warning  'router' is assigned a value but never used. Allowed unused vars must match /^_/u                                 @typescript-eslint/no-unused-vars
+   67:36  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+   77:64  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+   83:6   warning  React Hook useEffect has a missing dependency: 'fetchProducts'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  323:9   warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+  324:23  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+  325:13  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+  441:19  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+  674:94  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+  774:96  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\admin\stock-movements\page.tsx
+  35:9   warning  'router' is assigned a value but never used. Allowed unused vars must match /^_/u                                  @typescript-eslint/no-unused-vars
+  38:36  warning  Unexpected any. Specify a different type                                                                           @typescript-eslint/no-explicit-any
+  55:6   warning  React Hook useEffect has a missing dependency: 'fetchMovements'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\admin\subscriptions\page.tsx
+   8:10  warning  'showToast' is defined but never used. Allowed unused vars must match /^_/u                     @typescript-eslint/no-unused-vars
+   9:57  warning  'CheckCircle' is defined but never used. Allowed unused vars must match /^_/u                   @typescript-eslint/no-unused-vars
+   9:70  warning  'XCircle' is defined but never used. Allowed unused vars must match /^_/u                       @typescript-eslint/no-unused-vars
+  83:36  warning  Unexpected any. Specify a different type                                                        @typescript-eslint/no-explicit-any
+  88:11  warning  'subscriptionStatus' is assigned a value but never used. Allowed unused vars must match /^_/u   @typescript-eslint/no-unused-vars
+  88:31  warning  'refreshSubscription' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\admin\tax-rules\page.tsx
+  15:36  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+  22:6   warning  React Hook useEffect has a missing dependency: 'fetchSettings'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\admin\tenants\page.tsx
+   29:9   warning  'router' is assigned a value but never used. Allowed unused vars must match /^_/u                                @typescript-eslint/no-unused-vars
+   32:36  warning  Unexpected any. Specify a different type                                                                         @typescript-eslint/no-explicit-any
+   35:19  warning  'setMessage' is assigned a value but never used. Allowed unused vars must match /^_/u                            @typescript-eslint/no-unused-vars
+   42:6   warning  React Hook useEffect has a missing dependency: 'fetchTenants'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  199:9   warning  Unexpected any. Specify a different type                                                                         @typescript-eslint/no-explicit-any
+  215:54  warning  Unexpected any. Specify a different type                                                                         @typescript-eslint/no-explicit-any
+  250:19  warning  Unexpected any. Specify a different type                                                                         @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\admin\transactions\page.tsx
+   36:9   warning  'router' is assigned a value but never used. Allowed unused vars must match /^_/u                                     @typescript-eslint/no-unused-vars
+   39:36  warning  Unexpected any. Specify a different type                                                                              @typescript-eslint/no-explicit-any
+   46:11  warning  'settings' is assigned a value but never used. Allowed unused vars must match /^_/u                                   @typescript-eslint/no-unused-vars
+   51:6   warning  React Hook useEffect has a missing dependency: 'fetchTransactions'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  236:9   warning  Unexpected any. Specify a different type                                                                              @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\admin\users\page.tsx
+   27:9   warning  'router' is assigned a value but never used. Allowed unused vars must match /^_/u                               @typescript-eslint/no-unused-vars
+   30:36  warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+   44:6   warning  React Hook useEffect has a missing dependency: 'fetchUsers'. Either include it or remove the dependency array   react-hooks/exhaustive-deps
+  308:9   warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  326:19  warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  405:85  warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  452:9   warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  594:9   warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  604:6   warning  React Hook useEffect has a missing dependency: 'fetchQRCode'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\dictionaries-client.ts
+   3:39  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  30:73  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\inventory\page.tsx
+  25:36  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+  28:10  warning  'loading' is assigned a value but never used. Allowed unused vars must match /^_/u                                @typescript-eslint/no-unused-vars
+  39:6   warning  React Hook useEffect has a missing dependency: 'fetchBranches'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  56:30  warning  'update' is defined but never used. Allowed unused args must match /^_/u                                          @typescript-eslint/no-unused-vars
+  56:38  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\layout.tsx
+   7:10  warning  'headers' is defined but never used. Allowed unused vars must match /^_/u             @typescript-eslint/no-unused-vars
+   9:7   warning  'geistSans' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  14:7   warning  'geistMono' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\login\page.tsx
+  19:36  warning  Unexpected any. Specify a different type                                        @typescript-eslint/no-explicit-any
+  23:10  warning  'pin' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\page.tsx
+   43:9   warning  'router' is assigned a value but never used. Allowed unused vars must match /^_/u                              @typescript-eslint/no-unused-vars
+   49:36  warning  Unexpected any. Specify a different type                                                                       @typescript-eslint/no-explicit-any
+   71:6   warning  React Hook useEffect has a missing dependency: 'fetchStats'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  102:75  warning  Unexpected any. Specify a different type                                                                       @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\pos\page.tsx
+    53:36  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+    61:62  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+    67:48  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+    73:28  warning  'ConfirmDialog' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   105:49  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+   106:46  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+   107:49  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+   108:46  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+   109:49  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+   110:46  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+   116:33  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+   117:30  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+   118:33  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+   119:30  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+   120:33  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+   121:30  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+   365:42  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+   548:50  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+   655:38  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+   671:55  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+   750:45  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+   776:44  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+  1423:57  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\products\page.tsx
+  40:36  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+  65:6   warning  React Hook useEffect has a missing dependency: 'fetchProducts'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\profile\page.tsx
+   5:8   warning  'ProtectedRoute' is defined but never used. Allowed unused vars must match /^_/u                                 @typescript-eslint/no-unused-vars
+  13:9   warning  'tenant' is assigned a value but never used. Allowed unused vars must match /^_/u                                @typescript-eslint/no-unused-vars
+  15:11  warning  'user' is assigned a value but never used. Allowed unused vars must match /^_/u                                  @typescript-eslint/no-unused-vars
+  16:36  warning  Unexpected any. Specify a different type                                                                         @typescript-eslint/no-explicit-any
+  36:50  warning  Unexpected any. Specify a different type                                                                         @typescript-eslint/no-explicit-any
+  41:6   warning  React Hook useEffect has a missing dependency: 'fetchProfile'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\reports\page.tsx
+   97:36   warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  125:6    warning  React Hook useEffect has a missing dependency: 'loadReports'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  311:66   warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  414:95   warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  512:99   warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  586:83   warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  659:102  warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  770:87   warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\settings\page.tsx
+    5:8   warning  'ProtectedRoute' is defined but never used. Allowed unused vars must match /^_/u                                  @typescript-eslint/no-unused-vars
+   19:36  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+   27:54  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+   35:6   warning  React Hook useEffect has a missing dependency: 'fetchSettings'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  246:47  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+  251:18  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\subscription\page.tsx
+    7:56  warning  'AlertTriangle' is defined but never used. Allowed unused vars must match /^_/u    @typescript-eslint/no-unused-vars
+   42:9   warning  'router' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   43:9   warning  'tenant' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   45:36  warning  Unexpected any. Specify a different type                                           @typescript-eslint/no-explicit-any
+  105:72  warning  Unexpected any. Specify a different type                                           @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\subscription\payment-failed\page.tsx
+  13:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\subscription\payment-success\page.tsx
+  14:36  warning  Unexpected any. Specify a different type                                                                                 @typescript-eslint/no-explicit-any
+  25:6   warning  React Hook useEffect has a missing dependency: 'activateSubscription'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  77:21  warning  Unexpected any. Specify a different type                                                                                 @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\[tenant]\[lang]\transactions\page.tsx
+  61:36  warning  Unexpected any. Specify a different type                                                                                                    @typescript-eslint/no-explicit-any
+  84:6   warning  React Hook useEffect has missing dependencies: 'fetchExpenses' and 'fetchTransactions'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\corew\localpro-pos\app\[tenant]\error.tsx
+  14:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\[tenant]\forbidden.tsx
+  25:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\[tenant]\layout.tsx
+  35:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\[tenant]\not-found.tsx
+  8:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\attendance\current\route.ts
+  42:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\attendance\notifications\route.ts
+    4:8   warning  'User' is defined but never used. Allowed unused vars must match /^_/u                              @typescript-eslint/no-unused-vars
+    6:10  warning  'sendEmail' is defined but never used. Allowed unused vars must match /^_/u                         @typescript-eslint/no-unused-vars
+   43:26  warning  Unexpected any. Specify a different type                                                            @typescript-eslint/no-explicit-any
+   46:38  warning  Unexpected any. Specify a different type                                                            @typescript-eslint/no-explicit-any
+   80:43  warning  Unexpected any. Specify a different type                                                            @typescript-eslint/no-explicit-any
+  122:19  warning  Unexpected any. Specify a different type                                                            @typescript-eslint/no-explicit-any
+  152:11  warning  'expectedStartTime' is assigned a value but never used. Allowed unused vars must match /^_/u        @typescript-eslint/no-unused-vars
+  153:11  warning  'maxHoursWithoutClockOut' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  185:25  warning  Unexpected any. Specify a different type                                                            @typescript-eslint/no-explicit-any
+  205:19  warning  Unexpected any. Specify a different type                                                            @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\attendance\route.ts
+   23:18  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   54:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  154:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\audit-logs\route.ts
+   5:8   warning  'User' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  37:18  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  82:19  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\auth\change-password\route.ts
+  82:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\auth\customer\send-otp\route.ts
+    4:8   warning  'Customer' is defined but never used. Allowed unused vars must match /^_/u                @typescript-eslint/no-unused-vars
+    6:10  warning  'getTenantIdFromRequest' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  116:19  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\auth\customer\verify-otp\route.ts
+    6:10  warning  'getTenantIdFromRequest' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  141:19  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\auth\login-pin\route.ts
+  127:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\auth\login-qr\route.ts
+  97:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\auth\login\route.ts
+   94:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  158:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\auth\logout\route.ts
+  24:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\auth\me\route.ts
+  34:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\auth\qr-code\route.ts
+  60:5  warning  't' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\corew\localpro-pos\app\api\auth\reset-password\route.ts
+   38:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  160:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  161:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  180:12  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  181:12  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\automations\analytics\sales-trends\route.ts
+  23:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  52:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\automations\attendance\auto-clockout\route.ts
+  32:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  73:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\automations\attendance\break-detection\route.ts
+  23:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  53:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\automations\attendance\violations\route.ts
+  23:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  53:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\automations\audit-logs\cleanup\route.ts
+  23:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  54:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\automations\backups\create\route.ts
+  23:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  50:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\automations\booking-reminders\route.ts
+  35:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  78:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\automations\bookings\confirm\route.ts
+  29:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  65:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\automations\bookings\no-show\route.ts
+  32:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  73:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\automations\carts\abandoned\route.ts
+  23:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  53:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\automations\cash-drawer\auto-close\route.ts
+  32:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  71:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\automations\cash-drawer\reminders\route.ts
+  23:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  53:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\automations\customers\lifetime-value\route.ts
+  23:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  51:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\automations\data\archive\route.ts
+  23:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  56:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\automations\discounts\manage\route.ts
+  29:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  64:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\automations\low-stock-alerts\route.ts
+  34:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  76:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\automations\pricing\dynamic\route.ts
+  23:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  53:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\automations\products\performance\route.ts
+  23:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  56:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\automations\purchase-orders\route.ts
+  23:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  50:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\automations\reports\sales\route.ts
+  34:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  74:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\automations\security\suspicious-activity\route.ts
+  29:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  74:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\automations\sessions\expire\route.ts
+  23:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  53:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\automations\status\route.ts
+  169:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\automations\stock\predictive\route.ts
+  23:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  56:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\automations\stock\transfer\route.ts
+  23:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  54:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\automations\sync\multi-branch\route.ts
+  28:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  64:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\automations\sync\offline\route.ts
+  23:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  53:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\automations\transaction-receipts\route.ts
+  44:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  96:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\booking\availability\route.ts
+   70:33  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  127:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\booking\route.ts
+    6:10  warning  'validateEmail' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   82:41  warning  Unexpected any. Specify a different type                                         @typescript-eslint/no-explicit-any
+  125:19  warning  Unexpected any. Specify a different type                                         @typescript-eslint/no-explicit-any
+  190:34  warning  Unexpected any. Specify a different type                                         @typescript-eslint/no-explicit-any
+  204:19  warning  Unexpected any. Specify a different type                                         @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\bookings\[id]\reminder\route.ts
+  76:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\bookings\[id]\route.ts
+    8:60  warning  'sendBookingReminder' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   51:19  warning  Unexpected any. Specify a different type                                               @typescript-eslint/no-explicit-any
+  175:23  warning  Unexpected any. Specify a different type                                               @typescript-eslint/no-explicit-any
+  239:19  warning  Unexpected any. Specify a different type                                               @typescript-eslint/no-explicit-any
+  317:19  warning  Unexpected any. Specify a different type                                               @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\bookings\customer\[customerId]\route.ts
+  40:18  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  73:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\bookings\reminders\send\route.ts
+   91:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  106:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\bookings\route.ts
+   47:18  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   73:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   93:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  124:28  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  280:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\bookings\time-slots\route.ts
+   60:18  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  114:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\branches\[id]\route.ts
+   33:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   82:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  128:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\branches\route.ts
+  23:18  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  34:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  62:26  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  99:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\bundles\[id]\route.ts
+   33:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   82:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  128:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\bundles\analytics\route.ts
+   25:22  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+   34:29  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+   44:24  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+   58:42  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+   60:41  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+   96:28  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+   96:45  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+   97:19  warning  'item' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+   97:25  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  113:19  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\bundles\bulk\route.ts
+  63:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\bundles\route.ts
+  28:18  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\business-types\route.ts
+  34:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\cash-drawer\sessions\route.ts
+   25:18  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   36:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  160:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\categories\[id]\route.ts
+   30:19  warning  Unexpected any. Specify a different type                                            @typescript-eslint/no-explicit-any
+   82:19  warning  Unexpected any. Specify a different type                                            @typescript-eslint/no-explicit-any
+  113:11  warning  'oldData' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  126:19  warning  Unexpected any. Specify a different type                                            @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\categories\route.ts
+   5:10  warning  'requireAuth' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  24:19  warning  Unexpected any. Specify a different type                                       @typescript-eslint/no-explicit-any
+  37:25  warning  Unexpected any. Specify a different type                                       @typescript-eslint/no-explicit-any
+  72:19  warning  Unexpected any. Specify a different type                                       @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\client\address\[addressId]\route.ts
+   45:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   86:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  151:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\client\address\route.ts
+  76:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\client\profile\route.ts
+   65:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  123:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  189:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\customers\[id]\route.ts
+    5:10  warning  'requireAuth' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   29:19  warning  Unexpected any. Specify a different type                                       @typescript-eslint/no-explicit-any
+   46:25  warning  Unexpected any. Specify a different type                                       @typescript-eslint/no-explicit-any
+   47:13  warning  't' is assigned a value but never used. Allowed unused vars must match /^_/u   @typescript-eslint/no-unused-vars
+  100:19  warning  Unexpected any. Specify a different type                                       @typescript-eslint/no-explicit-any
+  117:25  warning  Unexpected any. Specify a different type                                       @typescript-eslint/no-explicit-any
+  118:13  warning  't' is assigned a value but never used. Allowed unused vars must match /^_/u   @typescript-eslint/no-unused-vars
+  148:19  warning  Unexpected any. Specify a different type                                       @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\customers\route.ts
+    5:10  warning  'requireAuth' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   25:18  warning  Unexpected any. Specify a different type                                       @typescript-eslint/no-explicit-any
+   56:19  warning  Unexpected any. Specify a different type                                       @typescript-eslint/no-explicit-any
+   69:25  warning  Unexpected any. Specify a different type                                       @typescript-eslint/no-explicit-any
+   70:13  warning  't' is assigned a value but never used. Allowed unused vars must match /^_/u   @typescript-eslint/no-unused-vars
+  149:19  warning  Unexpected any. Specify a different type                                       @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\discounts\[id]\route.ts
+  27:20  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  65:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  98:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\discounts\route.ts
+    4:10  warning  'getTenantIdFromRequest' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+    5:10  warning  'requireAuth' is defined but never used. Allowed unused vars must match /^_/u             @typescript-eslint/no-unused-vars
+   18:25  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+   19:13  warning  't' is assigned a value but never used. Allowed unused vars must match /^_/u              @typescript-eslint/no-unused-vars
+   28:11  warning  't' is assigned a value but never used. Allowed unused vars must match /^_/u              @typescript-eslint/no-unused-vars
+   34:18  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+   49:19  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+   64:25  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+   65:13  warning  't' is assigned a value but never used. Allowed unused vars must match /^_/u              @typescript-eslint/no-unused-vars
+   78:28  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+  159:19  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\discounts\validate\route.ts
+  105:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\expenses\[id]\route.ts
+  107:11  warning  'oldData' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\corew\localpro-pos\app\api\expenses\route.ts
+  25:18  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\inventory\low-stock\route.ts
+  12:11  warning  'user' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  37:19  warning  Unexpected any. Specify a different type                                         @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\inventory\realtime\route.ts
+   34:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   47:26  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  113:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\invoices\[id]\route.ts
+   36:19  warning  Unexpected any. Specify a different type                                         @typescript-eslint/no-explicit-any
+   48:23  warning  'user' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   67:20  warning  Unexpected any. Specify a different type                                         @typescript-eslint/no-explicit-any
+  109:19  warning  Unexpected any. Specify a different type                                         @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\invoices\from-transaction\route.ts
+   17:23  warning  'user' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   56:46  warning  Unexpected any. Specify a different type                                         @typescript-eslint/no-explicit-any
+   63:55  warning  Unexpected any. Specify a different type                                         @typescript-eslint/no-explicit-any
+  113:19  warning  Unexpected any. Specify a different type                                         @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\invoices\route.ts
+   27:18  warning  Unexpected any. Specify a different type                                         @typescript-eslint/no-explicit-any
+   62:19  warning  Unexpected any. Specify a different type                                         @typescript-eslint/no-explicit-any
+   71:23  warning  'user' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  132:46  warning  Unexpected any. Specify a different type                                         @typescript-eslint/no-explicit-any
+  174:19  warning  Unexpected any. Specify a different type                                         @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\payments\[id]\refund\route.ts
+  14:23  warning  'user' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  61:19  warning  Unexpected any. Specify a different type                                         @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\payments\route.ts
+   25:18  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   59:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  129:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\paypal\create-payment\route.ts
+  14:11  warning  'user' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\corew\localpro-pos\app\api\paypal\success\route.ts
+  27:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\products\[id]\pin\route.ts
+  46:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\products\[id]\refill\route.ts
+  85:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\products\[id]\route.ts
+    5:10  warning  'requireAuth' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   37:19  warning  Unexpected any. Specify a different type                                       @typescript-eslint/no-explicit-any
+   50:25  warning  Unexpected any. Specify a different type                                       @typescript-eslint/no-explicit-any
+   91:27  warning  Unexpected any. Specify a different type                                       @typescript-eslint/no-explicit-any
+  124:35  warning  Unexpected any. Specify a different type                                       @typescript-eslint/no-explicit-any
+  143:19  warning  Unexpected any. Specify a different type                                       @typescript-eslint/no-explicit-any
+  156:25  warning  Unexpected any. Specify a different type                                       @typescript-eslint/no-explicit-any
+  182:19  warning  Unexpected any. Specify a different type                                       @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\products\route.ts
+   5:10  warning  'requireAuth' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  25:18  warning  Unexpected any. Specify a different type                                       @typescript-eslint/no-explicit-any
+  61:25  warning  Unexpected any. Specify a different type                                       @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\reports\cash-drawer\route.ts
+  30:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\reports\products\route.ts
+  47:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\reports\profit-loss\route.ts
+  30:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\reports\sales\route.ts
+  27:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\reports\vat\route.ts
+  36:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\saved-carts\[id]\route.ts
+  37:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  71:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\saved-carts\route.ts
+  29:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  79:31  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  94:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\services\route.ts
+  41:34  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  63:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\stock-movements\route.ts
+  26:18  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  55:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\subscription-plans\route.ts
+  6:27  warning  'request' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\corew\localpro-pos\app\api\subscriptions\[id]\route.ts
+   29:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   54:20  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  107:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  145:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\subscriptions\activate\route.ts
+   14:11  warning  'user' is assigned a value but never used. Allowed unused vars must match /^_/u           @typescript-eslint/no-unused-vars
+   25:47  warning  'paypalOrderId' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   50:27  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+  131:19  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\subscriptions\billing-history\route.ts
+  12:11  warning  'user' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  37:59  warning  Unexpected any. Specify a different type                                         @typescript-eslint/no-explicit-any
+  54:19  warning  Unexpected any. Specify a different type                                         @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\subscriptions\current\route.ts
+  12:11  warning  'user' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  32:19  warning  Unexpected any. Specify a different type                                         @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\subscriptions\request-upgrade\route.ts
+   5:8   warning  'Tenant' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  90:19  warning  Unexpected any. Specify a different type                                  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\tax-rules\[id]\route.ts
+   29:19  warning  Unexpected any. Specify a different type                                         @typescript-eslint/no-explicit-any
+   41:11  warning  'user' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   87:19  warning  Unexpected any. Specify a different type                                         @typescript-eslint/no-explicit-any
+   99:11  warning  'user' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  122:19  warning  Unexpected any. Specify a different type                                         @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\tax-rules\route.ts
+  21:18  warning  Unexpected any. Specify a different type                                         @typescript-eslint/no-explicit-any
+  31:19  warning  Unexpected any. Specify a different type                                         @typescript-eslint/no-explicit-any
+  39:11  warning  'user' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  87:19  warning  Unexpected any. Specify a different type                                         @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\tenants\[slug]\business-hours\route.ts
+  33:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  78:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\tenants\[slug]\exchange-rates\route.ts
+   42:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   95:33  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  119:41  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  136:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\tenants\[slug]\holidays\route.ts
+   33:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   91:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  118:25  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  130:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  166:49  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  180:25  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  192:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  228:42  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  240:25  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  249:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\tenants\[slug]\notification-templates\route.ts
+  34:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  99:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\tenants\[slug]\receipt-templates\route.ts
+   40:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  116:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  203:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  259:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\tenants\[slug]\reset-collections\route.ts
+   23:41  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   73:34  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  113:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  196:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  261:55  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  275:52  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  312:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\tenants\[slug]\route.ts
+   22:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   42:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   93:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  115:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  159:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\tenants\[slug]\settings\route.ts
+   29:19  warning  Unexpected any. Specify a different type                                         @typescript-eslint/no-explicit-any
+   47:13  warning  'user' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   49:25  warning  Unexpected any. Specify a different type                                         @typescript-eslint/no-explicit-any
+  131:19  warning  Unexpected any. Specify a different type                                         @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\tenants\[slug]\tax-rules\route.ts
+   33:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   96:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  136:46  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  152:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  188:42  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  199:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\tenants\signup\route.ts
+  122:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  155:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\transactions\[id]\refund\route.ts
+   47:65  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   58:16  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   96:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   98:42  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  131:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  132:53  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  200:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\transactions\[id]\route.ts
+    5:10  warning  'getTenantIdFromRequest' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+    6:10  warning  'requireAuth' is defined but never used. Allowed unused vars must match /^_/u             @typescript-eslint/no-unused-vars
+   19:25  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+   20:13  warning  't' is assigned a value but never used. Allowed unused vars must match /^_/u              @typescript-eslint/no-unused-vars
+   42:19  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+   61:25  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+   62:13  warning  't' is assigned a value but never used. Allowed unused vars must match /^_/u              @typescript-eslint/no-unused-vars
+  120:19  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\transactions\customer\[customerId]\route.ts
+  44:18  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  88:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\transactions\stats\route.ts
+   43:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   73:26  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  132:25  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  159:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\users\[id]\pin\route.ts
+   84:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  142:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\users\[id]\qr-code\route.ts
+   62:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  124:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\users\[id]\route.ts
+   32:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   65:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  123:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  145:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  190:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\users\pin\route.ts
+  61:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  85:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\api\users\route.ts
+    4:10  warning  'getTenantIdFromRequest' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   21:25  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+   37:19  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+   59:25  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+  110:26  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+  147:19  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\marketing\page.tsx
+  8:10  warning  'scrollY' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\corew\localpro-pos\app\not-found.tsx
+  16:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\app\proxy.ts
+  32:11  warning  'firstPart' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\corew\localpro-pos\app\signup\page.tsx
+   12:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   29:54  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   91:18  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  140:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  265:95  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\components\AttendanceClock.tsx
+   19:36  warning  Unexpected any. Specify a different type                                                                                @typescript-eslint/no-explicit-any
+   70:6   warning  React Hook useEffect has a missing dependency: 'fetchCurrentSession'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+   96:19  warning  Unexpected any. Specify a different type                                                                                @typescript-eslint/no-explicit-any
+  127:19  warning  Unexpected any. Specify a different type                                                                                @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\components\AttendanceTrendsCharts.tsx
+  43:9  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\components\BarcodeScanner.tsx
+   3:21  warning  'useRef' is defined but never used. Allowed unused vars must match /^_/u                @typescript-eslint/no-unused-vars
+  12:20  warning  'setIsActive' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\corew\localpro-pos\components\BookingCalendar.tsx
+  49:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\components\BundlePerformanceCharts.tsx
+    5:10  warning  'formatCurrency' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   22:9   warning  Unexpected any. Specify a different type                                          @typescript-eslint/no-explicit-any
+  191:36  warning  Unexpected any. Specify a different type                                          @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\components\ErrorBoundary.tsx
+   4:10  warning  'useParams' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  15:9   warning  Unexpected any. Specify a different type                                     @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\components\FormattedDate.tsx
+  4:22  warning  'formatTime' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\corew\localpro-pos\components\HardwareSettings.tsx
+   25:36  warning  Unexpected any. Specify a different type                                                                                              @typescript-eslint/no-explicit-any
+   48:6   warning  React Hook useEffect has missing dependencies: 'externalConfig' and 'loadConfig'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+  180:45  warning  Unexpected any. Specify a different type                                                                                              @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\components\HardwareStatus.tsx
+  25:9   warning  'tenant' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  27:36  warning  Unexpected any. Specify a different type                                           @typescript-eslint/no-explicit-any
+  68:21  warning  Unexpected any. Specify a different type                                           @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\components\LowStockAlerts.tsx
+   6:8   warning  'Currency' is defined but never used. Allowed unused vars must match /^_/u                                      @typescript-eslint/no-unused-vars
+  30:36  warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  51:19  warning  Unexpected any. Specify a different type                                                                        @typescript-eslint/no-explicit-any
+  65:6   warning  React Hook useEffect has a missing dependency: 'fetchAlerts'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\corew\localpro-pos\components\Navbar.tsx
+  19:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  93:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\components\OfflineIndicator.tsx
+  12:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\components\PageTitle.tsx
+  15:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\components\ProductModal.tsx
+   45:36  warning  Unexpected any. Specify a different type                                                                    @typescript-eslint/no-explicit-any
+  128:6   warning  React Hook useEffect has a missing dependency: 'product'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  229:25  warning  Unexpected any. Specify a different type                                                                    @typescript-eslint/no-explicit-any
+  253:37  warning  Unexpected any. Specify a different type                                                                    @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\components\ProtectedRoute.tsx
+  24:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\components\QRCodeDisplay.tsx
+  17:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\components\QRCodeScanner.tsx
+  17:36  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+  19:10  warning  'isScanning' is assigned a value but never used. Allowed unused vars must match /^_/u                                                                                                                                                                                                    @typescript-eslint/no-unused-vars
+  34:21  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+  46:6   warning  React Hook useEffect has a missing dependency: 'dict?.common?.failedToStartQRScanner'. Either include it or remove the dependency array. You can also replace multiple useState variables with useReducer if 'setError' needs the current value of 'dict.common.failedToStartQRScanner'  react-hooks/exhaustive-deps
+
+C:\Users\corew\localpro-pos\components\RealTimeStockTracker.tsx
+  40:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\components\SalesChart.tsx
+   15:9   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  100:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\components\StockRefillModal.tsx
+  24:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\components\SubscriptionGuard.tsx
+   6:10  warning  'SubscriptionService' is defined but never used. Allowed unused vars must match /^_/u                                       @typescript-eslint/no-unused-vars
+  58:6   warning  React Hook useEffect has a missing dependency: 'createTrialSubscription'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\corew\localpro-pos\components\SubscriptionStatusBar.tsx
+  4:54  warning  'Crown' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\corew\localpro-pos\components\TenantAccessGuard.tsx
+   3:10  warning  'useEffect' is defined but never used. Allowed unused vars must match /^_/u                     @typescript-eslint/no-unused-vars
+  16:9   warning  'router' is assigned a value but never used. Allowed unused vars must match /^_/u               @typescript-eslint/no-unused-vars
+  17:9   warning  'params' is assigned a value but never used. Allowed unused vars must match /^_/u               @typescript-eslint/no-unused-vars
+  18:29  warning  'userTenantSlug' is assigned a value but never used. Allowed unused vars must match /^_/u       @typescript-eslint/no-unused-vars
+  18:45  warning  'requestedTenantSlug' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\corew\localpro-pos\components\settings\BusinessHoursManager.tsx
+  18:59  warning  Unexpected any. Specify a different type                                                                               @typescript-eslint/no-explicit-any
+  19:58  warning  Unexpected any. Specify a different type                                                                               @typescript-eslint/no-explicit-any
+  24:6   warning  React Hook useEffect has a missing dependency: 'fetchBusinessHours'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  37:21  warning  Unexpected any. Specify a different type                                                                               @typescript-eslint/no-explicit-any
+  62:21  warning  Unexpected any. Specify a different type                                                                               @typescript-eslint/no-explicit-any
+  69:52  warning  Unexpected any. Specify a different type                                                                               @typescript-eslint/no-explicit-any
+  92:54  warning  Unexpected any. Specify a different type                                                                               @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\components\settings\HolidaysManager.tsx
+   27:43  warning  'settings' is defined but never used. Allowed unused args must match /^_/u                                        @typescript-eslint/no-unused-vars
+   27:61  warning  'onUpdate' is defined but never used. Allowed unused args must match /^_/u                                        @typescript-eslint/no-unused-vars
+   36:6   warning  React Hook useEffect has a missing dependency: 'fetchHolidays'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+   46:21  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+   80:21  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+  102:21  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+  268:72  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\components\settings\MultiCurrencyDisplaySettings.tsx
+  3:10  warning  'useState' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\corew\localpro-pos\components\settings\MultiCurrencySettings.tsx
+   3:20  warning  'useEffect' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  42:21  warning  Unexpected any. Specify a different type                                     @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\components\settings\NotificationTemplatesManager.tsx
+   15:11  warning  'Template' is defined but never used. Allowed unused vars must match /^_/u                                         @typescript-eslint/no-unused-vars
+   38:56  warning  'settings' is defined but never used. Allowed unused args must match /^_/u                                         @typescript-eslint/no-unused-vars
+   38:74  warning  'onUpdate' is defined but never used. Allowed unused args must match /^_/u                                         @typescript-eslint/no-unused-vars
+   39:61  warning  Unexpected any. Specify a different type                                                                           @typescript-eslint/no-explicit-any
+   47:6   warning  React Hook useEffect has a missing dependency: 'fetchTemplates'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+   57:21  warning  Unexpected any. Specify a different type                                                                           @typescript-eslint/no-explicit-any
+  110:21  warning  Unexpected any. Specify a different type                                                                           @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\components\settings\ReceiptTemplatesManager.tsx
+   21:51  warning  'settings' is defined but never used. Allowed unused args must match /^_/u                                         @typescript-eslint/no-unused-vars
+   21:69  warning  'onUpdate' is defined but never used. Allowed unused args must match /^_/u                                         @typescript-eslint/no-unused-vars
+   30:6   warning  React Hook useEffect has a missing dependency: 'fetchTemplates'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+   40:21  warning  Unexpected any. Specify a different type                                                                           @typescript-eslint/no-explicit-any
+   72:21  warning  Unexpected any. Specify a different type                                                                           @typescript-eslint/no-explicit-any
+   93:21  warning  Unexpected any. Specify a different type                                                                           @typescript-eslint/no-explicit-any
+  112:21  warning  Unexpected any. Specify a different type                                                                           @typescript-eslint/no-explicit-any
+  356:42  warning  Unexpected any. Specify a different type                                                                           @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\components\settings\TaxRulesManager.tsx
+   30:43  warning  'settings' is defined but never used. Allowed unused args must match /^_/u                                     @typescript-eslint/no-unused-vars
+   30:61  warning  'onUpdate' is defined but never used. Allowed unused args must match /^_/u                                     @typescript-eslint/no-unused-vars
+   39:6   warning  React Hook useEffect has a missing dependency: 'fetchRules'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+   49:21  warning  Unexpected any. Specify a different type                                                                       @typescript-eslint/no-explicit-any
+   79:21  warning  Unexpected any. Specify a different type                                                                       @typescript-eslint/no-explicit-any
+  100:21  warning  Unexpected any. Specify a different type                                                                       @typescript-eslint/no-explicit-any
+  274:61  warning  Unexpected any. Specify a different type                                                                       @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\contexts\AuthContext.tsx
+   75:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  110:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  131:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\contexts\SubscriptionContext.tsx
+   98:6  warning  React Hook useEffect has a missing dependency: 'refreshSubscription'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  104:6  warning  React Hook useEffect has a missing dependency: 'refreshSubscription'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\corew\localpro-pos\contexts\TenantSettingsContext.tsx
+  47:6  warning  React Hook useEffect has a missing dependency: 'fetchSettings'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\corew\localpro-pos\hooks\useTenantAccess.ts
+  66:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\analytics.ts
+  197:38  warning  Unexpected any. Specify a different type                                                @typescript-eslint/no-explicit-any
+  253:9   warning  'nonVatSales' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  257:5   warning  'vatSales' is assigned a value but never used. Allowed unused vars must match /^_/u     @typescript-eslint/no-unused-vars
+  378:36  warning  Unexpected any. Specify a different type                                                @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\api-client.ts
+   9:45  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  58:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\api-tenant.ts
+  261:61  warning  'request' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\corew\localpro-pos\lib\audit.ts
+  13:28  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  14:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\automations\abandoned-carts.ts
+   10:8   warning  'User' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   80:41  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  165:27  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  170:23  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  181:19  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\automations\attendance-auto-clockout.ts
+    9:8   warning  'User' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  138:46  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  182:27  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  187:23  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  198:19  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\automations\attendance-violations.ts
+    9:8   warning  'User' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   95:49  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  124:27  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  134:23  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  145:19  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\automations\audit-log-cleanup.ts
+  80:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  91:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\automations\booking-confirmations.ts
+  105:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  110:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  121:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\automations\booking-no-show.ts
+  124:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  129:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  140:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\automations\booking-reminders.ts
+   99:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  104:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  115:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\automations\break-detection.ts
+   99:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  104:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  115:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\automations\cash-count-reminders.ts
+   10:8   warning  'User' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   79:44  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  131:27  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  136:23  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  147:19  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\automations\cash-drawer-closure.ts
+  142:46  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  249:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  254:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  265:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\automations\customer-lifetime-value.ts
+   96:19  warning  'avgOrderValue' is assigned a value but never used. Allowed unused vars must match /^_/u      @typescript-eslint/no-unused-vars
+  104:19  warning  'purchaseFrequency' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  107:19  warning  'clv' is assigned a value but never used. Allowed unused vars must match /^_/u                @typescript-eslint/no-unused-vars
+  120:27  warning  Unexpected any. Specify a different type                                                      @typescript-eslint/no-explicit-any
+  125:23  warning  Unexpected any. Specify a different type                                                      @typescript-eslint/no-explicit-any
+  136:19  warning  Unexpected any. Specify a different type                                                      @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\automations\customer-welcome.ts
+  131:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\automations\data-archiving.ts
+    7:8   warning  'Transaction' is defined but never used. Allowed unused vars must match /^_/u                     @typescript-eslint/no-unused-vars
+   64:15  warning  'archiveCollectionName' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   95:27  warning  Unexpected any. Specify a different type                                                          @typescript-eslint/no-explicit-any
+  100:23  warning  Unexpected any. Specify a different type                                                          @typescript-eslint/no-explicit-any
+  111:19  warning  Unexpected any. Specify a different type                                                          @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\automations\database-backups.ts
+   58:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  115:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\automations\discount-management.ts
+   95:21  warning  'companyName' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  105:27  warning  Unexpected any. Specify a different type                                                @typescript-eslint/no-explicit-any
+  119:21  warning  'companyName' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  133:27  warning  Unexpected any. Specify a different type                                                @typescript-eslint/no-explicit-any
+  180:23  warning  Unexpected any. Specify a different type                                                @typescript-eslint/no-explicit-any
+  191:19  warning  Unexpected any. Specify a different type                                                @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\automations\dynamic-pricing.ts
+   12:8   warning  'mongoose' is defined but never used. Allowed unused vars must match /^_/u                 @typescript-eslint/no-unused-vars
+   59:15  warning  'tenantSettings' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  107:27  warning  Unexpected any. Specify a different type                                                   @typescript-eslint/no-explicit-any
+  112:23  warning  Unexpected any. Specify a different type                                                   @typescript-eslint/no-explicit-any
+  123:19  warning  Unexpected any. Specify a different type                                                   @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\automations\low-stock-alerts.ts
+   88:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  124:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  139:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  144:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  155:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\automations\multi-branch-sync.ts
+    8:8   warning  'Customer' is defined but never used. Allowed unused vars must match /^_/u                     @typescript-eslint/no-unused-vars
+    9:8   warning  'Discount' is defined but never used. Allowed unused vars must match /^_/u                     @typescript-eslint/no-unused-vars
+   42:11  warning  'conflictResolution' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   84:29  warning  Unexpected any. Specify a different type                                                       @typescript-eslint/no-explicit-any
+  104:23  warning  Unexpected any. Specify a different type                                                       @typescript-eslint/no-explicit-any
+  115:19  warning  Unexpected any. Specify a different type                                                       @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\automations\offline-sync.ts
+   7:8   warning  'Transaction' is defined but never used. Allowed unused vars must match /^_/u       @typescript-eslint/no-unused-vars
+   8:8   warning  'Tenant' is defined but never used. Allowed unused vars must match /^_/u            @typescript-eslint/no-unused-vars
+  22:3   warning  'options' is assigned a value but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+  43:19  warning  Unexpected any. Specify a different type                                            @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\automations\predictive-stock.ts
+   70:28  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  140:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  180:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  191:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\automations\product-performance.ts
+   72:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   73:30  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  140:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  194:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  205:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\automations\purchase-orders.ts
+    7:8   warning  'Product' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   65:69  warning  Unexpected any. Specify a different type                                   @typescript-eslint/no-explicit-any
+   76:68  warning  Unexpected any. Specify a different type                                   @typescript-eslint/no-explicit-any
+  153:23  warning  Unexpected any. Specify a different type                                   @typescript-eslint/no-explicit-any
+  164:19  warning  Unexpected any. Specify a different type                                   @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\automations\recurring-bookings.ts
+   7:8   warning  'Booking' is defined but never used. Allowed unused vars must match /^_/u           @typescript-eslint/no-unused-vars
+   8:8   warning  'Tenant' is defined but never used. Allowed unused vars must match /^_/u            @typescript-eslint/no-unused-vars
+  22:3   warning  'options' is assigned a value but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+  43:19  warning  Unexpected any. Specify a different type                                            @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\automations\report-delivery.ts
+  185:40  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  214:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  225:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\automations\sales-trend-analysis.ts
+  205:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  216:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\automations\session-expiration.ts
+   92:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   97:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  108:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\automations\stock-transfer.ts
+   85:63  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  127:26  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  135:26  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  201:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  206:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  217:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\automations\suspicious-activity.ts
+  156:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  167:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\automations\transaction-receipts.ts
+    8:8   warning  'Tenant' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  167:19  warning  Unexpected any. Specify a different type                                  @typescript-eslint/no-explicit-any
+  200:18  warning  Unexpected any. Specify a different type                                  @typescript-eslint/no-explicit-any
+  235:23  warning  Unexpected any. Specify a different type                                  @typescript-eslint/no-explicit-any
+  246:19  warning  Unexpected any. Specify a different type                                  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\automations\types.ts
+  17:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\business-hours.ts
+    6:10  warning  'ITenantSettings' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  169:9   warning  'year' is assigned a value but never used. Allowed unused vars must match /^_/u    @typescript-eslint/no-unused-vars
+
+C:\Users\corew\localpro-pos\lib\business-type-helpers.ts
+   7:47   warning  'getAllowedProductTypes' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  55:106  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+  56:34   warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\business-types.ts
+   25:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  180:12  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  207:53  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  207:82  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\cron.ts
+   19:3   warning  'manageDiscountStatus' is defined but never used. Allowed unused vars must match /^_/u           @typescript-eslint/no-unused-vars
+   20:3   warning  'autoClockOutForgottenSessions' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   21:3   warning  'autoCloseCashDrawers' is defined but never used. Allowed unused vars must match /^_/u           @typescript-eslint/no-unused-vars
+   31:3   warning  'expireInactiveSessions' is defined but never used. Allowed unused vars must match /^_/u         @typescript-eslint/no-unused-vars
+   65:21  warning  Unexpected any. Specify a different type                                                         @typescript-eslint/no-explicit-any
+   78:21  warning  Unexpected any. Specify a different type                                                         @typescript-eslint/no-explicit-any
+   91:21  warning  Unexpected any. Specify a different type                                                         @typescript-eslint/no-explicit-any
+  104:21  warning  Unexpected any. Specify a different type                                                         @typescript-eslint/no-explicit-any
+  117:21  warning  Unexpected any. Specify a different type                                                         @typescript-eslint/no-explicit-any
+  130:21  warning  Unexpected any. Specify a different type                                                         @typescript-eslint/no-explicit-any
+  144:21  warning  Unexpected any. Specify a different type                                                         @typescript-eslint/no-explicit-any
+  158:21  warning  Unexpected any. Specify a different type                                                         @typescript-eslint/no-explicit-any
+  172:21  warning  Unexpected any. Specify a different type                                                         @typescript-eslint/no-explicit-any
+  185:21  warning  Unexpected any. Specify a different type                                                         @typescript-eslint/no-explicit-any
+  198:21  warning  Unexpected any. Specify a different type                                                         @typescript-eslint/no-explicit-any
+  211:21  warning  Unexpected any. Specify a different type                                                         @typescript-eslint/no-explicit-any
+  224:21  warning  Unexpected any. Specify a different type                                                         @typescript-eslint/no-explicit-any
+  237:21  warning  Unexpected any. Specify a different type                                                         @typescript-eslint/no-explicit-any
+  250:21  warning  Unexpected any. Specify a different type                                                         @typescript-eslint/no-explicit-any
+  263:21  warning  Unexpected any. Specify a different type                                                         @typescript-eslint/no-explicit-any
+  276:21  warning  Unexpected any. Specify a different type                                                         @typescript-eslint/no-explicit-any
+  289:21  warning  Unexpected any. Specify a different type                                                         @typescript-eslint/no-explicit-any
+  302:21  warning  Unexpected any. Specify a different type                                                         @typescript-eslint/no-explicit-any
+  315:21  warning  Unexpected any. Specify a different type                                                         @typescript-eslint/no-explicit-any
+  329:21  warning  Unexpected any. Specify a different type                                                         @typescript-eslint/no-explicit-any
+  342:21  warning  Unexpected any. Specify a different type                                                         @typescript-eslint/no-explicit-any
+  355:21  warning  Unexpected any. Specify a different type                                                         @typescript-eslint/no-explicit-any
+  372:21  warning  Unexpected any. Specify a different type                                                         @typescript-eslint/no-explicit-any
+  385:21  warning  Unexpected any. Specify a different type                                                         @typescript-eslint/no-explicit-any
+  398:21  warning  Unexpected any. Specify a different type                                                         @typescript-eslint/no-explicit-any
+  411:21  warning  Unexpected any. Specify a different type                                                         @typescript-eslint/no-explicit-any
+  424:21  warning  Unexpected any. Specify a different type                                                         @typescript-eslint/no-explicit-any
+  437:21  warning  Unexpected any. Specify a different type                                                         @typescript-eslint/no-explicit-any
+  450:21  warning  Unexpected any. Specify a different type                                                         @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\error-handler.ts
+  13:39  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  30:58  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\export.ts
+    8:34  warning  Unexpected any. Specify a different type                                    @typescript-eslint/no-explicit-any
+   37:30  warning  Unexpected any. Specify a different type                                    @typescript-eslint/no-explicit-any
+   37:50  warning  Unexpected any. Specify a different type                                    @typescript-eslint/no-explicit-any
+   73:43  warning  Unexpected any. Specify a different type                                    @typescript-eslint/no-explicit-any
+  110:9   warning  Unexpected any. Specify a different type                                    @typescript-eslint/no-explicit-any
+  153:24  warning  'rowIndex' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\corew\localpro-pos\lib\hardware\qr-reader.ts
+  44:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\hardware\receipt-printer.ts
+    8:18  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+    9:19  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+   69:44  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+   80:42  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  294:37  warning  'data' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\corew\localpro-pos\lib\hardware\status-checker.ts
+    7:10  warning  'receiptPrinterService' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+    8:10  warning  'barcodeScannerService' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+    9:10  warning  'qrReaderService' is defined but never used. Allowed unused vars must match /^_/u        @typescript-eslint/no-unused-vars
+   79:45  warning  Unexpected any. Specify a different type                                                 @typescript-eslint/no-explicit-any
+  153:21  warning  Unexpected any. Specify a different type                                                 @typescript-eslint/no-explicit-any
+  171:15  warning  'response' is assigned a value but never used. Allowed unused vars must match /^_/u      @typescript-eslint/no-unused-vars
+  175:14  warning  Unexpected any. Specify a different type                                                 @typescript-eslint/no-explicit-any
+  184:21  warning  Unexpected any. Specify a different type                                                 @typescript-eslint/no-explicit-any
+  189:46  warning  Unexpected any. Specify a different type                                                 @typescript-eslint/no-explicit-any
+  209:35  warning  Unexpected any. Specify a different type                                                 @typescript-eslint/no-explicit-any
+  237:41  warning  Unexpected any. Specify a different type                                                 @typescript-eslint/no-explicit-any
+  237:61  warning  Unexpected any. Specify a different type                                                 @typescript-eslint/no-explicit-any
+  274:47  warning  Unexpected any. Specify a different type                                                 @typescript-eslint/no-explicit-any
+  326:25  warning  Unexpected any. Specify a different type                                                 @typescript-eslint/no-explicit-any
+  339:25  warning  Unexpected any. Specify a different type                                                 @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\mongodb.ts
+  18:46  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  20:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  21:18  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\multi-currency.ts
+  7:26  warning  'formatNumber' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\corew\localpro-pos\lib\notification-templates.ts
+  248:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\notifications.ts
+  131:19  warning  Unexpected any. Specify a different type                                            @typescript-eslint/no-explicit-any
+  214:19  warning  Unexpected any. Specify a different type                                            @typescript-eslint/no-explicit-any
+  305:9   warning  'message' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  416:9   warning  'message' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\corew\localpro-pos\lib\pin-validation.ts
+  13:13  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  18:16  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\receipt-templates.ts
+  148:28  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  154:28  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  164:28  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  181:56  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  245:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\stock.ts
+    5:10  warning  'IProductVariation' is defined but never used. Allowed unused vars must match /^_/u     @typescript-eslint/no-unused-vars
+  147:39  warning  Unexpected any. Specify a different type                                                @typescript-eslint/no-explicit-any
+  165:5   warning  'updateField' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  269:16  warning  Unexpected any. Specify a different type                                                @typescript-eslint/no-explicit-any
+  276:27  warning  Unexpected any. Specify a different type                                                @typescript-eslint/no-explicit-any
+  324:12  warning  Unexpected any. Specify a different type                                                @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\subscription.ts
+    5:8   warning  'mongoose' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   64:43  warning  Unexpected any. Specify a different type                                    @typescript-eslint/no-explicit-any
+  188:24  warning  Unexpected any. Specify a different type                                    @typescript-eslint/no-explicit-any
+  216:36  warning  Unexpected any. Specify a different type                                    @typescript-eslint/no-explicit-any
+  237:14  warning  Unexpected any. Specify a different type                                    @typescript-eslint/no-explicit-any
+  253:31  warning  Unexpected any. Specify a different type                                    @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\sync-service.ts
+   6:29  warning  'OfflineTransaction' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  61:23  warning  Unexpected any. Specify a different type                                              @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\lib\tax-calculation.ts
+  3:8   warning  'Product' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  4:10  warning  'ITenant' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\corew\localpro-pos\lib\tax-rules.ts
+  6:10  warning  'ITenantSettings' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\corew\localpro-pos\lib\toast.ts
+  33:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\scripts\apply-business-type-defaults.ts
+  55:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  85:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\scripts\create-subscription-plans.ts
+  153:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\scripts\create-tenant.ts
+  234:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  260:25  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  299:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\scripts\reset-collections.ts
+  100:53  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  135:51  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  210:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  326:25  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\scripts\test-automations.ts
+   24:10  warning  Unexpected any. Specify a different type                                         @typescript-eslint/no-explicit-any
+   47:13  warning  'text' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   77:19  warning  Unexpected any. Specify a different type                                         @typescript-eslint/no-explicit-any
+  132:19  warning  Unexpected any. Specify a different type                                         @typescript-eslint/no-explicit-any
+
+C:\Users\corew\localpro-pos\scripts\test-customer-auth.ts
+  149:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+✖ 882 problems (0 errors, 882 warnings)
+

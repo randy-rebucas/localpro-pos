@@ -104,6 +104,13 @@ export async function sendSalesReport(
         const dateRange = `${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`;
 
         // Build report HTML
+        const dailyRows = report.salesByDay?.map((item: { date: string; sales: number; transactions: number }) => `
+        <tr>
+          <td>${new Date(item.date).toLocaleDateString()}</td>
+          <td style="text-align: right;">${item.sales?.toFixed(2) || '0.00'}</td>
+          <td style="text-align: right;">${item.transactions || 0}</td>
+        </tr>
+        `).join('') ?? '';
         const reportHtml = `
 <!DOCTYPE html>
 <html>
@@ -182,13 +189,7 @@ export async function sendSalesReport(
         </tr>
       </thead>
       <tbody>
-        ${report.salesByDay.map((item: any) => `
-        <tr>
-          <td>${new Date(item.date).toLocaleDateString()}</td>
-          <td style="text-align: right;">${item.sales?.toFixed(2) || '0.00'}</td>
-          <td style="text-align: right;">${item.transactions || 0}</td>
-        </tr>
-        `).join('')}
+        ${dailyRows}
       </tbody>
     </table>
     ` : ''}
@@ -211,7 +212,7 @@ export async function sendSalesReport(
         });
 
         totalProcessed++;
-      } catch (error: any) {
+      } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         totalFailed++;
         results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
       }
@@ -222,7 +223,7 @@ export async function sendSalesReport(
     results.message = `Processed ${totalProcessed} reports${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     results.success = false;
     results.message = `Error sending reports: ${error.message}`;
     results.errors?.push(error.message);

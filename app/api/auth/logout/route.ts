@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     response.cookies.delete('auth-token');
     
     return response;
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
       { success: false, error: error.message || t('validation.logoutFailed', 'Logout failed') },

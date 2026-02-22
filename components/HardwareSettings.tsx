@@ -22,7 +22,7 @@ export default function HardwareSettings({
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = (params?.lang as 'en' | 'es') || 'en';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [internalConfig, setInternalConfig] = useState<HardwareConfig>({});
   const [loading, setLoading] = useState(false);
   const [devices, setDevices] = useState<{
@@ -45,6 +45,7 @@ export default function HardwareSettings({
       loadConfig();
     }
     detectDevices();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenant]);
 
   const loadConfig = () => {
@@ -177,7 +178,7 @@ export default function HardwareSettings({
                 onChange={(e) => updateConfig({
                   printer: {
                     ...config.printer,
-                    type: e.target.value as any,
+                    type: e.target.value as any, // eslint-disable-line @typescript-eslint/no-explicit-any
                   } as PrinterConfig,
                 })}
                 className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"

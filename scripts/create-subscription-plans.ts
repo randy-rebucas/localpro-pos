@@ -150,7 +150,7 @@ async function createSubscriptionPlans() {
 
     console.log('Subscription plans created successfully!');
     process.exit(0);
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Error creating subscription plans:', error.message);
     process.exit(1);
   }

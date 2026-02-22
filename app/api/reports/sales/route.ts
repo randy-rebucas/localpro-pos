@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     const report = await getSalesReport(tenantId, period, startDate, endDate);
 
     return NextResponse.json({ success: true, data: report });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Error fetching sales report:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

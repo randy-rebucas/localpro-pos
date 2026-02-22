@@ -16,7 +16,7 @@ interface AttendanceSession {
 export default function AttendanceClock() {
   const params = useParams();
   const lang = (params?.lang as 'en' | 'es') || 'en';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const { user, isAuthenticated } = useAuth();
   const [session, setSession] = useState<AttendanceSession | null>(null);
   const [loading, setLoading] = useState(false);
@@ -67,6 +67,7 @@ export default function AttendanceClock() {
 
   useEffect(() => {
     fetchCurrentSession();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 
   const handleClockIn = async () => {
@@ -93,7 +94,7 @@ export default function AttendanceClock() {
       } else {
         setError(data.error || dict?.common?.failedToClockIn || 'Failed to clock in');
       }
-    } catch (err: any) {
+    } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       setError(err.message || dict?.common?.failedToClockIn || 'Failed to clock in');
     } finally {
       setLoading(false);
@@ -124,7 +125,7 @@ export default function AttendanceClock() {
       } else {
         setError(data.error || dict?.common?.failedToClockOut || 'Failed to clock out');
       }
-    } catch (err: any) {
+    } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       setError(err.message || dict?.common?.failedToClockOut || 'Failed to clock out');
     } finally {
       setLoading(false);

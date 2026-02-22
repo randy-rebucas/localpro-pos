@@ -1,7 +1,7 @@
 import TaxRule from '@/models/TaxRule';
 import Tenant, { ITenantSettings } from '@/models/Tenant';
-import Product from '@/models/Product';
-import { ITenant } from '@/models/Tenant';
+import Product from '@/models/Product'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import { ITenant } from '@/models/Tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
 
 /**
  * Calculate tax amount for a transaction

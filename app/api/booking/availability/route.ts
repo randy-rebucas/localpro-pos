@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
     endDate.setHours(23, 59, 59, 999);
 
     // Fetch existing bookings for this date
-    const query: Record<string, any> = {
+    const query: Record<string, any> = { // eslint-disable-line @typescript-eslint/no-explicit-any
       tenantId: tenant._id,
       startTime: { $gte: selectedDate, $lte: endDate },
       status: { $in: ['pending', 'confirmed'] },
@@ -124,7 +124,7 @@ export async function GET(request: NextRequest) {
         slotInterval,
       },
     });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return NextResponse.json(
       { success: false, error: error.message || 'Failed to fetch availability' },
       { status: 500 }

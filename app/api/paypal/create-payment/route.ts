@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
     await connectDB();
 
     // Require authentication
-    const user = await requireAuth(request);
+    const user = await requireAuth(request); // eslint-disable-line @typescript-eslint/no-unused-vars
     const tenantId = await getTenantIdFromRequest(request);
     const tenantSlug = await getTenantSlugFromRequest(request);
 

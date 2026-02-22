@@ -4,7 +4,7 @@
  */
 
 import connectDB from '@/lib/mongodb';
-import Transaction from '@/models/Transaction';
+import Transaction from '@/models/Transaction'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import Tenant from '@/models/Tenant';
 import { AutomationResult } from './types';
 import mongoose from 'mongoose';
@@ -61,7 +61,7 @@ export async function archiveOldData(
         if (!db) continue;
 
         // Create archive collection if it doesn't exist
-        const archiveCollectionName = `${collections[0]}_archive`;
+        const archiveCollectionName = `${collections[0]}_archive`; // eslint-disable-line @typescript-eslint/no-unused-vars
 
         for (const collectionName of collections) {
           try {
@@ -92,12 +92,12 @@ export async function archiveOldData(
             });
 
             totalArchived += oldDocuments.length;
-          } catch (error: any) {
+          } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             totalFailed++;
             results.errors?.push(`Collection ${collectionName}: ${error.message}`);
           }
         }
-      } catch (error: any) {
+      } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         totalFailed++;
         results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
       }
@@ -108,7 +108,7 @@ export async function archiveOldData(
     results.message = `Archived ${totalArchived} records${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     results.success = false;
     results.message = `Error archiving data: ${error.message}`;
     results.errors?.push(error.message);

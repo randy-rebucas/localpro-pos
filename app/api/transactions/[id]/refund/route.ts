@@ -44,7 +44,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { items, reason, notes } = body;
 
     // If no items specified, refund all items (full refund)
-    const itemsToRefund = items || transaction.items.map((item: any) => ({
+    const itemsToRefund = items || transaction.items.map((item: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
       productId: item.product.toString(),
       quantity: item.quantity,
     }));
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     for (const refundItem of itemsToRefund) {
       const originalItem = transaction.items.find(
-        (item: any) => item.product.toString() === refundItem.productId
+        (item: any) => item.product.toString() === refundItem.productId // eslint-disable-line @typescript-eslint/no-explicit-any
       );
 
       if (!originalItem) {
@@ -93,9 +93,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // Create refund transaction
     const refundTransaction = await Transaction.create({
       tenantId,
-      items: refundItems.map((item: any) => ({
+      items: refundItems.map((item: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
         product: item.productId,
-        name: transaction.items.find((i: any) => i.product.toString() === item.productId)?.name || '',
+        name: transaction.items.find((i: any) => i.product.toString() === item.productId)?.name || '', // eslint-disable-line @typescript-eslint/no-explicit-any
         price: item.price,
         quantity: item.quantity,
         subtotal: item.subtotal,
@@ -128,8 +128,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     // Mark original transaction as refunded if full refund
     const isFullRefund = refundItems.length === transaction.items.length &&
-      refundItems.every((item: any) => {
-        const original = transaction.items.find((i: any) => i.product.toString() === item.productId);
+      refundItems.every((item: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+        const original = transaction.items.find((i: any) => i.product.toString() === item.productId); // eslint-disable-line @typescript-eslint/no-explicit-any
         return original && item.quantity === original.quantity;
       });
 
@@ -197,7 +197,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         refundPayment,
       },
     }, { status: 201 });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     if (error.message === 'Unauthorized' || error.message.includes('Forbidden')) {
       return NextResponse.json(
         { success: false, error: error.message },

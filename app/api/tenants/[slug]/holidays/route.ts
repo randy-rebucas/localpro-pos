@@ -30,7 +30,7 @@ export async function GET(
       success: true,
       data: tenant.settings.holidays || [],
     });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Error fetching holidays:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -88,7 +88,7 @@ export async function POST(
     }
 
     const holidays = tenant.settings.holidays || [];
-    const newHoliday: any = {
+    const newHoliday: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
       id: `holiday_${Date.now()}`,
       name,
       type,
@@ -115,7 +115,7 @@ export async function POST(
     try {
       await tenant.save();
       console.log('Holiday saved successfully:', newHoliday);
-    } catch (saveError: any) {
+    } catch (saveError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       console.error('Error saving holiday to database:', saveError);
       return NextResponse.json({ 
         success: false, 
@@ -127,7 +127,7 @@ export async function POST(
       success: true,
       data: newHoliday,
     });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Error creating holiday:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -163,7 +163,7 @@ export async function PUT(
     }
 
     const holidays = tenant.settings.holidays || [];
-    const holidayIndex = holidays.findIndex((h: any) => h.id === id);
+    const holidayIndex = holidays.findIndex((h: any) => h.id === id); // eslint-disable-line @typescript-eslint/no-explicit-any
 
     if (holidayIndex === -1) {
       return NextResponse.json({ success: false, error: 'Holiday not found' }, { status: 404 });
@@ -177,7 +177,7 @@ export async function PUT(
     try {
       await tenant.save();
       console.log('Holiday updated successfully:', holidays[holidayIndex]);
-    } catch (saveError: any) {
+    } catch (saveError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       console.error('Error saving holiday update to database:', saveError);
       return NextResponse.json({ 
         success: false, 
@@ -189,7 +189,7 @@ export async function PUT(
       success: true,
       data: holidays[holidayIndex],
     });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Error updating holiday:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -225,7 +225,7 @@ export async function DELETE(
     }
 
     const holidays = tenant.settings.holidays || [];
-    const filtered = holidays.filter((h: any) => h.id !== id);
+    const filtered = holidays.filter((h: any) => h.id !== id); // eslint-disable-line @typescript-eslint/no-explicit-any
 
     if (filtered.length === holidays.length) {
       return NextResponse.json({ success: false, error: 'Holiday not found' }, { status: 404 });
@@ -237,7 +237,7 @@ export async function DELETE(
     try {
       await tenant.save();
       console.log('Holiday deleted successfully');
-    } catch (saveError: any) {
+    } catch (saveError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       console.error('Error saving holiday deletion to database:', saveError);
       return NextResponse.json({ 
         success: false, 
@@ -246,7 +246,7 @@ export async function DELETE(
     }
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Error deleting holiday:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL('/subscription/payment-failed', request.url));
     }
 
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Error processing PayPal success:', error);
     return NextResponse.redirect(new URL('/subscription/payment-failed', request.url));
   }

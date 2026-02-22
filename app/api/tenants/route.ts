@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 import connectDB from '@/lib/mongodb';
 import Tenant from '@/models/Tenant';
 import User from '@/models/User';
@@ -87,7 +88,6 @@ export async function POST(request: NextRequest) {
     const tenant = await Tenant.create(tenantData);
 
     // Automatically create admin user for the tenant
-    const crypto = require('crypto');
     const adminEmail = `admin@${tenant.slug}.local`;
     const adminPassword = crypto.randomBytes(16).toString('base64url');
     

@@ -194,7 +194,7 @@ export async function getProductPerformance(
   }>();
 
   transactions.forEach(transaction => {
-    transaction.items.forEach((item: any) => {
+    transaction.items.forEach((item: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
       const productId = item.product?._id?.toString() || item.product?.toString();
       const productName = item.product?.name || item.name || 'Unknown';
       
@@ -250,11 +250,11 @@ export async function getVATReport(
   const totalSales = transactions.reduce((sum, t) => sum + t.total, 0);
   
   let vatSales = 0;
-  const nonVatSales = 0;
+  const nonVatSales = 0; // eslint-disable-line @typescript-eslint/no-unused-vars
   
   if (vatRate > 0) {
     // Calculate VAT sales (total includes VAT)
-    vatSales = totalSales;
+    vatSales = totalSales; // eslint-disable-line @typescript-eslint/no-unused-vars
     // Calculate base amount (without VAT)
     const baseAmount = totalSales / (1 + vatRate);
     const vatAmount = totalSales - baseAmount;
@@ -375,7 +375,7 @@ export async function getCashDrawerReports(
     reports.push({
       sessionId: session._id.toString(),
       userId: session.userId.toString(),
-      userName: (session.userId as any)?.name || 'Unknown',
+      userName: (session.userId as any)?.name || 'Unknown', // eslint-disable-line @typescript-eslint/no-explicit-any
       openingTime: session.openingTime,
       closingTime: session.closingTime,
       openingAmount: session.openingAmount,

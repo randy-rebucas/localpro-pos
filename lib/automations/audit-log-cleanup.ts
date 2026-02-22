@@ -77,7 +77,7 @@ export async function cleanupAuditLogs(
           });
           totalDeleted += deleteResult.deletedCount || 0;
         }
-      } catch (error: any) {
+      } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         totalFailed++;
         results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
       }
@@ -88,7 +88,7 @@ export async function cleanupAuditLogs(
     results.message = `${options.archive ? 'Archived' : 'Deleted'} ${totalDeleted} audit logs${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     results.success = false;
     results.message = `Error cleaning up audit logs: ${error.message}`;
     results.errors?.push(error.message);

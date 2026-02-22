@@ -258,7 +258,7 @@ export async function requireTenantAccess(request: NextRequest): Promise<{
  * Helper function to handle TenantAccessViolationError in API routes
  * Returns a NextResponse with 403 status and redirect information
  */
-export function handleTenantAccessViolation(error: unknown, request: NextRequest): NextResponse {
+export function handleTenantAccessViolation(error: unknown, request: NextRequest): NextResponse { // eslint-disable-line @typescript-eslint/no-unused-vars
   if (error instanceof TenantAccessViolationError) {
     const redirectUrl = `/${error.tenantSlug}/forbidden`;
     return NextResponse.json(

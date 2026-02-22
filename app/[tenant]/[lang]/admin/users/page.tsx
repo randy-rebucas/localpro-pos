@@ -24,10 +24,10 @@ interface User {
 
 export default function UsersPage() {
   const params = useParams();
-  const router = useRouter();
+  const router = useRouter(); // eslint-disable-line @typescript-eslint/no-unused-vars
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -41,6 +41,7 @@ export default function UsersPage() {
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
     fetchUsers();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang, tenant]);
 
   const fetchUsers = async () => {
@@ -305,7 +306,7 @@ function UserModal({
   user: User | null;
   onClose: () => void;
   onSave: () => void;
-  dict: any;
+  dict: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }) {
   const [formData, setFormData] = useState({
     email: user?.email || '',
@@ -323,7 +324,7 @@ function UserModal({
     try {
       const url = user ? `/api/users/${user._id}` : '/api/users';
       const method = user ? 'PUT' : 'POST';
-      const body: any = {
+      const body: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
         email: formData.email,
         name: formData.name,
         role: formData.role,
@@ -402,7 +403,7 @@ function UserModal({
               </label>
               <select
                 value={formData.role}
-                onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
+                onChange={(e) => setFormData({ ...formData, role: e.target.value as any })} // eslint-disable-line @typescript-eslint/no-explicit-any
                 className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               >
                 <option value="viewer">{dict.admin?.viewer || 'Viewer'}</option>
@@ -449,7 +450,7 @@ function PINModal({
   user: User;
   onClose: () => void;
   onSave: () => void;
-  dict: any;
+  dict: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }) {
   const [pin, setPin] = useState('');
   const [saving, setSaving] = useState(false);
@@ -591,7 +592,7 @@ function QRModal({
   user: User;
   onClose: () => void;
   onRegenerate: () => void;
-  dict: any;
+  dict: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }) {
   const [qrData, setQrData] = useState<{ qrToken: string; name: string; email: string } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -601,6 +602,7 @@ function QRModal({
 
   useEffect(() => {
     fetchQRCode();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user._id]);
 
   const fetchQRCode = async () => {

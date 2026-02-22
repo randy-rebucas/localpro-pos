@@ -13,7 +13,8 @@
     "tenant:default": "tsx scripts/create-default-tenant.ts",
     "reset:collections": "tsx scripts/reset-collections.ts",
     "test:automations": "tsx scripts/test-automations.ts",
-    "test:customer-auth": "tsx scripts/test-customer-auth.ts"
+    "test:customer-auth": "tsx scripts/test-customer-auth.ts",
+    "seed:subscription-plans": "tsx scripts/create-subscription-plans.ts"
   },
   "dependencies": {
     "@formatjs/intl-localematcher": "^0.6.2",

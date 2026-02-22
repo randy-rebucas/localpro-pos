@@ -7,7 +7,7 @@ import connectDB from '@/lib/mongodb';
 import SavedCart from '@/models/SavedCart';
 import Transaction from '@/models/Transaction';
 import Tenant from '@/models/Tenant';
-import User from '@/models/User';
+import User from '@/models/User'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { sendEmail } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { AutomationResult } from './types';
@@ -77,7 +77,7 @@ export async function sendAbandonedCartReminders(
 
         for (const cart of abandonedCarts) {
           try {
-            const user = cart.userId as any;
+            const user = cart.userId as any; // eslint-disable-line @typescript-eslint/no-explicit-any
             if (!user || !user.email) {
               continue; // Skip if no user or email
             }
@@ -162,12 +162,12 @@ export async function sendAbandonedCartReminders(
             });
 
             totalReminders++;
-          } catch (error: any) {
+          } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             totalFailed++;
             results.errors?.push(`Cart ${cart._id}: ${error.message}`);
           }
         }
-      } catch (error: any) {
+      } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         totalFailed++;
         results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
       }
@@ -178,7 +178,7 @@ export async function sendAbandonedCartReminders(
     results.message = `Sent ${totalReminders} abandoned cart reminders${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     results.success = false;
     results.message = `Error sending abandoned cart reminders: ${error.message}`;
     results.errors?.push(error.message);

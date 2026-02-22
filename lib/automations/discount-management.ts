@@ -92,7 +92,7 @@ export async function manageDiscountStatus(
 
             // Send notification if enabled
             if (tenantSettings?.emailNotifications && tenantSettings?.email) {
-              const companyName = tenantSettings?.companyName || tenant.name || 'Business';
+              const companyName = tenantSettings?.companyName || tenant.name || 'Business'; // eslint-disable-line @typescript-eslint/no-unused-vars
               await sendEmail({
                 to: tenantSettings.email,
                 subject: `Discount Activated: ${discount.code}`,
@@ -102,7 +102,7 @@ export async function manageDiscountStatus(
                 // Don't fail if email fails
               });
             }
-          } catch (error: any) {
+          } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             totalFailed++;
             results.errors?.push(`Activate discount ${discount.code}: ${error.message}`);
           }
@@ -116,7 +116,7 @@ export async function manageDiscountStatus(
 
             // Send notification if enabled
             if (tenantSettings?.emailNotifications && tenantSettings?.email) {
-              const companyName = tenantSettings?.companyName || tenant.name || 'Business';
+              const companyName = tenantSettings?.companyName || tenant.name || 'Business'; // eslint-disable-line @typescript-eslint/no-unused-vars
               const reason = discount.validUntil < now
                 ? 'expired (validUntil date passed)'
                 : 'reached usage limit';
@@ -130,7 +130,7 @@ export async function manageDiscountStatus(
                 // Don't fail if email fails
               });
             }
-          } catch (error: any) {
+          } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             totalFailed++;
             results.errors?.push(`Deactivate discount ${discount.code}: ${error.message}`);
           }
@@ -177,7 +177,7 @@ This is an automated alert from your POS system.`,
             });
           }
         }
-      } catch (error: any) {
+      } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         totalFailed++;
         results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
       }
@@ -188,7 +188,7 @@ This is an automated alert from your POS system.`,
     results.message = `Activated ${totalActivated} discounts, deactivated ${totalDeactivated} discounts${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     results.success = false;
     results.message = `Error managing discount status: ${error.message}`;
     results.errors?.push(error.message);

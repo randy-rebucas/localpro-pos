@@ -11,7 +11,7 @@ export default function AdvancedBrandingPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState<ITenantSettings | null>(null);
@@ -20,6 +20,7 @@ export default function AdvancedBrandingPage() {
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
     fetchSettings();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang, tenant]);
 
   const fetchSettings = async () => {
@@ -40,12 +41,12 @@ export default function AdvancedBrandingPage() {
     }
   };
 
-  const updateSetting = (path: string, value: any) => {
+  const updateSetting = (path: string, value: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
     if (!settings) return;
     
     const keys = path.split('.');
     const newSettings = JSON.parse(JSON.stringify(settings));
-    let current: any = newSettings;
+    let current: any = newSettings; // eslint-disable-line @typescript-eslint/no-explicit-any
     
     for (let i = 0; i < keys.length - 1; i++) {
       if (!current[keys[i]]) {

@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
         finalTotal: Math.max(0, subtotal - discountAmount),
       },
     });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

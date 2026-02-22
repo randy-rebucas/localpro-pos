@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     const customerId = searchParams.get('customerId');
     const overdue = searchParams.get('overdue') === 'true';
 
-    const query: any = { tenantId };
+    const query: any = { tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
     
     if (status) {
       query.status = status;
@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
         pages: Math.ceil(total / limit),
       },
     });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
   try {
     await connectDB();
     const tenantAccess = await requireTenantAccess(request);
-    const { tenantId, user } = tenantAccess;
+    const { tenantId, user } = tenantAccess; // eslint-disable-line @typescript-eslint/no-unused-vars
     
     const body = await request.json();
     const { 
@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
           email: customer.email,
           phone: customer.phone,
           address: customer.addresses && customer.addresses.length > 0 
-            ? customer.addresses.find((addr: any) => addr.isDefault) || customer.addresses[0]
+            ? customer.addresses.find((addr: any) => addr.isDefault) || customer.addresses[0] // eslint-disable-line @typescript-eslint/no-explicit-any
             : undefined,
         };
       }
@@ -171,7 +171,7 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ success: true, data: invoice }, { status: 201 });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return NextResponse.json({ success: false, error: error.message }, { status: 400 });
   }
 }

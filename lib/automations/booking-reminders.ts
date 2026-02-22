@@ -96,12 +96,12 @@ export async function sendBookingReminders(
             // Mark reminder as sent
             await Booking.findByIdAndUpdate(booking._id, { reminderSent: true });
             totalProcessed++;
-          } catch (error: any) {
+          } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             totalFailed++;
             results.errors?.push(`Booking ${booking._id}: ${error.message}`);
           }
         }
-      } catch (error: any) {
+      } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         totalFailed++;
         results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
       }
@@ -112,7 +112,7 @@ export async function sendBookingReminders(
     results.message = `Processed ${totalProcessed} booking reminders${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     results.success = false;
     results.message = `Error sending booking reminders: ${error.message}`;
     results.errors?.push(error.message);

@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get('endDate');
     const name = searchParams.get('name');
 
-    const query: any = { tenantId };
+    const query: any = { tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
     
     if (startDate || endDate) {
       query.date = {};

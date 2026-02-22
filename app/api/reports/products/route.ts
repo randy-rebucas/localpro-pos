@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
     const performance = await getProductPerformance(tenantId, startDate, endDate, limit);
 
     return NextResponse.json({ success: true, data: performance });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Error fetching product performance:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

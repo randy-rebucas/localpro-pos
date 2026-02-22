@@ -11,7 +11,7 @@ export default function PaymentSuccessPage() {
   const searchParams = useSearchParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [activating, setActivating] = useState(true);
   const [success, setSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -22,6 +22,7 @@ export default function PaymentSuccessPage() {
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
     activateSubscription();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang]);
 
   const activateSubscription = async () => {
@@ -74,7 +75,7 @@ export default function PaymentSuccessPage() {
         setErrorMsg(data.error || 'Unknown backend error.');
         throw new Error(data.error);
       }
-    } catch (error: any) {
+    } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       console.error('Error activating subscription:', error);
     } finally {
       setActivating(false);

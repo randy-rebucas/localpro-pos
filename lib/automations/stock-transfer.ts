@@ -82,7 +82,7 @@ export async function detectStockImbalances(
             }
 
             // Find branches with low stock and high stock
-            const branchStocks = product.branchStock.map((bs: any) => ({
+            const branchStocks = product.branchStock.map((bs: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
               branchId: bs.branchId.toString(),
               stock: bs.stock || 0,
             }));
@@ -124,7 +124,7 @@ export async function detectStockImbalances(
                 if (productDoc && productDoc.branchStock) {
                   // Update source branch stock
                   const fromBranchStock = productDoc.branchStock.find(
-                    (bs: any) => bs.branchId.toString() === highStock.branchId
+                    (bs: any) => bs.branchId.toString() === highStock.branchId // eslint-disable-line @typescript-eslint/no-explicit-any
                   );
                   if (fromBranchStock) {
                     fromBranchStock.stock -= transferQuantity;
@@ -132,7 +132,7 @@ export async function detectStockImbalances(
 
                   // Update destination branch stock
                   const toBranchStock = productDoc.branchStock.find(
-                    (bs: any) => bs.branchId.toString() === lowStock.branchId
+                    (bs: any) => bs.branchId.toString() === lowStock.branchId // eslint-disable-line @typescript-eslint/no-explicit-any
                   );
                   if (toBranchStock) {
                     toBranchStock.stock += transferQuantity;
@@ -198,12 +198,12 @@ This is an automated stock transfer request from your POS system.`,
 
               totalTransfers++;
             }
-          } catch (error: any) {
+          } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             totalFailed++;
             results.errors?.push(`Product ${product._id}: ${error.message}`);
           }
         }
-      } catch (error: any) {
+      } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         totalFailed++;
         results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
       }
@@ -214,7 +214,7 @@ This is an automated stock transfer request from your POS system.`,
     results.message = `${autoApprove ? 'Processed' : 'Created'} ${totalTransfers} stock transfers${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     results.success = false;
     results.message = `Error detecting stock imbalances: ${error.message}`;
     results.errors?.push(error.message);

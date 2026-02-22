@@ -6,6 +6,7 @@ let isRedirecting = false;
  * Automatically redirects to forbidden page if tenant access is denied
  * IMPORTANT: Skips redirect if already on the forbidden page to prevent infinite loops
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function handleApiResponse<T = any>(
   response: Response,
   options?: {
@@ -55,6 +56,7 @@ export async function handleApiResponse<T = any>(
 /**
  * Enhanced fetch wrapper that automatically handles 403 responses
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function apiFetch<T = any>(
   url: string,
   options?: RequestInit & {

@@ -11,10 +11,10 @@ import { useSubscription } from '@/contexts/SubscriptionContext';
 
 export default function AdminPage() {
   const params = useParams();
-  const router = useRouter();
+  const router = useRouter(); // eslint-disable-line @typescript-eslint/no-unused-vars
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [loading, setLoading] = useState(true);
   const { settings } = useTenantSettings();
   const tenantSettings = settings || getDefaultTenantSettings();

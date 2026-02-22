@@ -6,7 +6,7 @@
 import connectDB from '@/lib/mongodb';
 import Attendance from '@/models/Attendance';
 import Tenant from '@/models/Tenant';
-import User from '@/models/User';
+import User from '@/models/User'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { sendEmail } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { AutomationResult } from './types';
@@ -92,7 +92,7 @@ export async function detectAttendanceViolations(
             const minutesLate = (clockInTime.getTime() - expectedStart.getTime()) / (1000 * 60);
 
             if (minutesLate > lateThresholdMinutes) {
-              const user = attendance.userId as any;
+              const user = attendance.userId as any; // eslint-disable-line @typescript-eslint/no-explicit-any
               if (!user) continue;
 
               // Send alert to manager
@@ -121,7 +121,7 @@ This is an automated alert from your POS system.`,
                 totalViolations++;
               }
             }
-          } catch (error: any) {
+          } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             totalFailed++;
             results.errors?.push(`Attendance ${attendance._id}: ${error.message}`);
           }
@@ -131,7 +131,7 @@ This is an automated alert from your POS system.`,
         // This would require a user schedule system, which may not exist
         // For now, we'll skip this check
 
-      } catch (error: any) {
+      } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         totalFailed++;
         results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
       }
@@ -142,7 +142,7 @@ This is an automated alert from your POS system.`,
     results.message = `Detected ${totalViolations} attendance violations${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     results.success = false;
     results.message = `Error detecting attendance violations: ${error.message}`;
     results.errors?.push(error.message);

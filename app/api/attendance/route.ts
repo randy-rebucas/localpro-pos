@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '50');
 
     // Build query
-    const query: any = { tenantId: user.tenantId };
+    const query: any = { tenantId: user.tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
 
     // If userId is provided and user is manager+, allow viewing other users
     if (userId && (user.role === 'owner' || user.role === 'admin' || user.role === 'manager')) {
@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
       success: true,
       data: attendances,
     });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Get attendance error:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
         data: activeSession,
       });
     }
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Attendance error:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(

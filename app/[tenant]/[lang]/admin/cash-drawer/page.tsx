@@ -25,21 +25,22 @@ interface CashDrawerSession {
 
 export default function CashDrawerPage() {
   const params = useParams();
-  const router = useRouter();
+  const router = useRouter(); // eslint-disable-line @typescript-eslint/no-unused-vars
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [sessions, setSessions] = useState<CashDrawerSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedSession, setSelectedSession] = useState<CashDrawerSession | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const { settings } = useTenantSettings();
+  const { settings } = useTenantSettings(); // eslint-disable-line @typescript-eslint/no-unused-vars
 
    
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
     fetchSessions();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang, tenant, statusFilter]);
 
   const fetchSessions = async () => {

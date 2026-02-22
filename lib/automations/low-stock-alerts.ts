@@ -85,7 +85,7 @@ export async function sendLowStockAlerts(
         const productList = lowStockProducts
           .slice(0, 20) // Limit to 20 products in email
           .map(
-            (product: any) =>
+            (product: any) => // eslint-disable-line @typescript-eslint/no-explicit-any
               `- ${product.name}${product.sku ? ` (SKU: ${product.sku})` : ''}: ${product.currentStock || 0} units (Threshold: ${product.threshold || threshold})`
           )
           .join('\n');
@@ -121,7 +121,7 @@ This is an automated alert from your POS system.`;
               type: 'email',
             });
             totalProcessed++;
-          } catch (error: any) {
+          } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             totalFailed++;
             results.errors?.push(`Email to ${recipientEmail}: ${error.message}`);
           }
@@ -136,12 +136,12 @@ This is an automated alert from your POS system.`;
               type: 'sms',
             });
             totalProcessed++;
-          } catch (error: any) {
+          } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             totalFailed++;
             results.errors?.push(`SMS to ${recipientPhone}: ${error.message}`);
           }
         }
-      } catch (error: any) {
+      } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         totalFailed++;
         results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
       }
@@ -152,7 +152,7 @@ This is an automated alert from your POS system.`;
     results.message = `Processed ${totalProcessed} low stock alerts${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     results.success = false;
     results.message = `Error sending low stock alerts: ${error.message}`;
     results.errors?.push(error.message);

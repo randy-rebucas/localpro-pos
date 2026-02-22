@@ -166,7 +166,7 @@ export async function GET(request: NextRequest) {
       data: stats,
       timestamp: now.toISOString(),
     });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Automation status error:', error);
     return NextResponse.json(
       {

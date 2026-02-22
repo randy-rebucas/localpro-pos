@@ -1,7 +1,7 @@
 'use client';
 
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams } from 'next/navigation'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
 
 interface Props {
@@ -12,7 +12,7 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
-  dict: any;
+  dict: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
 export default class ErrorBoundary extends Component<Props, State> {

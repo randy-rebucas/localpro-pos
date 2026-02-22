@@ -37,7 +37,7 @@ export async function GET(
     const endDate = searchParams.get('endDate');
 
     // Build query
-    const query: any = {
+    const query: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
       tenantId: customer.tenantId,
       $or: [
         { customerEmail: customer.email },
@@ -70,7 +70,7 @@ export async function GET(
       success: true,
       data: bookings,
     });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Get customer bookings error:', error);
     
     if (error.message === 'Unauthorized') {

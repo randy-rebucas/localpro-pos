@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
     const categoryId = request.nextUrl.searchParams.get('categoryId');
     const search = request.nextUrl.searchParams.get('search');
 
-    const filter: Record<string, any> = {
+    const filter: Record<string, any> = { // eslint-disable-line @typescript-eslint/no-explicit-any
       tenantId: tenant._id,
       productType: 'service',
     };
@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
       .lean();
 
     return NextResponse.json({ success: true, data: services });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return NextResponse.json(
       { success: false, error: error.message || 'Failed to fetch services' },
       { status: 500 }

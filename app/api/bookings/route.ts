@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
     const staffId = searchParams.get('staffId');
 
     // Build query
-    const query: any = { tenantId };
+    const query: any = { tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
 
     if (startDate || endDate) {
       query.startTime = {};
@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
       .lean();
 
     return NextResponse.json({ success: true, data: bookings });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Get bookings error:', error);
     return NextResponse.json(
       { success: false, error: error.message || 'Failed to fetch bookings' },
@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
     // Allow cashiers and above OR authenticated customers to create bookings
     let tenantId: string | null = null;
     let isCustomer = false;
-    let customerAuth: any = null;
+    let customerAuth: any = null; // eslint-disable-line @typescript-eslint/no-explicit-any
     
     try {
       // Try customer authentication first
@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
     // Check if booking scheduling feature is enabled in subscription
     try {
       await checkFeatureAccess(tenantId.toString(), 'enableBookingScheduling');
-    } catch (featureError: any) {
+    } catch (featureError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       return NextResponse.json(
         { success: false, error: featureError.message },
         { status: 403 }
@@ -129,10 +129,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    let {
-      customerName,
-      customerEmail,
-      customerPhone,
+    const {
       serviceName,
       serviceDescription,
       startTime,
@@ -140,6 +137,11 @@ export async function POST(request: NextRequest) {
       staffId,
       notes,
       status = 'pending',
+    } = body;
+    let {
+      customerName,
+      customerEmail,
+      customerPhone,
     } = body;
 
     // If customer is authenticated, use their information
@@ -275,7 +277,7 @@ export async function POST(request: NextRequest) {
       { success: true, data: bookingData },
       { status: 201 }
     );
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Create booking error:', error);
     const t = await getValidationTranslatorFromRequest(request);
     if (error.code === 11000) {

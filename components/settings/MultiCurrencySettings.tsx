@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { ITenantSettings } from '@/models/Tenant';
 
 interface MultiCurrencySettingsProps {
@@ -39,7 +39,7 @@ export default function MultiCurrencySettings({ settings, tenant, onUpdate }: Mu
       } else {
         setMessage({ type: 'error', text: data.error || 'Failed to fetch exchange rates' });
       }
-    } catch (error: any) {
+    } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       setMessage({ type: 'error', text: error.message || 'Failed to fetch exchange rates' });
     } finally {
       setLoading(false);

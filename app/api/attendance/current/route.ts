@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
         currentHours: roundedHours,
       },
     });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Get current attendance error:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(

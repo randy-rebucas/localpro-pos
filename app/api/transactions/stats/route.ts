@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
         startDate = new Date(0);
     }
 
-    const matchQuery: any = {
+    const matchQuery: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
       tenantId: tenantObjectId,
       status: 'completed',
       createdAt: { $gte: startDate, $lte: endDate },
@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
     ]);
 
     // Time-series data for chart
-    let timeSeriesGroup: any;
+    let timeSeriesGroup: any; // eslint-disable-line @typescript-eslint/no-explicit-any
     let dateFormat: string;
     
     if (period === 'today') {
@@ -129,7 +129,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Get expense statistics for the same period
-    const expenseQuery: any = {
+    const expenseQuery: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
       tenantId: tenantObjectId,
       date: { $gte: startDate, $lte: endDate },
     };
@@ -156,7 +156,7 @@ export async function GET(request: NextRequest) {
     };
 
     return NextResponse.json({ success: true, data: result });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     // Handle tenant access violations with redirect
     if (error instanceof TenantAccessViolationError) {
       return handleTenantAccessViolation(error, request);

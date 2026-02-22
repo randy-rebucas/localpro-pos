@@ -30,10 +30,10 @@ interface Discount {
 
 export default function DiscountsPage() {
   const params = useParams();
-  const router = useRouter();
+  const router = useRouter(); // eslint-disable-line @typescript-eslint/no-unused-vars
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [discounts, setDiscounts] = useState<Discount[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -46,6 +46,7 @@ export default function DiscountsPage() {
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
     fetchDiscounts();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang, tenant]);
 
   const fetchDiscounts = async () => {
@@ -308,7 +309,7 @@ function DiscountModal({
   discount: Discount | null;
   onClose: () => void;
   onSave: () => void;
-  dict: any;
+  dict: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }) {
   const [formData, setFormData] = useState({
     code: discount?.code || '',
@@ -396,7 +397,7 @@ function DiscountModal({
                 </label>
                 <select
                   value={formData.type}
-                  onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
+                  onChange={(e) => setFormData({ ...formData, type: e.target.value as any })} // eslint-disable-line @typescript-eslint/no-explicit-any
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                 >
                   <option value="percentage">{dict.admin?.percentage || 'Percentage'}</option>

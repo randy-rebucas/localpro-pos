@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { getCurrentUser } from '@/lib/auth';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
 
     // Generate QR token if it doesn't exist
     if (!user.qrToken) {
-      const newQrToken = require('crypto').randomBytes(32).toString('hex');
+      const newQrToken = crypto.randomBytes(32).toString('hex');
       await User.findByIdAndUpdate(currentUser.userId, { qrToken: newQrToken });
       user = await User.findById(currentUser.userId).select('-password').lean();
       

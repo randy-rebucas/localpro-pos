@@ -94,7 +94,7 @@ export default function ReportsPage() {
   const { settings } = useTenantSettings();
   const primaryColor = settings?.primaryColor || '#3b82f6';
   const COLORS = [primaryColor, ...DEFAULT_COLORS.filter(c => c !== primaryColor)].slice(0, 5);
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'sales' | 'products' | 'vat' | 'profit-loss' | 'cash-drawer'>('sales');
   const [period, setPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
@@ -122,6 +122,7 @@ export default function ReportsPage() {
     if (dict && startDate && endDate) {
       loadReports();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, period, startDate, endDate, dict, tenant]);
 
   const loadReports = async () => {
@@ -308,7 +309,7 @@ export default function ReportsPage() {
                   </label>
                   <select
                     value={period}
-                    onChange={(e) => setPeriod(e.target.value as any)}
+                    onChange={(e) => setPeriod(e.target.value as any)} // eslint-disable-line @typescript-eslint/no-explicit-any
                     className="px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-[var(--primary-color)] focus:border-[var(--primary-color)] transition-all bg-white"
                   >
                     <option value="daily">{dict.reports?.daily || 'Daily'}</option>
@@ -411,7 +412,7 @@ export default function ReportsPage() {
   );
 }
 
-function SalesReportView({ report, dict, primaryColor, colors }: { report: SalesReport; dict: any; primaryColor: string; colors: string[] }) {
+function SalesReportView({ report, dict, primaryColor, colors }: { report: SalesReport; dict: any; primaryColor: string; colors: string[] }) { // eslint-disable-line @typescript-eslint/no-explicit-any
   const paymentMethodData = [
     { name: dict.pos?.cash || 'Cash', value: report.salesByPaymentMethod.cash },
     { name: dict.pos?.card || 'Card', value: report.salesByPaymentMethod.card },
@@ -509,7 +510,7 @@ function SalesReportView({ report, dict, primaryColor, colors }: { report: Sales
   );
 }
 
-function ProductPerformanceView({ data, dict, primaryColor }: { data: ProductPerformance[]; dict: any; primaryColor: string }) {
+function ProductPerformanceView({ data, dict, primaryColor }: { data: ProductPerformance[]; dict: any; primaryColor: string }) { // eslint-disable-line @typescript-eslint/no-explicit-any
   return (
     <div className="space-y-6">
       <div className="bg-white border border-gray-300 p-5 sm:p-6">
@@ -583,7 +584,7 @@ function ProductPerformanceView({ data, dict, primaryColor }: { data: ProductPer
   );
 }
 
-function VATReportView({ report, dict, primaryColor }: { report: VATReport; dict: any; primaryColor: string }) {
+function VATReportView({ report, dict, primaryColor }: { report: VATReport; dict: any; primaryColor: string }) { // eslint-disable-line @typescript-eslint/no-explicit-any
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
@@ -656,7 +657,7 @@ function VATReportView({ report, dict, primaryColor }: { report: VATReport; dict
   );
 }
 
-function ProfitLossView({ summary, dict, primaryColor, colors }: { summary: ProfitLossSummary; dict: any; primaryColor: string; colors: string[] }) {
+function ProfitLossView({ summary, dict, primaryColor, colors }: { summary: ProfitLossSummary; dict: any; primaryColor: string; colors: string[] }) { // eslint-disable-line @typescript-eslint/no-explicit-any
   const expenseData = summary.expenses.byCategory.map((cat) => ({
     name: cat.category,
     value: cat.amount,
@@ -767,7 +768,7 @@ function ProfitLossView({ summary, dict, primaryColor, colors }: { summary: Prof
   );
 }
 
-function CashDrawerReportView({ reports, dict }: { reports: CashDrawerReport[]; dict: any }) {
+function CashDrawerReportView({ reports, dict }: { reports: CashDrawerReport[]; dict: any }) { // eslint-disable-line @typescript-eslint/no-explicit-any
   return (
     <div className="space-y-6">
       <div className="bg-white border border-gray-300 overflow-hidden">

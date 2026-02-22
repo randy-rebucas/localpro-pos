@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
 
     const result = await detectBreaks({ tenantId, inactivityMinutes });
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Break detection error:', error);
     return NextResponse.json({
       success: false,
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
 
     const result = await detectBreaks({ tenantId, inactivityMinutes });
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Break detection error:', error);
     return NextResponse.json({
       success: false,

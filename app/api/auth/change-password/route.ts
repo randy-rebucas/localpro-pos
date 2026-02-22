@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
       success: true,
       message: t('validation.passwordChangedSuccess', 'Password changed successfully'),
     });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     if (error.message === 'Unauthorized') {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }

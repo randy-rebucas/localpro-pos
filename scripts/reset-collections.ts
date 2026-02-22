@@ -97,7 +97,7 @@ async function getCollectionCounts(tenantId?: mongoose.Types.ObjectId) {
   
   for (const [name, model] of Object.entries(COLLECTIONS)) {
     try {
-      const mongooseModel = model as mongoose.Model<any>;
+      const mongooseModel = model as mongoose.Model<any>; // eslint-disable-line @typescript-eslint/no-explicit-any
       if (tenantId && 'tenantId' in model.schema.paths) {
         counts[name] = await mongooseModel.countDocuments({ tenantId });
       } else {
@@ -132,7 +132,7 @@ async function cleanCollections(
     }
     
     const model = COLLECTIONS[collectionName];
-    const mongooseModel = model as mongoose.Model<any>;
+    const mongooseModel = model as mongoose.Model<any>; // eslint-disable-line @typescript-eslint/no-explicit-any
     
     try {
       let deleteResult;
@@ -207,7 +207,7 @@ async function createDefaultStore(createAdmin = false) {
     };
 
     // Create tenant first (following tenant signup route hierarchy)
-    const tenantData: any = {
+    const tenantData: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
       slug: 'default',
       name: 'Default Store',
       settings,
@@ -323,7 +323,7 @@ async function createDemoTenant() {
       console.log(`  Tenant:   ${demoTenant.name} (${demoTenant.slug})`);
       console.log('');
       console.log('⚠️  IMPORTANT: Please change the admin password after first login!');
-    } catch (userError: any) {
+    } catch (userError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       console.log('');
       console.log('⚠️  Warning: Failed to create demo admin user:', userError.message);
     }

@@ -26,7 +26,7 @@ export async function GET(
     }
 
     return NextResponse.json({ success: true, data: subscription });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -51,7 +51,7 @@ export async function PUT(
       );
     }
 
-    const changes: any = {};
+    const changes: any = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
 
     // Update status if provided
     if (status && ['active', 'inactive', 'cancelled', 'suspended', 'trial'].includes(status)) {
@@ -104,7 +104,7 @@ export async function PUT(
     });
 
     return NextResponse.json({ success: true, data: updatedSubscription });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return NextResponse.json({ success: false, error: error.message }, { status: 400 });
   }
 }
@@ -142,7 +142,7 @@ export async function DELETE(
     });
 
     return NextResponse.json({ success: true, message: 'Subscription deleted successfully' });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return NextResponse.json({ success: false, error: error.message }, { status: 400 });
   }
 }

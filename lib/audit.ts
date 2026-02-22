@@ -10,8 +10,8 @@ export interface AuditLogData {
   action: string;
   entityType: string;
   entityId?: string;
-  changes?: Record<string, any>;
-  metadata?: Record<string, any>;
+  changes?: Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  metadata?: Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
 /**

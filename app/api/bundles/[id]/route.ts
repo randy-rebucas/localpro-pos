@@ -30,7 +30,7 @@ export async function GET(
     }
 
     return NextResponse.json({ success: true, data: bundle });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Error fetching bundle:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -79,7 +79,7 @@ export async function PUT(
     });
 
     return NextResponse.json({ success: true, data: bundle });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     const t = await getValidationTranslatorFromRequest(request);
     if (error.code === 11000) {
       return NextResponse.json(
@@ -125,7 +125,7 @@ export async function DELETE(
     });
 
     return NextResponse.json({ success: true, message: t('validation.bundleDeactivated', 'Bundle deactivated') });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Error deleting bundle:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

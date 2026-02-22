@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
 
     const result = await syncMultiBranchData({ tenantId, syncProducts, syncCustomers, syncDiscounts, conflictResolution });
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Multi-branch sync error:', error);
     return NextResponse.json({
       success: false,
@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
 
     const result = await syncMultiBranchData({ tenantId, syncProducts, syncCustomers, syncDiscounts, conflictResolution });
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Multi-branch sync error:', error);
     return NextResponse.json({
       success: false,

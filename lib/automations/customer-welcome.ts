@@ -128,7 +128,7 @@ export async function sendCustomerWelcomeEmail(
     results.message = 'Welcome email sent successfully';
 
     return results;
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     results.success = false;
     results.message = `Error sending welcome email: ${error.message}`;
     results.errors?.push(error.message);

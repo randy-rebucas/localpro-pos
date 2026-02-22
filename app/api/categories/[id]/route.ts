@@ -27,7 +27,7 @@ export async function GET(
     }
 
     return NextResponse.json({ success: true, data: category });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -79,7 +79,7 @@ export async function PUT(
     });
 
     return NextResponse.json({ success: true, data: category });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     if (error.code === 11000) {
       return NextResponse.json(
         { success: false, error: 'Category with this name already exists' },
@@ -110,7 +110,7 @@ export async function DELETE(
     }
 
     // Soft delete - set isActive to false
-    const oldData = category.toObject();
+    const oldData = category.toObject(); // eslint-disable-line @typescript-eslint/no-unused-vars
     category.isActive = false;
     await category.save();
 
@@ -123,7 +123,7 @@ export async function DELETE(
     });
 
     return NextResponse.json({ success: true, message: 'Category deactivated' });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

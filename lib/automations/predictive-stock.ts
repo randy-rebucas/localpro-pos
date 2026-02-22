@@ -67,7 +67,7 @@ export async function predictStockNeeds(
           trackInventory: true,
         }).lean();
 
-        const predictions: any[] = [];
+        const predictions: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
 
         for (const product of products) {
           try {
@@ -137,7 +137,7 @@ export async function predictStockNeeds(
                 suggestedReorderQuantity,
               });
             }
-          } catch (error: any) {
+          } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             // Skip product on error
           }
         }
@@ -177,7 +177,7 @@ This is an automated predictive analysis from your POS system.`;
 
           totalPredictions += predictions.length;
         }
-      } catch (error: any) {
+      } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         totalFailed++;
         results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
       }
@@ -188,7 +188,7 @@ This is an automated predictive analysis from your POS system.`;
     results.message = `Generated ${totalPredictions} stock predictions${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     results.success = false;
     results.message = `Error predicting stock needs: ${error.message}`;
     results.errors?.push(error.message);

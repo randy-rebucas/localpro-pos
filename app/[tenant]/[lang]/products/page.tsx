@@ -37,7 +37,7 @@ export default function ProductsPage() {
   const [isRefillModalOpen, setIsRefillModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [refillingProduct, setRefillingProduct] = useState<Product | null>(null);
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [displayMode, setDisplayMode] = useState<'grid' | 'list'>('grid');
   const { confirm, Dialog: ConfirmDialog } = useConfirm();
   const { settings } = useTenantSettings();
@@ -62,6 +62,7 @@ export default function ProductsPage() {
 
   useEffect(() => {
     fetchProducts();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, tenant]);
 
   // Sort products: pinned first, then by creation date

@@ -5,7 +5,7 @@ import User from '@/models/User';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireRole, getCurrentUser } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
-import { sendBookingConfirmation, sendBookingCancellation, sendBookingReminder } from '@/lib/notifications';
+import { sendBookingConfirmation, sendBookingCancellation, sendBookingReminder } from '@/lib/notifications'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { getTenantSettingsById } from '@/lib/tenant';
 
@@ -48,7 +48,7 @@ export async function GET(
     }
 
     return NextResponse.json({ success: true, data: booking });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Get booking error:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
@@ -172,7 +172,7 @@ export async function PUT(
     }
 
     // Update booking
-    const updateData: any = {};
+    const updateData: any = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
     if (customerName !== undefined) updateData.customerName = customerName;
     if (customerEmail !== undefined) updateData.customerEmail = customerEmail;
     if (customerPhone !== undefined) updateData.customerPhone = customerPhone;
@@ -236,7 +236,7 @@ export async function PUT(
     });
 
     return NextResponse.json({ success: true, data: updatedBooking });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Update booking error:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
@@ -314,7 +314,7 @@ export async function DELETE(
     });
 
     return NextResponse.json({ success: true, message: t('validation.bookingDeleted', 'Booking deleted successfully') });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Delete booking error:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(

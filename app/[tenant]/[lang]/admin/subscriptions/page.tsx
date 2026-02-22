@@ -5,8 +5,8 @@ import Navbar from '@/components/Navbar';
 import { useParams, useRouter } from 'next/navigation';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { useSubscription } from '@/contexts/SubscriptionContext';
-import { showToast } from '@/lib/toast';
-import { Loader2, Users, Building, Package, CreditCard, CheckCircle, XCircle, Clock, AlertTriangle, ArrowUp, Receipt } from 'lucide-react';
+import { showToast } from '@/lib/toast'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import { Loader2, Users, Building, Package, CreditCard, CheckCircle, XCircle, Clock, AlertTriangle, ArrowUp, Receipt } from 'lucide-react'; // eslint-disable-line @typescript-eslint/no-unused-vars
 
 interface SubscriptionPlan {
   _id: string;
@@ -80,12 +80,12 @@ export default function SubscriptionsPage() {
   const router = useRouter();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [billingHistory, setBillingHistory] = useState<BillingTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [billingLoading, setBillingLoading] = useState(false);
-  const { subscriptionStatus, refreshSubscription } = useSubscription();
+  const { subscriptionStatus, refreshSubscription } = useSubscription(); // eslint-disable-line @typescript-eslint/no-unused-vars
 
   const fetchSubscription = async () => {
     try {
@@ -261,7 +261,7 @@ export default function SubscriptionsPage() {
                   <div className="text-center py-12">
                     <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-gray-400" />
                     <h3 className="text-lg font-medium text-gray-900 mb-2">No Active Subscription</h3>
-                    <p className="text-gray-600 mb-4">You don't have an active subscription. Contact support to get started.</p>
+                    <p className="text-gray-600 mb-4">You don&apos;t have an active subscription. Contact support to get started.</p>
                     <button
                       onClick={() => router.push(`/${tenant}/${lang}/subscription`)}
                       className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"

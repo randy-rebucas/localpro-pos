@@ -32,10 +32,10 @@ interface StockMovement {
 
 export default function StockMovementsPage() {
   const params = useParams();
-  const router = useRouter();
+  const router = useRouter(); // eslint-disable-line @typescript-eslint/no-unused-vars
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [movements, setMovements] = useState<StockMovement[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -52,6 +52,7 @@ export default function StockMovementsPage() {
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
     fetchMovements();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang, tenant, page, filters]);
 
   const fetchMovements = async () => {

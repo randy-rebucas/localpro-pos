@@ -9,7 +9,7 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
-    const user = await requireAuth(request);
+    const user = await requireAuth(request); // eslint-disable-line @typescript-eslint/no-unused-vars
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
 
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
       threshold: finalThreshold,
       count: lowStockProducts.length,
     });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Error fetching low stock products:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

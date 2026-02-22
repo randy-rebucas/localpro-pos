@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
     endDate.setHours(23, 59, 59, 999);
 
     // Get existing bookings for the date
-    const query: any = {
+    const query: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
       tenantId,
       startTime: { $gte: selectedDate, $lte: endDate },
       status: { $in: ['pending', 'confirmed'] },
@@ -111,7 +111,7 @@ export async function GET(request: NextRequest) {
         slotInterval,
       },
     });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Get time slots error:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(

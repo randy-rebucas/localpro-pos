@@ -10,12 +10,12 @@ import bcrypt from 'bcryptjs';
  * @returns Promise<boolean> - true if PIN is already in use, false otherwise
  */
 export async function isPinDuplicate(
-  tenantId: any,
+  tenantId: any, // eslint-disable-line @typescript-eslint/no-explicit-any
   candidatePin: string,
   excludeUserId?: string
 ): Promise<boolean> {
   // Get all users in the tenant with PINs (excluding the current user if specified)
-  const query: any = { tenantId, pin: { $exists: true, $ne: null } };
+  const query: any = { tenantId, pin: { $exists: true, $ne: null } }; // eslint-disable-line @typescript-eslint/no-explicit-any
   if (excludeUserId) {
     query._id = { $ne: excludeUserId };
   }

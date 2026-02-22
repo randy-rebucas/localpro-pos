@@ -12,7 +12,7 @@ export default function PageTitle() {
   const { settings } = useTenantSettings();
   const params = useParams();
   const lang = (params?.lang as 'en' | 'es') || 'en';
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);

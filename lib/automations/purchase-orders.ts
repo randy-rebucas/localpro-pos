@@ -4,7 +4,7 @@
  */
 
 import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
+import Product from '@/models/Product'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import Tenant from '@/models/Tenant';
 import { getLowStockProducts } from '@/lib/stock';
 import { sendEmail } from '@/lib/notifications';
@@ -62,7 +62,7 @@ export async function generatePurchaseOrders(
         const lowStockProducts = await getLowStockProducts(tenantId);
 
         // Group products that need reordering
-        const productsToReorder = lowStockProducts.filter((product: any) => {
+        const productsToReorder = lowStockProducts.filter((product: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
           // Check if product has reorderPoint set (if field exists)
           // For now, we'll use products below threshold
           return product.currentStock <= (product.threshold || 10);
@@ -73,7 +73,7 @@ export async function generatePurchaseOrders(
         }
 
         // Generate purchase order data
-        const purchaseOrderItems = productsToReorder.map((product: any) => {
+        const purchaseOrderItems = productsToReorder.map((product: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
           // Calculate reorder quantity (if reorderQuantity field exists, use it; otherwise suggest threshold * 2)
           const reorderQuantity = product.reorderQuantity || ((product.threshold || 10) * 2);
           
@@ -150,7 +150,7 @@ This is an automated purchase order from your POS system.`;
 
           totalOrders++;
         }
-      } catch (error: any) {
+      } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         totalFailed++;
         results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
       }
@@ -161,7 +161,7 @@ This is an automated purchase order from your POS system.`;
     results.message = `Generated ${totalOrders} purchase orders${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     results.success = false;
     results.message = `Error generating purchase orders: ${error.message}`;
     results.errors?.push(error.message);

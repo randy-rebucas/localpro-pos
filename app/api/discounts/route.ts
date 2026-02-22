@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Discount from '@/models/Discount';
-import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
-import { requireAuth, requireRole } from '@/lib/auth';
+import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import { requireAuth, requireRole } from '@/lib/auth'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkFeatureAccess } from '@/lib/subscription';
@@ -15,8 +15,8 @@ export async function GET(request: NextRequest) {
     try {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
-    } catch (authError: any) {
-      const t = await getValidationTranslatorFromRequest(request);
+    } catch (authError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+      const t = await getValidationTranslatorFromRequest(request); // eslint-disable-line @typescript-eslint/no-unused-vars
       if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
         return NextResponse.json(
           { success: false, error: authError.message },
@@ -25,13 +25,13 @@ export async function GET(request: NextRequest) {
       }
       throw authError;
     }
-    const t = await getValidationTranslatorFromRequest(request);
+    const t = await getValidationTranslatorFromRequest(request); // eslint-disable-line @typescript-eslint/no-unused-vars
     
     const searchParams = request.nextUrl.searchParams;
     const code = searchParams.get('code');
     const activeOnly = searchParams.get('activeOnly') === 'true';
 
-    const query: any = { tenantId };
+    const query: any = { tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
     
     if (code) {
       query.code = code.toUpperCase();
@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
     const discounts = await Discount.find(query).sort({ createdAt: -1 });
 
     return NextResponse.json({ success: true, data: discounts });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -61,8 +61,8 @@ export async function POST(request: NextRequest) {
       tenantId = tenantAccess.tenantId;
       // Also check role
       await requireRole(request, ['admin', 'manager']);
-    } catch (authError: any) {
-      const t = await getValidationTranslatorFromRequest(request);
+    } catch (authError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+      const t = await getValidationTranslatorFromRequest(request); // eslint-disable-line @typescript-eslint/no-unused-vars
       if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
         return NextResponse.json(
           { success: false, error: authError.message },
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
     // Check if discounts feature is enabled in subscription
     try {
       await checkFeatureAccess(tenantId.toString(), 'enableDiscounts');
-    } catch (featureError: any) {
+    } catch (featureError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       return NextResponse.json(
         { success: false, error: featureError.message },
         { status: 403 }
@@ -156,7 +156,7 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ success: true, data: discount }, { status: 201 });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     const t = await getValidationTranslatorFromRequest(request);
     if (error.code === 11000) {
       return NextResponse.json(

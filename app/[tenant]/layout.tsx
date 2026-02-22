@@ -32,7 +32,7 @@ async function ensureDefaultTenant() {
         },
         isActive: true,
       });
-    } catch (error: any) {
+    } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       // If duplicate key error (11000), another parallel process already created it
       // This can happen during build/prerendering when multiple pages are generated in parallel
       // It's safe to ignore this error and continue

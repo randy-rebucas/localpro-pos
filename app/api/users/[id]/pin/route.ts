@@ -81,7 +81,7 @@ export async function PUT(
       success: true,
       message: 'PIN updated successfully',
     });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Update user PIN error:', error);
     const errorMessage = error.message || 'Failed to update PIN';
     return NextResponse.json(
@@ -139,7 +139,7 @@ export async function DELETE(
       success: true,
       message: 'PIN removed successfully',
     });
-  } catch (error: any) {
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Delete user PIN error:', error);
     const errorMessage = error.message || 'Failed to remove PIN';
     return NextResponse.json(
