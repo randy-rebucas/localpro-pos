@@ -5,8 +5,11 @@ import Navbar from '@/components/Navbar';
 import { useParams, useRouter } from 'next/navigation';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { useSubscription } from '@/contexts/SubscriptionContext';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { getDefaultTenantSettings } from '@/lib/currency';
 import { showToast } from '@/lib/toast'; // eslint-disable-line @typescript-eslint/no-unused-vars
-import { Loader2, Users, Building, Package, CreditCard, CheckCircle, XCircle, Clock, AlertTriangle, ArrowUp, Receipt } from 'lucide-react'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import { Loader2, Users, Building, Package, CreditCard, Clock, AlertTriangle, ArrowUp, Receipt } from 'lucide-react'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import Link from 'next/link';
 
 interface SubscriptionPlan {
   _id: string;
@@ -86,6 +89,9 @@ export default function SubscriptionsPage() {
   const [loading, setLoading] = useState(true);
   const [billingLoading, setBillingLoading] = useState(false);
   const { subscriptionStatus, refreshSubscription } = useSubscription(); // eslint-disable-line @typescript-eslint/no-unused-vars
+  const { settings } = useTenantSettings();
+  const tenantSettings = settings || getDefaultTenantSettings();
+  const primaryColor = tenantSettings.primaryColor || '#2563eb';
 
   const fetchSubscription = async () => {
     try {
@@ -127,8 +133,11 @@ export default function SubscriptionsPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto" />
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+          <div
+            className="inline-block animate-spin h-8 w-8 rounded-full"
+            style={{ borderTop: `2px solid ${primaryColor}`, borderRight: `2px solid ${primaryColor}`, borderBottom: '2px solid transparent', borderLeft: `2px solid ${primaryColor}` }}
+          />
+          <p className="mt-4 text-gray-600">Loading...</p>
         </div>
       </div>
     );
@@ -139,6 +148,15 @@ export default function SubscriptionsPage() {
       <Navbar />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         <div className="mb-6 sm:mb-8">
+          <Link
+            href={`/${tenant}/${lang}/admin`}
+            className="inline-flex items-center text-sm font-medium text-gray-500 hover:text-gray-700 mb-4"
+          >
+            <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            {dict.common?.back || 'Back'}
+          </Link>
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
             {dict.admin?.subscriptions || 'My Subscription'}
           </h1>
@@ -147,193 +165,171 @@ export default function SubscriptionsPage() {
 
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin" />
+            <div
+              className="inline-block animate-spin h-8 w-8 rounded-full"
+              style={{ borderTop: `2px solid ${primaryColor}`, borderRight: `2px solid ${primaryColor}`, borderBottom: '2px solid transparent', borderLeft: `2px solid ${primaryColor}` }}
+            />
           </div>
         ) : (
-          <div className="space-y-8">
+          <div className="space-y-6">
             {/* Current Subscription */}
-            <div className="bg-white border border-gray-300 rounded-lg overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h2 className="text-lg font-semibold text-gray-900">{dict?.admin?.currentSubscription || 'Current Subscription'}</h2>
-              </div>
-              <div className="p-6">
-                {subscription ? (
-                  <div className="space-y-6">
-                    {/* Subscription Overview */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      <div className="bg-gray-50 p-4 rounded-lg">
-                        <div className="flex items-center">
-                          <CreditCard className="h-8 w-8 text-blue-600" />
-                          <div className="ml-3">
-                            <p className="text-sm font-medium text-gray-600">{dict?.admin?.plan || 'Plan'}</p>
-                            <p className="text-lg font-semibold text-gray-900">{subscription.planId?.name}</p>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="bg-gray-50 p-4 rounded-lg">
-                        <div className="flex items-center">
-                          <Clock className="h-8 w-8 text-green-600" />
-                          <div className="ml-3">
-                            <p className="text-sm font-medium text-gray-600">{dict?.admin?.status || 'Status'}</p>
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              subscription.status === 'active'
-                                ? 'bg-green-100 text-green-800'
-                                : subscription.status === 'trial'
-                                ? 'bg-blue-100 text-blue-800'
-                                : 'bg-red-100 text-red-800'
-                            }`}>
-                              {
-                                {
-                                  active: dict?.admin?.active || 'Active',
-                                  inactive: dict?.admin?.inactive || 'Inactive',
-                                  trial: dict?.admin?.trial || 'Trial',
-                                  suspended: dict?.admin?.suspended || 'Suspended',
-                                  cancelled: subscription.status.charAt(0).toUpperCase() + subscription.status.slice(1),
-                                }[subscription.status] || (subscription.status.charAt(0).toUpperCase() + subscription.status.slice(1))
-                              }
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="bg-gray-50 p-4 rounded-lg">
-                        <div className="flex items-center">
-                          <Receipt className="h-8 w-8 text-purple-600" />
-                          <div className="ml-3">
-                            <p className="text-sm font-medium text-gray-600">{dict?.admin?.billingCycle || 'Billing Cycle'}</p>
-                            <p className="text-lg font-semibold text-gray-900 capitalize">{subscription.billingCycle}</p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Usage Limits */}
-                    <div className="border-t border-gray-200 pt-6">
-                      <h3 className="text-md font-semibold text-gray-900 mb-4">{dict?.admin?.usageLimits || 'Usage Limits'}</h3>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="text-center">
-                          <Users className="h-6 w-6 mx-auto mb-2 text-blue-600" />
-                          <p className="text-sm text-gray-600">{dict?.admin?.users || 'Users'}</p>
-                          <p className="text-lg font-semibold">
-                            {subscription.usage.currentUsers} / {subscription.planId?.features.maxUsers === -1 ? '∞' : subscription.planId?.features.maxUsers}
-                          </p>
-                        </div>
-                        <div className="text-center">
-                          <Building className="h-6 w-6 mx-auto mb-2 text-green-600" />
-                          <p className="text-sm text-gray-600">{dict?.admin?.branches || 'Branches'}</p>
-                          <p className="text-lg font-semibold">
-                            {subscription.usage.currentBranches} / {subscription.planId?.features.maxBranches === -1 ? '∞' : subscription.planId?.features.maxBranches}
-                          </p>
-                        </div>
-                        <div className="text-center">
-                          <Package className="h-6 w-6 mx-auto mb-2 text-purple-600" />
-                          <p className="text-sm text-gray-600">{dict?.admin?.products || 'Products'}</p>
-                          <p className="text-lg font-semibold">
-                            {subscription.usage.currentProducts} / {subscription.planId?.features.maxProducts === -1 ? '∞' : subscription.planId?.features.maxProducts}
-                          </p>
-                        </div>
-                        <div className="text-center">
-                          <Receipt className="h-6 w-6 mx-auto mb-2 text-orange-600" />
-                          <p className="text-sm text-gray-600">{dict?.admin?.transactions || 'Transactions'}</p>
-                          <p className="text-lg font-semibold">
-                            {subscription.usage.currentTransactions} / {subscription.planId?.features.maxTransactions === -1 ? '∞' : subscription.planId?.features.maxTransactions}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Subscription Actions */}
-                    <div className="border-t border-gray-200 pt-6">
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <p className="text-sm text-gray-600">Need to upgrade or modify your plan?</p>
-                        </div>
-                        <button
-                          onClick={() => router.push(`/${tenant}/${lang}/subscription`)}
-                          className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center text-sm font-medium"
-                        >
-                          <ArrowUp className="h-4 w-4 mr-2" />
-                          Upgrade Plan
-                        </button>
-                      </div>
-                    </div>
+            <div className="bg-white border p-6" style={{ borderColor: primaryColor }}>
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-4">
+                  <div
+                    className="inline-flex p-3 border"
+                    style={{ background: `${primaryColor}11`, color: primaryColor, borderColor: primaryColor }}
+                  >
+                    <CreditCard className="h-8 w-8" />
                   </div>
-                ) : (
-                  <div className="text-center py-12">
-                    <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No Active Subscription</h3>
-                    <p className="text-gray-600 mb-4">You don&apos;t have an active subscription. Contact support to get started.</p>
-                    <button
-                      onClick={() => router.push(`/${tenant}/${lang}/subscription`)}
-                      className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-                    >
-                      View Plans
-                    </button>
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900">{dict?.admin?.currentSubscription || 'Current Subscription'}</h2>
+                    {subscription && (
+                      <p className="text-sm text-gray-500">{subscription.planId?.name} &mdash; <span className="capitalize">{subscription.billingCycle}</span></p>
+                    )}
                   </div>
+                </div>
+                {subscription && (
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    subscription.status === 'active' ? 'bg-green-100 text-green-800' :
+                    subscription.status === 'trial' ? 'bg-blue-100 text-blue-800' :
+                    'bg-red-100 text-red-800'
+                  }`}>
+                    {({ active: dict?.admin?.active || 'Active', inactive: dict?.admin?.inactive || 'Inactive', trial: dict?.admin?.trial || 'Trial', suspended: dict?.admin?.suspended || 'Suspended', cancelled: 'Cancelled' } as Record<string,string>)[subscription.status] ?? subscription.status}
+                  </span>
                 )}
               </div>
+
+              {subscription ? (
+                <div className="space-y-6">
+                  {/* Usage Limits */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-gray-50 rounded p-4 text-center">
+                      <div className="text-2xl font-bold mb-1" style={{ color: primaryColor }}>
+                        {subscription.usage.currentUsers}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {dict?.admin?.users || 'Users'} / {subscription.planId?.features.maxUsers === -1 ? '∞' : subscription.planId?.features.maxUsers}
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 rounded p-4 text-center">
+                      <div className="text-2xl font-bold text-green-600 mb-1">
+                        {subscription.usage.currentBranches}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {dict?.admin?.branches || 'Branches'} / {subscription.planId?.features.maxBranches === -1 ? '∞' : subscription.planId?.features.maxBranches}
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 rounded p-4 text-center">
+                      <div className="text-2xl font-bold text-orange-600 mb-1">
+                        {subscription.usage.currentProducts}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {dict?.admin?.products || 'Products'} / {subscription.planId?.features.maxProducts === -1 ? '∞' : subscription.planId?.features.maxProducts}
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 rounded p-4 text-center">
+                      <div className="text-2xl font-bold text-purple-600 mb-1">
+                        {subscription.usage.currentTransactions}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {dict?.admin?.transactions || 'Transactions'} / {subscription.planId?.features.maxTransactions === -1 ? '∞' : subscription.planId?.features.maxTransactions}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Action */}
+                  <div className="border-t border-gray-100 pt-5 flex items-center justify-between">
+                    <p className="text-sm text-gray-500">{dict?.admin?.upgradePlanHint || 'Need to upgrade or modify your plan?'}</p>
+                    <button
+                      onClick={() => router.push(`/${tenant}/${lang}/subscription`)}
+                      className="inline-flex items-center px-4 py-2 text-sm font-medium text-white transition-colors"
+                      style={{ background: primaryColor }}
+                    >
+                      <ArrowUp className="h-4 w-4 mr-2" />
+                      {dict?.admin?.upgradePlan || 'Upgrade Plan'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">{dict?.admin?.noSubscription || 'No Active Subscription'}</h3>
+                  <p className="text-gray-500 text-sm mb-6">{dict?.admin?.noSubscriptionHint || "You don't have an active subscription. Contact support to get started."}</p>
+                  <button
+                    onClick={() => router.push(`/${tenant}/${lang}/subscription`)}
+                    className="inline-flex items-center px-4 py-2 text-sm font-medium text-white transition-colors"
+                    style={{ background: primaryColor }}
+                  >
+                    {dict?.admin?.viewPlans || 'View Plans'}
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Billing History */}
-            <div className="bg-white border border-gray-300 rounded-lg overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-                <h2 className="text-lg font-semibold text-gray-900">Billing History</h2>
+            <div className="bg-white border p-6" style={{ borderColor: primaryColor }}>
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-4">
+                  <div
+                    className="inline-flex p-3 border"
+                    style={{ background: `${primaryColor}11`, color: primaryColor, borderColor: primaryColor }}
+                  >
+                    <Receipt className="h-8 w-8" />
+                  </div>
+                  <h2 className="text-xl font-bold text-gray-900">{dict?.admin?.billingHistory || 'Billing History'}</h2>
+                </div>
                 <button
                   onClick={fetchBillingHistory}
                   disabled={billingLoading}
-                  className="text-sm text-blue-600 hover:text-blue-500 disabled:opacity-50"
+                  className="text-sm font-medium disabled:opacity-50 transition-colors"
+                  style={{ color: primaryColor }}
                 >
-                  {billingLoading ? 'Loading...' : 'Refresh'}
+                  {billingLoading ? (dict?.common?.loading || 'Loading...') : (dict?.common?.refresh || 'Refresh')}
                 </button>
               </div>
-              <div className="p-6">
-                {billingHistory.length > 0 ? (
-                  <div className="space-y-4">
-                    {billingHistory.map((transaction) => (
-                      <div key={transaction._id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                        <div className="flex items-center space-x-4">
-                          <div className={`p-2 rounded-full ${
-                            transaction.status === 'paid' ? 'bg-green-100' :
-                            transaction.status === 'pending' ? 'bg-yellow-100' :
-                            transaction.status === 'failed' ? 'bg-red-100' : 'bg-gray-100'
-                          }`}>
-                            <Receipt className={`h-5 w-5 ${
-                              transaction.status === 'paid' ? 'text-green-600' :
-                              transaction.status === 'pending' ? 'text-yellow-600' :
-                              transaction.status === 'failed' ? 'text-red-600' : 'text-gray-600'
-                            }`} />
-                          </div>
-                          <div>
-                            <p className="font-medium text-gray-900">
-                              ₱{transaction.amount} - {transaction.billingCycle} billing
-                            </p>
-                            <p className="text-sm text-gray-600">
-                              {new Date(transaction.periodStart).toLocaleDateString()} - {new Date(transaction.periodEnd).toLocaleDateString()}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              {new Date(transaction.createdAt).toLocaleDateString()} {new Date(transaction.createdAt).toLocaleTimeString()}
-                            </p>
-                          </div>
+
+              {billingHistory.length > 0 ? (
+                <div className="space-y-3">
+                  {billingHistory.map((transaction) => (
+                    <div key={transaction._id} className="flex items-center justify-between p-4 border border-gray-100 bg-gray-50">
+                      <div className="flex items-center gap-4">
+                        <div className={`p-2 ${
+                          transaction.status === 'paid' ? 'bg-green-100 text-green-600' :
+                          transaction.status === 'pending' ? 'bg-yellow-100 text-yellow-600' :
+                          transaction.status === 'failed' ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          <Receipt className="h-5 w-5" />
                         </div>
-                        <div className="text-right">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            transaction.status === 'paid' ? 'bg-green-100 text-green-800' :
-                            transaction.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                            transaction.status === 'failed' ? 'bg-red-100 text-red-800' :
-                            'bg-gray-100 text-gray-800'
-                          }`}>
-                            {transaction.status.charAt(0).toUpperCase() + transaction.status.slice(1)}
-                          </span>
+                        <div>
+                          <p className="font-medium text-gray-900 text-sm">
+                            ₱{transaction.amount} &mdash; <span className="capitalize">{transaction.billingCycle}</span>
+                          </p>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {new Date(transaction.periodStart).toLocaleDateString()} – {new Date(transaction.periodEnd).toLocaleDateString()}
+                          </p>
+                          <p className="text-xs text-gray-400">
+                            {new Date(transaction.createdAt).toLocaleString()}
+                          </p>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <Receipt className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-                    <p className="text-gray-600">No billing history available</p>
-                  </div>
-                )}
-              </div>
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        transaction.status === 'paid' ? 'bg-green-100 text-green-800' :
+                        transaction.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                        transaction.status === 'failed' ? 'bg-red-100 text-red-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {transaction.status.charAt(0).toUpperCase() + transaction.status.slice(1)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-10">
+                  <Receipt className="h-10 w-10 mx-auto mb-3 text-gray-300" />
+                  <p className="text-gray-500 text-sm">{dict?.admin?.noBillingHistory || 'No billing history available'}</p>
+                </div>
+              )}
             </div>
           </div>
         )}

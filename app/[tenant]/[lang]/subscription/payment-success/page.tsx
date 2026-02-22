@@ -3,7 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { getDictionaryClient } from '../../dictionaries-client';
-import { CheckCircle, Loader2 } from 'lucide-react';
+import { CheckCircle } from 'lucide-react';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { getDefaultTenantSettings } from '@/lib/currency';
 
 export default function PaymentSuccessPage() {
   const params = useParams();
@@ -15,6 +17,9 @@ export default function PaymentSuccessPage() {
   const [activating, setActivating] = useState(true);
   const [success, setSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const { settings } = useTenantSettings();
+  const tenantSettings = settings || getDefaultTenantSettings();
+  const primaryColor = tenantSettings.primaryColor || '#2563eb';
 
   // Accept both 'orderId' and 'token' as PayPal order ID
   const orderId = searchParams.get('orderId') || searchParams.get('token');
@@ -85,49 +90,61 @@ export default function PaymentSuccessPage() {
   if (!dict) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
+        <div
+          className="inline-block animate-spin h-8 w-8 rounded-full"
+          style={{ borderTop: `2px solid ${primaryColor}`, borderRight: `2px solid ${primaryColor}`, borderBottom: '2px solid transparent', borderLeft: `2px solid ${primaryColor}` }}
+        />
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
+      <div className="max-w-md w-full bg-white border p-8 text-center" style={{ borderColor: primaryColor }}>
         {activating ? (
           <>
-            <Loader2 className="h-16 w-16 animate-spin mx-auto mb-4 text-blue-600" />
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Processing Payment</h1>
-            <p className="text-gray-600">Please wait while we activate your subscription...</p>
+            <div className="inline-flex p-4 border mb-6" style={{ borderColor: primaryColor, background: `${primaryColor}11` }}>
+              <div
+                className="h-10 w-10 animate-spin rounded-full"
+                style={{ borderTop: `2px solid ${primaryColor}`, borderRight: `2px solid ${primaryColor}`, borderBottom: '2px solid transparent', borderLeft: `2px solid ${primaryColor}` }}
+              />
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">{dict?.subscription?.processingPayment || 'Processing Payment'}</h1>
+            <p className="text-gray-500 text-sm">{dict?.subscription?.activatingSubscription || 'Please wait while we activate your subscription...'}</p>
           </>
         ) : success ? (
           <>
-            <CheckCircle className="h-16 w-16 mx-auto mb-4 text-green-600" />
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Payment Successful!</h1>
-            <p className="text-gray-600 mb-6">Your subscription has been activated successfully.</p>
+            <div className="inline-flex p-4 border border-green-200 bg-green-50 mb-6">
+              <CheckCircle className="h-10 w-10 text-green-600" />
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">{dict?.subscription?.paymentSuccess || 'Payment Successful!'}</h1>
+            <p className="text-gray-500 text-sm mb-8">{dict?.subscription?.subscriptionActivated || 'Your subscription has been activated successfully.'}</p>
             <button
               onClick={() => router.push(`/${tenant}/${lang}/admin`)}
-              className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 font-medium"
+              className="w-full py-2 px-4 text-white font-medium transition-opacity"
+              style={{ background: primaryColor }}
             >
-              Go to Dashboard
+              {dict?.admin?.dashboard || 'Go to Dashboard'}
             </button>
           </>
         ) : (
           <>
-            <div className="text-red-600 mb-4">
-              <svg className="h-16 w-16 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="inline-flex p-4 border border-red-200 bg-red-50 mb-6">
+              <svg className="h-10 w-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
               </svg>
             </div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Activation Failed</h1>
-            <p className="text-gray-600 mb-6">There was an issue activating your subscription. Please contact support.</p>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">{dict?.subscription?.activationFailed || 'Activation Failed'}</h1>
+            <p className="text-gray-500 text-sm mb-4">{dict?.subscription?.activationFailedMessage || 'There was an issue activating your subscription. Please contact support.'}</p>
             {errorMsg && (
-              <div className="text-xs text-red-500 mb-4 break-all">{errorMsg}</div>
+              <div className="text-xs text-red-500 mb-6 break-all bg-red-50 p-3">{errorMsg}</div>
             )}
             <button
               onClick={() => router.push(`/${tenant}/${lang}/subscription`)}
-              className="w-full bg-gray-600 text-white py-2 px-4 rounded-md hover:bg-gray-700 font-medium"
+              className="w-full py-2 px-4 text-white font-medium transition-opacity"
+              style={{ background: primaryColor }}
             >
-              Try Again
+              {dict?.subscription?.tryAgain || 'Try Again'}
             </button>
           </>
         )}

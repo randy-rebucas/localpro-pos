@@ -229,6 +229,18 @@ export default function AdminPage() {
       ),
       color: 'slate',
     },
+    {
+      title: dict.admin?.sampleData || 'Sample Data',
+      description: dict.admin?.sampleDataDescription || 'Install sample products, categories, customers, and discounts tailored to your business type',
+      href: `/${tenant}/${lang}/admin/sample-data`,
+      featureFlag: undefined as keyof typeof settings | undefined,
+      icon: (
+        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+        </svg>
+      ),
+      color: 'teal',
+    },
   ];
 
   return (
@@ -241,60 +253,67 @@ export default function AdminPage() {
           </h1>
           <p className="text-gray-600">{dict.admin?.subtitle || 'Manage users, tenants, and system settings'}</p>
         </div>
-
-        {/* Subscription Usage Summary */}
+         {/* Subscription Usage Card */}
         {subscriptionStatus && (
-          <div
-            className="col-span-full mb-6 bg-gradient-to-r rounded-lg"
-            style={{
-              background: `linear-gradient(to right, ${primaryColor}11, #a5b4fc22)`,
-              border: `1px solid ${primaryColor}55`,
-            }}
+          <Link
+            href={`/${tenant}/${lang}/admin/subscriptions`}
+            className="mb-6 block bg-white border border-gray-300 p-6 transition-all duration-200"
+            style={{ borderColor: primaryColor }}
           >
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900">{dict.admin?.subscriptionUsage || 'Subscription Usage'}</h2>
-                  <p className="text-sm text-gray-600">{subscriptionStatus.planName} {dict.admin?.plan || 'Plan'}</p>
-                </div>
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                  subscriptionStatus.isActive
-                    ? 'bg-green-100 text-green-800'
-                    : 'bg-red-100 text-red-800'
-                }`}>
-                  {subscriptionStatus.isActive ? (dict.admin?.active || "Active") : (dict.admin?.inactive || "Inactive")}
-                </span>
+            <div className="flex items-start justify-between mb-4">
+              <div
+                className="inline-flex p-3 border"
+                style={{ background: `${primaryColor}11`, color: primaryColor, borderColor: primaryColor }}
+              >
+                <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="text-center">
-                  <div className="text-2xl font-bold" style={{ color: primaryColor }}>{subscriptionStatus.usage.currentUsers}</div>
-                  <div className="text-xs text-gray-500">
-                    {dict.admin?.users || 'Users'} ({subscriptionStatus.limits.maxUsers === -1 ? '∞' : subscriptionStatus.limits.maxUsers})
-                  </div>
+              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                subscriptionStatus.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+              }`}>
+                {subscriptionStatus.isActive ? (dict.admin?.active || 'Active') : (dict.admin?.inactive || 'Inactive')}
+              </span>
+            </div>
+
+            <h2 className="text-xl font-bold text-gray-900 mb-1">{dict.admin?.subscriptionUsage || 'Subscription Usage'}</h2>
+            <p className="text-gray-600 text-sm mb-4">{subscriptionStatus.planName} {dict.admin?.plan || 'Plan'}</p>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+              <div className="bg-gray-50 rounded p-3 text-center">
+                <div className="text-2xl font-bold" style={{ color: primaryColor }}>{subscriptionStatus.usage.currentUsers}</div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {dict.admin?.users || 'Users'} / {subscriptionStatus.limits.maxUsers === -1 ? '∞' : subscriptionStatus.limits.maxUsers}
                 </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-green-600">{subscriptionStatus.usage.currentBranches}</div>
-                  <div className="text-xs text-gray-500">
-                    {dict.admin?.branches || 'Branches'} ({subscriptionStatus.limits.maxBranches === -1 ? '∞' : subscriptionStatus.limits.maxBranches})
-                  </div>
+              </div>
+              <div className="bg-gray-50 rounded p-3 text-center">
+                <div className="text-2xl font-bold text-green-600">{subscriptionStatus.usage.currentBranches}</div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {dict.admin?.branches || 'Branches'} / {subscriptionStatus.limits.maxBranches === -1 ? '∞' : subscriptionStatus.limits.maxBranches}
                 </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-orange-600">{subscriptionStatus.usage.currentProducts}</div>
-                  <div className="text-xs text-gray-500">
-                    {dict.admin?.products || 'Products'} ({subscriptionStatus.limits.maxProducts === -1 ? '∞' : subscriptionStatus.limits.maxProducts})
-                  </div>
+              </div>
+              <div className="bg-gray-50 rounded p-3 text-center">
+                <div className="text-2xl font-bold text-orange-600">{subscriptionStatus.usage.currentProducts}</div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {dict.admin?.products || 'Products'} / {subscriptionStatus.limits.maxProducts === -1 ? '∞' : subscriptionStatus.limits.maxProducts}
                 </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-purple-600">{subscriptionStatus.usage.currentTransactions}</div>
-                  <div className="text-xs text-gray-500">
-                    {dict.admin?.transactions || 'Transactions'} ({subscriptionStatus.limits.maxTransactions === -1 ? '∞' : subscriptionStatus.limits.maxTransactions})
-                  </div>
+              </div>
+              <div className="bg-gray-50 rounded p-3 text-center">
+                <div className="text-2xl font-bold text-purple-600">{subscriptionStatus.usage.currentTransactions}</div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {dict.admin?.transactions || 'Transactions'} / {subscriptionStatus.limits.maxTransactions === -1 ? '∞' : subscriptionStatus.limits.maxTransactions}
                 </div>
               </div>
             </div>
-          </div>
-        )}
 
+            <div className="mt-4 flex items-center font-medium text-sm" style={{ color: primaryColor }}>
+              <span>{dict.admin?.manageSubscription || 'Manage Subscription'}</span>
+              <svg className="w-4 h-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </Link>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {allAdminCards
             .filter(card => {
@@ -338,6 +357,8 @@ export default function AdminPage() {
             </Link>
           ))}
         </div>
+
+       
       </div>
     </div>
   );

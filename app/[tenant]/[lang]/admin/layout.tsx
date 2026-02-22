@@ -4,7 +4,6 @@ import { ReactNode, useEffect, useState } from 'react'; // eslint-disable-line @
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { TenantSettingsProvider } from '@/contexts/TenantSettingsContext';
 import { SubscriptionProvider } from '@/contexts/SubscriptionContext';
-import { SubscriptionStatusBar } from '@/components/SubscriptionStatusBar';
 import { SubscriptionGuard } from '@/components/SubscriptionGuard';
 
 /**
@@ -22,7 +21,6 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       <SubscriptionProvider>
         <ProtectedRoute requiredRoles={['owner', 'admin', 'manager']}>
           <SubscriptionGuard>
-            <SubscriptionStatusBar />
             {children}
           </SubscriptionGuard>
         </ProtectedRoute>

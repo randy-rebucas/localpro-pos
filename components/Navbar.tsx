@@ -453,9 +453,9 @@ export default function Navbar() {
                   <>
                     <div className="border-t border-gray-200 my-2" />
                     <div className="p-2">
-                      <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                      <div className="border p-3" style={{ borderColor: primaryColor, background: `${primaryColor}08` }}>
                         <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-medium text-gray-900">
+                          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
                             {dict?.common?.subscription || 'Subscription'}
                           </span>
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
@@ -473,29 +473,31 @@ export default function Navbar() {
                             }
                           </span>
                         </div>
-                        <div className="text-sm text-gray-600">
-                          <div className="font-medium">{subscriptionStatus.planName}</div>
-                          {subscriptionStatus.isTrial && subscriptionStatus.trialEndDate && (
-                            <div className="text-xs mt-1">
-                              {subscriptionStatus.isTrialExpired
-                                ? (dict?.common?.trialExpired || 'Trial expired')
-                                : `${Math.ceil((new Date(subscriptionStatus.trialEndDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} ${dict?.common?.daysLeft || 'days left'}`
-                              }
-                            </div>
-                          )}
-                          {subscriptionStatus.nextBillingDate && !subscriptionStatus.isTrial && (
-                            <div className="text-xs mt-1">
-                              {dict?.common?.nextBilling || 'Next billing'}: {new Date(subscriptionStatus.nextBillingDate).toLocaleDateString()}
-                            </div>
-                          )}
-                        </div>
+                        <div className="font-semibold text-sm text-gray-900 mb-1">{subscriptionStatus.planName}</div>
+                        {subscriptionStatus.isTrial && subscriptionStatus.trialEndDate && (
+                          <div className="text-xs text-gray-500">
+                            {subscriptionStatus.isTrialExpired
+                              ? (dict?.common?.trialExpired || 'Trial expired')
+                              : `${Math.ceil((new Date(subscriptionStatus.trialEndDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} ${dict?.common?.daysLeft || 'days left'}`
+                            }
+                          </div>
+                        )}
+                        {subscriptionStatus.nextBillingDate && !subscriptionStatus.isTrial && (
+                          <div className="text-xs text-gray-500">
+                            {dict?.common?.nextBilling || 'Next billing'}: {new Date(subscriptionStatus.nextBillingDate).toLocaleDateString()}
+                          </div>
+                        )}
                         {isAdmin && (
                           <Link
                             href={`/${tenant}/${lang}/admin/subscriptions`}
                             onClick={() => setDrawerOpen(false)}
-                            className="mt-2 block w-full text-center px-3 py-1.5 text-xs font-medium text-blue-600 hover:text-blue-500 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded transition-colors"
+                            className="mt-3 flex items-center justify-between w-full px-3 py-1.5 text-xs font-medium text-white transition-opacity"
+                            style={{ background: primaryColor }}
                           >
-                            {dict?.common?.manageSubscription || 'Manage Subscription'}
+                            <span>{dict?.common?.manageSubscription || 'Manage Subscription'}</span>
+                            <svg className="w-3 h-3 ml-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
                           </Link>
                         )}
                       </div>

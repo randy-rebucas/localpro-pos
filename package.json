@@ -14,7 +14,10 @@
     "reset:collections": "tsx scripts/reset-collections.ts",
     "test:automations": "tsx scripts/test-automations.ts",
     "test:customer-auth": "tsx scripts/test-customer-auth.ts",
-    "seed:subscription-plans": "tsx scripts/create-subscription-plans.ts"
+    "seed:subscription-plans": "tsx scripts/create-subscription-plans.ts",
+    "seed:sample-data": "tsx scripts/seed-sample-data.ts",
+    "health:check": "tsx scripts/health-check.ts",
+    "health:check:verbose": "tsx scripts/health-check.ts --verbose"
   },
   "dependencies": {
     "@formatjs/intl-localematcher": "^0.6.2",
