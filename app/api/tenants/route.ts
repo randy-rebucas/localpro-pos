@@ -10,17 +10,28 @@ import { getDefaultTenantSettings } from '@/lib/currency';
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
-    // Require admin role to list all tenants
-    await requireRole(request, ['admin']);
-    const tenants = await Tenant.find({ isActive: true }).select('slug name settings isActive createdAt').lean();
+
+    // Check if admin credentials are provided; if so, return full info
+    // Otherwise return limited public info for store selector (no auth required)
+    let isAdmin = false;
+    try {
+      await requireRole(request, ['admin']);
+      isAdmin = true;
+    } catch {
+      // Not authenticated — allow public read of active tenants
+    }
+
+    if (isAdmin) {
+      const tenants = await Tenant.find({ isActive: true }).select('slug name settings isActive createdAt').lean();
+      return NextResponse.json({ success: true, data: tenants });
+    }
+
+    // Public: return only safe fields needed for store selector
+    const tenants = await Tenant.find({ isActive: true })
+      .select('slug name settings.companyName')
+      .lean();
     return NextResponse.json({ success: true, data: tenants });
   } catch (error: unknown) {
-    if ((error as Error).message === 'Unauthorized' || (error as Error).message.includes('Forbidden')) {
-      return NextResponse.json(
-        { success: false, error: (error as Error).message },
-        { status: (error as Error).message === 'Unauthorized' ? 401 : 403 }
-      );
-    }
     return NextResponse.json({ success: false, error: 'Failed to fetch tenants' }, { status: 500 });
   }
 }

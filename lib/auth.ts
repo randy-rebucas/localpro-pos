@@ -68,8 +68,13 @@ export async function getCurrentUser(request: NextRequest): Promise<{
     // Verify user still exists and is active
     await connectDB();
     const user = await User.findById(payload.userId).select('isActive tenantId').lean();
-    
-    if (!user || !user.isActive || user.tenantId.toString() !== payload.tenantId) {
+
+    if (!user || !user.isActive) {
+      return null;
+    }
+
+    // Guard against missing tenantId before string comparison
+    if (user.tenantId && user.tenantId.toString() !== payload.tenantId) {
       return null;
     }
 

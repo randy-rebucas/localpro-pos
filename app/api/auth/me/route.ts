@@ -6,10 +6,20 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await getCurrentUser(request);
     const t = await getValidationTranslatorFromRequest(request);
-    
+
+    // Check for a token first; if none exists return 200 with no user (not a 401)
+    const hasToken = !!(request.cookies.get('auth-token')?.value ||
+      request.headers.get('authorization')?.replace('Bearer ', ''));
+
+    const user = await getCurrentUser(request);
+
     if (!user) {
+      if (!hasToken) {
+        // No token at all — unauthenticated visitor, no error
+        return NextResponse.json({ success: false, user: null });
+      }
+      // Token present but invalid/expired
       return NextResponse.json({ success: false, error: t('validation.notAuthenticated', 'Not authenticated') }, { status: 401 });
     }
 
