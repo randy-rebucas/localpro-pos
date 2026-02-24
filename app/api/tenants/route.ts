@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
 
     // Public: return only safe fields needed for store selector
     const tenants = await Tenant.find({ isActive: true })
-      .select('slug name settings.companyName')
+      .select('slug name settings.companyName settings.logo settings.businessType settings.address settings.primaryColor settings.secondaryColor settings.currency settings.language')
       .lean();
     return NextResponse.json({ success: true, data: tenants });
   } catch (error: unknown) {

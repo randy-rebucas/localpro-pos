@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "POS System - Point of Sale",
-  description: "Complete POS system with product management and sales tracking",
+  title: "1pos - Point of Sale",
+  description: "1pos: Enterprise-grade POS system with 100+ features for modern businesses",
 };
 
 export const viewport: Viewport = {
