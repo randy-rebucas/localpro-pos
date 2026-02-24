@@ -24,9 +24,11 @@ export async function createSubscriptionPayment(planId: string, amount: number, 
   try {
     const language = lang || 'en';
     const tenantPath = tenant ? `/${tenant}/${language}` : '';
-    const planParams = `planId=${encodeURIComponent(planId)}&billingCycle=${encodeURIComponent(billingCycle || 'monthly')}`;
-    const returnUrl = `${process.env.BASE_URL || 'http://localhost:3000'}${tenantPath}/subscription/payment-success?${planParams}`;
-    const cancelUrl = `${process.env.BASE_URL || 'http://localhost:3000'}${tenantPath}/subscription/payment-cancel?${planParams}`;
+    const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+    const planParams = `planId=${encodeURIComponent(planId)}&billingCycle=${encodeURIComponent(billingCycle || 'monthly')}&tenant=${encodeURIComponent(tenant || '')}&lang=${encodeURIComponent(language)}`;
+    // Return URL must go through the API capture route first, then it redirects to the frontend success page
+    const returnUrl = `${baseUrl}/api/paypal/success?${planParams}`;
+    const cancelUrl = `${baseUrl}${tenantPath}/subscription/payment-cancel?${planParams}`;
     const response = await ordersController.createOrder({
       body: {
         intent: CheckoutPaymentIntent.Capture,

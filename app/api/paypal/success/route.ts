@@ -5,9 +5,15 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const token = searchParams.get('token'); // PayPal order ID
+    const tenant = searchParams.get('tenant') || '';
+    const lang = searchParams.get('lang') || 'en';
+    const planId = searchParams.get('planId') || '';
+    const billingCycle = searchParams.get('billingCycle') || 'monthly';
+
+    const basePath = tenant ? `/${tenant}/${lang}` : '';
 
     if (!token) {
-      return NextResponse.redirect(new URL('/?payment=cancelled', request.url));
+      return NextResponse.redirect(new URL(`${basePath}/subscription/payment-cancel`, request.url));
     }
 
     // Capture the payment
@@ -17,14 +23,13 @@ export async function GET(request: NextRequest) {
     const isSuccessful = captureResult.status === 'COMPLETED';
 
     if (isSuccessful) {
-      // Redirect to subscription activation page with success
-      return NextResponse.redirect(new URL(`/subscription/payment-success?orderId=${token}`, request.url));
+      const params = new URLSearchParams({ orderId: token, planId, billingCycle });
+      return NextResponse.redirect(new URL(`${basePath}/subscription/payment-success?${params}`, request.url));
     } else {
-      // Redirect with failure
-      return NextResponse.redirect(new URL('/subscription/payment-failed', request.url));
+      return NextResponse.redirect(new URL(`${basePath}/subscription/payment-failed?orderId=${token}`, request.url));
     }
 
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  } catch (error: unknown) {
     console.error('Error processing PayPal success:', error);
     return NextResponse.redirect(new URL('/subscription/payment-failed', request.url));
   }
