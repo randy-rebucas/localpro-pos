@@ -18,7 +18,12 @@
       "Bash(node -e \"const c = require\\(''./node_modules/next/dist/build/analysis/get-page-static-info.js''\\); console.log\\(Object.keys\\(c\\).join\\(''\\\\n''\\)\\);\")",
       "Bash(grep -r '\"\"proxy\"\"' node_modules/next/dist/shared/lib/constants.js)",
       "Bash(node -e \" const src = require\\(''fs''\\).readFileSync\\(''node_modules/next/dist/shared/lib/constants.js'', ''utf8''\\); const idx = src.indexOf\\(''proxy''\\); console.log\\(src.slice\\(Math.max\\(0,idx-100\\), idx+200\\)\\); \")",
-      "Bash(node -e \":*)"
+      "Bash(node -e \":*)",
+      "Bash(done)",
+      "Bash(for f in \"app/api/automations/attendance/auto-clockout/route.ts\" \"app/api/automations/bookings/confirm/route.ts\" \"app/api/automations/bookings/no-show/route.ts\" \"app/api/automations/cash-drawer/auto-close/route.ts\" \"app/api/automations/discounts/manage/route.ts\")",
+      "Bash(do)",
+      "Bash(echo \"=== $f ===\")",
+      "Read(//c/Users/corew/localpro-pos/**)"
     ]
   }
 }

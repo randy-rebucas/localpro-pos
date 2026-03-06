@@ -48,8 +48,6 @@ export async function GET(request: NextRequest) {
         const authError = verifyCronAuth(request, searchParams.get('secret'));
     if (authError) return authError;
 
-      );
-    }
 
     const result = await sendBookingReminders({
       tenantId,

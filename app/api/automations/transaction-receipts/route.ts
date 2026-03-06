@@ -59,9 +59,6 @@ export async function GET(request: NextRequest) {
         const authError = verifyCronAuth(request, searchParams.get('secret'));
     if (authError) return authError;
 
-      );
-    }
-
     if (transactionId) {
       const result = await sendTransactionReceipt({
         transactionId,

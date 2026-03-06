@@ -11,12 +11,8 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
     const { tenantId, forceClose } = body;
-
-        const authError = verifyCronAuth(request, searchParams.get('secret'));
+        const authError = verifyCronAuth(request, null);
     if (authError) return authError;
-
-      );
-    }
 
     const result = await autoCloseCashDrawers({
       tenantId,
@@ -45,17 +41,8 @@ export async function GET(request: NextRequest) {
     const tenantId = searchParams.get('tenantId') || undefined;
     const forceClose = searchParams.get('forceClose') === 'true';
 
-    // Allow Vercel cron jobs or verify secret
-    const isVercelCron = request.headers.get('authorization') === `Bearer ${process.env.CRON_SECRET}`;
-    const cronSecret = process.env.CRON_SECRET;
-    const providedSecret = searchParams.get('secret');
-
-    if (cronSecret && !isVercelCron && providedSecret !== cronSecret) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
+        const authError = verifyCronAuth(request, searchParams.get('secret'));
+    if (authError) return authError;
 
     const result = await autoCloseCashDrawers({
       tenantId,

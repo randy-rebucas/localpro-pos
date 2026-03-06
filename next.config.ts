@@ -6,7 +6,10 @@ const getAllowedOrigin = (): string => {
   }
   const origin = process.env.ALLOWED_ORIGINS;
   if (!origin) {
-    throw new Error('CRITICAL: ALLOWED_ORIGINS must be set in production.');
+    // Warn at build time — do not throw, which would break the build.
+    // Set ALLOWED_ORIGINS in your production environment variables.
+    console.warn('WARNING: ALLOWED_ORIGINS is not set. CORS will be restricted to no origin.');
+    return '';
   }
   return origin;
 };

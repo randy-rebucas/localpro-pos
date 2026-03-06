@@ -18,8 +18,17 @@ export async function GET(request: NextRequest) {
   try {
     await connectDB();
 
-        const authError = verifyCronAuth(request, null);
+    const searchParams = request.nextUrl.searchParams;
+        const authError = verifyCronAuth(request, searchParams.get('secret'));
     if (authError) return authError;
+
+    const now = new Date();
+    const stats = {
+      discounts: { active: 0, expiringSoon: 0, needsActivation: 0, needsDeactivation: 0 },
+      attendance: { openSessions: 0, forgottenSessions: 0 },
+      cashDrawer: { openSessions: 0 },
+      transactions: { pendingReceipts: 0 },
+    };
 
     // Get discount stats
     stats.discounts.active = await Discount.countDocuments({
