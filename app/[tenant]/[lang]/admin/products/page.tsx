@@ -26,6 +26,7 @@ interface Product {
     _id: string;
     name: string;
   } | string;
+  image?: string;
   productType: 'regular' | 'bundle' | 'service';
   hasVariations: boolean;
   variations?: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -221,6 +222,7 @@ export default function ProductsPage() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Image</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.name || 'Name'}</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.category || 'Category'}</th>
@@ -233,6 +235,18 @@ export default function ProductsPage() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredProducts.map((product) => (
                   <tr key={product._id}>
+                    <td className="px-4 py-4 w-14">
+                      {product.image ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={product.image} alt={product.name} className="w-10 h-10 object-cover border border-gray-200 rounded" />
+                      ) : (
+                        <div className="w-10 h-10 bg-gray-100 border border-gray-200 rounded flex items-center justify-center">
+                          <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                        </div>
+                      )}
+                    </td>
                     <td className="px-4 py-4">
                       <div className="text-sm font-medium text-gray-900">{product.name}</div>
                       {product.description && (
@@ -345,6 +359,7 @@ function ProductModal({
   const [formData, setFormData] = useState({
     name: product?.name || '',
     description: product?.description || '',
+    image: product?.image || '',
     price: product?.price || 0,
     stock: product?.stock || 0,
     sku: product?.sku || '',
@@ -373,6 +388,7 @@ function ProductModal({
     setFormData({
       name: product?.name || '',
       description: product?.description || '',
+      image: product?.image || '',
       price: product?.price || 0,
       stock: product?.stock || 0,
       sku: product?.sku || '',
@@ -461,6 +477,7 @@ function ProductModal({
       const body: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
         name: formData.name,
         description: formData.description || undefined,
+        image: formData.image || undefined,
         price: formData.price,
         stock: formData.stock,
         sku: formData.sku || undefined,
@@ -607,6 +624,66 @@ function ProductModal({
                 rows={3}
                 className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Product Image
+              </label>
+              <div className="flex gap-3 items-start">
+                {formData.image && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={formData.image}
+                    alt="Preview"
+                    className="w-20 h-20 object-cover border border-gray-200 rounded flex-shrink-0"
+                  />
+                )}
+                <div className="flex-1 space-y-2">
+                  <label className="flex items-center gap-2 px-3 py-2 border border-gray-300 bg-gray-50 hover:bg-gray-100 cursor-pointer text-sm text-gray-700 transition-colors">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    </svg>
+                    Upload image
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d')!;
+                        const img = new window.Image();
+                        img.onload = () => {
+                          const MAX = 400;
+                          const ratio = Math.min(MAX / img.width, MAX / img.height, 1);
+                          canvas.width = Math.round(img.width * ratio);
+                          canvas.height = Math.round(img.height * ratio);
+                          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                          setFormData(prev => ({ ...prev, image: canvas.toDataURL('image/jpeg', 0.75) }));
+                        };
+                        img.src = URL.createObjectURL(file);
+                      }}
+                    />
+                  </label>
+                  <input
+                    type="url"
+                    value={formData.image.startsWith('data:') ? '' : formData.image}
+                    onChange={(e) => setFormData(prev => ({ ...prev, image: e.target.value }))}
+                    placeholder="Or paste image URL (https://...)"
+                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white text-sm"
+                  />
+                  {formData.image && (
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, image: '' }))}
+                      className="text-xs text-red-600 hover:text-red-800"
+                    >
+                      Remove image
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
             <div className={`grid gap-4 ${businessTypeConfig?.defaultFeatures?.enableInventory !== false ? 'grid-cols-3' : 'grid-cols-1'}`}>
               <div>
