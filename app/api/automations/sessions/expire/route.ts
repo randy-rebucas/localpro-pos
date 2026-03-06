@@ -3,6 +3,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyCronAuth } from '@/lib/automation-auth';
 import { expireInactiveSessions } from '@/lib/automations';
 
 export async function POST(request: NextRequest) {

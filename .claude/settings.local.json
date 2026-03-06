@@ -9,7 +9,16 @@
       "Bash(pnpm run lint:*)",
       "Bash(npx eslint:*)",
       "Bash(ls:*)",
-      "Bash(npm run lint)"
+      "Bash(npm run lint)",
+      "Bash(grep -v \"//.*error\\\\.message\")",
+      "Bash(node _fix-automation-auth.js)",
+      "Bash(node _fix-pagination.js)",
+      "Bash(rm _fix-pagination.js)",
+      "Bash(node -e \"const c = require\\(''./node_modules/next/dist/shared/lib/constants.js''\\); console.log\\(''PROXY:'', c.PROXY_FILENAME, ''MIDDLEWARE:'', c.MIDDLEWARE_FILENAME\\);\")",
+      "Bash(node -e \"const c = require\\(''./node_modules/next/dist/build/analysis/get-page-static-info.js''\\); console.log\\(Object.keys\\(c\\).join\\(''\\\\n''\\)\\);\")",
+      "Bash(grep -r '\"\"proxy\"\"' node_modules/next/dist/shared/lib/constants.js)",
+      "Bash(node -e \" const src = require\\(''fs''\\).readFileSync\\(''node_modules/next/dist/shared/lib/constants.js'', ''utf8''\\); const idx = src.indexOf\\(''proxy''\\); console.log\\(src.slice\\(Math.max\\(0,idx-100\\), idx+200\\)\\); \")",
+      "Bash(node -e \":*)"
     ]
   }
 }

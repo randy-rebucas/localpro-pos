@@ -1,5 +1,6 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 
 export interface IUser extends Document {
   email: string;
@@ -105,10 +106,9 @@ UserSchema.pre('save', async function (next) {
     }
   }
   
-  // Generate QR token if not exists
+  // Generate cryptographically secure QR token if not exists
   if (this.isNew && !this.qrToken) {
-    const id = (this._id as mongoose.Types.ObjectId).toString();
-    this.qrToken = id + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 15);
+    this.qrToken = crypto.randomBytes(32).toString('hex');
   }
   
   next();

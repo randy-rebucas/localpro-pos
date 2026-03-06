@@ -70,12 +70,10 @@ interface BillingTransaction {
   _id: string;
   amount: number;
   currency: string;
-  status: 'paid' | 'pending' | 'failed' | 'refunded';
-  billingCycle: 'monthly' | 'yearly';
-  periodStart: string;
-  periodEnd: string;
-  createdAt: string;
-  description?: string;
+  status: 'paid' | 'failed' | 'pending' | 'refunded';
+  date: string;
+  transactionId?: string;
+  invoiceUrl?: string;
 }
 
 export default function SubscriptionsPage() {
@@ -83,6 +81,12 @@ export default function SubscriptionsPage() {
   const router = useRouter();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
+
+  const formatDate = (value: string | Date | undefined | null) => {
+    if (!value) return '—';
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? '—' : d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  };
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [billingHistory, setBillingHistory] = useState<BillingTransaction[]>([]);
@@ -303,14 +307,14 @@ export default function SubscriptionsPage() {
                         </div>
                         <div>
                           <p className="font-medium text-gray-900 text-sm">
-                            ₱{transaction.amount} &mdash; <span className="capitalize">{transaction.billingCycle}</span>
+                            {transaction.currency} {transaction.amount.toLocaleString()}
                           </p>
                           <p className="text-xs text-gray-500 mt-0.5">
-                            {new Date(transaction.periodStart).toLocaleDateString()} – {new Date(transaction.periodEnd).toLocaleDateString()}
+                            {formatDate(transaction.date)}
                           </p>
-                          <p className="text-xs text-gray-400">
-                            {new Date(transaction.createdAt).toLocaleString()}
-                          </p>
+                          {transaction.transactionId && (
+                            <p className="text-xs text-gray-400 font-mono mt-0.5">{transaction.transactionId}</p>
+                          )}
                         </div>
                       </div>
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${

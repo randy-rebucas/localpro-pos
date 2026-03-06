@@ -6,6 +6,7 @@ import { validateEmail, validatePassword } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { generateToken } from '@/lib/auth';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
 /**
  * Public endpoint for client (end user) registration
@@ -16,6 +17,16 @@ import { generateToken } from '@/lib/auth';
 export async function POST(request: NextRequest) {
   let t: (key: string, fallback: string) => string;
   try {
+    // Rate limiting: 5 registrations per hour per IP
+    const ip = getClientIp(request);
+    const rl = checkRateLimit(`register:${ip}`, 5, 60 * 60 * 1000);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { success: false, error: 'Too many registration attempts. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.resetAfterMs / 1000)) } }
+      );
+    }
+
     await connectDB();
     const body = await request.json();
     const { name, email, password, tenantId } = body;
@@ -91,12 +102,22 @@ export async function POST(request: NextRequest) {
     const userResponse = user.toObject();
     const { password: _, ...userWithoutPassword } = userResponse;
 
-    return NextResponse.json({
+    // Return token only via httpOnly cookie — not in body
+    const response = NextResponse.json({
       success: true,
       data: userWithoutPassword,
-      token,
       message: t('validation.userCreatedSuccess', 'Registration successful! You can now log in.')
     }, { status: 201 });
+
+    response.cookies.set('auth-token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 24 * 7,
+    });
+
+    return response;
   } catch (error: unknown) {
     if ((error as Record<string, unknown>).code === 11000) {
       return NextResponse.json(
@@ -104,6 +125,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    return NextResponse.json({ success: false, error: (error as Error).message }, { status: 400 });
+    console.error('Register error:', error);
+    return NextResponse.json({ success: false, error: 'Registration failed. Please try again.' }, { status: 400 });
   }
 }

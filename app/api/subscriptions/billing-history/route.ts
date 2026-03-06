@@ -39,11 +39,9 @@ export async function GET(request: NextRequest) {
       amount: billing.amount,
       currency: billing.currency || 'PHP',
       status: billing.status || 'paid',
-      billingCycle: billing.billingCycle || subscription.billingCycle,
-      periodStart: billing.periodStart,
-      periodEnd: billing.periodEnd,
-      createdAt: billing.createdAt || billing.date,
-      description: billing.description,
+      date: billing.date ?? billing.createdAt ?? null,
+      transactionId: billing.transactionId,
+      invoiceUrl: billing.invoiceUrl,
     }));
 
     return NextResponse.json({

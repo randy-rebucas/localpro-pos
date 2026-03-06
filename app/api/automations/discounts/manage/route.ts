@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyCronAuth } from '@/lib/automation-auth';
 import { manageDiscountStatus } from '@/lib/automations';
 
 export async function POST(request: NextRequest) {
@@ -11,15 +12,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const { tenantId } = body;
 
-    // Allow Vercel cron jobs or verify secret
-    const isVercelCron = request.headers.get('authorization') === `Bearer ${process.env.CRON_SECRET}`;
-    const cronSecret = process.env.CRON_SECRET;
-    const providedSecret = body.secret;
+        const authError = verifyCronAuth(request, searchParams.get('secret'));
+    if (authError) return authError;
 
-    if (cronSecret && !isVercelCron && providedSecret !== cronSecret) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
       );
     }
 

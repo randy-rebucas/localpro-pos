@@ -17,7 +17,8 @@ export async function GET(request: NextRequest) {
     const userId = searchParams.get('userId');
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
-    const limit = parseInt(searchParams.get('limit') || '50');
+    const rawLimit = parseInt(searchParams.get('limit') || '50');
+    const limit = Math.min(Math.max(1, rawLimit), 200);
 
     // Build query
     const query: any = { tenantId: user.tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any

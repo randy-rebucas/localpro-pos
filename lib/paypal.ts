@@ -1,19 +1,24 @@
 import { Client, Environment, OrdersController, CheckoutPaymentIntent, OrderApplicationContextUserAction } from '@paypal/paypal-server-sdk';
 
 // PayPal configuration
-const clientId = process.env.PAYPAL_CLIENT_ID || 'your_paypal_client_id_here';
-const clientSecret = process.env.PAYPAL_CLIENT_SECRET || 'your_paypal_client_secret_here';
-const environment = process.env.PAYPAL_ENVIRONMENT === 'production'
+// Uses PAYPAL_MODE ("sandbox" | "live") — consistent with .env convention
+const clientId = process.env.PAYPAL_CLIENT_ID || '';
+const clientSecret = process.env.PAYPAL_CLIENT_SECRET || '';
+
+if (!clientId || !clientSecret) {
+  console.warn('WARNING: PAYPAL_CLIENT_ID or PAYPAL_CLIENT_SECRET not set.');
+}
+
+const environment = process.env.PAYPAL_MODE === 'live'
   ? Environment.Production
   : Environment.Sandbox;
-
 
 export const paypalClient = new Client({
   clientCredentialsAuthCredentials: {
     oAuthClientId: clientId,
     oAuthClientSecret: clientSecret,
   },
-  timeout: 0,
+  timeout: 15000, // 15-second timeout
   environment,
 });
 

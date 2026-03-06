@@ -19,8 +19,9 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const productId = searchParams.get('productId');
     const type = searchParams.get('type');
-    const limit = parseInt(searchParams.get('limit') || '50');
-    const page = parseInt(searchParams.get('page') || '1');
+    const rawLimit = parseInt(searchParams.get('limit') || '50');
+    const limit = Math.min(Math.max(1, rawLimit), 200);
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
     const skip = (page - 1) * limit;
 
     const query: any = { tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any

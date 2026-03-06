@@ -5,6 +5,7 @@ import SubscriptionPlan from '@/models/SubscriptionPlan';
 import Tenant from '@/models/Tenant';
 import { requireAuth } from '@/lib/auth';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { capturePayment } from '@/lib/paypal';
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,12 +23,37 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { planId, billingCycle = 'monthly', paypalOrderId } = body; // eslint-disable-line @typescript-eslint/no-unused-vars
+    const { planId, billingCycle = 'monthly', paypalOrderId } = body;
 
     if (!planId) {
       return NextResponse.json(
         { success: false, error: 'Plan ID is required' },
         { status: 400 }
+      );
+    }
+
+    // Verify PayPal payment before activating subscription
+    if (!paypalOrderId) {
+      return NextResponse.json(
+        { success: false, error: 'PayPal order ID is required' },
+        { status: 400 }
+      );
+    }
+
+    let captureResult;
+    try {
+      captureResult = await capturePayment(paypalOrderId);
+    } catch {
+      return NextResponse.json(
+        { success: false, error: 'Failed to verify PayPal payment. Please try again.' },
+        { status: 402 }
+      );
+    }
+
+    if (captureResult.status !== 'COMPLETED') {
+      return NextResponse.json(
+        { success: false, error: `Payment not completed. Status: ${captureResult.status}` },
+        { status: 402 }
       );
     }
 
@@ -40,52 +66,40 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if tenant already has an active subscription
-    const existingSubscription = await Subscription.findOne({
-      tenantId,
-      status: { $in: ['active', 'trial'] }
-    });
+    // Find any existing subscription for this tenant (any status)
+    const existingSubscription = await Subscription.findOne({ tenantId });
 
     const now = new Date();
     let subscriptionData: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-    if (existingSubscription) {
-      // Update existing subscription
-      const endDate = billingCycle === 'yearly'
-        ? new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000)
-        : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const endDate = billingCycle === 'yearly'
+      ? new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000)
+      : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
+    const billingEntry = {
+      date: now,
+      amount: billingCycle === 'yearly' ? plan.price.monthly * 12 * 0.9 : plan.price.monthly,
+      currency: plan.price.currency,
+      status: 'paid',
+      transactionId: paypalOrderId || undefined,
+    };
+
+    if (existingSubscription) {
+      // Update existing subscription (upgrade, re-activate, or trial conversion)
       subscriptionData = {
         planId: plan._id,
         status: 'active',
         billingCycle,
         endDate,
+        nextBillingDate: endDate,
         isTrial: false,
         autoRenew: true,
-        updatedAt: now,
-      };
-
-      // Add billing history entry
-      subscriptionData.$push = {
-        billingHistory: {
-          amount: billingCycle === 'yearly' ? plan.price.monthly * 12 * 0.9 : plan.price.monthly,
-          currency: plan.price.currency,
-          status: 'paid',
-          billingCycle,
-          periodStart: now,
-          periodEnd: endDate,
-          createdAt: now,
-          description: `Subscription ${billingCycle === 'yearly' ? 'yearly' : 'monthly'} payment`,
-        }
+        $push: { billingHistory: billingEntry },
       };
 
       await Subscription.findByIdAndUpdate(existingSubscription._id, subscriptionData);
     } else {
-      // Create new subscription
-      const endDate = billingCycle === 'yearly'
-        ? new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000)
-        : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-
+      // Create brand-new subscription
       subscriptionData = {
         tenantId,
         planId: plan._id,
@@ -93,6 +107,7 @@ export async function POST(request: NextRequest) {
         billingCycle,
         startDate: now,
         endDate,
+        nextBillingDate: endDate,
         isTrial: false,
         autoRenew: true,
         usage: {
@@ -102,16 +117,7 @@ export async function POST(request: NextRequest) {
           currentTransactions: 0,
           lastResetDate: now,
         },
-        billingHistory: [{
-          amount: billingCycle === 'yearly' ? plan.price.monthly * 12 * 0.9 : plan.price.monthly,
-          currency: plan.price.currency,
-          status: 'paid',
-          billingCycle,
-          periodStart: now,
-          periodEnd: endDate,
-          createdAt: now,
-          description: `Initial subscription ${billingCycle === 'yearly' ? 'yearly' : 'monthly'} payment`,
-        }],
+        billingHistory: [billingEntry],
       };
 
       const subscription = await Subscription.create(subscriptionData);

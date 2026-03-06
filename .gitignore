@@ -24,6 +24,14 @@
 .DS_Store
 *.pem
 
+# database backups — never commit
+/backups/
+
+# lint output artifacts
+lint-output.json
+lint-output.txt
+lint-parsed.json
+
 # debug
 npm-debug.log*
 yarn-debug.log*

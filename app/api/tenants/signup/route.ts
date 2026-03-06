@@ -6,6 +6,7 @@ import { getDefaultTenantSettings } from '@/lib/currency';
 import { validateEmail, validatePassword, validateTenant } from '@/lib/validation';
 import { getValidationTranslator } from '@/lib/validation-translations';
 import { applyBusinessTypeDefaults } from '@/lib/business-types';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
 /**
  * Public endpoint for tenant signup
@@ -14,8 +15,18 @@ import { applyBusinessTypeDefaults } from '@/lib/business-types';
 export async function POST(request: NextRequest) {
   let t: (key: string, fallback: string) => string;
   try {
+    // Rate limiting: 3 store sign-ups per hour per IP
+    const ip = getClientIp(request);
+    const rl = checkRateLimit(`signup:${ip}`, 3, 60 * 60 * 1000);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { success: false, error: 'Too many signup attempts. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.resetAfterMs / 1000)) } }
+      );
+    }
+
     await connectDB();
-    
+
     const body = await request.json();
     const { 
       // Tenant info

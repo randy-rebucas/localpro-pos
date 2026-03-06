@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyCronAuth } from '@/lib/automation-auth';
 import { sendSalesReport } from '@/lib/automations';
 
 export async function POST(request: NextRequest) {
@@ -11,19 +12,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const { tenantId, period } = body;
 
-    // Optional: Add authentication/authorization
-    const authHeader = request.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
-
-    if (authHeader && cronSecret) {
-      const token = authHeader.replace('Bearer ', '');
-      if (token !== cronSecret) {
-        return NextResponse.json(
-          { success: false, error: 'Unauthorized' },
-          { status: 401 }
-        );
-      }
-    }
+        const authError = verifyCronAuth(request, null);
+    if (authError) return authError;
 
     const result = await sendSalesReport({
       tenantId,
@@ -52,16 +42,9 @@ export async function GET(request: NextRequest) {
     const tenantId = searchParams.get('tenantId') || undefined;
     const period = (searchParams.get('period') || 'daily') as 'daily' | 'weekly' | 'monthly';
 
-    // Allow Vercel cron jobs (they send a special header) or verify secret
-    const isVercelCron = request.headers.get('authorization') === `Bearer ${process.env.CRON_SECRET}`;
-    const cronSecret = process.env.CRON_SECRET;
-    const providedSecret = searchParams.get('secret');
+        const authError = verifyCronAuth(request, searchParams.get('secret'));
+    if (authError) return authError;
 
-    // Allow if: Vercel cron, or no secret configured, or secret matches
-    if (cronSecret && !isVercelCron && providedSecret !== cronSecret) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
       );
     }
 

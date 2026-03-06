@@ -455,12 +455,16 @@ export default function SettingsPage() {
                         value={settings.currency || 'USD'}
                         onChange={(e) => {
                           const newCurrency = e.target.value.toUpperCase();
-                          updateSetting('currency', newCurrency);
-                          // Auto-update currency symbol when currency changes
                           const symbol = getCurrencySymbolForCode(newCurrency);
-                          if (symbol !== newCurrency) {
-                            updateSetting('currencySymbol', symbol);
-                          }
+                          // Update both fields in one setState to avoid React batching overwrite
+                          setSettings(prev => {
+                            if (!prev) return prev;
+                            return {
+                              ...prev,
+                              currency: newCurrency,
+                              ...(symbol !== newCurrency ? { currencySymbol: symbol } : {}),
+                            };
+                          });
                         }}
                         className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                         placeholder={dict?.settings?.currencyPlaceholder || 'USD'}

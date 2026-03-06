@@ -51,18 +51,31 @@ export default function SubscriptionPage() {
   const [loading, setLoading] = useState(true);
   const [selectedPlan, setSelectedPlan] = useState<string>('');
   const [upgrading, setUpgrading] = useState(false);
+  const [currentPlanName, setCurrentPlanName] = useState<string | null>(null);
   const { settings } = useTenantSettings();
   const tenantSettings = settings || getDefaultTenantSettings();
   const primaryColor = tenantSettings.primaryColor || '#2563eb';
 
+  // Match the current plan by name
+  const currentPlan = plans.find((p) => p.name === currentPlanName);
+  const currentPlanId = currentPlan?._id ?? null;
+
   const loadPlans = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/subscription-plans');
-      const result = await response.json();
-
-      if (result.success) {
-        setPlans(result.data);
+      const [plansRes, statusRes] = await Promise.all([
+        fetch('/api/subscription-plans'),
+        fetch('/api/subscription/status', { credentials: 'include' }),
+      ]);
+      const plansResult = await plansRes.json();
+      if (plansResult.success) {
+        setPlans(plansResult.data);
+      }
+      if (statusRes.ok) {
+        const statusResult = await statusRes.json();
+        if (statusResult.success && statusResult.data?.planName) {
+          setCurrentPlanName(statusResult.data.planName);
+        }
       }
     } catch (error) {
       console.error('Failed to load plans:', error);
@@ -159,15 +172,28 @@ export default function SubscriptionPage() {
 
         {/* Plans Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
-          {plans.filter(plan => plan.tier !== 'enterprise').map((plan) => (
+          {plans.filter(plan => plan.tier !== 'enterprise').map((plan) => {
+            const isCurrent = plan._id === currentPlanId;
+            return (
             <div
               key={plan._id}
-              className="flex flex-col h-full bg-white border transition-all duration-200"
+              className="flex flex-col h-full bg-white border transition-all duration-200 relative"
               style={{
-                borderColor: selectedPlan === plan._id ? primaryColor : '#d1d5db',
-                boxShadow: selectedPlan === plan._id ? `0 0 0 2px ${primaryColor}33` : undefined,
+                borderColor: isCurrent ? primaryColor : selectedPlan === plan._id ? primaryColor : '#d1d5db',
+                boxShadow: isCurrent
+                  ? `0 0 0 2px ${primaryColor}55`
+                  : selectedPlan === plan._id ? `0 0 0 2px ${primaryColor}33` : undefined,
               }}
             >
+              {/* Current plan badge */}
+              {isCurrent && (
+                <div
+                  className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-3 py-1 text-xs font-semibold text-white whitespace-nowrap"
+                  style={{ background: primaryColor }}
+                >
+                  Current Plan
+                </div>
+              )}
               <div className="flex-1 flex flex-col p-6 justify-between">
                 <div>
                   <div className="mb-5">
@@ -179,7 +205,7 @@ export default function SubscriptionPage() {
                     </div>
                     <h3 className="text-lg font-bold text-gray-900">{plan.name}</h3>
                     <div className="mt-1">
-                      <span className="text-3xl font-bold text-gray-900">₱{plan.price.monthly}</span>
+                      <span className="text-3xl font-bold text-gray-900">{plan.price.currency} {plan.price.monthly.toLocaleString()}</span>
                       <span className="text-sm text-gray-500 ml-1">/month</span>
                     </div>
                   </div>
@@ -224,7 +250,7 @@ export default function SubscriptionPage() {
                           {upgrading ? (
                             <Loader2 className="h-4 w-4 animate-spin mx-auto" />
                           ) : (
-                            <><div>₱{plan.price.monthly}</div><div className="text-xs opacity-80">Monthly</div></>
+                            <><div>{plan.price.currency} {plan.price.monthly.toLocaleString()}</div><div className="text-xs opacity-80">Monthly</div></>
                           )}
                         </button>
                         <button
@@ -235,7 +261,7 @@ export default function SubscriptionPage() {
                           {upgrading ? (
                             <Loader2 className="h-4 w-4 animate-spin mx-auto" />
                           ) : (
-                            <><div>₱{(plan.price.monthly * 12 * 0.9).toFixed(0)}</div><div className="text-xs opacity-80">Yearly (10% off)</div></>
+                            <><div>{plan.price.currency} {(plan.price.monthly * 12 * 0.9).toFixed(0)}</div><div className="text-xs opacity-80">Yearly (10% off)</div></>
                           )}
                         </button>
                       </div>
@@ -246,19 +272,30 @@ export default function SubscriptionPage() {
                         {dict?.common?.cancel || 'Cancel'}
                       </button>
                     </div>
+                  ) : isCurrent ? (
+                    <button
+                      disabled
+                      className="w-full px-4 py-2 text-sm font-medium border cursor-default"
+                      style={{ borderColor: primaryColor, color: primaryColor, background: `${primaryColor}11` }}
+                    >
+                      <CheckCircle className="inline h-4 w-4 mr-1.5 mb-0.5" />
+                      {dict?.subscription?.currentPlan || 'Current Plan'}
+                    </button>
                   ) : (
                     <button
                       onClick={() => handlePlanSelect(plan._id)}
                       className="w-full px-4 py-2 text-white text-sm font-medium transition-opacity"
                       style={{ background: primaryColor }}
                     >
+                      <ArrowUp className="inline h-4 w-4 mr-1.5 mb-0.5" />
                       {dict?.subscription?.selectPlan || 'Select Plan'}
                     </button>
                   )}
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
 
           {/* Enterprise Plan */}
           <div className="flex flex-col h-full bg-gray-900 border border-gray-800 text-white">

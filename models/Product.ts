@@ -21,6 +21,7 @@ export interface IProduct extends Document {
   price: number;
   stock: number; // Master stock (used when no branches/variations)
   sku?: string;
+  barcode?: string;
   category?: string;
   categoryId?: mongoose.Types.ObjectId;
   image?: string;
@@ -96,6 +97,10 @@ const ProductSchema: Schema = new Schema(
       // Validation moved to pre-save hook to properly check allowOutOfStockSales
     },
     sku: {
+      type: String,
+      trim: true,
+    },
+    barcode: {
       type: String,
       trim: true,
     },
@@ -265,6 +270,8 @@ ProductSchema.pre('validate', function(next) {
 
 // Compound index for tenant-scoped unique SKU
 ProductSchema.index({ tenantId: 1, sku: 1 }, { unique: true, sparse: true });
+// Compound index for tenant-scoped unique barcode
+ProductSchema.index({ tenantId: 1, barcode: 1 }, { unique: true, sparse: true });
 // Index for product type and inventory tracking
 ProductSchema.index({ tenantId: 1, productType: 1, trackInventory: 1 });
 ProductSchema.index({ tenantId: 1, hasVariations: 1 });

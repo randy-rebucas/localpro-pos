@@ -6,10 +6,21 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateEmail } from '@/lib/validation';
 import bcrypt from 'bcryptjs';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
   let t: (key: string, fallback: string) => string;
   try {
+    // Rate limiting: 10 attempts per 15 minutes per IP
+    const ip = getClientIp(request);
+    const rl = checkRateLimit(`login:${ip}`, 10, 15 * 60 * 1000);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { success: false, error: 'Too many login attempts. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.resetAfterMs / 1000)) } }
+      );
+    }
+
     await connectDB();
     const body = await request.json();
     const { email, password, tenantSlug } = body;
@@ -41,41 +52,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // First check if user exists in any tenant (to provide better error message)
-    const userInAnyTenant = await User.findOne({ email: email.toLowerCase(), isActive: true })
-      .select('tenantId');
-    
-    // Find user with password field in the requested tenant - ensure we get a Mongoose document, not a plain object
+    // Find user with password field in the requested tenant
     const user = await User.findOne({ email: email.toLowerCase(), tenantId: tenant._id })
       .select('+password');
 
     if (!user || !user.isActive) {
-      // Provide more specific error message
-      if (userInAnyTenant) {
-        // User exists but not in this tenant
-        await createAuditLog(request, {
-          tenantId: tenant._id,
-          action: AuditActions.LOGIN,
-          entityType: 'user',
-          metadata: { success: false, reason: 'user_not_in_tenant', email: email.toLowerCase() },
-        });
-        return NextResponse.json(
-          { success: false, error: 'This account does not have access to this store. Please log in to the correct store or contact your administrator.' },
-          { status: 403 }
-        );
-      } else {
-        // User doesn't exist at all
-        await createAuditLog(request, {
-          tenantId: tenant._id,
-          action: AuditActions.LOGIN,
-          entityType: 'user',
-          metadata: { success: false, reason: 'user_not_found', email: email.toLowerCase() },
-        });
-        return NextResponse.json(
-          { success: false, error: t('validation.invalidCredentials', 'Invalid credentials') },
-          { status: 401 }
-        );
-      }
+      await createAuditLog(request, {
+        tenantId: tenant._id,
+        action: AuditActions.LOGIN,
+        entityType: 'user',
+        metadata: { success: false, reason: 'user_not_found', email: email.toLowerCase() },
+      });
+      // Generic message — do not reveal whether the user exists in this or another tenant
+      return NextResponse.json(
+        { success: false, error: t('validation.invalidCredentials', 'Invalid credentials') },
+        { status: 401 }
+      );
     }
 
     // Check if password exists and is a string
@@ -133,7 +125,7 @@ export async function POST(request: NextRequest) {
       metadata: { success: true },
     });
 
-    // Set cookie
+    // Set httpOnly cookie — do NOT return token in body (XSS risk)
     const response = NextResponse.json({
       success: true,
       data: {
@@ -143,7 +135,6 @@ export async function POST(request: NextRequest) {
           name: user.name,
           role: user.role,
         },
-        token,
       },
     });
 
@@ -151,15 +142,15 @@ export async function POST(request: NextRequest) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
+      path: '/',
       maxAge: 60 * 60 * 24 * 7, // 7 days
     });
 
     return response;
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Login error:', error);
-    const errorMessage = error.message || 'Login failed';
     return NextResponse.json(
-      { success: false, error: errorMessage },
+      { success: false, error: 'Login failed' },
       { status: 500 }
     );
   }

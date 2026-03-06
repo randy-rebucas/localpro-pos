@@ -5,6 +5,7 @@ import Customer from '@/models/Customer';
 import { generateCustomerToken } from '@/lib/auth-customer';
 import { getTenantIdFromRequest } from '@/lib/api-tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
 /**
  * POST - Verify OTP and login customer
@@ -12,6 +13,16 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
  */
 export async function POST(request: NextRequest) {
   try {
+    // Rate limiting: 10 verify attempts per 10 minutes per IP
+    const ip = getClientIp(request);
+    const rl = checkRateLimit(`verify-otp:${ip}`, 10, 10 * 60 * 1000);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { success: false, error: 'Too many verification attempts. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.resetAfterMs / 1000)) } }
+      );
+    }
+
     await connectDB();
     const t = await getValidationTranslatorFromRequest(request);
     const body = await request.json();
@@ -115,7 +126,7 @@ export async function POST(request: NextRequest) {
       email: customer.email,
     });
 
-    // Set cookie
+    // Set httpOnly cookie — do NOT return token in body (XSS risk)
     const response = NextResponse.json({
       success: true,
       data: {
@@ -126,7 +137,6 @@ export async function POST(request: NextRequest) {
           email: customer.email,
           phone: customer.phone,
         },
-        token,
       },
     });
 
@@ -134,6 +144,7 @@ export async function POST(request: NextRequest) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
+      path: '/',
       maxAge: 60 * 60 * 24 * 30, // 30 days
     });
 

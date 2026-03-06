@@ -26,9 +26,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, data: tenants });
     }
 
-    // Public: return only safe fields needed for store selector
+    // Public store selector: return only the minimum fields needed to display a store picker.
+    // Intentionally omits address, business type, colors to reduce information exposure.
     const tenants = await Tenant.find({ isActive: true })
-      .select('slug name settings.companyName settings.logo settings.businessType settings.address settings.primaryColor settings.secondaryColor settings.currency settings.language')
+      .select('slug name settings.companyName settings.logo settings.currency settings.language')
       .lean();
     return NextResponse.json({ success: true, data: tenants });
   } catch (error: unknown) {

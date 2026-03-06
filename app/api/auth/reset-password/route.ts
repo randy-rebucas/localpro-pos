@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 import { validateEmail, validatePassword } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getCurrentUser } from '@/lib/auth';
 import bcrypt from 'bcryptjs';
@@ -22,6 +23,16 @@ import bcrypt from 'bcryptjs';
 export async function POST(request: NextRequest) {
   let t: (key: string, fallback: string) => string;
   try {
+    // Rate limiting: 5 reset attempts per 15 minutes per IP
+    const ip = getClientIp(request);
+    const rl = checkRateLimit(`reset-password:${ip}`, 5, 15 * 60 * 1000);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { success: false, error: 'Too many password reset attempts. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.resetAfterMs / 1000)) } }
+      );
+    }
+
     await connectDB();
     t = await getValidationTranslatorFromRequest(request);
     const body = await request.json();

@@ -32,7 +32,7 @@ const TransactionItemSchema: Schema = new Schema({
   product: {
     type: Schema.Types.ObjectId,
     ref: 'Product',
-    required: true,
+    required: false, // optional for manual/custom transactions
   },
   name: {
     type: String,

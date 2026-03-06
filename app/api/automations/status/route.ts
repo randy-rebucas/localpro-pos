@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyCronAuth } from '@/lib/automation-auth';
 import connectDB from '@/lib/mongodb';
 import Tenant from '@/models/Tenant';
 import Booking from '@/models/Booking';
@@ -17,93 +18,8 @@ export async function GET(request: NextRequest) {
   try {
     await connectDB();
 
-    // Optional: Add authentication
-    // Allow if: no secret configured, or secret matches, or Vercel cron header
-    const cronSecret = process.env.CRON_SECRET;
-    const providedSecret = request.nextUrl.searchParams.get('secret');
-    const authHeader = request.headers.get('authorization');
-    const isVercelCron = authHeader === `Bearer ${cronSecret}`;
-
-    // Only require secret if it's configured AND not from Vercel cron
-    if (cronSecret && !isVercelCron && providedSecret !== cronSecret) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized. Provide ?secret=your-secret or set CRON_SECRET in environment.' },
-        { status: 401 }
-      );
-    }
-
-    const now = new Date();
-    const stats = {
-      tenants: {
-        total: 0,
-        active: 0,
-      },
-      bookings: {
-        pendingReminders: 0,
-        upcoming24h: 0,
-      },
-      inventory: {
-        lowStockProducts: 0,
-      },
-      discounts: {
-        active: 0,
-        expiringSoon: 0,
-        needsActivation: 0,
-        needsDeactivation: 0,
-      },
-      attendance: {
-        openSessions: 0,
-        forgottenSessions: 0,
-      },
-      cashDrawer: {
-        openSessions: 0,
-      },
-      transactions: {
-        pendingReceipts: 0,
-      },
-      automations: {
-        enabled: process.env.ENABLE_CRON_JOBS === 'true',
-        cronSecretConfigured: !!process.env.CRON_SECRET,
-        emailProvider: process.env.EMAIL_PROVIDER || 'console',
-        smsProvider: process.env.SMS_PROVIDER || 'console',
-      },
-    };
-
-    // Get tenant stats
-    const tenants = await Tenant.find({ status: 'active' }).lean();
-    stats.tenants.total = await Tenant.countDocuments();
-    stats.tenants.active = tenants.length;
-
-    // Get booking stats
-    const reminderWindowStart = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-    const reminderWindowEnd = new Date(reminderWindowStart.getTime() + 60 * 60 * 1000);
-    
-    stats.bookings.pendingReminders = await Booking.countDocuments({
-      startTime: {
-        $gte: reminderWindowStart,
-        $lte: reminderWindowEnd,
-      },
-      status: { $in: ['pending', 'confirmed'] },
-      reminderSent: { $ne: true },
-    });
-
-    stats.bookings.upcoming24h = await Booking.countDocuments({
-      startTime: {
-        $gte: now,
-        $lte: new Date(now.getTime() + 24 * 60 * 60 * 1000),
-      },
-      status: { $in: ['pending', 'confirmed'] },
-    });
-
-    // Get inventory stats (sample first tenant)
-    if (tenants.length > 0) {
-      try {
-        const lowStock = await getLowStockProducts(tenants[0]._id.toString());
-        stats.inventory.lowStockProducts = lowStock.length;
-      } catch (error) {
-        // Ignore errors
-      }
-    }
+        const authError = verifyCronAuth(request, null);
+    if (authError) return authError;
 
     // Get discount stats
     stats.discounts.active = await Discount.countDocuments({

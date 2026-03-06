@@ -2,16 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { capturePayment } from '@/lib/paypal';
 
 export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const token = searchParams.get('token'); // PayPal order ID
+  const tenant = searchParams.get('tenant') || '';
+  const lang = searchParams.get('lang') || 'en';
+  const planId = searchParams.get('planId') || '';
+  const billingCycle = searchParams.get('billingCycle') || 'monthly';
+
+  // Resolve basePath outside try so it's available in catch
+  const basePath = tenant ? `/${tenant}/${lang}` : '';
+
   try {
-    const { searchParams } = new URL(request.url);
-    const token = searchParams.get('token'); // PayPal order ID
-    const tenant = searchParams.get('tenant') || '';
-    const lang = searchParams.get('lang') || 'en';
-    const planId = searchParams.get('planId') || '';
-    const billingCycle = searchParams.get('billingCycle') || 'monthly';
-
-    const basePath = tenant ? `/${tenant}/${lang}` : '';
-
     if (!token) {
       return NextResponse.redirect(new URL(`${basePath}/subscription/payment-cancel`, request.url));
     }
@@ -31,6 +32,6 @@ export async function GET(request: NextRequest) {
 
   } catch (error: unknown) {
     console.error('Error processing PayPal success:', error);
-    return NextResponse.redirect(new URL('/subscription/payment-failed', request.url));
+    return NextResponse.redirect(new URL(`${basePath}/subscription/payment-failed`, request.url));
   }
 }

@@ -11,6 +11,7 @@ import { showToast } from '@/lib/toast';
 import { useConfirm } from '@/lib/confirm';
 import { getBusinessTypeConfig, getAllowedProductTypes } from '@/lib/business-types'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getBusinessType } from '@/lib/business-type-helpers';
+import { RefreshCw } from 'lucide-react';
 
 interface Product {
   _id: string;
@@ -19,6 +20,7 @@ interface Product {
   price: number;
   stock: number;
   sku?: string;
+  barcode?: string;
   category?: string;
   categoryId?: {
     _id: string;
@@ -148,6 +150,7 @@ export default function ProductsPage() {
   const filteredProducts = products.filter(product =>
     product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     product.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    product.barcode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     product.description?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -236,7 +239,12 @@ export default function ProductsPage() {
                         <div className="text-xs text-gray-500 mt-1">{product.description.substring(0, 50)}...</div>
                       )}
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{product.sku || '-'}</td>
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <div>{product.sku || '-'}</div>
+                      {product.barcode && (
+                        <div className="text-xs text-gray-400 font-mono mt-0.5">{product.barcode}</div>
+                      )}
+                    </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
                       {typeof product.categoryId === 'object' && product.categoryId?.name ? product.categoryId.name : product.category || '-'}
                     </td>
@@ -308,6 +316,15 @@ export default function ProductsPage() {
   );
 }
 
+/** Generate a valid EAN-13 barcode string */
+function generateEAN13(): string {
+  // 12 random digits then compute check digit
+  const digits: number[] = Array.from({ length: 12 }, () => Math.floor(Math.random() * 10));
+  const checksum = digits.reduce((sum, d, i) => sum + d * (i % 2 === 0 ? 1 : 3), 0);
+  const checkDigit = (10 - (checksum % 10)) % 10;
+  return [...digits, checkDigit].join('');
+}
+
 function ProductModal({
   product,
   categories,
@@ -331,6 +348,7 @@ function ProductModal({
     price: product?.price || 0,
     stock: product?.stock || 0,
     sku: product?.sku || '',
+    barcode: product?.barcode || '',
     categoryId: typeof product?.categoryId === 'object' && product.categoryId?._id ? product.categoryId._id : product?.categoryId || '',
     productType: product?.productType || (businessTypeConfig?.productTypes?.[0] || 'regular'),
     trackInventory: product?.trackInventory !== undefined ? product.trackInventory : (businessTypeConfig?.defaultFeatures?.enableInventory ?? true),
@@ -358,6 +376,7 @@ function ProductModal({
       price: product?.price || 0,
       stock: product?.stock || 0,
       sku: product?.sku || '',
+      barcode: product?.barcode || '',
       categoryId: typeof product?.categoryId === 'object' && product.categoryId?._id ? product.categoryId._id : product?.categoryId || '',
       productType: product?.productType || (businessTypeConfig?.productTypes?.[0] || 'regular'),
       trackInventory: product?.trackInventory !== undefined ? product.trackInventory : (businessTypeConfig?.defaultFeatures?.enableInventory ?? true),
@@ -445,6 +464,7 @@ function ProductModal({
         price: formData.price,
         stock: formData.stock,
         sku: formData.sku || undefined,
+        barcode: formData.barcode || undefined,
         categoryId: formData.categoryId || undefined,
         productType: formData.productType,
         trackInventory: formData.trackInventory,
@@ -552,6 +572,29 @@ function ProductModal({
                   onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                 />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Barcode
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={formData.barcode}
+                  onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
+                  className="flex-1 px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white font-mono"
+                  placeholder="Scan or enter barcode"
+                />
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, barcode: generateEAN13() })}
+                  className="px-3 py-2 border border-gray-300 bg-gray-50 hover:bg-gray-100 text-gray-700 text-sm font-medium flex items-center gap-1.5 transition-colors whitespace-nowrap"
+                  title="Generate EAN-13 barcode"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Generate
+                </button>
               </div>
             </div>
             <div>

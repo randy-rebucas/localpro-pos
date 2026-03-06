@@ -5,6 +5,8 @@ import Customer from '@/models/Customer'; // eslint-disable-line @typescript-esl
 import { sendSMS } from '@/lib/notifications';
 import { getTenantIdFromRequest } from '@/lib/api-tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import crypto from 'crypto';
 
 /**
  * POST - Send OTP to customer phone number
@@ -12,6 +14,16 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
  */
 export async function POST(request: NextRequest) {
   try {
+    // Rate limiting: 5 OTP requests per 10 minutes per IP (Twilio cost protection)
+    const ip = getClientIp(request);
+    const rl = checkRateLimit(`send-otp:${ip}`, 5, 10 * 60 * 1000);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { success: false, error: 'Too many OTP requests. Please try again later.', retryAfter: Math.ceil(rl.resetAfterMs / 1000) },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.resetAfterMs / 1000)) } }
+      );
+    }
+
     await connectDB();
     const t = await getValidationTranslatorFromRequest(request);
     const body = await request.json();
@@ -68,8 +80,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    // Generate cryptographically secure 6-digit OTP
+    const otp = (100000 + (crypto.randomInt(900000))).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes expiry
 
     // Invalidate any existing OTPs for this phone

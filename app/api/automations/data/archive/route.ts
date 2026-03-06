@@ -3,6 +3,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyCronAuth } from '@/lib/automation-auth';
 import { archiveOldData } from '@/lib/automations';
 
 export async function POST(request: NextRequest) {

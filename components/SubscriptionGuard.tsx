@@ -3,7 +3,6 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useSubscription } from '@/contexts/SubscriptionContext';
-import { SubscriptionService } from '@/lib/subscription'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { Loader2 } from 'lucide-react';
 
 interface SubscriptionGuardProps {

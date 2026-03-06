@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
+import '@/models/Category'; // register schema for populate
 import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -113,6 +114,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, data: product }, { status: 201 });
   } catch (error: unknown) {
     if ((error as Record<string, unknown>).code === 11000) {
+      const keyPattern = (error as any)?.keyPattern; // eslint-disable-line @typescript-eslint/no-explicit-any
+      if (keyPattern?.barcode) {
+        return NextResponse.json(
+          { success: false, error: 'A product with this barcode already exists' },
+          { status: 400 }
+        );
+      }
       return NextResponse.json(
         { success: false, error: 'Product with this SKU already exists' },
         { status: 400 }

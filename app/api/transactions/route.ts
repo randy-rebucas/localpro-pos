@@ -66,15 +66,23 @@ interface TransactionItemRecord {
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
-    const tenantId = await getTenantIdFromRequest(request);
-    
-    if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found or access denied' }, { status: 403 });
+    // Require authentication — financial data must not be public
+    let tenantId: string;
+    try {
+      const tenantAccess = await requireTenantAccess(request);
+      tenantId = tenantAccess.tenantId;
+    } catch (authError: unknown) {
+      const msg = authError instanceof Error ? authError.message : '';
+      return NextResponse.json(
+        { success: false, error: msg.includes('Forbidden') ? 'Forbidden' : 'Unauthorized' },
+        { status: msg.includes('Forbidden') ? 403 : 401 }
+      );
     }
-    
+
     const searchParams = request.nextUrl.searchParams;
-    const limit = parseInt(searchParams.get('limit') || '50');
-    const page = parseInt(searchParams.get('page') || '1');
+    const rawLimit = parseInt(searchParams.get('limit') || '50');
+    const limit = Math.min(Math.max(1, rawLimit), 200); // cap at 200
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
     const skip = (page - 1) * limit;
 
     const transactions = await Transaction.find({ tenantId })
