@@ -75,7 +75,6 @@ const ProductSchema: Schema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'Tenant',
       required: [true, 'Tenant ID is required'],
-      index: true,
     },
     name: {
       type: String,

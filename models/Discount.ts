@@ -26,7 +26,6 @@ const DiscountSchema: Schema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'Tenant',
       required: [true, 'Tenant ID is required'],
-      index: true,
     },
     code: {
       type: String,

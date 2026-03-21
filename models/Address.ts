@@ -26,7 +26,6 @@ const AddressSchema: Schema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'Tenant',
       required: [true, 'Tenant is required'],
-      index: true,
     },
     label: {
       type: String,

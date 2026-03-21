@@ -61,7 +61,6 @@ const TransactionSchema: Schema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'Tenant',
       required: [true, 'Tenant ID is required'],
-      index: true,
     },
     branchId: {
       type: Schema.Types.ObjectId,

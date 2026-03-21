@@ -24,7 +24,6 @@ const CategorySchema: Schema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'Tenant',
       required: [true, 'Tenant is required'],
-      index: true,
     },
     isActive: {
       type: Boolean,
