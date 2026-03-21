@@ -25,8 +25,7 @@ const RevokedTokenSchema = new Schema<IRevokedToken>({
   tokenHash: {
     type: String,
     required: true,
-    unique: true,
-    index: true,
+    unique: true, // unique implies index
   },
   reason: {
     type: String,
@@ -35,9 +34,11 @@ const RevokedTokenSchema = new Schema<IRevokedToken>({
   expiresAt: {
     type: Date,
     required: true,
-    index: { expires: 0 }, // TTL index — MongoDB auto-deletes when expiresAt is reached
   },
 });
+
+// TTL index — MongoDB auto-deletes documents when expiresAt is reached
+RevokedTokenSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 function getRevokedTokenModel(): Model<IRevokedToken> {
   return (
