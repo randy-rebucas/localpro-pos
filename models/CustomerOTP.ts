@@ -31,7 +31,7 @@ const CustomerOTPSchema: Schema = new Schema(
     expiresAt: {
       type: Date,
       required: true,
-      index: { expireAfterSeconds: 0 }, // Auto-delete expired OTPs
+      // TTL index defined via schema.index() below
     },
     verified: {
       type: Boolean,
