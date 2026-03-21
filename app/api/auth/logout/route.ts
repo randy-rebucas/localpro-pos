@@ -2,11 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { revokeToken } from '@/lib/token-blacklist';
 
 export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser(request);
-    
+
+    // Revoke the token so it cannot be reused even if intercepted
+    const token = request.cookies.get('auth-token')?.value ||
+                  request.headers.get('authorization')?.replace('Bearer ', '');
+    if (token) {
+      await revokeToken(token, 7 * 86400, 'logout'); // match JWT_EXPIRES_IN default
+    }
+
     if (user) {
       await createAuditLog(request, {
         tenantId: user.tenantId,

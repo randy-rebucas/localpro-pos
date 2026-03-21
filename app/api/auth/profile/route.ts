@@ -4,8 +4,8 @@ import { getCurrentUser } from '@/lib/auth';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 import { validateEmail, validatePassword } from '@/lib/validation';
-import { isPinDuplicate } from '@/lib/pin-validation';
 import { createAuditLog, AuditActions } from '@/lib/audit';
+import { revokeAllUserTokens } from '@/lib/token-blacklist';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 /**
@@ -54,7 +54,6 @@ export async function GET(request: NextRequest) {
         role: user.role,
         createdAt: user.createdAt,
         lastLogin: user.lastLogin,
-        hasPin: !!user.pin,
         qrToken: user.qrToken || null,
         tenantId: user.tenantId?.toString() || null,
         tenantSlug,
@@ -80,7 +79,7 @@ export async function PUT(request: NextRequest) {
 
     await connectDB();
     const body = await request.json();
-    const { email, password, name, currentPassword, pin, currentPin } = body;
+    const { email, password, name, currentPassword } = body;
 
     // Get translation function
     t = await getValidationTranslatorFromRequest(request);
@@ -146,52 +145,6 @@ export async function PUT(request: NextRequest) {
       updateData.password = password;
     }
 
-    // PIN management
-    if (pin !== undefined) {
-      // Validate PIN format (4-8 digits)
-      if (!/^\d{4,8}$/.test(pin)) {
-        return NextResponse.json(
-          { success: false, error: 'PIN must be 4-8 digits' },
-          { status: 400 }
-        );
-      }
-
-      // If user already has a PIN, require current PIN
-      if (oldUser.pin) {
-        if (!currentPin) {
-          return NextResponse.json(
-            { success: false, error: 'Current PIN is required to change PIN' },
-            { status: 400 }
-          );
-        }
-
-        // Verify current PIN
-        const userDoc = await User.findById(currentUser.userId).select('+pin');
-        if (!userDoc) {
-          return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
-        }
-
-        const isPINValid = await userDoc.comparePIN(currentPin);
-        if (!isPINValid) {
-          return NextResponse.json(
-            { success: false, error: 'Current PIN is incorrect' },
-            { status: 400 }
-          );
-        }
-      }
-
-      // Check if PIN is already in use by another user in the same tenant
-      const pinExists = await isPinDuplicate(oldUser.tenantId, pin, currentUser.userId);
-      if (pinExists) {
-        return NextResponse.json(
-          { success: false, error: 'This PIN is already in use by another user in your organization' },
-          { status: 400 }
-        );
-      }
-
-      updateData.pin = pin;
-    }
-
     if (Object.keys(updateData).length === 0) {
       return NextResponse.json(
         { success: false, error: t('validation.noChanges', 'No changes provided') },
@@ -204,15 +157,20 @@ export async function PUT(request: NextRequest) {
       updateData,
       { new: true, runValidators: true }
     ).select('-password');
-    
+
     if (!user) {
       return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
     }
 
-    // Track changes (excluding password and PIN details)
+    // Revoke all existing tokens when password is changed
+    if (updateData.password) {
+      await revokeAllUserTokens(currentUser.userId);
+    }
+
+    // Track changes (excluding password details)
     const changes: Record<string, unknown> = {};
     Object.keys(updateData).forEach(key => {
-      if (key !== 'password' && key !== 'pin' && oldUser[key as keyof typeof oldUser] !== updateData[key]) {
+      if (key !== 'password' && oldUser[key as keyof typeof oldUser] !== updateData[key]) {
         changes[key] = {
           old: oldUser[key as keyof typeof oldUser],
           new: updateData[key],
@@ -221,9 +179,6 @@ export async function PUT(request: NextRequest) {
     });
     if (password) {
       changes.password = { changed: true };
-    }
-    if (pin) {
-      changes.pin = { changed: true };
     }
 
     await createAuditLog(request, {
@@ -243,7 +198,6 @@ export async function PUT(request: NextRequest) {
         role: user.role,
         createdAt: user.createdAt,
         lastLogin: user.lastLogin,
-        hasPin: !!user.pin,
         qrToken: user.qrToken || null,
       }
     });

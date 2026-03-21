@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
 
     // Get the current subscription for this tenant
     const subscription = await Subscription.findOne({ tenantId })
-      .populate('planId', 'name tier price features')
+      .populate('planId', 'name tier price features birCompliance isCustom')
       .lean();
 
     return NextResponse.json({

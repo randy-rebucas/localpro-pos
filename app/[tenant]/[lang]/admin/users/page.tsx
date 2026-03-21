@@ -18,7 +18,6 @@ interface User {
   isActive: boolean;
   createdAt: string;
   lastLogin?: string;
-  hasPIN?: boolean;
   qrToken?: string;
 }
 
@@ -32,7 +31,6 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showUserModal, setShowUserModal] = useState(false);
-  const [showPINModal, setShowPINModal] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const { user: currentUser } = useAuth();
@@ -167,7 +165,7 @@ export default function UsersPage() {
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.email || 'Email'}</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.role || 'Role'}</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.status || 'Status'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">PIN/QR</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">QR</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.actions || 'Actions'}</th>
                 </tr>
               </thead>
@@ -187,28 +185,16 @@ export default function UsersPage() {
                       </span>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            setEditingUser(user);
-                            setShowPINModal(true);
-                          }}
-                          className="text-purple-600 hover:text-purple-900 text-xs"
-                          title={dict?.admin?.managePIN || 'Manage PIN'}
-                        >
-                          PIN
-                        </button>
-                        <button
-                          onClick={() => {
-                            setEditingUser(user);
-                            setShowQRModal(true);
-                          }}
-                          className="text-indigo-600 hover:text-indigo-900 text-xs"
-                          title={dict?.admin?.viewQRCode || 'View QR Code'}
-                        >
-                          QR
-                        </button>
-                      </div>
+                      <button
+                        onClick={() => {
+                          setEditingUser(user);
+                          setShowQRModal(true);
+                        }}
+                        className="text-indigo-600 hover:text-indigo-900 text-xs"
+                        title={dict?.admin?.viewQRCode || 'View QR Code'}
+                      >
+                        QR
+                      </button>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex gap-2">
@@ -257,22 +243,6 @@ export default function UsersPage() {
             onSave={() => {
               fetchUsers();
               setShowUserModal(false);
-              setEditingUser(null);
-            }}
-            dict={dict}
-          />
-        )}
-
-        {showPINModal && editingUser && (
-          <PINModal
-            user={editingUser}
-            onClose={() => {
-              setShowPINModal(false);
-              setEditingUser(null);
-            }}
-            onSave={() => {
-              fetchUsers();
-              setShowPINModal(false);
               setEditingUser(null);
             }}
             dict={dict}
@@ -432,148 +402,6 @@ function UserModal({
                 className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
               >
                 {saving ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function PINModal({
-  user,
-  onClose,
-  onSave,
-  dict,
-}: {
-  user: User;
-  onClose: () => void;
-  onSave: () => void;
-  dict: any; // eslint-disable-line @typescript-eslint/no-explicit-any
-}) {
-  const [pin, setPin] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [removing, setRemoving] = useState(false);
-  const { confirm, Dialog } = useConfirm();
-
-  const handleSetPIN = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    
-    if (!pin || !/^\d{4,8}$/.test(pin)) {
-      setError(dict?.admin?.pinDigits || 'PIN must be 4-8 digits');
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const res = await fetch(`/api/users/${user._id}/pin`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ pin }),
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        onSave();
-      } else {
-        setError(data.error || 'Failed to set PIN');
-      }
-    } catch (error) {
-      setError('Failed to set PIN');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleRemovePIN = async () => {
-    if (!dict) return;
-    const confirmed = await confirm(
-      dict.common?.removePINConfirmTitle || 'Remove PIN',
-      dict.common?.removePINConfirm || dict.admin?.removePINConfirm || 'Are you sure you want to remove the PIN for this user?',
-      { variant: 'warning' }
-    );
-    if (!confirmed) return;
-    
-    setRemoving(true);
-    setError('');
-    try {
-      const res = await fetch(`/api/users/${user._id}/pin`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        onSave();
-      } else {
-        setError(data.error || 'Failed to remove PIN');
-      }
-    } catch (error) {
-      setError('Failed to remove PIN');
-    } finally {
-      setRemoving(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      {Dialog}
-      <div className="bg-white border border-gray-300 max-w-md w-full">
-        <div className="p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">
-            {dict?.admin?.managePINFor || 'Manage PIN for'} {user.name}
-          </h2>
-          <form onSubmit={handleSetPIN} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict?.admin?.pinDigits || 'PIN (4-8 digits)'}
-              </label>
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]{4,8}"
-                maxLength={8}
-                value={pin}
-                onChange={(e) => {
-                  const value = e.target.value.replace(/\D/g, '');
-                  if (value.length <= 8) setPin(value);
-                }}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 text-center text-2xl font-mono tracking-widest bg-white"
-                placeholder="0000"
-                required
-              />
-            </div>
-            {error && (
-              <div className="bg-red-50 text-red-800 border border-red-300 p-3">
-                {error}
-              </div>
-            )}
-            <div className="flex gap-3 justify-end pt-4">
-              <button
-                type="button"
-                onClick={handleRemovePIN}
-                disabled={removing}
-                className="px-4 py-2 border border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-50 bg-white"
-              >
-                {removing ? (dict?.admin?.removing || 'Removing...') : (dict?.admin?.removePIN || 'Remove PIN')}
-              </button>
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
-              >
-                {dict.common?.cancel || 'Cancel'}
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
-              >
-                {saving ? (dict?.common?.saving || 'Saving...') : (dict?.admin?.setPIN || 'Set PIN')}
               </button>
             </div>
           </form>

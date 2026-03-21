@@ -23,16 +23,10 @@ export default function ProfilePage() {
     newPassword: '',
     confirmPassword: '',
   });
-  const [pinData, setPinData] = useState({
-    currentPin: '',
-    newPin: '',
-    confirmPin: '',
-  });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showPasswordSection, setShowPasswordSection] = useState(false);
-  const [showPinSection, setShowPinSection] = useState(false);
   const [profileInfo, setProfileInfo] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
 
   useEffect(() => {
@@ -135,56 +129,6 @@ export default function ProfilePage() {
     } catch (error) {
       console.error('Error updating password:', error);
       setMessage({ type: 'error', text: dict?.common?.failedToUpdatePassword || 'Failed to update password. Please check your connection.' });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handlePinUpdate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    setMessage(null);
-
-    if (pinData.newPin !== pinData.confirmPin) {
-      setMessage({ type: 'error', text: dict?.profile?.pinsNotMatch || 'New PINs do not match' });
-      setSaving(false);
-      return;
-    }
-
-    if (!/^\d{4,8}$/.test(pinData.newPin)) {
-      setMessage({ type: 'error', text: dict?.profile?.pinInvalid || 'PIN must be 4-8 digits' });
-      setSaving(false);
-      return;
-    }
-
-    try {
-      const res = await fetch('/api/auth/profile', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          pin: pinData.newPin,
-          currentPin: profileInfo?.hasPin ? pinData.currentPin : undefined,
-        }),
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        setMessage({ type: 'success', text: dict?.profile?.pinSaved || 'PIN updated successfully!' });
-        setPinData({
-          currentPin: '',
-          newPin: '',
-          confirmPin: '',
-        });
-        setShowPinSection(false);
-        // Refresh profile to get updated hasPin status
-        await fetchProfile();
-      } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToUpdatePIN || 'Failed to update PIN' });
-      }
-    } catch (error) {
-      console.error('Error updating PIN:', error);
-      setMessage({ type: 'error', text: dict?.common?.failedToUpdatePIN || 'Failed to update PIN. Please check your connection.' });
     } finally {
       setSaving(false);
     }
@@ -403,121 +347,6 @@ export default function ProfilePage() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                           </svg>
                           <span>{dict?.profile?.updatePassword || 'Update Password'}</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </form>
-              )}
-            </section>
-
-            {/* PIN Management Section */}
-            <section className="pt-8 border-t border-gray-200">
-              <div className="flex items-center justify-between mb-5">
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900">
-                    {dict?.profile?.mpin || 'MPIN (Mobile PIN)'}
-                  </h2>
-                  <p className="text-sm text-gray-600 mt-1">
-                    {profileInfo?.hasPin 
-                      ? dict?.profile?.pinSet || 'Your PIN is set. Use it for quick login.'
-                      : dict?.profile?.pinNotSet || 'Set a PIN for quick login (4-8 digits)'}
-                  </p>
-                </div>
-                <button
-                  onClick={() => setShowPinSection(!showPinSection)}
-                  className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors border border-blue-300"
-                >
-                  {showPinSection ? (dict?.common?.cancel || 'Cancel') : (profileInfo?.hasPin ? (dict?.profile?.changePIN || 'Change PIN') : (dict?.profile?.setPIN || 'Set PIN'))}
-                </button>
-              </div>
-
-              {showPinSection && (
-                <form onSubmit={handlePinUpdate} className="space-y-6">
-                  {profileInfo?.hasPin && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {dict?.profile?.currentPin || 'Current PIN'}
-                      </label>
-                      <input
-                        type="password"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        value={pinData.currentPin}
-                        onChange={(e) => setPinData({ ...pinData, currentPin: e.target.value.replace(/\D/g, '') })}
-                        required={profileInfo?.hasPin}
-                        maxLength={8}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
-                        placeholder={dict?.profile?.currentPinPlaceholder || 'Enter current PIN'}
-                      />
-                    </div>
-                  )}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {profileInfo?.hasPin 
-                          ? (dict?.profile?.newPin || 'New PIN')
-                          : (dict?.profile?.pin || 'PIN')}
-                      </label>
-                      <input
-                        type="password"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        value={pinData.newPin}
-                        onChange={(e) => setPinData({ ...pinData, newPin: e.target.value.replace(/\D/g, '') })}
-                        required
-                        minLength={4}
-                        maxLength={8}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
-                        placeholder={profileInfo?.hasPin 
-                          ? (dict?.profile?.newPinPlaceholder || 'Enter new PIN (4-8 digits)')
-                          : (dict?.profile?.pinPlaceholder || 'Enter PIN (4-8 digits)')}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {profileInfo?.hasPin 
-                          ? (dict?.profile?.confirmPin || 'Confirm New PIN')
-                          : (dict?.profile?.confirmPin || 'Confirm PIN')}
-                      </label>
-                      <input
-                        type="password"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        value={pinData.confirmPin}
-                        onChange={(e) => setPinData({ ...pinData, confirmPin: e.target.value.replace(/\D/g, '') })}
-                        required
-                        minLength={4}
-                        maxLength={8}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
-                        placeholder={profileInfo?.hasPin 
-                          ? (dict?.profile?.confirmPinPlaceholder || 'Confirm new PIN')
-                          : (dict?.profile?.confirmPinPlaceholder || 'Confirm PIN')}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end pt-4">
-                    <button
-                      type="submit"
-                      disabled={saving}
-                      className="px-6 py-3 bg-blue-600 text-white hover:bg-blue-700 font-semibold transition-all duration-200 border border-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                    >
-                      {saving ? (
-                        <>
-                          <div className="animate-spin h-5 w-5 border-b-2 border-white"></div>
-                          <span>{dict?.profile?.saving || 'Saving...'}</span>
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                          </svg>
-                          <span>
-                            {profileInfo?.hasPin 
-                              ? (dict?.profile?.updatePin || 'Change PIN')
-                              : (dict?.profile?.setPin || 'Set PIN')}
-                          </span>
                         </>
                       )}
                     </button>

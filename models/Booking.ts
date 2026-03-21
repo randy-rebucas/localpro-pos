@@ -104,6 +104,8 @@ BookingSchema.index({ tenantId: 1, startTime: 1 });
 BookingSchema.index({ tenantId: 1, status: 1 });
 BookingSchema.index({ tenantId: 1, staffId: 1, startTime: 1 });
 BookingSchema.index({ startTime: 1, endTime: 1 }); // For conflict detection
+// Compound index for filtering pending/completed bookings sorted by creation date
+BookingSchema.index({ tenantId: 1, status: 1, createdAt: -1 });
 
 // Virtual to check if booking is in the past
 BookingSchema.virtual('isPast').get(function(this: IBooking) {
@@ -119,14 +121,39 @@ BookingSchema.virtual('isToday').get(function(this: IBooking) {
   return bookingDate.getTime() === today.getTime();
 });
 
-// Pre-save middleware to calculate endTime if not provided
+// Pre-save middleware to calculate endTime, validate times, and check overlaps
 BookingSchema.pre('save', async function(this: IBooking, next) {
+  // Auto-calculate endTime from startTime + duration
   if (this.isModified('startTime') || this.isModified('duration')) {
-    if (this.startTime && this.duration && !this.endTime) {
+    if (this.startTime && this.duration) {
       this.endTime = new Date(this.startTime.getTime() + this.duration * 60000);
     }
   }
-  
+
+  // Validate endTime > startTime
+  if (this.startTime && this.endTime && this.endTime <= this.startTime) {
+    return next(new Error('End time must be after start time'));
+  }
+
+  // Check for staff double-booking (overlapping active bookings)
+  if (this.staffId && this.startTime && this.endTime &&
+      (this.isModified('startTime') || this.isModified('endTime') || this.isModified('staffId'))) {
+    const activeStatuses = ['pending', 'confirmed'];
+    if (activeStatuses.includes(this.status)) {
+      const overlap = await mongoose.model('Booking').findOne({
+        _id: { $ne: this._id },
+        tenantId: this.tenantId,
+        staffId: this.staffId,
+        status: { $in: activeStatuses },
+        startTime: { $lt: this.endTime },
+        endTime: { $gt: this.startTime },
+      });
+      if (overlap) {
+        return next(new Error('Staff member has an overlapping booking during this time'));
+      }
+    }
+  }
+
   // Populate staffName if staffId is set
   if (this.isModified('staffId') && this.staffId) {
     try {
@@ -139,7 +166,7 @@ BookingSchema.pre('save', async function(this: IBooking, next) {
       // Ignore error, staffName will remain undefined
     }
   }
-  
+
   next();
 });
 

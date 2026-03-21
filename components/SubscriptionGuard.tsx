@@ -22,19 +22,25 @@ export function SubscriptionGuard({ children }: SubscriptionGuardProps) {
       // If still loading, wait
       if (loading) return;
 
-      // If no subscription exists, create a trial
+      // If no subscription exists, try to create a trial
       if (!subscriptionStatus) {
         setIsCreatingTrial(true);
         try {
           await createTrialSubscription();
-          await refreshSubscription();
-        } catch (error) {
-          console.error('Failed to create trial subscription:', error);
-          // Redirect to subscription page if trial creation fails
-          router.push(`/${tenant}/${lang}/subscription`);
-        } finally {
-          setIsCreatingTrial(false);
+        } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+          // If tenant already has a subscription, the status endpoint may have
+          // returned null due to an orphaned planId. Just refresh and continue.
+          if (error.message?.includes('already has an active subscription')) {
+            console.warn('Subscription exists but status returned null — refreshing');
+          } else {
+            console.error('Failed to create trial subscription:', error);
+            router.push(`/${tenant}/${lang}/subscription`);
+            setIsCreatingTrial(false);
+            return;
+          }
         }
+        await refreshSubscription();
+        setIsCreatingTrial(false);
         return;
       }
 

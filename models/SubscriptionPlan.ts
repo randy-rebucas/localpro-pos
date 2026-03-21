@@ -8,6 +8,7 @@ export interface ISubscriptionPlan extends Document {
   description?: string;
   price: {
     monthly: number;
+    setupFee: number; // One-time setup fee
     currency: string;
   };
   features: {
@@ -27,6 +28,14 @@ export interface ISubscriptionPlan extends Document {
     prioritySupport: boolean;
     customIntegrations: boolean;
     dedicatedAccountManager: boolean;
+  };
+  birCompliance: {
+    ptuAssistance: boolean; // Permit to Use assistance
+    receiptFormatting: boolean; // BIR-compliant receipt formatting
+    birDocumentation: boolean; // BIR documentation package
+    casReporting: boolean; // Computerized Accounting System reporting
+    auditTrailSystem: boolean; // Full audit trail
+    monthlySupport: boolean; // Monthly compliance support
   };
   isActive: boolean;
   isCustom: boolean; // For enterprise/custom pricing
@@ -56,6 +65,11 @@ const SubscriptionPlanSchema: Schema = new Schema(
         type: Number,
         required: [true, 'Monthly price is required'],
         min: [0, 'Price cannot be negative'],
+      },
+      setupFee: {
+        type: Number,
+        default: 0,
+        min: [0, 'Setup fee cannot be negative'],
       },
       currency: {
         type: String,
@@ -156,6 +170,32 @@ const SubscriptionPlanSchema: Schema = new Schema(
         default: false,
       },
     },
+    birCompliance: {
+      ptuAssistance: {
+        type: Boolean,
+        default: false,
+      },
+      receiptFormatting: {
+        type: Boolean,
+        default: false,
+      },
+      birDocumentation: {
+        type: Boolean,
+        default: false,
+      },
+      casReporting: {
+        type: Boolean,
+        default: false,
+      },
+      auditTrailSystem: {
+        type: Boolean,
+        default: false,
+      },
+      monthlySupport: {
+        type: Boolean,
+        default: false,
+      },
+    },
     isActive: {
       type: Boolean,
       default: true,
@@ -169,6 +209,41 @@ const SubscriptionPlanSchema: Schema = new Schema(
     timestamps: true,
   }
 );
+
+// Cascade delete protection: prevent deletion if active subscriptions reference this plan
+async function checkSubscriptionPlanDependencies(filter: Record<string, unknown>) {
+  const doc = await mongoose.model('SubscriptionPlan').findOne(filter);
+  if (!doc) return;
+
+  const Subscription = mongoose.model('Subscription');
+  const activeSubCount = await Subscription.countDocuments({
+    planId: doc._id,
+    status: { $in: ['active', 'trial'] },
+  });
+  if (activeSubCount > 0) {
+    throw new Error(
+      `Cannot delete subscription plan "${doc.name}": ${activeSubCount} active subscription(s) reference this plan. Migrate subscribers to another plan first.`
+    );
+  }
+}
+
+SubscriptionPlanSchema.pre('findOneAndDelete', async function (next) {
+  try {
+    await checkSubscriptionPlanDependencies(this.getFilter());
+    next();
+  } catch (err) {
+    next(err as Error);
+  }
+});
+
+SubscriptionPlanSchema.pre('deleteOne', { document: false, query: true }, async function (next) {
+  try {
+    await checkSubscriptionPlanDependencies(this.getFilter());
+    next();
+  } catch (err) {
+    next(err as Error);
+  }
+});
 
 // Create indexes
 SubscriptionPlanSchema.index({ isActive: 1 });

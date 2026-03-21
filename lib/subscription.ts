@@ -61,8 +61,21 @@ export class SubscriptionService {
         return null;
       }
 
-      const plan = subscription.planId as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+      let plan = subscription.planId as any; // eslint-disable-line @typescript-eslint/no-explicit-any
       const now = new Date();
+
+      // Handle orphaned planId (plan was deleted/recreated)
+      if (!plan || !plan.features) {
+        const SubscriptionPlan = (await import('@/models/SubscriptionPlan')).default;
+        const fallbackPlan = await SubscriptionPlan.findOne({ tier: 'starter', isActive: true }).lean();
+        if (fallbackPlan) {
+          // Reassign subscription to the current starter plan
+          await Subscription.findByIdAndUpdate(subscription._id, { planId: fallbackPlan._id });
+          plan = fallbackPlan;
+        } else {
+          return null;
+        }
+      }
 
       const status: SubscriptionStatus = {
         isActive: subscription.status === 'active',

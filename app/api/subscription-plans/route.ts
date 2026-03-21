@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     await requireRole(request, ['admin']);
 
     const body = await request.json();
-    const { name, tier, description, price, features, isCustom = false } = body;
+    const { name, tier, description, price, features, birCompliance, isCustom = false } = body;
 
     if (!name || !tier || !price?.monthly) {
       return NextResponse.json(
@@ -47,6 +47,7 @@ export async function POST(request: NextRequest) {
       description,
       price: {
         monthly: price.monthly,
+        setupFee: price.setupFee || 0,
         currency: price.currency || 'PHP',
       },
       features: {
@@ -66,6 +67,14 @@ export async function POST(request: NextRequest) {
         prioritySupport: features?.prioritySupport ?? false,
         customIntegrations: features?.customIntegrations ?? false,
         dedicatedAccountManager: features?.dedicatedAccountManager ?? false,
+      },
+      birCompliance: {
+        ptuAssistance: birCompliance?.ptuAssistance ?? false,
+        receiptFormatting: birCompliance?.receiptFormatting ?? false,
+        birDocumentation: birCompliance?.birDocumentation ?? false,
+        casReporting: birCompliance?.casReporting ?? false,
+        auditTrailSystem: birCompliance?.auditTrailSystem ?? false,
+        monthlySupport: birCompliance?.monthlySupport ?? false,
       },
       isActive: true,
       isCustom,

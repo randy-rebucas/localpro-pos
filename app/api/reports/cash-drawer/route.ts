@@ -4,6 +4,7 @@ import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { getCashDrawerReports } from '@/lib/analytics';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { checkFeatureAccess } from '@/lib/subscription';
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,6 +15,16 @@ export async function GET(request: NextRequest) {
 
     if (!tenantId) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
+    }
+
+    // Check if reports feature is enabled in subscription
+    try {
+      await checkFeatureAccess(tenantId.toString(), 'enableReports');
+    } catch (featureError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+      return NextResponse.json(
+        { success: false, error: featureError.message },
+        { status: 403 }
+      );
     }
 
     const searchParams = request.nextUrl.searchParams;

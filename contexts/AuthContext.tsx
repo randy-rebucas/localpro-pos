@@ -14,7 +14,6 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string, tenantSlug: string) => Promise<{ success: boolean; error?: string }>;
-  loginPIN: (pin: string, tenantSlug: string) => Promise<{ success: boolean; error?: string }>;
   loginQR: (qrToken: string, tenantSlug: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
@@ -91,27 +90,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const loginPIN = async (pin: string, tenantSlug: string) => {
-    try {
-      const res = await fetch('/api/auth/login-pin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ pin, tenantSlug }),
-      });
-
-      const data = await res.json();
-      if (data.success && data.data?.user) {
-        setUser(data.data.user);
-        return { success: true };
-      } else {
-        return { success: false, error: data.error || 'Login failed' };
-      }
-    } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      return { success: false, error: error.message || 'Login failed' };
-    }
-  };
-
   const loginQR = async (qrToken: string, tenantSlug: string) => {
     try {
       const res = await fetch('/api/auth/login-qr', {
@@ -152,7 +130,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         loading,
         login,
-        loginPIN,
         loginQR,
         logout,
         isAuthenticated: !!user,

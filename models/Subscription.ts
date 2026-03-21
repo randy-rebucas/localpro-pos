@@ -179,6 +179,10 @@ SubscriptionSchema.index({ status: 1 });
 SubscriptionSchema.index({ nextBillingDate: 1 });
 SubscriptionSchema.index({ endDate: 1 });
 SubscriptionSchema.index({ trialEndDate: 1 });
+// Compound index for plan usage reporting
+SubscriptionSchema.index({ planId: 1, status: 1 });
+// Compound index for expiry automation (finding subscriptions due for billing)
+SubscriptionSchema.index({ tenantId: 1, status: 1, nextBillingDate: 1 });
 
 // Virtual for checking if subscription is expired
 SubscriptionSchema.virtual('isExpired').get(function() {

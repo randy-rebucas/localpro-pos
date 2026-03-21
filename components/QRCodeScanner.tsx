@@ -32,7 +32,13 @@ export default function QRCodeScanner({ onScan, onClose, enabled = true }: QRCod
         setError(null);
         await hardwareService.startQRScanning(videoRef.current!, onScan);
       } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-        setError(err.message || dict?.common?.failedToStartQRScanner || 'Failed to start QR scanner');
+        if (err.name === 'NotAllowedError') {
+          setError(dict?.common?.cameraPermissionDenied || 'Camera access denied. Please allow camera permissions in your browser settings and try again.');
+        } else if (err.name === 'NotFoundError') {
+          setError(dict?.common?.cameraNotFound || 'No camera found. Please connect a camera and try again.');
+        } else {
+          setError(err.message || dict?.common?.failedToStartQRScanner || 'Failed to start QR scanner');
+        }
         setIsScanning(false);
       }
     };

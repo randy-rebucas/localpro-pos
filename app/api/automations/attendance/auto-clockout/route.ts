@@ -6,22 +6,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyCronAuth } from '@/lib/automation-auth';
 import { autoClockOutForgottenSessions } from '@/lib/automations';
+import { logger } from '@/lib/logger';
+import { positiveFloat, validTenantId } from '@/lib/automation-validation';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
-    const { tenantId, gracePeriodHours } = body;
-        const authError = verifyCronAuth(request, null);
+    const { secret } = body;
+    const authError = verifyCronAuth(request, secret ?? null);
     if (authError) return authError;
 
     const result = await autoClockOutForgottenSessions({
-      tenantId,
-      gracePeriodHours,
+      tenantId: validTenantId(body.tenantId),
+      gracePeriodHours: positiveFloat(body.gracePeriodHours, 8, 72),
     });
 
     return NextResponse.json(result);
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Auto clock-out automation error:', error);
+    logger.error('Auto clock-out automation error', error);
     return NextResponse.json(
       {
         success: false,
@@ -38,22 +40,17 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    const tenantId = searchParams.get('tenantId') || undefined;
-    const gracePeriodHours = searchParams.get('gracePeriodHours')
-      ? parseInt(searchParams.get('gracePeriodHours')!, 10)
-      : undefined;
-
-        const authError = verifyCronAuth(request, searchParams.get('secret'));
+    const authError = verifyCronAuth(request, searchParams.get('secret'));
     if (authError) return authError;
 
     const result = await autoClockOutForgottenSessions({
-      tenantId,
-      gracePeriodHours,
+      tenantId: validTenantId(searchParams.get('tenantId')),
+      gracePeriodHours: positiveFloat(searchParams.get('gracePeriodHours'), 8, 72),
     });
 
     return NextResponse.json(result);
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Auto clock-out automation error:', error);
+    logger.error('Auto clock-out automation error', error);
     return NextResponse.json(
       {
         success: false,

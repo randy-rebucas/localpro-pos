@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import jwt from 'jsonwebtoken';
 import connectDB from './mongodb';
 import User from '@/models/User';
+import { isTokenRevoked, isTokenIssuedBeforeRevocation } from '@/lib/token-blacklist';
 
 export interface JWTPayload {
   userId: string;
@@ -60,8 +61,19 @@ export async function getCurrentUser(request: NextRequest): Promise<{
       return null;
     }
 
+    // Check if this specific token has been revoked (e.g. after logout)
+    if (await isTokenRevoked(token)) {
+      return null;
+    }
+
     const payload = verifyToken(token);
     if (!payload) {
+      return null;
+    }
+
+    // Check if all tokens for this user were revoked (e.g. password change)
+    const decoded = jwt.decode(token) as { iat?: number } | null;
+    if (decoded?.iat && await isTokenIssuedBeforeRevocation(payload.userId, decoded.iat)) {
       return null;
     }
 

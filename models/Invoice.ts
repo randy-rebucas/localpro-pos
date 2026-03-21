@@ -88,8 +88,7 @@ const InvoiceSchema: Schema = new Schema(
     invoiceNumber: {
       type: String,
       required: [true, 'Invoice number is required'],
-      unique: true,
-      index: true,
+      // unique enforced via compound index { tenantId, invoiceNumber } below
     },
     transactionId: {
       type: Schema.Types.ObjectId,

@@ -77,7 +77,17 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ success: false, error: t('validation.transactionNotFound', 'Transaction not found') }, { status: 404 });
     }
 
-    // Only allow status updates
+    // BIR Compliance: Completed transactions are immutable.
+    // Only status changes (void/refund) are allowed on completed transactions.
+    // Cancelled/refunded transactions cannot be modified at all.
+    if (transaction.status === 'cancelled' || transaction.status === 'refunded') {
+      return NextResponse.json(
+        { success: false, error: t('validation.transactionAlreadyFinalized', 'This transaction has already been voided or refunded and cannot be modified') },
+        { status: 400 }
+      );
+    }
+
+    // Only allow status updates (void/refund) on completed transactions
     if (body.status && ['cancelled', 'refunded'].includes(body.status)) {
       const oldStatus = transaction.status;
       transaction.status = body.status;
@@ -109,11 +119,16 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         entityId: id,
         changes: { status: { old: oldStatus, new: body.status } },
       });
+
+      return NextResponse.json({ success: true, data: transaction });
     }
 
-    if (body.notes !== undefined) {
-      transaction.notes = body.notes;
-      await transaction.save();
+    // Reject any other modifications to completed transactions
+    if (transaction.status === 'completed') {
+      return NextResponse.json(
+        { success: false, error: t('validation.transactionImmutable', 'Completed transactions cannot be modified') },
+        { status: 400 }
+      );
     }
 
     return NextResponse.json({ success: true, data: transaction });

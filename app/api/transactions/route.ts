@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import connectDB from '@/lib/mongodb';
 import Transaction from '@/models/Transaction';
 import Payment from '@/models/Payment';
@@ -13,7 +14,7 @@ import ProductBundle from '@/models/ProductBundle';
 import StockMovement from '@/models/StockMovement';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { getTenantSettingsById } from '@/lib/tenant';
-import { SubscriptionService } from '@/lib/subscription';
+import { checkSubscriptionLimit, SubscriptionService } from '@/lib/subscription';
 import { calculateTax } from '@/lib/tax-calculation';
 
 interface VariationInput {
@@ -61,6 +62,7 @@ interface TransactionItemRecord {
   subtotal: number;
   bundleId?: unknown;
   categoryId?: string;
+  taxExempt?: boolean;
 }
 
 export async function GET(request: NextRequest) {
@@ -143,6 +145,23 @@ export async function POST(request: NextRequest) {
     }
 
     const { items, paymentMethod, cashReceived, notes, discountCode, branchId, payments } = data as unknown as TransactionInput;
+
+    // Check subscription transaction limits
+    const currentTransactionCount = await Transaction.countDocuments({
+      tenantId,
+      createdAt: {
+        $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+        $lt: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1)
+      }
+    });
+    try {
+      await checkSubscriptionLimit(tenantId.toString(), 'maxTransactions', currentTransactionCount);
+    } catch (limitError: unknown) {
+      return NextResponse.json(
+        { success: false, error: (limitError as Error).message },
+        { status: 403 }
+      );
+    }
 
     // Get tenant settings to check feature flags
     const tenantSettings = await getTenantSettingsById(tenantId);
@@ -284,6 +303,7 @@ export async function POST(request: NextRequest) {
           price: itemPrice,
           quantity: quantity,
           subtotal: itemSubtotal,
+          taxExempt: product.taxExempt || false,
         });
       }
     }
@@ -291,7 +311,8 @@ export async function POST(request: NextRequest) {
     // Apply discount if provided
     let discountAmount = 0;
     let appliedDiscountCode: string | undefined;
-    
+    let appliedDiscountCategory: string | undefined;
+
     if (discountCode) {
       const discount = await Discount.findOne({
         tenantId,
@@ -346,6 +367,7 @@ export async function POST(request: NextRequest) {
       }
 
       appliedDiscountCode = discount.code;
+      appliedDiscountCategory = discount.category || 'general';
 
       // Increment usage count
       discount.usageCount += 1;
@@ -357,13 +379,16 @@ export async function POST(request: NextRequest) {
 
     // Calculate tax (if applicable)
     let taxAmount = 0;
+    let taxResult: { taxAmount: number; taxRate: number; taxLabel: string; taxableAmount: number; exemptAmount: number } | null = null;
     if (typeof calculateTax === 'function') {
       const taxItems = transactionItems.map((item) => ({
         productId: item.product ? String(item.product) : undefined,
         productType: item.bundleId ? ('bundle' as const) : ('regular' as const),
         categoryId: item.categoryId ? item.categoryId.toString() : undefined,
+        taxExempt: item.taxExempt || false,
+        subtotal: item.subtotal,
       }));
-      const taxResult = await calculateTax(tenantId, subtotalAfterDiscount, taxItems, tenantSettings ?? undefined);
+      taxResult = await calculateTax(tenantId, subtotalAfterDiscount, taxItems, tenantSettings ?? undefined, appliedDiscountCategory);
       taxAmount = taxResult.taxAmount;
     }
 
@@ -406,24 +431,30 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Update stock BEFORE creating transaction (critical - must succeed)
-    // Use the original items array to get productId and quantity
-    for (const item of items) {
-      const { productId, quantity, variation, bundleId } = item;
+    // ─── Atomic section: stock + transaction + payments in a MongoDB session ───
+    // If the DB supports replica sets, all writes are atomic.
+    // On standalone dev servers, session falls back gracefully.
+    const session = await mongoose.startSession();
+    let transaction;
+    const paymentRecords: Array<{ _id: unknown; method: string; amount: number; status: string }> = [];
 
-      // Skip if no productId (shouldn't happen, but safety check)
-      if (!productId && !bundleId) {
-        console.warn('Skipping stock update: missing productId and bundleId', item);
-        continue;
-      }
+    try {
+      session.startTransaction();
 
-      try {
+      // Update stock BEFORE creating transaction (critical - must succeed)
+      for (const item of items) {
+        const { productId, quantity, variation, bundleId } = item;
+
+        if (!productId && !bundleId) {
+          console.warn('Skipping stock update: missing productId and bundleId', item);
+          continue;
+        }
+
         if (bundleId) {
-          // Update stock for all items in bundle
           await updateBundleStock(
             bundleId,
             tenantId,
-            -quantity, // Negative for sale
+            -quantity,
             'sale',
             {
               userId: user.userId,
@@ -432,14 +463,12 @@ export async function POST(request: NextRequest) {
             }
           );
         } else if (productId) {
-          // Check if product tracks inventory before updating stock
           const product = await Product.findOne({ _id: productId, tenantId });
           if (product && product.trackInventory !== false) {
-            // Update stock for regular product (only if tracking inventory)
             await updateStock(
               productId,
               tenantId,
-              -quantity, // Negative for sale
+              -quantity,
               'sale',
               {
                 userId: user.userId,
@@ -450,65 +479,55 @@ export async function POST(request: NextRequest) {
             );
           }
         }
-      } catch (stockError: unknown) {
-        // Stock update is critical - fail the entire transaction
-        const stockMessage = stockError instanceof Error ? stockError.message : String(stockError);
-        console.error(`CRITICAL: Error updating stock for item ${productId || bundleId}:`, stockMessage);
-        console.error('Full error:', stockError);
-        throw new Error(`Failed to update stock for ${productId || bundleId}: ${stockMessage}`);
       }
-    }
 
-    // Generate receipt number
-    const receiptNumber = await generateReceiptNumber(tenantId);
+      // Generate receipt number
+      const receiptNumber = await generateReceiptNumber(tenantId);
 
-    // Create transaction after stock is successfully updated
-    const transaction = await Transaction.create({
-      tenantId,
-      branchId: branchId || undefined,
-      items: transactionItems,
-      subtotal,
-      discountCode: appliedDiscountCode,
-      discountAmount: discountAmount > 0 ? discountAmount : undefined,
-      taxAmount: taxAmount > 0 ? taxAmount : undefined,
-      total,
-      paymentMethod: finalPaymentMethod,
-      cashReceived: finalPaymentMethod === 'cash' ? finalCashReceived : undefined,
-      change: finalPaymentMethod === 'cash' ? finalChange : undefined,
-      status: 'completed',
-      userId: user.userId,
-      receiptNumber,
-      notes,
-    });
+      // Create transaction
+      const [txn] = await Transaction.create([{
+        tenantId,
+        branchId: branchId || undefined,
+        items: transactionItems,
+        subtotal,
+        discountCode: appliedDiscountCode,
+        discountCategory: appliedDiscountCategory,
+        discountAmount: discountAmount > 0 ? discountAmount : undefined,
+        taxExemptAmount: taxResult?.exemptAmount || 0,
+        taxAmount: taxAmount > 0 ? taxAmount : undefined,
+        total,
+        paymentMethod: finalPaymentMethod,
+        cashReceived: finalPaymentMethod === 'cash' ? finalCashReceived : undefined,
+        change: finalPaymentMethod === 'cash' ? finalChange : undefined,
+        status: 'completed',
+        userId: user.userId,
+        receiptNumber,
+        notes,
+      }], { session });
+      transaction = txn;
 
-    // Update stock movements with transaction ID (now that transaction exists)
-    for (const item of items) {
-      const { productId, bundleId } = item;
-      if (productId || bundleId) {
-        // Update the stock movement records with transaction ID
-        await StockMovement.updateOne(
-          {
-            productId: productId || undefined,
-            tenantId,
-            reason: productId ? 'Transaction sale' : 'Transaction sale - bundle',
-            transactionId: { $exists: false }, // Only update if no transaction ID yet
-          },
-          {
-            $set: { transactionId: transaction._id },
-          }
-        );
+      // Link stock movements to transaction
+      for (const item of items) {
+        const { productId, bundleId } = item;
+        if (productId || bundleId) {
+          await StockMovement.updateOne(
+            {
+              productId: productId || undefined,
+              tenantId,
+              reason: productId ? 'Transaction sale' : 'Transaction sale - bundle',
+              transactionId: { $exists: false },
+            },
+            { $set: { transactionId: transaction._id } },
+            { session }
+          );
+        }
       }
-    }
 
-    // Create Payment record(s) (if enabled via paymentDetails in body)
-    const paymentRecords = [];
-    if (body.createPaymentRecord !== false) {
-      try {
+      // Create Payment record(s)
+      if (body.createPaymentRecord !== false) {
         if (isMultiplePayments) {
-          // Create multiple payment records for split payments
           for (const payment of payments) {
             const paymentDetails: Record<string, unknown> = {};
-            
             if (payment.method === 'cash') {
               paymentDetails.cashReceived = payment.cashReceived || payment.amount;
               paymentDetails.change = payment.change || 0;
@@ -521,12 +540,11 @@ export async function POST(request: NextRequest) {
             } else if (payment.method === 'check') {
               paymentDetails.checkNumber = payment.checkNumber;
             }
-            
             if (payment.notes) {
               paymentDetails.notes = payment.notes;
             }
 
-            const paymentRecord = await Payment.create({
+            const [paymentRecord] = await Payment.create([{
               tenantId,
               transactionId: transaction._id,
               method: payment.method as 'cash' | 'card' | 'digital' | 'check' | 'other',
@@ -535,12 +553,10 @@ export async function POST(request: NextRequest) {
               details: Object.keys(paymentDetails).length > 0 ? paymentDetails : undefined,
               processedBy: user.userId,
               processedAt: new Date(),
-            });
-            
+            }], { session });
             paymentRecords.push(paymentRecord);
           }
         } else {
-          // Single payment method (existing logic)
           const paymentDetails: Record<string, unknown> = {};
           if (finalPaymentMethod === 'cash') {
             paymentDetails.cashReceived = finalCashReceived;
@@ -553,7 +569,7 @@ export async function POST(request: NextRequest) {
             paymentDetails.cardBrand = body.cardBrand;
           }
 
-          const paymentRecord = await Payment.create({
+          const [paymentRecord] = await Payment.create([{
             tenantId,
             transactionId: transaction._id,
             method: finalPaymentMethod as 'cash' | 'card' | 'digital' | 'check' | 'other',
@@ -562,14 +578,17 @@ export async function POST(request: NextRequest) {
             details: Object.keys(paymentDetails).length > 0 ? paymentDetails : undefined,
             processedBy: user.userId,
             processedAt: new Date(),
-          });
-          
+          }], { session });
           paymentRecords.push(paymentRecord);
         }
-      } catch (paymentError) {
-        // Log error but don't fail transaction - payment record is optional
-        console.error('Failed to create payment record(s):', paymentError);
       }
+
+      await session.commitTransaction();
+    } catch (sessionError) {
+      await session.abortTransaction();
+      throw sessionError;
+    } finally {
+      session.endSession();
     }
 
     // Create audit log
@@ -579,11 +598,11 @@ export async function POST(request: NextRequest) {
       entityType: 'transaction',
       entityId: transaction._id.toString(),
       changes: {
-        receiptNumber,
+        receiptNumber: transaction.receiptNumber,
         total,
         itemsCount: transactionItems.length,
         paymentCount: paymentRecords.length,
-        paymentIds: paymentRecords.map((p: { _id: { toString(): string } }) => p._id.toString()),
+        paymentIds: paymentRecords.map((p) => String(p._id)),
         isMultiplePayments: isMultiplePayments,
       },
     });

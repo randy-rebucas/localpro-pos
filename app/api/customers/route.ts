@@ -5,6 +5,7 @@ import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { checkFeatureAccess } from '@/lib/subscription';
 
 export async function GET(request: NextRequest) {
   try {
@@ -28,11 +29,12 @@ export async function GET(request: NextRequest) {
       query.isActive = isActive === 'true';
     }
     if (search) {
+      const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       query.$or = [
-        { firstName: { $regex: search, $options: 'i' } },
-        { lastName: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
-        { phone: { $regex: search, $options: 'i' } },
+        { firstName: { $regex: escapedSearch, $options: 'i' } },
+        { lastName: { $regex: escapedSearch, $options: 'i' } },
+        { email: { $regex: escapedSearch, $options: 'i' } },
+        { phone: { $regex: escapedSearch, $options: 'i' } },
       ];
     }
     
@@ -78,10 +80,20 @@ export async function POST(request: NextRequest) {
       throw authError;
     }
     const t = await getValidationTranslatorFromRequest(request);
-    
+
+    // Check if customer management feature is enabled in subscription
+    try {
+      await checkFeatureAccess(tenantId.toString(), 'enableCustomerManagement');
+    } catch (featureError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+      return NextResponse.json(
+        { success: false, error: featureError.message },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const { firstName, lastName, email, phone, addresses, dateOfBirth, notes, tags } = body;
-    
+
     // Validate required fields
     if (!firstName || !firstName.trim()) {
       return NextResponse.json(

@@ -11,12 +11,10 @@ export interface IUser extends Document {
   branchId?: mongoose.Types.ObjectId; // Branch assignment (optional)
   isActive: boolean;
   lastLogin?: Date;
-  pin?: string; // Hashed PIN for quick login
   qrToken?: string; // Unique token for QR code login
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
-  comparePIN(candidatePIN: string): Promise<boolean>;
 }
 
 const UserSchema: Schema = new Schema(
@@ -46,12 +44,6 @@ const UserSchema: Schema = new Schema(
       enum: ['owner', 'admin', 'manager', 'cashier', 'viewer'],
       default: 'cashier',
       required: true,
-    },
-    pin: {
-      type: String,
-      minlength: [4, 'PIN must be at least 4 digits'],
-      maxlength: [8, 'PIN must be at most 8 digits'],
-      select: false, // Don't return PIN by default
     },
     qrToken: {
       type: String,
@@ -95,17 +87,6 @@ UserSchema.pre('save', async function (next) {
     }
   }
   
-  // Hash PIN before saving
-  if (this.isModified('pin') && this.pin) {
-    try {
-      const salt = await bcrypt.genSalt(10);
-      const pin = this.pin as string;
-      this.pin = await bcrypt.hash(pin, salt);
-    } catch (error: unknown) {
-      return next(error as Error);
-    }
-  }
-  
   // Generate cryptographically secure QR token if not exists
   if (this.isNew && !this.qrToken) {
     this.qrToken = crypto.randomBytes(32).toString('hex');
@@ -120,14 +101,6 @@ UserSchema.methods.comparePassword = async function (candidatePassword: string):
     throw new Error('Password not available for comparison');
   }
   return bcrypt.compare(candidatePassword, this.password);
-};
-
-// Method to compare PIN
-UserSchema.methods.comparePIN = async function (candidatePIN: string): Promise<boolean> {
-  if (!this.pin) {
-    return false;
-  }
-  return bcrypt.compare(candidatePIN, this.pin);
 };
 
 // Compound index for tenant and email

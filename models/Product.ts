@@ -30,6 +30,7 @@ export interface IProduct extends Document {
   hasVariations: boolean;
   variations?: IProductVariation[];
   branchStock?: IBranchStock[]; // Branch-specific stock levels
+  taxExempt: boolean; // Whether the product is VAT/tax exempt
   trackInventory: boolean; // Whether to track inventory for this product
   allowOutOfStockSales?: boolean; // Whether to allow sales when out of stock
   lowStockThreshold?: number; // Product-specific threshold (overrides tenant default)
@@ -154,6 +155,10 @@ const ProductSchema: Schema = new Schema(
         // Note: Branch stock validation is handled in the parent document context
       },
     }],
+    taxExempt: {
+      type: Boolean,
+      default: false,
+    },
     trackInventory: {
       type: Boolean,
       default: true,
@@ -268,6 +273,51 @@ ProductSchema.pre('validate', function(next) {
   next();
 });
 
+// Cascade delete protection: prevent deletion if product is referenced in transactions or saved carts
+async function checkProductDependencies(filter: Record<string, unknown>) {
+  const doc = await mongoose.model('Product').findOne(filter);
+  if (!doc) return;
+
+  const Transaction = mongoose.model('Transaction');
+  const activeTransactionCount = await Transaction.countDocuments({
+    'items.product': doc._id,
+    status: { $in: ['completed'] },
+  });
+  if (activeTransactionCount > 0) {
+    throw new Error(
+      `Cannot delete product "${doc.name}": ${activeTransactionCount} completed transaction(s) reference this product. Consider deactivating it instead.`
+    );
+  }
+
+  const SavedCart = mongoose.model('SavedCart');
+  const savedCartCount = await SavedCart.countDocuments({
+    'items.productId': doc._id,
+  });
+  if (savedCartCount > 0) {
+    throw new Error(
+      `Cannot delete product "${doc.name}": ${savedCartCount} saved cart(s) reference this product. Remove the product from saved carts first.`
+    );
+  }
+}
+
+ProductSchema.pre('findOneAndDelete', async function (next) {
+  try {
+    await checkProductDependencies(this.getFilter());
+    next();
+  } catch (err) {
+    next(err as Error);
+  }
+});
+
+ProductSchema.pre('deleteOne', { document: false, query: true }, async function (next) {
+  try {
+    await checkProductDependencies(this.getFilter());
+    next();
+  } catch (err) {
+    next(err as Error);
+  }
+});
+
 // Compound index for tenant-scoped unique SKU
 ProductSchema.index({ tenantId: 1, sku: 1 }, { unique: true, sparse: true });
 // Compound index for tenant-scoped unique barcode
@@ -275,6 +325,8 @@ ProductSchema.index({ tenantId: 1, barcode: 1 }, { unique: true, sparse: true })
 // Index for product type and inventory tracking
 ProductSchema.index({ tenantId: 1, productType: 1, trackInventory: 1 });
 ProductSchema.index({ tenantId: 1, hasVariations: 1 });
+// Compound index for POS pinned product queries (pinned first, then newest)
+ProductSchema.index({ tenantId: 1, pinned: -1, createdAt: -1 });
 
 const Product: Model<IProduct> = mongoose.models.Product || mongoose.model<IProduct>('Product', ProductSchema);
 

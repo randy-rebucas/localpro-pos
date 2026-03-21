@@ -4,23 +4,21 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import Link from 'next/link';
-import PINInput from '@/components/PINInput';
 import QRCodeScanner from '@/components/QRCodeScanner';
 import { getDictionaryClient } from '../dictionaries-client';
 
-type LoginMethod = 'email' | 'pin' | 'qr';
+type LoginMethod = 'email' | 'qr';
 
 export default function LoginPage() {
   const router = useRouter();
   const params = useParams();
   const tenant = (params?.tenant as string) || 'default';
   const lang = (params?.lang as 'en' | 'es') || 'en';
-  const { login, loginPIN, loginQR, isAuthenticated, loading: authLoading } = useAuth();
+  const { login, loginQR, isAuthenticated, loading: authLoading } = useAuth();
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [loginMethod, setLoginMethod] = useState<LoginMethod>('email');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [pin, setPin] = useState(''); // eslint-disable-line @typescript-eslint/no-unused-vars
   const [error, setError] = useState('');
   const [loggingIn, setLoggingIn] = useState(false);
   const [showQRScanner, setShowQRScanner] = useState(false);
@@ -53,22 +51,6 @@ export default function LoginPage() {
     } else {
       setError(result.error || dict?.login?.loginFailed || 'Login failed. Please check your credentials.');
       setLoggingIn(false);
-    }
-  };
-
-  const handlePINComplete = async (enteredPin: string) => {
-    setError('');
-    setLoggingIn(true);
-    setPin(enteredPin);
-
-    const result = await loginPIN(enteredPin, tenant);
-    
-    if (result.success) {
-      router.push(`/${tenant}/${lang}`);
-    } else {
-      setError(result.error || dict?.login?.invalidPIN || 'Invalid PIN');
-      setLoggingIn(false);
-      setPin('');
     }
   };
 
@@ -126,16 +108,6 @@ export default function LoginPage() {
             }`}
           >
             {dict?.login?.email || 'Email'}
-          </button>
-          <button
-            onClick={() => { setLoginMethod('pin'); setError(''); }}
-            className={`flex-1 py-2 px-4 text-sm font-medium transition-all border-r border-gray-300 last:border-r-0 ${
-              loginMethod === 'pin'
-                ? 'bg-white text-blue-600 border-b-2 border-b-blue-600'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-            }`}
-          >
-            {dict?.login?.pin || 'PIN'}
           </button>
           <button
             onClick={() => { setLoginMethod('qr'); setError(''); setShowQRScanner(true); }}
@@ -215,29 +187,6 @@ export default function LoginPage() {
               )}
             </button>
           </form>
-        )}
-
-        {/* PIN Login */}
-        {loginMethod === 'pin' && (
-          <div className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-4 text-center">
-                {dict?.login?.enterPin || 'Enter your PIN'}
-              </label>
-              <PINInput
-                length={4}
-                onComplete={handlePINComplete}
-                disabled={loggingIn}
-                error={error}
-              />
-            </div>
-            {loggingIn && (
-              <div className="flex items-center justify-center gap-2 text-blue-600">
-                <div className="animate-spin h-5 w-5 border-b-2 border-blue-600"></div>
-                <span>{dict?.login?.verifyingPin || 'Verifying PIN...'}</span>
-              </div>
-            )}
-          </div>
         )}
 
         {/* QR Code Login */}

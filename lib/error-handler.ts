@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { logger } from '@/lib/logger';
 
 export interface ApiError {
   success: false;
@@ -11,7 +12,7 @@ export interface ApiError {
  * Standardized error handler for API routes
  */
 export function handleApiError(error: any, defaultMessage: string = 'An error occurred'): NextResponse<ApiError> { // eslint-disable-line @typescript-eslint/no-explicit-any
-  console.error('API Error:', error);
+  logger.error('API Error', error);
 
   // Validation errors
   if (error.name === 'ValidationException' && error.errors) {

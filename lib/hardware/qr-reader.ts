@@ -64,7 +64,7 @@ class QRReaderService {
       }, 500); // Scan every 500ms
 
       return true;
-    } catch (error) {
+    } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       console.error('Failed to start QR scanning:', error);
       // Ensure cleanup on error
       if (this.stream) {
@@ -74,7 +74,7 @@ class QRReaderService {
       if (videoElement) {
         videoElement.srcObject = null;
       }
-      return false;
+      throw error;
     }
   }
 

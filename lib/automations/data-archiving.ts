@@ -11,7 +11,7 @@ import mongoose from 'mongoose';
 
 export interface DataArchivingOptions {
   tenantId?: string;
-  archiveYears?: number; // Years to keep before archiving (default: 2)
+  archiveYears?: number; // Years to keep before archiving (default: 10, BIR compliance)
   collections?: string[]; // Collections to archive (default: ['transactions'])
 }
 
@@ -32,7 +32,7 @@ export async function archiveOldData(
   };
 
   try {
-    const archiveYears = options.archiveYears || 2;
+    const archiveYears = options.archiveYears || 10; // BIR requires 10-year retention
     const collections = options.collections || ['transactions'];
     const cutoffDate = new Date();
     cutoffDate.setFullYear(cutoffDate.getFullYear() - archiveYears);

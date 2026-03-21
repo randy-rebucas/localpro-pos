@@ -6,19 +6,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyCronAuth } from '@/lib/automation-auth';
 import { manageDiscountStatus } from '@/lib/automations';
+import { logger } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
-    const { tenantId } = body;
-        const authError = verifyCronAuth(request, null);
+    const { tenantId, secret } = body;
+    const authError = verifyCronAuth(request, secret ?? null);
     if (authError) return authError;
 
     const result = await manageDiscountStatus({ tenantId });
 
     return NextResponse.json(result);
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Discount management automation error:', error);
+    logger.error('Discount management automation error', error);
     return NextResponse.json(
       {
         success: false,
@@ -44,7 +45,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(result);
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Discount management automation error:', error);
+    logger.error('Discount management automation error', error);
     return NextResponse.json(
       {
         success: false,

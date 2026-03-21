@@ -17,6 +17,7 @@ interface SubscriptionPlan {
   description?: string;
   price: {
     monthly: number;
+    setupFee?: number;
     currency: string;
   };
   features: {
@@ -36,6 +37,14 @@ interface SubscriptionPlan {
     prioritySupport: boolean;
     customIntegrations: boolean;
     dedicatedAccountManager: boolean;
+  };
+  birCompliance?: {
+    ptuAssistance: boolean;
+    receiptFormatting: boolean;
+    birDocumentation: boolean;
+    casReporting: boolean;
+    auditTrailSystem: boolean;
+    monthlySupport: boolean;
   };
   isActive: boolean;
   isCustom: boolean;
@@ -208,8 +217,15 @@ export default function SubscriptionPage() {
                       <span className="text-3xl font-bold text-gray-900">{plan.price.currency} {plan.price.monthly.toLocaleString()}</span>
                       <span className="text-sm text-gray-500 ml-1">/month</span>
                     </div>
+                    {plan.price.setupFee ? (
+                      <div className="mt-1">
+                        <span className="text-sm text-gray-500">+ {plan.price.currency} {plan.price.setupFee.toLocaleString()} one-time setup</span>
+                      </div>
+                    ) : null}
                   </div>
-                  <ul className="space-y-2 mb-6">
+
+                  {/* System Features */}
+                  <ul className="space-y-2 mb-4">
                     <li className="flex items-center">
                       <Users className="h-4 w-4 text-green-600 mr-2 flex-shrink-0" />
                       <span className="text-sm text-gray-600">
@@ -234,7 +250,64 @@ export default function SubscriptionPage() {
                         <span className="text-sm text-gray-600">Discounts & Promotions</span>
                       </li>
                     )}
+                    {plan.features.enableMultiBranch && (
+                      <li className="flex items-center">
+                        <CheckCircle className="h-4 w-4 text-green-600 mr-2 flex-shrink-0" />
+                        <span className="text-sm text-gray-600">Multi-Branch Support</span>
+                      </li>
+                    )}
+                    {plan.features.prioritySupport && (
+                      <li className="flex items-center">
+                        <CheckCircle className="h-4 w-4 text-green-600 mr-2 flex-shrink-0" />
+                        <span className="text-sm text-gray-600">Priority Support</span>
+                      </li>
+                    )}
                   </ul>
+
+                  {/* BIR Compliance Features */}
+                  {plan.birCompliance && (
+                    <div className="pt-3 mb-4 border-t border-gray-200">
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">BIR Compliance</p>
+                      <ul className="space-y-1.5">
+                        {plan.birCompliance.auditTrailSystem && (
+                          <li className="flex items-center">
+                            <CheckCircle className="h-3.5 w-3.5 text-blue-600 mr-2 flex-shrink-0" />
+                            <span className="text-xs text-gray-600">Audit Trail System</span>
+                          </li>
+                        )}
+                        {plan.birCompliance.ptuAssistance && (
+                          <li className="flex items-center">
+                            <CheckCircle className="h-3.5 w-3.5 text-blue-600 mr-2 flex-shrink-0" />
+                            <span className="text-xs text-gray-600">PTU Assistance</span>
+                          </li>
+                        )}
+                        {plan.birCompliance.receiptFormatting && (
+                          <li className="flex items-center">
+                            <CheckCircle className="h-3.5 w-3.5 text-blue-600 mr-2 flex-shrink-0" />
+                            <span className="text-xs text-gray-600">BIR Receipt Formatting</span>
+                          </li>
+                        )}
+                        {plan.birCompliance.birDocumentation && (
+                          <li className="flex items-center">
+                            <CheckCircle className="h-3.5 w-3.5 text-blue-600 mr-2 flex-shrink-0" />
+                            <span className="text-xs text-gray-600">BIR Documentation</span>
+                          </li>
+                        )}
+                        {plan.birCompliance.casReporting && (
+                          <li className="flex items-center">
+                            <CheckCircle className="h-3.5 w-3.5 text-blue-600 mr-2 flex-shrink-0" />
+                            <span className="text-xs text-gray-600">CAS-Ready Reporting</span>
+                          </li>
+                        )}
+                        {plan.birCompliance.monthlySupport && (
+                          <li className="flex items-center">
+                            <CheckCircle className="h-3.5 w-3.5 text-blue-600 mr-2 flex-shrink-0" />
+                            <span className="text-xs text-gray-600">Monthly Compliance Support</span>
+                          </li>
+                        )}
+                      </ul>
+                    </div>
+                  )}
                 </div>
                 <div>
                   {selectedPlan === plan._id ? (
@@ -310,7 +383,7 @@ export default function SubscriptionPage() {
                     <span className="text-2xl font-bold">Custom Pricing</span>
                   </div>
                 </div>
-                <ul className="space-y-2 mb-6">
+                <ul className="space-y-2 mb-4">
                   <li className="flex items-center">
                     <Star className="h-4 w-4 text-yellow-400 mr-2 flex-shrink-0" />
                     <span className="text-sm text-gray-300">Unlimited users, branches, products</span>
@@ -324,6 +397,23 @@ export default function SubscriptionPage() {
                     <span className="text-sm text-gray-300">Custom billing & account manager</span>
                   </li>
                 </ul>
+                <div className="pt-3 mb-4 border-t border-gray-700">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Full BIR Compliance</p>
+                  <ul className="space-y-1.5">
+                    <li className="flex items-center">
+                      <CheckCircle className="h-3.5 w-3.5 text-yellow-400 mr-2 flex-shrink-0" />
+                      <span className="text-xs text-gray-400">PTU + CAS + Audit Trail</span>
+                    </li>
+                    <li className="flex items-center">
+                      <CheckCircle className="h-3.5 w-3.5 text-yellow-400 mr-2 flex-shrink-0" />
+                      <span className="text-xs text-gray-400">BIR Documentation & Receipts</span>
+                    </li>
+                    <li className="flex items-center">
+                      <CheckCircle className="h-3.5 w-3.5 text-yellow-400 mr-2 flex-shrink-0" />
+                      <span className="text-xs text-gray-400">Monthly Compliance Support</span>
+                    </li>
+                  </ul>
+                </div>
               </div>
               <button
                 onClick={() => { window.location.href = 'mailto:admin@localpro.asia?subject=Enterprise%20Plan%20Inquiry'; }}
@@ -344,11 +434,15 @@ export default function SubscriptionPage() {
             </div>
             <div className="flex items-center gap-2">
               <CheckCircle className="h-4 w-4 text-green-600" />
+              <span className="text-sm text-gray-600">BIR Compliant</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <CheckCircle className="h-4 w-4 text-green-600" />
               <span className="text-sm text-gray-600">30-Day Money Back</span>
             </div>
             <div className="flex items-center gap-2">
               <CheckCircle className="h-4 w-4 text-green-600" />
-              <span className="text-sm text-gray-600">24/7 Support</span>
+              <span className="text-sm text-gray-600">10-Year Data Retention</span>
             </div>
           </div>
         </div>

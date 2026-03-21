@@ -5,24 +5,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyCronAuth } from '@/lib/automation-auth';
 import { createDatabaseBackup } from '@/lib/automations';
+import { logger } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
-    const { tenantId, backupPath, uploadToCloud } = body;
+    const { tenantId, backupPath, uploadToCloud, secret } = body;
 
-    const isVercelCron = request.headers.get('authorization') === `Bearer ${process.env.CRON_SECRET}`;
-    const cronSecret = process.env.CRON_SECRET;
-    const providedSecret = body.secret;
-
-    if (cronSecret && !isVercelCron && providedSecret !== cronSecret) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
+    const authError = verifyCronAuth(request, secret ?? null);
+    if (authError) return authError;
 
     const result = await createDatabaseBackup({ tenantId, backupPath, uploadToCloud });
     return NextResponse.json(result);
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Database backup error:', error);
+    logger.error('Database backup error', error);
     return NextResponse.json({
       success: false,
       message: `Error: ${error.message}`,
@@ -38,18 +34,13 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const tenantId = searchParams.get('tenantId') || undefined;
 
-    const isVercelCron = request.headers.get('authorization') === `Bearer ${process.env.CRON_SECRET}`;
-    const cronSecret = process.env.CRON_SECRET;
-    const providedSecret = searchParams.get('secret');
-
-    if (cronSecret && !isVercelCron && providedSecret !== cronSecret) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
+    const authError = verifyCronAuth(request, searchParams.get('secret'));
+    if (authError) return authError;
 
     const result = await createDatabaseBackup({ tenantId });
     return NextResponse.json(result);
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Database backup error:', error);
+    logger.error('Database backup error', error);
     return NextResponse.json({
       success: false,
       message: `Error: ${error.message}`,

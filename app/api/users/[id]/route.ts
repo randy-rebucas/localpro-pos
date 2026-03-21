@@ -6,6 +6,7 @@ import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateEmail, validatePassword } from '@/lib/validation';
 import { handleApiError } from '@/lib/error-handler';
+import { revokeAllUserTokens } from '@/lib/token-blacklist';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -114,9 +115,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       updateData,
       { new: true, runValidators: true }
     ).select('-password');
-    
+
     if (!user) {
       return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
+    }
+
+    // Revoke all existing tokens when password is changed or account is deactivated
+    if (updateData.password || updateData.isActive === false) {
+      await revokeAllUserTokens(id);
     }
 
     // Track changes

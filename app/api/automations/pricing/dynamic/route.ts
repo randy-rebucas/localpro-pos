@@ -11,13 +11,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const { tenantId, enableTimeBased, enableDemandBased, enableStockBased } = body;
 
-    const isVercelCron = request.headers.get('authorization') === `Bearer ${process.env.CRON_SECRET}`;
-    const cronSecret = process.env.CRON_SECRET;
-    const providedSecret = body.secret;
-
-    if (cronSecret && !isVercelCron && providedSecret !== cronSecret) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
+    const authError = verifyCronAuth(request, body.secret || null);
+    if (authError) return authError;
 
     const result = await applyDynamicPricing({ tenantId, enableTimeBased, enableDemandBased, enableStockBased });
     return NextResponse.json(result);
@@ -41,13 +36,9 @@ export async function GET(request: NextRequest) {
     const enableDemandBased = searchParams.get('enableDemandBased') === 'true';
     const enableStockBased = searchParams.get('enableStockBased') === 'true';
 
-    const isVercelCron = request.headers.get('authorization') === `Bearer ${process.env.CRON_SECRET}`;
-    const cronSecret = process.env.CRON_SECRET;
-    const providedSecret = searchParams.get('secret');
-
-    if (cronSecret && !isVercelCron && providedSecret !== cronSecret) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
+    const secret = searchParams.get('secret');
+    const authError = verifyCronAuth(request, secret);
+    if (authError) return authError;
 
     const result = await applyDynamicPricing({ tenantId, enableTimeBased, enableDemandBased, enableStockBased });
     return NextResponse.json(result);

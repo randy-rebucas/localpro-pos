@@ -5,24 +5,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyCronAuth } from '@/lib/automation-auth';
 import { expireInactiveSessions } from '@/lib/automations';
+import { logger } from '@/lib/logger';
+import { positiveFloat, validTenantId } from '@/lib/automation-validation';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
-    const { tenantId, inactivityHours } = body;
+    const { secret } = body;
 
-    const isVercelCron = request.headers.get('authorization') === `Bearer ${process.env.CRON_SECRET}`;
-    const cronSecret = process.env.CRON_SECRET;
-    const providedSecret = body.secret;
+    const authError = verifyCronAuth(request, secret ?? null);
+    if (authError) return authError;
 
-    if (cronSecret && !isVercelCron && providedSecret !== cronSecret) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const result = await expireInactiveSessions({ tenantId, inactivityHours });
+    const result = await expireInactiveSessions({
+      tenantId: validTenantId(body.tenantId),
+      inactivityHours: positiveFloat(body.inactivityHours, 24, 720),
+    });
     return NextResponse.json(result);
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Session expiration error:', error);
+    logger.error('Session expiration error', error);
     return NextResponse.json({
       success: false,
       message: `Error: ${error.message}`,
@@ -36,23 +36,16 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    const tenantId = searchParams.get('tenantId') || undefined;
-    const inactivityHours = searchParams.get('inactivityHours')
-      ? parseInt(searchParams.get('inactivityHours')!, 10)
-      : undefined;
+    const authError = verifyCronAuth(request, searchParams.get('secret'));
+    if (authError) return authError;
 
-    const isVercelCron = request.headers.get('authorization') === `Bearer ${process.env.CRON_SECRET}`;
-    const cronSecret = process.env.CRON_SECRET;
-    const providedSecret = searchParams.get('secret');
-
-    if (cronSecret && !isVercelCron && providedSecret !== cronSecret) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const result = await expireInactiveSessions({ tenantId, inactivityHours });
+    const result = await expireInactiveSessions({
+      tenantId: validTenantId(searchParams.get('tenantId')),
+      inactivityHours: positiveFloat(searchParams.get('inactivityHours'), 24, 720),
+    });
     return NextResponse.json(result);
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Session expiration error:', error);
+    logger.error('Session expiration error', error);
     return NextResponse.json({
       success: false,
       message: `Error: ${error.message}`,

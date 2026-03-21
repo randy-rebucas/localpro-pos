@@ -5,7 +5,7 @@ import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
-import { checkSubscriptionLimit, SubscriptionService } from '@/lib/subscription';
+import { checkSubscriptionLimit, checkFeatureAccess, SubscriptionService } from '@/lib/subscription';
 
 export async function GET(request: NextRequest) {
   try {
@@ -55,8 +55,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: t('validation.branchNameRequired', 'Branch name is required') }, { status: 400 });
     }
 
-    // Check subscription limits
+    // Check if multi-branch feature is enabled (skip for first branch)
     const currentBranchCount = await Branch.countDocuments({ tenantId, isActive: true });
+    if (currentBranchCount >= 1) {
+      try {
+        await checkFeatureAccess(tenantId.toString(), 'enableMultiBranch');
+      } catch (featureError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+        return NextResponse.json(
+          { success: false, error: featureError.message },
+          { status: 403 }
+        );
+      }
+    }
+
+    // Check subscription limits
     try {
       await checkSubscriptionLimit(tenantId.toString(), 'maxBranches', currentBranchCount);
     } catch (limitError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any

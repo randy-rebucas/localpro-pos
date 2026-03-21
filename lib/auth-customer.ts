@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import jwt from 'jsonwebtoken';
 import connectDB from './mongodb';
 import Customer from '@/models/Customer';
+import { logger } from '@/lib/logger';
 
 export interface CustomerJWTPayload {
   customerId: string;
@@ -10,7 +11,17 @@ export interface CustomerJWTPayload {
   email?: string;
 }
 
-const JWT_SECRET: string = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const JWT_SECRET: string = (() => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('FATAL: JWT_SECRET environment variable is required in production');
+    }
+    console.warn('WARNING: JWT_SECRET not set. Using insecure default for development only.');
+    return 'dev-only-insecure-secret-do-not-use-in-production';
+  }
+  return secret;
+})();
 
 /**
  * Generate JWT token for customer
@@ -67,7 +78,7 @@ export async function getCurrentCustomer(request: NextRequest): Promise<{
 
     return payload;
   } catch (error) {
-    console.error('Error getting current customer:', error);
+    logger.error('Error getting current customer', error);
     return null;
   }
 }

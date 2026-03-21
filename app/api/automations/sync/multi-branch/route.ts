@@ -11,13 +11,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const { tenantId, syncProducts, syncCustomers, syncDiscounts, conflictResolution: conflictResolutionRaw } = body;
 
-    const isVercelCron = request.headers.get('authorization') === `Bearer ${process.env.CRON_SECRET}`;
-    const cronSecret = process.env.CRON_SECRET;
-    const providedSecret = body.secret;
-
-    if (cronSecret && !isVercelCron && providedSecret !== cronSecret) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
+    const authError = verifyCronAuth(request, body.secret || null);
+    if (authError) return authError;
 
     // Validate conflictResolution type
     const conflictResolution = (conflictResolutionRaw === 'manual' || conflictResolutionRaw === 'last-write-wins')
@@ -47,13 +42,9 @@ export async function GET(request: NextRequest) {
     const syncDiscounts = searchParams.get('syncDiscounts') !== 'false';
     const conflictResolutionRaw = searchParams.get('conflictResolution') || 'last-write-wins';
 
-    const isVercelCron = request.headers.get('authorization') === `Bearer ${process.env.CRON_SECRET}`;
-    const cronSecret = process.env.CRON_SECRET;
-    const providedSecret = searchParams.get('secret');
-
-    if (cronSecret && !isVercelCron && providedSecret !== cronSecret) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
+    const secret = searchParams.get('secret');
+    const authError = verifyCronAuth(request, secret);
+    if (authError) return authError;
 
     // Validate conflictResolution type
     const conflictResolution = (conflictResolutionRaw === 'manual' || conflictResolutionRaw === 'last-write-wins')

@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
 
     const subscriptions = await Subscription.find(query)
       .populate('tenantId', 'slug name')
-      .populate('planId', 'name tier price features')
+      .populate('planId', 'name tier price features birCompliance isCustom')
       .sort({ createdAt: -1 })
       .lean();
 
@@ -147,7 +147,7 @@ export async function POST(request: NextRequest) {
 
     const populatedSubscription = await Subscription.findById(subscription._id)
       .populate('tenantId', 'slug name')
-      .populate('planId', 'name tier price features');
+      .populate('planId', 'name tier price features birCompliance isCustom');
 
     return NextResponse.json({
       success: true,

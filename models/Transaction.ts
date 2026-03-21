@@ -14,7 +14,9 @@ export interface ITransaction extends Document {
   items: ITransactionItem[];
   subtotal: number; // Total before discount
   discountCode?: string;
+  discountCategory?: 'general' | 'senior' | 'pwd' | 'employee' | 'promo';
   discountAmount?: number;
+  taxExemptAmount?: number; // Amount exempt from VAT (BIR)
   taxAmount?: number; // Calculated tax amount
   total: number; // Total after discount and tax
   paymentMethod: 'cash' | 'card' | 'digital';
@@ -80,9 +82,18 @@ const TransactionSchema: Schema = new Schema(
       trim: true,
       uppercase: true,
     },
+    discountCategory: {
+      type: String,
+      enum: ['general', 'senior', 'pwd', 'employee', 'promo'],
+    },
     discountAmount: {
       type: Number,
       min: 0,
+    },
+    taxExemptAmount: {
+      type: Number,
+      min: 0,
+      default: 0,
     },
     taxAmount: {
       type: Number,
@@ -119,9 +130,7 @@ const TransactionSchema: Schema = new Schema(
     },
     receiptNumber: {
       type: String,
-      unique: true,
-      sparse: true,
-      index: true,
+      // unique enforced via compound index { tenantId, receiptNumber } below
     },
     notes: {
       type: String,
@@ -132,6 +141,12 @@ const TransactionSchema: Schema = new Schema(
     timestamps: true,
   }
 );
+
+// Compound indexes
+TransactionSchema.index({ tenantId: 1, createdAt: -1 });
+TransactionSchema.index({ tenantId: 1, branchId: 1, createdAt: -1 });
+TransactionSchema.index({ tenantId: 1, receiptNumber: 1 }, { unique: true, sparse: true });
+TransactionSchema.index({ tenantId: 1, status: 1 });
 
 const Transaction: Model<ITransaction> = mongoose.models.Transaction || mongoose.model<ITransaction>('Transaction', TransactionSchema);
 

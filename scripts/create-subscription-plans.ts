@@ -6,12 +6,18 @@ import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 
 const subscriptionPlans = [
+  // ──────────────────────────────────────────────
+  // BASIC — POS Only
+  // One-time setup: ₱50,000–₱70,000
+  // Monthly cloud subscription: ₱1,500/month
+  // ──────────────────────────────────────────────
   {
-    name: 'Starter',
+    name: 'Basic',
     tier: 'starter',
-    description: 'Perfect for micro businesses getting started with POS',
+    description: 'POS software + hardware setup & training. Perfect for micro businesses getting started.',
     price: {
-      monthly: 999,
+      monthly: 1500,
+      setupFee: 50000,
       currency: 'PHP',
     },
     features: {
@@ -27,20 +33,34 @@ const subscriptionPlans = [
       enableBookingScheduling: false,
       enableReports: true,
       enableMultiBranch: false,
-      enableHardwareIntegration: false,
+      enableHardwareIntegration: true,
       prioritySupport: false,
       customIntegrations: false,
       dedicatedAccountManager: false,
     },
+    birCompliance: {
+      ptuAssistance: false,
+      receiptFormatting: false,
+      birDocumentation: false,
+      casReporting: false,
+      auditTrailSystem: true,
+      monthlySupport: false,
+    },
     isActive: true,
     isCustom: false,
   },
+  // ──────────────────────────────────────────────
+  // STANDARD — POS + BIR Setup
+  // One-time setup: ₱70,000–₱100,000
+  // Monthly cloud subscription: ₱2,500/month
+  // ──────────────────────────────────────────────
   {
-    name: 'Pro',
+    name: 'Standard',
     tier: 'pro',
-    description: 'Ideal for core MSMEs scaling their operations',
+    description: 'Everything in Basic + BIR Permit-to-Use assistance, receipt formatting, and BIR documentation.',
     price: {
-      monthly: 1999,
+      monthly: 2500,
+      setupFee: 70000,
       currency: 'PHP',
     },
     features: {
@@ -52,7 +72,7 @@ const subscriptionPlans = [
       enableCategories: true,
       enableDiscounts: true,
       enableLoyaltyProgram: true,
-      enableCustomerManagement: false,
+      enableCustomerManagement: true,
       enableBookingScheduling: false,
       enableReports: true,
       enableMultiBranch: false,
@@ -61,15 +81,29 @@ const subscriptionPlans = [
       customIntegrations: false,
       dedicatedAccountManager: false,
     },
+    birCompliance: {
+      ptuAssistance: true,
+      receiptFormatting: true,
+      birDocumentation: true,
+      casReporting: false,
+      auditTrailSystem: true,
+      monthlySupport: false,
+    },
     isActive: true,
     isCustom: false,
   },
+  // ──────────────────────────────────────────────
+  // PREMIUM — Full BIR Compliance Solution
+  // One-time setup: ₱100,000–₱150,000
+  // Monthly cloud subscription: ₱5,000/month
+  // ──────────────────────────────────────────────
   {
-    name: 'Business',
+    name: 'Premium',
     tier: 'business',
-    description: 'Designed for multi-branch businesses',
+    description: 'Full BIR compliance solution: CAS-ready reporting, complete audit trail, and monthly support.',
     price: {
-      monthly: 3999,
+      monthly: 5000,
+      setupFee: 100000,
       currency: 'PHP',
     },
     features: {
@@ -90,15 +124,28 @@ const subscriptionPlans = [
       customIntegrations: false,
       dedicatedAccountManager: false,
     },
+    birCompliance: {
+      ptuAssistance: true,
+      receiptFormatting: true,
+      birDocumentation: true,
+      casReporting: true,
+      auditTrailSystem: true,
+      monthlySupport: true,
+    },
     isActive: true,
     isCustom: false,
   },
+  // ──────────────────────────────────────────────
+  // ENTERPRISE — Custom Solutions
+  // Custom pricing for chains and LGUs
+  // ──────────────────────────────────────────────
   {
     name: 'Enterprise',
     tier: 'enterprise',
-    description: 'Custom solutions for chains and LGUs',
+    description: 'Custom solutions for chains and LGUs. Unlimited everything with dedicated account management.',
     price: {
       monthly: 0, // Custom pricing
+      setupFee: 0, // Custom pricing
       currency: 'PHP',
     },
     features: {
@@ -118,6 +165,14 @@ const subscriptionPlans = [
       prioritySupport: true,
       customIntegrations: true,
       dedicatedAccountManager: true,
+    },
+    birCompliance: {
+      ptuAssistance: true,
+      receiptFormatting: true,
+      birDocumentation: true,
+      casReporting: true,
+      auditTrailSystem: true,
+      monthlySupport: true,
     },
     isActive: true,
     isCustom: true,
@@ -145,7 +200,7 @@ async function createSubscriptionPlans() {
     console.log(`Created ${createdPlans.length} subscription plans:`);
 
     createdPlans.forEach(plan => {
-      console.log(`- ${plan.name} (${plan.tier}): ₱${plan.price.monthly}/month`);
+      console.log(`- ${plan.name} (${plan.tier}): ₱${plan.price.monthly}/month + ₱${plan.price.setupFee} setup`);
     });
 
     console.log('Subscription plans created successfully!');

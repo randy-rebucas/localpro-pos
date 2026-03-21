@@ -7,6 +7,8 @@ export interface IDiscount extends Document {
   description?: string;
   type: 'percentage' | 'fixed';
   value: number; // Percentage (0-100) or fixed amount
+  category?: 'general' | 'senior' | 'pwd' | 'employee' | 'promo'; // BIR: Senior/PWD discount tracking
+  requiresIdVerification?: boolean; // Whether ID must be verified before applying
   minPurchaseAmount?: number;
   maxDiscountAmount?: number; // For percentage discounts
   validFrom: Date;
@@ -49,7 +51,26 @@ const DiscountSchema: Schema = new Schema(
     value: {
       type: Number,
       required: true,
-      min: 0,
+      min: [0, 'Discount value must be positive'],
+      validate: {
+        validator: function (this: { type: string }, v: number) {
+          // Percentage discounts must be 0-100
+          if (this.type === 'percentage' && v > 100) {
+            return false;
+          }
+          return true;
+        },
+        message: 'Percentage discount cannot exceed 100%',
+      },
+    },
+    category: {
+      type: String,
+      enum: ['general', 'senior', 'pwd', 'employee', 'promo'],
+      default: 'general',
+    },
+    requiresIdVerification: {
+      type: Boolean,
+      default: false,
     },
     minPurchaseAmount: {
       type: Number,
@@ -66,6 +87,12 @@ const DiscountSchema: Schema = new Schema(
     validUntil: {
       type: Date,
       required: true,
+      validate: {
+        validator: function (this: { validFrom: Date }, v: Date) {
+          return !this.validFrom || v > this.validFrom;
+        },
+        message: 'validUntil must be after validFrom',
+      },
     },
     usageLimit: {
       type: Number,
@@ -85,6 +112,36 @@ const DiscountSchema: Schema = new Schema(
     timestamps: true,
   }
 );
+
+// Cascade delete protection: prevent deletion if discount has been used in transactions
+async function checkDiscountDependencies(filter: Record<string, unknown>) {
+  const doc = await mongoose.model('Discount').findOne(filter);
+  if (!doc) return;
+
+  if (doc.usageCount > 0) {
+    throw new Error(
+      `Cannot delete discount "${doc.code}": it has been used ${doc.usageCount} time(s) in transactions. Deactivate it instead (set isActive = false).`
+    );
+  }
+}
+
+DiscountSchema.pre('findOneAndDelete', async function (next) {
+  try {
+    await checkDiscountDependencies(this.getFilter());
+    next();
+  } catch (err) {
+    next(err as Error);
+  }
+});
+
+DiscountSchema.pre('deleteOne', { document: false, query: true }, async function (next) {
+  try {
+    await checkDiscountDependencies(this.getFilter());
+    next();
+  } catch (err) {
+    next(err as Error);
+  }
+});
 
 // Compound index for tenant and code uniqueness
 DiscountSchema.index({ tenantId: 1, code: 1 }, { unique: true });

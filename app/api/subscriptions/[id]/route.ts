@@ -15,7 +15,7 @@ export async function GET(
 
     const subscription = await Subscription.findById(id)
       .populate('tenantId', 'slug name settings')
-      .populate('planId', 'name tier price features')
+      .populate('planId', 'name tier price features birCompliance isCustom')
       .lean();
 
     if (!subscription) {
@@ -93,7 +93,7 @@ export async function PUT(
       changes,
       { new: true }
     ).populate('tenantId', 'slug name')
-     .populate('planId', 'name tier price features');
+     .populate('planId', 'name tier price features birCompliance isCustom');
 
     await createAuditLog(request, {
       tenantId: subscription.tenantId,
