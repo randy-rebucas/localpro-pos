@@ -57,11 +57,11 @@ export async function DELETE(
 
     const tenantObjectId = new mongoose.Types.ObjectId(tenantId);
 
-    const savedCart = await SavedCart.findOneAndDelete({
-      _id: id,
-      tenantId: tenantObjectId,
-      userId: user.userId,
-    });
+    const savedCart = await SavedCart.findOneAndUpdate(
+      { _id: id, tenantId: tenantObjectId, userId: user.userId, isActive: true },
+      { isActive: false },
+      { new: true }
+    );
 
     if (!savedCart) {
       return NextResponse.json({ success: false, error: t('validation.savedCartNotFound', 'Saved cart not found') }, { status: 404 });

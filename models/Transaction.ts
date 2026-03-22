@@ -26,6 +26,7 @@ export interface ITransaction extends Document {
   userId?: mongoose.Types.ObjectId;
   receiptNumber?: string;
   notes?: string;
+  isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -134,6 +135,10 @@ const TransactionSchema: Schema = new Schema(
     notes: {
       type: String,
       trim: true,
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
     },
   },
   {

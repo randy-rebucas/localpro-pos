@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(Math.max(1, rawLimit), 200);
 
     // Build query
-    const query: any = { tenantId: user.tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const query: any = { tenantId: user.tenantId, isActive: { $ne: false } }; // eslint-disable-line @typescript-eslint/no-explicit-any
 
     // If userId is provided and user is manager+, allow viewing other users
     if (userId && (user.role === 'owner' || user.role === 'admin' || user.role === 'manager')) {

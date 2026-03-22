@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     const category = searchParams.get('category') || '';
     const categoryId = searchParams.get('categoryId') || '';
 
-    const query: any = { tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const query: any = { tenantId, isActive: { $ne: false } }; // eslint-disable-line @typescript-eslint/no-explicit-any
     if (search) {
       const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       query.$or = [

@@ -87,14 +87,14 @@ export async function GET(request: NextRequest) {
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
     const skip = (page - 1) * limit;
 
-    const transactions = await Transaction.find({ tenantId })
+    const transactions = await Transaction.find({ tenantId, isActive: { $ne: false } })
       .sort({ createdAt: -1 })
       .limit(limit)
       .skip(skip)
       .populate('items.product', 'name')
       .lean();
 
-    const total = await Transaction.countDocuments({ tenantId });
+    const total = await Transaction.countDocuments({ tenantId, isActive: { $ne: false } });
 
     return NextResponse.json({
       success: true,

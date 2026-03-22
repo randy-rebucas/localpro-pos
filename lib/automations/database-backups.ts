@@ -1,6 +1,6 @@
 /**
  * Automated Database Backups
- * Scheduled automatic backups
+ * Scheduled automatic backups with optional S3 cloud upload
  */
 
 import connectDB from '@/lib/mongodb';
@@ -12,7 +12,7 @@ import * as path from 'path';
 export interface DatabaseBackupOptions {
   tenantId?: string; // If specified, backup only this tenant's data
   backupPath?: string; // Local backup path
-  uploadToCloud?: boolean; // Upload to cloud storage (S3, Azure, etc.)
+  uploadToCloud?: boolean; // Upload to cloud storage (S3-compatible)
 }
 
 /**
@@ -108,8 +108,16 @@ export async function createDatabaseBackup(
     results.processed = 1;
     results.message = `Backup created: ${backupFileName}`;
 
-    // TODO: Upload to cloud storage if uploadToCloud is true
-    // This would require AWS S3, Azure Blob, or similar integration
+    // Upload to S3-compatible cloud storage if enabled
+    if (options.uploadToCloud) {
+      try {
+        await uploadBackupToS3(backupPath, backupFileName, options.tenantId);
+        results.message += ` | Uploaded to cloud storage`;
+      } catch (uploadError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+        results.errors?.push(`Cloud upload failed: ${uploadError.message}`);
+        // Don't fail the whole backup if cloud upload fails — local backup is still valid
+      }
+    }
 
     return results;
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -119,4 +127,45 @@ export async function createDatabaseBackup(
     results.failed = 1;
     return results;
   }
+}
+
+/**
+ * Upload backup file to S3-compatible storage
+ * Requires env vars: BACKUP_S3_BUCKET, BACKUP_S3_REGION, BACKUP_S3_ACCESS_KEY_ID, BACKUP_S3_SECRET_ACCESS_KEY
+ * Optional: BACKUP_S3_ENDPOINT (for DigitalOcean Spaces, MinIO, etc.)
+ */
+async function uploadBackupToS3(
+  filePath: string,
+  fileName: string,
+  tenantId?: string
+): Promise<void> {
+  const bucket = process.env.BACKUP_S3_BUCKET;
+  const region = process.env.BACKUP_S3_REGION || 'ap-southeast-1';
+  const accessKeyId = process.env.BACKUP_S3_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.BACKUP_S3_SECRET_ACCESS_KEY;
+  const endpoint = process.env.BACKUP_S3_ENDPOINT; // Optional: for S3-compatible services
+
+  if (!bucket || !accessKeyId || !secretAccessKey) {
+    throw new Error('Missing S3 configuration. Set BACKUP_S3_BUCKET, BACKUP_S3_ACCESS_KEY_ID, and BACKUP_S3_SECRET_ACCESS_KEY env vars.');
+  }
+
+  const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3');
+
+  const client = new S3Client({
+    region,
+    credentials: { accessKeyId, secretAccessKey },
+    ...(endpoint ? { endpoint, forcePathStyle: true } : {}),
+  });
+
+  const fileContent = await fs.readFile(filePath);
+  const key = tenantId
+    ? `backups/${tenantId}/${fileName}`
+    : `backups/full/${fileName}`;
+
+  await client.send(new PutObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    Body: fileContent,
+    ContentType: 'application/json',
+  }));
 }

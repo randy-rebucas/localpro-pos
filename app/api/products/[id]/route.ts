@@ -164,8 +164,12 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     }
     const { id } = await params;
     
-    const product = await Product.findOneAndDelete({ _id: id, tenantId });
-    
+    const product = await Product.findOneAndUpdate(
+      { _id: id, tenantId, isActive: true },
+      { isActive: false },
+      { new: true }
+    );
+
     if (!product) {
       return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
     }
@@ -175,9 +179,9 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       action: AuditActions.DELETE,
       entityType: 'product',
       entityId: id,
-      changes: { name: product.name },
+      changes: { name: product.name, softDeleted: true },
     });
-    
+
     return NextResponse.json({ success: true, data: {} });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return handleApiError(error);

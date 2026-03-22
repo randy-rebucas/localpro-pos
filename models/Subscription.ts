@@ -39,6 +39,7 @@ export interface ISubscription extends Document {
   };
   isTrial: boolean;
   autoRenew: boolean;
+  isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -163,6 +164,10 @@ const SubscriptionSchema: Schema = new Schema(
       default: true,
     },
     autoRenew: {
+      type: Boolean,
+      default: true,
+    },
+    isActive: {
       type: Boolean,
       default: true,
     },

@@ -10,6 +10,7 @@ export interface IExpense extends Document {
   receipt?: string; // URL or reference to receipt
   notes?: string;
   userId: mongoose.Types.ObjectId;
+  isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -60,6 +61,10 @@ const ExpenseSchema: Schema = new Schema(
       ref: 'User',
       required: true,
       index: true,
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
     },
   },
   {

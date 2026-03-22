@@ -25,8 +25,8 @@ export async function GET(request: NextRequest) {
     const customerId = searchParams.get('customerId');
     const overdue = searchParams.get('overdue') === 'true';
 
-    const query: any = { tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
-    
+    const query: any = { tenantId, isActive: { $ne: false } }; // eslint-disable-line @typescript-eslint/no-explicit-any
+
     if (status) {
       query.status = status;
     }

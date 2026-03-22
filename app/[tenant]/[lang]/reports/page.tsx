@@ -87,6 +87,35 @@ interface CashDrawerReport {
   netCash: number;
 }
 
+interface SalesJournalEntry {
+  receiptNumber: string;
+  date: string;
+  time: string;
+  items: string;
+  itemCount: number;
+  subtotal: number;
+  discountCategory: string;
+  discountAmount: number;
+  taxExemptAmount: number;
+  taxAmount: number;
+  total: number;
+  paymentMethod: string;
+  status: string;
+}
+
+interface SalesJournalData {
+  entries: SalesJournalEntry[];
+  summary: {
+    totalTransactions: number;
+    totalSales: number;
+    totalTax: number;
+    totalDiscounts: number;
+    totalTaxExempt: number;
+  };
+  startDate: string;
+  endDate: string;
+}
+
 export default function ReportsPage() {
   const params = useParams();
   const tenant = params.tenant as string;
@@ -96,7 +125,7 @@ export default function ReportsPage() {
   const COLORS = [primaryColor, ...DEFAULT_COLORS.filter(c => c !== primaryColor)].slice(0, 5);
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'sales' | 'products' | 'vat' | 'profit-loss' | 'cash-drawer'>('sales');
+  const [activeTab, setActiveTab] = useState<'sales' | 'products' | 'vat' | 'profit-loss' | 'cash-drawer' | 'sales-journal'>('sales');
   const [period, setPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -107,6 +136,7 @@ export default function ReportsPage() {
   const [vatReport, setVatReport] = useState<VATReport | null>(null);
   const [profitLoss, setProfitLoss] = useState<ProfitLossSummary | null>(null);
   const [cashDrawerReports, setCashDrawerReports] = useState<CashDrawerReport[]>([]);
+  const [salesJournal, setSalesJournal] = useState<SalesJournalData | null>(null);
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -143,6 +173,9 @@ export default function ReportsPage() {
           break;
         case 'cash-drawer':
           await loadCashDrawerReports();
+          break;
+        case 'sales-journal':
+          await loadSalesJournal();
           break;
       }
     } catch (error) {
@@ -259,6 +292,53 @@ export default function ReportsPage() {
     }
   };
 
+  const loadSalesJournal = async () => {
+    try {
+      const params = new URLSearchParams({
+        tenant,
+        ...(startDate && { startDate }),
+        ...(endDate && { endDate }),
+      });
+      const res = await fetch(`/api/reports/sales-journal?${params}`);
+      const data = await res.json();
+      if (data.success) {
+        setSalesJournal(data.data);
+      } else {
+        console.error('Error loading sales journal:', data.error);
+        setSalesJournal(null);
+      }
+    } catch (error) {
+      console.error('Error fetching sales journal:', error);
+      setSalesJournal(null);
+    }
+  };
+
+  const exportSalesJournal = async (format: 'csv' | 'excel' | 'pdf') => {
+    if (format === 'csv') {
+      const params = new URLSearchParams({
+        tenant,
+        format: 'csv',
+        ...(startDate && { startDate }),
+        ...(endDate && { endDate }),
+      });
+      window.open(`/api/reports/sales-journal?${params}`, '_blank');
+      return;
+    }
+    if (!salesJournal) return;
+    const headers = [
+      'receiptNumber', 'date', 'time', 'items', 'itemCount',
+      'subtotal', 'discountCategory', 'discountAmount',
+      'taxExemptAmount', 'taxAmount', 'total', 'paymentMethod', 'status',
+    ];
+    const { downloadExcel, downloadPDF } = await import('@/lib/export');
+    const filename = `sales-journal-${startDate}-to-${endDate}`;
+    if (format === 'excel') {
+      await downloadExcel(salesJournal.entries, headers, filename);
+    } else {
+      await downloadPDF(salesJournal.entries, headers, filename, 'Sales Journal');
+    }
+  };
+
   if (!dict) {
     return <div className="text-center py-12">{dict?.common?.loading || 'Loading...'}</div>;
   }
@@ -325,7 +405,7 @@ export default function ReportsPage() {
           <div className="bg-white border border-gray-300 overflow-hidden mb-6">
             <div className="border-b border-gray-200">
               <nav className="flex overflow-x-auto" aria-label={dict?.common?.tabs || 'Tabs'}>
-                {(['sales', 'products', 'vat', 'profit-loss', 'cash-drawer'] as const).map((tab) => (
+                {(['sales', 'products', 'vat', 'profit-loss', 'cash-drawer', 'sales-journal'] as const).map((tab) => (
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
@@ -401,6 +481,18 @@ export default function ReportsPage() {
                   )}
                   {activeTab === 'cash-drawer' && (
                     <CashDrawerReportView reports={cashDrawerReports} dict={dict} />
+                  )}
+                  {activeTab === 'sales-journal' && (
+                    salesJournal ? (
+                      <SalesJournalView data={salesJournal} dict={dict} onExport={exportSalesJournal} />
+                    ) : (
+                      <div className="text-center py-16">
+                        <svg className="mx-auto h-16 w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <p className="text-gray-500 text-lg">{dict.reports?.noData || 'No sales journal data available for the selected period'}</p>
+                      </div>
+                    )
                   )}
                 </>
               )}
@@ -846,6 +938,129 @@ function CashDrawerReportView({ reports, dict }: { reports: CashDrawerReport[]; 
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
             </svg>
             <p className="text-lg">{dict.reports?.noCashDrawerReports || 'No cash drawer reports found'}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SalesJournalView({ data, dict, onExport }: { data: SalesJournalData; dict: any; onExport: (format: 'csv' | 'excel' | 'pdf') => void }) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  return (
+    <div className="space-y-6">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-6">
+        <div className="bg-blue-50 border border-blue-300 p-5 sm:p-6">
+          <div className="text-xs sm:text-sm text-blue-600 font-semibold mb-2 uppercase tracking-wide">
+            {dict.reports?.totalTransactions || 'Transactions'}
+          </div>
+          <div className="text-2xl sm:text-3xl font-bold text-blue-900">{data.summary.totalTransactions}</div>
+        </div>
+        <div className="bg-green-50 border border-green-300 p-5 sm:p-6">
+          <div className="text-xs sm:text-sm text-green-600 font-semibold mb-2 uppercase tracking-wide">
+            {dict.reports?.totalSales || 'Total Sales'}
+          </div>
+          <div className="text-2xl sm:text-3xl font-bold text-green-900">
+            <Currency amount={data.summary.totalSales} />
+          </div>
+        </div>
+        <div className="bg-purple-50 border border-purple-300 p-5 sm:p-6">
+          <div className="text-xs sm:text-sm text-purple-600 font-semibold mb-2 uppercase tracking-wide">
+            {dict.reports?.totalTax || 'Total Tax'}
+          </div>
+          <div className="text-2xl sm:text-3xl font-bold text-purple-900">
+            <Currency amount={data.summary.totalTax} />
+          </div>
+        </div>
+        <div className="bg-orange-50 border border-orange-300 p-5 sm:p-6">
+          <div className="text-xs sm:text-sm text-orange-600 font-semibold mb-2 uppercase tracking-wide">
+            {dict.reports?.totalDiscounts || 'Total Discounts'}
+          </div>
+          <div className="text-2xl sm:text-3xl font-bold text-orange-900">
+            <Currency amount={data.summary.totalDiscounts} />
+          </div>
+        </div>
+        <div className="bg-red-50 border border-red-300 p-5 sm:p-6">
+          <div className="text-xs sm:text-sm text-red-600 font-semibold mb-2 uppercase tracking-wide">
+            {dict.reports?.totalTaxExempt || 'Tax Exempt'}
+          </div>
+          <div className="text-2xl sm:text-3xl font-bold text-red-900">
+            <Currency amount={data.summary.totalTaxExempt} />
+          </div>
+        </div>
+      </div>
+
+      {/* Export Buttons */}
+      <div className="flex gap-3">
+        <button
+          onClick={() => onExport('csv')}
+          className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
+        >
+          {dict.reports?.exportCSV || 'Export CSV'}
+        </button>
+        <button
+          onClick={() => onExport('excel')}
+          className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
+        >
+          {dict.reports?.exportExcel || 'Export Excel'}
+        </button>
+        <button
+          onClick={() => onExport('pdf')}
+          className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
+        >
+          {dict.reports?.exportPDF || 'Export PDF'}
+        </button>
+      </div>
+
+      {/* Journal Table */}
+      <div className="bg-white border border-gray-300 overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.reports?.receiptNo || 'Receipt #'}</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.reports?.date || 'Date'}</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.reports?.time || 'Time'}</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.reports?.items || 'Items'}</th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{dict.reports?.subtotal || 'Subtotal'}</th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{dict.reports?.discount || 'Discount'}</th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{dict.reports?.tax || 'Tax'}</th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{dict.reports?.total || 'Total'}</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.reports?.payment || 'Payment'}</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.reports?.status || 'Status'}</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {data.entries.map((entry, index) => (
+              <tr key={entry.receiptNumber || `journal-${index}`}>
+                <td className="px-4 py-3 whitespace-nowrap text-sm font-mono text-gray-900">{entry.receiptNumber || '-'}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{entry.date}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{entry.time}</td>
+                <td className="px-4 py-3 text-sm text-gray-500 max-w-xs truncate" title={entry.items}>{entry.items || '-'}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900"><Currency amount={entry.subtotal} /></td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-orange-600">
+                  {entry.discountAmount > 0 ? <><Currency amount={entry.discountAmount} /> {entry.discountCategory && <span className="text-xs">({entry.discountCategory})</span>}</> : '-'}
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-purple-600">
+                  {entry.taxAmount > 0 ? <Currency amount={entry.taxAmount} /> : entry.taxExemptAmount > 0 ? <span className="text-xs text-red-500">EXEMPT</span> : '-'}
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-semibold text-gray-900"><Currency amount={entry.total} /></td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 capitalize">{entry.paymentMethod}</td>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <span className={`px-2 py-1 text-xs font-medium border ${
+                    entry.status === 'completed' ? 'bg-green-100 text-green-800 border-green-300' :
+                    entry.status === 'refunded' ? 'bg-red-100 text-red-800 border-red-300' :
+                    'bg-yellow-100 text-yellow-800 border-yellow-300'
+                  }`}>
+                    {entry.status}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {data.entries.length === 0 && (
+          <div className="text-center py-16 text-gray-500">
+            <p className="text-lg">{dict.reports?.noData || 'No sales journal entries found'}</p>
           </div>
         )}
       </div>

@@ -17,6 +17,7 @@ export interface ISavedCart extends Document {
   discountAmount?: number;
   total: number;
   userId: mongoose.Types.ObjectId;
+  isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -89,6 +90,10 @@ const SavedCartSchema: Schema = new Schema(
       ref: 'User',
       required: true,
       index: true,
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
     },
   },
   {

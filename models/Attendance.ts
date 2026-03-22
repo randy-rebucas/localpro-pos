@@ -14,6 +14,7 @@ export interface IAttendance extends Document {
     longitude?: number;
     address?: string;
   };
+  isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -70,6 +71,10 @@ const AttendanceSchema: Schema = new Schema(
         type: String,
         trim: true,
       },
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
     },
   },
   {

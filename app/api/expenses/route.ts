@@ -22,8 +22,8 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get('endDate');
     const name = searchParams.get('name');
 
-    const query: any = { tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
-    
+    const query: any = { tenantId, isActive: { $ne: false } }; // eslint-disable-line @typescript-eslint/no-explicit-any
+
     if (startDate || endDate) {
       query.date = {};
       if (startDate) query.date.$gte = new Date(startDate);

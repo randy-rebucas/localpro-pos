@@ -303,14 +303,16 @@ export async function DELETE(
       }
     }
 
-    await Booking.findByIdAndDelete(id);
+    booking.isActive = false;
+    booking.status = 'cancelled';
+    await booking.save();
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.DELETE,
       entityType: 'booking',
       entityId: id,
-      changes: { customerName: booking.customerName, serviceName: booking.serviceName },
+      changes: { customerName: booking.customerName, serviceName: booking.serviceName, softDeleted: true },
     });
 
     return NextResponse.json({ success: true, message: t('validation.bookingDeleted', 'Booking deleted successfully') });

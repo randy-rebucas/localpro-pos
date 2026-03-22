@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
     const savedCarts = await SavedCart.find({
       tenantId: tenantObjectId,
       userId: user.userId,
+      isActive: { $ne: false },
     })
       .sort({ createdAt: -1 })
       .lean();

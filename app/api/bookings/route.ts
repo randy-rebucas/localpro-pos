@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
     const staffId = searchParams.get('staffId');
 
     // Build query
-    const query: any = { tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const query: any = { tenantId, isActive: { $ne: false } }; // eslint-disable-line @typescript-eslint/no-explicit-any
 
     if (startDate || endDate) {
       query.startTime = {};

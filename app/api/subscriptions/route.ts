@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
 
     // tenantId is never user-supplied to prevent IDOR
-    const query: Record<string, unknown> = {};
+    const query: Record<string, unknown> = { isActive: { $ne: false } };
 
     if (status) {
       query.status = status;

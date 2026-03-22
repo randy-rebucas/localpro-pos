@@ -65,6 +65,7 @@ export interface IProduct extends Document {
   staffRequired?: number; // Number of staff members required
   equipmentRequired?: string[]; // List of required equipment
   
+  isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -229,6 +230,10 @@ const ProductSchema: Schema = new Schema(
       default: 1,
     },
     equipmentRequired: [String],
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
   },
   {
     timestamps: true,

@@ -99,20 +99,21 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
-    const expense = await Expense.findOne({ _id: id, tenantId });
+    const expense = await Expense.findOneAndUpdate(
+      { _id: id, tenantId, isActive: true },
+      { isActive: false },
+      { new: true }
+    );
     if (!expense) {
       return NextResponse.json({ success: false, error: t('validation.expenseNotFound', 'Expense not found') }, { status: 404 });
     }
-
-    const oldData = expense.toObject(); // eslint-disable-line @typescript-eslint/no-unused-vars
-    await expense.deleteOne();
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.DELETE,
       entityType: 'expense',
       entityId: expense._id.toString(),
-      changes: { name: expense.name, description: expense.description, amount: expense.amount },
+      changes: { name: expense.name, description: expense.description, amount: expense.amount, softDeleted: true },
     });
 
     return NextResponse.json({ success: true, message: t('validation.expenseDeleted', 'Expense deleted successfully') });

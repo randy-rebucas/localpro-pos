@@ -34,6 +34,7 @@ export interface IInvoice extends Document {
   paidAt?: Date;
   paidAmount?: number;
   notes?: string;
+  isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -149,6 +150,10 @@ const InvoiceSchema: Schema = new Schema(
     notes: {
       type: String,
       trim: true,
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
     },
   },
   {

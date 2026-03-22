@@ -118,7 +118,11 @@ export async function DELETE(
     await requireRole(request, ['admin']);
     const { id } = await params;
 
-    const subscription = await Subscription.findById(id);
+    const subscription = await Subscription.findOneAndUpdate(
+      { _id: id, isActive: true },
+      { isActive: false, status: 'cancelled', cancelledAt: new Date() },
+      { new: true }
+    );
     if (!subscription) {
       return NextResponse.json(
         { success: false, error: 'Subscription not found' },
@@ -126,19 +130,12 @@ export async function DELETE(
       );
     }
 
-    // Remove subscription reference from tenant
-    await Tenant.findByIdAndUpdate(subscription.tenantId, {
-      $unset: { subscriptionId: 1 }
-    });
-
-    await Subscription.findByIdAndDelete(id);
-
     await createAuditLog(request, {
       tenantId: subscription.tenantId,
       action: AuditActions.DELETE,
       entityType: 'subscription',
       entityId: subscription._id.toString(),
-      changes: { deleted: true },
+      changes: { softDeleted: true },
     });
 
     return NextResponse.json({ success: true, message: 'Subscription deleted successfully' });

@@ -10,6 +10,7 @@ export interface IAddress extends Document {
   zipCode?: string;
   country: string;
   isDefault: boolean;
+  isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -58,6 +59,10 @@ const AddressSchema: Schema = new Schema(
     isDefault: {
       type: Boolean,
       default: false,
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
     },
   },
   {

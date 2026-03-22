@@ -23,8 +23,8 @@ export async function GET(request: NextRequest) {
     const method = searchParams.get('method');
     const transactionId = searchParams.get('transactionId');
 
-    const query: any = { tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
-    
+    const query: any = { tenantId, isActive: { $ne: false } }; // eslint-disable-line @typescript-eslint/no-explicit-any
+
     if (status) {
       query.status = status;
     }

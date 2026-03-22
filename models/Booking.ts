@@ -16,6 +16,7 @@ export interface IBooking extends Document {
   notes?: string;
   reminderSent?: boolean;
   confirmationSent?: boolean;
+  isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -91,6 +92,10 @@ const BookingSchema: Schema = new Schema(
     confirmationSent: {
       type: Boolean,
       default: false,
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
     },
   },
   {

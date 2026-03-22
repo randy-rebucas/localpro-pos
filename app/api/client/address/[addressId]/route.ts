@@ -107,7 +107,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const currentUser = await requireAuth(request);
     const { addressId } = await params;
 
-    const address = await Address.findById(addressId);
+    const address = await Address.findOne({ _id: addressId, isActive: true });
     if (!address) {
       return NextResponse.json(
         { success: false, error: t('validation.addressNotFound', 'Address not found') },
@@ -125,13 +125,15 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const wasDefault = address.isDefault;
     const tenantId = address.tenantId;
 
-    await Address.findByIdAndDelete(addressId);
+    address.isActive = false;
+    await address.save();
 
     // If we deleted the default address, promote the most recent remaining one
     if (wasDefault) {
       const nextDefault = await Address.findOne({
         userId: currentUser.userId,
         tenantId,
+        isActive: true,
       }).sort({ createdAt: -1 });
 
       if (nextDefault) {
@@ -145,6 +147,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       action: AuditActions.DELETE,
       entityType: 'address',
       entityId: addressId,
+      changes: { softDeleted: true },
     });
 
     return NextResponse.json({ success: true, message: t('validation.addressDeleted', 'Address deleted successfully') });
