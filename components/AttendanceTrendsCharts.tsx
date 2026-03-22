@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getDefaultTenantSettings } from '@/lib/currency';
@@ -43,7 +44,7 @@ interface AttendanceTrendsChartsProps {
   dict: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
-export default function AttendanceTrendsCharts({ attendances, dict }: AttendanceTrendsChartsProps) {
+export default memo(function AttendanceTrendsCharts({ attendances, dict }: AttendanceTrendsChartsProps) {
   const { settings } = useTenantSettings();
   const tenantSettings = settings || getDefaultTenantSettings();
   const primaryColor = tenantSettings.primaryColor || '#3b82f6';
@@ -219,4 +220,4 @@ export default function AttendanceTrendsCharts({ attendances, dict }: Attendance
       )}
     </div>
   );
-}
+});

@@ -8,6 +8,7 @@ import connectDB from '@/lib/mongodb';
 import Tenant from '@/models/Tenant';
 import { validateTemplate } from '@/lib/receipt-templates';
 import { getCurrentUser } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 
 export async function GET(
   request: NextRequest,
@@ -38,7 +39,7 @@ export async function GET(
       },
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error fetching receipt templates:', error);
+    logger.error('Error fetching receipt templates:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -114,7 +115,7 @@ export async function POST(
       data: newTemplate,
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error creating receipt template:', error);
+    logger.error('Error creating receipt template:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -201,7 +202,7 @@ export async function PUT(
       data: templates[templateIndex],
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error updating receipt template:', error);
+    logger.error('Error updating receipt template:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -257,7 +258,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error deleting receipt template:', error);
+    logger.error('Error deleting receipt template:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

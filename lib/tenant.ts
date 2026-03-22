@@ -1,6 +1,7 @@
 import connectDB from './mongodb';
 import Tenant from '@/models/Tenant';
 import { ITenantSettings } from '@/models/Tenant';
+import { logger } from '@/lib/logger';
 
 export interface TenantInfo {
   _id: string;
@@ -24,7 +25,7 @@ export async function getTenantSettingsById(tenantId: string): Promise<ITenantSe
     const tenant = await Tenant.findById(tenantId).select('settings').lean();
     return tenant?.settings || null;
   } catch (error) {
-    console.error('Error fetching tenant settings:', error);
+    logger.error('Error fetching tenant settings:', error);
     return null;
   }
 }
@@ -48,7 +49,7 @@ export async function getTenantBySlug(slug: string): Promise<TenantInfo | null> 
       settings: tenant.settings,
     };
   } catch (error) {
-    console.error('Error fetching tenant:', error);
+    logger.error('Error fetching tenant:', error);
     return null;
   }
 }
@@ -86,7 +87,7 @@ export async function getTenantFromHost(host: string): Promise<TenantInfo | null
     
     return null;
   } catch (error) {
-    console.error('Error fetching tenant from host:', error);
+    logger.error('Error fetching tenant from host:', error);
     return null;
   }
 }

@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Tenant from '@/models/Tenant';
 import { getCurrentUser } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 
 export async function GET(
   request: NextRequest,
@@ -31,7 +32,7 @@ export async function GET(
       data: tenant.settings.holidays || [],
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error fetching holidays:', error);
+    logger.error('Error fetching holidays:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -114,9 +115,9 @@ export async function POST(
     
     try {
       await tenant.save();
-      console.log('Holiday saved successfully:', newHoliday);
+      logger.info('Holiday saved successfully:', newHoliday);
     } catch (saveError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error('Error saving holiday to database:', saveError);
+      logger.error('Error saving holiday to database:', saveError);
       return NextResponse.json({ 
         success: false, 
         error: `Failed to save holiday: ${saveError.message || 'Database error'}` 
@@ -128,7 +129,7 @@ export async function POST(
       data: newHoliday,
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error creating holiday:', error);
+    logger.error('Error creating holiday:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -176,9 +177,9 @@ export async function PUT(
     
     try {
       await tenant.save();
-      console.log('Holiday updated successfully:', holidays[holidayIndex]);
+      logger.info('Holiday updated successfully:', holidays[holidayIndex]);
     } catch (saveError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error('Error saving holiday update to database:', saveError);
+      logger.error('Error saving holiday update to database:', saveError);
       return NextResponse.json({ 
         success: false, 
         error: `Failed to update holiday: ${saveError.message || 'Database error'}` 
@@ -190,7 +191,7 @@ export async function PUT(
       data: holidays[holidayIndex],
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error updating holiday:', error);
+    logger.error('Error updating holiday:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -236,9 +237,9 @@ export async function DELETE(
     
     try {
       await tenant.save();
-      console.log('Holiday deleted successfully');
+      logger.info('Holiday deleted successfully');
     } catch (saveError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error('Error saving holiday deletion to database:', saveError);
+      logger.error('Error saving holiday deletion to database:', saveError);
       return NextResponse.json({ 
         success: false, 
         error: `Failed to delete holiday: ${saveError.message || 'Database error'}` 
@@ -247,7 +248,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error deleting holiday:', error);
+    logger.error('Error deleting holiday:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

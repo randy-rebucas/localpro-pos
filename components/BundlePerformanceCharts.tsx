@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { formatCurrency, formatNumber, getCurrencySymbol, getDefaultTenantSettings } from '@/lib/currency'; // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -40,7 +41,7 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
   return null;
 };
 
-export default function BundlePerformanceCharts({ analytics, dict }: BundlePerformanceChartsProps) {
+export default memo(function BundlePerformanceCharts({ analytics, dict }: BundlePerformanceChartsProps) {
   const { settings } = useTenantSettings();
   const tenantSettings = settings || getDefaultTenantSettings();
   const primaryColor = tenantSettings.primaryColor || '#3b82f6';
@@ -197,4 +198,4 @@ export default function BundlePerformanceCharts({ analytics, dict }: BundlePerfo
       )}
     </div>
   );
-}
+});

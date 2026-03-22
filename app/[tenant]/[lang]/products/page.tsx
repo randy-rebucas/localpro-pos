@@ -4,8 +4,14 @@ import { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import Currency from '@/components/Currency';
 import PageTitle from '@/components/PageTitle';
-import ProductModal from '@/components/ProductModal';
-import StockRefillModal from '@/components/StockRefillModal';
+import dynamic from 'next/dynamic';
+
+const ProductModal = dynamic(() => import('@/components/ProductModal'), {
+  loading: () => <div className="p-4 text-center text-gray-500">Loading...</div>,
+});
+const StockRefillModal = dynamic(() => import('@/components/StockRefillModal'), {
+  loading: () => <div className="p-4 text-center text-gray-500">Loading...</div>,
+});
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '../dictionaries-client';
 import { showToast } from '@/lib/toast';

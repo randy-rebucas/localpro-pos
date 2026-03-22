@@ -5,6 +5,7 @@ import StockMovement from '@/models/StockMovement';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { logger } from '@/lib/logger';
 
 /**
  * Server-Sent Events endpoint for real-time stock tracking
@@ -83,7 +84,7 @@ export async function GET(request: NextRequest) {
               lastCheck = recentMovements[0].createdAt;
             }
           } catch (error) {
-            console.error('Error polling stock movements:', error);
+            logger.error('Error polling stock movements:', error);
             send({ type: 'error', message: t('validation.pollingError', 'Polling error') });
           }
         }, 2000); // Poll every 2 seconds
@@ -111,7 +112,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error setting up real-time stock tracking:', error);
+    logger.error('Error setting up real-time stock tracking:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return new Response(t('validation.internalServerError', 'Internal server error'), { status: 500 });
   }

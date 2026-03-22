@@ -9,6 +9,7 @@ import { sendBookingConfirmation } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkFeatureAccess } from '@/lib/subscription';
+import { logger } from '@/lib/logger';
 
 /**
  * GET - Get all bookings for a tenant
@@ -71,7 +72,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ success: true, data: bookings });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Get bookings error:', error);
+    logger.error('Get bookings error:', error);
     return NextResponse.json(
       { success: false, error: error.message || 'Failed to fetch bookings' },
       { status: 500 }
@@ -251,7 +252,7 @@ export async function POST(request: NextRequest) {
         }, tenantSettings || undefined);
         await Booking.findByIdAndUpdate(booking._id, { confirmationSent: true });
       } catch (notificationError) {
-        console.error('Failed to send booking confirmation:', notificationError);
+        logger.error('Failed to send booking confirmation:', notificationError);
         // Don't fail the booking creation if notification fails
       }
     }
@@ -278,7 +279,7 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Create booking error:', error);
+    logger.error('Create booking error:', error);
     const t = await getValidationTranslatorFromRequest(request);
     if (error.code === 11000) {
       return NextResponse.json(

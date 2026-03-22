@@ -4,6 +4,7 @@
  */
 
 import jsQR from 'jsqr';
+import { logger } from '@/lib/logger';
 
 export interface QRReaderConfig {
   enabled: boolean;
@@ -65,7 +66,7 @@ class QRReaderService {
 
       return true;
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error('Failed to start QR scanning:', error);
+      logger.error('Failed to start QR scanning:', error);
       // Ensure cleanup on error
       if (this.stream) {
         this.stream.getTracks().forEach(track => track.stop());
@@ -146,7 +147,7 @@ class QRReaderService {
       try {
         listener(data);
       } catch (error) {
-        console.error('Error in QR scan listener:', error);
+        logger.error('Error in QR scan listener:', error);
       }
     });
   }

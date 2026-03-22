@@ -2,6 +2,7 @@
  * Receipt Printer Service
  * Supports ESC/POS printers via WebUSB, Serial API, or network printing
  */
+import { logger } from '@/lib/logger';
 
 // Web API types (available in browsers that support these APIs)
 // Using any for browser APIs that may not have complete type definitions
@@ -86,7 +87,7 @@ class ReceiptPrinterService {
       }
       return false;
     } catch (error) {
-      console.error('Failed to connect to printer:', error);
+      logger.error('Failed to connect to printer:', error);
       return false;
     }
   }
@@ -264,7 +265,7 @@ class ReceiptPrinterService {
 
       return true;
     } catch (error) {
-      console.error('Print error:', error);
+      logger.error('Print error:', error);
       // Fallback to browser print
       return this.printViaBrowser(data);
     }
@@ -288,7 +289,7 @@ class ReceiptPrinterService {
 
       return response.ok;
     } catch (error) {
-      console.error('Network print error:', error);
+      logger.error('Network print error:', error);
       return false;
     }
   }
@@ -339,7 +340,7 @@ class ReceiptPrinterService {
         const { renderReceiptTemplate } = require('@/lib/receipt-templates');
         return renderReceiptTemplate(data.template, data);
       } catch (error) {
-        console.error('Error rendering receipt template:', error);
+        logger.error('Error rendering receipt template:', error);
         // Fall through to default template
       }
     }
@@ -446,7 +447,7 @@ class ReceiptPrinterService {
       await this.sendData(command);
       return true;
     } catch (error) {
-      console.error('Failed to open cash drawer:', error);
+      logger.error('Failed to open cash drawer:', error);
       return false;
     }
   }

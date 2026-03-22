@@ -6,6 +6,7 @@ import { sendSMS } from '@/lib/notifications';
 import { getTenantIdFromRequest } from '@/lib/api-tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import { logger } from '@/lib/logger';
 import crypto from 'crypto';
 
 /**
@@ -110,14 +111,14 @@ export async function POST(request: NextRequest) {
     });
 
     if (!smsSent) {
-      console.error('Failed to send OTP SMS');
+      logger.error('Failed to send OTP SMS');
       // Don't fail the request, OTP is still created
       // In production, you might want to handle this differently
     }
 
     // In development, log OTP to console
     if (process.env.NODE_ENV !== 'production') {
-      console.log(`📱 OTP for ${normalizedPhone}: ${otp}`);
+      logger.info(`📱 OTP for ${normalizedPhone}: ${otp}`);
     }
 
     return NextResponse.json({
@@ -126,7 +127,7 @@ export async function POST(request: NextRequest) {
       // Don't send OTP in response for security
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Send OTP error:', error);
+    logger.error('Send OTP error:', error);
     return NextResponse.json(
       { success: false, error: error.message || 'Failed to send OTP' },
       { status: 500 }

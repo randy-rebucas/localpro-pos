@@ -4,6 +4,7 @@ import Booking from '@/models/Booking';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { getCurrentUser } from '@/lib/auth';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { logger } from '@/lib/logger';
 
 /**
  * GET - Get available time slots for a given date
@@ -112,7 +113,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Get time slots error:', error);
+    logger.error('Get time slots error:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
       { success: false, error: error.message || t('validation.failedToFetchTimeSlots', 'Failed to fetch time slots') },

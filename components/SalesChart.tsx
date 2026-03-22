@@ -1,5 +1,6 @@
 'use client';
 
+import { memo, useMemo, useCallback } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { formatCurrency, formatNumber, getCurrencySymbol, getDefaultTenantSettings } from '@/lib/currency';
@@ -15,41 +16,39 @@ interface SalesChartProps {
   dict: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
-export default function SalesChart({ data, dict }: SalesChartProps) {
+export default memo(function SalesChart({ data, dict }: SalesChartProps) {
   const { settings } = useTenantSettings();
   const tenantSettings = settings || getDefaultTenantSettings();
-  
-  console.log('[SalesChart] Received data:', data);
-  
-  // Validate and ensure data is properly formatted
-  const chartData = (data || []).map((item) => {
-    const salesValue = typeof item.sales === 'number' ? item.sales : parseFloat(String(item.sales)) || 0;
-    const transactionsValue = typeof item.transactions === 'number' ? item.transactions : parseInt(String(item.transactions)) || 0;
-    return {
+
+  const chartData = useMemo(() =>
+    (data || []).map((item) => ({
       date: String(item.date || ''),
-      sales: salesValue,
-      transactions: transactionsValue,
-    };
-  }).filter((item) => item.sales >= 0 && item.transactions >= 0); // Ensure valid numeric values
+      sales: typeof item.sales === 'number' ? item.sales : parseFloat(String(item.sales)) || 0,
+      transactions: typeof item.transactions === 'number' ? item.transactions : parseInt(String(item.transactions)) || 0,
+    })).filter((item) => item.sales >= 0 && item.transactions >= 0),
+    [data]
+  );
 
-  console.log('[SalesChart] Processed chart data:', chartData);
-
-  // Helper function to format currency for Y-axis (shorter format without decimals for readability)
-  const formatYAxisValue = (value: number) => {
-    // Round to whole number for Y-axis readability
+  const formatYAxisValue = useCallback((value: number) => {
     const rounded = Math.round(value);
-    // Format number with no decimals for Y-axis
-    const numberFormat = {
-      ...tenantSettings.numberFormat,
-      decimalPlaces: 0,
-    };
+    const numberFormat = { ...tenantSettings.numberFormat, decimalPlaces: 0 };
     const formatted = formatNumber(rounded, numberFormat);
     const symbol = tenantSettings.currencySymbol || getCurrencySymbol(tenantSettings.currency);
     if (tenantSettings.currencyPosition === 'after') {
       return `${formatted} ${symbol}`;
     }
     return `${symbol}${formatted}`;
-  };
+  }, [tenantSettings]);
+
+  const tooltipFormatter = useCallback((value: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+    const numValue = typeof value === 'number' ? value : parseFloat(String(value));
+    return formatCurrency(numValue, tenantSettings);
+  }, [tenantSettings]);
+
+  const labelFormatter = useCallback((label: string) =>
+    `${dict.dashboard?.date || 'Date'}: ${label}`,
+    [dict]
+  );
 
   if (!chartData || chartData.length === 0) {
     return (
@@ -69,39 +68,31 @@ export default function SalesChart({ data, dict }: SalesChartProps) {
       <ResponsiveContainer width="100%" height="100%">
         <LineChart
           data={chartData}
-          margin={{
-            top: 5,
-            right: 30,
-            left: 20,
-            bottom: 5,
-          }}
+          margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
         >
           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-          <XAxis 
-            dataKey="date" 
+          <XAxis
+            dataKey="date"
             stroke="#6b7280"
             style={{ fontSize: '12px' }}
             angle={-45}
             textAnchor="end"
             height={60}
           />
-          <YAxis 
+          <YAxis
             stroke="#6b7280"
             style={{ fontSize: '12px' }}
-            tickFormatter={(value) => formatYAxisValue(value)}
+            tickFormatter={formatYAxisValue}
           />
-          <Tooltip 
-            contentStyle={{ 
-              backgroundColor: '#fff', 
+          <Tooltip
+            contentStyle={{
+              backgroundColor: '#fff',
               border: '1px solid #d1d5db',
               borderRadius: '0px',
               boxShadow: 'none'
             }}
-            formatter={(value: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-              const numValue = typeof value === 'number' ? value : parseFloat(String(value));
-              return formatCurrency(numValue, tenantSettings);
-            }}
-            labelFormatter={(label) => `${dict.dashboard?.date || 'Date'}: ${label}`}
+            formatter={tooltipFormatter}
+            labelFormatter={labelFormatter}
           />
           <Legend />
           <Line
@@ -117,5 +108,4 @@ export default function SalesChart({ data, dict }: SalesChartProps) {
       </ResponsiveContainer>
     </div>
   );
-}
-
+});

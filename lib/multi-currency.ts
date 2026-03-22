@@ -5,6 +5,7 @@
 
 import { ITenantSettings } from '@/models/Tenant';
 import { formatCurrency, formatNumber } from './currency'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import { logger } from '@/lib/logger';
 
 export interface ExchangeRateResponse {
   base: string;
@@ -50,7 +51,7 @@ export async function fetchExchangeRates(
 
     return null;
   } catch (error) {
-    console.error('Error fetching exchange rates:', error);
+    logger.error('Error fetching exchange rates:', error);
     return null;
   }
 }

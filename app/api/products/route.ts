@@ -8,6 +8,7 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateAndSanitize, validateProduct } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkSubscriptionLimit, SubscriptionService } from '@/lib/subscription';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -46,7 +47,7 @@ export async function GET(request: NextRequest) {
     
     return NextResponse.json({ success: true, data: products });
   } catch (_error: unknown) {
-    console.error('Error fetching products:', _error);
+    logger.error('Error fetching products:', _error);
     return NextResponse.json({ success: false, error: 'Failed to fetch products' }, { status: 500 });
   }
 }
@@ -107,7 +108,7 @@ export async function POST(request: NextRequest) {
         products: currentProductCount + 1
       });
     } catch (usageError) {
-      console.error('Failed to update subscription usage:', usageError);
+      logger.error('Failed to update subscription usage:', usageError);
       // Don't fail the request if usage update fails
     }
 
@@ -126,7 +127,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    console.error('Error creating product:', error);
+    logger.error('Error creating product:', error);
     return NextResponse.json({ success: false, error: 'Failed to create product' }, { status: 400 });
   }
 }

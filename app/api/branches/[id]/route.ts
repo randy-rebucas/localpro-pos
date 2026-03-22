@@ -5,6 +5,7 @@ import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { logger } from '@/lib/logger';
 
 export async function GET(
   request: NextRequest,
@@ -31,7 +32,7 @@ export async function GET(
 
     return NextResponse.json({ success: true, data: branch });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error fetching branch:', error);
+    logger.error('Error fetching branch:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -87,7 +88,7 @@ export async function PUT(
         { status: 400 }
       );
     }
-    console.error('Error updating branch:', error);
+    logger.error('Error updating branch:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 400 });
   }
 }
@@ -126,7 +127,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true, message: t('validation.branchDeactivated', 'Branch deactivated') });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error deleting branch:', error);
+    logger.error('Error deleting branch:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

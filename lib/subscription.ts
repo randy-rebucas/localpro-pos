@@ -2,6 +2,7 @@ import connectDB from '@/lib/mongodb';
 import Subscription from '@/models/Subscription';
 import SubscriptionPlan from '@/models/SubscriptionPlan';
 import Tenant from '@/models/Tenant';
+import { logger } from '@/lib/logger';
 import mongoose from 'mongoose'; // eslint-disable-line @typescript-eslint/no-unused-vars
 
 export interface SubscriptionLimits {
@@ -111,7 +112,7 @@ export class SubscriptionService {
 
       return status;
     } catch (error) {
-      console.error('Error getting subscription status:', error);
+      logger.error('Error getting subscription status:', error);
       return null;
     }
   }
@@ -221,7 +222,7 @@ export class SubscriptionService {
         { upsert: false }
       );
     } catch (error) {
-      console.error('Error updating subscription usage:', error);
+      logger.error('Error updating subscription usage:', error);
     }
   }
 
@@ -233,7 +234,7 @@ export class SubscriptionService {
       await connectDB();
       return await SubscriptionPlan.find({ isActive: true }).sort({ 'price.monthly': 1 }).lean();
     } catch (error) {
-      console.error('Error getting subscription plans:', error);
+      logger.error('Error getting subscription plans:', error);
       return [];
     }
   }
@@ -307,7 +308,7 @@ export class SubscriptionService {
 
       return subscription;
     } catch (error) {
-      console.error('Error creating subscription:', error);
+      logger.error('Error creating subscription:', error);
       throw error;
     }
   }

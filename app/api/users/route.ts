@@ -7,6 +7,7 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateEmail, validatePassword } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkSubscriptionLimit, SubscriptionService } from '@/lib/subscription';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -136,7 +137,7 @@ export async function POST(request: NextRequest) {
         users: currentUserCount + 1
       });
     } catch (usageError) {
-      console.error('Failed to update subscription usage:', usageError);
+      logger.error('Failed to update subscription usage:', usageError);
       // Don't fail the request if usage update fails
     }
 

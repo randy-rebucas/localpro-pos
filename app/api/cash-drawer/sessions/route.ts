@@ -7,6 +7,7 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import Transaction from '@/models/Transaction';
 import Expense from '@/models/Expense';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -34,7 +35,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ success: true, data: sessions });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error fetching cash drawer sessions:', error);
+    logger.error('Error fetching cash drawer sessions:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -158,7 +159,7 @@ export async function POST(request: NextRequest) {
       );
     }
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error managing cash drawer session:', error);
+    logger.error('Error managing cash drawer session:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 400 });
   }
 }

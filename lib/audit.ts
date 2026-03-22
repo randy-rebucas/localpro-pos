@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import connectDB from './mongodb';
 import AuditLog from '@/models/AuditLog';
 import { getCurrentUser } from './auth';
+import { logger } from '@/lib/logger';
 
 export interface AuditLogData {
   tenantId: string | mongoose.Types.ObjectId;
@@ -104,7 +105,7 @@ export async function createAuditLog(
     });
   } catch (error) {
     // Don't throw - audit logging should not break the application
-    console.error('Error creating audit log:', error);
+    logger.error('Error creating audit log:', error);
   }
 }
 

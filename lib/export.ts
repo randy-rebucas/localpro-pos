@@ -1,6 +1,7 @@
 /**
  * Export utility functions for CSV/Excel/PDF export
  */
+import { logger } from '@/lib/logger';
 
 /**
  * Convert array of objects to CSV string
@@ -127,7 +128,7 @@ export async function downloadExcel(data: any[], headers: string[], filename: st
 
     setTimeout(() => URL.revokeObjectURL(url), 100);
   } catch (error) {
-    console.error('Error exporting to Excel:', error);
+    logger.error('Error exporting to Excel:', error);
     throw new Error('Excel export failed. Please ensure exceljs package is installed.');
   }
 }
@@ -199,7 +200,7 @@ export async function downloadPDF(
     // Save PDF
     doc.save(filename.endsWith('.pdf') ? filename : `${filename}.pdf`);
   } catch (error) {
-    console.error('Error exporting to PDF:', error);
+    logger.error('Error exporting to PDF:', error);
     throw new Error('PDF export failed. Please ensure jspdf package is installed.');
   }
 }

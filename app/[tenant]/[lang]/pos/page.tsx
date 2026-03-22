@@ -8,9 +8,19 @@ import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '../dictionaries-client';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { getOfflineStorage } from '@/lib/offline-storage';
-import BarcodeScanner from '@/components/BarcodeScanner';
-import QRCodeScanner from '@/components/QRCodeScanner';
-import HardwareStatusChecker from '@/components/HardwareStatus';
+import dynamic from 'next/dynamic';
+
+const BarcodeScanner = dynamic(() => import('@/components/BarcodeScanner'), {
+  ssr: false,
+  loading: () => <div className="p-4 text-center text-gray-500">Loading scanner...</div>,
+});
+const QRCodeScanner = dynamic(() => import('@/components/QRCodeScanner'), {
+  ssr: false,
+  loading: () => <div className="p-4 text-center text-gray-500">Loading scanner...</div>,
+});
+const HardwareStatusChecker = dynamic(() => import('@/components/HardwareStatus'), {
+  ssr: false,
+});
 import { hardwareService } from '@/lib/hardware';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { showToast } from '@/lib/toast';

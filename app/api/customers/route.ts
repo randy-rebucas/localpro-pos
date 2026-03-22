@@ -5,6 +5,7 @@ import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { logger } from '@/lib/logger';
 import { checkFeatureAccess } from '@/lib/subscription';
 
 export async function GET(request: NextRequest) {
@@ -150,11 +151,11 @@ export async function POST(request: NextRequest) {
           tenantId,
         }).catch((error) => {
           // Log error but don't fail customer creation
-          console.error('Failed to send welcome email:', error);
+          logger.error('Failed to send welcome email:', error);
         });
       } catch (error) {
         // Silently fail - welcome email shouldn't block customer creation
-        console.error('Error importing welcome email automation:', error);
+        logger.error('Error importing welcome email automation:', error);
       }
     }
     

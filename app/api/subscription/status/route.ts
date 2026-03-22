@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { SubscriptionService } from '@/lib/subscription';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest) {
         { status: 401 }
       );
     }
-    console.error('Error fetching subscription status:', error);
+    logger.error('Error fetching subscription status:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to fetch subscription status' },
       { status: 500 }

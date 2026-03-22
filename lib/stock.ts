@@ -2,6 +2,7 @@ import connectDB from './mongodb';
 import Product from '@/models/Product';
 import ProductBundle from '@/models/ProductBundle';
 import StockMovement from '@/models/StockMovement';
+import { logger } from '@/lib/logger';
 import { IProductVariation } from '@/models/Product'; // eslint-disable-line @typescript-eslint/no-unused-vars
 
 export interface StockUpdateOptions {
@@ -101,7 +102,7 @@ export async function updateStock(
 
   // If product doesn't track inventory, skip stock update
   if (product.trackInventory === false) {
-    console.log(`Skipping stock update for product ${productId}: trackInventory is false`);
+    logger.info(`Skipping stock update for product ${productId}: trackInventory is false`);
     return;
   }
 
@@ -190,7 +191,7 @@ export async function updateStock(
   await product.save();
   
   // Log the update for debugging
-  console.log(`Stock updated: Product ${productId}, ${previousStock} -> ${newStock} (${quantity > 0 ? '+' : ''}${quantity})`);
+  logger.info(`Stock updated: Product ${productId}, ${previousStock} -> ${newStock} (${quantity > 0 ? '+' : ''}${quantity})`);
 
   // Create stock movement record
   await StockMovement.create({

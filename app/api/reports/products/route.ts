@@ -8,6 +8,7 @@ import Transaction from '@/models/Transaction'; // Ensure Transaction model is r
 import mongoose from 'mongoose';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkFeatureAccess } from '@/lib/subscription';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ success: true, data: performance });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error fetching product performance:', error);
+    logger.error('Error fetching product performance:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

@@ -4,6 +4,7 @@ import AuditLog from '@/models/AuditLog';
 import { requireAuth } from '@/lib/auth';
 import User from '@/models/User'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -81,7 +82,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Get audit logs error:', error);
+    logger.error('Get audit logs error:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
       { success: false, error: error.message || t('validation.failedToFetchAuditLogs', 'Failed to fetch audit logs') },

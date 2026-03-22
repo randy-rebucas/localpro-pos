@@ -6,6 +6,7 @@ import User from '@/models/User';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getDefaultTenantSettings } from '@/lib/currency';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -122,7 +123,7 @@ export async function POST(request: NextRequest) {
       });
     } catch (userError: unknown) {
       // Log error but don't fail tenant creation if user creation fails
-      console.error('Failed to create admin user:', (userError as Error).message);
+      logger.error('Failed to create admin user:', (userError as Error).message);
     }
 
     await createAuditLog(request, {

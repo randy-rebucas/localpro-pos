@@ -6,6 +6,7 @@ import Tenant from '@/models/Tenant';
 import { requireAuth } from '@/lib/auth';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { capturePayment } from '@/lib/paypal';
+import { logger } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
@@ -135,7 +136,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error activating subscription:', error);
+    logger.error('Error activating subscription:', error);
     return NextResponse.json(
       { success: false, error: error.message },
       { status: 500 }

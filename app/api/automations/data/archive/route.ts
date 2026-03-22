@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyCronAuth } from '@/lib/automation-auth';
 import { archiveOldData } from '@/lib/automations';
+import { logger } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,7 +18,7 @@ export async function POST(request: NextRequest) {
     const result = await archiveOldData({ tenantId, archiveYears, collections });
     return NextResponse.json(result);
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Data archiving error:', error);
+    logger.error('Data archiving error:', error);
     return NextResponse.json({
       success: false,
       message: `Error: ${error.message}`,
@@ -46,7 +47,7 @@ export async function GET(request: NextRequest) {
     const result = await archiveOldData({ tenantId, archiveYears, collections });
     return NextResponse.json(result);
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Data archiving error:', error);
+    logger.error('Data archiving error:', error);
     return NextResponse.json({
       success: false,
       message: `Error: ${error.message}`,

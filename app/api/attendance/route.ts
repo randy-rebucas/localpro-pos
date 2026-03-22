@@ -4,6 +4,7 @@ import Attendance from '@/models/Attendance';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { logger } from '@/lib/logger';
 
 /**
  * GET - Get attendance records for current user or all users (if manager+)
@@ -53,7 +54,7 @@ export async function GET(request: NextRequest) {
       data: attendances,
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Get attendance error:', error);
+    logger.error('Get attendance error:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
       { success: false, error: error.message || t('validation.failedToGetAttendance', 'Failed to get attendance') },
@@ -153,7 +154,7 @@ export async function POST(request: NextRequest) {
       });
     }
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Attendance error:', error);
+    logger.error('Attendance error:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
       { success: false, error: error.message || t('validation.failedToProcessAttendance', 'Failed to process attendance') },

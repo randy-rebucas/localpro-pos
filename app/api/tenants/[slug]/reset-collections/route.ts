@@ -18,6 +18,7 @@ import SavedCart from '@/models/SavedCart';
 import AuditLog from '@/models/AuditLog';
 import mongoose from 'mongoose';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { logger } from '@/lib/logger';
 
 // Map collection names to their models
 const COLLECTION_MODELS: Record<string, any> = { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -117,7 +118,7 @@ export async function GET(
         { status: error.message === 'Unauthorized' ? 401 : 403 }
       );
     }
-    console.error('Error creating backup:', error);
+    logger.error('Error creating backup:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
       { success: false, error: error.message || t('validation.failedToCreateBackup', 'Failed to create backup') },
@@ -200,7 +201,7 @@ export async function POST(
         { status: error.message === 'Unauthorized' ? 401 : 403 }
       );
     }
-    console.error('Error resetting collections:', error);
+    logger.error('Error resetting collections:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
       { success: false, error: error.message || t('validation.failedToResetCollections', 'Failed to reset collections') },
@@ -316,7 +317,7 @@ export async function PUT(
         { status: error.message === 'Unauthorized' ? 401 : 403 }
       );
     }
-    console.error('Error restoring backup:', error);
+    logger.error('Error restoring backup:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
       { success: false, error: error.message || t('validation.failedToRestoreBackup', 'Failed to restore backup') },

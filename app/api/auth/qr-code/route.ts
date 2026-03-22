@@ -4,6 +4,7 @@ import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 import { requireAuth } from '@/lib/auth';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { logger } from '@/lib/logger';
 
 /**
  * GET - Get current user's QR code token (generates one if it doesn't exist)
@@ -40,7 +41,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error: unknown) {
-    console.error('Get QR code error:', error);
+    logger.error('Get QR code error:', error);
     const errorMessage = (error as Error).message || 'Failed to get QR code';
     return NextResponse.json(
       { success: false, error: errorMessage },
@@ -71,7 +72,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error: unknown) {
-    console.error('Generate/Regenerate QR code error:', error);
+    logger.error('Generate/Regenerate QR code error:', error);
     const errorMessage = (error as Error).message || 'Failed to generate QR code';
     return NextResponse.json(
       { success: false, error: errorMessage },

@@ -7,6 +7,7 @@ import Customer from '@/models/Customer';
 import Discount from '@/models/Discount';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
+import { logger } from '@/lib/logger';
 
 // ── Sample data per business type ────────────────────────────────────────────
 
@@ -358,7 +359,7 @@ export async function POST(
     if (error.message === 'Unauthorized' || error.message?.includes('Forbidden')) {
       return NextResponse.json({ success: false, error: error.message }, { status: error.message === 'Unauthorized' ? 401 : 403 });
     }
-    console.error('Seed sample data error:', error);
+    logger.error('Seed sample data error:', error);
     return NextResponse.json({ success: false, error: 'Failed to seed sample data' }, { status: 500 });
   }
 }

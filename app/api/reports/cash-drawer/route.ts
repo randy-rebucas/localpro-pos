@@ -5,6 +5,7 @@ import { requireAuth } from '@/lib/auth';
 import { getCashDrawerReports } from '@/lib/analytics';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkFeatureAccess } from '@/lib/subscription';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ success: true, data: reports });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error fetching cash drawer reports:', error);
+    logger.error('Error fetching cash drawer reports:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

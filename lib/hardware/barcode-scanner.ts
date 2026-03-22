@@ -2,6 +2,7 @@
  * Barcode Scanner Service
  * Supports USB HID barcode scanners and camera-based scanning
  */
+import { logger } from '@/lib/logger';
 
 export interface BarcodeScannerConfig {
   type: 'keyboard' | 'camera' | 'usb';
@@ -82,7 +83,7 @@ class BarcodeScannerService {
       try {
         listener(barcode);
       } catch (error) {
-        console.error('Error in barcode scan listener:', error);
+        logger.error('Error in barcode scan listener:', error);
       }
     });
   }

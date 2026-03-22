@@ -8,6 +8,7 @@ import connectDB from '@/lib/mongodb';
 import Tenant from '@/models/Tenant';
 import { fetchExchangeRates } from '@/lib/multi-currency';
 import { getCurrentUser } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 
 export async function GET(
   request: NextRequest,
@@ -40,7 +41,7 @@ export async function GET(
       },
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error fetching exchange rates:', error);
+    logger.error('Error fetching exchange rates:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -134,7 +135,7 @@ export async function POST(
 
     return NextResponse.json({ success: false, error: 'Invalid action' }, { status: 400 });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error updating exchange rates:', error);
+    logger.error('Error updating exchange rates:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

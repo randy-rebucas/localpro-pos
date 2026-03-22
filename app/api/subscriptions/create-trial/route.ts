@@ -4,6 +4,7 @@ import Subscription from '@/models/Subscription';
 import SubscriptionPlan from '@/models/SubscriptionPlan';
 import Tenant from '@/models/Tenant';
 import { requireAuth } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
@@ -78,7 +79,7 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       );
     }
-    console.error('Error creating trial subscription:', error);
+    logger.error('Error creating trial subscription:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to create trial subscription' },
       { status: 500 }

@@ -8,6 +8,7 @@ import connectDB from '@/lib/mongodb';
 import Tenant from '@/models/Tenant';
 import { validateNotificationTemplate } from '@/lib/notification-templates';
 import { getCurrentUser } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 
 export async function GET(
   request: NextRequest,
@@ -32,7 +33,7 @@ export async function GET(
       data: tenant.settings.notificationTemplates || {},
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error fetching notification templates:', error);
+    logger.error('Error fetching notification templates:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -97,7 +98,7 @@ export async function PUT(
       data: templates,
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error updating notification template:', error);
+    logger.error('Error updating notification template:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

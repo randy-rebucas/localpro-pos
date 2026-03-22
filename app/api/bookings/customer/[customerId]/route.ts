@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb';
 import Booking from '@/models/Booking';
 import { requireCustomerAuth } from '@/lib/auth-customer';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { logger } from '@/lib/logger';
 
 /**
  * GET - Get all bookings for a customer
@@ -71,7 +72,7 @@ export async function GET(
       data: bookings,
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Get customer bookings error:', error);
+    logger.error('Get customer bookings error:', error);
     
     if (error.message === 'Unauthorized') {
       return NextResponse.json(

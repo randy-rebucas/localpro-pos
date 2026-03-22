@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { capturePayment } from '@/lib/paypal';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -31,7 +32,7 @@ export async function GET(request: NextRequest) {
     }
 
   } catch (error: unknown) {
-    console.error('Error processing PayPal success:', error);
+    logger.error('Error processing PayPal success:', error);
     return NextResponse.redirect(new URL(`${basePath}/subscription/payment-failed`, request.url));
   }
 }

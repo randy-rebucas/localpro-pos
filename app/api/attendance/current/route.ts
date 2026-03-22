@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb';
 import Attendance from '@/models/Attendance';
 import { requireAuth } from '@/lib/auth';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { logger } from '@/lib/logger';
 
 /**
  * GET - Get current user's active attendance session (if clocked in)
@@ -40,7 +41,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Get current attendance error:', error);
+    logger.error('Get current attendance error:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
       { success: false, error: error.message || t('validation.failedToGetCurrentAttendance', 'Failed to get current attendance') },

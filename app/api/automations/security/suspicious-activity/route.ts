@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyCronAuth } from '@/lib/automation-auth';
 import { detectSuspiciousActivity } from '@/lib/automations';
+import { logger } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,7 +24,7 @@ export async function POST(request: NextRequest) {
     });
     return NextResponse.json(result);
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Suspicious activity detection error:', error);
+    logger.error('Suspicious activity detection error:', error);
     return NextResponse.json({
       success: false,
       message: `Error: ${error.message}`,
@@ -64,7 +65,7 @@ export async function GET(request: NextRequest) {
     });
     return NextResponse.json(result);
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Suspicious activity detection error:', error);
+    logger.error('Suspicious activity detection error:', error);
     return NextResponse.json({
       success: false,
       message: `Error: ${error.message}`,

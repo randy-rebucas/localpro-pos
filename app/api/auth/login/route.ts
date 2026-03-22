@@ -7,6 +7,7 @@ import { validateEmail } from '@/lib/validation';
 import bcrypt from 'bcryptjs';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import { logger } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   let t: (key: string, fallback: string) => string;
@@ -72,7 +73,7 @@ export async function POST(request: NextRequest) {
 
     // Check if password exists and is a string
     if (!user.password || typeof user.password !== 'string') {
-      console.error('User password is missing or invalid for user:', user._id, 'Password type:', typeof user.password);
+      logger.error('User password is missing or invalid', { userId: user._id, passwordType: typeof user.password });
       return NextResponse.json(
         { success: false, error: t('validation.invalidCredentials', 'Invalid credentials') },
         { status: 401 }
@@ -84,7 +85,7 @@ export async function POST(request: NextRequest) {
     try {
       isPasswordValid = await bcrypt.compare(password, user.password);
     } catch (bcryptError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error('Bcrypt comparison error:', bcryptError);
+      logger.error('Bcrypt comparison error:', bcryptError);
       return NextResponse.json(
         { success: false, error: t('validation.invalidCredentials', 'Invalid credentials') },
         { status: 401 }
@@ -148,7 +149,7 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Login error:', error);
+    logger.error('Login error:', error);
     return NextResponse.json(
       { success: false, error: 'Login failed' },
       { status: 500 }

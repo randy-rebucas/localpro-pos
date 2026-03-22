@@ -5,6 +5,7 @@ import { requireRole, getCurrentUser } from '@/lib/auth';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { logger } from '@/lib/logger';
 
 /**
  * GET - Get QR code token for a user (admin/manager only)
@@ -60,7 +61,7 @@ export async function GET(
       },
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Get user QR code error:', error);
+    logger.error('Get user QR code error:', error);
     const errorMessage = error.message || 'Failed to get QR code';
     return NextResponse.json(
       { success: false, error: errorMessage },
@@ -122,7 +123,7 @@ export async function POST(
       },
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Regenerate user QR code error:', error);
+    logger.error('Regenerate user QR code error:', error);
     const errorMessage = error.message || 'Failed to regenerate QR code';
     return NextResponse.json(
       { success: false, error: errorMessage },

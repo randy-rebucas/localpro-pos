@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 import Currency from '@/components/Currency';
-import { arrayToCSV, downloadCSV, downloadExcel, downloadPDF } from '@/lib/export';
+// Export libs loaded on demand — see handleExport()
 import dynamic from 'next/dynamic';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getBusinessTypeConfig } from '@/lib/business-types';
@@ -297,7 +297,7 @@ export default function BundlesPage() {
     setSelectedBundles(newSelected);
   };
 
-  const handleExport = (format: 'csv' | 'excel' | 'pdf' = 'csv') => {
+  const handleExport = async (format: 'csv' | 'excel' | 'pdf' = 'csv') => {
     const headers = [
       'Name',
       'SKU',
@@ -322,13 +322,14 @@ export default function BundlesPage() {
 
     const baseFilename = `bundles_export_${new Date().toISOString().split('T')[0]}`;
     
+    const { arrayToCSV, downloadCSV, downloadExcel, downloadPDF } = await import('@/lib/export');
     if (format === 'csv') {
       const csv = arrayToCSV(exportData, headers);
       downloadCSV(csv, `${baseFilename}.csv`);
     } else if (format === 'excel') {
-      downloadExcel(exportData, headers, baseFilename);
+      await downloadExcel(exportData, headers, baseFilename);
     } else if (format === 'pdf') {
-      downloadPDF(exportData, headers, baseFilename, dict.admin?.bundles || 'Bundles');
+      await downloadPDF(exportData, headers, baseFilename, dict.admin?.bundles || 'Bundles');
     }
   };
 

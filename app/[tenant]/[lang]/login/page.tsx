@@ -4,7 +4,12 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import Link from 'next/link';
-import QRCodeScanner from '@/components/QRCodeScanner';
+import dynamic from 'next/dynamic';
+
+const QRCodeScanner = dynamic(() => import('@/components/QRCodeScanner'), {
+  ssr: false,
+  loading: () => <div className="p-4 text-center text-gray-500">Loading scanner...</div>,
+});
 import { getDictionaryClient } from '../dictionaries-client';
 
 type LoginMethod = 'email' | 'qr';

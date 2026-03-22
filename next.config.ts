@@ -6,8 +6,6 @@ const getAllowedOrigin = (): string => {
   }
   const origin = process.env.ALLOWED_ORIGINS;
   if (!origin) {
-    // Warn at build time — do not throw, which would break the build.
-    // Set ALLOWED_ORIGINS in your production environment variables.
     console.warn('WARNING: ALLOWED_ORIGINS is not set. CORS will be restricted to no origin.');
     return '';
   }
@@ -15,6 +13,28 @@ const getAllowedOrigin = (): string => {
 };
 
 const nextConfig: NextConfig = {
+  // Production optimizations
+  compress: true,
+  poweredByHeader: false,
+
+  // Optimize large packages for tree-shaking
+  experimental: {
+    optimizePackageImports: [
+      'recharts',
+      'exceljs',
+      'jspdf',
+      '@aws-sdk/client-s3',
+      'web-push',
+      'lucide-react',
+    ],
+  },
+
+  // Image optimization
+  images: {
+    formats: ['image/avif', 'image/webp'],
+    minimumCacheTTL: 60 * 60 * 24, // 24 hours
+  },
+
   async headers() {
     const allowedOrigin = getAllowedOrigin();
 
@@ -54,6 +74,13 @@ const nextConfig: NextConfig = {
           { key: 'Content-Type', value: 'application/javascript; charset=utf-8' },
           { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
           { key: 'Content-Security-Policy', value: "default-src 'self'; script-src 'self'" },
+        ],
+      },
+      {
+        // Cache PWA icons aggressively
+        source: '/:icon(icon-.*\\.png)',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
         ],
       },
       {

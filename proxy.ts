@@ -120,6 +120,7 @@ const PUBLIC_API_PATHS = new Set([
   '/api/tenants',            // public store selector list (GET only)
   '/api/subscription-plans', // public plan listing
   '/api/business-types',
+  '/api/health',
 ]);
 
 /** Automation routes are protected by CRON_SECRET, not JWT */
@@ -186,13 +187,13 @@ export function proxy(request: NextRequest) {
 
   // Automation routes use CRON_SECRET — skip JWT check
   if (pathname.startsWith(AUTOMATION_PREFIX)) {
-    return addRateLimitHeaders(NextResponse.next(), limit, rate.remaining);
+    return addResponseHeaders(NextResponse.next(), limit, rate.remaining);
   }
 
   // Exact public paths or sub-paths
   for (const pub of PUBLIC_API_PATHS) {
     if (pathname === pub || pathname.startsWith(pub + '/')) {
-      return addRateLimitHeaders(NextResponse.next(), limit, rate.remaining);
+      return addResponseHeaders(NextResponse.next(), limit, rate.remaining);
     }
   }
 
@@ -231,11 +232,13 @@ export function proxy(request: NextRequest) {
   requestHeaders.set('x-user-role', payload.role);
 
   const response = NextResponse.next({ request: { headers: requestHeaders } });
-  return addRateLimitHeaders(response, limit, rate.remaining);
+  return addResponseHeaders(response, limit, rate.remaining);
 }
 
-function addRateLimitHeaders(response: NextResponse, limit: number, remaining: number): NextResponse {
+function addResponseHeaders(response: NextResponse, limit: number, remaining: number): NextResponse {
   response.headers.set('X-RateLimit-Limit', String(limit));
   response.headers.set('X-RateLimit-Remaining', String(remaining));
+  response.headers.set('X-Request-Id', crypto.randomUUID());
+  response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
   return response;
 }

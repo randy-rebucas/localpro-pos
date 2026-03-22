@@ -7,6 +7,7 @@ import { validateEmail, validatePassword, validateTenant } from '@/lib/validatio
 import { getValidationTranslator } from '@/lib/validation-translations';
 import { applyBusinessTypeDefaults } from '@/lib/business-types';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import { logger } from '@/lib/logger';
 
 /**
  * Public endpoint for tenant signup
@@ -171,7 +172,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    console.error('Signup error:', error);
+    logger.error('Signup error:', error);
     const errorMessage = error.message || 'Failed to create store. Please try again.';
     return NextResponse.json({ 
       success: false, 

@@ -8,6 +8,7 @@ import { requireRole, getCurrentUser } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { updateStock } from '@/lib/stock';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { logger } from '@/lib/logger';
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -170,7 +171,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       }
     } catch (paymentError) {
       // Log error but don't fail refund - payment record refund is optional
-      console.error('Failed to create payment refund record:', paymentError);
+      logger.error('Failed to create payment refund record:', paymentError);
     }
 
     await createAuditLog(request, {

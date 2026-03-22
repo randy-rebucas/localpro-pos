@@ -6,6 +6,7 @@ import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -64,7 +65,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ success: true, data: bundles });
   } catch (_error: unknown) {
-    console.error('Error fetching bundles:', _error);
+    logger.error('Error fetching bundles:', _error);
     return NextResponse.json({ success: false, error: 'Failed to fetch bundles' }, { status: 500 });
   }
 }
@@ -120,7 +121,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    console.error('Error creating bundle:', error);
+    logger.error('Error creating bundle:', error);
     return NextResponse.json({ success: false, error: 'Failed to create bundle' }, { status: 400 });
   }
 }

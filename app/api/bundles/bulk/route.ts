@@ -4,6 +4,7 @@ import ProductBundle from '@/models/ProductBundle';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
+import { logger } from '@/lib/logger';
 
 /**
  * Bulk operations for bundles (activate/deactivate)
@@ -61,7 +62,7 @@ export async function PUT(request: NextRequest) {
       modifiedCount: result.modifiedCount,
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error in bulk bundle operation:', error);
+    logger.error('Error in bulk bundle operation:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

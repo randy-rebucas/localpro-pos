@@ -37,6 +37,7 @@ import {
   detectSuspiciousActivity,
   analyzeSalesTrends,
 } from './automations';
+import { logger } from '@/lib/logger';
 
 let cronJobs: cron.ScheduledTask[] = [];
 
@@ -53,17 +54,17 @@ export function initializeCronJobs() {
   // Clear existing jobs
   stopCronJobs();
 
-  console.log('🕐 Initializing cron jobs...');
+  logger.info('🕐 Initializing cron jobs...');
 
   // 1. Booking Reminders - Every hour
   // Runs at the top of every hour
   const bookingRemindersJob = cron.schedule('0 * * * *', async () => {
-    console.log('📅 Running booking reminders automation...');
+    logger.info('📅 Running booking reminders automation...');
     try {
       const result = await sendBookingReminders({ hoursBefore: 24 });
-      console.log('✅ Booking reminders:', result.message);
+      logger.info('✅ Booking reminders:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error('❌ Booking reminders error:', error.message);
+      logger.error('❌ Booking reminders error:' + error.message);
     }
   }, {
     timezone: 'UTC',
@@ -71,12 +72,12 @@ export function initializeCronJobs() {
 
   // 2. Low Stock Alerts - Every hour
   const lowStockJob = cron.schedule('0 * * * *', async () => {
-    console.log('📦 Running low stock alerts automation...');
+    logger.info('📦 Running low stock alerts automation...');
     try {
       const result = await sendLowStockAlerts();
-      console.log('✅ Low stock alerts:', result.message);
+      logger.info('✅ Low stock alerts:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error('❌ Low stock alerts error:', error.message);
+      logger.error('❌ Low stock alerts error:' + error.message);
     }
   }, {
     timezone: 'UTC',
@@ -84,12 +85,12 @@ export function initializeCronJobs() {
 
   // 3. Daily Sales Report - Every day at 8 AM
   const dailyReportJob = cron.schedule('0 8 * * *', async () => {
-    console.log('📊 Running daily sales report automation...');
+    logger.info('📊 Running daily sales report automation...');
     try {
       const result = await sendSalesReport({ period: 'daily' });
-      console.log('✅ Daily sales report:', result.message);
+      logger.info('✅ Daily sales report:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error('❌ Daily sales report error:', error.message);
+      logger.error('❌ Daily sales report error:' + error.message);
     }
   }, {
     timezone: 'UTC',
@@ -97,12 +98,12 @@ export function initializeCronJobs() {
 
   // 4. Weekly Sales Report - Every Monday at 9 AM
   const weeklyReportJob = cron.schedule('0 9 * * 1', async () => {
-    console.log('📊 Running weekly sales report automation...');
+    logger.info('📊 Running weekly sales report automation...');
     try {
       const result = await sendSalesReport({ period: 'weekly' });
-      console.log('✅ Weekly sales report:', result.message);
+      logger.info('✅ Weekly sales report:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error('❌ Weekly sales report error:', error.message);
+      logger.error('❌ Weekly sales report error:' + error.message);
     }
   }, {
     timezone: 'UTC',
@@ -110,12 +111,12 @@ export function initializeCronJobs() {
 
   // 5. Monthly Sales Report - 1st of month at 10 AM
   const monthlyReportJob = cron.schedule('0 10 1 * *', async () => {
-    console.log('📊 Running monthly sales report automation...');
+    logger.info('📊 Running monthly sales report automation...');
     try {
       const result = await sendSalesReport({ period: 'monthly' });
-      console.log('✅ Monthly sales report:', result.message);
+      logger.info('✅ Monthly sales report:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error('❌ Monthly sales report error:', error.message);
+      logger.error('❌ Monthly sales report error:' + error.message);
     }
   }, {
     timezone: 'UTC',
@@ -123,12 +124,12 @@ export function initializeCronJobs() {
 
   // 6. Pending Receipts - Every 6 hours
   const pendingReceiptsJob = cron.schedule('0 */6 * * *', async () => {
-    console.log('📧 Running pending receipts automation...');
+    logger.info('📧 Running pending receipts automation...');
     try {
       const result = await sendPendingReceipts({ hoursAgo: 24 });
-      console.log('✅ Pending receipts:', result.message);
+      logger.info('✅ Pending receipts:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error('❌ Pending receipts error:', error.message);
+      logger.error('❌ Pending receipts error:' + error.message);
     }
   }, {
     timezone: 'UTC',
@@ -136,13 +137,13 @@ export function initializeCronJobs() {
 
   // 7. Discount Management - Every 6 hours
   const discountManagementJob = cron.schedule('0 */6 * * *', async () => {
-    console.log('💰 Running discount management automation...');
+    logger.info('💰 Running discount management automation...');
     try {
       const { manageDiscountStatus } = await import('./automations/discount-management');
       const result = await manageDiscountStatus();
-      console.log('✅ Discount management:', result.message);
+      logger.info('✅ Discount management:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error('❌ Discount management error:', error.message);
+      logger.error('❌ Discount management error:' + error.message);
     }
   }, {
     timezone: 'UTC',
@@ -150,13 +151,13 @@ export function initializeCronJobs() {
 
   // 8. Auto Clock-Out - Every 2 hours
   const autoClockOutJob = cron.schedule('0 */2 * * *', async () => {
-    console.log('⏰ Running auto clock-out automation...');
+    logger.info('⏰ Running auto clock-out automation...');
     try {
       const { autoClockOutForgottenSessions } = await import('./automations/attendance-auto-clockout');
       const result = await autoClockOutForgottenSessions();
-      console.log('✅ Auto clock-out:', result.message);
+      logger.info('✅ Auto clock-out:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error('❌ Auto clock-out error:', error.message);
+      logger.error('❌ Auto clock-out error:' + error.message);
     }
   }, {
     timezone: 'UTC',
@@ -164,13 +165,13 @@ export function initializeCronJobs() {
 
   // 9. Cash Drawer Auto-Close - Every day at 10 PM
   const cashDrawerCloseJob = cron.schedule('0 22 * * *', async () => {
-    console.log('💵 Running cash drawer auto-close automation...');
+    logger.info('💵 Running cash drawer auto-close automation...');
     try {
       const { autoCloseCashDrawers } = await import('./automations/cash-drawer-closure');
       const result = await autoCloseCashDrawers();
-      console.log('✅ Cash drawer auto-close:', result.message);
+      logger.info('✅ Cash drawer auto-close:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error('❌ Cash drawer auto-close error:', error.message);
+      logger.error('❌ Cash drawer auto-close error:' + error.message);
     }
   }, {
     timezone: 'UTC',
@@ -178,12 +179,12 @@ export function initializeCronJobs() {
 
   // 10. Booking Confirmations - Every 15 minutes
   const bookingConfirmJob = cron.schedule('*/15 * * * *', async () => {
-    console.log('✅ Running booking confirmations automation...');
+    logger.info('✅ Running booking confirmations automation...');
     try {
       const result = await autoConfirmBookings();
-      console.log('✅ Booking confirmations:', result.message);
+      logger.info('✅ Booking confirmations:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error('❌ Booking confirmations error:', error.message);
+      logger.error('❌ Booking confirmations error:' + error.message);
     }
   }, {
     timezone: 'UTC',
@@ -191,12 +192,12 @@ export function initializeCronJobs() {
 
   // 11. No-Show Detection - Every 30 minutes
   const noShowJob = cron.schedule('*/30 * * * *', async () => {
-    console.log('🚫 Running no-show detection automation...');
+    logger.info('🚫 Running no-show detection automation...');
     try {
       const result = await detectNoShows({ gracePeriodMinutes: 15 });
-      console.log('✅ No-show detection:', result.message);
+      logger.info('✅ No-show detection:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error('❌ No-show detection error:', error.message);
+      logger.error('❌ No-show detection error:' + error.message);
     }
   }, {
     timezone: 'UTC',
@@ -204,12 +205,12 @@ export function initializeCronJobs() {
 
   // 12. Cash Count Reminders - Daily at 5 PM
   const cashCountReminderJob = cron.schedule('0 17 * * *', async () => {
-    console.log('💵 Running cash count reminders automation...');
+    logger.info('💵 Running cash count reminders automation...');
     try {
       const result = await sendCashCountReminders({ reminderMinutesBefore: 30 });
-      console.log('✅ Cash count reminders:', result.message);
+      logger.info('✅ Cash count reminders:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error('❌ Cash count reminders error:', error.message);
+      logger.error('❌ Cash count reminders error:' + error.message);
     }
   }, {
     timezone: 'UTC',
@@ -217,12 +218,12 @@ export function initializeCronJobs() {
 
   // 13. Attendance Violations - Daily at 9 AM
   const attendanceViolationsJob = cron.schedule('0 9 * * *', async () => {
-    console.log('⏰ Running attendance violations automation...');
+    logger.info('⏰ Running attendance violations automation...');
     try {
       const result = await detectAttendanceViolations({ lateThresholdMinutes: 15 });
-      console.log('✅ Attendance violations:', result.message);
+      logger.info('✅ Attendance violations:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error('❌ Attendance violations error:', error.message);
+      logger.error('❌ Attendance violations error:' + error.message);
     }
   }, {
     timezone: 'UTC',
@@ -230,12 +231,12 @@ export function initializeCronJobs() {
 
   // 14. Break Detection - Every 30 minutes
   const breakDetectionJob = cron.schedule('*/30 * * * *', async () => {
-    console.log('☕ Running break detection automation...');
+    logger.info('☕ Running break detection automation...');
     try {
       const result = await detectBreaks({ inactivityMinutes: 30 });
-      console.log('✅ Break detection:', result.message);
+      logger.info('✅ Break detection:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error('❌ Break detection error:', error.message);
+      logger.error('❌ Break detection error:' + error.message);
     }
   }, {
     timezone: 'UTC',
@@ -243,12 +244,12 @@ export function initializeCronJobs() {
 
   // 15. Abandoned Cart Reminders - Every 12 hours
   const abandonedCartJob = cron.schedule('0 */12 * * *', async () => {
-    console.log('🛒 Running abandoned cart reminders automation...');
+    logger.info('🛒 Running abandoned cart reminders automation...');
     try {
       const result = await sendAbandonedCartReminders({ hoursAgo: 24 });
-      console.log('✅ Abandoned cart reminders:', result.message);
+      logger.info('✅ Abandoned cart reminders:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error('❌ Abandoned cart reminders error:', error.message);
+      logger.error('❌ Abandoned cart reminders error:' + error.message);
     }
   }, {
     timezone: 'UTC',
@@ -256,12 +257,12 @@ export function initializeCronJobs() {
 
   // 16. Purchase Order Generation - Daily at 9 AM
   const purchaseOrderJob = cron.schedule('0 9 * * *', async () => {
-    console.log('📋 Running purchase order generation automation...');
+    logger.info('📋 Running purchase order generation automation...');
     try {
       const result = await generatePurchaseOrders();
-      console.log('✅ Purchase order generation:', result.message);
+      logger.info('✅ Purchase order generation:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error('❌ Purchase order generation error:', error.message);
+      logger.error('❌ Purchase order generation error:' + error.message);
     }
   }, {
     timezone: 'UTC',
@@ -269,12 +270,12 @@ export function initializeCronJobs() {
 
   // 17. Database Backups - Daily at 2 AM
   const backupJob = cron.schedule('0 2 * * *', async () => {
-    console.log('💾 Running database backup automation...');
+    logger.info('💾 Running database backup automation...');
     try {
       const result = await createDatabaseBackup();
-      console.log('✅ Database backup:', result.message);
+      logger.info('✅ Database backup:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error('❌ Database backup error:', error.message);
+      logger.error('❌ Database backup error:' + error.message);
     }
   }, {
     timezone: 'UTC',
@@ -282,12 +283,12 @@ export function initializeCronJobs() {
 
   // 18. Audit Log Cleanup - Weekly on Sunday at 4 AM
   const auditCleanupJob = cron.schedule('0 4 * * 0', async () => {
-    console.log('🧹 Running audit log cleanup automation...');
+    logger.info('🧹 Running audit log cleanup automation...');
     try {
       const result = await cleanupAuditLogs({ retentionYears: 2 });
-      console.log('✅ Audit log cleanup:', result.message);
+      logger.info('✅ Audit log cleanup:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error('❌ Audit log cleanup error:', error.message);
+      logger.error('❌ Audit log cleanup error:' + error.message);
     }
   }, {
     timezone: 'UTC',
@@ -295,12 +296,12 @@ export function initializeCronJobs() {
 
   // 19. Product Performance - Weekly on Monday at 10 AM
   const productPerformanceJob = cron.schedule('0 10 * * 1', async () => {
-    console.log('📊 Running product performance automation...');
+    logger.info('📊 Running product performance automation...');
     try {
       const result = await analyzeProductPerformance({ daysToAnalyze: 30 });
-      console.log('✅ Product performance:', result.message);
+      logger.info('✅ Product performance:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error('❌ Product performance error:', error.message);
+      logger.error('❌ Product performance error:' + error.message);
     }
   }, {
     timezone: 'UTC',
@@ -308,12 +309,12 @@ export function initializeCronJobs() {
 
   // 20. Customer Lifetime Value - Weekly on Sunday at 2 AM
   const clvJob = cron.schedule('0 2 * * 0', async () => {
-    console.log('💰 Running customer lifetime value automation...');
+    logger.info('💰 Running customer lifetime value automation...');
     try {
       const result = await calculateCustomerLifetimeValue();
-      console.log('✅ Customer lifetime value:', result.message);
+      logger.info('✅ Customer lifetime value:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error('❌ Customer lifetime value error:', error.message);
+      logger.error('❌ Customer lifetime value error:' + error.message);
     }
   }, {
     timezone: 'UTC',
@@ -321,13 +322,13 @@ export function initializeCronJobs() {
 
   // 21. Session Expiration - Every 6 hours
   const sessionExpirationJob = cron.schedule('0 */6 * * *', async () => {
-    console.log('🔒 Running session expiration automation...');
+    logger.info('🔒 Running session expiration automation...');
     try {
       const { expireInactiveSessions } = await import('./automations/session-expiration');
       const result = await expireInactiveSessions({ inactivityHours: 24 });
-      console.log('✅ Session expiration:', result.message);
+      logger.info('✅ Session expiration:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error('❌ Session expiration error:', error.message);
+      logger.error('❌ Session expiration error:' + error.message);
     }
   }, {
     timezone: 'UTC',
@@ -335,12 +336,12 @@ export function initializeCronJobs() {
 
   // 22. Stock Transfer - Daily at 8 AM
   const stockTransferJob = cron.schedule('0 8 * * *', async () => {
-    console.log('📦 Running stock transfer automation...');
+    logger.info('📦 Running stock transfer automation...');
     try {
       const result = await detectStockImbalances({ autoApprove: false });
-      console.log('✅ Stock transfer:', result.message);
+      logger.info('✅ Stock transfer:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error('❌ Stock transfer error:', error.message);
+      logger.error('❌ Stock transfer error:' + error.message);
     }
   }, {
     timezone: 'UTC',
@@ -348,12 +349,12 @@ export function initializeCronJobs() {
 
   // 23. Predictive Stock - Weekly on Monday at 9 AM
   const predictiveStockJob = cron.schedule('0 9 * * 1', async () => {
-    console.log('🔮 Running predictive stock automation...');
+    logger.info('🔮 Running predictive stock automation...');
     try {
       const result = await predictStockNeeds({ analysisDays: 30, predictionDays: 7 });
-      console.log('✅ Predictive stock:', result.message);
+      logger.info('✅ Predictive stock:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error('❌ Predictive stock error:', error.message);
+      logger.error('❌ Predictive stock error:' + error.message);
     }
   }, {
     timezone: 'UTC',
@@ -361,16 +362,16 @@ export function initializeCronJobs() {
 
   // 24. Dynamic Pricing - Every 30 minutes
   const dynamicPricingJob = cron.schedule('*/30 * * * *', async () => {
-    console.log('💲 Running dynamic pricing automation...');
+    logger.info('💲 Running dynamic pricing automation...');
     try {
       const result = await applyDynamicPricing({
         enableTimeBased: true,
         enableDemandBased: true,
         enableStockBased: true,
       });
-      console.log('✅ Dynamic pricing:', result.message);
+      logger.info('✅ Dynamic pricing:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error('❌ Dynamic pricing error:', error.message);
+      logger.error('❌ Dynamic pricing error:' + error.message);
     }
   }, {
     timezone: 'UTC',
@@ -378,12 +379,12 @@ export function initializeCronJobs() {
 
   // 25. Data Archiving - Weekly on Sunday at 3 AM
   const dataArchiveJob = cron.schedule('0 3 * * 0', async () => {
-    console.log('📚 Running data archiving automation...');
+    logger.info('📚 Running data archiving automation...');
     try {
       const result = await archiveOldData({ archiveYears: 2 });
-      console.log('✅ Data archiving:', result.message);
+      logger.info('✅ Data archiving:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error('❌ Data archiving error:', error.message);
+      logger.error('❌ Data archiving error:' + error.message);
     }
   }, {
     timezone: 'UTC',
@@ -391,12 +392,12 @@ export function initializeCronJobs() {
 
   // 26. Multi-Branch Sync - Every 4 hours
   const multiBranchSyncJob = cron.schedule('0 */4 * * *', async () => {
-    console.log('🔄 Running multi-branch sync automation...');
+    logger.info('🔄 Running multi-branch sync automation...');
     try {
       const result = await syncMultiBranchData();
-      console.log('✅ Multi-branch sync:', result.message);
+      logger.info('✅ Multi-branch sync:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error('❌ Multi-branch sync error:', error.message);
+      logger.error('❌ Multi-branch sync error:' + error.message);
     }
   }, {
     timezone: 'UTC',
@@ -404,12 +405,12 @@ export function initializeCronJobs() {
 
   // 27. Suspicious Activity - Every 15 minutes
   const suspiciousActivityJob = cron.schedule('*/15 * * * *', async () => {
-    console.log('🚨 Running suspicious activity detection automation...');
+    logger.info('🚨 Running suspicious activity detection automation...');
     try {
       const result = await detectSuspiciousActivity();
-      console.log('✅ Suspicious activity detection:', result.message);
+      logger.info('✅ Suspicious activity detection:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error('❌ Suspicious activity detection error:', error.message);
+      logger.error('❌ Suspicious activity detection error:' + error.message);
     }
   }, {
     timezone: 'UTC',
@@ -417,12 +418,12 @@ export function initializeCronJobs() {
 
   // 28. Sales Trend Analysis (Daily) - Daily at 9 AM
   const salesTrendDailyJob = cron.schedule('0 9 * * *', async () => {
-    console.log('📈 Running daily sales trend analysis automation...');
+    logger.info('📈 Running daily sales trend analysis automation...');
     try {
       const result = await analyzeSalesTrends({ period: 'daily', comparePeriods: true });
-      console.log('✅ Daily sales trend analysis:', result.message);
+      logger.info('✅ Daily sales trend analysis:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error('❌ Daily sales trend analysis error:', error.message);
+      logger.error('❌ Daily sales trend analysis error:' + error.message);
     }
   }, {
     timezone: 'UTC',
@@ -430,12 +431,12 @@ export function initializeCronJobs() {
 
   // 29. Sales Trend Analysis (Weekly) - Weekly on Monday at 10 AM
   const salesTrendWeeklyJob = cron.schedule('0 10 * * 1', async () => {
-    console.log('📈 Running weekly sales trend analysis automation...');
+    logger.info('📈 Running weekly sales trend analysis automation...');
     try {
       const result = await analyzeSalesTrends({ period: 'weekly', comparePeriods: true });
-      console.log('✅ Weekly sales trend analysis:', result.message);
+      logger.info('✅ Weekly sales trend analysis:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error('❌ Weekly sales trend analysis error:', error.message);
+      logger.error('❌ Weekly sales trend analysis error:' + error.message);
     }
   }, {
     timezone: 'UTC',
@@ -443,12 +444,12 @@ export function initializeCronJobs() {
 
   // 30. Sales Trend Analysis (Monthly) - Monthly on 1st at 11 AM
   const salesTrendMonthlyJob = cron.schedule('0 11 1 * *', async () => {
-    console.log('📈 Running monthly sales trend analysis automation...');
+    logger.info('📈 Running monthly sales trend analysis automation...');
     try {
       const result = await analyzeSalesTrends({ period: 'monthly', comparePeriods: true });
-      console.log('✅ Monthly sales trend analysis:', result.message);
+      logger.info('✅ Monthly sales trend analysis:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error('❌ Monthly sales trend analysis error:', error.message);
+      logger.error('❌ Monthly sales trend analysis error:' + error.message);
     }
   }, {
     timezone: 'UTC',
@@ -492,9 +493,9 @@ export function initializeCronJobs() {
   const cronEnabled = process.env.ENABLE_CRON_JOBS === 'true';
   if (cronEnabled) {
     cronJobs.forEach(job => job.start());
-    console.log(`✅ Started ${cronJobs.length} cron jobs`);
+    logger.info(`✅ Started ${cronJobs.length} cron jobs`);
   } else {
-    console.log('⚠️  Cron jobs disabled (set ENABLE_CRON_JOBS=true to enable)');
+    logger.info('⚠️  Cron jobs disabled (set ENABLE_CRON_JOBS=true to enable)');
   }
 }
 
@@ -504,7 +505,7 @@ export function initializeCronJobs() {
 export function stopCronJobs() {
   cronJobs.forEach(job => job.stop());
   cronJobs = [];
-  console.log('🛑 Stopped all cron jobs');
+  logger.info('🛑 Stopped all cron jobs');
 }
 
 /**

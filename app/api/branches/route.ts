@@ -6,6 +6,7 @@ import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkSubscriptionLimit, checkFeatureAccess, SubscriptionService } from '@/lib/subscription';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -32,7 +33,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ success: true, data: branches });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error fetching branches:', error);
+    logger.error('Error fetching branches:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -103,7 +104,7 @@ export async function POST(request: NextRequest) {
         branches: currentBranchCount + 1
       });
     } catch (usageError) {
-      console.error('Failed to update subscription usage:', usageError);
+      logger.error('Failed to update subscription usage:', usageError);
       // Don't fail the request if usage update fails
     }
 
@@ -116,7 +117,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    console.error('Error creating branch:', error);
+    logger.error('Error creating branch:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 400 });
   }
 }

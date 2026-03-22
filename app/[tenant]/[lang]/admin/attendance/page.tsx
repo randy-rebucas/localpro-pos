@@ -5,7 +5,7 @@ import Navbar from '@/components/Navbar';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
-import { arrayToCSV, downloadCSV, downloadExcel, downloadPDF } from '@/lib/export';
+// Export libs loaded on demand — see exportData()
 import dynamic from 'next/dynamic';
 
 // Dynamically import charts to avoid SSR issues
@@ -152,7 +152,7 @@ export default function AttendancePage() {
     return attendances.reduce((total, att) => total + (att.totalHours || 0), 0);
   };
 
-  const handleExport = (format: 'csv' | 'excel' | 'pdf' = 'csv') => {
+  const handleExport = async (format: 'csv' | 'excel' | 'pdf' = 'csv') => {
     const headers = [
       'Employee',
       'Clock In',
@@ -187,13 +187,14 @@ export default function AttendancePage() {
 
     const baseFilename = `attendance_export_${startDate || 'all'}_to_${endDate || 'today'}`;
     
+    const { arrayToCSV, downloadCSV, downloadExcel, downloadPDF } = await import('@/lib/export');
     if (format === 'csv') {
       const csv = arrayToCSV(exportData, headers);
       downloadCSV(csv, `${baseFilename}.csv`);
     } else if (format === 'excel') {
-      downloadExcel(exportData, headers, baseFilename);
+      await downloadExcel(exportData, headers, baseFilename);
     } else if (format === 'pdf') {
-      downloadPDF(exportData, headers, baseFilename, dict.admin?.attendance || 'Attendance Records');
+      await downloadPDF(exportData, headers, baseFilename, dict.admin?.attendance || 'Attendance Records');
     }
   };
 

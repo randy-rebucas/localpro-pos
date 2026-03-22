@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Tenant from '@/models/Tenant';
 import { getCurrentUser } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 
 export async function GET(
   request: NextRequest,
@@ -31,7 +32,7 @@ export async function GET(
       data: tenant.settings.taxRules || [],
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error fetching tax rules:', error);
+    logger.error('Error fetching tax rules:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -94,7 +95,7 @@ export async function POST(
       data: newRule,
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error creating tax rule:', error);
+    logger.error('Error creating tax rule:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -150,7 +151,7 @@ export async function PUT(
       data: taxRules[ruleIndex],
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error updating tax rule:', error);
+    logger.error('Error updating tax rule:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -197,7 +198,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error deleting tax rule:', error);
+    logger.error('Error deleting tax rule:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

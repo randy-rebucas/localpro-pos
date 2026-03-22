@@ -5,6 +5,7 @@ import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { logger } from '@/lib/logger';
 
 export async function GET(
   request: NextRequest,
@@ -79,7 +80,7 @@ export async function PUT(
 
     return NextResponse.json({ success: true, data: expense });
   } catch (error: unknown) {
-    console.error('Error updating expense:', error);
+    logger.error('Error updating expense:', error);
     return NextResponse.json({ success: false, error: (error as Error).message }, { status: 400 });
   }
 }
@@ -118,7 +119,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true, message: t('validation.expenseDeleted', 'Expense deleted successfully') });
   } catch (error: unknown) {
-    console.error('Error deleting expense:', error);
+    logger.error('Error deleting expense:', error);
     return NextResponse.json({ success: false, error: (error as Error).message }, { status: 500 });
   }
 }

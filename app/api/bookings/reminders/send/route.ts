@@ -6,6 +6,7 @@ import { requireRole, getCurrentUser } from '@/lib/auth';
 import { sendBookingReminder } from '@/lib/notifications';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { getTenantSettingsById } from '@/lib/tenant';
+import { logger } from '@/lib/logger';
 
 /**
  * POST - Send reminders for upcoming bookings
@@ -104,7 +105,7 @@ export async function POST(request: NextRequest) {
       results,
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Send reminders error:', error);
+    logger.error('Send reminders error:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
       { success: false, error: error.message || t('validation.failedToSendReminders', 'Failed to send reminders') },

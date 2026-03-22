@@ -15,6 +15,7 @@ import StockMovement from '@/models/StockMovement';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { checkSubscriptionLimit, SubscriptionService } from '@/lib/subscription';
+import { logger } from '@/lib/logger';
 import { calculateTax } from '@/lib/tax-calculation';
 
 interface VariationInput {
@@ -646,7 +647,7 @@ export async function POST(request: NextRequest) {
         transactions: currentTransactionCount
       });
     } catch (usageError) {
-      console.error('Failed to update subscription usage:', usageError);
+      logger.error('Failed to update subscription usage:', usageError);
       // Don't fail the request if usage update fails
     }
 

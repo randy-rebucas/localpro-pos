@@ -6,6 +6,7 @@ import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { sendEmail } from '@/lib/notifications'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { logger } from '@/lib/logger';
 
 /**
  * Get attendance notifications - late arrivals, missing clock-outs
@@ -122,7 +123,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error fetching attendance notifications:', error);
+    logger.error('Error fetching attendance notifications:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -206,7 +207,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error sending attendance notifications:', error);
+    logger.error('Error sending attendance notifications:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

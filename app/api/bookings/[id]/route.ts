@@ -8,6 +8,7 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { sendBookingConfirmation, sendBookingCancellation, sendBookingReminder } from '@/lib/notifications'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { getTenantSettingsById } from '@/lib/tenant';
+import { logger } from '@/lib/logger';
 
 /**
  * GET - Get a single booking by ID
@@ -49,7 +50,7 @@ export async function GET(
 
     return NextResponse.json({ success: true, data: booking });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Get booking error:', error);
+    logger.error('Get booking error:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
       { success: false, error: error.message || t('validation.failedToFetchBooking', 'Failed to fetch booking') },
@@ -222,7 +223,7 @@ export async function PUT(
           }, tenantSettings || undefined);
         }
       } catch (notificationError) {
-        console.error('Failed to send booking notification:', notificationError);
+        logger.error('Failed to send booking notification:', notificationError);
         // Don't fail the update if notification fails
       }
     }
@@ -237,7 +238,7 @@ export async function PUT(
 
     return NextResponse.json({ success: true, data: updatedBooking });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Update booking error:', error);
+    logger.error('Update booking error:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
       { success: false, error: error.message || t('validation.failedToUpdateBooking', 'Failed to update booking') },
@@ -299,7 +300,7 @@ export async function DELETE(
           bookingId: id,
         });
       } catch (notificationError) {
-        console.error('Failed to send cancellation notification:', notificationError);
+        logger.error('Failed to send cancellation notification:', notificationError);
       }
     }
 
@@ -317,7 +318,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true, message: t('validation.bookingDeleted', 'Booking deleted successfully') });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Delete booking error:', error);
+    logger.error('Delete booking error:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
       { success: false, error: error.message || t('validation.failedToDeleteBooking', 'Failed to delete booking') },

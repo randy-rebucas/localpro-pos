@@ -8,15 +8,21 @@ import ServiceWorkerRegistration from "@/components/ServiceWorkerRegistration";
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
+  display: "swap",
 });
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "1POS - Point of Sale",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"),
+  title: {
+    default: "1POS - Point of Sale",
+    template: "%s | 1POS",
+  },
   description: "1POS: BIR-ready point of sale system for Philippine businesses",
   appleWebApp: {
     capable: true,
@@ -26,12 +32,21 @@ export const metadata: Metadata = {
   formatDetection: {
     telephone: false,
   },
+  icons: {
+    icon: "/icon-192x192.png",
+    apple: "/icon-192x192.png",
+  },
+  robots: {
+    index: false,
+    follow: false,
+  },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 5,
+  themeColor: "#2563eb",
 };
 
 export default function RootLayout({
@@ -39,20 +54,21 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Don't set lang here - let the nested [lang] layout handle it
-  // Using suppressHydrationWarning to prevent mismatch during client navigation
-          return (
-            <html suppressHydrationWarning>
-              <body
-                className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-                suppressHydrationWarning
-              >
-                <AuthProvider>
-                  <ServiceWorkerRegistration />
-                  <ToastProvider />
-                  {children}
-                </AuthProvider>
-              </body>
-            </html>
-          );
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <link rel="dns-prefetch" href="https://api-m.paypal.com" />
+      </head>
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        suppressHydrationWarning
+      >
+        <AuthProvider>
+          <ServiceWorkerRegistration />
+          <ToastProvider />
+          {children}
+        </AuthProvider>
+      </body>
+    </html>
+  );
 }

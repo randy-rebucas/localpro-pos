@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyCronAuth } from '@/lib/automation-auth';
 import { applyDynamicPricing } from '@/lib/automations';
+import { logger } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,7 +18,7 @@ export async function POST(request: NextRequest) {
     const result = await applyDynamicPricing({ tenantId, enableTimeBased, enableDemandBased, enableStockBased });
     return NextResponse.json(result);
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Dynamic pricing error:', error);
+    logger.error('Dynamic pricing error:', error);
     return NextResponse.json({
       success: false,
       message: `Error: ${error.message}`,
@@ -43,7 +44,7 @@ export async function GET(request: NextRequest) {
     const result = await applyDynamicPricing({ tenantId, enableTimeBased, enableDemandBased, enableStockBased });
     return NextResponse.json(result);
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Dynamic pricing error:', error);
+    logger.error('Dynamic pricing error:', error);
     return NextResponse.json({
       success: false,
       message: `Error: ${error.message}`,

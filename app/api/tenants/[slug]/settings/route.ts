@@ -6,6 +6,7 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { applyBusinessTypeDefaults } from '@/lib/business-types';
+import { logger } from '@/lib/logger';
 
 export async function GET(
   request: NextRequest,
@@ -27,7 +28,7 @@ export async function GET(
 
     return NextResponse.json({ success: true, data: tenant.settings });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error fetching tenant settings:', error);
+    logger.error('Error fetching tenant settings:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json({ success: false, error: error.message || t('validation.failedToFetchSettings', 'Failed to fetch settings') }, { status: 500 });
   }
@@ -49,7 +50,7 @@ export async function PUT(
     } catch (authError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       // If auth fails, still allow update but log it (tenant-scoped security)
       // In production, you might want to require auth here
-      console.log('Settings update without authentication for tenant:', slug);
+      logger.info(`Settings update without authentication for tenant: ${slug}`);
     }
     
     const body = await request.json();
@@ -129,7 +130,7 @@ export async function PUT(
 
     return NextResponse.json({ success: true, data: tenant.settings });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error updating tenant settings:', error);
+    logger.error('Error updating tenant settings:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json({ success: false, error: error.message || t('validation.failedToUpdateSettings', 'Failed to update settings') }, { status: 400 });
   }

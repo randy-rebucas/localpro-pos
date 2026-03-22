@@ -5,6 +5,7 @@ import { requireAuth } from '@/lib/auth';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { getTenantSlugFromRequest } from '@/lib/api-tenant';
 import { createSubscriptionPayment } from '@/lib/paypal';
+import { logger } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
@@ -62,7 +63,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error: unknown) {
-    console.error('Error creating PayPal payment:', error);
+    logger.error('Error creating PayPal payment:', error);
     return NextResponse.json(
       { success: false, error: (error as Error).message || 'Failed to create payment' },
       { status: 500 }

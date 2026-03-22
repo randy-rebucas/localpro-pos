@@ -5,6 +5,7 @@ import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import mongoose from 'mongoose';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { logger } from '@/lib/logger';
 
 export async function GET(
   request: NextRequest,
@@ -35,7 +36,7 @@ export async function GET(
 
     return NextResponse.json({ success: true, data: savedCart });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error fetching saved cart:', error);
+    logger.error('Error fetching saved cart:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -69,7 +70,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true, message: t('validation.savedCartDeleted', 'Saved cart deleted successfully') });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error deleting saved cart:', error);
+    logger.error('Error deleting saved cart:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

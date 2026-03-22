@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb';
 import ProductBundle from '@/models/ProductBundle';
 import Transaction from '@/models/Transaction';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { logger } from '@/lib/logger';
 
 /**
  * Get bundle analytics - sales performance metrics
@@ -111,7 +112,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error fetching bundle analytics:', error);
+    logger.error('Error fetching bundle analytics:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

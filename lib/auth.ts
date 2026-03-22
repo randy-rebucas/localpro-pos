@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import connectDB from './mongodb';
 import User from '@/models/User';
 import { isTokenRevoked, isTokenIssuedBeforeRevocation } from '@/lib/token-blacklist';
+import { logger } from '@/lib/logger';
 
 export interface JWTPayload {
   userId: string;
@@ -92,7 +93,7 @@ export async function getCurrentUser(request: NextRequest): Promise<{
 
     return payload;
   } catch (error) {
-    console.error('Error getting current user:', error);
+    logger.error('Error getting current user:', error);
     return null;
   }
 }

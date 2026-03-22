@@ -7,6 +7,7 @@ import { ITenantSettings } from '@/models/Tenant';
 import { formatDate, formatTime } from '@/lib/formatting';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { renderNotificationTemplate, getDefaultTemplate } from '@/lib/notification-templates';
+import { logger } from '@/lib/logger';
 
 export interface NotificationOptions {
   to: string;
@@ -38,7 +39,7 @@ export async function sendEmail(options: NotificationOptions): Promise<boolean> 
 
     // If no provider is configured, log to console (development mode)
     if (emailProvider === 'console' || !process.env.EMAIL_API_KEY) {
-      console.log('📧 Email notification (console mode):', {
+      logger.info('📧 Email notification (console mode):', {
         to: options.to,
         from: fromEmail,
         subject: options.subject,
@@ -120,8 +121,8 @@ export async function sendEmail(options: NotificationOptions): Promise<boolean> 
     }
 
     // Unknown provider
-    console.warn(`Unknown email provider: ${emailProvider}, falling back to console logging`);
-    console.log('📧 Email notification:', {
+    logger.warn(`Unknown email provider: ${emailProvider}, falling back to console logging`);
+    logger.info('📧 Email notification:', {
       to: options.to,
       from: fromEmail,
       subject: options.subject,
@@ -129,7 +130,7 @@ export async function sendEmail(options: NotificationOptions): Promise<boolean> 
     });
     return true;
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Failed to send email:', error);
+    logger.error('Failed to send email:', error);
     return false;
   }
 }
@@ -145,7 +146,7 @@ export async function sendSMS(options: NotificationOptions): Promise<boolean> {
 
     // If no provider is configured, log to console (development mode)
     if (smsProvider === 'console' || (!process.env.SMS_API_KEY && !process.env.TWILIO_ACCOUNT_SID)) {
-      console.log('📱 SMS notification (console mode):', {
+      logger.info('📱 SMS notification (console mode):', {
         to: options.to,
         from: fromPhone || 'N/A',
         message: options.message.substring(0, 160) + (options.message.length > 160 ? '...' : ''),
@@ -204,15 +205,15 @@ export async function sendSMS(options: NotificationOptions): Promise<boolean> {
     }
 
     // Unknown provider
-    console.warn(`Unknown SMS provider: ${smsProvider}, falling back to console logging`);
-    console.log('📱 SMS notification:', {
+    logger.warn(`Unknown SMS provider: ${smsProvider}, falling back to console logging`);
+    logger.info('📱 SMS notification:', {
       to: options.to,
       from: fromPhone || 'N/A',
       message: options.message.substring(0, 160) + (options.message.length > 160 ? '...' : ''),
     });
     return true;
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Failed to send SMS:', error);
+    logger.error('Failed to send SMS:', error);
     return false;
   }
 }
@@ -229,7 +230,7 @@ export async function sendBookingConfirmation(
 
   // Check if notifications are enabled for this tenant
   if (!tenantSettings.emailNotifications && !tenantSettings.smsNotifications) {
-    console.log('Notifications disabled for tenant, skipping booking confirmation');
+    logger.info('Notifications disabled for tenant, skipping booking confirmation');
     return results;
   }
 
@@ -346,7 +347,7 @@ export async function sendBookingReminder(
 
   // Check if notifications are enabled for this tenant
   if (!tenantSettings.emailNotifications && !tenantSettings.smsNotifications) {
-    console.log('Notifications disabled for tenant, skipping booking reminder');
+    logger.info('Notifications disabled for tenant, skipping booking reminder');
     return results;
   }
 
@@ -468,7 +469,7 @@ export async function sendAttendanceNotification(
 
     // Check if email notifications are enabled for this tenant
     if (!tenantSettings.emailNotifications) {
-      console.log('Email notifications disabled for tenant, skipping attendance notification');
+      logger.info('Email notifications disabled for tenant, skipping attendance notification');
       return false;
     }
 
@@ -522,7 +523,7 @@ Attendance Management System
       type: 'email',
     });
   } catch (error) {
-    console.error('Failed to send attendance notification:', error);
+    logger.error('Failed to send attendance notification:', error);
     return false;
   }
 }
@@ -539,7 +540,7 @@ export async function sendBookingCancellation(
 
   // Check if notifications are enabled for this tenant
   if (!tenantSettings.emailNotifications && !tenantSettings.smsNotifications) {
-    console.log('Notifications disabled for tenant, skipping booking cancellation');
+    logger.info('Notifications disabled for tenant, skipping booking cancellation');
     return results;
   }
 

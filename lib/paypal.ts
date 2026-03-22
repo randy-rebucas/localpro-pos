@@ -1,4 +1,5 @@
 import { Client, Environment, OrdersController, CheckoutPaymentIntent, OrderApplicationContextUserAction } from '@paypal/paypal-server-sdk';
+import { logger } from '@/lib/logger';
 
 // PayPal configuration
 // Uses PAYPAL_MODE ("sandbox" | "live") — consistent with .env convention
@@ -54,7 +55,7 @@ export async function createSubscriptionPayment(planId: string, amount: number, 
     });
     return response.result;
   } catch (error) {
-    console.error('Error creating PayPal payment:', error);
+    logger.error('Error creating PayPal payment:', error);
     throw error;
   }
 }
@@ -68,7 +69,7 @@ export async function capturePayment(orderId: string) {
     });
     return response.result;
   } catch (error) {
-    console.error('Error capturing PayPal payment:', error);
+    logger.error('Error capturing PayPal payment:', error);
     throw error;
   }
 }
@@ -116,7 +117,7 @@ export async function verifyWebhookSignature(
     const result = await verifyRes.json();
     return result.verification_status === 'SUCCESS';
   } catch (error) {
-    console.error('PayPal webhook verification failed:', error);
+    logger.error('PayPal webhook verification failed:', error);
     return false;
   }
 }

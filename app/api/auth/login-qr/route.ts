@@ -4,6 +4,7 @@ import User from '@/models/User';
 import { generateToken } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { logger } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   let t: (key: string, fallback: string) => string;
@@ -95,7 +96,7 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('QR login error:', error);
+    logger.error('QR login error:', error);
     const errorMessage = error.message || 'Login failed';
     return NextResponse.json(
       { success: false, error: errorMessage },

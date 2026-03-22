@@ -6,6 +6,7 @@ import { getVATReport } from '@/lib/analytics';
 import Tenant from '@/models/Tenant';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkFeatureAccess } from '@/lib/subscription';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ success: true, data: report });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error fetching VAT report:', error);
+    logger.error('Error fetching VAT report:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

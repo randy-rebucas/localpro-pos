@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb';
 import Subscription from '@/models/Subscription';
 import { requireAuth } from '@/lib/auth';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -50,7 +51,7 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error fetching billing history:', error);
+    logger.error('Error fetching billing history:', error);
     return NextResponse.json(
       { success: false, error: error.message },
       { status: 500 }

@@ -5,6 +5,7 @@ import SubscriptionPlan from '@/models/SubscriptionPlan';
 import Tenant from '@/models/Tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { requireAuth } from '@/lib/auth';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { logger } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
@@ -62,7 +63,7 @@ export async function POST(request: NextRequest) {
 
     // Create upgrade request (in a real app, this might send an email or create a ticket)
     // For now, we'll just log it and return success
-    console.log('Upgrade Request:', {
+    logger.info('Upgrade Request:', {
       tenantId,
       userId: user.userId,
       currentPlan: currentPlan,
@@ -88,7 +89,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error requesting upgrade:', error);
+    logger.error('Error requesting upgrade:', error);
     return NextResponse.json(
       { success: false, error: error.message },
       { status: 500 }

@@ -13,6 +13,7 @@ import Attendance from '@/models/Attendance';
 import CashDrawerSession from '@/models/CashDrawerSession';
 import Transaction from '@/models/Transaction';
 import { getLowStockProducts } from '@/lib/stock';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -92,7 +93,7 @@ export async function GET(request: NextRequest) {
       timestamp: now.toISOString(),
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Automation status error:', error);
+    logger.error('Automation status error:', error);
     return NextResponse.json(
       {
         success: false,

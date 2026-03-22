@@ -4,6 +4,7 @@ import User from '@/models/User';
 import Tenant from '@/models/Tenant';
 import { validateEmail, validatePassword } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { logger } from '@/lib/logger';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { generateToken } from '@/lib/auth';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
@@ -125,7 +126,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    console.error('Register error:', error);
+    logger.error('Register error:', error);
     return NextResponse.json({ success: false, error: 'Registration failed. Please try again.' }, { status: 400 });
   }
 }

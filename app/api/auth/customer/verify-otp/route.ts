@@ -5,6 +5,7 @@ import Customer from '@/models/Customer';
 import { generateCustomerToken } from '@/lib/auth-customer';
 import { getTenantIdFromRequest } from '@/lib/api-tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { logger } from '@/lib/logger';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
 /**
@@ -150,7 +151,7 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Verify OTP error:', error);
+    logger.error('Verify OTP error:', error);
     return NextResponse.json(
       { success: false, error: error.message || 'Failed to verify OTP' },
       { status: 500 }
