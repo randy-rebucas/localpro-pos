@@ -1,9 +1,9 @@
 {
   "info": {
     "_postman_id": "localpro-pos-client-api-2026-full",
-    "name": "LocalPro POS Client API (Full)",
+    "name": "1POS Client API (Full)",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Comprehensive Postman collection for LocalPro POS client-side API endpoints, including authentication, booking, profile, address management, and password reset."
+    "description": "Comprehensive Postman collection for 1POS client-side API endpoints, including authentication, booking, profile, address management, and password reset."
   },
   "item": [
     {

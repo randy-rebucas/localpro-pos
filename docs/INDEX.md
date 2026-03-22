@@ -1,6 +1,6 @@
 # Documentation Index
 
-Complete index of all LocalPro POS documentation.
+Complete index of all 1POS documentation.
 
 ## 📱 Mobile API Documentation
 

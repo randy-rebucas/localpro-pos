@@ -36,8 +36,9 @@ export default function AttendanceClock() {
       const res = await fetch('/api/attendance/current', {
         credentials: 'include',
       });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      
+
       if (data.success) {
         setSession(data.data);
         if (data.data) {
@@ -84,9 +85,9 @@ export default function AttendanceClock() {
           notes: notes.trim() || undefined,
         }),
       });
-
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      
+
       if (data.success) {
         setSession(data.data);
         setNotes('');
@@ -115,7 +116,7 @@ export default function AttendanceClock() {
           notes: notes.trim() || undefined,
         }),
       });
-
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       
       if (data.success) {

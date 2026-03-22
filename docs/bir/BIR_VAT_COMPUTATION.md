@@ -1,4 +1,4 @@
-# LocalPro POS - VAT Computation Logic
+# 1POS - VAT Computation Logic
 
 ## BIR Compliance Documentation | Tax Calculation & Reporting
 
@@ -360,4 +360,4 @@ TOTAL SALES:      ₱ 1,500,000.00
 
 *Document Version: 1.0*
 *Generated: 2026-03-21*
-*System: LocalPro POS*
+*System: 1POS*

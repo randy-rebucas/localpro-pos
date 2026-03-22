@@ -1,6 +1,6 @@
 # Mobile API Reference
 
-Complete reference documentation for all LocalPro POS API endpoints accessible from mobile applications.
+Complete reference documentation for all 1POS API endpoints accessible from mobile applications.
 
 ## Base URL
 

@@ -1,6 +1,6 @@
 # Product Bundles - User Guide
 
-Complete guide to creating and managing product bundles in LocalPro POS.
+Complete guide to creating and managing product bundles in 1POS.
 
 ## Overview
 

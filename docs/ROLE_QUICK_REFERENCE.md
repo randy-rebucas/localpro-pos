@@ -1,4 +1,4 @@
-# LocalPro POS - Role Quick Reference Cards
+# 1POS - Role Quick Reference Cards
 
 Print these cards and hand them to staff based on their assigned role.
 

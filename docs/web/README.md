@@ -1,6 +1,6 @@
 # Web Application Documentation
 
-Complete documentation for the LocalPro POS web application features.
+Complete documentation for the 1POS web application features.
 
 ## 📚 Documentation Structure
 

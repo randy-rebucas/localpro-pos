@@ -1,4 +1,4 @@
-# LocalPro POS - Sample Official Receipt
+# 1POS - Sample Official Receipt
 
 ## BIR Compliance Documentation | Receipt Format & Layout
 
@@ -78,7 +78,7 @@ Transaction ID: 65f2a1b3c4d5e6f7a8b9c0d1
   Thank you for your purchase!
   Visit us again soon.
 
-  Powered by LocalPro POS
+  Powered by 1POS
   www.localpro.com
 
 ================================================
@@ -328,4 +328,4 @@ Audit Trail ID:  65f2a1b3c4d5e6f7a8b9c0d3
 
 *Document Version: 1.0*
 *Generated: 2026-03-21*
-*System: LocalPro POS*
+*System: 1POS*

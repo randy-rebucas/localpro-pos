@@ -1,8 +1,8 @@
-# LocalPro POS - Mobile App Specifications (Expo)
+# 1POS - Mobile App Specifications (Expo)
 
 ## Overview
 
-This document provides complete specifications for developing a client-facing mobile application using **Expo** that integrates with the LocalPro POS system. The mobile app enables customers to book services, order products, manage their bookings, and interact with businesses seamlessly.
+This document provides complete specifications for developing a client-facing mobile application using **Expo** that integrates with the 1POS system. The mobile app enables customers to book services, order products, manage their bookings, and interact with businesses seamlessly.
 
 ---
 
@@ -48,7 +48,7 @@ This document provides complete specifications for developing a client-facing mo
               │ HTTPS/REST API
               │
 ┌─────────────▼─────────────────────────┐
-│      LocalPro POS Backend              │
+│      1POS Backend              │
 │      (Next.js API Routes)              │
 └─────────────────────────────────────────┘
 ```
@@ -1375,7 +1375,7 @@ The following endpoints need to be created for customer-facing functionality:
 
 ## Conclusion
 
-This specification provides a comprehensive foundation for building a client-facing mobile application using Expo that integrates seamlessly with the LocalPro POS system. The app will enable customers to book services, order products, and manage their interactions with businesses efficiently.
+This specification provides a comprehensive foundation for building a client-facing mobile application using Expo that integrates seamlessly with the 1POS system. The app will enable customers to book services, order products, and manage their interactions with businesses efficiently.
 
 For implementation, follow the phases outlined and ensure proper testing at each stage. The modular architecture allows for iterative development and easy maintenance.
 
@@ -1383,4 +1383,4 @@ For implementation, follow the phases outlined and ensure proper testing at each
 
 **Last Updated**: 2024
 **Version**: 1.0
-**Author**: LocalPro POS Development Team
+**Author**: 1POS Development Team

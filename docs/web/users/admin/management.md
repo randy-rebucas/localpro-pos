@@ -1,6 +1,6 @@
 # User Management - Admin Guide
 
-Complete administrative guide for managing users, roles, and permissions in LocalPro POS.
+Complete administrative guide for managing users, roles, and permissions in 1POS.
 
 ## Overview
 

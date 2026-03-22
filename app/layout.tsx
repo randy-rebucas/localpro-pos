@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import ToastProvider from "@/components/ToastProvider";
+import ServiceWorkerRegistration from "@/components/ServiceWorkerRegistration";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -15,8 +16,16 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "1pos - Point of Sale",
-  description: "1pos: Enterprise-grade POS system with 100+ features for modern businesses",
+  title: "1POS - Point of Sale",
+  description: "1POS: BIR-ready point of sale system for Philippine businesses",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "1POS",
+  },
+  formatDetection: {
+    telephone: false,
+  },
 };
 
 export const viewport: Viewport = {
@@ -39,6 +48,7 @@ export default function RootLayout({
                 suppressHydrationWarning
               >
                 <AuthProvider>
+                  <ServiceWorkerRegistration />
                   <ToastProvider />
                   {children}
                 </AuthProvider>

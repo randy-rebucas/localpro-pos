@@ -135,7 +135,8 @@ export class SubscriptionService {
       return { allowed: false, limit: 0, upgradeRequired: true };
     }
 
-    if (status.isExpired || status.isTrialExpired) {
+    // Only block if the subscription itself is expired, or if still in trial and trial expired
+    if (status.isExpired || (status.isTrial && status.isTrialExpired)) {
       return { allowed: false, limit: 0, upgradeRequired: true };
     }
 
@@ -176,7 +177,8 @@ export class SubscriptionService {
       return false;
     }
 
-    if (status.isExpired || status.isTrialExpired) {
+    // Only block if the subscription itself is expired, or if still in trial and trial expired
+    if (status.isExpired || (status.isTrial && status.isTrialExpired)) {
       return false;
     }
 

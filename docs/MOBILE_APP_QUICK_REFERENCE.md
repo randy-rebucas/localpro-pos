@@ -1,6 +1,6 @@
 # Mobile App Quick Reference Guide
 
-A quick reference guide for developers building the LocalPro POS mobile app with Expo.
+A quick reference guide for developers building the 1POS mobile app with Expo.
 
 ---
 

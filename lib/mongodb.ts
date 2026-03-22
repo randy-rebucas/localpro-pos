@@ -1,5 +1,9 @@
 import mongoose from 'mongoose';
 import { logger } from '@/lib/logger';
+import { validateConfig } from '@/lib/config';
+
+// Validate required env vars on first import
+validateConfig();
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/pos-system';
 

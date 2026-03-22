@@ -1,8 +1,8 @@
-# LocalPro POS — The All-in-One Cloud Point of Sale System for Modern Businesses
+# 1POS — The All-in-One Cloud Point of Sale System for Modern Businesses
 
-Are you running a retail shop, restaurant, salon, or service-based business? Meet **LocalPro POS** — a powerful, cloud-based Point of Sale system built to help you manage everything from sales to scheduling, inventory to invoicing — all from one platform.
+Are you running a retail shop, restaurant, salon, or service-based business? Meet **1POS** — a powerful, cloud-based Point of Sale system built to help you manage everything from sales to scheduling, inventory to invoicing — all from one platform.
 
-Whether you're a solo entrepreneur or managing multiple branches, LocalPro POS scales with your business.
+Whether you're a solo entrepreneur or managing multiple branches, 1POS scales with your business.
 
 ---
 
@@ -197,7 +197,7 @@ Whether you're a solo entrepreneur or managing multiple branches, LocalPro POS s
 
 ---
 
-**LocalPro POS** — Everything your business needs. One platform. Any device.
+**1POS** — Everything your business needs. One platform. Any device.
 
 Start your **FREE 30-day trial** today.
 

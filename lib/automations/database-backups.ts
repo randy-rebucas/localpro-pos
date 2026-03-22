@@ -6,8 +6,13 @@
 import connectDB from '@/lib/mongodb';
 import mongoose from 'mongoose';
 import { AutomationResult } from './types';
-import * as fs from 'fs/promises';
-import * as path from 'path';
+
+// Lazy-load Node.js modules to prevent Turbopack from tracing the entire project.
+// These are only used at runtime when backups are triggered, not at bundle time.
+/* turbopackIgnore: true */
+const _importFs = () => import('fs/promises');
+/* turbopackIgnore: true */
+const _importPath = () => import('path');
 
 export interface DatabaseBackupOptions {
   tenantId?: string; // If specified, backup only this tenant's data
@@ -32,13 +37,13 @@ export async function createDatabaseBackup(
   };
 
   try {
-    // For MongoDB, we'll use mongodump if available, or export collections
-    // This is a simplified version - in production, use mongodump or MongoDB Atlas backup API
-    
+    const fs = await _importFs();
+    const path = await _importPath();
+
     const backupDir = options.backupPath || path.join(process.cwd(), 'backups');
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const backupFileName = `backup-${timestamp}.json`;
-    const backupPath = path.join(backupDir, backupFileName);
+    const backupFilePath = path.join(backupDir, backupFileName);
 
     // Ensure backup directory exists
     try {
@@ -83,19 +88,19 @@ export async function createDatabaseBackup(
     }
 
     // Write backup to file
-    await fs.writeFile(backupPath, JSON.stringify(backupData, null, 2), 'utf-8');
+    await fs.writeFile(backupFilePath, JSON.stringify(backupData, null, 2), 'utf-8');
 
     // Rotate old backups (keep last 7)
     try {
       const files = await fs.readdir(backupDir);
-      const backupFiles = files
+      const oldBackups = files
         .filter(f => f.startsWith('backup-') && f.endsWith('.json'))
         .sort()
         .reverse();
-      
+
       // Keep only last 7 backups
-      if (backupFiles.length > 7) {
-        for (const file of backupFiles.slice(7)) {
+      if (oldBackups.length > 7) {
+        for (const file of oldBackups.slice(7)) {
           await fs.unlink(path.join(backupDir, file)).catch(() => {
             // Ignore errors
           });
@@ -111,7 +116,7 @@ export async function createDatabaseBackup(
     // Upload to S3-compatible cloud storage if enabled
     if (options.uploadToCloud) {
       try {
-        await uploadBackupToS3(backupPath, backupFileName, options.tenantId);
+        await uploadBackupToS3(backupFilePath, backupFileName, options.tenantId);
         results.message += ` | Uploaded to cloud storage`;
       } catch (uploadError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         results.errors?.push(`Cloud upload failed: ${uploadError.message}`);
@@ -157,6 +162,7 @@ async function uploadBackupToS3(
     ...(endpoint ? { endpoint, forcePathStyle: true } : {}),
   });
 
+  const fs = await _importFs();
   const fileContent = await fs.readFile(filePath);
   const key = tenantId
     ? `backups/${tenantId}/${fileName}`

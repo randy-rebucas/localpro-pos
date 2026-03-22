@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * LocalPro POS — Sample Data Seeder
+ * 1POS — Sample Data Seeder
  *
  * Seeds realistic sample data for every business type.
  * Creates a dedicated sample tenant for each type, or targets an existing one.
@@ -696,7 +696,7 @@ async function seedTenant(cfg: SeedTenantConfig, existingTenantId?: mongoose.Typ
 // ════════════════════════════════════════════════════════════════════════════
 async function main() {
   console.log(`\n${c.bold}${c.cyan}╔══════════════════════════════════════════╗`);
-  console.log(`║   LocalPro POS — Sample Data Seeder     ║`);
+  console.log(`║   1POS — Sample Data Seeder     ║`);
   console.log(`╚══════════════════════════════════════════╝${c.reset}`);
 
   await mongoose.connect(MONGODB_URI);

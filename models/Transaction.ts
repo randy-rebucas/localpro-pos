@@ -151,6 +151,7 @@ TransactionSchema.index({ tenantId: 1, createdAt: -1 });
 TransactionSchema.index({ tenantId: 1, branchId: 1, createdAt: -1 });
 TransactionSchema.index({ tenantId: 1, receiptNumber: 1 }, { unique: true, sparse: true });
 TransactionSchema.index({ tenantId: 1, status: 1 });
+TransactionSchema.index({ tenantId: 1, isActive: 1, createdAt: -1 });
 
 const Transaction: Model<ITransaction> = mongoose.models.Transaction || mongoose.model<ITransaction>('Transaction', TransactionSchema);
 

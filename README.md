@@ -1,4 +1,4 @@
-# LocalPro POS - Enterprise Point of Sale System
+# 1POS - Enterprise Point of Sale System
 
 A comprehensive, enterprise-grade Point of Sale (POS) system built with Next.js 16, MongoDB, Mongoose, and Tailwind CSS. Features multi-tenant architecture, real-time inventory management, advanced reporting, and extensive customization options.
 

@@ -1,7 +1,7 @@
-# Copilot Instructions for LocalPro POS
+# Copilot Instructions for 1POS
 
 ## Project Overview
-- **LocalPro POS** is a multi-tenant, enterprise-grade Point of Sale system with both web and mobile clients.
+- **1POS** is a multi-tenant, enterprise-grade Point of Sale system with both web and mobile clients.
 - The codebase is organized by feature (products, transactions, inventory, etc.) and platform (web, mobile).
 - Documentation is comprehensive and feature-based: see `docs/README.md`, `docs/INDEX.md`, and `README.md` for navigation.
 

@@ -1,4 +1,4 @@
-# LocalPro POS - Audit Trail Documentation
+# 1POS - Audit Trail Documentation
 
 ## BIR Compliance Documentation | Complete Audit Logging System
 
@@ -408,4 +408,4 @@ GET /api/audit-logs?entityType=transaction&startDate=2026-03-01&endDate=2026-03-
 
 *Document Version: 1.0*
 *Generated: 2026-03-21*
-*System: LocalPro POS*
+*System: 1POS*

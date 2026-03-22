@@ -48,6 +48,15 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        // Service worker headers — no caching, strict CSP
+        source: '/sw.js',
+        headers: [
+          { key: 'Content-Type', value: 'application/javascript; charset=utf-8' },
+          { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
+          { key: 'Content-Security-Policy', value: "default-src 'self'; script-src 'self'" },
+        ],
+      },
+      {
         // CORS for API routes — explicit origin, never wildcard
         source: '/api/:path*',
         headers: [

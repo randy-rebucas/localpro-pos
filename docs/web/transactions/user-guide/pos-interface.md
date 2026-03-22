@@ -1,6 +1,6 @@
 # POS Interface User Guide
 
-Complete guide to using the Point of Sale (POS) interface in LocalPro POS.
+Complete guide to using the Point of Sale (POS) interface in 1POS.
 
 ## Overview
 

@@ -1,6 +1,6 @@
 # Mobile API Documentation
 
-Complete documentation for integrating LocalPro POS API with mobile applications.
+Complete documentation for integrating 1POS API with mobile applications.
 
 ## 📱 Quick Navigation
 

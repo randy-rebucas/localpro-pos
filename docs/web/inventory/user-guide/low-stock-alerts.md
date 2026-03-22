@@ -1,6 +1,6 @@
 # Low Stock Alerts - User Guide
 
-Complete guide to setting up and managing low stock alerts in LocalPro POS.
+Complete guide to setting up and managing low stock alerts in 1POS.
 
 ## Overview
 

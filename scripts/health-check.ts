@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * LocalPro POS — System Health Check
+ * 1POS — System Health Check
  *
  * Verifies environment, database connectivity, collection integrity,
  * tenant status, and subscription plan seeds.
@@ -293,7 +293,7 @@ async function checkSubscriptions(): Promise<CheckResult[]> {
 // ═══════════════════════════════════════════════════════════════════════════
 async function main() {
   console.log(`\n${c.bold}${c.cyan}╔══════════════════════════════════════════╗`);
-  console.log(`║   LocalPro POS — System Health Check    ║`);
+  console.log(`║   1POS — System Health Check    ║`);
   console.log(`╚══════════════════════════════════════════╝${c.reset}`);
   console.log(`  ${c.grey}${new Date().toISOString()}${c.reset}`);
   if (VERBOSE) console.log(`  ${c.grey}verbose mode on${c.reset}`);

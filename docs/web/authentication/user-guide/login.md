@@ -1,10 +1,10 @@
 # Login Guide
 
-Complete guide to logging in to LocalPro POS using different authentication methods.
+Complete guide to logging in to 1POS using different authentication methods.
 
 ## Overview
 
-LocalPro POS supports three login methods:
+1POS supports three login methods:
 1. **Email/Password** - Standard login
 2. **PIN** - Quick login for cashiers
 3. **QR Code** - Contactless login
@@ -49,7 +49,7 @@ LocalPro POS supports three login methods:
 
 ```
 ┌─────────────────────────────────┐
-│  LocalPro POS                   │
+│  1POS                   │
 │                                 │
 │  Email: [________________]      │
 │  Password: [____________]       │

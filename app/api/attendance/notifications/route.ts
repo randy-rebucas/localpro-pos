@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb';
 import Attendance from '@/models/Attendance';
 import User from '@/models/User'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { requireAuth } from '@/lib/auth';
 import { sendEmail } from '@/lib/notifications'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
@@ -12,6 +13,7 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
+    await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
 
@@ -131,6 +133,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
+    await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
     

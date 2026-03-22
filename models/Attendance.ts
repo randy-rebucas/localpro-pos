@@ -109,6 +109,7 @@ AttendanceSchema.index({ tenantId: 1, clockIn: -1 });
 AttendanceSchema.index({ userId: 1, clockIn: -1 });
 // Index for finding active sessions (clocked in but not out)
 AttendanceSchema.index({ userId: 1, clockOut: 1 }, { partialFilterExpression: { clockOut: null } });
+AttendanceSchema.index({ tenantId: 1, isActive: 1 });
 
 const Attendance: Model<IAttendance> = mongoose.models.Attendance || mongoose.model<IAttendance>('Attendance', AttendanceSchema);
 

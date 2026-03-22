@@ -1,9 +1,9 @@
 {
   "info": {
     "_postman_id": "localpro-pos-client-api-2026",
-    "name": "LocalPro POS Client API",
+    "name": "1POS Client API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Postman collection for LocalPro POS client-side API endpoints."
+    "description": "Postman collection for 1POS client-side API endpoints."
   },
   "item": [
     {
