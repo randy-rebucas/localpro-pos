@@ -1,11 +1,11 @@
-# LocalPro POS - Complete Documentation
+# 1POS - Complete Documentation
 
-Welcome to the complete documentation for LocalPro POS, an enterprise-grade Point of Sale system.
+Welcome to the complete documentation for 1POS, an enterprise-grade Point of Sale system.
 
 ## 📚 Documentation Structure
 
 ### Mobile API Documentation
-Complete guide for integrating LocalPro POS API with mobile applications.
+Complete guide for integrating 1POS API with mobile applications.
 
 - **[Mobile API Overview](./mobile/README.md)** - Start here for mobile integration
 - **[Quick Start](./mobile/quick-start.md)** - Get started in 10 minutes
@@ -45,7 +45,7 @@ Complete guide for integrating LocalPro POS API with mobile applications.
 ---
 
 ### Web Application Documentation
-Complete guide for using and administering the LocalPro POS web application.
+Complete guide for using and administering the 1POS web application.
 
 - **[Web App Overview](./web/README.md)** - Start here for web features
 

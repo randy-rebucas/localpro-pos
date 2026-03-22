@@ -20,12 +20,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ success: false, error: 'Tenant not found or access denied' }, { status: 403 });
     }
     
-    const product = await Product.findOne({ _id: id, tenantId }).lean();
-    
+    const product = await Product.findOne({ _id: id, tenantId, isActive: { $ne: false } }).lean();
+
     if (!product) {
       return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
     }
-    
+
     // Ensure boolean fields are properly set
     const productData = {
       ...product,

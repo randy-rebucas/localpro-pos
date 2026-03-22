@@ -1,6 +1,6 @@
-# LocalPro POS - Mobile App Integration
+# 1POS - Mobile App Integration
 
-This document provides an overview of the mobile app integration for LocalPro POS, including customer authentication via Twilio OTP and all customer-facing API endpoints.
+This document provides an overview of the mobile app integration for 1POS, including customer authentication via Twilio OTP and all customer-facing API endpoints.
 
 ---
 

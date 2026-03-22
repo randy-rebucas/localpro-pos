@@ -119,6 +119,7 @@ export async function getSalesReport(
     tenantId,
     createdAt: { $gte: start, $lte: end },
     status: 'completed',
+    isActive: { $ne: false },
   }).lean();
 
   const totalSales = transactions.reduce((sum, t) => sum + t.total, 0);
@@ -183,6 +184,7 @@ export async function getProductPerformance(
     tenantId,
     createdAt: { $gte: startDate, $lte: endDate },
     status: 'completed',
+    isActive: { $ne: false },
   }).populate('items.product', 'name').lean();
 
   const productMap = new Map<string, {
@@ -241,6 +243,7 @@ export async function getVATReport(
     tenantId,
     createdAt: { $gte: startDate, $lte: endDate },
     status: 'completed',
+    isActive: { $ne: false },
   }).lean();
 
   const vatRate = settings.taxEnabled && settings.taxRate ? settings.taxRate / 100 : 0;
@@ -286,11 +289,13 @@ export async function getProfitLossSummary(
     tenantId,
     createdAt: { $gte: startDate, $lte: endDate },
     status: 'completed',
+    isActive: { $ne: false },
   }).lean();
 
   const expenses = await Expense.find({
     tenantId,
     date: { $gte: startDate, $lte: endDate },
+    isActive: { $ne: false },
   }).lean();
 
   const revenue = {
@@ -357,6 +362,7 @@ export async function getCashDrawerReports(
       paymentMethod: 'cash',
       createdAt: { $gte: session.openingTime, $lte: sessionEnd },
       status: 'completed',
+      isActive: { $ne: false },
     }).lean();
 
     const cashSales = cashTransactions.reduce((sum, t) => sum + t.total, 0);
@@ -366,6 +372,7 @@ export async function getCashDrawerReports(
       tenantId,
       paymentMethod: 'cash',
       date: { $gte: session.openingTime, $lte: sessionEnd },
+      isActive: { $ne: false },
     }).lean();
 
     const cashExpensesTotal = cashExpenses.reduce((sum, e) => sum + e.amount, 0);

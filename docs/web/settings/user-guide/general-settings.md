@@ -1,6 +1,6 @@
 # General Settings - User Guide
 
-Complete guide to configuring general system settings in LocalPro POS.
+Complete guide to configuring general system settings in 1POS.
 
 ## Overview
 

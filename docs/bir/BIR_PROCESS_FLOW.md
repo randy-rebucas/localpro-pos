@@ -1,4 +1,4 @@
-# LocalPro POS - Process Flow
+# 1POS - Process Flow
 
 ## BIR Compliance Documentation | Sales → Receipt → Reporting
 
@@ -414,4 +414,4 @@ Each record captures: `previousStock`, `newStock`, `userId`, `timestamp`, `branc
 
 *Document Version: 1.0*
 *Generated: 2026-03-21*
-*System: LocalPro POS*
+*System: 1POS*

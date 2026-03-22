@@ -1,6 +1,6 @@
 # Managing Categories - User Guide
 
-Complete guide to creating and managing product categories in LocalPro POS.
+Complete guide to creating and managing product categories in 1POS.
 
 ## Overview
 

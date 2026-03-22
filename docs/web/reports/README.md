@@ -1,6 +1,6 @@
 # Reports & Analytics
 
-Complete guide to reports and analytics in LocalPro POS.
+Complete guide to reports and analytics in 1POS.
 
 ## Overview
 

@@ -1,6 +1,6 @@
 # Products Management
 
-Complete guide to managing products in the LocalPro POS web application.
+Complete guide to managing products in the 1POS web application.
 
 ## Overview
 

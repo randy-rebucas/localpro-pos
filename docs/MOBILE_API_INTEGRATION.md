@@ -1,6 +1,6 @@
 # Mobile App API Integration Guide
 
-This guide explains how to integrate the LocalPro POS API endpoints with mobile applications (iOS, Android, React Native, Flutter, etc.).
+This guide explains how to integrate the 1POS API endpoints with mobile applications (iOS, Android, React Native, Flutter, etc.).
 
 ## Table of Contents
 1. [API Base URL](#api-base-url)

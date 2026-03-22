@@ -4,7 +4,7 @@ Complete guide to adding new products to your inventory.
 
 ## Overview
 
-This guide walks you through the process of adding new products to your LocalPro POS system, including basic products, variations, and bundles.
+This guide walks you through the process of adding new products to your 1POS system, including basic products, variations, and bundles.
 
 ## Prerequisites
 

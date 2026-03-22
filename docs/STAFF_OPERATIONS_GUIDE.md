@@ -1,4 +1,4 @@
-# LocalPro POS - Staff Operations Guide
+# 1POS - Staff Operations Guide
 
 This guide covers day-to-day operations for all staff roles. Refer to your specific role section for tasks relevant to you.
 
@@ -498,4 +498,4 @@ The **Sales Journal** tab provides full export capability:
 
 ---
 
-*This guide is for LocalPro POS. For technical/developer documentation, see `/docs/README.md`.*
+*This guide is for 1POS. For technical/developer documentation, see `/docs/README.md`.*

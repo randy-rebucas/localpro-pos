@@ -1,9 +1,10 @@
 /**
  * Sync Service
  * Handles syncing offline transactions when connection is restored
+ * Includes exponential backoff retry for failed syncs
  */
 
-import { getOfflineStorage, OfflineTransaction } from './offline-storage'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import { getOfflineStorage } from './offline-storage';
 
 export interface SyncResult {
   success: boolean;
@@ -11,6 +12,9 @@ export interface SyncResult {
   failed: number;
   errors: Array<{ id: string; error: string }>;
 }
+
+const MAX_RETRIES = 3;
+const BASE_DELAY_MS = 1000;
 
 class SyncService {
   private isSyncing = false;
@@ -35,6 +39,48 @@ class SyncService {
     const errors: Array<{ id: string; error: string }> = [];
 
     for (const transaction of pendingTransactions) {
+      const syncSuccess = await this.syncWithRetry(transaction, tenant, storage);
+      if (syncSuccess) {
+        synced++;
+      } else {
+        failed++;
+        errors.push({ id: transaction.id, error: transaction.syncError || 'Sync failed after retries' });
+      }
+    }
+
+    this.isSyncing = false;
+
+    const result: SyncResult = {
+      success: failed === 0,
+      synced,
+      failed,
+      errors,
+    };
+
+    // Notify listeners
+    this.syncListeners.forEach(listener => listener(result));
+
+    // Register for background sync if there are still failures
+    if (failed > 0 && 'serviceWorker' in navigator) {
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        if ('sync' in registration) {
+          await (registration as any).sync.register('sync-transactions'); // eslint-disable-line @typescript-eslint/no-explicit-any
+        }
+      } catch {
+        // Background sync not supported — rely on online event retry
+      }
+    }
+
+    return result;
+  }
+
+  private async syncWithRetry(
+    transaction: any, // eslint-disable-line @typescript-eslint/no-explicit-any
+    tenant: string,
+    storage: Awaited<ReturnType<typeof getOfflineStorage>>
+  ): Promise<boolean> {
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       try {
         const response = await fetch(`/api/transactions?tenant=${tenant}`, {
           method: 'POST',
@@ -51,37 +97,34 @@ class SyncService {
 
         if (data.success) {
           await storage.markTransactionSynced(transaction.id);
-          synced++;
-        } else {
-          const errorMsg = data.error || 'Unknown error';
-          await storage.markTransactionError(transaction.id, errorMsg);
-          failed++;
-          errors.push({ id: transaction.id, error: errorMsg });
+          return true;
+        }
+
+        // Non-retryable errors (validation failures, etc.)
+        if (response.status >= 400 && response.status < 500) {
+          await storage.markTransactionError(transaction.id, data.error || 'Validation error');
+          return false;
+        }
+
+        // Server error — retry
+        if (attempt < MAX_RETRIES - 1) {
+          await this.delay(BASE_DELAY_MS * Math.pow(2, attempt));
         }
       } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-        const errorMsg = error.message || 'Network error';
-        await storage.markTransactionError(transaction.id, errorMsg);
-        failed++;
-        errors.push({ id: transaction.id, error: errorMsg });
+        if (attempt < MAX_RETRIES - 1) {
+          await this.delay(BASE_DELAY_MS * Math.pow(2, attempt));
+        } else {
+          await storage.markTransactionError(transaction.id, error.message || 'Network error');
+          return false;
+        }
       }
     }
 
-    // Clean up synced transactions (optional - keep for history or delete)
-    // For now, we'll keep them marked as synced
+    return false;
+  }
 
-    this.isSyncing = false;
-
-    const result: SyncResult = {
-      success: failed === 0,
-      synced,
-      failed,
-      errors,
-    };
-
-    // Notify listeners
-    this.syncListeners.forEach(listener => listener(result));
-
-    return result;
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   onSync(listener: (result: SyncResult) => void): () => void {
@@ -98,4 +141,3 @@ class SyncService {
 
 // Singleton instance
 export const syncService = new SyncService();
-

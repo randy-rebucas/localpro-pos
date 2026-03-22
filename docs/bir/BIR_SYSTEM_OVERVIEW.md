@@ -1,4 +1,4 @@
-# LocalPro POS - System Overview
+# 1POS - System Overview
 
 ## BIR Compliance Documentation | System Architecture & Modules
 
@@ -241,4 +241,4 @@ The system operates as a **multi-tenant SaaS platform**. Each tenant (business) 
 
 *Document Version: 1.0*
 *Generated: 2026-03-21*
-*System: LocalPro POS*
+*System: 1POS*

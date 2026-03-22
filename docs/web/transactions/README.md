@@ -4,7 +4,7 @@ Complete guide to the Point of Sale system and transaction management.
 
 ## Overview
 
-The POS system is the core of LocalPro POS, allowing you to process sales, handle payments, and manage transactions.
+The POS system is the core of 1POS, allowing you to process sales, handle payments, and manage transactions.
 
 ## Features
 

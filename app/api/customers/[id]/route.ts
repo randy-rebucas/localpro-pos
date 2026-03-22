@@ -19,8 +19,8 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Tenant not found or access denied' }, { status: 403 });
     }
     
-    const customer = await Customer.findOne({ _id: id, tenantId }).lean();
-    
+    const customer = await Customer.findOne({ _id: id, tenantId, isActive: { $ne: false } }).lean();
+
     if (!customer) {
       return NextResponse.json({ success: false, error: 'Customer not found' }, { status: 404 });
     }

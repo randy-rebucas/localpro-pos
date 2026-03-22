@@ -50,6 +50,11 @@ export const config = {
  * Validate required environment variables
  */
 export function validateConfig(): void {
+  // Skip validation during build phase (NEXT_PHASE is set by Next.js during build)
+  if (process.env.NEXT_PHASE === 'phase-production-build') {
+    return;
+  }
+
   const required = ['MONGODB_URI'];
   if (process.env.NODE_ENV === 'production') {
     required.push('JWT_SECRET', 'ALLOWED_ORIGINS');

@@ -4,7 +4,7 @@
  */
 
 const DB_NAME = 'pos-offline-db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 interface OfflineTransaction {
   id: string;
@@ -19,6 +19,24 @@ interface OfflineTransaction {
   timestamp: number;
   synced: boolean;
   syncError?: string;
+}
+
+interface CachedDiscount {
+  _id: string;
+  code: string;
+  name: string;
+  type: 'percentage' | 'fixed';
+  value: number;
+  maxDiscountAmount?: number;
+  minPurchaseAmount?: number;
+  category?: string;
+  isActive: boolean;
+  startDate?: string;
+  endDate?: string;
+  usageLimit?: number;
+  usageCount?: number;
+  tenant: string;
+  lastUpdated: number;
 }
 
 interface CachedProduct {
@@ -61,6 +79,13 @@ class OfflineStorage {
           const productStore = db.createObjectStore('products', { keyPath: '_id' });
           productStore.createIndex('tenant', 'tenant', { unique: false });
           productStore.createIndex('lastUpdated', 'lastUpdated', { unique: false });
+        }
+
+        // Discounts cache store
+        if (!db.objectStoreNames.contains('discounts')) {
+          const discountStore = db.createObjectStore('discounts', { keyPath: '_id' });
+          discountStore.createIndex('tenant', 'tenant', { unique: false });
+          discountStore.createIndex('code', 'code', { unique: false });
         }
       };
     });
@@ -238,6 +263,56 @@ class OfflineStorage {
       getRequest.onerror = () => reject(getRequest.error);
     });
   }
+
+  // Discount cache methods
+  async cacheDiscounts(discounts: CachedDiscount[], tenant: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const tx = this.getDB().transaction(['discounts'], 'readwrite');
+      const store = tx.objectStore('discounts');
+
+      // Clear old discounts for this tenant
+      const index = store.index('tenant');
+      const clearRequest = index.openKeyCursor(IDBKeyRange.only(tenant));
+
+      clearRequest.onsuccess = (event) => {
+        const cursor = (event.target as IDBRequest).result;
+        if (cursor) {
+          store.delete(cursor.primaryKey);
+          cursor.continue();
+        } else {
+          const now = Date.now();
+          const promises = discounts.map(discount => {
+            const cached: CachedDiscount = { ...discount, tenant, lastUpdated: now };
+            return new Promise<void>((res, rej) => {
+              const req = store.put(cached);
+              req.onsuccess = () => res();
+              req.onerror = () => rej(req.error);
+            });
+          });
+          Promise.all(promises).then(() => resolve()).catch(reject);
+        }
+      };
+      clearRequest.onerror = () => reject(clearRequest.error);
+    });
+  }
+
+  async getCachedDiscountByCode(code: string, tenant: string): Promise<CachedDiscount | null> {
+    return new Promise((resolve, reject) => {
+      const tx = this.getDB().transaction(['discounts'], 'readonly');
+      const store = tx.objectStore('discounts');
+      const index = store.index('tenant');
+      const request = index.getAll(tenant);
+
+      request.onsuccess = () => {
+        const discounts = request.result as CachedDiscount[];
+        const match = discounts.find(d =>
+          d.code === code.toUpperCase() && d.isActive
+        );
+        resolve(match || null);
+      };
+      request.onerror = () => reject(request.error);
+    });
+  }
 }
 
 // Singleton instance
@@ -269,5 +344,5 @@ export async function getOfflineStorage(): Promise<OfflineStorage> {
   return storageInstance;
 }
 
-export type { OfflineTransaction, CachedProduct };
+export type { OfflineTransaction, CachedProduct, CachedDiscount };
 

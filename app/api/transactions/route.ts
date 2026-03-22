@@ -185,19 +185,46 @@ export async function POST(request: NextRequest) {
     const transactionItems: TransactionItemRecord[] = [];
     let subtotal = 0;
 
+    // Batch-load all products and bundles upfront to avoid N+1 queries
+    const productIds = items.filter(i => i.productId && !i.bundleId).map(i => i.productId);
+    const bundleIds = items.filter(i => i.bundleId).map(i => i.bundleId);
+
+    const [productsArray, bundlesArray] = await Promise.all([
+      productIds.length > 0
+        ? Product.find({ _id: { $in: productIds }, tenantId }).lean()
+        : Promise.resolve([]),
+      bundleIds.length > 0
+        ? ProductBundle.find({ _id: { $in: bundleIds }, tenantId, isActive: true }).lean()
+        : Promise.resolve([]),
+    ]);
+
+    const productMap = new Map(productsArray.map(p => [p._id.toString(), p]));
+    const bundleMap = new Map(bundlesArray.map(b => [b._id.toString(), b]));
+
+    // Also batch-load all products referenced by bundles
+    const bundleProductIds = bundlesArray.flatMap(b => b.items.map((bi: any) => bi.productId)); // eslint-disable-line @typescript-eslint/no-explicit-any
+    if (bundleProductIds.length > 0) {
+      const bundleProducts = await Product.find({ _id: { $in: bundleProductIds }, tenantId }).lean();
+      for (const bp of bundleProducts) {
+        if (!productMap.has(bp._id.toString())) {
+          productMap.set(bp._id.toString(), bp);
+        }
+      }
+    }
+
     for (const item of items) {
       const { productId, quantity, variation, bundleId } = item;
 
       // Handle bundles
       if (bundleId) {
-        const bundle = await ProductBundle.findOne({ _id: bundleId, tenantId, isActive: true });
+        const bundle = bundleMap.get(bundleId);
         if (!bundle) {
           return NextResponse.json({ success: false, error: t('validation.bundleNotFound', 'Bundle {bundleId} not found').replace('{bundleId}', bundleId) }, { status: 404 });
         }
 
         // Check stock for all bundle items - but respect allowOutOfStockSales and trackInventory
         for (const bundleItem of bundle.items) {
-          const bundleProduct = await Product.findOne({ _id: bundleItem.productId, tenantId });
+          const bundleProduct = productMap.get(bundleItem.productId.toString());
           if (!bundleProduct) {
             continue; // Skip if product not found (shouldn't happen, but safety check)
           }
@@ -246,7 +273,7 @@ export async function POST(request: NextRequest) {
       }
       // Handle regular products
       else {
-        const product = await Product.findOne({ _id: productId, tenantId });
+        const product = productId ? productMap.get(productId as string) : undefined;
         if (!product) {
           const errorMsg = t('validation.productNotFoundInTransaction', 'Product {productId} not found').replace('{productId}', String(productId));
           return NextResponse.json({ success: false, error: errorMsg }, { status: 404 });
@@ -255,7 +282,7 @@ export async function POST(request: NextRequest) {
         // Check stock (considering variations and branches) - but respect allowOutOfStockSales and trackInventory
         const trackInventory = product.trackInventory !== false; // Default to true if not set
         const allowOutOfStockSales = product.allowOutOfStockSales === true;
-        
+
         if (trackInventory && !allowOutOfStockSales) {
           if (!productId) {
             return NextResponse.json({ success: false, error: t('validation.productIdMissing', 'Product ID is missing') }, { status: 400 });
@@ -283,7 +310,7 @@ export async function POST(request: NextRequest) {
         // Get price (variation price override or base price)
         let itemPrice = product.price;
         if (variation && product.hasVariations && product.variations) {
-          const variationData = product.variations.find((v) => {
+          const variationData = product.variations.find((v: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
             const matchSize = !variation.size || v.size === variation.size;
             const matchColor = !variation.color || v.color === variation.color;
             const matchType = !variation.type || v.type === variation.type;
@@ -369,9 +396,8 @@ export async function POST(request: NextRequest) {
       appliedDiscountCode = discount.code;
       appliedDiscountCategory = discount.category || 'general';
 
-      // Increment usage count
-      discount.usageCount += 1;
-      await discount.save();
+      // Increment usage count atomically
+      await Discount.findByIdAndUpdate(discount._id, { $inc: { usageCount: 1 } });
     }
 
     // Calculate subtotal after discount

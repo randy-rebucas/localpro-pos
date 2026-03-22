@@ -41,8 +41,9 @@ export default function LowStockAlerts({
       setLoading(true);
       setError(null);
       const res = await fetch(`/api/inventory/low-stock?tenant=${tenant}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      
+
       if (data.success) {
         setAlerts(data.data || []);
       } else {

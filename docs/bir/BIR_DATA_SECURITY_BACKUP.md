@@ -1,4 +1,4 @@
-# LocalPro POS - Data Security & Backup Plan
+# 1POS - Data Security & Backup Plan
 
 ## BIR Compliance Documentation | Security Controls & Data Protection
 
@@ -534,4 +534,4 @@ Storage:
 
 *Document Version: 1.0*
 *Generated: 2026-03-21*
-*System: LocalPro POS*
+*System: 1POS*

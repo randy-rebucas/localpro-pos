@@ -1,10 +1,10 @@
 # Authentication & User Management
 
-Complete guide to authentication and user management in the LocalPro POS web application.
+Complete guide to authentication and user management in the 1POS web application.
 
 ## Overview
 
-The LocalPro POS system supports multiple authentication methods and comprehensive user management with role-based access control.
+The 1POS system supports multiple authentication methods and comprehensive user management with role-based access control.
 
 ## Features
 

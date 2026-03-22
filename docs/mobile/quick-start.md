@@ -1,12 +1,12 @@
 # Mobile API Quick Start
 
-Get started with LocalPro POS mobile API integration in 10 minutes.
+Get started with 1POS mobile API integration in 10 minutes.
 
 > This is a condensed version. For detailed documentation, see [Mobile API Documentation](./README.md)
 
 ## Prerequisites
 
-- LocalPro POS instance running
+- 1POS instance running
 - Tenant slug
 - User credentials
 - Mobile development environment

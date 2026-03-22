@@ -29,7 +29,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
     
-    const transaction = await Transaction.findOne({ _id: id, tenantId })
+    const transaction = await Transaction.findOne({ _id: id, tenantId, isActive: { $ne: false } })
       .populate('items.product', 'name sku')
       .populate('userId', 'name email')
       .lean();

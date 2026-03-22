@@ -1,6 +1,6 @@
 # Documentation Structure
 
-This document describes the complete documentation structure for LocalPro POS.
+This document describes the complete documentation structure for 1POS.
 
 ## 📁 Directory Structure
 

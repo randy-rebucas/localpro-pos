@@ -1,6 +1,6 @@
 # Mobile App Layouts & Wireframes
 
-This document provides detailed visual layouts and wireframes for the LocalPro POS mobile application.
+This document provides detailed visual layouts and wireframes for the 1POS mobile application.
 
 ---
 

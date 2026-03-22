@@ -245,9 +245,19 @@ export default function POSPage() {
           const data = await res.json();
           if (data.success) {
             setProducts(data.data);
-            // Cache products for offline use
+            // Cache products and discounts for offline use
             const storage = await getOfflineStorage();
             await storage.cacheProducts(data.data, tenant);
+            // Pre-cache active discounts for offline validation
+            try {
+              const discountRes = await fetch(`/api/discounts?tenant=${tenant}`);
+              const discountData = await discountRes.json();
+              if (discountData.success && discountData.data) {
+                await storage.cacheDiscounts(discountData.data, tenant);
+              }
+            } catch {
+              // Discount cache is best-effort — don't fail product load
+            }
           }
         } catch (error) {
           console.error('Error fetching products from server:', error);
@@ -313,23 +323,70 @@ export default function POSPage() {
 
     try {
       const subtotal = getSubtotal();
-      const res = await fetch(`/api/discounts/validate?tenant=${tenant}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: promoCode, subtotal }),
-      });
 
-      const data = await res.json();
-      if (data.success) {
+      // Try online validation first
+      if (navigator.onLine) {
+        const res = await fetch(`/api/discounts/validate?tenant=${tenant}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: promoCode, subtotal }),
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          setAppliedDiscount({
+            code: data.data.code,
+            amount: data.data.discountAmount,
+            name: data.data.name,
+          });
+          setPromoCode('');
+          showToast.success(dict.pos.discountApplied || 'Discount applied successfully');
+          return;
+        } else {
+          showToast.error(data.error || dict.pos.invalidDiscountCode);
+          return;
+        }
+      }
+
+      // Offline fallback: validate against cached discounts
+      const storage = await getOfflineStorage();
+      const cachedDiscount = await storage.getCachedDiscountByCode(promoCode.toUpperCase(), tenant);
+
+      if (cachedDiscount) {
+        // Basic offline validation
+        const now = new Date();
+        if (cachedDiscount.startDate && new Date(cachedDiscount.startDate) > now) {
+          showToast.error(dict.pos.invalidDiscountCode || 'Discount not yet active');
+          return;
+        }
+        if (cachedDiscount.endDate && new Date(cachedDiscount.endDate) < now) {
+          showToast.error(dict.pos.invalidDiscountCode || 'Discount expired');
+          return;
+        }
+        if (cachedDiscount.minPurchaseAmount && subtotal < cachedDiscount.minPurchaseAmount) {
+          showToast.error(dict.pos.invalidDiscountCode || 'Minimum purchase not met');
+          return;
+        }
+
+        let discountAmount = 0;
+        if (cachedDiscount.type === 'percentage') {
+          discountAmount = (subtotal * cachedDiscount.value) / 100;
+          if (cachedDiscount.maxDiscountAmount) {
+            discountAmount = Math.min(discountAmount, cachedDiscount.maxDiscountAmount);
+          }
+        } else {
+          discountAmount = cachedDiscount.value;
+        }
+
         setAppliedDiscount({
-          code: data.data.code,
-          amount: data.data.discountAmount,
-          name: data.data.name,
+          code: cachedDiscount.code,
+          amount: Math.round(discountAmount * 100) / 100,
+          name: cachedDiscount.name,
         });
         setPromoCode('');
-        showToast.success(dict.pos.discountApplied || 'Discount applied successfully');
+        showToast.success((dict.pos.discountApplied || 'Discount applied') + ' (offline)');
       } else {
-        showToast.error(data.error || dict.pos.invalidDiscountCode);
+        showToast.error(dict.pos.invalidDiscountCode || 'Invalid discount code');
       }
     } catch (error) {
       console.error('Error applying discount:', error);

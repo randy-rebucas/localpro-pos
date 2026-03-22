@@ -93,7 +93,7 @@ async function testAutomation(name: string, endpoint: string): Promise<TestResul
 }
 
 async function main() {
-  console.log('🚀 Testing LocalPro POS Automations');
+  console.log('🚀 Testing 1POS Automations');
   console.log('=====================================');
   console.log(`Base URL: ${BASE_URL}`);
   console.log(`Cron Secret: ${CRON_SECRET ? '***' + CRON_SECRET.slice(-4) : 'NOT SET'}`);
