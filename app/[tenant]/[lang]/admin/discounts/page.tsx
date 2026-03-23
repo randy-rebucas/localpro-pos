@@ -18,6 +18,8 @@ interface Discount {
   description?: string;
   type: 'percentage' | 'fixed';
   value: number;
+  category?: 'general' | 'senior' | 'pwd' | 'employee' | 'promo';
+  requiresIdVerification?: boolean;
   minPurchaseAmount?: number;
   maxDiscountAmount?: number;
   validFrom: string;
@@ -317,6 +319,8 @@ function DiscountModal({
     description: discount?.description || '',
     type: discount?.type || 'percentage',
     value: discount?.value || 0,
+    category: discount?.category || 'general',
+    requiresIdVerification: discount?.requiresIdVerification || false,
     minPurchaseAmount: discount?.minPurchaseAmount || 0,
     maxDiscountAmount: discount?.maxDiscountAmount || 0,
     validFrom: discount ? new Date(discount.validFrom).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
@@ -341,6 +345,8 @@ function DiscountModal({
         description: formData.description || undefined,
         type: formData.type,
         value: formData.value,
+        category: formData.category,
+        requiresIdVerification: formData.requiresIdVerification,
         minPurchaseAmount: formData.minPurchaseAmount > 0 ? formData.minPurchaseAmount : undefined,
         maxDiscountAmount: formData.maxDiscountAmount > 0 ? formData.maxDiscountAmount : undefined,
         validFrom: new Date(formData.validFrom),
@@ -387,7 +393,9 @@ function DiscountModal({
                   required
                   value={formData.code}
                   onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  readOnly={!!discount}
+                  maxLength={50}
+                  className={`w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 ${discount ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`}
                   placeholder={dict?.admin?.discountCodePlaceholder || 'DISCOUNT10'}
                 />
               </div>
@@ -413,8 +421,38 @@ function DiscountModal({
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                maxLength={100}
                 className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {dict.admin?.category || 'Category'}
+                </label>
+                <select
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value as 'general' | 'senior' | 'pwd' | 'employee' | 'promo' })}
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                >
+                  <option value="general">{dict.admin?.categoryGeneral || 'General'}</option>
+                  <option value="senior">{dict.admin?.categorySenior || 'Senior Citizen (RA 9994)'}</option>
+                  <option value="pwd">{dict.admin?.categoryPwd || 'PWD (RA 10754)'}</option>
+                  <option value="employee">{dict.admin?.categoryEmployee || 'Employee'}</option>
+                  <option value="promo">{dict.admin?.categoryPromo || 'Promo'}</option>
+                </select>
+              </div>
+              <div className="flex items-end pb-1">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.requiresIdVerification}
+                    onChange={(e) => setFormData({ ...formData, requiresIdVerification: e.target.checked })}
+                    className="w-4 h-4 rounded border-gray-300"
+                  />
+                  <span className="text-sm text-gray-700">{dict.admin?.requiresId || 'Requires ID verification'}</span>
+                </label>
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">

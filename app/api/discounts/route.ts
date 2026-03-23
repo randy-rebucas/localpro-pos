@@ -91,6 +91,8 @@ export async function POST(request: NextRequest) {
       description,
       type,
       value,
+      category,
+      requiresIdVerification,
       minPurchaseAmount,
       maxDiscountAmount,
       validFrom,
@@ -103,6 +105,25 @@ export async function POST(request: NextRequest) {
     if (!code || !type || value === undefined || !validFrom || !validUntil) {
       return NextResponse.json(
         { success: false, error: t('validation.missingRequiredFields', 'Missing required fields') },
+        { status: 400 }
+      );
+    }
+
+    // Input length validation
+    if (typeof code === 'string' && code.length > 50) {
+      return NextResponse.json({ success: false, error: 'Code must be 50 characters or less' }, { status: 400 });
+    }
+    if (name && typeof name === 'string' && name.length > 100) {
+      return NextResponse.json({ success: false, error: 'Name must be 100 characters or less' }, { status: 400 });
+    }
+    if (description && typeof description === 'string' && description.length > 500) {
+      return NextResponse.json({ success: false, error: 'Description must be 500 characters or less' }, { status: 400 });
+    }
+
+    // Validate date range
+    if (new Date(validFrom) >= new Date(validUntil)) {
+      return NextResponse.json(
+        { success: false, error: t('validation.validUntilAfterFrom', 'End date must be after start date') },
         { status: 400 }
       );
     }
@@ -138,6 +159,8 @@ export async function POST(request: NextRequest) {
       description,
       type,
       value,
+      category: category || 'general',
+      requiresIdVerification: requiresIdVerification || false,
       minPurchaseAmount,
       maxDiscountAmount,
       validFrom: new Date(validFrom),

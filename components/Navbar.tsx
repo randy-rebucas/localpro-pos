@@ -76,6 +76,7 @@ export default function Navbar() {
     { href: `/${tenant}/${lang}/products`, key: 'products' },
     { href: `/${tenant}/${lang}/transactions`, key: 'transactions' },
     { href: `/${tenant}/${lang}/reports`, key: 'reports' },
+    { href: `/${tenant}/${lang}/user-manual`, key: 'userManual' },
   ];
 
   // Conditional navigation items based on feature flags

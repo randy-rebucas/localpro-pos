@@ -3,7 +3,7 @@ import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
 import '@/models/Category'; // register schema for populate
 import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
-import { requireAuth } from '@/lib/auth'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateAndSanitize, validateProduct } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -13,8 +13,12 @@ import { logger } from '@/lib/logger';
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
-    const tenantId = await getTenantIdFromRequest(request);
-    
+
+    // Require authentication to prevent unauthenticated product enumeration
+    const authResult = await requireTenantAccess(request);
+    if (authResult instanceof NextResponse) return authResult;
+    const tenantId = authResult.tenantId;
+
     if (!tenantId) {
       return NextResponse.json({ success: false, error: 'Tenant not found or access denied' }, { status: 403 });
     }

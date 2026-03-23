@@ -72,7 +72,29 @@ export default function QRCodeScanner({ onScan, onClose, enabled = true }: QRCod
         </div>
 
         {error ? (
-          <div className="text-red-600 mb-4">{error}</div>
+          <div className="text-center py-6">
+            <svg className="w-12 h-12 text-red-400 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l-4 4m0-4l4 4m6-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p className="text-red-600 text-sm mb-4">{error}</p>
+            <button
+              onClick={() => {
+                setError(null);
+                setIsScanning(false);
+                // Re-trigger the scan effect
+                if (videoRef.current) {
+                  hardwareService.startQRScanning(videoRef.current, onScan)
+                    .then(() => setIsScanning(true))
+                    .catch((err: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+                      setError(err.message || 'Failed to start scanner');
+                    });
+                }
+              }}
+              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+            >
+              {dict?.common?.retry || 'Try Again'}
+            </button>
+          </div>
         ) : (
           <div className="relative">
             <video

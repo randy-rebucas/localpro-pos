@@ -27,6 +27,9 @@
 # database backups — never commit
 /backups/
 
+# uploaded files — stored at runtime
+/public/uploads/
+
 # lint output artifacts
 lint-output.json
 lint-output.txt

@@ -174,8 +174,12 @@ export async function POST(request: NextRequest) {
     let finalCashReceived = cashReceived;
     let finalChange = 0;
 
-    // Check if discounts are enabled
-    if (discountCode && tenantSettings && tenantSettings.enableDiscounts === false) {
+    // Check if discounts are enabled (SC/PWD are legal requirements — always allowed)
+    const legalDiscountCodes = ['SC20', 'PWD20'];
+    const isLegalDiscount = discountCode && legalDiscountCodes.includes(
+      typeof discountCode === 'string' ? discountCode.toUpperCase() : ''
+    );
+    if (discountCode && !isLegalDiscount && tenantSettings && tenantSettings.enableDiscounts === false) {
       return NextResponse.json(
         { success: false, error: t('validation.discountsNotEnabled', 'Discounts are not enabled for this tenant') },
         { status: 400 }
@@ -342,51 +346,69 @@ export async function POST(request: NextRequest) {
     let appliedDiscountCategory: string | undefined;
 
     if (discountCode) {
-      const discount = await Discount.findOne({
-        tenantId,
-        code: typeof discountCode === 'string' ? discountCode.toUpperCase() : '',
-        isActive: true,
-      });
+      const now = new Date();
+
+      // Atomic check + increment: find the discount and increment usage in one operation.
+      // The query filter ensures validity, active status, and usage limit in the same step,
+      // preventing race conditions where two transactions pass the check simultaneously.
+      const discount = await Discount.findOneAndUpdate(
+        {
+          tenantId,
+          code: typeof discountCode === 'string' ? discountCode.toUpperCase() : '',
+          isActive: true,
+          validFrom: { $lte: now },
+          validUntil: { $gte: now },
+          $or: [
+            { usageLimit: { $exists: false } },
+            { usageLimit: null },
+            { usageLimit: 0 },
+            { $expr: { $lt: ['$usageCount', '$usageLimit'] } },
+          ],
+        },
+        { $inc: { usageCount: 1 } },
+        { new: false } // return pre-increment doc for calculations
+      );
 
       if (!discount) {
-        return NextResponse.json(
-          { success: false, error: t('validation.invalidDiscountCode', 'Invalid or inactive discount code') },
-          { status: 400 }
-        );
-      }
+        // Lookup without filters to give a specific error message
+        const rawDiscount = await Discount.findOne({
+          tenantId,
+          code: typeof discountCode === 'string' ? discountCode.toUpperCase() : '',
+        });
 
-      // Check validity dates
-      const now = new Date();
-      if (now < discount.validFrom || now > discount.validUntil) {
-        return NextResponse.json(
-          { success: false, error: t('validation.discountCodeNotValid', 'Discount code is not valid at this time') },
-          { status: 400 }
-        );
-      }
-
-      // Check usage limit
-      if (discount.usageLimit && discount.usageCount >= discount.usageLimit) {
+        if (!rawDiscount || !rawDiscount.isActive) {
+          return NextResponse.json(
+            { success: false, error: t('validation.invalidDiscountCode', 'Invalid or inactive discount code') },
+            { status: 400 }
+          );
+        }
+        if (now < rawDiscount.validFrom || now > rawDiscount.validUntil) {
+          return NextResponse.json(
+            { success: false, error: t('validation.discountCodeNotValid', 'Discount code is not valid at this time') },
+            { status: 400 }
+          );
+        }
+        // Must be usage limit exceeded
         return NextResponse.json(
           { success: false, error: t('validation.discountCodeUsageLimit', 'Discount code has reached its usage limit') },
           { status: 400 }
         );
       }
 
-      // Check minimum purchase amount
+      // Check minimum purchase amount (rollback usage if not met)
       if (discount.minPurchaseAmount && subtotal < discount.minPurchaseAmount) {
+        // Rollback the usage increment
+        await Discount.findByIdAndUpdate(discount._id, { $inc: { usageCount: -1 } });
         const errorMsg = t('validation.minimumPurchaseAmount', 'Minimum purchase amount of {amount} required').replace('{amount}', discount.minPurchaseAmount.toString());
         return NextResponse.json(
-          { 
-            success: false, 
-            error: errorMsg
-          },
+          { success: false, error: errorMsg },
           { status: 400 }
         );
       }
 
-      // Calculate discount amount
+      // Calculate discount amount using integer math to avoid floating point
       if (discount.type === 'percentage') {
-        discountAmount = (subtotal * discount.value) / 100;
+        discountAmount = Math.round((subtotal * discount.value) / 100 * 100) / 100;
         if (discount.maxDiscountAmount) {
           discountAmount = Math.min(discountAmount, discount.maxDiscountAmount);
         }
@@ -396,9 +418,6 @@ export async function POST(request: NextRequest) {
 
       appliedDiscountCode = discount.code;
       appliedDiscountCategory = discount.category || 'general';
-
-      // Increment usage count atomically
-      await Discount.findByIdAndUpdate(discount._id, { $inc: { usageCount: 1 } });
     }
 
     // Calculate subtotal after discount

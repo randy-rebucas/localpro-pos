@@ -66,7 +66,11 @@ class QRReaderService {
 
       return true;
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      logger.error('Failed to start QR scanning:', error);
+      if (error.name === 'NotAllowedError' || error.name === 'NotFoundError') {
+        logger.warn('QR scanning unavailable:', error.message);
+      } else {
+        logger.error('Failed to start QR scanning:', error);
+      }
       // Ensure cleanup on error
       if (this.stream) {
         this.stream.getTracks().forEach(track => track.stop());

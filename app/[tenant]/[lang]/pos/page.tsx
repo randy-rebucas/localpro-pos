@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import Navbar from '@/components/Navbar';
 import Currency from '@/components/Currency';
 import OfflineIndicator from '@/components/OfflineIndicator';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { getDictionaryClient } from '../dictionaries-client';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { getOfflineStorage } from '@/lib/offline-storage';
@@ -35,6 +35,7 @@ interface Product {
   stock: number;
   sku?: string;
   category?: string;
+  image?: string;
   pinned?: boolean;
   trackInventory?: boolean;
   allowOutOfStockSales?: boolean;
@@ -50,6 +51,7 @@ interface CartItem {
 
 export default function POSPage() {
   const params = useParams();
+  const router = useRouter();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const [products, setProducts] = useState<Product[]>([]);
@@ -80,7 +82,29 @@ export default function POSPage() {
   const [showSaveCartModal, setShowSaveCartModal] = useState(false);
   const [cartName, setCartName] = useState('');
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const { confirm, Dialog: ConfirmDialog } = useConfirm(); // eslint-disable-line @typescript-eslint/no-unused-vars
+  const [showFullscreenPrompt, setShowFullscreenPrompt] = useState(false);
+  const [applyingDiscount, setApplyingDiscount] = useState(false);
+  const [lookingUpRefund, setLookingUpRefund] = useState(false);
+  const { confirm, Dialog: confirmDialog } = useConfirm();
+
+  // Max limits
+  const MAX_QUANTITY = 9999;
+  const MAX_PROMO_CODE_LENGTH = 50;
+  const MAX_REFUND_NOTES_LENGTH = 500;
+
+  // Fetch with timeout
+  const fetchWithTimeout = useCallback(async (url: string, options?: RequestInit, timeoutMs = 15000) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, { ...options, signal: controller.signal });
+      clearTimeout(timer);
+      return res;
+    } catch (err) {
+      clearTimeout(timer);
+      throw err;
+    }
+  }, []);
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -105,36 +129,51 @@ export default function POSPage() {
     };
   }, []);
 
-  // Toggle fullscreen
-  const toggleFullscreen = async () => {
-    try {
-      if (!document.fullscreenElement) {
-        // Enter fullscreen
-        if (document.documentElement.requestFullscreen) {
-          await document.documentElement.requestFullscreen();
-        } else if ((document.documentElement as any).webkitRequestFullscreen) { // eslint-disable-line @typescript-eslint/no-explicit-any
-          await (document.documentElement as any).webkitRequestFullscreen(); // eslint-disable-line @typescript-eslint/no-explicit-any
-        } else if ((document.documentElement as any).mozRequestFullScreen) { // eslint-disable-line @typescript-eslint/no-explicit-any
-          await (document.documentElement as any).mozRequestFullScreen(); // eslint-disable-line @typescript-eslint/no-explicit-any
-        } else if ((document.documentElement as any).msRequestFullscreen) { // eslint-disable-line @typescript-eslint/no-explicit-any
-          await (document.documentElement as any).msRequestFullscreen(); // eslint-disable-line @typescript-eslint/no-explicit-any
-        }
-      } else {
-        // Exit fullscreen
-        if (document.exitFullscreen) {
-          await document.exitFullscreen();
-        } else if ((document as any).webkitExitFullscreen) { // eslint-disable-line @typescript-eslint/no-explicit-any
-          await (document as any).webkitExitFullscreen(); // eslint-disable-line @typescript-eslint/no-explicit-any
-        } else if ((document as any).mozCancelFullScreen) { // eslint-disable-line @typescript-eslint/no-explicit-any
-          await (document as any).mozCancelFullScreen(); // eslint-disable-line @typescript-eslint/no-explicit-any
-        } else if ((document as any).msExitFullscreen) { // eslint-disable-line @typescript-eslint/no-explicit-any
-          await (document as any).msExitFullscreen(); // eslint-disable-line @typescript-eslint/no-explicit-any
+  // Esc key to close modals
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showPaymentModal) {
+          setShowPaymentModal(false);
+          setCashReceived('');
+        } else if (showRefundModal) {
+          setShowRefundModal(false);
+        } else if (showSavedCartsModal) {
+          setShowSavedCartsModal(false);
+        } else if (showSaveCartModal) {
+          setShowSaveCartModal(false);
+        } else if (showQRScanner) {
+          setShowQRScanner(false);
         }
       }
-    } catch (error) {
-      console.error('Error toggling fullscreen:', error);
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [showPaymentModal, showRefundModal, showSavedCartsModal, showSaveCartModal, showQRScanner]);
+
+  // Check if running in standalone/fullscreen-like mode (PWA or actual fullscreen)
+  const isFullscreenLike = useCallback(() => {
+    return !!document.fullscreenElement
+      || window.matchMedia('(display-mode: standalone)').matches
+      || window.matchMedia('(display-mode: fullscreen)').matches
+      || (window.navigator as any).standalone === true; // eslint-disable-line @typescript-eslint/no-explicit-any
+  }, []);
+
+  // Show fullscreen prompt only if not in any fullscreen-like mode
+  useEffect(() => {
+    if (!isFullscreenLike()) {
+      setShowFullscreenPrompt(true);
     }
-  };
+  }, [isFullscreenLike]);
+
+  // Re-show prompt if user exits fullscreen, hide when in fullscreen
+  useEffect(() => {
+    if (isFullscreen || isFullscreenLike()) {
+      setShowFullscreenPrompt(false);
+    } else if (dict) {
+      setShowFullscreenPrompt(true);
+    }
+  }, [isFullscreen, dict, isFullscreenLike]);
 
   // Initialize hardware services
   useEffect(() => {
@@ -251,7 +290,7 @@ export default function POSPage() {
       if (isOnline) {
         // Try to fetch from server
         try {
-          const res = await fetch(`/api/products?search=${encodeURIComponent(search)}&tenant=${tenant}`);
+          const res = await fetchWithTimeout(`/api/products?search=${encodeURIComponent(search)}&tenant=${tenant}`);
           const data = await res.json();
           if (data.success) {
             setProducts(data.data);
@@ -285,7 +324,7 @@ export default function POSPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, tenant, isOnline, loadCachedProducts]);
+  }, [search, tenant, isOnline, loadCachedProducts, fetchWithTimeout]);
 
   useEffect(() => {
     fetchProducts();
@@ -295,6 +334,10 @@ export default function POSPage() {
     if (!dict) return;
     if (quantity <= 0) {
       removeFromCart(productId);
+      return;
+    }
+    if (quantity > MAX_QUANTITY) {
+      showToast.error(dict.pos?.maxQuantityReached || `Maximum quantity is ${MAX_QUANTITY}`);
       return;
     }
     const item = cart.find((item) => item.productId === productId);
@@ -322,21 +365,32 @@ export default function POSPage() {
     return cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   };
 
+  const getTaxAmount = () => {
+    if (!settings?.taxEnabled || !settings?.taxRate) return 0;
+    const subtotal = getSubtotal();
+    const discount = appliedDiscount?.amount || 0;
+    const taxable = Math.max(0, subtotal - discount);
+    return Math.round(taxable * (settings.taxRate / 100) * 100) / 100;
+  };
+
   const getTotal = () => {
     const subtotal = getSubtotal();
     const discount = appliedDiscount?.amount || 0;
-    return Math.max(0, subtotal - discount);
+    const afterDiscount = Math.max(0, subtotal - discount);
+    const tax = getTaxAmount();
+    return Math.round((afterDiscount + tax) * 100) / 100;
   };
 
   const applyDiscount = async () => {
-    if (!dict || !promoCode.trim()) return;
+    if (!dict || !promoCode.trim() || applyingDiscount) return;
 
+    setApplyingDiscount(true);
     try {
       const subtotal = getSubtotal();
 
       // Try online validation first
       if (navigator.onLine) {
-        const res = await fetch(`/api/discounts/validate?tenant=${tenant}`, {
+        const res = await fetchWithTimeout(`/api/discounts/validate?tenant=${tenant}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ code: promoCode, subtotal }),
@@ -365,11 +419,13 @@ export default function POSPage() {
       if (cachedDiscount) {
         // Basic offline validation
         const now = new Date();
-        if (cachedDiscount.startDate && new Date(cachedDiscount.startDate) > now) {
+        const validFrom = cachedDiscount.validFrom || cachedDiscount.startDate;
+        const validUntil = cachedDiscount.validUntil || cachedDiscount.endDate;
+        if (validFrom && new Date(validFrom) > now) {
           showToast.error(dict.pos.invalidDiscountCode || 'Discount not yet active');
           return;
         }
-        if (cachedDiscount.endDate && new Date(cachedDiscount.endDate) < now) {
+        if (validUntil && new Date(validUntil) < now) {
           showToast.error(dict.pos.invalidDiscountCode || 'Discount expired');
           return;
         }
@@ -401,6 +457,8 @@ export default function POSPage() {
     } catch (error) {
       console.error('Error applying discount:', error);
       showToast.error(dict.pos.invalidDiscountCode);
+    } finally {
+      setApplyingDiscount(false);
     }
   };
 
@@ -410,10 +468,11 @@ export default function POSPage() {
   };
 
   const lookupTransaction = async () => {
-    if (!dict || !refundTransactionId.trim()) return;
+    if (!dict || !refundTransactionId.trim() || lookingUpRefund) return;
 
+    setLookingUpRefund(true);
     try {
-      const res = await fetch(`/api/transactions/${refundTransactionId}?tenant=${tenant}`);
+      const res = await fetchWithTimeout(`/api/transactions/${refundTransactionId}?tenant=${tenant}`);
       const data = await res.json();
 
       if (data.success) {
@@ -439,6 +498,8 @@ export default function POSPage() {
     } catch (error) {
       console.error('Error looking up transaction:', error);
       showToast.error(dict.pos.noTransactionFound);
+    } finally {
+      setLookingUpRefund(false);
     }
   };
 
@@ -456,7 +517,7 @@ export default function POSPage() {
 
     setProcessingRefund(true);
     try {
-      const res = await fetch(`/api/transactions/${refundTransaction._id}/refund?tenant=${tenant}`, {
+      const res = await fetchWithTimeout(`/api/transactions/${refundTransaction._id}/refund?tenant=${tenant}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -512,7 +573,7 @@ export default function POSPage() {
       if (isOnline) {
         // Try to process online
         try {
-          const res = await fetch(`/api/transactions?tenant=${tenant}`, {
+          const res = await fetchWithTimeout(`/api/transactions?tenant=${tenant}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -524,7 +585,7 @@ export default function POSPage() {
               cashReceived: paymentMethod === 'cash' ? parseFloat(cashReceived) : undefined,
               discountCode: appliedDiscount?.code,
             }),
-          });
+          }, 30000); // 30s timeout for transactions
 
           const data = await res.json();
             if (data.success) {
@@ -876,8 +937,66 @@ export default function POSPage() {
     return <div className="text-center py-12">{dict?.common?.loading || 'Loading...'}</div>;
   }
 
+  const handleFullscreenPrompt = async () => {
+    try {
+      if (document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen();
+      } else if ((document.documentElement as any).webkitRequestFullscreen) { // eslint-disable-line @typescript-eslint/no-explicit-any
+        await (document.documentElement as any).webkitRequestFullscreen(); // eslint-disable-line @typescript-eslint/no-explicit-any
+      }
+      // Prompt hides automatically via the isFullscreen effect
+    } catch {
+      // If browser still blocks, keep prompt visible so user can retry
+    }
+  };
+
   return (
     <div className="min-h-screen">
+      {/* Fullscreen prompt overlay */}
+      {showFullscreenPrompt && (
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white border border-gray-300 max-w-sm w-full p-6 text-center shadow-xl">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center"
+              style={{ backgroundColor: `${settings?.primaryColor || '#2563eb'}15` }}>
+              <svg className="w-8 h-8" style={{ color: settings?.primaryColor || '#2563eb' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-bold text-gray-900 mb-2">
+              {dict?.pos?.enterFullscreen || 'Enter Fullscreen Mode'}
+            </h3>
+            <p className="text-sm text-gray-500 mb-6">
+              {dict?.pos?.fullscreenRequired || 'POS requires fullscreen mode. Tap the button below to continue.'}
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={handleFullscreenPrompt}
+                className="w-full py-3 text-white font-semibold text-sm transition-colors"
+                style={{ backgroundColor: settings?.primaryColor || '#2563eb' }}
+              >
+                {dict?.pos?.goFullscreen || 'Go Fullscreen'}
+              </button>
+              <button
+                onClick={async () => {
+                  if (cart.length > 0) {
+                    const confirmed = await confirm(
+                      dict?.pos?.exitPosTitle || 'Exit POS',
+                      dict?.pos?.exitPosConfirm || 'You have items in your cart. Are you sure you want to exit?',
+                      { variant: 'warning' }
+                    );
+                    if (!confirmed) return;
+                  }
+                  setShowFullscreenPrompt(false);
+                  router.push(`/${tenant}/${lang}`);
+                }}
+                className="w-full py-2.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                {dict?.pos?.exitPos || 'Exit POS'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <OfflineIndicator />
       <BarcodeScanner onScan={handleBarcodeScan} enabled={true} />
       {showQRScanner && (
@@ -887,17 +1006,17 @@ export default function POSPage() {
           enabled={true}
         />
       )}
-      <Navbar />
+      {!isFullscreen && <Navbar />}
       <div className="fixed bottom-4 right-4 z-40">
         <HardwareStatusChecker compact={true} autoRefresh={true} />
       </div>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      <div className={`mx-auto px-4 sm:px-5 lg:px-6 ${isFullscreen ? 'py-3' : 'py-6 sm:py-8'}`}>
         {/* Mobile: Cart first (sticky at top), then products below */}
         {/* Desktop: Products left, Cart right */}
         <div className="flex flex-col lg:grid lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Cart Section - Mobile: First, Desktop: Right */}
           <div className="lg:col-span-1 order-1 lg:order-2">
-            <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:sticky lg:top-20 flex flex-col h-full max-h-[calc(100vh-6rem)]">
+            <div className={`bg-white border border-gray-300 p-5 sm:p-6 lg:sticky flex flex-col h-full ${isFullscreen ? 'lg:top-3 max-h-[calc(100vh-2rem)]' : 'lg:top-20 max-h-[calc(100vh-6rem)]'}`}>
               <div className="flex justify-between items-center mb-4 pb-4 border-b border-gray-200">
                 <h2 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2">
                   <svg className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1019,28 +1138,125 @@ export default function POSPage() {
                   <div className="border-t border-gray-200 pt-4 mt-auto">
                     {!appliedDiscount ? (
                       <div className="mb-4">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          {dict.pos.promoCode}
-                        </label>
+                        {/* SC / PWD Quick Buttons */}
+                        <div className="flex gap-2 mb-3">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              setApplyingDiscount(true);
+                              try {
+                                // Try applying SC20 directly
+                                const subtotal = getSubtotal();
+                                let res = await fetchWithTimeout(`/api/discounts/validate?tenant=${tenant}`, {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ code: 'SC20', subtotal }),
+                                });
+                                let data = await res.json();
+
+                                // If code doesn't exist, seed defaults and retry
+                                if (!data.success && res.status === 404) {
+                                  await fetchWithTimeout('/api/discounts/seed-defaults', { method: 'POST', credentials: 'include' });
+                                  res = await fetchWithTimeout(`/api/discounts/validate?tenant=${tenant}`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ code: 'SC20', subtotal }),
+                                  });
+                                  data = await res.json();
+                                }
+
+                                if (data.success) {
+                                  setAppliedDiscount({ code: data.data.code, amount: data.data.discountAmount, name: data.data.name });
+                                  setPromoCode('');
+                                  showToast.success(dict.pos.discountApplied || 'Discount applied');
+                                } else {
+                                  showToast.error(data.error || 'Failed to apply Senior discount');
+                                }
+                              } catch {
+                                showToast.error('Failed to apply discount');
+                              } finally {
+                                setApplyingDiscount(false);
+                              }
+                            }}
+                            disabled={applyingDiscount || cart.length === 0}
+                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold border-2 border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:border-blue-300 transition-colors disabled:opacity-50"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                            </svg>
+                            {dict.pos?.seniorDiscount || 'Senior (20%)'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              setApplyingDiscount(true);
+                              try {
+                                const subtotal = getSubtotal();
+                                let res = await fetchWithTimeout(`/api/discounts/validate?tenant=${tenant}`, {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ code: 'PWD20', subtotal }),
+                                });
+                                let data = await res.json();
+
+                                // If code doesn't exist, seed defaults and retry
+                                if (!data.success && res.status === 404) {
+                                  await fetchWithTimeout('/api/discounts/seed-defaults', { method: 'POST', credentials: 'include' });
+                                  res = await fetchWithTimeout(`/api/discounts/validate?tenant=${tenant}`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ code: 'PWD20', subtotal }),
+                                  });
+                                  data = await res.json();
+                                }
+
+                                if (data.success) {
+                                  setAppliedDiscount({ code: data.data.code, amount: data.data.discountAmount, name: data.data.name });
+                                  setPromoCode('');
+                                  showToast.success(dict.pos.discountApplied || 'Discount applied');
+                                } else {
+                                  showToast.error(data.error || 'Failed to apply PWD discount');
+                                }
+                              } catch {
+                                showToast.error('Failed to apply discount');
+                              } finally {
+                                setApplyingDiscount(false);
+                              }
+                            }}
+                            disabled={applyingDiscount || cart.length === 0}
+                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold border-2 border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 hover:border-purple-300 transition-colors disabled:opacity-50"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                            </svg>
+                            {dict.pos?.pwdDiscount || 'PWD (20%)'}
+                          </button>
+                        </div>
+
+                        {/* Promo Code Input */}
                         <div className="flex gap-2 items-stretch">
                           <input
                             type="text"
                             placeholder={dict.pos.promoCode || 'Enter promo code'}
                             value={promoCode}
-                            onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
-                            onKeyPress={(e) => e.key === 'Enter' && applyDiscount()}
+                            onChange={(e) => setPromoCode(e.target.value.toUpperCase().slice(0, MAX_PROMO_CODE_LENGTH))}
+                            onKeyDown={(e) => e.key === 'Enter' && applyDiscount()}
                             className="flex-1 min-w-0 px-4 py-3 text-base border-2 border-gray-300 focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white transition-all placeholder:text-gray-400"
                           />
                           <button
                             type="button"
                             onClick={applyDiscount}
-                            disabled={!promoCode.trim()}
+                            disabled={!promoCode.trim() || applyingDiscount}
                             className="p-3 bg-green-600 text-white hover:bg-green-700 active:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 border border-green-700 flex items-center justify-center flex-shrink-0"
                             title={dict.pos.applyDiscount || 'Apply Discount'}
                           >
-                            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
+                            {applyingDiscount ? (
+                              <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            ) : (
+                              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                            )}
                           </button>
                         </div>
                       </div>
@@ -1089,6 +1305,14 @@ export default function POSPage() {
                           <span className="text-gray-600">{dict.pos.discount}:</span>
                           <span className="font-semibold text-green-600">
                             -<Currency amount={appliedDiscount.amount} />
+                          </span>
+                        </div>
+                      )}
+                      {getTaxAmount() > 0 && (
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-gray-600">{settings?.taxLabel || 'Tax'} ({settings?.taxRate}%):</span>
+                          <span className="font-semibold text-gray-900">
+                            <Currency amount={getTaxAmount()} />
                           </span>
                         </div>
                       )}
@@ -1152,23 +1376,30 @@ export default function POSPage() {
                   </svg>
                 </button>
                 <button
-                  onClick={toggleFullscreen}
-                  className={`px-4 py-3 transition-colors border ${
-                    isFullscreen
-                      ? 'bg-green-600 text-white hover:bg-green-700 border-green-700'
-                      : 'bg-gray-600 text-white hover:bg-gray-700 border-gray-700'
-                  }`}
-                  title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
+                  onClick={async () => {
+                    // Confirm if cart has items
+                    if (cart.length > 0) {
+                      const confirmed = await confirm(
+                        dict?.pos?.exitPosTitle || 'Exit POS',
+                        dict?.pos?.exitPosConfirm || 'You have items in your cart. Are you sure you want to exit?',
+                        { variant: 'warning' }
+                      );
+                      if (!confirmed) return;
+                    }
+                    // Exit fullscreen first, then navigate to dashboard
+                    try {
+                      if (document.fullscreenElement) {
+                        await document.exitFullscreen();
+                      }
+                    } catch { /* ignore */ }
+                    router.push(`/${tenant}/${lang}`);
+                  }}
+                  className="px-4 py-3 transition-colors border bg-gray-600 text-white hover:bg-gray-700 border-gray-700"
+                  title={dict?.pos?.exitPos || 'Exit POS'}
                 >
-                  {isFullscreen ? (
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6h12v12" />
-                    </svg>
-                  ) : (
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                    </svg>
-                  )}
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
                 </button>
                 <button
                   onClick={() => setShowRefundModal(true)}
@@ -1183,13 +1414,19 @@ export default function POSPage() {
             </div>
 
             {loading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
-                  <div key={i} className="bg-white border border-gray-300 p-5 animate-pulse">
-                    <div className="h-6 bg-gray-200 w-3/4 mb-3"></div>
-                    <div className="h-4 bg-gray-200 w-1/2 mb-3"></div>
-                    <div className="h-8 bg-gray-200 w-20 mb-4"></div>
-                    <div className="h-8 bg-gray-200 w-full"></div>
+              <div className={`grid grid-cols-2 sm:grid-cols-3 ${isFullscreen ? 'lg:grid-cols-4 xl:grid-cols-5' : 'lg:grid-cols-3'} gap-3`}>
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((i) => (
+                  <div key={i} className="bg-white border border-gray-300 overflow-hidden animate-pulse">
+                    <div className="h-28 bg-gray-200"></div>
+                    <div className="p-4">
+                      <div className="h-4 bg-gray-200 w-3/4 mb-2"></div>
+                      <div className="h-3 bg-gray-200 w-1/3 mb-3"></div>
+                      <div className="flex justify-between items-end mb-3">
+                        <div className="h-6 bg-gray-200 w-16"></div>
+                        <div className="h-5 bg-gray-200 w-12"></div>
+                      </div>
+                      <div className="h-9 bg-gray-200 w-full"></div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1201,7 +1438,7 @@ export default function POSPage() {
                 <p className="text-gray-500 text-lg">{dict.common.noResults}</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className={`grid grid-cols-2 sm:grid-cols-3 ${isFullscreen ? 'lg:grid-cols-4 xl:grid-cols-5' : 'lg:grid-cols-3'} gap-3`}>
                 {[...products]
                   .sort((a, b) => {
                     // Pinned products first
@@ -1212,57 +1449,78 @@ export default function POSPage() {
                   .map((product) => (
                   <div
                     key={product._id}
-                    className={`bg-white border border-gray-300 p-5 hover:border-gray-400 transition-all duration-200 relative ${
+                    className={`bg-white border border-gray-300 hover:border-gray-400 transition-all duration-200 relative overflow-hidden flex flex-col ${
                       product.stock === 0 && !product.allowOutOfStockSales ? 'opacity-60' : ''
                     }`}
                   >
-                    <div className="flex flex-col h-full">
-                      <div className="flex-1">
-                        <div className="flex items-start gap-2 mb-2">
-                          <h3 className="font-semibold text-gray-900 text-lg line-clamp-2 flex-1">
-                            {product.name}
-                          </h3>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              e.preventDefault();
-                              handleTogglePin(product._id, product.pinned || false);
-                            }}
-                            className={`p-1.5 transition-all duration-200 flex-shrink-0 mt-0.5 flex items-center justify-center border ${
-                              product.pinned
-                                ? 'bg-amber-50 hover:bg-amber-100 text-amber-600 border-amber-300'
-                                : 'bg-gray-50 hover:bg-gray-100 text-gray-400 hover:text-gray-600 border-gray-300'
-                            }`}
-                            title={product.pinned ? 'Unpin Product' : 'Pin Product'}
-                          >
-                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                              <path d="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12M8.5,12V4H15.5V12L17.5,14H14.3V20H9.7V14H6.5L8.5,12Z"/>
-                            </svg>
-                          </button>
+                    {/* Pin button — absolute over image */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        handleTogglePin(product._id, product.pinned || false);
+                      }}
+                      className={`absolute top-2 right-2 z-10 p-1.5 transition-all duration-200 flex items-center justify-center border shadow-sm ${
+                        product.pinned
+                          ? 'bg-amber-50 hover:bg-amber-100 text-amber-600 border-amber-300'
+                          : 'bg-white/80 hover:bg-white text-gray-400 hover:text-gray-600 border-gray-300 backdrop-blur-sm'
+                      }`}
+                      title={product.pinned ? 'Unpin Product' : 'Pin Product'}
+                    >
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12M8.5,12V4H15.5V12L17.5,14H14.3V20H9.7V14H6.5L8.5,12Z"/>
+                      </svg>
+                    </button>
+
+                    {/* Product Image — consistent height */}
+                    <div className="w-full h-28 bg-gray-50 overflow-hidden flex-shrink-0">
+                      {product.image ? (
+                        <img // eslint-disable-line
+                          src={product.image}
+                          alt={product.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <svg className="w-10 h-10 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                          </svg>
                         </div>
-                        {product.category && (
-                          <p className="text-xs text-gray-500 mb-3">
-                            {product.category}
-                          </p>
-                        )}
-                        <div className="mb-3">
-                          <span
-                            className={`inline-block text-xs font-semibold px-3 py-1.5 border ${
-                              product.stock > 10
-                                ? 'bg-green-100 text-green-800 border-green-300'
-                                : product.stock > 0
-                                ? 'bg-yellow-100 text-yellow-800 border-yellow-300'
-                                : 'bg-red-100 text-red-800 border-red-300'
-                            }`}
-                          >
-                            {product.stock} {dict.pos.inStock}
-                          </span>
-                        </div>
-                        <div className="font-bold text-blue-600 text-2xl mb-4">
+                      )}
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex flex-col flex-1 p-4">
+                      {/* Name — fixed 2-line height */}
+                      <h3 className="font-semibold text-gray-900 text-sm leading-5 line-clamp-2 min-h-[2.5rem] mb-1">
+                        {product.name}
+                      </h3>
+
+                      {/* Category */}
+                      <p className="text-xs text-gray-400 mb-2 truncate h-4">
+                        {product.category || '\u00A0'}
+                      </p>
+
+                      {/* Price + Stock row */}
+                      <div className="flex items-end justify-between gap-2 mb-3 mt-auto">
+                        <div className="font-bold text-blue-600 text-xl leading-tight">
                           <Currency amount={product.price} />
                         </div>
+                        <span
+                          className={`text-[10px] font-semibold px-2 py-1 border whitespace-nowrap ${
+                            product.stock > 10
+                              ? 'bg-green-50 text-green-700 border-green-200'
+                              : product.stock > 0
+                              ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                              : 'bg-red-50 text-red-700 border-red-200'
+                          }`}
+                        >
+                          {product.stock} {dict.pos.inStock}
+                        </span>
                       </div>
+
+                      {/* Add button — always at bottom */}
                       <button
                         type="button"
                         disabled={product.stock === 0 && !product.allowOutOfStockSales}
@@ -1271,14 +1529,14 @@ export default function POSPage() {
                             addToCart(product);
                           }
                         }}
-                        className={`w-full px-4 py-3 font-medium text-sm transition-all duration-200 ${
+                        className={`w-full px-4 py-2.5 font-medium text-sm transition-all duration-200 ${
                           product.stock > 0 || product.allowOutOfStockSales
                             ? 'bg-blue-600 text-white hover:bg-blue-700 border border-blue-700'
                             : 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300'
                         }`}
                       >
-                        {product.stock > 0 || product.allowOutOfStockSales 
-                          ? dict.common.add 
+                        {product.stock > 0 || product.allowOutOfStockSales
+                          ? dict.common.add
                           : dict.pos.outOfStock}
                       </button>
                     </div>
@@ -1355,8 +1613,12 @@ export default function POSPage() {
                     <input
                       type="number"
                       step="0.01"
+                      min="0"
                       value={cashReceived}
-                      onChange={(e) => setCashReceived(e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === '' || parseFloat(val) >= 0) setCashReceived(val);
+                      }}
                       className="w-full px-4 py-3 text-base border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="0.00"
                     />
@@ -1559,7 +1821,8 @@ export default function POSPage() {
                   </label>
                   <textarea
                     value={refundNotes}
-                    onChange={(e) => setRefundNotes(e.target.value)}
+                    onChange={(e) => setRefundNotes(e.target.value.slice(0, MAX_REFUND_NOTES_LENGTH))}
+                    maxLength={MAX_REFUND_NOTES_LENGTH}
                     rows={3}
                     className="w-full px-4 py-3 text-base border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder={dict?.pos?.refundNotesPlaceholder || 'Additional notes'}
@@ -1759,6 +2022,7 @@ export default function POSPage() {
           </div>
         </div>
       )}
+      {confirmDialog}
     </div>
   );
 }

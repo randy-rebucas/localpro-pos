@@ -5,11 +5,23 @@ import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { getTenantSettingsById } from '@/lib/tenant';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { logger } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
     await requireAuth(request);
+
+    // Rate limit: 20 attempts per minute per IP to prevent brute-force code guessing
+    const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+    const rateCheck = checkRateLimit(`discount-validate:${ip}`, 20, 60_000);
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        { success: false, error: 'Too many attempts. Please wait before trying again.' },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil(rateCheck.resetAfterMs / 1000)) } }
+      );
+    }
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
     
@@ -17,19 +29,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
     
-    // Get tenant settings to check feature flags
-    const tenantSettings = await getTenantSettingsById(tenantId);
-    
-    // Check if discounts are enabled
-    if (tenantSettings && tenantSettings.enableDiscounts === false) {
-      return NextResponse.json(
-        { success: false, error: t('validation.discountsNotEnabled', 'Discounts are not enabled for this tenant') },
-        { status: 400 }
-      );
-    }
-    
     const body = await request.json();
     const { code, subtotal } = body;
+
+    // SC/PWD discounts are legal requirements (RA 9994/10754) — always allowed
+    const legalDiscountCodes = ['SC20', 'PWD20'];
+    const isLegalDiscount = code && legalDiscountCodes.includes(code.toUpperCase());
+
+    // Check if discounts feature is enabled (skip for legally-required discounts)
+    if (!isLegalDiscount) {
+      const tenantSettings = await getTenantSettingsById(tenantId);
+      if (tenantSettings && tenantSettings.enableDiscounts === false) {
+        return NextResponse.json(
+          { success: false, error: t('validation.discountsNotEnabled', 'Discounts are not enabled for this tenant') },
+          { status: 400 }
+        );
+      }
+    }
 
     if (!code) {
       return NextResponse.json(
@@ -80,10 +96,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Calculate discount amount
+    // Calculate discount amount with decimal precision
     let discountAmount = 0;
     if (discount.type === 'percentage') {
-      discountAmount = (subtotal * discount.value) / 100;
+      discountAmount = Math.round((subtotal * discount.value) / 100 * 100) / 100;
       if (discount.maxDiscountAmount) {
         discountAmount = Math.min(discountAmount, discount.maxDiscountAmount);
       }
@@ -99,11 +115,12 @@ export async function POST(request: NextRequest) {
         type: discount.type,
         value: discount.value,
         discountAmount,
-        finalTotal: Math.max(0, subtotal - discountAmount),
+        finalTotal: Math.max(0, Math.round((subtotal - discountAmount) * 100) / 100),
       },
     });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    logger.error('Error validating discount:', error);
+    return NextResponse.json({ success: false, error: 'Failed to validate discount' }, { status: 500 });
   }
 }
 

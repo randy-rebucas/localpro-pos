@@ -53,13 +53,14 @@ export default function CategoriesPage() {
 
   const handleDeleteCategory = async (categoryId: string) => {
     if (!dict) return;
-    if (!confirm(dict.common?.deleteCategoryConfirm || dict.admin?.deleteCategoryConfirm || 'Are you sure you want to delete this category?')) return;
+    if (!window.confirm(dict.common?.deleteCategoryConfirm || dict.admin?.deleteCategoryConfirm || 'Are you sure you want to delete this category?')) return;
     try {
       const res = await fetch(`/api/categories/${categoryId}`, { method: 'DELETE', credentials: 'include' });
       const data = await res.json();
       if (data.success) {
+        // Remove from local state immediately for instant feedback
+        setCategories(prev => prev.filter(c => c._id !== categoryId));
         setMessage({ type: 'success', text: dict?.common?.categoryDeletedSuccess || 'Category deleted successfully' });
-        fetchCategories();
       } else {
         setMessage({ type: 'error', text: data.error || dict?.common?.failedToDeleteCategory || 'Failed to delete category' });
       }

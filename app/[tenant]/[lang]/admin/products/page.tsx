@@ -646,23 +646,44 @@ function ProductModal({
                     Upload image
                     <input
                       type="file"
-                      accept="image/*"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
                       className="hidden"
-                      onChange={(e) => {
+                      onChange={async (e) => {
                         const file = e.target.files?.[0];
                         if (!file) return;
-                        const canvas = document.createElement('canvas');
-                        const ctx = canvas.getContext('2d')!;
-                        const img = new window.Image();
-                        img.onload = () => {
-                          const MAX = 400;
-                          const ratio = Math.min(MAX / img.width, MAX / img.height, 1);
-                          canvas.width = Math.round(img.width * ratio);
-                          canvas.height = Math.round(img.height * ratio);
-                          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                          setFormData(prev => ({ ...prev, image: canvas.toDataURL('image/jpeg', 0.75) }));
-                        };
-                        img.src = URL.createObjectURL(file);
+                        if (file.size > 2 * 1024 * 1024) {
+                          alert('File too large. Maximum size: 2MB');
+                          return;
+                        }
+                        try {
+                          const fd = new FormData();
+                          fd.append('file', file);
+                          const res = await fetch('/api/upload', {
+                            method: 'POST',
+                            credentials: 'include',
+                            body: fd,
+                          });
+                          const data = await res.json();
+                          if (data.success) {
+                            setFormData(prev => ({ ...prev, image: data.data.url }));
+                          } else {
+                            alert(data.error || 'Failed to upload image');
+                          }
+                        } catch {
+                          // Fallback to base64 if upload API unavailable
+                          const canvas = document.createElement('canvas');
+                          const ctx = canvas.getContext('2d')!;
+                          const img = new window.Image();
+                          img.onload = () => {
+                            const MAX = 400;
+                            const ratio = Math.min(MAX / img.width, MAX / img.height, 1);
+                            canvas.width = Math.round(img.width * ratio);
+                            canvas.height = Math.round(img.height * ratio);
+                            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                            setFormData(prev => ({ ...prev, image: canvas.toDataURL('image/jpeg', 0.75) }));
+                          };
+                          img.src = URL.createObjectURL(file);
+                        }
                       }}
                     />
                   </label>

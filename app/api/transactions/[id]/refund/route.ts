@@ -85,10 +85,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     // Calculate proportional discount refund if applicable
-    if (transaction.discountAmount && transaction.discountAmount > 0) {
+    if (transaction.discountAmount && transaction.discountAmount > 0 && transaction.subtotal > 0) {
       const discountRatio = refundAmount / transaction.subtotal;
-      const refundDiscount = transaction.discountAmount * discountRatio;
-      refundAmount -= refundDiscount;
+      const refundDiscount = Math.round(transaction.discountAmount * discountRatio * 100) / 100;
+      refundAmount = Math.round((refundAmount - refundDiscount) * 100) / 100;
     }
 
     // Create refund transaction

@@ -33,6 +33,8 @@ interface CachedDiscount {
   isActive: boolean;
   startDate?: string;
   endDate?: string;
+  validFrom?: string;
+  validUntil?: string;
   usageLimit?: number;
   usageCount?: number;
   tenant: string;
