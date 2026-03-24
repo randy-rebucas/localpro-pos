@@ -3,6 +3,7 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useSubscription } from '@/contexts/SubscriptionContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 
 interface SubscriptionGuardProps {
@@ -11,6 +12,7 @@ interface SubscriptionGuardProps {
 
 export function SubscriptionGuard({ children }: SubscriptionGuardProps) {
   const { subscriptionStatus, loading, refreshSubscription } = useSubscription();
+  const { user } = useAuth();
   const router = useRouter();
   const params = useParams();
   const tenant = params.tenant as string;
@@ -19,6 +21,9 @@ export function SubscriptionGuard({ children }: SubscriptionGuardProps) {
 
   useEffect(() => {
     const handleSubscriptionCheck = async () => {
+      // super_admin has no tenant — subscription check does not apply
+      if (user?.role === 'super_admin') return;
+
       // If still loading, wait
       if (loading) return;
 
@@ -88,6 +93,9 @@ export function SubscriptionGuard({ children }: SubscriptionGuardProps) {
       throw error;
     }
   };
+
+  // super_admin bypasses subscription entirely
+  if (user?.role === 'super_admin') return <>{children}</>;
 
   // Show loading while checking/creating subscription
   if (loading || isCreatingTrial) {

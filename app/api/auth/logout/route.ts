@@ -15,7 +15,8 @@ export async function POST(request: NextRequest) {
       await revokeToken(token, 7 * 86400, 'logout'); // match JWT_EXPIRES_IN default
     }
 
-    if (user) {
+    // super_admin has no tenantId — skip tenant-scoped audit log
+    if (user && user.role !== 'super_admin') {
       await createAuditLog(request, {
         tenantId: user.tenantId,
         action: AuditActions.LOGOUT,
