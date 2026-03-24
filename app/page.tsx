@@ -1,750 +1,723 @@
-'use client';
-
+import type { Metadata } from 'next';
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import FeaturesGrid from '@/components/FeaturesGrid';
 
-export default function MarketingPage() {
-  const [activeSection, setActiveSection] = useState<string | null>(null);
-  const [scrollY, setScrollY] = useState(0); // eslint-disable-line @typescript-eslint/no-unused-vars
+/* ── Page-level metadata (overrides root layout defaults) ─────────── */
+export const metadata: Metadata = {
+  title: 'Enterprise POS System for Philippine Businesses',
+  description:
+    'Transform your business with 1pos — the complete BIR-ready point of sale system with 100+ features, real-time inventory, multi-branch support, and 30+ automated workflows. Start your free 14-day trial today.',
+  keywords: [
+    'POS system Philippines',
+    'point of sale',
+    'BIR compliant POS',
+    'inventory management system',
+    'multi-tenant POS',
+    'retail POS software',
+    'restaurant POS',
+    'free POS trial',
+  ],
+  openGraph: {
+    title: '1pos — Enterprise POS System for Philippine Businesses',
+    description:
+      'Complete BIR-ready POS with 100+ features, real-time inventory, and 30+ automations. Free 14-day trial.',
+    type: 'website',
+    url: '/',
+    siteName: '1pos',
+    images: [{ url: '/icon-192x192.png', width: 192, height: 192, alt: '1pos point of sale logo' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: '1pos — Enterprise POS System',
+    description: 'Complete BIR-ready POS with 100+ features. Free 14-day trial.',
+    images: ['/icon-192x192.png'],
+  },
+  alternates: { canonical: '/' },
+  robots: { index: true, follow: true, googleBot: { index: true, follow: true } },
+};
 
-  useEffect(() => {
-    const handleScroll = () => setScrollY(window.scrollY);
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+/* ── JSON-LD structured data ─────────────────────────────────────── */
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'SoftwareApplication',
+      '@id': '/#software',
+      name: '1pos',
+      applicationCategory: 'BusinessApplication',
+      operatingSystem: 'Web Browser',
+      description:
+        'Enterprise-grade BIR-ready point of sale system for Philippine businesses. Includes inventory management, multi-branch support, customer management, and 30+ automated workflows.',
+      offers: {
+        '@type': 'Offer',
+        price: '0',
+        priceCurrency: 'PHP',
+        description: '14-day free trial — no credit card required',
+      },
+      featureList:
+        'Point of Sale, Inventory Management, Customer Management, BIR Compliance, Multi-Branch Support, Reports & Analytics, Booking & Scheduling, Offline Mode, Hardware Integration',
+    },
+    {
+      '@type': 'Organization',
+      '@id': '/#org',
+      name: '1pos',
+      url: 'https://1pos.app',
+      description: 'Enterprise-grade POS system provider for modern Philippine businesses',
+    },
+    {
+      '@type': 'WebSite',
+      '@id': '/#website',
+      url: 'https://1pos.app',
+      name: '1pos',
+      publisher: { '@id': '/#org' },
+      potentialAction: {
+        '@type': 'SearchAction',
+        target: 'https://1pos.app/stores?q={search_term_string}',
+        'query-input': 'required name=search_term_string',
+      },
+    },
+  ],
+};
 
-  const features = [
-    {
-      id: 'core-pos',
-      title: 'Core POS Features',
-      icon: '🛒',
-      description: 'Complete point of sale interface with shopping cart, payments, and receipts',
-      details: [
-        'Shopping cart system with real-time calculations',
-        'Product search & filtering by name, SKU, or barcode',
-        'Real-time stock validation',
-        'Multiple payment methods (Cash, Card, Digital Wallet)',
-        'Customizable receipt generation (PDF, Print, Email)',
-        'Transaction management with full history',
-        'Refund processing with stock restoration'
-      ]
-    },
-    {
-      id: 'product-management',
-      title: 'Product Management',
-      icon: '📦',
-      description: 'Comprehensive product management with variations, bundles, and barcode support',
-      details: [
-        'Full CRUD operations for products',
-        'Product categories and organization',
-        'SKU tracking and management',
-        'Product variations (size, color, type)',
-        'Product bundles with automatic stock deduction',
-        'Barcode & QR code scanning and generation',
-        'Product images and descriptions'
-      ]
-    },
-    {
-      id: 'inventory',
-      title: 'Inventory Management',
-      icon: '📊',
-      description: 'Real-time inventory tracking with multi-branch support and low stock alerts',
-      details: [
-        'Real-time stock updates via Server-Sent Events',
-        'Complete stock movement history',
-        'Multi-branch inventory with transfers',
-        'Low stock alerts and notifications',
-        'Stock movement types: Sale, Purchase, Adjustment, Return, Damage, Transfer',
-        'Automated stock deduction on sales'
-      ]
-    },
-    {
-      id: 'multi-tenant',
-      title: 'Multi-Tenant Architecture',
-      icon: '🏢',
-      description: 'Complete data isolation with tenant-specific branding and configuration',
-      details: [
-        'Complete data isolation per tenant',
-        'Path-based and subdomain routing',
-        'Tenant-specific branding (logo, colors, favicon)',
-        'Custom currency and localization per tenant',
-        'Business type configuration',
-        'Tenant-specific settings and features'
-      ]
-    },
-    {
-      id: 'business-types',
-      title: 'Multi-Business Type Support',
-      icon: '🎯',
-      description: 'Industry-specific configurations for Retail, Restaurant, Laundry, Service, and more',
-      details: [
-        'Retail: Product-focused with inventory management',
-        'Restaurant: Menu items with modifiers and allergens',
-        'Laundry: Service-based with weight-based pricing',
-        'Service: Time-based services with staff assignment',
-        'General: Flexible configuration for any business',
-        'Automatic feature configuration based on type'
-      ]
-    },
-    {
-      id: 'user-management',
-      title: 'User Management & Authentication',
-      icon: '👥',
-      description: 'Flexible authentication with role-based access control',
-      details: [
-        'Email/Password authentication',
-        'PIN-based login (4-6 digits)',
-        'QR code-based login',
-        'Role-based access control (Owner, Admin, Manager, Cashier, Viewer)',
-        'User profiles with activity tracking',
-        'Session management with JWT tokens'
-      ]
-    },
-    {
-      id: 'customers',
-      title: 'Customer Management',
-      icon: '👤',
-      description: 'Comprehensive customer profiles with analytics and lifetime value tracking',
-      details: [
-        'Customer information and contact details',
-        'Multiple addresses per customer',
-        'Customer tags and categorization',
-        'Purchase history and analytics',
-        'Customer lifetime value calculation',
-        'Customer notes and preferences'
-      ]
-    },
-    {
-      id: 'discounts',
-      title: 'Discount & Promo System',
-      icon: '🎁',
-      description: 'Flexible discount codes with usage limits and validity periods',
-      details: [
-        'Percentage and fixed amount discounts',
-        'Product, category, or store-wide discounts',
-        'Minimum purchase requirements',
-        'Usage limits per code and per customer',
-        'Validity periods with start/end dates',
-        'Real-time discount validation'
-      ]
-    },
-    {
-      id: 'tax',
-      title: 'Tax Rules Management',
-      icon: '💰',
-      description: 'Flexible tax configuration with multiple tax rules support',
-      details: [
-        'Flat rate and percentage-based taxes',
-        'Product, category, and region-specific taxes',
-        'Custom tax labels (VAT, GST, Sales Tax)',
-        'Multiple tax rules with priority ordering',
-        'Automatic tax calculation',
-        'Tax reporting and breakdown'
-      ]
-    },
-    {
-      id: 'reports',
-      title: 'Reports & Analytics',
-      icon: '📈',
-      description: 'Comprehensive reporting with sales, product, financial, and attendance analytics',
-      details: [
-        'Sales reports (Daily, Weekly, Monthly, Custom)',
-        'Product performance and analytics',
-        'Financial reports (Profit & Loss)',
-        'VAT/Tax reports',
-        'Cash drawer session reports',
-        'Bundle performance reports',
-        'Attendance reports',
-        'Export capabilities (CSV, Excel, PDF)'
-      ]
-    },
-    {
-      id: 'attendance',
-      title: 'Attendance Management',
-      icon: '⏰',
-      description: 'Time tracking with clock in/out, breaks, and location tracking',
-      details: [
-        'Clock in/out functionality',
-        'Break tracking (start/end)',
-        'Automatic hours calculation',
-        'Attendance history and records',
-        'GPS location capture (optional)',
-        'Auto clock-out for forgotten sessions'
-      ]
-    },
-    {
-      id: 'cash-drawer',
-      title: 'Cash Drawer Management',
-      icon: '💵',
-      description: 'Cash drawer sessions with opening/closing amounts and reconciliation',
-      details: [
-        'Opening cash drawer with starting amount',
-        'Closing cash drawer with count',
-        'Shortage/overage detection',
-        'Cash sales and expenses tracking',
-        'Session history and reports',
-        'Auto-close at end of day'
-      ]
-    },
-    {
-      id: 'expenses',
-      title: 'Expense Management',
-      icon: '💸',
-      description: 'Track expenses with categories, receipts, and integration with P&L reports',
-      details: [
-        'Expense categories and organization',
-        'Receipt attachments',
-        'Payment method tracking',
-        'Date-based filtering',
-        'Integration with profit/loss reports',
-        'Category-wise expense breakdown'
-      ]
-    },
-    {
-      id: 'booking',
-      title: 'Booking & Scheduling',
-      icon: '📅',
-      description: 'Calendar-based booking system with reminders and status management',
-      details: [
-        'Calendar views (Month, Week, Day)',
-        'Create, edit, cancel, and delete bookings',
-        'Customer and service information',
-        'Staff assignment',
-        'Booking status management',
-        'Automated reminders (24h before)',
-        'Conflict detection'
-      ]
-    },
-    {
-      id: 'currency',
-      title: 'Multi-Currency Support',
-      icon: '🌍',
-      description: 'Support for multiple currencies with automatic exchange rates',
-      details: [
-        'Base currency per tenant',
-        'Display currencies',
-        'Automatic exchange rate fetching',
-        'Multiple exchange rate providers',
-        'Real-time currency conversion',
-        'Multi-currency reporting'
-      ]
-    },
-    {
-      id: 'branches',
-      title: 'Branch Management',
-      icon: '🏪',
-      description: 'Multi-branch support with branch-specific inventory and reporting',
-      details: [
-        'Create and manage multiple branches',
-        'Branch-specific stock levels',
-        'Stock transfers between branches',
-        'Branch-specific reports',
-        'Cross-branch comparisons',
-        'Consolidated reporting'
-      ]
-    },
-    {
-      id: 'bundles',
-      title: 'Bundles Management',
-      icon: '📦',
-      description: 'Product bundles with automatic stock management and analytics',
-      details: [
-        'Create and manage product bundles',
-        'Bundle-specific pricing',
-        'Automatic stock deduction for all bundle items',
-        'Bundle performance tracking',
-        'Component product analysis',
-        'Bulk bundle operations'
-      ]
-    },
-    {
-      id: 'hardware',
-      title: 'Hardware Integration',
-      icon: '🖨️',
-      description: 'Support for barcode scanners, QR code scanners, and receipt printers',
-      details: [
-        'USB and wireless barcode scanners',
-        'Camera-based QR code scanning',
-        'ESC/POS compatible receipt printers',
-        'Per-tenant hardware configuration',
-        'Hardware status monitoring',
-        'Connection error handling'
-      ]
-    },
-    {
-      id: 'settings',
-      title: 'Settings & Configuration',
-      icon: '⚙️',
-      description: 'Comprehensive settings for branding, receipts, taxes, and feature flags',
-      details: [
-        'Company information and branding',
-        'Currency and localization settings',
-        'Receipt template customization',
-        'Tax configuration',
-        'Feature flags (enable/disable features)',
-        'Business hours and holidays management',
-        'Notification templates'
-      ]
-    },
-    {
-      id: 'security',
-      title: 'Security & Audit',
-      icon: '🔒',
-      description: 'Enterprise-grade security with complete audit logging',
-      details: [
-        'JWT token-based authentication',
-        'Secure password hashing (bcrypt)',
-        'Role-based access control',
-        'Tenant data isolation',
-        'Complete audit trail',
-        'Before/after value tracking',
-        'IP address and user agent logging'
-      ]
-    },
-    {
-      id: 'automations',
-      title: 'Automations',
-      icon: '🤖',
-      description: '30+ automated workflows to reduce manual work',
-      details: [
-        'Automated booking reminders',
-        'Low stock alerts',
-        'Transaction receipt auto-email',
-        'Scheduled reports',
-        'Auto clock-out for attendance',
-        'Cash drawer auto-close',
-        'Customer welcome emails',
-        'And 23+ more automations'
-      ]
-    },
-    {
-      id: 'offline',
-      title: 'Offline Support',
-      icon: '📱',
-      description: 'Work offline with automatic sync when connection is restored',
-      details: [
-        'Automatic offline mode detection',
-        'Local storage for offline transactions',
-        'Offline product browsing',
-        'Offline cart management',
-        'Automatic sync when online',
-        'Conflict resolution'
-      ]
-    },
-    {
-      id: 'i18n',
-      title: 'Internationalization',
-      icon: '🌐',
-      description: 'Multi-language support with localized formatting',
-      details: [
-        'English and Spanish support',
-        'Extensible for additional languages',
-        'Localized date/time formatting',
-        'Localized number formatting',
-        'Localized currency formatting',
-        'Timezone support'
-      ]
-    }
+/* ── Sub-components (pure JSX — no hooks — server-safe) ──────────── */
+function DashboardMockup() {
+  const bars = [42, 67, 53, 80, 61, 74, 88, 65, 71, 93, 82, 78];
+  const months = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
+  const txns = [
+    { id: '#4821', item: 'Chicken Rice Meal', amt: '₱185', status: 'Paid', color: 'text-emerald-400' },
+    { id: '#4820', item: 'Coffee + Pastry Set', amt: '₱220', status: 'Paid', color: 'text-emerald-400' },
+    { id: '#4819', item: 'Laundry — 5kg', amt: '₱350', status: 'Paid', color: 'text-emerald-400' },
+    { id: '#4818', item: 'Haircut Service', amt: '₱250', status: 'Refund', color: 'text-red-400' },
+    { id: '#4817', item: 'T-Shirt (M, Blue)', amt: '₱599', status: 'Paid', color: 'text-emerald-400' },
   ];
-
-  const stats = [
-    { label: 'Features', value: '100+' },
-    { label: 'Automations', value: '30+' },
-    { label: 'Business Types', value: '5' },
-    { label: 'Languages', value: '2+' }
+  const navItems = ['Dashboard', 'Point of Sale', 'Products', 'Customers', 'Inventory', 'Reports', 'Settings'];
+  const statCards = [
+    { label: "Today's Revenue", val: '₱84,231', change: '+12.4%', up: true },
+    { label: 'Transactions', val: '1,248', change: '+8.1%', up: true },
+    { label: 'Customers', val: '3,892', change: '+3.7%', up: true },
+    { label: 'Low Stock Items', val: '14', change: '−2', up: false },
   ];
 
   return (
-    <div className="min-h-screen bg-white overflow-x-hidden">
-      {/* Hero Section */}
-      <section className="relative bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 text-white py-24 md:py-32 px-4 overflow-hidden">
-        {/* Animated Background Elements */}
-        <div className="absolute inset-0 overflow-hidden">
-          <div 
-            className="absolute top-20 left-10 w-72 h-72 bg-blue-400/20 rounded-full blur-3xl animate-pulse"
-            style={{ animationDelay: '0s', animationDuration: '4s' }}
-          />
-          <div 
-            className="absolute bottom-20 right-10 w-96 h-96 bg-purple-400/20 rounded-full blur-3xl animate-pulse"
-            style={{ animationDelay: '2s', animationDuration: '5s' }}
-          />
-          <div 
-            className="absolute top-1/2 left-1/2 w-80 h-80 bg-indigo-400/10 rounded-full blur-3xl animate-pulse"
-            style={{ animationDelay: '1s', animationDuration: '6s' }}
-          />
+    <div className="bg-gray-950 rounded-b-2xl overflow-hidden text-xs select-none" aria-hidden="true" style={{ minHeight: '420px' }}>
+      <div className="flex h-full" style={{ minHeight: '420px' }}>
+        {/* Sidebar */}
+        <div className="w-40 bg-gray-900 border-r border-gray-800 flex-shrink-0 p-3">
+          <div className="flex items-center gap-2 mb-5 px-1">
+            <div className="w-6 h-6 rounded bg-blue-600 flex items-center justify-center text-white font-bold text-xs">1</div>
+            <span className="text-white font-bold text-sm">pos</span>
+          </div>
+          {navItems.map((item, i) => (
+            <div key={item} className={`flex items-center gap-2 px-2 py-2 rounded-md mb-0.5 ${i === 0 ? 'bg-blue-600 text-white' : 'text-gray-400'}`}>
+              <div className={`w-1.5 h-1.5 rounded-full ${i === 0 ? 'bg-white' : 'bg-gray-600'}`} />
+              <span>{item}</span>
+            </div>
+          ))}
         </div>
 
-        <div className="relative max-w-7xl mx-auto text-center z-10">
-          {/* Badge */}
-          <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-md border border-white/30 px-4 py-2 rounded-full mb-6 animate-fade-in">
-            <span className="text-sm font-semibold">✨ Enterprise-Grade POS System</span>
-          </div>
-
-          <h1 className="text-6xl md:text-7xl lg:text-8xl font-bold mb-6 animate-fade-in bg-gradient-to-r from-white via-blue-100 to-white bg-clip-text text-transparent">
-            1pos
-          </h1>
-          <p className="text-2xl md:text-3xl mb-6 text-blue-50 max-w-3xl mx-auto font-light">
-            Transform Your Business Operations
-          </p>
-          <p className="text-lg md:text-xl mb-12 text-blue-100 max-w-2xl mx-auto leading-relaxed">
-            The most comprehensive POS solution with <span className="font-bold text-white">100+ features</span>, 
-            multi-tenant architecture, real-time inventory, and <span className="font-bold text-white">30+ automated workflows</span>.
-          </p>
-          
-          {/* Enhanced Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 max-w-5xl mx-auto mb-12">
-            {stats.map((stat, index) => (
-              <div 
-                key={index} 
-                className="group bg-white/15 backdrop-blur-md border border-white/30 p-6 md:p-8 hover:bg-white/20 transition-all duration-300 hover:scale-105 hover:shadow-2xl"
-                style={{ animationDelay: `${index * 0.1}s` }}
-              >
-                <div className="text-4xl md:text-5xl font-bold mb-2 bg-gradient-to-br from-white to-blue-200 bg-clip-text text-transparent">
-                  {stat.value}
-                </div>
-                <div className="text-blue-100 text-sm md:text-base font-medium">{stat.label}</div>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-            <Link
-              href="/signup"
-              className="group relative bg-white text-blue-600 px-10 py-5 font-bold text-lg hover:bg-blue-50 transition-all duration-300 hover:scale-105 hover:shadow-2xl overflow-hidden"
-            >
-              <span className="relative z-10">Get Started Free</span>
-              <div className="absolute inset-0 bg-gradient-to-r from-blue-50 to-indigo-50 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-            </Link>
-            <Link
-              href="/stores"
-              className="group bg-white/15 backdrop-blur-md text-white px-10 py-5 font-bold text-lg border-2 border-white/50 hover:border-white hover:bg-white/25 transition-all duration-300 hover:scale-105"
-            >
-              🏪 Browse Stores
-            </Link>
-            <a
-              href="#features"
-              className="group bg-transparent text-white px-10 py-5 font-bold text-lg border-2 border-white/30 hover:border-white/50 hover:bg-white/10 transition-all duration-300 hover:scale-105"
-            >
-              Explore Features ↓
-            </a>
-          </div>
-
-          {/* Scroll Indicator */}
-          <div className="mt-16 animate-bounce">
-            <div className="w-6 h-10 border-2 border-white/50 rounded-full mx-auto flex items-start justify-center p-2">
-              <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Features Grid */}
-      <section id="features" className="py-24 px-4 bg-gradient-to-b from-gray-50 to-white relative">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-20">
-            <div className="inline-block bg-blue-100 text-blue-700 px-4 py-2 rounded-full text-sm font-semibold mb-4">
-              POWERFUL FEATURES
-            </div>
-            <h2 className="text-5xl md:text-6xl font-bold mb-6 text-gray-900">
-              Everything You Need
-            </h2>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
-              A comprehensive suite of features designed to streamline your business operations
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-            {features.map((feature, index) => (
-              <div
-                key={feature.id}
-                className="group relative bg-white border-2 border-gray-200 p-6 md:p-8 cursor-pointer transition-all duration-300 hover:border-blue-400 hover:shadow-2xl hover:-translate-y-2 overflow-hidden"
-                onClick={() => setActiveSection(activeSection === feature.id ? null : feature.id)}
-                style={{ animationDelay: `${index * 0.05}s` }}
-              >
-                {/* Gradient Overlay on Hover */}
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-50/0 to-indigo-50/0 group-hover:from-blue-50/50 group-hover:to-indigo-50/50 transition-all duration-300" />
-                
-                <div className="relative z-10">
-                  <div className="flex items-start gap-4 mb-4">
-                    <div className="text-5xl transform group-hover:scale-110 transition-transform duration-300">
-                      {feature.icon}
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="text-xl font-bold mb-2 text-gray-900 group-hover:text-blue-600 transition-colors">
-                        {feature.title}
-                      </h3>
-                      <p className="text-gray-600 text-sm mb-4 leading-relaxed">
-                        {feature.description}
-                      </p>
-                    </div>
-                  </div>
-
-                  {activeSection === feature.id && (
-                    <div className="mt-4 pt-4 border-t-2 border-blue-200 animate-fade-in">
-                      <ul className="space-y-3">
-                        {feature.details.map((detail, idx) => (
-                          <li key={idx} className="flex items-start gap-3 text-sm text-gray-700">
-                            <span className="flex-shrink-0 w-5 h-5 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs font-bold mt-0.5">
-                              ✓
-                            </span>
-                            <span className="leading-relaxed">{detail}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {activeSection !== feature.id && (
-                    <div className="flex items-center gap-2 text-blue-600 text-sm font-semibold mt-4 group-hover:gap-3 transition-all">
-                      <span>View Details</span>
-                      <span className="transform group-hover:translate-x-1 transition-transform">→</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Key Highlights */}
-      <section className="py-24 px-4 bg-gradient-to-b from-white via-blue-50/30 to-white">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-20">
-            <div className="inline-block bg-indigo-100 text-indigo-700 px-4 py-2 rounded-full text-sm font-semibold mb-4">
-              WHY CHOOSE US
-            </div>
-            <h2 className="text-5xl md:text-6xl font-bold mb-6 text-gray-900">
-              Built for Modern Businesses
-            </h2>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              Enterprise-grade features that scale with your business
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-10">
-            <div className="group relative text-center p-10 bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-200 hover:border-blue-400 transition-all duration-300 hover:shadow-2xl hover:-translate-y-2">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-200/30 rounded-full blur-2xl -z-10" />
-              <div className="text-6xl mb-6 transform group-hover:scale-110 group-hover:rotate-6 transition-transform duration-300">🏢</div>
-              <h3 className="text-2xl font-bold mb-4 text-gray-900">Multi-Tenant</h3>
-              <p className="text-gray-700 leading-relaxed">
-                Complete data isolation with tenant-specific branding, settings, and configurations. 
-                Perfect for SaaS deployments and enterprise solutions.
-              </p>
-            </div>
-
-            <div className="group relative text-center p-10 bg-gradient-to-br from-emerald-50 to-emerald-100 border-2 border-emerald-200 hover:border-emerald-400 transition-all duration-300 hover:shadow-2xl hover:-translate-y-2">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-200/30 rounded-full blur-2xl -z-10" />
-              <div className="text-6xl mb-6 transform group-hover:scale-110 group-hover:rotate-6 transition-transform duration-300">⚡</div>
-              <h3 className="text-2xl font-bold mb-4 text-gray-900">Real-Time</h3>
-              <p className="text-gray-700 leading-relaxed">
-                Real-time inventory updates, stock validation, and Server-Sent Events for 
-                instant synchronization across all devices and locations.
-              </p>
-            </div>
-
-            <div className="group relative text-center p-10 bg-gradient-to-br from-purple-50 to-purple-100 border-2 border-purple-200 hover:border-purple-400 transition-all duration-300 hover:shadow-2xl hover:-translate-y-2">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-purple-200/30 rounded-full blur-2xl -z-10" />
-              <div className="text-6xl mb-6 transform group-hover:scale-110 group-hover:rotate-6 transition-transform duration-300">🤖</div>
-              <h3 className="text-2xl font-bold mb-4 text-gray-900">Automated</h3>
-              <p className="text-gray-700 leading-relaxed">
-                30+ automated workflows including booking reminders, low stock alerts, 
-                scheduled reports, and intelligent business automation.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Business Types */}
-      <section className="py-24 px-4 bg-gradient-to-b from-gray-50 to-white">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-20">
-            <div className="inline-block bg-purple-100 text-purple-700 px-4 py-2 rounded-full text-sm font-semibold mb-4">
-              VERSATILE SOLUTION
-            </div>
-            <h2 className="text-5xl md:text-6xl font-bold mb-6 text-gray-900">
-              Built for Every Business
-            </h2>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              Industry-specific configurations tailored to your business model
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-            {[
-              { icon: '🏪', name: 'Retail', desc: 'Product-focused with inventory', color: 'from-blue-500 to-blue-600' },
-              { icon: '🍕', name: 'Restaurant', desc: 'Menu items with modifiers', color: 'from-orange-500 to-red-500' },
-              { icon: '👔', name: 'Laundry', desc: 'Service-based operations', color: 'from-cyan-500 to-blue-500' },
-              { icon: '💼', name: 'Service', desc: 'Time-based services', color: 'from-indigo-500 to-purple-500' },
-              { icon: '🔧', name: 'General', desc: 'Flexible configuration', color: 'from-gray-500 to-gray-600' }
-            ].map((type, index) => (
-              <div 
-                key={index} 
-                className="group relative bg-white border-2 border-gray-200 p-8 text-center transition-all duration-300 hover:border-blue-400 hover:shadow-xl hover:-translate-y-2 overflow-hidden"
-              >
-                <div className={`absolute inset-0 bg-gradient-to-br ${type.color} opacity-0 group-hover:opacity-5 transition-opacity duration-300`} />
-                <div className="relative z-10">
-                  <div className="text-6xl mb-4 transform group-hover:scale-125 group-hover:rotate-12 transition-transform duration-300">
-                    {type.icon}
-                  </div>
-                  <h3 className="text-xl font-bold mb-2 text-gray-900 group-hover:text-blue-600 transition-colors">
-                    {type.name}
-                  </h3>
-                  <p className="text-sm text-gray-600">{type.desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Benefits Section */}
-      <section className="py-24 px-4 bg-gradient-to-b from-white to-gray-50">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid md:grid-cols-2 gap-12 items-center">
+        {/* Main */}
+        <div className="flex-1 p-4 overflow-hidden bg-gray-950">
+          <div className="flex items-center justify-between mb-4">
             <div>
-              <div className="inline-block bg-green-100 text-green-700 px-4 py-2 rounded-full text-sm font-semibold mb-4">
-                KEY BENEFITS
+              <div className="text-white font-semibold text-sm">Good morning, Admin 👋</div>
+              <div className="text-gray-500 text-xs">Today — March 24, 2026</div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="bg-blue-600/20 text-blue-400 px-2 py-1 rounded text-xs font-medium">Premium Plan</div>
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold">A</div>
+            </div>
+          </div>
+
+          {/* Stat cards */}
+          <div className="grid grid-cols-4 gap-3 mb-4">
+            {statCards.map((s) => (
+              <div key={s.label} className="bg-gray-900 border border-gray-800 rounded-xl p-3">
+                <div className="text-gray-500 text-xs mb-1.5">{s.label}</div>
+                <div className="text-white font-bold text-base mb-1">{s.val}</div>
+                <div className={`text-xs font-medium ${s.up ? 'text-emerald-400' : 'text-red-400'}`}>{s.change} vs yesterday</div>
               </div>
-              <h2 className="text-4xl md:text-5xl font-bold mb-6 text-gray-900">
-                Streamline Your Operations
-              </h2>
-              <div className="space-y-6">
-                {[
-                  { title: 'Save Time', desc: '30+ automations reduce manual work by up to 80%' },
-                  { title: 'Increase Revenue', desc: 'Advanced analytics help identify growth opportunities' },
-                  { title: 'Reduce Errors', desc: 'Real-time validation prevents costly mistakes' },
-                  { title: 'Scale Easily', desc: 'Multi-tenant architecture grows with your business' }
-                ].map((benefit, index) => (
-                  <div key={index} className="flex gap-4">
-                    <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-xl">
-                      ✓
+            ))}
+          </div>
+
+          <div className="grid grid-cols-5 gap-3">
+            {/* Bar chart */}
+            <div className="col-span-3 bg-gray-900 border border-gray-800 rounded-xl p-3">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-white font-semibold text-xs">Revenue — Last 12 months</span>
+                <span className="text-gray-500 text-xs">₱1.2M total</span>
+              </div>
+              <div className="flex items-end gap-1.5 h-20">
+                {bars.map((h, i) => (
+                  <div key={i} className="flex-1 flex flex-col justify-end">
+                    <div className={`rounded-sm w-full ${i === bars.length - 1 ? 'bg-blue-500' : 'bg-gray-700'}`} style={{ height: `${h}%` }} />
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-between mt-1.5">
+                {months.map((m) => (
+                  <span key={m} className="text-gray-600" style={{ fontSize: '9px' }}>{m}</span>
+                ))}
+              </div>
+            </div>
+
+            {/* Recent transactions */}
+            <div className="col-span-2 bg-gray-900 border border-gray-800 rounded-xl p-3">
+              <div className="text-white font-semibold text-xs mb-3">Recent Transactions</div>
+              <div className="space-y-2">
+                {txns.map((t) => (
+                  <div key={t.id} className="flex items-center justify-between">
+                    <div className="min-w-0">
+                      <div className="text-gray-300 truncate" style={{ fontSize: '10px', maxWidth: '100px' }}>{t.item}</div>
+                      <div className="text-gray-600" style={{ fontSize: '9px' }}>{t.id}</div>
                     </div>
-                    <div>
-                      <h3 className="text-xl font-bold mb-1 text-gray-900">{benefit.title}</h3>
-                      <p className="text-gray-600">{benefit.desc}</p>
+                    <div className="text-right flex-shrink-0 ml-1">
+                      <div className="text-white font-medium" style={{ fontSize: '10px' }}>{t.amt}</div>
+                      <div className={`${t.color} font-medium`} style={{ fontSize: '9px' }}>{t.status}</div>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
-            <div className="relative">
-              <div className="bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-700 rounded-2xl p-12 text-white shadow-2xl">
-                <div className="space-y-8">
-                  <div className="text-center">
-                    <div className="text-6xl font-bold mb-2">100+</div>
-                    <div className="text-xl opacity-90">Features</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const AVATAR_COLORS = ['from-blue-500 to-indigo-600', 'from-violet-500 to-purple-600', 'from-emerald-500 to-teal-600'];
+function InitialAvatar({ name, index }: { name: string; index: number }) {
+  const initials = name.split(' ').slice(0, 2).map((w) => w[0]).join('');
+  return (
+    <div
+      className={`w-12 h-12 rounded-full bg-gradient-to-br ${AVATAR_COLORS[index % AVATAR_COLORS.length]} flex items-center justify-center text-white font-bold text-sm flex-shrink-0`}
+      aria-hidden="true"
+    >
+      {initials}
+    </div>
+  );
+}
+
+/* ── Page ─────────────────────────────────────────────────────────── */
+export default function MarketingPage() {
+  const businessTypes = [
+    { emoji: '🏪', name: 'Retail', desc: 'Product & inventory focused', gradient: 'from-blue-600/70 to-blue-900/90', img: '/images/business/retail.jpg', alt: 'Retail store' },
+    { emoji: '🍕', name: 'Restaurant', desc: 'Menu & table management', gradient: 'from-orange-600/70 to-red-800/90', img: '/images/business/restaurant.jpg', alt: 'Restaurant' },
+    { emoji: '👔', name: 'Laundry', desc: 'Weight-based pricing', gradient: 'from-cyan-600/70 to-blue-800/90', img: '/images/business/laundry.jpg', alt: 'Laundry shop' },
+    { emoji: '💼', name: 'Service', desc: 'Time-based bookings', gradient: 'from-indigo-600/70 to-purple-900/90', img: '/images/business/service.jpg', alt: 'Service business' },
+    { emoji: '🔧', name: 'General', desc: 'Fully flexible setup', gradient: 'from-slate-600/70 to-slate-900/90', img: '/images/business/general.jpg', alt: 'General business' },
+  ];
+
+  const testimonials = [
+    { quote: '1pos transformed how we run our retail chain. The real-time inventory and multi-branch reporting paid for itself within the first month.', name: 'Maria Santos', role: 'Owner, Santos Retail Group' },
+    { quote: 'The automated workflows alone save my team 3+ hours every day — reminders, stock alerts, and scheduled reports just run themselves.', name: 'James Reyes', role: 'Operations Manager, FastBite Restaurants' },
+    { quote: 'We replaced three separate tools with 1pos. Bookings, customer CRM, and POS all in one platform is an absolute game changer.', name: 'Ana Cruz', role: 'Director, Cruz Service Centers' },
+  ];
+
+  const benefits = [
+    { title: 'Save Time', desc: '30+ automations reduce manual work by up to 80%', icon: '⏱️' },
+    { title: 'Increase Revenue', desc: 'Advanced analytics help identify growth opportunities', icon: '📈' },
+    { title: 'Reduce Errors', desc: 'Real-time validation prevents costly mistakes', icon: '🛡️' },
+    { title: 'Scale Easily', desc: 'Multi-tenant architecture grows with your business', icon: '🚀' },
+  ];
+
+  return (
+    <>
+      {/* JSON-LD */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+
+      <div className="min-h-screen bg-white overflow-x-hidden">
+
+        {/* ── Site Navigation ────────────────────────────────────── */}
+        <header>
+
+          {/* ── Sticky nav ─────────────────────────────────────── */}
+          <nav
+            className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-100"
+            aria-label="Main navigation"
+          >
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+
+              {/* Logo mark */}
+              <Link href="/" className="flex items-center gap-2 group flex-shrink-0">
+                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-black text-sm group-hover:bg-blue-700 transition-colors">
+                  1
+                </div>
+                <span className="font-bold text-xl text-gray-900">pos</span>
+              </Link>
+
+              {/* Centre links */}
+              <div className="hidden md:flex items-center gap-1">
+                {[
+                  { href: '#features', label: 'Features', isLink: false },
+                  { href: '#solutions', label: 'Solutions', isLink: false },
+                  { href: '#testimonials', label: 'Customers', isLink: false },
+                  { href: '/stores', label: 'Browse Stores', isLink: true },
+                ].map((item) =>
+                  item.isLink ? (
+                    <Link key={item.label} href={item.href} className="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-all">
+                      {item.label}
+                    </Link>
+                  ) : (
+                    <a key={item.label} href={item.href} className="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-all">
+                      {item.label}
+                    </a>
+                  )
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <Link
+                  href="/stores"
+                  className="hidden sm:block px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all"
+                >
+                  Sign in
+                </Link>
+                <Link
+                  href="/signup"
+                  className="flex items-center gap-1.5 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 shadow-sm transition-colors"
+                >
+                  Get Started Free
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                </Link>
+              </div>
+
+            </div>
+          </nav>
+
+          {/* ── Hero ───────────────────────────────────────────── */}
+          <div className="relative bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 text-white pt-20 md:pt-28 pb-0 px-4 overflow-hidden">
+
+            {/* Background: dot grid + soft orbs */}
+            <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
+              <div
+                className="absolute inset-0 opacity-[0.06]"
+                style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '28px 28px' }}
+              />
+              <div className="absolute -top-16 -left-16 w-96 h-96 bg-blue-400/25 rounded-full blur-3xl" />
+              <div className="absolute top-1/3 -right-24 w-80 h-80 bg-purple-400/25 rounded-full blur-3xl" />
+            </div>
+
+            <div className="relative max-w-4xl mx-auto text-center z-10">
+
+              {/* Status badge */}
+              <div className="inline-flex items-center gap-2 bg-white/15 backdrop-blur-md border border-white/25 px-4 py-2 rounded-full mb-8 text-sm font-medium">
+                <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse flex-shrink-0" aria-hidden="true" />
+                BIR-Ready Enterprise POS System
+              </div>
+
+              {/* H1 */}
+              <h1 className="text-7xl md:text-8xl lg:text-9xl font-black mb-5 tracking-tight bg-gradient-to-b from-white via-blue-50 to-blue-200 bg-clip-text text-transparent">
+                1pos
+              </h1>
+
+              {/* Tagline */}
+              <p className="text-2xl md:text-3xl font-light text-white/90 mb-5 tracking-wide">
+                Transform Your Business Operations
+              </p>
+
+              {/* Description */}
+              <p className="text-base md:text-lg text-blue-100/90 max-w-xl mx-auto leading-relaxed mb-10">
+                The complete point of sale system with{' '}
+                <strong className="text-white font-semibold">100+ features</strong>,
+                real-time inventory, multi-tenant architecture, and{' '}
+                <strong className="text-white font-semibold">30+ automated workflows</strong>.
+              </p>
+
+              {/* Inline stats — divider-separated */}
+              <div className="flex flex-wrap items-center justify-center gap-0 mb-10">
+                {[
+                  { value: '100+', label: 'Features' },
+                  { value: '30+', label: 'Automations' },
+                  { value: '5', label: 'Business Types' },
+                  { value: '2+', label: 'Languages' },
+                ].map((s, i) => (
+                  <div key={s.label} className="flex items-center">
+                    <div className="px-6 py-2 text-center">
+                      <div className="text-2xl font-extrabold text-white tracking-tight leading-none">{s.value}</div>
+                      <div className="text-xs text-blue-200 uppercase tracking-widest mt-0.5">{s.label}</div>
+                    </div>
+                    {i < 3 && <div className="h-8 w-px bg-white/20" aria-hidden="true" />}
                   </div>
-                  <div className="grid grid-cols-2 gap-6">
-                    <div className="text-center p-4 bg-white/10 rounded-lg backdrop-blur-sm">
-                      <div className="text-3xl font-bold mb-1">30+</div>
-                      <div className="text-sm opacity-80">Automations</div>
+                ))}
+              </div>
+
+              {/* CTAs */}
+              <div className="flex flex-col sm:flex-row gap-3 justify-center items-center mb-4">
+                <Link
+                  href="/signup"
+                  className="group flex items-center gap-2 bg-white text-blue-700 px-8 py-4 font-bold text-base rounded-xl shadow-lg hover:bg-blue-50 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200"
+                >
+                  Start Free Trial
+                  <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                </Link>
+                <Link
+                  href="/stores"
+                  className="flex items-center gap-2 bg-white/10 backdrop-blur-sm text-white px-8 py-4 font-semibold text-base rounded-xl border border-white/30 hover:bg-white/20 hover:border-white/50 transition-all duration-200"
+                >
+                  Browse Live Stores
+                </Link>
+              </div>
+              <p className="text-blue-200/70 text-xs mb-14">
+                No credit card required · 14-day free trial · Cancel anytime
+              </p>
+
+              {/* Dashboard mockup */}
+              <div className="relative mx-auto max-w-5xl">
+                {/* Browser chrome */}
+                <div className="bg-gray-900/95 rounded-t-2xl px-4 py-3 flex items-center gap-3 border-x border-t border-white/10" aria-hidden="true">
+                  <div className="flex gap-1.5 flex-shrink-0">
+                    <div className="w-3 h-3 rounded-full bg-red-500/80" />
+                    <div className="w-3 h-3 rounded-full bg-yellow-500/80" />
+                    <div className="w-3 h-3 rounded-full bg-green-500/80" />
+                  </div>
+                  <div className="flex-1 bg-gray-800 rounded-md h-6 flex items-center px-3 gap-2">
+                    <svg className="w-3 h-3 text-gray-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    <span className="text-gray-400 text-xs font-mono">1pos.app / admin / dashboard</span>
+                  </div>
+                </div>
+                <DashboardMockup />
+                {/* Fade into next section (white bg) */}
+                <div className="absolute bottom-0 left-0 right-0 h-28 bg-gradient-to-t from-white to-transparent pointer-events-none" aria-hidden="true" />
+              </div>
+
+            </div>
+          </div>
+        </header>
+
+        {/* ── Main content ──────────────────────────────────────── */}
+        <main id="main-content">
+
+          {/* Social proof strip */}
+          <section aria-label="Platform statistics" className="relative bg-white border-y border-gray-100 py-14 px-4 overflow-hidden">
+            {/* Subtle gradient backdrop */}
+            <div className="absolute inset-0 bg-gradient-to-r from-blue-50/60 via-white to-indigo-50/60 pointer-events-none" aria-hidden="true" />
+
+            <div className="relative max-w-6xl mx-auto">
+              <p className="text-center text-xs font-bold uppercase tracking-widest text-gray-400 mb-10">
+                Trusted by businesses across industries
+              </p>
+
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-gray-100 rounded-2xl overflow-hidden shadow-sm">
+                {[
+                  { value: '500+', label: 'Active stores', icon: '🏪', desc: 'and growing every day' },
+                  { value: '2M+', label: 'Transactions', icon: '💳', desc: 'processed without downtime' },
+                  { value: '99.9%', label: 'Uptime SLA', icon: '⚡', desc: 'guaranteed reliability' },
+                  { value: '24/7', label: 'Support', icon: '🛎️', desc: 'whenever you need us' },
+                ].map((item) => (
+                  <div key={item.label} className="bg-white px-8 py-8 flex flex-col items-center text-center group hover:bg-blue-50/50 transition-colors duration-200">
+                    <span className="text-3xl mb-3 group-hover:scale-110 transition-transform duration-200 block" aria-hidden="true">
+                      {item.icon}
+                    </span>
+                    <div className="text-4xl font-extrabold text-gray-900 tracking-tight leading-none mb-1">
+                      {item.value}
                     </div>
-                    <div className="text-center p-4 bg-white/10 rounded-lg backdrop-blur-sm">
-                      <div className="text-3xl font-bold mb-1">5</div>
-                      <div className="text-sm opacity-80">Business Types</div>
+                    <div className="text-sm font-semibold text-gray-700 mb-0.5">{item.label}</div>
+                    <div className="text-xs text-gray-400">{item.desc}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* Features */}
+          <section id="features" aria-labelledby="features-heading" className="py-24 px-4 bg-gray-50 relative overflow-hidden">
+            {/* Subtle dot pattern */}
+            <div
+              className="absolute inset-0 opacity-[0.035] pointer-events-none"
+              aria-hidden="true"
+              style={{ backgroundImage: 'radial-gradient(circle, #6366f1 1px, transparent 1px)', backgroundSize: '24px 24px' }}
+            />
+
+            <div className="relative max-w-7xl mx-auto">
+              {/* Header */}
+              <div className="text-center mb-14">
+                <div className="inline-block bg-blue-100 text-blue-700 px-4 py-2 rounded-full text-sm font-semibold mb-4 tracking-wide">
+                  POWERFUL FEATURES
+                </div>
+                <h2 id="features-heading" className="text-5xl md:text-6xl font-bold mb-5 text-gray-900 tracking-tight">
+                  Everything You Need
+                </h2>
+                <p className="text-lg text-gray-500 max-w-xl mx-auto leading-relaxed">
+                  23 built-in modules covering every aspect of running a modern business — from the POS counter to the back office.
+                </p>
+              </div>
+
+              {/* Spotlight cards — 3 key capabilities */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-12">
+                {[
+                  {
+                    icon: '🛒',
+                    label: 'Point of Sale',
+                    headline: 'Sell faster, smarter',
+                    body: 'Full POS with cart, barcode scanning, multiple payment methods, and BIR-compliant official receipt printing.',
+                    accent: 'bg-blue-600',
+                    ring: 'ring-blue-100',
+                  },
+                  {
+                    icon: '📊',
+                    label: 'Inventory',
+                    headline: 'Always in stock, never guessing',
+                    body: 'Real-time stock tracking across branches, automatic deductions on sale, low-stock alerts, and transfer management.',
+                    accent: 'bg-emerald-600',
+                    ring: 'ring-emerald-100',
+                  },
+                  {
+                    icon: '📈',
+                    label: 'Reports & Analytics',
+                    headline: 'Know your numbers',
+                    body: 'Daily, weekly, and monthly sales reports, P&L statements, VAT summaries, and exportable data in CSV, Excel, or PDF.',
+                    accent: 'bg-violet-600',
+                    ring: 'ring-violet-100',
+                  },
+                ].map((card) => (
+                  <div key={card.label} className={`bg-white rounded-2xl p-7 shadow-sm ring-1 ${card.ring} hover:shadow-md transition-shadow duration-200`}>
+                    <div className={`inline-flex w-11 h-11 rounded-xl ${card.accent} items-center justify-center text-2xl mb-4`} aria-hidden="true">
+                      {card.icon}
                     </div>
-                    <div className="text-center p-4 bg-white/10 rounded-lg backdrop-blur-sm">
-                      <div className="text-3xl font-bold mb-1">24/7</div>
-                      <div className="text-sm opacity-80">Support</div>
+                    <div className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">{card.label}</div>
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">{card.headline}</h3>
+                    <p className="text-sm text-gray-500 leading-relaxed">{card.body}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Full feature grid with category tabs */}
+              <FeaturesGrid />
+            </div>
+          </section>
+
+          {/* Key highlights */}
+          <section aria-labelledby="highlights-heading" className="py-24 px-4 bg-gradient-to-b from-gray-50 to-white">
+            <div className="max-w-7xl mx-auto">
+              <div className="text-center mb-16">
+                <div className="inline-block bg-indigo-100 text-indigo-700 px-4 py-2 rounded-full text-sm font-semibold mb-4">WHY CHOOSE US</div>
+                <h2 id="highlights-heading" className="text-5xl md:text-6xl font-bold mb-5 text-gray-900">Built for Modern Businesses</h2>
+                <p className="text-xl text-gray-500 max-w-2xl mx-auto">Enterprise-grade features that scale with your business</p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                {[
+                  { emoji: '🏢', title: 'Multi-Tenant', desc: 'Complete data isolation with tenant-specific branding, settings, and configurations. Perfect for SaaS deployments and enterprise solutions.', bg: 'from-blue-50 to-blue-100', border: 'border-blue-200 hover:border-blue-400' },
+                  { emoji: '⚡', title: 'Real-Time Sync', desc: 'Real-time inventory updates, stock validation, and Server-Sent Events for instant synchronization across all devices and locations.', bg: 'from-emerald-50 to-emerald-100', border: 'border-emerald-200 hover:border-emerald-400' },
+                  { emoji: '🤖', title: 'Automated', desc: '30+ automated workflows including booking reminders, low stock alerts, scheduled reports, and intelligent business automation.', bg: 'from-purple-50 to-purple-100', border: 'border-purple-200 hover:border-purple-400' },
+                ].map((item) => (
+                  <div key={item.title} className={`group relative text-center p-10 bg-gradient-to-br ${item.bg} border-2 ${item.border} rounded-2xl transition-all duration-300 hover:shadow-2xl hover:-translate-y-2`}>
+                    <div className="text-6xl mb-6 transform group-hover:scale-110 group-hover:rotate-6 transition-transform duration-300" aria-hidden="true">{item.emoji}</div>
+                    <h3 className="text-2xl font-bold mb-3 text-gray-900">{item.title}</h3>
+                    <p className="text-gray-600 leading-relaxed">{item.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* Business Types */}
+          <section id="solutions" aria-labelledby="solutions-heading" className="py-24 px-4 bg-white">
+            <div className="max-w-7xl mx-auto">
+              <div className="text-center mb-16">
+                <div className="inline-block bg-purple-100 text-purple-700 px-4 py-2 rounded-full text-sm font-semibold mb-4">VERSATILE SOLUTION</div>
+                <h2 id="solutions-heading" className="text-5xl md:text-6xl font-bold mb-5 text-gray-900">Built for Every Business</h2>
+                <p className="text-xl text-gray-500 max-w-2xl mx-auto">Industry-specific configurations tailored to your business model</p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
+                {businessTypes.map((type) => (
+                  <div key={type.name} className="group relative rounded-2xl overflow-hidden shadow-md hover:shadow-2xl transition-all duration-300 hover:-translate-y-2" style={{ minHeight: '280px' }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={type.img} alt={type.alt} className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                    <div className={`absolute inset-0 bg-gradient-to-t ${type.gradient}`} aria-hidden="true" />
+                    <div className="relative z-10 flex flex-col justify-end h-full p-6" style={{ minHeight: '280px' }}>
+                      <span className="text-4xl mb-3 transform group-hover:scale-110 transition-transform duration-300 block" aria-hidden="true">{type.emoji}</span>
+                      <h3 className="text-xl font-bold text-white mb-1">{type.name}</h3>
+                      <p className="text-white/75 text-sm leading-snug">{type.desc}</p>
                     </div>
-                    <div className="text-center p-4 bg-white/10 rounded-lg backdrop-blur-sm">
-                      <div className="text-3xl font-bold mb-1">99.9%</div>
-                      <div className="text-sm opacity-80">Uptime</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* Benefits */}
+          <section aria-labelledby="benefits-heading" className="py-24 px-4 bg-gradient-to-b from-gray-50 to-white">
+            <div className="max-w-7xl mx-auto">
+              <div className="grid md:grid-cols-2 gap-16 items-center">
+                <div>
+                  <div className="inline-block bg-green-100 text-green-700 px-4 py-2 rounded-full text-sm font-semibold mb-4">KEY BENEFITS</div>
+                  <h2 id="benefits-heading" className="text-4xl md:text-5xl font-bold mb-8 text-gray-900 leading-tight">
+                    Streamline Your Operations
+                  </h2>
+                  <ul className="space-y-6" aria-label="Key business benefits">
+                    {benefits.map((b) => (
+                      <li key={b.title} className="flex gap-4 items-start">
+                        <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center text-xl shadow-md" aria-hidden="true">{b.icon}</div>
+                        <div>
+                          <h3 className="text-lg font-bold mb-1 text-gray-900">{b.title}</h3>
+                          <p className="text-gray-500">{b.desc}</p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* Receipt mockup */}
+                <div className="relative" aria-hidden="true">
+                  <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-6 shadow-2xl">
+                    <div className="bg-white rounded-xl p-5 font-mono text-xs text-gray-700 shadow-lg mb-4">
+                      <div className="text-center mb-3">
+                        <div className="font-bold text-base text-gray-900">SANTOS RETAIL</div>
+                        <div className="text-gray-500">123 Main St, Makati City</div>
+                        <div className="text-gray-500">TIN: 123-456-789-000</div>
+                        <div className="border-t border-dashed border-gray-300 my-2" />
+                        <div className="text-gray-500">OR No: 0000048821</div>
+                        <div className="text-gray-500">March 24, 2026 — 2:41 PM</div>
+                      </div>
+                      <div className="border-t border-dashed border-gray-300 my-2" />
+                      {[['T-Shirt (M, Blue)', '₱599.00'], ['Coffee Mug', '₱250.00'], ['Tote Bag', '₱180.00']].map(([item, price]) => (
+                        <div key={item} className="flex justify-between mb-1">
+                          <span className="text-gray-600">{item}</span><span>{price}</span>
+                        </div>
+                      ))}
+                      <div className="border-t border-dashed border-gray-300 my-2" />
+                      <div className="flex justify-between text-gray-500"><span>Subtotal</span><span>₱1,029.00</span></div>
+                      <div className="flex justify-between text-gray-500"><span>VAT (12%)</span><span>₱110.04</span></div>
+                      <div className="flex justify-between font-bold text-gray-900 text-sm mt-1"><span>TOTAL</span><span>₱1,139.04</span></div>
+                      <div className="border-t border-dashed border-gray-300 my-2" />
+                      <div className="text-center text-gray-500">Cash: ₱1,200.00 | Change: ₱60.96</div>
+                      <div className="text-center mt-2 text-gray-400">Thank you for shopping!</div>
                     </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      {[{ v: '100+', l: 'Features', c: 'text-blue-400' }, { v: '80%', l: 'Less manual work', c: 'text-emerald-400' }, { v: '30+', l: 'Automations', c: 'text-purple-400' }, { v: '99.9%', l: 'Uptime', c: 'text-yellow-400' }].map((s) => (
+                        <div key={s.l} className="bg-gray-700/60 rounded-xl p-4 text-center">
+                          <div className={`text-2xl font-bold ${s.c}`}>{s.v}</div>
+                          <div className="text-gray-400 text-xs mt-0.5">{s.l}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="absolute -top-4 -right-4 bg-white rounded-2xl shadow-xl px-4 py-3 border border-gray-100">
+                    <div className="text-xs text-gray-500 mb-0.5">BIR-compliant</div>
+                    <div className="text-sm font-bold text-gray-900">Official Receipt ✓</div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
+          </section>
 
-      {/* CTA Section */}
-      <section className="relative py-24 px-4 bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 text-white overflow-hidden">
-        {/* Animated Background */}
-        <div className="absolute inset-0">
-          <div className="absolute top-0 left-0 w-96 h-96 bg-blue-400/20 rounded-full blur-3xl animate-pulse" />
-          <div className="absolute bottom-0 right-0 w-96 h-96 bg-purple-400/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
-        </div>
+          {/* Testimonials */}
+          <section id="testimonials" aria-labelledby="testimonials-heading" className="py-24 px-4 bg-white">
+            <div className="max-w-7xl mx-auto">
+              <div className="text-center mb-16">
+                <div className="inline-block bg-yellow-100 text-yellow-700 px-4 py-2 rounded-full text-sm font-semibold mb-4">CUSTOMER STORIES</div>
+                <h2 id="testimonials-heading" className="text-5xl font-bold mb-5 text-gray-900">Loved by Business Owners</h2>
+                <p className="text-xl text-gray-500 max-w-xl mx-auto">See what our customers say about running their business with 1pos</p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                {testimonials.map((t, i) => (
+                  <figure key={i} className="bg-gray-50 rounded-2xl p-8 border border-gray-100 hover:shadow-xl transition-shadow duration-300 flex flex-col">
+                    <div className="flex gap-1 mb-5" aria-label="5 out of 5 stars">
+                      {[...Array(5)].map((_, s) => (
+                        <svg key={s} className="w-5 h-5 text-yellow-400 fill-current" viewBox="0 0 20 20" aria-hidden="true">
+                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                        </svg>
+                      ))}
+                    </div>
+                    <blockquote className="text-gray-700 leading-relaxed flex-1 mb-6 text-[15px]">
+                      <p>&ldquo;{t.quote}&rdquo;</p>
+                    </blockquote>
+                    <figcaption className="flex items-center gap-3">
+                      <InitialAvatar name={t.name} index={i} />
+                      <div>
+                        <cite className="not-italic font-semibold text-gray-900 text-sm block">{t.name}</cite>
+                        <span className="text-xs text-gray-500">{t.role}</span>
+                      </div>
+                    </figcaption>
+                  </figure>
+                ))}
+              </div>
+            </div>
+          </section>
 
-        <div className="relative max-w-4xl mx-auto text-center z-10">
-          <div className="inline-block bg-white/20 backdrop-blur-md border border-white/30 px-4 py-2 rounded-full text-sm font-semibold mb-6">
-            🚀 START YOUR JOURNEY TODAY
-          </div>
-          <h2 className="text-5xl md:text-6xl font-bold mb-6">
-            Ready to Transform Your Business?
-          </h2>
-          <p className="text-xl md:text-2xl mb-10 text-blue-100 max-w-2xl mx-auto leading-relaxed">
-            Join thousands of businesses using 1pos to streamline operations, 
-            increase revenue, and scale effortlessly.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-            <Link
-              href="/signup"
-              className="group relative bg-white text-blue-600 px-10 py-5 font-bold text-lg hover:bg-blue-50 transition-all duration-300 hover:scale-105 hover:shadow-2xl overflow-hidden"
-            >
-              <span className="relative z-10">Start Free Trial →</span>
-              <div className="absolute inset-0 bg-gradient-to-r from-blue-50 to-indigo-50 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-            </Link>
-            <Link
-              href="/stores"
-              className="group bg-white/15 backdrop-blur-md text-white px-10 py-5 font-bold text-lg border-2 border-white/50 hover:border-white hover:bg-white/25 transition-all duration-300 hover:scale-105"
-            >
-              🏪 Browse Stores
-            </Link>
-          </div>
-          <p className="mt-8 text-blue-200 text-sm">
-            No credit card required • 14-day free trial • Cancel anytime
-          </p>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="bg-gray-900 text-gray-300 py-16 px-4">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
-            <div>
-              <h3 className="text-white font-bold text-xl mb-4">1pos</h3>
-              <p className="text-gray-400 text-sm leading-relaxed">
-                Enterprise-grade POS system with 100+ features designed for modern businesses.
+          {/* CTA */}
+          <section aria-labelledby="cta-heading" className="relative py-24 px-4 bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 text-white overflow-hidden">
+            <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
+              <div className="absolute top-0 left-0 w-96 h-96 bg-blue-400/20 rounded-full blur-3xl animate-pulse" />
+              <div className="absolute bottom-0 right-0 w-96 h-96 bg-purple-400/20 rounded-full blur-3xl animate-pulse" />
+            </div>
+            <div className="relative max-w-4xl mx-auto text-center z-10">
+              <div className="inline-block bg-white/20 backdrop-blur-md border border-white/30 px-4 py-2 rounded-full text-sm font-semibold mb-6">
+                🚀 START YOUR JOURNEY TODAY
+              </div>
+              <h2 id="cta-heading" className="text-5xl md:text-6xl font-bold mb-6">Ready to Transform Your Business?</h2>
+              <p className="text-xl mb-10 text-blue-100 max-w-2xl mx-auto leading-relaxed">
+                Join thousands of businesses using 1pos to streamline operations, increase revenue, and scale effortlessly.
               </p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                <Link href="/signup" className="bg-white text-blue-600 px-10 py-4 font-bold text-lg hover:bg-blue-50 transition-all duration-300 hover:scale-105 hover:shadow-2xl rounded-xl">
+                  Start Your Free 14-Day Trial →
+                </Link>
+                <Link href="/stores" className="bg-white/15 backdrop-blur-md text-white px-10 py-4 font-bold text-lg border-2 border-white/50 hover:border-white hover:bg-white/25 transition-all duration-300 hover:scale-105 rounded-xl">
+                  Browse Live Stores
+                </Link>
+              </div>
+              <p className="mt-8 text-blue-200 text-sm">No credit card required · 14-day free trial · Cancel anytime</p>
             </div>
-            <div>
-              <h4 className="text-white font-semibold mb-4">Product</h4>
-              <ul className="space-y-2 text-sm text-gray-400">
-                <li><a href="#features" className="hover:text-white transition-colors">Features</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Pricing</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Integrations</a></li>
-                <li><Link href="/stores" className="hover:text-white transition-colors">Browse Stores</Link></li>
-              </ul>
+          </section>
+
+        </main>
+
+        {/* ── Footer ──────────────────────────────────────────────── */}
+        <footer className="bg-gray-950 text-gray-400 py-16 px-4" aria-label="Site footer">
+          <div className="max-w-7xl mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-10 mb-12">
+              <div>
+                <Link href="/" className="text-white font-bold text-2xl mb-3 block hover:text-blue-400 transition-colors">1pos</Link>
+                <p className="text-gray-500 text-sm leading-relaxed">
+                  BIR-ready enterprise POS system with 100+ features for modern Philippine businesses.
+                </p>
+              </div>
+              <nav aria-label="Product links">
+                <h3 className="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Product</h3>
+                <ul className="space-y-2.5 text-sm">
+                  <li><a href="#features" className="hover:text-white transition-colors">Features</a></li>
+                  <li><a href="#solutions" className="hover:text-white transition-colors">Solutions</a></li>
+                  <li><a href="#" className="hover:text-white transition-colors">Pricing</a></li>
+                  <li><Link href="/stores" className="hover:text-white transition-colors">Browse Stores</Link></li>
+                </ul>
+              </nav>
+              <nav aria-label="Company links">
+                <h3 className="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Company</h3>
+                <ul className="space-y-2.5 text-sm">
+                  <li><a href="#" className="hover:text-white transition-colors">About</a></li>
+                  <li><a href="#" className="hover:text-white transition-colors">Blog</a></li>
+                  <li><a href="#" className="hover:text-white transition-colors">Contact</a></li>
+                </ul>
+              </nav>
+              <nav aria-label="Resources links">
+                <h3 className="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Resources</h3>
+                <ul className="space-y-2.5 text-sm">
+                  <li><a href="#" className="hover:text-white transition-colors">Documentation</a></li>
+                  <li><a href="#" className="hover:text-white transition-colors">Support</a></li>
+                  <li><a href="#" className="hover:text-white transition-colors">API Reference</a></li>
+                </ul>
+              </nav>
             </div>
-            <div>
-              <h4 className="text-white font-semibold mb-4">Company</h4>
-              <ul className="space-y-2 text-sm text-gray-400">
-                <li><a href="#" className="hover:text-white transition-colors">About</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Blog</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Contact</a></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="text-white font-semibold mb-4">Resources</h4>
-              <ul className="space-y-2 text-sm text-gray-400">
-                <li><a href="#" className="hover:text-white transition-colors">Documentation</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Support</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">API</a></li>
-              </ul>
+            <div className="border-t border-gray-800 pt-8 flex flex-col sm:flex-row justify-between items-center gap-3">
+              <p className="text-gray-500 text-sm">© 2026 1pos. All rights reserved.</p>
+              <p className="text-gray-600 text-sm">BIR-ready POS · 100+ features · Built for the Philippines</p>
             </div>
           </div>
-          <div className="border-t border-gray-800 pt-8 text-center">
-            <p className="mb-2 text-gray-400">© 2026 1pos. All rights reserved.</p>
-            <p className="text-sm text-gray-500">
-              Enterprise-grade POS system with 100+ features
-            </p>
-          </div>
-        </div>
-      </footer>
-    </div>
+        </footer>
+
+      </div>
+    </>
   );
 }

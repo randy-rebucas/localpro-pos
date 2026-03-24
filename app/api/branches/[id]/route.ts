@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Branch from '@/models/Branch';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
-import { requireAuth } from '@/lib/auth';
+import { requireTenantAccess } from '@/lib/api-tenant';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
-import { logger } from '@/lib/logger';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(
   request: NextRequest,
@@ -13,14 +13,11 @@ export async function GET(
 ) {
   try {
     await connectDB();
-    await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
+    const authResult = await requireTenantAccess(request);
+    if (authResult instanceof NextResponse) return authResult;
+    const { tenantId } = authResult;
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
-
-    if (!tenantId) {
-      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
-    }
 
     const branch = await Branch.findOne({ _id: id, tenantId })
       .populate('managerId', 'name email')
@@ -31,9 +28,8 @@ export async function GET(
     }
 
     return NextResponse.json({ success: true, data: branch });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    logger.error('Error fetching branch:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error) {
+    return handleApiError(error, 'Failed to fetch branch');
   }
 }
 
@@ -43,12 +39,15 @@ export async function PUT(
 ) {
   try {
     await connectDB();
-    await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
+    const authResult = await requireTenantAccess(request);
+    if (authResult instanceof NextResponse) return authResult;
+    const { tenantId } = authResult;
     const { id } = await params;
 
-    if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+    const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
+    const { allowed } = checkRateLimit(`write:branches:${tenantId}:${ip}`, 30, 60_000);
+    if (!allowed) {
+      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
     const branch = await Branch.findOne({ _id: id, tenantId });
@@ -80,16 +79,8 @@ export async function PUT(
     });
 
     return NextResponse.json({ success: true, data: branch });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    const t = await getValidationTranslatorFromRequest(request);
-    if (error.code === 11000) {
-      return NextResponse.json(
-        { success: false, error: t('validation.branchCodeExists', 'Branch with this code already exists') },
-        { status: 400 }
-      );
-    }
-    logger.error('Error updating branch:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+  } catch (error) {
+    return handleApiError(error, 'Failed to update branch');
   }
 }
 
@@ -99,13 +90,16 @@ export async function DELETE(
 ) {
   try {
     await connectDB();
-    await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
+    const authResult = await requireTenantAccess(request);
+    if (authResult instanceof NextResponse) return authResult;
+    const { tenantId } = authResult;
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
 
-    if (!tenantId) {
-      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
+    const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
+    const { allowed } = checkRateLimit(`write:branches:${tenantId}:${ip}`, 30, 60_000);
+    if (!allowed) {
+      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
     const branch = await Branch.findOne({ _id: id, tenantId });
@@ -126,9 +120,8 @@ export async function DELETE(
     });
 
     return NextResponse.json({ success: true, message: t('validation.branchDeactivated', 'Branch deactivated') });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    logger.error('Error deleting branch:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error) {
+    return handleApiError(error, 'Failed to delete branch');
   }
 }
 

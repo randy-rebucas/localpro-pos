@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
 import '@/models/Category'; // register schema for populate
-import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
-import { requireAuth } from '@/lib/auth';
+import { requireTenantAccess } from '@/lib/api-tenant';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateAndSanitize, validateProduct } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkSubscriptionLimit, SubscriptionService } from '@/lib/subscription';
 import { logger } from '@/lib/logger';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(request: NextRequest) {
   try {
@@ -50,9 +51,8 @@ export async function GET(request: NextRequest) {
       .lean();
     
     return NextResponse.json({ success: true, data: products });
-  } catch (_error: unknown) {
-    logger.error('Error fetching products:', _error);
-    return NextResponse.json({ success: false, error: 'Failed to fetch products' }, { status: 500 });
+  } catch (error) {
+    return handleApiError(error, 'Failed to fetch products');
   }
 }
 
@@ -74,6 +74,12 @@ export async function POST(request: NextRequest) {
       throw authError;
     }
     
+    const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
+    const { allowed } = checkRateLimit(`write:products:${tenantId}:${ip}`, 30, 60_000);
+    if (!allowed) {
+      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
+    }
+
     const body = await request.json();
     const t = await getValidationTranslatorFromRequest(request);
     const { data, errors } = validateAndSanitize(body, validateProduct, t);
@@ -131,8 +137,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    logger.error('Error creating product:', error);
-    return NextResponse.json({ success: false, error: 'Failed to create product' }, { status: 400 });
+    return handleApiError(error, 'Failed to create product');
   }
 }
 

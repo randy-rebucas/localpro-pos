@@ -134,7 +134,7 @@ export default function SettingsPage() {
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-gray-400 italic">Click "Check Health" to run diagnostics.</p>
+              <p className="text-sm text-gray-400 italic">Click &quot;Check Health&quot; to run diagnostics.</p>
             )}
           </div>
         </section>

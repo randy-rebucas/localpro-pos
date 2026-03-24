@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { TenantSettingsProvider } from '@/contexts/TenantSettingsContext';
+import { SubscriptionProvider } from '@/contexts/SubscriptionContext';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import TenantAccessGuard from '@/components/TenantAccessGuard';
 
@@ -30,11 +31,13 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
   if (isSettingsPage) {
     return (
       <ErrorBoundary>
-        <TenantSettingsProvider>
-          <TenantAccessGuard>
-            <ProtectedRoute requiredRoles={['admin', 'manager']}>{children}</ProtectedRoute>
-          </TenantAccessGuard>
-        </TenantSettingsProvider>
+        <SubscriptionProvider>
+          <TenantSettingsProvider>
+            <TenantAccessGuard>
+              <ProtectedRoute requiredRoles={['admin', 'manager']}>{children}</ProtectedRoute>
+            </TenantAccessGuard>
+          </TenantSettingsProvider>
+        </SubscriptionProvider>
       </ErrorBoundary>
     );
   }
@@ -42,11 +45,13 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
   // Protect all other routes (require authentication + tenant access check)
   return (
     <ErrorBoundary>
-      <TenantSettingsProvider>
-        <TenantAccessGuard>
-          <ProtectedRoute>{children}</ProtectedRoute>
-        </TenantAccessGuard>
-      </TenantSettingsProvider>
+      <SubscriptionProvider>
+        <TenantSettingsProvider>
+          <TenantAccessGuard>
+            <ProtectedRoute>{children}</ProtectedRoute>
+          </TenantAccessGuard>
+        </TenantSettingsProvider>
+      </SubscriptionProvider>
     </ErrorBoundary>
   );
 }

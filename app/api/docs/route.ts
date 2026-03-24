@@ -5,7 +5,7 @@ import path from 'path';
 const DOCS_BASE = path.join(process.cwd(), 'docs');
 
 // Allowed doc folders
-const ALLOWED_FOLDERS = ['user-manual', 'tenant-manual'];
+const ALLOWED_FOLDERS = ['user-manual', 'tenant-manual', 'bir-documentation'];
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);

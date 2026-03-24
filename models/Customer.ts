@@ -21,6 +21,7 @@ export interface ICustomer extends Document {
   tags?: string[]; // For categorization (e.g., "VIP", "Regular", "Wholesale")
   totalSpent?: number; // Total amount spent (calculated)
   lastPurchaseDate?: Date;
+  loyaltyPointsBalance?: number;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -87,6 +88,11 @@ const CustomerSchema: Schema = new Schema(
     },
     lastPurchaseDate: {
       type: Date,
+    },
+    loyaltyPointsBalance: {
+      type: Number,
+      default: 0,
+      min: 0,
     },
     isActive: {
       type: Boolean,

@@ -1,10 +1,10 @@
 'use client';
 
-import { ReactNode, useEffect, useState } from 'react'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import { ReactNode } from 'react';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { TenantSettingsProvider } from '@/contexts/TenantSettingsContext';
-import { SubscriptionProvider } from '@/contexts/SubscriptionContext';
 import { SubscriptionGuard } from '@/components/SubscriptionGuard';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 /**
  * Admin Layout
@@ -18,13 +18,13 @@ import { SubscriptionGuard } from '@/components/SubscriptionGuard';
 export default function AdminLayout({ children }: { children: ReactNode }) {
   return (
     <TenantSettingsProvider>
-      <SubscriptionProvider>
-        <ProtectedRoute requiredRoles={['owner', 'admin', 'manager']}>
-          <SubscriptionGuard>
+      <ProtectedRoute requiredRoles={['owner', 'admin', 'manager']}>
+        <SubscriptionGuard>
+          <ErrorBoundary>
             {children}
-          </SubscriptionGuard>
-        </ProtectedRoute>
-      </SubscriptionProvider>
+          </ErrorBoundary>
+        </SubscriptionGuard>
+      </ProtectedRoute>
     </TenantSettingsProvider>
   );
 }

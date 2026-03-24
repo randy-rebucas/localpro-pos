@@ -1,22 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Expense from '@/models/Expense';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
-import { requireAuth } from '@/lib/auth';
+import { requireTenantAccess } from '@/lib/api-tenant';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
-import { logger } from '@/lib/logger';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
-    await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
-    const t = await getValidationTranslatorFromRequest(request);
-
-    if (!tenantId) {
-      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
-    }
+    const authResult = await requireTenantAccess(request);
+    if (authResult instanceof NextResponse) return authResult;
+    const { tenantId } = authResult;
 
     const searchParams = request.nextUrl.searchParams;
     const startDate = searchParams.get('startDate');
@@ -41,21 +37,24 @@ export async function GET(request: NextRequest) {
       .lean();
 
     return NextResponse.json({ success: true, data: expenses });
-  } catch (error: unknown) {
-    logger.error('Error fetching expenses:', error);
-    return NextResponse.json({ success: false, error: (error as Error).message }, { status: 500 });
+  } catch (error) {
+    return handleApiError(error, 'Failed to fetch expenses');
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
-    const user = await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
+    const authResult = await requireTenantAccess(request);
+    if (authResult instanceof NextResponse) return authResult;
+    const { tenantId, user } = authResult;
+    const userId = user.userId;
     const t = await getValidationTranslatorFromRequest(request);
 
-    if (!tenantId) {
-      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
+    const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
+    const { allowed } = checkRateLimit(`write:expenses:${tenantId}:${ip}`, 30, 60_000);
+    if (!allowed) {
+      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
     const body = await request.json();
@@ -100,7 +99,7 @@ export async function POST(request: NextRequest) {
       paymentMethod: paymentMethod || 'cash',
       receipt: receipt?.trim() || undefined,
       notes: notes?.trim() || undefined,
-      userId: user.userId,
+      userId,
     });
 
     await createAuditLog(request, {
@@ -112,9 +111,8 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ success: true, data: expense }, { status: 201 });
-  } catch (error: unknown) {
-    logger.error('Error creating expense:', error);
-    return NextResponse.json({ success: false, error: (error as Error).message }, { status: 400 });
+  } catch (error) {
+    return handleApiError(error, 'Failed to create expense');
   }
 }
 

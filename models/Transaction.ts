@@ -23,6 +23,9 @@ export interface ITransaction extends Document {
   cashReceived?: number;
   change?: number;
   status: 'completed' | 'cancelled' | 'refunded';
+  customerId?: mongoose.Types.ObjectId;
+  loyaltyPointsEarned?: number;
+  loyaltyPointsRedeemed?: number;
   userId?: mongoose.Types.ObjectId;
   receiptNumber?: string;
   notes?: string;
@@ -122,6 +125,18 @@ const TransactionSchema: Schema = new Schema(
       type: String,
       enum: ['completed', 'cancelled', 'refunded'],
       default: 'completed',
+    },
+    customerId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Customer',
+    },
+    loyaltyPointsEarned: {
+      type: Number,
+      min: 0,
+    },
+    loyaltyPointsRedeemed: {
+      type: Number,
+      min: 0,
     },
     userId: {
       type: Schema.Types.ObjectId,

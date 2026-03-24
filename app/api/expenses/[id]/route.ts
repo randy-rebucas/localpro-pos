@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Expense from '@/models/Expense';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
-import { requireAuth } from '@/lib/auth';
+import { requireTenantAccess } from '@/lib/api-tenant';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
-import { logger } from '@/lib/logger';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(
   request: NextRequest,
@@ -13,14 +13,11 @@ export async function GET(
 ) {
   try {
     await connectDB();
-    await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
+    const authResult = await requireTenantAccess(request);
+    if (authResult instanceof NextResponse) return authResult;
+    const { tenantId } = authResult;
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
-
-    if (!tenantId) {
-      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
-    }
 
     const expense = await Expense.findOne({ _id: id, tenantId })
       .populate('userId', 'name email')
@@ -31,8 +28,8 @@ export async function GET(
     }
 
     return NextResponse.json({ success: true, data: expense });
-  } catch (error: unknown) {
-    return NextResponse.json({ success: false, error: (error as Error).message }, { status: 500 });
+  } catch (error) {
+    return handleApiError(error, 'Failed to fetch expense');
   }
 }
 
@@ -42,12 +39,15 @@ export async function PUT(
 ) {
   try {
     await connectDB();
-    await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
+    const authResult = await requireTenantAccess(request);
+    if (authResult instanceof NextResponse) return authResult;
+    const { tenantId } = authResult;
     const { id } = await params;
 
-    if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+    const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
+    const { allowed } = checkRateLimit(`write:expenses:${tenantId}:${ip}`, 30, 60_000);
+    if (!allowed) {
+      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
     const expense = await Expense.findOne({ _id: id, tenantId });
@@ -79,9 +79,8 @@ export async function PUT(
     });
 
     return NextResponse.json({ success: true, data: expense });
-  } catch (error: unknown) {
-    logger.error('Error updating expense:', error);
-    return NextResponse.json({ success: false, error: (error as Error).message }, { status: 400 });
+  } catch (error) {
+    return handleApiError(error, 'Failed to update expense');
   }
 }
 
@@ -91,13 +90,16 @@ export async function DELETE(
 ) {
   try {
     await connectDB();
-    await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
+    const authResult = await requireTenantAccess(request);
+    if (authResult instanceof NextResponse) return authResult;
+    const { tenantId } = authResult;
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
 
-    if (!tenantId) {
-      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
+    const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
+    const { allowed } = checkRateLimit(`write:expenses:${tenantId}:${ip}`, 30, 60_000);
+    if (!allowed) {
+      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
     const expense = await Expense.findOneAndUpdate(
@@ -118,9 +120,8 @@ export async function DELETE(
     });
 
     return NextResponse.json({ success: true, message: t('validation.expenseDeleted', 'Expense deleted successfully') });
-  } catch (error: unknown) {
-    logger.error('Error deleting expense:', error);
-    return NextResponse.json({ success: false, error: (error as Error).message }, { status: 500 });
+  } catch (error) {
+    return handleApiError(error, 'Failed to delete expense');
   }
 }
 

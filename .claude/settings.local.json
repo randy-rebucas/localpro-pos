@@ -29,7 +29,8 @@
       "Bash(pnpm run health:check:verbose)",
       "Bash(npx tsc --noEmit)",
       "Bash(bash .claude/hooks/lint-changed-file.sh)",
-      "Bash(bash .claude/hooks/typecheck-before-commit.sh)"
+      "Bash(bash .claude/hooks/typecheck-before-commit.sh)",
+      "Bash(grep -E \"\\\\.ts$|\\\\.tsx$\")"
     ]
   },
   "hooks": {

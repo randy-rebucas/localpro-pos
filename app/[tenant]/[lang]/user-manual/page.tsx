@@ -7,13 +7,16 @@ import remarkGfm from 'remark-gfm';
 import Navbar from '@/components/Navbar';
 import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { useSubscription } from '@/contexts/SubscriptionContext';
 
 interface DocIndex {
   files: string[];
   readme: string;
 }
 
-type DocFolder = 'user-manual' | 'tenant-manual';
+type DocFolder = 'user-manual' | 'tenant-manual' | 'bir-documentation';
+
+const BIR_PLANS = ['Standard', 'Premium', 'Enterprise'];
 
 // Section icons mapped by keyword
 const SECTION_ICONS: Record<string, string> = {
@@ -69,6 +72,8 @@ export default function UserManualPage() {
   const lang = (params?.lang as string) || 'en';
   const { settings } = useTenantSettings();
   const primaryColor = settings?.primaryColor || '#2563eb';
+  const { subscriptionStatus } = useSubscription();
+  const hasBirAccess = BIR_PLANS.includes(subscriptionStatus?.planName ?? '');
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [dict, setDict] = useState<any>(null);
@@ -142,6 +147,8 @@ export default function UserManualPage() {
 
   const folderLabel = activeFolder === 'user-manual'
     ? (dict?.nav?.userManual || 'User Manual')
+    : activeFolder === 'bir-documentation'
+    ? 'BIR Documentation'
     : (dict?.nav?.tenantManual || 'Tenant Manual');
 
   return (
@@ -175,6 +182,8 @@ export default function UserManualPage() {
                 <p className="mt-1 text-sm text-gray-500">
                   {activeFolder === 'user-manual'
                     ? (dict?.common?.userManualDesc || 'Step-by-step guides for daily store operations')
+                    : activeFolder === 'bir-documentation'
+                    ? 'Bureau of Internal Revenue compliance, receipts, VAT, and audit trail guides'
                     : (dict?.common?.tenantManualDesc || 'Setup, configuration, and administration guides')
                   }
                 </p>
@@ -215,6 +224,24 @@ export default function UserManualPage() {
                 </svg>
                 {dict?.nav?.tenantManual || 'Tenant Manual'}
               </button>
+              {hasBirAccess && (
+                <button
+                  onClick={() => setActiveFolder('bir-documentation')}
+                  className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors border-l border-gray-300 ${
+                    activeFolder !== 'bir-documentation' ? 'hover:bg-gray-50' : ''
+                  }`}
+                  style={
+                    activeFolder === 'bir-documentation'
+                      ? { backgroundColor: primaryColor, color: '#fff' }
+                      : { color: '#374151' }
+                  }
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" />
+                  </svg>
+                  BIR Docs
+                </button>
+              )}
             </div>
           </div>
         </div>

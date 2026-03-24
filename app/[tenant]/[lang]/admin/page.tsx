@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '../dictionaries-client';
 import Link from 'next/link';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
@@ -11,7 +11,6 @@ import { useSubscription } from '@/contexts/SubscriptionContext';
 
 export default function AdminPage() {
   const params = useParams();
-  const router = useRouter(); // eslint-disable-line @typescript-eslint/no-unused-vars
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -113,6 +112,18 @@ export default function AdminPage() {
             </svg>
           ),
           color: 'rose',
+        },
+        {
+          title: dict.admin?.loyalty || 'Loyalty Program',
+          description: dict.admin?.loyaltyDescription || 'Manage customer loyalty points and rewards',
+          href: `/${tenant}/${lang}/admin/loyalty`,
+          featureFlag: 'enableLoyaltyProgram' as keyof typeof settings,
+          icon: (
+            <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+            </svg>
+          ),
+          color: 'yellow',
         },
         {
           title: dict.admin?.transactions || 'Transactions',
@@ -381,6 +392,25 @@ export default function AdminPage() {
     },
   ];
 
+  const colorClasses: Record<string, { icon: string; text: string }> = {
+    teal:    { icon: 'bg-teal-50 text-teal-600 border-teal-200',    text: 'text-teal-600' },
+    indigo:  { icon: 'bg-indigo-50 text-indigo-600 border-indigo-200',  text: 'text-indigo-600' },
+    amber:   { icon: 'bg-amber-50 text-amber-600 border-amber-200',   text: 'text-amber-600' },
+    yellow:  { icon: 'bg-yellow-50 text-yellow-600 border-yellow-200',  text: 'text-yellow-600' },
+    rose:    { icon: 'bg-rose-50 text-rose-600 border-rose-200',    text: 'text-rose-600' },
+    cyan:    { icon: 'bg-cyan-50 text-cyan-600 border-cyan-200',    text: 'text-cyan-600' },
+    emerald: { icon: 'bg-emerald-50 text-emerald-600 border-emerald-200', text: 'text-emerald-600' },
+    red:     { icon: 'bg-red-50 text-red-600 border-red-200',      text: 'text-red-600' },
+    violet:  { icon: 'bg-violet-50 text-violet-600 border-violet-200',  text: 'text-violet-600' },
+    pink:    { icon: 'bg-pink-50 text-pink-600 border-pink-200',    text: 'text-pink-600' },
+    blue:    { icon: 'bg-blue-50 text-blue-600 border-blue-200',    text: 'text-blue-600' },
+    green:   { icon: 'bg-green-50 text-green-600 border-green-200',   text: 'text-green-600' },
+    orange:  { icon: 'bg-orange-50 text-orange-600 border-orange-200',  text: 'text-orange-600' },
+    purple:  { icon: 'bg-purple-50 text-purple-600 border-purple-200',  text: 'text-purple-600' },
+    slate:   { icon: 'bg-slate-50 text-slate-600 border-slate-200',   text: 'text-slate-600' },
+    gray:    { icon: 'bg-gray-50 text-gray-500 border-gray-200',    text: 'text-gray-500' },
+  };
+
   const isCardVisible = (card: AdminCard) => {
     if (!card.featureFlag) return true;
     if (!settings) return true;
@@ -398,11 +428,11 @@ export default function AdminPage() {
           </h1>
           <p className="text-gray-600">{dict.admin?.subtitle || 'Manage users, tenants, and system settings'}</p>
         </div>
-         {/* Subscription Usage Card */}
+        {/* Subscription Usage Card */}
         {subscriptionStatus && (
           <Link
             href={`/${tenant}/${lang}/admin/subscriptions`}
-            className="mb-6 block bg-white border border-gray-300 p-6 transition-all duration-200"
+            className="mb-6 block bg-white border rounded-xl p-6 transition-all duration-200 hover:shadow-md"
             style={{ borderColor: primaryColor }}
           >
             <div className="flex items-start justify-between mb-4">
@@ -470,35 +500,29 @@ export default function AdminPage() {
                 <p className="text-gray-500 text-sm">{section.description}</p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {visibleCards.map((card, cardIndex) => (
-                  <Link
-                    key={cardIndex}
-                    href={card.href}
-                    className="bg-white border border-gray-300 p-6 transition-all duration-200"
-                    style={{
-                      borderColor: primaryColor,
-                      ...(card.color === 'blue' && { boxShadow: `0 0 0 2px ${primaryColor}33` }),
-                    }}
-                  >
-                    <div
-                      className="inline-flex p-3 border mb-4"
-                      style={card.color === 'blue'
-                        ? { background: `${primaryColor}11`, color: primaryColor, borderColor: primaryColor }
-                        : {}}
+                {visibleCards.map((card, cardIndex) => {
+                  const cc = colorClasses[card.color] ?? colorClasses.gray;
+                  return (
+                    <Link
+                      key={cardIndex}
+                      href={card.href}
+                      className="group bg-white border rounded-xl p-6 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5"
+                      style={{ borderColor: `${primaryColor}40` }}
                     >
-                      {card.icon}
-                    </div>
-                    <h2 className="text-xl font-bold text-gray-900 mb-2">{card.title}</h2>
-                    <p className="text-gray-600 text-sm">{card.description}</p>
-                    <div className="mt-4 flex items-center font-medium text-sm"
-                      style={card.color === 'blue' ? { color: primaryColor } : {}}>
-                      <span>{dict.common?.view || 'View'} {card.title}</span>
-                      <svg className="w-4 h-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </div>
-                  </Link>
-                ))}
+                      <div className={`inline-flex p-3 rounded-lg border mb-4 ${cc.icon}`}>
+                        {card.icon}
+                      </div>
+                      <h2 className="text-xl font-bold text-gray-900 mb-2">{card.title}</h2>
+                      <p className="text-gray-500 text-sm">{card.description}</p>
+                      <div className={`mt-4 flex items-center font-medium text-sm ${cc.text}`}>
+                        <span>{dict.common?.view || 'View'} {card.title}</span>
+                        <svg className="w-4 h-4 ml-1.5 transition-transform duration-150 group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </div>
+                    </Link>
+                  );
+                })}
               </div>
             </div>
           );

@@ -14,9 +14,12 @@ import ProductBundle from '@/models/ProductBundle';
 import StockMovement from '@/models/StockMovement';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { getTenantSettingsById } from '@/lib/tenant';
-import { checkSubscriptionLimit, SubscriptionService } from '@/lib/subscription';
+import { checkSubscriptionLimit, SubscriptionService, checkFeatureAccess } from '@/lib/subscription';
 import { logger } from '@/lib/logger';
 import { calculateTax } from '@/lib/tax-calculation';
+import Customer from '@/models/Customer';
+import LoyaltyConfig from '@/models/LoyaltyConfig';
+import LoyaltyTransaction from '@/models/LoyaltyTransaction';
 
 interface VariationInput {
   size?: string;
@@ -146,6 +149,8 @@ export async function POST(request: NextRequest) {
     }
 
     const { items, paymentMethod, cashReceived, notes, discountCode, branchId, payments } = data as unknown as TransactionInput;
+    const customerId = body.customerId as string | undefined;
+    const loyaltyPointsToRedeem = typeof body.loyaltyPointsToRedeem === 'number' ? Math.floor(body.loyaltyPointsToRedeem) : 0;
 
     // Check subscription transaction limits
     const currentTransactionCount = await Transaction.countDocuments({
@@ -162,6 +167,54 @@ export async function POST(request: NextRequest) {
         { success: false, error: (limitError as Error).message },
         { status: 403 }
       );
+    }
+
+    // ─── Loyalty: pre-validate customer and redemption ───
+    let loyaltyEnabled = false;
+    let loyaltyConfig: { pointsPerPeso: number; pesoPerPoint: number; minRedemption: number; isEnabled: boolean } | null = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let loyaltyCustomer: any = null;
+    let loyaltyDiscountAmount = 0;
+
+    try {
+      await checkFeatureAccess(tenantId.toString(), 'enableLoyaltyProgram');
+      loyaltyEnabled = true;
+    } catch {
+      // Feature not available for this plan — loyalty is silently skipped
+    }
+
+    if (loyaltyEnabled && customerId) {
+      const foundConfig = await LoyaltyConfig.findOne({ tenantId }).lean();
+      loyaltyConfig = foundConfig ?? { pointsPerPeso: 1, pesoPerPoint: 0.10, minRedemption: 100, isEnabled: true };
+
+      if (!loyaltyConfig.isEnabled) {
+        loyaltyEnabled = false;
+      }
+
+      if (loyaltyEnabled) {
+        const customer = await Customer.findOne({ _id: customerId, tenantId });
+        if (!customer) {
+          return NextResponse.json({ success: false, error: 'Customer not found' }, { status: 404 });
+        }
+        loyaltyCustomer = customer;
+
+        if (loyaltyPointsToRedeem > 0) {
+          const balance = customer.loyaltyPointsBalance ?? 0;
+          if (loyaltyPointsToRedeem < loyaltyConfig.minRedemption) {
+            return NextResponse.json(
+              { success: false, error: `Minimum ${loyaltyConfig.minRedemption} points required for redemption` },
+              { status: 400 }
+            );
+          }
+          if (loyaltyPointsToRedeem > balance) {
+            return NextResponse.json(
+              { success: false, error: `Insufficient loyalty points. Balance: ${balance}` },
+              { status: 400 }
+            );
+          }
+          loyaltyDiscountAmount = loyaltyPointsToRedeem * loyaltyConfig.pesoPerPoint;
+        }
+      }
     }
 
     // Get tenant settings to check feature flags
@@ -438,8 +491,8 @@ export async function POST(request: NextRequest) {
       taxAmount = taxResult.taxAmount;
     }
 
-    // Calculate total after discount and tax
-    const total = Math.max(0, subtotalAfterDiscount + taxAmount);
+    // Calculate total after discount, tax, and loyalty redemption
+    const total = Math.max(0, subtotalAfterDiscount + taxAmount - loyaltyDiscountAmount);
 
     // Handle multiple payments (split payments)
     if (isMultiplePayments) {
@@ -546,6 +599,7 @@ export async function POST(request: NextRequest) {
         cashReceived: finalPaymentMethod === 'cash' ? finalCashReceived : undefined,
         change: finalPaymentMethod === 'cash' ? finalChange : undefined,
         status: 'completed',
+        customerId: customerId || undefined,
         userId: user.userId,
         receiptNumber,
         notes,
@@ -567,6 +621,56 @@ export async function POST(request: NextRequest) {
             { session }
           );
         }
+      }
+
+      // ─── Loyalty: earn and/or redeem points ───
+      if (loyaltyEnabled && loyaltyCustomer && loyaltyConfig) {
+        const currentBalance = loyaltyCustomer.loyaltyPointsBalance ?? 0;
+        let newBalance = currentBalance;
+
+        // Redeem first
+        if (loyaltyPointsToRedeem > 0) {
+          const balanceAfterRedeem = Math.max(0, newBalance - loyaltyPointsToRedeem);
+          await LoyaltyTransaction.create([{
+            tenantId,
+            customerId: loyaltyCustomer._id,
+            transactionId: transaction._id,
+            type: 'redeem',
+            points: -loyaltyPointsToRedeem,
+            balanceBefore: newBalance,
+            balanceAfter: balanceAfterRedeem,
+            description: `Redeemed ${loyaltyPointsToRedeem} points (₱${loyaltyDiscountAmount.toFixed(2)} discount)`,
+            createdBy: user.userId,
+          }], { session });
+          newBalance = balanceAfterRedeem;
+          await Transaction.updateOne({ _id: transaction._id }, { $set: { loyaltyPointsRedeemed: loyaltyPointsToRedeem } }, { session });
+        }
+
+        // Earn points on total paid (after redemption discount)
+        const pointsEarned = Math.floor(total * loyaltyConfig.pointsPerPeso);
+        if (pointsEarned > 0) {
+          const balanceAfterEarn = newBalance + pointsEarned;
+          await LoyaltyTransaction.create([{
+            tenantId,
+            customerId: loyaltyCustomer._id,
+            transactionId: transaction._id,
+            type: 'earn',
+            points: pointsEarned,
+            balanceBefore: newBalance,
+            balanceAfter: balanceAfterEarn,
+            description: `Earned ${pointsEarned} points from receipt #${transaction.receiptNumber}`,
+            createdBy: user.userId,
+          }], { session });
+          newBalance = balanceAfterEarn;
+          await Transaction.updateOne({ _id: transaction._id }, { $set: { loyaltyPointsEarned: pointsEarned } }, { session });
+        }
+
+        // Persist updated balance on customer
+        await Customer.updateOne(
+          { _id: loyaltyCustomer._id },
+          { $set: { loyaltyPointsBalance: newBalance } },
+          { session }
+        );
       }
 
       // Create Payment record(s)

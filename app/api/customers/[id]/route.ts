@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Customer from '@/models/Customer';
 import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
-import { requireAuth } from '@/lib/auth'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(
   request: NextRequest,
@@ -26,8 +27,8 @@ export async function GET(
     }
     
     return NextResponse.json({ success: true, data: customer });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error) {
+    return handleApiError(error, 'Failed to fetch customer');
   }
 }
 
@@ -54,13 +55,19 @@ export async function PATCH(
       throw authError;
     }
     const t = await getValidationTranslatorFromRequest(request);
-    
+
+    const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
+    const { allowed } = checkRateLimit(`write:customers:${tenantId}:${ip}`, 30, 60_000);
+    if (!allowed) {
+      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
+    }
+
     const customer = await Customer.findOne({ _id: id, tenantId });
-    
+
     if (!customer) {
       return NextResponse.json({ success: false, error: t('validation.customerNotFound', 'Customer not found') }, { status: 404 });
     }
-    
+
     const body = await request.json();
     const oldData = { firstName: customer.firstName, lastName: customer.lastName, email: customer.email };
     
@@ -97,8 +104,8 @@ export async function PATCH(
     });
     
     return NextResponse.json({ success: true, data: customer });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+  } catch (error) {
+    return handleApiError(error, 'Failed to update customer');
   }
 }
 
@@ -125,7 +132,13 @@ export async function DELETE(
       throw authError;
     }
     const t = await getValidationTranslatorFromRequest(request);
-    
+
+    const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
+    const { allowed } = checkRateLimit(`write:customers:${tenantId}:${ip}`, 30, 60_000);
+    if (!allowed) {
+      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
+    }
+
     // Soft delete - set isActive to false
     const customer = await Customer.findOne({ _id: id, tenantId });
     
@@ -145,7 +158,7 @@ export async function DELETE(
     });
     
     return NextResponse.json({ success: true, message: 'Customer deleted' });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+  } catch (error) {
+    return handleApiError(error, 'Failed to delete customer');
   }
 }
