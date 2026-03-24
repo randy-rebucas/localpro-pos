@@ -52,7 +52,13 @@ export interface ITenantSettings {
   businessType?: string; // e.g., "Retail", "Restaurant", "Service"
   taxId?: string; // Tax ID or EIN
   registrationNumber?: string;
-  
+
+  // BIR Compliance Settings
+  birTin?: string; // PH Tax Identification Number, format: NNN-NNN-NNN-NNN
+  birPtuNumber?: string; // Permit to Use number, e.g. "POS-0001-2024"
+  birPtuIssuedDate?: Date;
+  birPtuExpiryDate?: Date;
+
   // Notification Settings
   lowStockThreshold?: number;
   lowStockAlert?: boolean;
@@ -357,7 +363,17 @@ const TenantSchema: Schema = new Schema(
       businessType: String,
       taxId: String,
       registrationNumber: String,
-      
+
+      // BIR Compliance Settings
+      birTin: {
+        type: String,
+        trim: true,
+        match: [/^\d{3}-\d{3}-\d{3}-\d{3}$/, 'BIR TIN must be in format NNN-NNN-NNN-NNN'],
+      },
+      birPtuNumber: { type: String, trim: true },
+      birPtuIssuedDate: { type: Date },
+      birPtuExpiryDate: { type: Date },
+
       // Notification Settings
       lowStockThreshold: {
         type: Number,

@@ -26,6 +26,15 @@ interface SubscriptionFeatures {
   dedicatedAccountManager: boolean;
 }
 
+interface BirComplianceFeatures {
+  ptuAssistance: boolean;
+  receiptFormatting: boolean;
+  birDocumentation: boolean;
+  casReporting: boolean;
+  auditTrailSystem: boolean;
+  monthlySupport: boolean;
+}
+
 interface SubscriptionStatus {
   isActive: boolean;
   isTrial: boolean;
@@ -34,6 +43,7 @@ interface SubscriptionStatus {
   planName: string;
   limits: SubscriptionLimits;
   features: SubscriptionFeatures;
+  birCompliance?: BirComplianceFeatures;
   usage: {
     currentUsers: number;
     currentBranches: number;
@@ -77,6 +87,13 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
     try {
       setLoading(true);
       const response = await fetch('/api/subscription/status');
+
+      // 401 means the user is not authenticated (e.g. on the login page) — not an error
+      if (response.status === 401) {
+        setSubscriptionStatus(null);
+        return;
+      }
+
       const result = await response.json();
 
       if (result.success) {

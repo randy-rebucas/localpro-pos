@@ -27,6 +27,15 @@ export interface SubscriptionFeatures {
   dedicatedAccountManager: boolean;
 }
 
+export interface BirComplianceFeatures {
+  ptuAssistance: boolean;
+  receiptFormatting: boolean;
+  birDocumentation: boolean;
+  casReporting: boolean;
+  auditTrailSystem: boolean;
+  monthlySupport: boolean;
+}
+
 export interface SubscriptionStatus {
   isActive: boolean;
   isTrial: boolean;
@@ -35,6 +44,7 @@ export interface SubscriptionStatus {
   planName: string;
   limits: SubscriptionLimits;
   features: SubscriptionFeatures;
+  birCompliance: BirComplianceFeatures;
   usage: {
     currentUsers: number;
     currentBranches: number;
@@ -55,14 +65,19 @@ export class SubscriptionService {
       await connectDB();
 
       const subscription = await Subscription.findOne({ tenantId })
-        .populate('planId', 'name tier price features')
+        .populate('planId', 'name tier price features birCompliance')
         .lean();
 
       if (!subscription) {
         return null;
       }
 
-      let plan = subscription.planId as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+      type PopulatedPlan = {
+        name: string;
+        features: SubscriptionLimits & SubscriptionFeatures;
+        birCompliance?: BirComplianceFeatures;
+      };
+      let plan = subscription.planId as unknown as PopulatedPlan | null;
       const now = new Date();
 
       // Handle orphaned planId (plan was deleted/recreated)
@@ -106,6 +121,14 @@ export class SubscriptionService {
           prioritySupport: plan.features.prioritySupport,
           customIntegrations: plan.features.customIntegrations,
           dedicatedAccountManager: plan.features.dedicatedAccountManager,
+        },
+        birCompliance: {
+          ptuAssistance: plan.birCompliance?.ptuAssistance ?? false,
+          receiptFormatting: plan.birCompliance?.receiptFormatting ?? false,
+          birDocumentation: plan.birCompliance?.birDocumentation ?? false,
+          casReporting: plan.birCompliance?.casReporting ?? false,
+          auditTrailSystem: plan.birCompliance?.auditTrailSystem ?? false,
+          monthlySupport: plan.birCompliance?.monthlySupport ?? false,
         },
         usage: subscription.usage,
       };
@@ -187,6 +210,31 @@ export class SubscriptionService {
   }
 
   /**
+   * Check if tenant has access to a BIR compliance feature
+   */
+  static async checkBirFeature(
+    tenantId: string,
+    feature: keyof BirComplianceFeatures
+  ): Promise<boolean> {
+    const status = await this.getSubscriptionStatus(tenantId);
+
+    if (!status) {
+      // auditTrailSystem is available on all plans including no-subscription trial
+      return feature === 'auditTrailSystem';
+    }
+
+    if (!status.isActive && !status.isTrial) {
+      return false;
+    }
+
+    if (status.isExpired || (status.isTrial && status.isTrialExpired)) {
+      return false;
+    }
+
+    return status.birCompliance[feature];
+  }
+
+  /**
    * Update usage counters for a tenant
    */
   static async updateUsage(
@@ -201,7 +249,7 @@ export class SubscriptionService {
     try {
       await connectDB();
 
-      const updateObj: any = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
+      const updateObj: Record<string, number> = {};
 
       if (updates.users !== undefined) {
         updateObj['usage.currentUsers'] = updates.users;
@@ -229,7 +277,7 @@ export class SubscriptionService {
   /**
    * Get all subscription plans
    */
-  static async getPlans(): Promise<any[]> { // eslint-disable-line @typescript-eslint/no-explicit-any
+  static async getPlans(): Promise<Record<string, unknown>[]> {
     try {
       await connectDB();
       return await SubscriptionPlan.find({ isActive: true }).sort({ 'price.monthly': 1 }).lean();
@@ -250,7 +298,7 @@ export class SubscriptionService {
       billingCycle?: 'monthly' | 'yearly';
       startDate?: Date;
     } = {}
-  ): Promise<any> { // eslint-disable-line @typescript-eslint/no-explicit-any
+  ): Promise<unknown> {
     try {
       await connectDB();
 
@@ -266,7 +314,18 @@ export class SubscriptionService {
         throw new Error('Tenant already has an active subscription');
       }
 
-      const subscriptionData: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
+      const subscriptionData: {
+        tenantId: string;
+        planId: string;
+        status: string;
+        billingCycle: string;
+        startDate: Date;
+        isTrial: boolean;
+        autoRenew: boolean;
+        usage: Record<string, unknown>;
+        trialEndDate?: Date;
+        nextBillingDate?: Date;
+      } = {
         tenantId,
         planId,
         status: isTrial ? 'trial' : 'active',
@@ -344,5 +403,19 @@ export async function checkFeatureAccess(
 
   if (!hasAccess) {
     throw new Error(`Feature '${feature}' is not available in your current subscription plan. Please upgrade to access this feature.`);
+  }
+}
+
+/**
+ * Middleware function to check BIR compliance feature access
+ */
+export async function checkBirFeatureAccess(
+  tenantId: string,
+  feature: keyof BirComplianceFeatures
+): Promise<void> {
+  const hasAccess = await SubscriptionService.checkBirFeature(tenantId, feature);
+
+  if (!hasAccess) {
+    throw new Error(`BIR compliance feature '${feature}' is not available in your current subscription plan. Please upgrade to access this feature.`);
   }
 }

@@ -8,7 +8,10 @@ import connectDB from '@/lib/mongodb';
 import Tenant from '@/models/Tenant';
 import { validateTemplate } from '@/lib/receipt-templates';
 import { getCurrentUser } from '@/lib/auth';
-import { logger } from '@/lib/logger';
+import { handleApiError } from '@/lib/error-handler';
+import { createAuditLog, AuditActions } from '@/lib/audit';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { checkBirFeatureAccess } from '@/lib/subscription';
 
 export async function GET(
   request: NextRequest,
@@ -23,9 +26,14 @@ export async function GET(
     const { slug } = await params;
     await connectDB();
 
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await Tenant.findOne({ slug }).lean();
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+    }
+
+    // Tenant isolation
+    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
     const templates = tenant.settings.receiptTemplates?.templates || [];
@@ -38,9 +46,8 @@ export async function GET(
         default: defaultTemplateId,
       },
     });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    logger.error('Error fetching receipt templates:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return handleApiError(error, 'Failed to fetch receipt templates');
   }
 }
 
@@ -54,11 +61,39 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (user.role !== 'admin' && user.role !== 'manager') {
+    if (user.role !== 'admin' && user.role !== 'manager' && user.role !== 'owner' && user.role !== 'super_admin') {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
+    // Rate limit: 30 writes per minute
+    const rl = checkRateLimit(`receipt-templates:${user.userId}`, 30, 60_000);
+    if (!rl.allowed) {
+      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
+    }
+
     const { slug } = await params;
+    await connectDB();
+
+    const tenant = await Tenant.findOne({ slug });
+    if (!tenant) {
+      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+    }
+
+    // Tenant isolation
+    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
+
+    // Feature gate
+    try {
+      await checkBirFeatureAccess(tenant._id.toString(), 'receiptFormatting');
+    } catch (featureError: unknown) {
+      return NextResponse.json(
+        { success: false, error: (featureError as Error).message },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const { name, html, isDefault } = body;
 
@@ -66,17 +101,9 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Name and HTML are required' }, { status: 400 });
     }
 
-    // Validate template
     const validation = validateTemplate(html);
     if (!validation.valid) {
       return NextResponse.json({ success: false, error: validation.error }, { status: 400 });
-    }
-
-    await connectDB();
-
-    const tenant = await Tenant.findOne({ slug });
-    if (!tenant) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
     const templates = tenant.settings.receiptTemplates?.templates || [];
@@ -89,7 +116,6 @@ export async function POST(
       updatedAt: new Date(),
     };
 
-    // If this is set as default, unset others
     if (isDefault) {
       templates.forEach((t) => {
         t.isDefault = false;
@@ -110,13 +136,20 @@ export async function POST(
     tenant.markModified('settings.receiptTemplates');
     await tenant.save();
 
+    await createAuditLog(request, {
+      tenantId: tenant._id,
+      action: AuditActions.CREATE,
+      entityType: 'receipt_template',
+      entityId: newTemplate.id,
+      changes: { name, isDefault },
+    });
+
     return NextResponse.json({
       success: true,
       data: newTemplate,
     });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    logger.error('Error creating receipt template:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return handleApiError(error, 'Failed to create receipt template');
   }
 }
 
@@ -130,8 +163,14 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (user.role !== 'admin' && user.role !== 'manager') {
+    if (user.role !== 'admin' && user.role !== 'manager' && user.role !== 'owner' && user.role !== 'super_admin') {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
+
+    // Rate limit: 30 writes per minute
+    const rl = checkRateLimit(`receipt-templates:${user.userId}`, 30, 60_000);
+    if (!rl.allowed) {
+      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
     const { slug } = await params;
@@ -156,6 +195,11 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
+    // Tenant isolation
+    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
+
     const templates = tenant.settings.receiptTemplates?.templates || [];
     const templateIndex = templates.findIndex((t) => t.id === id);
 
@@ -163,12 +207,10 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'Template not found' }, { status: 404 });
     }
 
-    // Update template
     if (name) templates[templateIndex].name = name;
     if (html) templates[templateIndex].html = html;
     templates[templateIndex].updatedAt = new Date();
 
-    // Handle default
     if (isDefault !== undefined) {
       if (isDefault) {
         templates.forEach((t) => {
@@ -197,13 +239,20 @@ export async function PUT(
     tenant.markModified('settings.receiptTemplates');
     await tenant.save();
 
+    await createAuditLog(request, {
+      tenantId: tenant._id,
+      action: AuditActions.UPDATE,
+      entityType: 'receipt_template',
+      entityId: id,
+      changes: { name, isDefault },
+    });
+
     return NextResponse.json({
       success: true,
       data: templates[templateIndex],
     });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    logger.error('Error updating receipt template:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return handleApiError(error, 'Failed to update receipt template');
   }
 }
 
@@ -217,8 +266,14 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (user.role !== 'admin' && user.role !== 'manager') {
+    if (user.role !== 'admin' && user.role !== 'manager' && user.role !== 'owner' && user.role !== 'super_admin') {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
+
+    // Rate limit: 30 writes per minute
+    const rl = checkRateLimit(`receipt-templates:${user.userId}`, 30, 60_000);
+    if (!rl.allowed) {
+      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
     const { slug } = await params;
@@ -236,6 +291,11 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
+    // Tenant isolation
+    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
+
     const templates = tenant.settings.receiptTemplates?.templates || [];
     const filtered = templates.filter((t) => t.id !== id);
 
@@ -243,7 +303,6 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'Template not found' }, { status: 404 });
     }
 
-    // If deleted template was default, clear default
     if (tenant.settings.receiptTemplates?.default === id) {
       tenant.settings.receiptTemplates.default = undefined;
     }
@@ -256,9 +315,16 @@ export async function DELETE(
     tenant.markModified('settings.receiptTemplates');
     await tenant.save();
 
+    await createAuditLog(request, {
+      tenantId: tenant._id,
+      action: AuditActions.DELETE,
+      entityType: 'receipt_template',
+      entityId: id,
+      changes: {},
+    });
+
     return NextResponse.json({ success: true });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    logger.error('Error deleting receipt template:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return handleApiError(error, 'Failed to delete receipt template');
   }
 }

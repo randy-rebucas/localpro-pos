@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Tenant from '@/models/Tenant';
-import { requireAuth, requireRole } from '@/lib/auth';
+import { requireRole, getCurrentUser } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -27,10 +27,11 @@ export async function GET(
     }
 
     return NextResponse.json({ success: true, data: tenant.settings });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  } catch (error: unknown) {
     logger.error('Error fetching tenant settings:', error);
     const t = await getValidationTranslatorFromRequest(request);
-    return NextResponse.json({ success: false, error: error.message || t('validation.failedToFetchSettings', 'Failed to fetch settings') }, { status: 500 });
+    const message = error instanceof Error ? error.message : undefined;
+    return NextResponse.json({ success: false, error: message || t('validation.failedToFetchSettings', 'Failed to fetch settings') }, { status: 500 });
   }
 }
 
@@ -41,31 +42,30 @@ export async function PUT(
   try {
     await connectDB();
     const { slug } = await params;
-    
-    // Try to get current user, but don't require auth (settings are tenant-scoped)
-    // If user is authenticated, verify they have proper role
-    try {
-      const user = await requireRole(request, ['admin', 'manager']); // eslint-disable-line @typescript-eslint/no-unused-vars
-      // User is authenticated and has proper role, proceed
-    } catch (authError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      // If auth fails, still allow update but log it (tenant-scoped security)
-      // In production, you might want to require auth here
-      logger.info(`Settings update without authentication for tenant: ${slug}`);
-    }
-    
+
+    await requireRole(request, ['admin', 'manager', 'owner', 'super_admin']);
+    const user = await getCurrentUser(request);
+
     const body = await request.json();
     const settings = body.settings || body;
     const t = await getValidationTranslatorFromRequest(request);
 
     // Validate settings structure
     const defaultSettings = getDefaultTenantSettings();
-    const mergedSettings = { ...defaultSettings, ...settings };
-    
-    // Auto-configure features based on business type if business type is being set/changed
+
+    // Load existing settings so sub-sections managed by dedicated admin pages
+    // (taxRules, businessHours, holidays, receiptTemplates, notificationTemplates,
+    //  advancedBranding, hardwareConfig, birTin, etc.) are preserved when the
+    // main settings page saves only its own tabs.
     const existingTenant = await Tenant.findOne({ slug }).lean();
+    const existingSettings = existingTenant?.settings || {};
+
+    // Three-way merge: defaults → existing → incoming (incoming wins on conflict)
+    const mergedSettings = { ...defaultSettings, ...existingSettings, ...settings };
+
     const currentBusinessType = existingTenant?.settings?.businessType;
     const newBusinessType = settings.businessType;
-    
+
     // Apply business type defaults if business type is being set or changed
     let updatedSettings = mergedSettings;
     if (newBusinessType && newBusinessType !== currentBusinessType) {
@@ -101,6 +101,12 @@ export async function PUT(
       }
     }
 
+    // Tenant isolation: verify the authenticated user belongs to this tenant
+    const tenantCheck = await Tenant.findOne({ slug }).select('_id').lean();
+    if (tenantCheck && user && user.role !== 'super_admin' && user.tenantId !== tenantCheck._id.toString()) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
+
     const tenant = await Tenant.findOneAndUpdate(
       { slug },
       { $set: { settings: updatedSettings } },
@@ -114,25 +120,20 @@ export async function PUT(
       );
     }
 
-    // Try to create audit log if user is authenticated
-    try {
-      await requireAuth(request);
-      await createAuditLog(request, {
-        tenantId: tenant._id,
-        action: AuditActions.UPDATE,
-        entityType: 'tenant',
-        entityId: tenant._id.toString(),
-        changes: { settings: updatedSettings },
-      });
-    } catch {
-      // Audit log is optional if not authenticated
-    }
+    await createAuditLog(request, {
+      tenantId: tenant._id,
+      action: AuditActions.UPDATE,
+      entityType: 'tenant',
+      entityId: tenant._id.toString(),
+      changes: { settings: updatedSettings },
+    });
 
     return NextResponse.json({ success: true, data: tenant.settings });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  } catch (error: unknown) {
     logger.error('Error updating tenant settings:', error);
     const t = await getValidationTranslatorFromRequest(request);
-    return NextResponse.json({ success: false, error: error.message || t('validation.failedToUpdateSettings', 'Failed to update settings') }, { status: 400 });
+    const message = error instanceof Error ? error.message : undefined;
+    return NextResponse.json({ success: false, error: message || t('validation.failedToUpdateSettings', 'Failed to update settings') }, { status: 400 });
   }
 }
 

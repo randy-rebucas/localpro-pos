@@ -30,7 +30,13 @@
       "Bash(npx tsc --noEmit)",
       "Bash(bash .claude/hooks/lint-changed-file.sh)",
       "Bash(bash .claude/hooks/typecheck-before-commit.sh)",
-      "Bash(grep -E \"\\\\.ts$|\\\\.tsx$\")"
+      "Bash(grep -E \"\\\\.ts$|\\\\.tsx$\")",
+      "Bash(grep -E \"\\(updateSetting|value=\\\\{settings\\)\" /c/Users/corew/localpro-pos/app/[tenant]/[lang]/settings/page.tsx)",
+      "Bash(tail -500 /c/Users/corew/localpro-pos/app/[tenant]/[lang]/settings/page.tsx)",
+      "Bash(grep -n \"require\\\\|checkRate\\\\|createAudit\" /c/Users/corew/localpro-pos/app/api/tenants/[slug]/receipt-templates/route.ts)",
+      "Bash(grep -A 5 \"findOne.*slug\" /c/Users/corew/localpro-pos/app/api/tenants/[slug]/receipt-templates/route.ts)",
+      "Bash(grep -n \"getCurrentUser\\\\|requireRole\\\\|super_admin\" /c/Users/corew/localpro-pos/app/api/tenants/[slug]/settings/route.ts)",
+      "Bash(grep -n \"audit\\\\|AuditLog\" /c/Users/corew/localpro-pos/app/api/tenants/[slug]/receipt-templates/route.ts)"
     ]
   },
   "hooks": {

@@ -127,6 +127,11 @@ export default function SettingsPage() {
           lowStockAlert: true,
           emailNotifications: false,
           smsNotifications: false,
+          attendanceNotifications: {
+            enabled: true,
+            expectedStartTime: '09:00',
+            maxHoursWithoutClockOut: 12,
+          },
           enableInventory: true,
           enableCategories: true,
           enableDiscounts: false,
@@ -1347,6 +1352,59 @@ export default function SettingsPage() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Attendance Notifications */}
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1">Attendance Notifications</h3>
+                    <p className="text-sm text-gray-500 mb-3">Alert managers when staff miss clock-in or forget to clock out.</p>
+                    <div className="space-y-4">
+                      <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
+                        <input
+                          type="checkbox"
+                          id="attendanceNotificationsEnabled"
+                          checked={settings.attendanceNotifications?.enabled !== false}
+                          onChange={(e) => updateSetting('attendanceNotifications.enabled', e.target.checked)}
+                          className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
+                        />
+                        <label htmlFor="attendanceNotificationsEnabled" className="ml-3 flex-1">
+                          <div className="text-sm font-medium text-gray-900">Enable Attendance Alerts</div>
+                          <div className="text-xs text-gray-500 mt-1">Notify managers of missed clock-ins and forgotten clock-outs</div>
+                        </label>
+                      </div>
+
+                      {settings.attendanceNotifications?.enabled !== false && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Expected Clock-In Time
+                            </label>
+                            <input
+                              type="time"
+                              value={settings.attendanceNotifications?.expectedStartTime || '09:00'}
+                              onChange={(e) => updateSetting('attendanceNotifications.expectedStartTime', e.target.value)}
+                              className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Alert if staff haven&apos;t clocked in by this time</p>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Max Hours Without Clock-Out
+                            </label>
+                            <input
+                              type="number"
+                              min={1}
+                              max={24}
+                              value={settings.attendanceNotifications?.maxHoursWithoutClockOut ?? 12}
+                              onChange={(e) => updateSetting('attendanceNotifications.maxHoursWithoutClockOut', Number(e.target.value))}
+                              className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Alert after this many hours without clocking out (1–24)</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
                 </div>
               </section>
             )}
