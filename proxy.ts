@@ -75,6 +75,7 @@ const STATE_CHANGING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 // Paths exempt from CSRF check (auth, cron, webhooks)
 const CSRF_EXEMPT_PREFIXES = [
   '/api/auth/',
+  '/api/super-admin/auth/',
   '/api/automations/',
   '/api/paypal/',
   '/api/tenants/signup',
@@ -121,6 +122,7 @@ const PUBLIC_API_PATHS = new Set([
   '/api/subscription-plans', // public plan listing
   '/api/business-types',
   '/api/health',
+  '/api/super-admin/auth/login', // super-admin login is unauthenticated
 ]);
 
 /** Automation routes are protected by CRON_SECRET, not JWT */
@@ -147,6 +149,17 @@ const JWT_SECRET = process.env.JWT_SECRET || 'dev-only-insecure-secret-do-not-us
  */
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // ── Subdomain routing: admin.* → /super-admin/... ──────────────────────
+  const host = (request.headers.get('host') || '').split(':')[0];
+  const hostParts = host.split('.');
+  if (hostParts.length >= 2 && hostParts[0] === 'admin') {
+    if (!pathname.startsWith('/super-admin') && !pathname.startsWith('/api/super-admin')) {
+      const url = request.nextUrl.clone();
+      url.pathname = `/super-admin${pathname === '/' ? '/dashboard' : pathname}`;
+      return NextResponse.rewrite(url);
+    }
+  }
 
   // Only gate /api/* routes
   if (!pathname.startsWith('/api/')) {
@@ -221,7 +234,9 @@ export function proxy(request: NextRequest) {
     return response;
   }
 
-  if (!payload.userId || !payload.tenantId || !payload.role) {
+  // super_admin has tenantId: '' — allow empty string for that role only
+  const isSuperAdmin = payload.role === 'super_admin';
+  if (!payload.userId || (!isSuperAdmin && !payload.tenantId) || !payload.role) {
     return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
   }
 

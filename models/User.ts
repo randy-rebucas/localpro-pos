@@ -6,8 +6,8 @@ export interface IUser extends Document {
   email: string;
   password: string;
   name: string;
-  role: 'owner' | 'admin' | 'manager' | 'cashier' | 'viewer';
-  tenantId: mongoose.Types.ObjectId;
+  role: 'owner' | 'admin' | 'manager' | 'cashier' | 'viewer' | 'super_admin';
+  tenantId?: mongoose.Types.ObjectId;
   branchId?: mongoose.Types.ObjectId; // Branch assignment (optional)
   isActive: boolean;
   lastLogin?: Date;
@@ -41,7 +41,7 @@ const UserSchema: Schema = new Schema(
     },
     role: {
       type: String,
-      enum: ['owner', 'admin', 'manager', 'cashier', 'viewer'],
+      enum: ['owner', 'admin', 'manager', 'cashier', 'viewer', 'super_admin'],
       default: 'cashier',
       required: true,
     },
@@ -54,7 +54,7 @@ const UserSchema: Schema = new Schema(
     tenantId: {
       type: Schema.Types.ObjectId,
       ref: 'Tenant',
-      required: [true, 'Tenant is required'],
+      required: function(this: IUser) { return this.role !== 'super_admin'; },
     },
     branchId: {
       type: Schema.Types.ObjectId,

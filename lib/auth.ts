@@ -87,7 +87,8 @@ export async function getCurrentUser(request: NextRequest): Promise<{
     }
 
     // Guard against missing tenantId before string comparison
-    if (user.tenantId && user.tenantId.toString() !== payload.tenantId) {
+    // super_admin users have no tenantId — skip this check
+    if (payload.role !== 'super_admin' && user.tenantId && user.tenantId.toString() !== payload.tenantId) {
       return null;
     }
 
@@ -108,6 +109,7 @@ export function hasRole(userRole: string, requiredRoles: string[]): boolean {
     manager: 3,
     admin: 4,
     owner: 5,
+    super_admin: 6,
   };
 
   const userLevel = roleHierarchy[userRole] || 0;

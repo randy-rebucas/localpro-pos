@@ -7,7 +7,7 @@ interface User {
   _id: string;
   email: string;
   name: string;
-  role: 'owner' | 'admin' | 'manager' | 'cashier' | 'viewer';
+  role: 'owner' | 'admin' | 'manager' | 'cashier' | 'viewer' | 'super_admin';
 }
 
 interface AuthContextType {
@@ -119,6 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       manager: 3,
       admin: 4,
       owner: 5,
+      super_admin: 6,
     };
     const userLevel = roleHierarchy[user.role] || 0;
     return roles.some(role => roleHierarchy[role] <= userLevel);
