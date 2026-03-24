@@ -2,17 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Payment from '@/models/Payment';
 import Transaction from '@/models/Transaction';
-import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
+import { requireTenantAccess } from '@/lib/api-tenant';
 import { createAuditLog, AuditActions } from '@/lib/audit';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
-    const tenantId = await getTenantIdFromRequest(request);
-    
-    if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found or access denied' }, { status: 403 });
-    }
+    const tenantAccess = await requireTenantAccess(request);
+    const { tenantId } = tenantAccess;
     
     const searchParams = request.nextUrl.searchParams;
     const rawLimit = parseInt(searchParams.get('limit') || '50');
@@ -57,8 +55,12 @@ export async function GET(request: NextRequest) {
         pages: Math.ceil(total / limit),
       },
     });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : 'Failed to fetch payments';
+    if (msg.includes('Unauthorized') || msg.includes('Forbidden')) {
+      return NextResponse.json({ success: false, error: msg }, { status: msg.includes('Unauthorized') ? 401 : 403 });
+    }
+    return NextResponse.json({ success: false, error: msg }, { status: 500 });
   }
 }
 
@@ -67,6 +69,11 @@ export async function POST(request: NextRequest) {
     await connectDB();
     const tenantAccess = await requireTenantAccess(request);
     const { tenantId, user } = tenantAccess;
+
+    const rl = checkRateLimit(`payments:${user.userId}`, 60, 60_000);
+    if (!rl.allowed) {
+      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
+    }
     
     const body = await request.json();
     const { transactionId, method, amount, details } = body;
@@ -127,7 +134,11 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ success: true, data: payment }, { status: 201 });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : 'Failed to create payment';
+    if (msg.includes('Unauthorized') || msg.includes('Forbidden')) {
+      return NextResponse.json({ success: false, error: msg }, { status: msg.includes('Unauthorized') ? 401 : 403 });
+    }
+    return NextResponse.json({ success: false, error: msg }, { status: 400 });
   }
 }

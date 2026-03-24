@@ -100,6 +100,7 @@ export async function PUT(
           ? subscription.trialEndDate
           : new Date();
         subscription.trialEndDate = new Date(base.getTime() + days * 86_400_000);
+        subscription.nextBillingDate = subscription.trialEndDate;
         if (subscription.status !== 'trial') subscription.status = 'trial';
         await subscription.save();
         await createAuditLog(request, {
@@ -126,6 +127,14 @@ export async function PUT(
       }
       case 'activate': {
         subscription.status = 'active';
+        subscription.isTrial = false;
+        const nextBilling = new Date();
+        if (subscription.billingCycle === 'yearly') {
+          nextBilling.setFullYear(nextBilling.getFullYear() + 1);
+        } else {
+          nextBilling.setMonth(nextBilling.getMonth() + 1);
+        }
+        subscription.nextBillingDate = nextBilling;
         await subscription.save();
         await createAuditLog(request, {
           tenantId,

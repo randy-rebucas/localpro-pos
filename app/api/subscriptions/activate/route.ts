@@ -73,9 +73,13 @@ export async function POST(request: NextRequest) {
     const now = new Date();
     let subscriptionData: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-    const endDate = billingCycle === 'yearly'
-      ? new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000)
-      : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const nextBillingDate = new Date(now);
+    if (billingCycle === 'yearly') {
+      nextBillingDate.setFullYear(nextBillingDate.getFullYear() + 1);
+    } else {
+      nextBillingDate.setMonth(nextBillingDate.getMonth() + 1);
+    }
+    const endDate = nextBillingDate;
 
     const billingEntry = {
       date: now,

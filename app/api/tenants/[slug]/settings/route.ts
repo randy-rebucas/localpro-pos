@@ -6,6 +6,7 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { applyBusinessTypeDefaults } from '@/lib/business-types';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 
 export async function GET(
@@ -45,6 +46,11 @@ export async function PUT(
 
     await requireRole(request, ['admin', 'manager', 'owner', 'super_admin']);
     const user = await getCurrentUser(request);
+
+    const rl = checkRateLimit(`settings:${slug}`, 30, 60_000);
+    if (!rl.allowed) {
+      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
+    }
 
     const body = await request.json();
     const settings = body.settings || body;
@@ -101,9 +107,8 @@ export async function PUT(
       }
     }
 
-    // Tenant isolation: verify the authenticated user belongs to this tenant
-    const tenantCheck = await Tenant.findOne({ slug }).select('_id').lean();
-    if (tenantCheck && user && user.role !== 'super_admin' && user.tenantId !== tenantCheck._id.toString()) {
+    // Tenant isolation: verify the authenticated user belongs to this tenant (reuse existingTenant)
+    if (existingTenant && user && user.role !== 'super_admin' && user.tenantId !== existingTenant._id.toString()) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 

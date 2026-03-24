@@ -64,9 +64,16 @@ export async function PUT(
       }
     }
 
-    // Update billing cycle if provided
+    // Update billing cycle if provided — also recalculate nextBillingDate
     if (billingCycle && ['monthly', 'yearly'].includes(billingCycle)) {
       changes.billingCycle = billingCycle;
+      const next = new Date();
+      if (billingCycle === 'yearly') {
+        next.setFullYear(next.getFullYear() + 1);
+      } else {
+        next.setMonth(next.getMonth() + 1);
+      }
+      changes.nextBillingDate = next;
     }
 
     // Update auto-renew if provided

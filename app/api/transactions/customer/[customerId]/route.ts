@@ -42,12 +42,9 @@ export async function GET(
     const limit = Math.min(parseInt(searchParams.get('limit') || '20', 10), 100);
 
     // Build query
-    const query: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
+    const query: Record<string, unknown> = {
       tenantId: customer.tenantId,
-      $or: [
-        { customerEmail: customer.email },
-        { customerPhone: customer.phone },
-      ],
+      customerId: customer.customerId,
     };
 
     // Add status filter
@@ -57,13 +54,18 @@ export async function GET(
 
     // Add date range filter
     if (startDate || endDate) {
-      query.createdAt = {};
+      const dateFilter: Record<string, Date> = {};
       if (startDate) {
-        query.createdAt.$gte = new Date(startDate);
+        const d = new Date(startDate);
+        if (isNaN(d.getTime())) return NextResponse.json({ success: false, error: 'Invalid startDate' }, { status: 400 });
+        dateFilter.$gte = d;
       }
       if (endDate) {
-        query.createdAt.$lte = new Date(endDate);
+        const d = new Date(endDate);
+        if (isNaN(d.getTime())) return NextResponse.json({ success: false, error: 'Invalid endDate' }, { status: 400 });
+        dateFilter.$lte = d;
       }
+      query.createdAt = dateFilter;
     }
 
     // Get total count for pagination
@@ -86,19 +88,12 @@ export async function GET(
         pages: Math.ceil(total / limit),
       },
     });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  } catch (error: unknown) {
     logger.error('Get customer transactions error:', error);
-    
-    if (error.message === 'Unauthorized') {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
-      );
+    const msg = error instanceof Error ? error.message : 'Failed to fetch transactions';
+    if (msg === 'Unauthorized') {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
-
-    return NextResponse.json(
-      { success: false, error: error.message || 'Failed to fetch transactions' },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: msg }, { status: 500 });
   }
 }

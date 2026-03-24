@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import SavedCart from '@/models/SavedCart';
+import Product from '@/models/Product';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import mongoose from 'mongoose';
@@ -28,9 +29,9 @@ export async function GET(request: NextRequest) {
       .lean();
 
     return NextResponse.json({ success: true, data: savedCarts });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  } catch (error: unknown) {
     logger.error('Error fetching saved carts:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Failed to fetch saved carts' }, { status: 500 });
   }
 }
 
@@ -75,17 +76,40 @@ export async function POST(request: NextRequest) {
 
     const tenantObjectId = new mongoose.Types.ObjectId(tenantId);
 
+    // Validate all product IDs belong to this tenant and use DB-authoritative price/stock
+    const productIds = items.map((item: { productId: string }) => item.productId);
+    const dbProducts = await Product.find({
+      _id: { $in: productIds },
+      tenantId: tenantObjectId,
+    }).lean();
+    const dbProductMap = new Map(dbProducts.map(p => [p._id.toString(), p]));
+
+    const validatedItems: Array<{ productId: mongoose.Types.ObjectId; name: string; price: number; quantity: number; stock: number }> = [];
+    for (const item of items as Array<{ productId: string; quantity: unknown }>) {
+      const dbProduct = dbProductMap.get(item.productId);
+      if (!dbProduct) {
+        return NextResponse.json(
+          { success: false, error: t('validation.productNotFoundInTransaction', 'Product {productId} not found').replace('{productId}', item.productId) },
+          { status: 404 }
+        );
+      }
+      validatedItems.push({
+        productId: new mongoose.Types.ObjectId(item.productId),
+        name: dbProduct.name,
+        price: dbProduct.price,
+        quantity: parseInt(String(item.quantity)),
+        stock: dbProduct.stock ?? 0,
+      });
+    }
+
+    // Recalculate subtotal from DB prices
+    const dbSubtotal = validatedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
     const savedCart = await SavedCart.create({
       tenantId: tenantObjectId,
       name: name.trim(),
-      items: items.map((item: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
-        productId: new mongoose.Types.ObjectId(item.productId),
-        name: item.name,
-        price: parseFloat(item.price),
-        quantity: parseInt(item.quantity),
-        stock: parseInt(item.stock),
-      })),
-      subtotal: parseFloat(subtotal) || 0,
+      items: validatedItems,
+      subtotal: Math.round(dbSubtotal * 100) / 100,
       discountCode: discountCode?.trim().toUpperCase() || undefined,
       discountAmount: discountAmount ? parseFloat(discountAmount) : undefined,
       total: parseFloat(total) || 0,

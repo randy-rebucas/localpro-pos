@@ -4,6 +4,8 @@ import Transaction from '@/models/Transaction';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { generateReceiptNumber } from '@/lib/receipt';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { createAuditLog, AuditActions } from '@/lib/audit';
 
 interface ManualItem {
   name: string;
@@ -24,6 +26,11 @@ export async function POST(request: NextRequest) {
       const msg = err instanceof Error ? err.message : '';
       const status = msg.includes('Unauthorized') ? 401 : msg.includes('Forbidden') ? 403 : 400;
       return NextResponse.json({ success: false, error: msg || 'Unauthorized' }, { status });
+    }
+
+    const rl = checkRateLimit(`transactions:manual:${tenantId}`, 60, 60_000);
+    if (!rl.allowed) {
+      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
     const body = await request.json();
@@ -88,6 +95,14 @@ export async function POST(request: NextRequest) {
       status: 'completed',
       notes: notes?.trim() || undefined,
       ...(receiptNumber ? { receiptNumber } : {}),
+    });
+
+    await createAuditLog(request, {
+      tenantId,
+      action: AuditActions.TRANSACTION_CREATE,
+      entityType: 'transaction',
+      entityId: transaction._id.toString(),
+      changes: { receiptNumber: transaction.receiptNumber, total, itemsCount: transactionItems.length },
     });
 
     return NextResponse.json({ success: true, data: transaction }, { status: 201 });

@@ -148,7 +148,6 @@ export default function SettingsPage() {
     } catch (error) {
       console.error('Error fetching settings:', error);
       setMessage({ type: 'error', text: dict?.common?.failedToLoadSettings || 'Failed to load settings. Please check your connection.' });
-      setLoading(false);
     } finally {
       setLoading(false);
     }
@@ -578,19 +577,19 @@ export default function SettingsPage() {
                         onChange={async (e) => {
                           const newLang = e.target.value as 'en' | 'es';
                           updateSetting('language', newLang);
-                          
-                          // Save settings first
+
+                          // Save only the language field, preserving all existing server-side settings
                           try {
                             setSaving(true);
                             setMessage(null);
                             const res = await fetch(`/api/tenants/${tenant}/settings`, {
                               method: 'PUT',
-                              headers: { 
+                              headers: {
                                 'Content-Type': 'application/json',
                               },
                               credentials: 'include',
-                              body: JSON.stringify({ 
-                                settings: { ...settings, language: newLang } 
+                              body: JSON.stringify({
+                                settings: { language: newLang }
                               }),
                             });
 

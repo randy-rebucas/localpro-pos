@@ -58,7 +58,11 @@ export async function POST(
     });
 
     return NextResponse.json({ success: true, data: payment });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : 'Failed to process refund';
+    if (msg.includes('Unauthorized') || msg.includes('Forbidden')) {
+      return NextResponse.json({ success: false, error: msg }, { status: msg.includes('Unauthorized') ? 401 : 403 });
+    }
+    return NextResponse.json({ success: false, error: msg }, { status: 400 });
   }
 }

@@ -26,7 +26,7 @@ interface Transaction {
   paymentMethod: 'cash' | 'card' | 'digital';
   cashReceived?: number;
   change?: number;
-  status: 'completed' | 'cancelled';
+  status: 'completed' | 'cancelled' | 'refunded';
   createdAt: string;
 }
 
@@ -117,7 +117,7 @@ export default function TransactionsPage() {
 
   const fetchTransactions = async () => {
     try {
-      const res = await fetch(`/api/transactions?page=${page}&limit=20&tenant=${tenant}`);
+      const res = await fetch(`/api/transactions?page=${page}&limit=20&tenant=${tenant}`, { credentials: 'include' });
       const data = await res.json();
       if (data.success) {
         setTransactions(data.data);
@@ -165,7 +165,7 @@ export default function TransactionsPage() {
         fetchTransactions();
         // Update local state so the card reflects refunded status
         setTransactions((prev) =>
-          prev.map((t) => (t._id === adjustTransaction._id ? { ...t, status: 'cancelled' } : t))
+          prev.map((t) => (t._id === adjustTransaction._id ? { ...t, status: 'refunded' } : t))
         );
       }
     } catch {

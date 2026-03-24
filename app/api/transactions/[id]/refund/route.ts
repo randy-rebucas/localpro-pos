@@ -141,6 +141,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     // Create Payment refund record if original payment exists
     let refundPayment = null;
+    let paymentRefundWarning: string | undefined;
     try {
       const originalPayment = await Payment.findOne({
         tenantId,
@@ -170,8 +171,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         await originalPayment.save();
       }
     } catch (paymentError) {
-      // Log error but don't fail refund - payment record refund is optional
       logger.error('Failed to create payment refund record:', paymentError);
+      paymentRefundWarning = 'Refund recorded but payment record could not be updated. Please update the payment manually.';
     }
 
     await createAuditLog(request, {
@@ -197,15 +198,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         isFullRefund,
         refundPayment,
       },
+      ...(paymentRefundWarning ? { warning: paymentRefundWarning } : {}),
     }, { status: 201 });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (error.message === 'Unauthorized' || error.message.includes('Forbidden')) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Refund failed';
+    if (message === 'Unauthorized' || message.includes('Forbidden')) {
       return NextResponse.json(
-        { success: false, error: error.message },
-        { status: error.message === 'Unauthorized' ? 401 : 403 }
+        { success: false, error: message },
+        { status: message === 'Unauthorized' ? 401 : 403 }
       );
     }
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+    logger.error('Refund error:', error);
+    return NextResponse.json({ success: false, error: message }, { status: 400 });
   }
 }
 

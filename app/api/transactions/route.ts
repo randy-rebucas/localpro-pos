@@ -5,7 +5,7 @@ import Transaction from '@/models/Transaction';
 import Payment from '@/models/Payment';
 import Product from '@/models/Product';
 import Discount from '@/models/Discount';
-import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
+import { requireTenantAccess } from '@/lib/api-tenant';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateAndSanitize, validateTransaction } from '@/lib/validation';
 import { generateReceiptNumber } from '@/lib/receipt';
@@ -20,6 +20,7 @@ import { calculateTax } from '@/lib/tax-calculation';
 import Customer from '@/models/Customer';
 import LoyaltyConfig from '@/models/LoyaltyConfig';
 import LoyaltyTransaction from '@/models/LoyaltyTransaction';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 interface VariationInput {
   size?: string;
@@ -136,7 +137,12 @@ export async function POST(request: NextRequest) {
       }
       throw authError;
     }
-    
+
+    const rl = checkRateLimit(`transactions:${user.userId}`, 120, 60_000);
+    if (!rl.allowed) {
+      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
+    }
+
     const body = await request.json();
     const t = await getValidationTranslatorFromRequest(request);
     const { data, errors } = validateAndSanitize(body, validateTransaction, t);
@@ -545,7 +551,7 @@ export async function POST(request: NextRequest) {
         const { productId, quantity, variation, bundleId } = item;
 
         if (!productId && !bundleId) {
-          console.warn('Skipping stock update: missing productId and bundleId', item);
+          logger.warn('Skipping stock update: missing productId and bundleId', item as unknown as Record<string, unknown>);
           continue;
         }
 
@@ -559,10 +565,11 @@ export async function POST(request: NextRequest) {
               userId: user.userId,
               branchId: typeof branchId === 'string' ? branchId : undefined,
               reason: 'Transaction sale - bundle',
-            }
+            },
+            session
           );
         } else if (productId) {
-          const product = await Product.findOne({ _id: productId, tenantId });
+          const product = await Product.findOne({ _id: productId, tenantId }).session(session);
           if (product && product.trackInventory !== false) {
             await updateStock(
               productId,
@@ -574,7 +581,8 @@ export async function POST(request: NextRequest) {
                 branchId: typeof branchId === 'string' ? branchId : undefined,
                 variation,
                 reason: 'Transaction sale',
-              }
+              },
+              session
             );
           }
         }
@@ -629,6 +637,7 @@ export async function POST(request: NextRequest) {
         let newBalance = currentBalance;
 
         // Redeem first
+        const loyaltyUpdate: Record<string, number> = {};
         if (loyaltyPointsToRedeem > 0) {
           const balanceAfterRedeem = Math.max(0, newBalance - loyaltyPointsToRedeem);
           await LoyaltyTransaction.create([{
@@ -643,7 +652,7 @@ export async function POST(request: NextRequest) {
             createdBy: user.userId,
           }], { session });
           newBalance = balanceAfterRedeem;
-          await Transaction.updateOne({ _id: transaction._id }, { $set: { loyaltyPointsRedeemed: loyaltyPointsToRedeem } }, { session });
+          loyaltyUpdate.loyaltyPointsRedeemed = loyaltyPointsToRedeem;
         }
 
         // Earn points on total paid (after redemption discount)
@@ -662,7 +671,12 @@ export async function POST(request: NextRequest) {
             createdBy: user.userId,
           }], { session });
           newBalance = balanceAfterEarn;
-          await Transaction.updateOne({ _id: transaction._id }, { $set: { loyaltyPointsEarned: pointsEarned } }, { session });
+          loyaltyUpdate.loyaltyPointsEarned = pointsEarned;
+        }
+
+        // Single update for all loyalty fields
+        if (Object.keys(loyaltyUpdate).length > 0) {
+          await Transaction.updateOne({ _id: transaction._id }, { $set: loyaltyUpdate }, { session });
         }
 
         // Persist updated balance on customer
@@ -788,7 +802,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, data: responseData }, { status: 201 });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Transaction failed';
-    return NextResponse.json({ success: false, error: message }, { status: 400 });
+    // Business validation errors (stock, discount, payment) are 400; unexpected errors are 500
+    const businessErrors = ['Insufficient stock', 'Invalid', 'not found', 'not enabled', 'limit', 'required', 'Unauthorized', 'Forbidden'];
+    const isBusinessError = businessErrors.some(e => message.toLowerCase().includes(e.toLowerCase()));
+    logger.error('Transaction POST error:', error);
+    return NextResponse.json({ success: false, error: message }, { status: isBusinessError ? 400 : 500 });
   }
 }
 

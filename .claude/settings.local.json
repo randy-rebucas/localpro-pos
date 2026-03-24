@@ -37,7 +37,9 @@
       "Bash(grep -A 5 \"findOne.*slug\" /c/Users/corew/localpro-pos/app/api/tenants/[slug]/receipt-templates/route.ts)",
       "Bash(grep -n \"getCurrentUser\\\\|requireRole\\\\|super_admin\" /c/Users/corew/localpro-pos/app/api/tenants/[slug]/settings/route.ts)",
       "Bash(grep -n \"audit\\\\|AuditLog\" /c/Users/corew/localpro-pos/app/api/tenants/[slug]/receipt-templates/route.ts)",
-      "Bash(xargs sed:*)"
+      "Bash(xargs sed:*)",
+      "Bash(xargs grep:*)",
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")"
     ]
   },
   "hooks": {

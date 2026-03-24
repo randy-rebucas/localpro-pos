@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import connectDB from './mongodb';
 import Product from '@/models/Product';
 import ProductBundle from '@/models/ProductBundle';
@@ -91,11 +92,14 @@ export async function updateStock(
   tenantId: string,
   quantity: number,
   type: 'sale' | 'purchase' | 'adjustment' | 'return' | 'damage' | 'transfer',
-  options: StockUpdateOptions = {}
+  options: StockUpdateOptions = {},
+  session?: mongoose.ClientSession
 ): Promise<void> {
   await connectDB();
 
-  const product = await Product.findOne({ _id: productId, tenantId });
+  const query = Product.findOne({ _id: productId, tenantId });
+  if (session) query.session(session);
+  const product = await query;
   if (!product) {
     throw new Error('Product not found');
   }
@@ -188,13 +192,13 @@ export async function updateStock(
     product.markModified('branchStock');
   }
 
-  await product.save();
-  
+  await product.save(session ? { session } : {});
+
   // Log the update for debugging
   logger.info(`Stock updated: Product ${productId}, ${previousStock} -> ${newStock} (${quantity > 0 ? '+' : ''}${quantity})`);
 
   // Create stock movement record
-  await StockMovement.create({
+  const movementData = {
     productId,
     tenantId,
     branchId: options.branchId,
@@ -207,7 +211,12 @@ export async function updateStock(
     transactionId: options.transactionId,
     userId: options.userId,
     notes: options.notes,
-  });
+  };
+  if (session) {
+    await StockMovement.create([movementData], { session });
+  } else {
+    await StockMovement.create(movementData);
+  }
 }
 
 /**
@@ -218,11 +227,14 @@ export async function updateBundleStock(
   tenantId: string,
   quantity: number,
   type: 'sale' | 'purchase' | 'adjustment' | 'return' | 'damage' | 'transfer',
-  options: StockUpdateOptions = {}
+  options: StockUpdateOptions = {},
+  session?: mongoose.ClientSession
 ): Promise<void> {
   await connectDB();
 
-  const bundle = await ProductBundle.findOne({ _id: bundleId, tenantId });
+  const bundleQuery = ProductBundle.findOne({ _id: bundleId, tenantId });
+  if (session) bundleQuery.session(session);
+  const bundle = await bundleQuery;
   if (!bundle) {
     throw new Error('Bundle not found');
   }
@@ -244,7 +256,8 @@ export async function updateBundleStock(
         variation: item.variation,
         reason: options.reason || `Bundle ${type}: ${bundle.name}`,
         notes: options.notes || `Part of bundle: ${bundle.name}`,
-      }
+      },
+      session
     );
   }
 }

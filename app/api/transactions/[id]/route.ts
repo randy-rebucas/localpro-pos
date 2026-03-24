@@ -16,12 +16,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     try {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
-    } catch (authError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      const t = await getValidationTranslatorFromRequest(request); // eslint-disable-line @typescript-eslint/no-unused-vars
-      if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
+    } catch (authError: unknown) {
+      const authMsg = authError instanceof Error ? authError.message : '';
+      if (authMsg.includes('Unauthorized') || authMsg.includes('Forbidden')) {
         return NextResponse.json(
-          { success: false, error: authError.message },
-          { status: authError.message.includes('Unauthorized') ? 401 : 403 }
+          { success: false, error: authMsg },
+          { status: authMsg.includes('Unauthorized') ? 401 : 403 }
         );
       }
       throw authError;
@@ -39,12 +39,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
     
     return NextResponse.json({ success: true, data: transaction });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  } catch (error: unknown) {
     const t = await getValidationTranslatorFromRequest(request);
-    if (error.message === 'Unauthorized') {
+    const msg = error instanceof Error ? error.message : 'Internal server error';
+    if (msg === 'Unauthorized') {
       return NextResponse.json({ success: false, error: t('validation.unauthorized', 'Unauthorized') }, { status: 401 });
     }
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: msg }, { status: 500 });
   }
 }
 
@@ -58,12 +59,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       tenantId = tenantAccess.tenantId;
       // Also check role
       await requireRole(request, ['admin', 'manager']);
-    } catch (authError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      const t = await getValidationTranslatorFromRequest(request); // eslint-disable-line @typescript-eslint/no-unused-vars
-      if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
+    } catch (authError: unknown) {
+      const authMsg = authError instanceof Error ? authError.message : '';
+      if (authMsg.includes('Unauthorized') || authMsg.includes('Forbidden')) {
         return NextResponse.json(
-          { success: false, error: authError.message },
-          { status: authError.message.includes('Unauthorized') ? 401 : 403 }
+          { success: false, error: authMsg },
+          { status: authMsg.includes('Unauthorized') ? 401 : 403 }
         );
       }
       throw authError;
@@ -132,14 +133,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     return NextResponse.json({ success: true, data: transaction });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (error.message === 'Unauthorized' || error.message.includes('Forbidden')) {
-      return NextResponse.json(
-        { success: false, error: error.message },
-        { status: error.message === 'Unauthorized' ? 401 : 403 }
-      );
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : 'Internal server error';
+    if (msg === 'Unauthorized' || msg.includes('Forbidden')) {
+      return NextResponse.json({ success: false, error: msg }, { status: msg === 'Unauthorized' ? 401 : 403 });
     }
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+    return NextResponse.json({ success: false, error: msg }, { status: 400 });
   }
 }
 
