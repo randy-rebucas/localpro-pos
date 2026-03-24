@@ -196,7 +196,7 @@ export default function StoresPage() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
+        <div className="w-full px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
           <Link href="/" className="flex items-center gap-2 font-bold text-lg text-gray-900 hover:text-blue-600 transition-colors">
             <span className="text-xl">🏬</span>
             <span>1pos</span>
@@ -213,7 +213,7 @@ export default function StoresPage() {
           <div className="absolute top-10 left-10 w-64 h-64 bg-blue-400/20 blur-3xl animate-pulse" style={{ animationDuration: '4s' }} />
           <div className="absolute bottom-0 right-0 w-80 h-80 bg-purple-400/20 blur-3xl animate-pulse" style={{ animationDelay: '2s', animationDuration: '5s' }} />
         </div>
-        <div className="relative max-w-3xl mx-auto text-center z-10">
+        <div className="relative w-full text-center z-10">
           <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-md border border-white/30 px-4 py-1.5 text-sm font-semibold mb-4">
             🏪 Store Directory
           </div>
@@ -236,7 +236,7 @@ export default function StoresPage() {
       </section>
 
       {/* Search + Filters */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-8 pb-4">
+      <div className="w-full px-4 sm:px-6 pt-8 pb-4">
         <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
           <div className="relative flex-1">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -281,7 +281,7 @@ export default function StoresPage() {
       </div>
 
       {/* Results count */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 pb-3">
+      <div className="w-full px-4 sm:px-6 pb-3">
         {!loading && (
           <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">
             {filtered.length === tenants.length
@@ -292,7 +292,7 @@ export default function StoresPage() {
       </div>
 
       {/* Grid */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 pb-16">
+      <div className="w-full px-4 sm:px-6 pb-16">
         {loading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {Array.from({ length: 8 }).map((_, i) => <SkeletonCard key={i} />)}

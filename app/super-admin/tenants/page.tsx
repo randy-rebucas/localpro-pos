@@ -155,7 +155,7 @@ export default function TenantsPage() {
 
   return (
     <SuperAdminShell>
-      <div className="p-6 max-w-7xl mx-auto">
+      <div className="p-6 w-full">
         <div className="mb-6 flex flex-col sm:flex-row sm:items-center gap-4">
           <div className="flex-1">
             <h1 className="text-2xl font-bold text-gray-900">Tenants</h1>

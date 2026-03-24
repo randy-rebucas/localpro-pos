@@ -14,7 +14,7 @@ export function SubscriptionStatusBar() {
   if (loading) {
     return (
       <div className="bg-blue-50 border-b border-blue-200 px-4 py-3">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
+        <div className="w-full flex items-center justify-between">
           <div className="animate-pulse flex items-center space-x-3">
             <div className="w-5 h-5 bg-blue-300 rounded"></div>
             <div className="h-4 bg-blue-300 rounded w-48"></div>
@@ -27,7 +27,7 @@ export function SubscriptionStatusBar() {
   if (!subscriptionStatus) {
     return (
       <div className="bg-amber-50 border-b border-amber-200 px-4 py-3">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
+        <div className="w-full flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <AlertTriangle className="w-5 h-5 text-amber-600" />
             <div>
@@ -122,7 +122,7 @@ export function SubscriptionStatusBar() {
 
   return (
     <div className={`${config.bgColor} border-b ${config.borderColor} px-4 py-3`}>
-      <div className="max-w-7xl mx-auto flex items-center justify-between">
+      <div className="w-full flex items-center justify-between">
         <div className="flex items-center space-x-3">
           {config.icon}
           <div>

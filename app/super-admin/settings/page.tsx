@@ -68,7 +68,7 @@ export default function SettingsPage() {
 
   return (
     <SuperAdminShell>
-      <div className="p-6 max-w-4xl mx-auto space-y-8">
+      <div className="p-6 w-full space-y-8">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
           <p className="text-sm text-gray-500 mt-1">Database health and seed data management</p>

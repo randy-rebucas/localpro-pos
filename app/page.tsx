@@ -239,7 +239,7 @@ export default function MarketingPage() {
             className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-100"
             aria-label="Main navigation"
           >
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div className="w-full px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
 
               {/* Logo mark */}
               <Link href="/" className="flex items-center gap-2 group flex-shrink-0">
@@ -304,7 +304,7 @@ export default function MarketingPage() {
               <div className="absolute top-1/3 -right-24 w-80 h-80 bg-purple-400/25 rounded-full blur-3xl" />
             </div>
 
-            <div className="relative max-w-4xl mx-auto text-center z-10">
+            <div className="relative w-full text-center z-10">
 
               {/* Status badge */}
               <div className="inline-flex items-center gap-2 bg-white/15 backdrop-blur-md border border-white/25 px-4 py-2 rounded-full mb-8 text-sm font-medium">
@@ -371,7 +371,7 @@ export default function MarketingPage() {
               </p>
 
               {/* Dashboard mockup */}
-              <div className="relative mx-auto max-w-5xl">
+              <div className="relative w-full">
                 {/* Browser chrome */}
                 <div className="bg-gray-900/95 rounded-t-2xl px-4 py-3 flex items-center gap-3 border-x border-t border-white/10" aria-hidden="true">
                   <div className="flex gap-1.5 flex-shrink-0">
@@ -403,7 +403,7 @@ export default function MarketingPage() {
             {/* Subtle gradient backdrop */}
             <div className="absolute inset-0 bg-gradient-to-r from-blue-50/60 via-white to-indigo-50/60 pointer-events-none" aria-hidden="true" />
 
-            <div className="relative max-w-6xl mx-auto">
+            <div className="relative w-full">
               <p className="text-center text-xs font-bold uppercase tracking-widest text-gray-400 mb-10">
                 Trusted by businesses across industries
               </p>
@@ -439,7 +439,7 @@ export default function MarketingPage() {
               style={{ backgroundImage: 'radial-gradient(circle, #6366f1 1px, transparent 1px)', backgroundSize: '24px 24px' }}
             />
 
-            <div className="relative max-w-7xl mx-auto">
+            <div className="relative w-full">
               {/* Header */}
               <div className="text-center mb-14">
                 <div className="inline-block bg-blue-100 text-blue-700 px-4 py-2 rounded-full text-sm font-semibold mb-4 tracking-wide">
@@ -499,7 +499,7 @@ export default function MarketingPage() {
 
           {/* Key highlights */}
           <section aria-labelledby="highlights-heading" className="py-24 px-4 bg-gradient-to-b from-gray-50 to-white">
-            <div className="max-w-7xl mx-auto">
+            <div className="w-full">
               <div className="text-center mb-16">
                 <div className="inline-block bg-indigo-100 text-indigo-700 px-4 py-2 rounded-full text-sm font-semibold mb-4">WHY CHOOSE US</div>
                 <h2 id="highlights-heading" className="text-5xl md:text-6xl font-bold mb-5 text-gray-900">Built for Modern Businesses</h2>
@@ -523,7 +523,7 @@ export default function MarketingPage() {
 
           {/* Business Types */}
           <section id="solutions" aria-labelledby="solutions-heading" className="py-24 px-4 bg-white">
-            <div className="max-w-7xl mx-auto">
+            <div className="w-full">
               <div className="text-center mb-16">
                 <div className="inline-block bg-purple-100 text-purple-700 px-4 py-2 rounded-full text-sm font-semibold mb-4">VERSATILE SOLUTION</div>
                 <h2 id="solutions-heading" className="text-5xl md:text-6xl font-bold mb-5 text-gray-900">Built for Every Business</h2>
@@ -548,7 +548,7 @@ export default function MarketingPage() {
 
           {/* Benefits */}
           <section aria-labelledby="benefits-heading" className="py-24 px-4 bg-gradient-to-b from-gray-50 to-white">
-            <div className="max-w-7xl mx-auto">
+            <div className="w-full">
               <div className="grid md:grid-cols-2 gap-16 items-center">
                 <div>
                   <div className="inline-block bg-green-100 text-green-700 px-4 py-2 rounded-full text-sm font-semibold mb-4">KEY BENEFITS</div>
@@ -614,7 +614,7 @@ export default function MarketingPage() {
 
           {/* Testimonials */}
           <section id="testimonials" aria-labelledby="testimonials-heading" className="py-24 px-4 bg-white">
-            <div className="max-w-7xl mx-auto">
+            <div className="w-full">
               <div className="text-center mb-16">
                 <div className="inline-block bg-yellow-100 text-yellow-700 px-4 py-2 rounded-full text-sm font-semibold mb-4">CUSTOMER STORIES</div>
                 <h2 id="testimonials-heading" className="text-5xl font-bold mb-5 text-gray-900">Loved by Business Owners</h2>
@@ -652,7 +652,7 @@ export default function MarketingPage() {
               <div className="absolute top-0 left-0 w-96 h-96 bg-blue-400/20 rounded-full blur-3xl animate-pulse" />
               <div className="absolute bottom-0 right-0 w-96 h-96 bg-purple-400/20 rounded-full blur-3xl animate-pulse" />
             </div>
-            <div className="relative max-w-4xl mx-auto text-center z-10">
+            <div className="relative w-full text-center z-10">
               <div className="inline-block bg-white/20 backdrop-blur-md border border-white/30 px-4 py-2 rounded-full text-sm font-semibold mb-6">
                 🚀 START YOUR JOURNEY TODAY
               </div>
@@ -676,7 +676,7 @@ export default function MarketingPage() {
 
         {/* ── Footer ──────────────────────────────────────────────── */}
         <footer className="bg-gray-950 text-gray-400 py-16 px-4" aria-label="Site footer">
-          <div className="max-w-7xl mx-auto">
+          <div className="w-full">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-10 mb-12">
               <div>
                 <Link href="/" className="text-white font-bold text-2xl mb-3 block hover:text-blue-400 transition-colors">1pos</Link>

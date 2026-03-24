@@ -37,7 +37,7 @@ export default function BusinessTypesPage() {
 
   return (
     <SuperAdminShell>
-      <div className="p-6 max-w-5xl mx-auto">
+      <div className="p-6 w-full">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Business Types</h1>
           <p className="text-sm text-gray-500 mt-1">

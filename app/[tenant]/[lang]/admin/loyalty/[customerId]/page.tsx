@@ -105,7 +105,7 @@ export default function LoyaltyCustomerPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
-      <div className="max-w-3xl mx-auto p-6">
+      <div className="w-full p-6">
         <div className="mb-4">
           <Link
             href={`/${tenant}/${lang}/admin/loyalty`}
