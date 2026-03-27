@@ -72,9 +72,17 @@ class BarcodeScannerService {
   };
 
   onScan(callback: (barcode: string) => void): () => void {
+    // Auto-start keyboard listening when first listener registers (USB HID scanners
+    // emulate keyboard input and work without explicit config)
+    if (!this.isListening) {
+      this.startListening();
+    }
     this.listeners.push(callback);
     return () => {
       this.listeners = this.listeners.filter(l => l !== callback);
+      if (this.listeners.length === 0) {
+        this.stopListening();
+      }
     };
   }
 

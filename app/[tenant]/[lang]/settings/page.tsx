@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
-import ProtectedRoute from '@/components/ProtectedRoute'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../dictionaries-client';
@@ -30,10 +29,13 @@ export default function SettingsPage() {
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
+  }, [lang]);
+
+  useEffect(() => {
     fetchSettings();
     loadBusinessTypes();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lang, tenant]);
+  }, [tenant]);
 
   const loadBusinessTypes = async () => {
     try {
@@ -196,6 +198,13 @@ export default function SettingsPage() {
       if (settings.numberFormat.decimalPlaces < 0 || settings.numberFormat.decimalPlaces > 4) {
         return 'Decimal places must be between 0 and 4';
       }
+      if (
+        settings.numberFormat.decimalSeparator &&
+        settings.numberFormat.thousandsSeparator &&
+        settings.numberFormat.decimalSeparator === settings.numberFormat.thousandsSeparator
+      ) {
+        return 'Decimal separator and thousands separator must be different';
+      }
     }
 
     return null;
@@ -244,9 +253,6 @@ export default function SettingsPage() {
     }
   };
 
-  const handleDetectLocation = async () => {
-    await autoDetectLocation();
-  };
 
   const updateSetting = (path: string, value: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
     if (!settings) return;
@@ -420,7 +426,7 @@ export default function SettingsPage() {
                   <div className="flex items-center justify-between mb-5">
                     <h2 className="text-xl font-bold text-gray-900">{dict?.settings?.currencyLocalization || 'Currency & Localization'}</h2>
                     <button
-                      onClick={handleDetectLocation}
+                      onClick={autoDetectLocation}
                       disabled={detecting}
                       className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 border border-blue-300"
                     >
@@ -1038,6 +1044,90 @@ export default function SettingsPage() {
                       </div>
                     </div>
                   </div>
+                </div>
+
+                {/* BIR Compliance Section */}
+                <div className="mt-8 pt-8 border-t-2 border-gray-200">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1">BIR Compliance</h3>
+                  <p className="text-sm text-gray-500 mb-4">
+                    Required fields for Bureau of Internal Revenue (BIR) official receipts in the Philippines.
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        BIR TIN <span className="text-gray-400 font-normal">(NNN-NNN-NNN-NNN)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={settings.birTin || ''}
+                        onChange={(e) => updateSetting('birTin', e.target.value)}
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                        placeholder="000-000-000-000"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Business Style <span className="text-gray-400 font-normal">(trade name)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={settings.birBusinessStyle || ''}
+                        onChange={(e) => updateSetting('birBusinessStyle', e.target.value)}
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                        placeholder="Retail / Trading / Services"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        PTU No. <span className="text-gray-400 font-normal">(Permit to Use)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={settings.birPtuNumber || ''}
+                        onChange={(e) => updateSetting('birPtuNumber', e.target.value)}
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                        placeholder="POS-0001-2024"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        PTU Date Issued
+                      </label>
+                      <input
+                        type="date"
+                        value={settings.birPtuIssuedDate ? new Date(settings.birPtuIssuedDate).toISOString().slice(0, 10) : ''}
+                        onChange={(e) => updateSetting('birPtuIssuedDate', e.target.value ? new Date(e.target.value) : undefined)}
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        MIN <span className="text-gray-400 font-normal">(Machine Identification No.)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={settings.birMinNumber || ''}
+                        onChange={(e) => updateSetting('birMinNumber', e.target.value)}
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                        placeholder="MIN assigned by BIR"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Accredited System Provider
+                      </label>
+                      <input
+                        type="text"
+                        value={settings.birSystemProvider || ''}
+                        onChange={(e) => updateSetting('birSystemProvider', e.target.value)}
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                        placeholder="LocalPro POS"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-3">
+                    Set Tax Label to &quot;VAT&quot; in General → Tax Settings to print a VAT receipt. Non-VAT receipts will show &quot;THIS DOCUMENT IS NOT VALID FOR CLAIM OF INPUT TAX&quot;.
+                  </p>
                 </div>
 
                 {/* Receipt Templates Section */}

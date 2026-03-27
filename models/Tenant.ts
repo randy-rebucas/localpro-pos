@@ -58,6 +58,9 @@ export interface ITenantSettings {
   birPtuNumber?: string; // Permit to Use number, e.g. "POS-0001-2024"
   birPtuIssuedDate?: Date;
   birPtuExpiryDate?: Date;
+  birMinNumber?: string; // Machine Identification Number assigned by BIR
+  birBusinessStyle?: string; // Trade name / style of business shown on receipt
+  birSystemProvider?: string; // Name of accredited CAS/POS system provider
 
   // Notification Settings
   lowStockThreshold?: number;
@@ -376,6 +379,9 @@ const TenantSchema: Schema = new Schema(
       birPtuNumber: { type: String, trim: true },
       birPtuIssuedDate: { type: Date },
       birPtuExpiryDate: { type: Date },
+      birMinNumber: { type: String, trim: true },
+      birBusinessStyle: { type: String, trim: true },
+      birSystemProvider: { type: String, trim: true },
 
       // Notification Settings
       lowStockThreshold: {

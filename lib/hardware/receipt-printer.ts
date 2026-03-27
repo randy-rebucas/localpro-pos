@@ -56,6 +56,15 @@ export interface ReceiptData {
   customerEmail?: string;
   customerPhone?: string;
   template?: string; // Template HTML to use
+  // BIR compliance fields
+  tin?: string;            // BIR Tax Identification Number
+  businessStyle?: string;  // Trade name / style of business
+  ptuNumber?: string;      // Permit to Use number
+  ptuDate?: string;        // PTU date issued (formatted string)
+  minNumber?: string;      // Machine Identification Number
+  systemProvider?: string; // Accredited system provider name
+  isVAT?: boolean;         // true = VAT-registered, false = NON-VAT
+  customerTIN?: string;    // Customer TIN (optional)
 }
 
 class ReceiptPrinterService {
@@ -243,65 +252,82 @@ class ReceiptPrinterService {
       // Initialize
       commands.push(this.init());
 
-      // Header
+      const fmt = (n: number) => n.toFixed(2);
+      const isVAT = data.isVAT ?? ((data.taxLabel || '').toUpperCase().includes('VAT') && !!data.tax);
+      const vatAmount = data.tax ?? 0;
+      const discountedSubtotal = data.subtotal - (data.discount ?? 0);
+      const vatableSales = isVAT && vatAmount > 0 ? discountedSubtotal - vatAmount : 0;
+      const vatExemptSales = isVAT ? 0 : discountedSubtotal;
+      const line = '--------------------------------\n';
+
+      // Header (centered)
       commands.push(this.setAlign('center'));
       commands.push(this.setFontSize('large'));
       commands.push(this.setBold(true));
-      if (data.storeName) {
-        commands.push(this.encodeText(data.storeName + '\n'));
-      }
+      if (data.storeName) commands.push(this.encodeText(data.storeName + '\n'));
       commands.push(this.setFontSize('normal'));
       commands.push(this.setBold(false));
-      if (data.address) {
-        commands.push(this.encodeText(data.address + '\n'));
-      }
-      if (data.phone) {
-        commands.push(this.encodeText(data.phone + '\n'));
-      }
-      commands.push(this.encodeText('--------------------------------\n'));
-
-      // Receipt info
+      if (data.businessStyle) commands.push(this.encodeText(data.businessStyle + '\n'));
+      if (data.address) commands.push(this.encodeText(data.address + '\n'));
+      if (data.phone) commands.push(this.encodeText(data.phone + '\n'));
+      if (data.tin) commands.push(this.encodeText(`TIN: ${data.tin}\n`));
+      commands.push(this.encodeText((isVAT ? 'VAT' : 'NON-VAT') + ' Registered\n'));
+      commands.push(this.encodeText('\n'));
+      commands.push(this.setBold(true));
+      commands.push(this.encodeText('OFFICIAL RECEIPT\n'));
+      commands.push(this.setBold(false));
       commands.push(this.setAlign('left'));
-      commands.push(this.encodeText(`Receipt: ${data.receiptNumber}\n`));
-      commands.push(this.encodeText(`Date: ${data.date}\n`));
-      commands.push(this.encodeText('--------------------------------\n'));
+      commands.push(this.encodeText(`Serial No: ${data.receiptNumber}\n`));
+      commands.push(this.encodeText(`Date: ${data.date}${data.time ? ' ' + data.time : ''}\n`));
+      if (data.customerName) {
+        commands.push(this.encodeText(`Customer: ${data.customerName}\n`));
+        if (data.customerTIN) commands.push(this.encodeText(`TIN: ${data.customerTIN}\n`));
+      }
+      commands.push(this.encodeText(line));
 
       // Items
       data.items.forEach((item) => {
         const name = item.name.substring(0, 20).padEnd(20);
         const qty = `x${item.quantity}`.padStart(4);
-        const price = `$${item.price.toFixed(2)}`.padStart(8);
-        const subtotal = `$${item.subtotal.toFixed(2)}`.padStart(10);
-        commands.push(this.encodeText(`${name} ${qty} ${price}\n`));
-        commands.push(this.encodeText(`${subtotal}\n`));
+        commands.push(this.encodeText(`${name} ${qty}\n`));
+        const atPrice = `  @ ${fmt(item.price)}`.padEnd(20);
+        const subtotalStr = fmt(item.subtotal).padStart(12);
+        commands.push(this.encodeText(`${atPrice}${subtotalStr}\n`));
       });
 
-      commands.push(this.encodeText('--------------------------------\n'));
+      commands.push(this.encodeText(line));
 
       // Totals
       commands.push(this.setAlign('right'));
-      commands.push(this.encodeText(`Subtotal: $${data.subtotal.toFixed(2)}\n`));
-      if (data.tax) {
-        commands.push(this.encodeText(`Tax: $${data.tax.toFixed(2)}\n`));
+      commands.push(this.encodeText(`Subtotal:         ${fmt(data.subtotal)}\n`));
+      if (data.discount) commands.push(this.encodeText(`Discount:        -${fmt(data.discount)}\n`));
+      if (isVAT) {
+        commands.push(this.encodeText(`VATable Sales:    ${fmt(vatableSales)}\n`));
+        commands.push(this.encodeText(`${data.taxLabel || 'VAT'}:             ${fmt(vatAmount)}\n`));
+        commands.push(this.encodeText(`VAT-Exempt:       ${fmt(vatExemptSales)}\n`));
+      } else {
+        commands.push(this.encodeText(`VAT-Exempt Sales: ${fmt(vatExemptSales)}\n`));
       }
       commands.push(this.setBold(true));
-      commands.push(this.encodeText(`TOTAL: $${data.total.toFixed(2)}\n`));
+      commands.push(this.encodeText(`TOTAL:            ${fmt(data.total)}\n`));
       commands.push(this.setBold(false));
-
-      commands.push(this.encodeText('--------------------------------\n'));
+      commands.push(this.encodeText(line));
       commands.push(this.setAlign('left'));
-      commands.push(this.encodeText(`Payment: ${data.paymentMethod}\n`));
-      if (data.cashReceived) {
-        commands.push(this.encodeText(`Cash: $${data.cashReceived.toFixed(2)}\n`));
-      }
-      if (data.change) {
-        commands.push(this.encodeText(`Change: $${data.change.toFixed(2)}\n`));
-      }
+      commands.push(this.encodeText(`Payment: ${data.paymentMethod.toUpperCase()}\n`));
+      if (data.cashReceived) commands.push(this.encodeText(`Cash:     ${fmt(data.cashReceived)}\n`));
+      if (data.change) commands.push(this.encodeText(`Change:   ${fmt(data.change)}\n`));
 
-      // Footer
+      // BIR Footer
+      commands.push(this.encodeText(line));
+      commands.push(this.setAlign('center'));
+      if (data.ptuNumber) commands.push(this.encodeText(`PTU No: ${data.ptuNumber}\n`));
+      if (data.minNumber) commands.push(this.encodeText(`MIN: ${data.minNumber}\n`));
+      if (data.systemProvider) commands.push(this.encodeText(`Accredited By: ${data.systemProvider}\n`));
+      if (data.ptuDate) commands.push(this.encodeText(`Date Issued: ${data.ptuDate}\n`));
+      commands.push(this.encodeText('\n'));
+      commands.push(this.encodeText((isVAT ? 'THIS SERVES AS AN OFFICIAL RECEIPT' : 'NOT VALID FOR CLAIM OF INPUT TAX') + '\n'));
       if (data.footer) {
-        commands.push(this.encodeText('--------------------------------\n'));
-        commands.push(this.setAlign('center'));
+        commands.push(this.encodeText('\n'));
         commands.push(this.encodeText(data.footer + '\n'));
       }
 
@@ -420,92 +446,98 @@ class ReceiptPrinterService {
       }
     }
 
-    // Default template
-    return `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Receipt</title>
-          <style>
-            @media print {
-              @page { margin: 0; size: 80mm auto; }
-              body { margin: 0; padding: 10px; }
-            }
-            body {
-              font-family: 'Courier New', monospace;
-              font-size: 12px;
-              width: 80mm;
-              margin: 0 auto;
-              padding: 10px;
-            }
-            .header { text-align: center; border-bottom: 2px dashed #000; padding-bottom: 10px; margin-bottom: 10px; }
-            .item { display: flex; justify-content: space-between; margin-bottom: 5px; }
-            .total { border-top: 2px dashed #000; padding-top: 10px; margin-top: 10px; font-weight: bold; }
-            .footer { text-align: center; margin-top: 20px; font-size: 10px; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            ${data.storeName ? `<h2>${data.storeName}</h2>` : ''}
-            ${data.logo ? `<img src="${data.logo}" alt="Logo" style="max-width: 100px; max-height: 60px;" />` : ''}
-            <p>Receipt #${data.receiptNumber}</p>
-            <p>${data.date}${data.time ? ` ${data.time}` : ''}</p>
-            ${data.address ? `<p>${data.address}</p>` : ''}
-            ${data.phone ? `<p>${data.phone}</p>` : ''}
-            ${data.email ? `<p>${data.email}</p>` : ''}
-            ${data.header ? `<p>${data.header}</p>` : ''}
-          </div>
-          ${data.items.map(item => `
-            <div class="item">
-              <div>
-                <div>${item.name} x${item.quantity}</div>
-                <div style="font-size: 10px;">@ $${item.price.toFixed(2)}</div>
-              </div>
-              <div>$${item.subtotal.toFixed(2)}</div>
-            </div>
-          `).join('')}
-          <div class="total">
-            <div class="item">
-              <div>Subtotal:</div>
-              <div>$${data.subtotal.toFixed(2)}</div>
-            </div>
-            ${data.discount ? `
-              <div class="item">
-                <div>Discount:</div>
-                <div>-$${data.discount.toFixed(2)}</div>
-              </div>
-            ` : ''}
-            ${data.tax ? `
-              <div class="item">
-                <div>${data.taxLabel || 'Tax'}:</div>
-                <div>$${data.tax.toFixed(2)}</div>
-              </div>
-            ` : ''}
-            <div class="item">
-              <div>TOTAL:</div>
-              <div>$${data.total.toFixed(2)}</div>
-            </div>
-            <div class="item">
-              <div>Payment:</div>
-              <div>${data.paymentMethod}</div>
-            </div>
-            ${data.cashReceived ? `
-              <div class="item">
-                <div>Cash:</div>
-                <div>$${data.cashReceived.toFixed(2)}</div>
-              </div>
-            ` : ''}
-            ${data.change ? `
-              <div class="item">
-                <div>Change:</div>
-                <div>$${data.change.toFixed(2)}</div>
-              </div>
-            ` : ''}
-          </div>
-          ${data.footer ? `<div class="footer">${data.footer}</div>` : ''}
-        </body>
-      </html>
-    `;
+    // BIR-compliant default template
+    const fmt = (n: number) => n.toFixed(2);
+    const taxLabel = data.taxLabel || 'Tax';
+    const isVAT = data.isVAT ?? (taxLabel.toUpperCase().includes('VAT') && !!data.tax);
+    const vatAmount = data.tax ?? 0;
+    // VATable sales = amount before VAT (net of discount)
+    const discountedSubtotal = data.subtotal - (data.discount ?? 0);
+    const vatableSales = isVAT && vatAmount > 0 ? discountedSubtotal - vatAmount : 0;
+    const vatExemptSales = isVAT ? 0 : discountedSubtotal;
+
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <title>Official Receipt</title>
+  <style>
+    @media print {
+      @page { margin: 0; size: 80mm auto; }
+      body { margin: 0; padding: 10px; }
+    }
+    body {
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      width: 80mm;
+      margin: 0 auto;
+      padding: 10px;
+    }
+    .center { text-align: center; }
+    .header { border-bottom: 2px dashed #000; padding-bottom: 8px; margin-bottom: 8px; }
+    .item { display: flex; justify-content: space-between; margin-bottom: 4px; }
+    .total { border-top: 2px dashed #000; padding-top: 8px; margin-top: 8px; font-weight: bold; }
+    .small { font-size: 9px; }
+    .footer { text-align: center; margin-top: 15px; font-size: 9px; }
+  </style>
+</head>
+<body>
+  <div class="header center">
+    ${data.logo ? `<img src="${data.logo}" alt="Logo" style="max-width:100px;max-height:60px;display:block;margin:0 auto 4px;" />` : ''}
+    ${data.storeName ? `<strong>${data.storeName}</strong><br>` : ''}
+    ${data.businessStyle ? `<span>${data.businessStyle}</span><br>` : ''}
+    ${data.address ? `<span>${data.address}</span><br>` : ''}
+    ${data.phone ? `<span>${data.phone}</span><br>` : ''}
+    ${data.tin ? `<span>TIN: ${data.tin}</span><br>` : ''}
+    <span>${isVAT ? 'VAT' : 'NON-VAT'} Registered</span><br>
+    ${data.header ? `<span>${data.header}</span><br>` : ''}
+    <br>
+    <strong>OFFICIAL RECEIPT</strong><br>
+    <span>Serial No: ${data.receiptNumber}</span><br>
+    <span>Date: ${data.date}${data.time ? ' ' + data.time : ''}</span>
+  </div>
+
+  ${data.customerName ? `
+  <div class="small">
+    Customer: ${data.customerName}<br>
+    ${data.customerTIN ? `TIN: ${data.customerTIN}<br>` : ''}
+  </div><br>` : ''}
+
+  ${data.items.map(item => `
+  <div class="item">
+    <div>
+      ${item.name} x${item.quantity}<br>
+      <span class="small">@ ${fmt(item.price)}</span>
+    </div>
+    <div>${fmt(item.subtotal)}</div>
+  </div>`).join('')}
+
+  <div class="total">
+    <div class="item"><div>Subtotal:</div><div>${fmt(data.subtotal)}</div></div>
+    ${data.discount ? `<div class="item"><div>Discount:</div><div>-${fmt(data.discount)}</div></div>` : ''}
+    ${isVAT ? `
+    <div class="item"><div>VATable Sales:</div><div>${fmt(vatableSales)}</div></div>
+    <div class="item"><div>${taxLabel} (${data.tax ? ((data.tax / (discountedSubtotal - vatAmount)) * 100).toFixed(0) : 0}%):</div><div>${fmt(vatAmount)}</div></div>
+    <div class="item"><div>VAT-Exempt Sales:</div><div>${fmt(vatExemptSales)}</div></div>
+    ` : `
+    <div class="item"><div>VAT-Exempt Sales:</div><div>${fmt(discountedSubtotal)}</div></div>
+    `}
+    <div class="item"><div><strong>TOTAL:</strong></div><div>${fmt(data.total)}</div></div>
+    <div class="item"><div>Payment:</div><div>${data.paymentMethod.toUpperCase()}</div></div>
+    ${data.cashReceived ? `<div class="item"><div>Cash:</div><div>${fmt(data.cashReceived)}</div></div>` : ''}
+    ${data.change ? `<div class="item"><div>Change:</div><div>${fmt(data.change)}</div></div>` : ''}
+  </div>
+
+  <div class="footer">
+    ${data.ptuNumber ? `<div>PTU No: ${data.ptuNumber}</div>` : ''}
+    ${data.minNumber ? `<div>MIN: ${data.minNumber}</div>` : ''}
+    ${data.systemProvider ? `<div>Accredited By: ${data.systemProvider}</div>` : ''}
+    ${data.ptuDate ? `<div>Date Issued: ${data.ptuDate}</div>` : ''}
+    <br>
+    <div class="small">${isVAT ? 'THIS SERVES AS AN OFFICIAL RECEIPT' : 'THIS DOCUMENT IS NOT VALID FOR CLAIM OF INPUT TAX'}</div>
+    ${data.footer ? `<br><div class="small">${data.footer}</div>` : ''}
+  </div>
+</body>
+</html>`;
   }
 
   async openCashDrawer(): Promise<boolean> {

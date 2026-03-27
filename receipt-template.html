@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Official Receipt</title>
+  <style>
+    @media print {
+      @page { margin: 0; size: 80mm auto; }
+      body { margin: 0; padding: 10px; }
+    }
+    body {
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      width: 80mm;
+      margin: 0 auto;
+      padding: 10px;
+    }
+    .center { text-align: center; }
+    .header { border-bottom: 2px dashed #000; padding-bottom: 8px; margin-bottom: 8px; }
+    .item { display: flex; justify-content: space-between; margin-bottom: 4px; }
+    .total { border-top: 2px dashed #000; padding-top: 8px; margin-top: 8px; font-weight: bold; }
+    .small { font-size: 9px; }
+    .footer { text-align: center; margin-top: 15px; font-size: 9px; }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <div class="header center">
+    <h3>{{storeName}}</h3>
+    {{#if businessStyle}}<div>{{businessStyle}}</div>{{/if}}
+    <div>{{address}}</div>
+    <div>TIN: {{tin}}</div>
+    <div>{{taxType}}</div> <!-- VAT / NON-VAT -->
+
+    <br>
+
+    <div><strong>OFFICIAL RECEIPT</strong></div>
+    <div>Serial No: {{receiptNumber}}</div>
+    <div>Date: {{date}} {{time}}</div>
+  </div>
+
+  <!-- CUSTOMER INFO -->
+  {{#if customerName}}
+  <div class="small">
+    Customer: {{customerName}}<br>
+    TIN: {{customerTIN}}
+  </div>
+  <br>
+  {{/if}}
+
+  <!-- ITEMS -->
+  {{#each items}}
+  <div class="item">
+    <div>
+      {{name}} x{{quantity}}<br>
+      <span class="small">@ {{price}}</span>
+    </div>
+    <div>{{subtotal}}</div>
+  </div>
+  {{/each}}
+
+  <!-- TOTALS -->
+  <div class="total">
+    <div class="item">
+      <div>Subtotal:</div>
+      <div>{{subtotal}}</div>
+    </div>
+
+    {{#if discount}}
+    <div class="item">
+      <div>Discount:</div>
+      <div>-{{discount}}</div>
+    </div>
+    {{/if}}
+
+    <!-- VAT BREAKDOWN -->
+    {{#if isVAT}}
+    <div class="item">
+      <div>VATable Sales:</div>
+      <div>{{vatableSales}}</div>
+    </div>
+    <div class="item">
+      <div>VAT (12%):</div>
+      <div>{{vatAmount}}</div>
+    </div>
+    <div class="item">
+      <div>VAT-Exempt Sales:</div>
+      <div>{{vatExempt}}</div>
+    </div>
+    {{else}}
+    <div class="item">
+      <div>VAT-Exempt Sales:</div>
+      <div>{{subtotal}}</div>
+    </div>
+    {{/if}}
+
+    <div class="item">
+      <div><strong>TOTAL:</strong></div>
+      <div>{{total}}</div>
+    </div>
+
+    <div class="item">
+      <div>Payment:</div>
+      <div>{{paymentMethod}}</div>
+    </div>
+
+    {{#if cashReceived}}
+    <div class="item">
+      <div>Cash:</div>
+      <div>{{cashReceived}}</div>
+    </div>
+    {{/if}}
+
+    {{#if change}}
+    <div class="item">
+      <div>Change:</div>
+      <div>{{change}}</div>
+    </div>
+    {{/if}}
+  </div>
+
+  <!-- BIR FOOTER -->
+  <div class="footer">
+    <div>PTU No: {{ptuNumber}}</div>
+    <div>MIN: {{minNumber}}</div>
+    <div>Accredited System Provider: {{systemProvider}}</div>
+    <div>Date Issued: {{ptuDate}}</div>
+
+    <br>
+
+    {{#if isVAT}}
+    <div class="small">THIS SERVES AS AN OFFICIAL RECEIPT</div>
+    {{else}}
+    <div class="small">THIS DOCUMENT IS NOT VALID FOR CLAIM OF INPUT TAX</div>
+    {{/if}}
+
+    <br>
+
+    <div class="small">{{footer}}</div>
+  </div>
+
+</body>
+</html>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import Navbar from '@/components/Navbar';
 import Currency from '@/components/Currency';
 import OfflineIndicator from '@/components/OfflineIndicator';
@@ -34,6 +34,7 @@ interface Product {
   price: number;
   stock: number;
   sku?: string;
+  barcode?: string;
   category?: string;
   image?: string;
   pinned?: boolean;
@@ -86,6 +87,7 @@ export default function POSPage() {
   const [applyingDiscount, setApplyingDiscount] = useState(false);
   const [lookingUpRefund, setLookingUpRefund] = useState(false);
   const { confirm, Dialog: confirmDialog } = useConfirm();
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Max limits
   const MAX_QUANTITY = 9999;
@@ -199,6 +201,13 @@ export default function POSPage() {
     }
   }, [settings, tenant]);
 
+  // Refocus search box whenever any modal closes
+  useEffect(() => {
+    if (!showPaymentModal && !showQRScanner && !showRefundModal && !showSavedCartsModal && !showSaveCartModal) {
+      searchInputRef.current?.focus();
+    }
+  }, [showPaymentModal, showQRScanner, showRefundModal, showSavedCartsModal, showSaveCartModal]);
+
   // Add to cart function
   const addToCart = useCallback((product: Product) => {
     if (!dict) return;
@@ -243,10 +252,14 @@ export default function POSPage() {
 
   // Handle barcode scanning
   const handleBarcodeScan = useCallback((barcode: string) => {
-    // Try to find product by SKU or barcode
+    const code = barcode.trim();
+    if (!code) return;
+    // Match against barcode field, SKU, or _id
     const product = products.find(
-      p => p.sku === barcode || p._id === barcode
+      p => p.barcode === code || p.sku === code || p._id === code
     );
+    // Clear any text that the scanner may have typed into the search box
+    setSearch('');
     if (product && (product.stock > 0 || product.allowOutOfStockSales)) {
       addToCart(product);
     } else {
@@ -917,28 +930,45 @@ export default function POSPage() {
       ? settings.receiptTemplates?.templates?.find((t) => t.id === defaultTemplateId)?.html
       : undefined;
 
+    const addressStr = settings.address
+      ? [settings.address.street, settings.address.city, settings.address.state, settings.address.zipCode]
+          .filter(Boolean).join(', ')
+      : undefined;
+    const taxEnabled = settings.taxEnabled && settings.taxRate;
+    const taxableBase = (transaction.subtotal || transaction.total) - (transaction.discountAmount || 0);
+    const taxAmount = taxEnabled ? taxableBase * (settings.taxRate! / 100) : undefined;
+    const isVAT = taxEnabled && (settings.taxLabel || '').toUpperCase().includes('VAT');
+    const ptuDateStr = settings.birPtuIssuedDate
+      ? new Date(settings.birPtuIssuedDate).toLocaleDateString()
+      : undefined;
+
     const receiptData = {
       storeName: settings.companyName,
-      address: settings.address
-        ? `${settings.address.street || ''}, ${settings.address.city || ''}, ${settings.address.state || ''} ${settings.address.zipCode || ''}`.trim()
-        : undefined,
+      address: addressStr,
       phone: settings.phone,
+      logo: settings.receiptShowLogo !== false ? settings.logo : undefined,
       receiptNumber: transaction.receiptNumber || transaction._id?.slice(-8) || 'N/A',
       date: transaction.date || formatDateTime(new Date(transaction.createdAt || Date.now()), settings || getDefaultTenantSettings()),
       items: transaction.items || [],
       subtotal: transaction.subtotal || transaction.total,
-      discountCode: transaction.discountCode,
-      discountAmount: transaction.discountAmount,
-      tax: settings.taxEnabled && settings.taxRate
-        ? ((transaction.subtotal || transaction.total) - (transaction.discountAmount || 0)) * (settings.taxRate / 100)
-        : undefined,
+      discount: transaction.discountAmount || undefined,
+      tax: taxAmount,
       taxLabel: settings.taxLabel,
       total: transaction.total,
       paymentMethod: transaction.paymentMethod,
       cashReceived: transaction.cashReceived,
       change: transaction.change,
       footer: settings.receiptFooter,
+      header: settings.receiptHeader,
       template: templateHtml,
+      // BIR compliance
+      tin: settings.birTin,
+      businessStyle: settings.birBusinessStyle,
+      ptuNumber: settings.birPtuNumber,
+      ptuDate: ptuDateStr,
+      minNumber: settings.birMinNumber,
+      systemProvider: settings.birSystemProvider,
+      isVAT: isVAT || false,
     };
 
     try {
@@ -1375,10 +1405,12 @@ export default function POSPage() {
               <div className="flex gap-2">
                 <div className="relative flex-1">
                   <input
+                    ref={searchInputRef}
                     type="text"
                     placeholder={dict.pos.searchPlaceholder}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
+                    autoFocus
                     className="w-full px-4 py-3 pl-11 text-base border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all"
                   />
                   <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
