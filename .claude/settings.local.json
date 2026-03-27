@@ -39,7 +39,8 @@
       "Bash(grep -n \"audit\\\\|AuditLog\" /c/Users/corew/localpro-pos/app/api/tenants/[slug]/receipt-templates/route.ts)",
       "Bash(xargs sed:*)",
       "Bash(xargs grep:*)",
-      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")"
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
+      "Bash(wc -l c:/Users/corew/localpro-pos/app/[tenant]/[lang]/pos/page.tsx)"
     ]
   },
   "hooks": {

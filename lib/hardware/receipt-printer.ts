@@ -3,6 +3,7 @@
  * Supports ESC/POS printers via WebUSB, Serial API, or network printing
  */
 import { logger } from '@/lib/logger';
+import { findProfile } from './printer-profiles';
 
 // Web API types (available in browsers that support these APIs)
 // Using any for browser APIs that may not have complete type definitions
@@ -13,6 +14,9 @@ type SerialPort = any;
 
 export interface PrinterConfig {
   type: 'usb' | 'serial' | 'network' | 'browser';
+  /** Profile id from PRINTER_PROFILES (e.g. 'custom-psd200i'). When set,
+   *  vendorId/productId are sourced from the profile unless overridden. */
+  profile?: string;
   name?: string;
   vendorId?: number;
   productId?: number;
@@ -69,6 +73,12 @@ class ReceiptPrinterService {
 
     try {
       if (this.config.type === 'usb' && 'usb' in navigator) {
+        // Resolve vendorId / productId: explicit config values take priority,
+        // then fall back to the selected printer profile.
+        const profile = this.config.profile ? findProfile(this.config.profile) : undefined;
+        const vendorId = this.config.vendorId ?? profile?.vendorId;
+        const productId = this.config.productId ?? profile?.productId;
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const usb = (navigator as any).usb;
 
@@ -78,9 +88,10 @@ class ReceiptPrinterService {
         let device: USBDevice | null = null;
 
         if (pairedDevices.length > 0) {
-          device = this.config.vendorId && this.config.productId
+          device = vendorId && productId
             ? pairedDevices.find(
-                (d: any) => d.vendorId === this.config!.vendorId && d.productId === this.config!.productId // eslint-disable-line @typescript-eslint/no-explicit-any
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (d: any) => d.vendorId === vendorId && d.productId === productId
               ) ?? pairedDevices[0]
             : pairedDevices[0];
         }
@@ -89,9 +100,7 @@ class ReceiptPrinterService {
           // No paired device — fall back to the picker (requires a live user gesture,
           // so this path only works from the hardware settings test button).
           device = await usb.requestDevice({
-            filters: this.config.vendorId && this.config.productId
-              ? [{ vendorId: this.config.vendorId, productId: this.config.productId }]
-              : [],
+            filters: vendorId ? [{ vendorId, ...(productId ? { productId } : {}) }] : [],
           });
         }
 
@@ -362,18 +371,36 @@ class ReceiptPrinterService {
   }
 
   private printViaBrowser(data: ReceiptData): boolean {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
+    // Use a hidden iframe instead of window.open so printing works from async
+    // callbacks (after await fetch) without being blocked by popup blockers.
+    const html = this.generateReceiptHTML(data);
+
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText =
+      'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentDocument ?? iframe.contentWindow?.document;
+    if (!doc) {
+      document.body.removeChild(iframe);
       return false;
     }
 
-    const html = this.generateReceiptHTML(data);
-    printWindow.document.write(html);
-    printWindow.document.close();
-    printWindow.focus();
+    doc.open();
+    doc.write(html);
+    doc.close();
+
+    // Give the iframe a moment to render before triggering print
     setTimeout(() => {
-      printWindow.print();
-      printWindow.close();
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      // Clean up after the print dialog closes (browsers hold the call
+      // synchronously while the dialog is open, so 500 ms is enough)
+      setTimeout(() => {
+        if (document.body.contains(iframe)) {
+          document.body.removeChild(iframe);
+        }
+      }, 500);
     }, 250);
 
     return true;

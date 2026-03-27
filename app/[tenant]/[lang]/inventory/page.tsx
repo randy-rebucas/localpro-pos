@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import PageTitle from '@/components/PageTitle';
@@ -25,8 +25,9 @@ export default function InventoryPage() {
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [selectedBranch, setSelectedBranch] = useState<string>('');
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [loading, setLoading] = useState(true); // eslint-disable-line @typescript-eslint/no-unused-vars
-  
+  const [loading, setLoading] = useState(true);
+  const [stockRefreshTrigger, setStockRefreshTrigger] = useState(0);
+
   const inventoryEnabled = supportsFeature(settings ?? undefined, 'inventory');
   const businessTypeConfig = settings ? getBusinessTypeConfig(getBusinessType(settings)) : null;
 
@@ -54,11 +55,10 @@ export default function InventoryPage() {
     }
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleStockUpdate = (update: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-    // Handle real-time stock updates
-    // Stock updates are handled by the RealTimeStockTracker component
-  };
+  const handleStockUpdate = useCallback(() => {
+    // Increment trigger so LowStockAlerts re-fetches immediately
+    setStockRefreshTrigger((n) => n + 1);
+  }, []);
 
   if (!dict) {
     return (
@@ -124,9 +124,10 @@ export default function InventoryPage() {
               <select
                 value={selectedBranch}
                 onChange={(e) => setSelectedBranch(e.target.value)}
-                className="block w-48 border-2 border-gray-300 focus:border-blue-500 focus:ring-blue-500 sm:text-sm bg-white"
+                disabled={loading}
+                className="block w-48 border-2 border-gray-300 focus:border-blue-500 focus:ring-blue-500 sm:text-sm bg-white disabled:opacity-50"
               >
-                <option value="">{dict?.inventory?.allBranches || 'All Branches'}</option>
+                <option value="">{loading ? (dict?.common?.loading || 'Loading…') : (dict?.inventory?.allBranches || 'All Branches')}</option>
                 {branches.map((branch) => (
                   <option key={branch._id} value={branch._id}>
                     {branch.name} {branch.code && `(${branch.code})`}
@@ -146,8 +147,9 @@ export default function InventoryPage() {
             <LowStockAlerts
               autoRefresh={true}
               refreshInterval={30000}
+              branchId={selectedBranch || undefined}
+              refreshTrigger={stockRefreshTrigger}
               onProductClick={(productId) => {
-                // Navigate to product edit page
                 window.location.href = `/${tenant}/${lang}/products?edit=${productId}`;
               }}
             />

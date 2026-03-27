@@ -3,8 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
-import Currency from './Currency'; // eslint-disable-line @typescript-eslint/no-unused-vars
-
 interface LowStockProduct {
   _id: string;
   name: string;
@@ -16,12 +14,18 @@ interface LowStockProduct {
 interface LowStockAlertsProps {
   autoRefresh?: boolean;
   refreshInterval?: number;
+  /** Filter alerts to a specific branch. Empty string / undefined = all branches. */
+  branchId?: string;
+  /** Increment to imperatively trigger a refresh (e.g. after an SSE stock update). */
+  refreshTrigger?: number;
   onProductClick?: (productId: string) => void;
 }
 
 export default function LowStockAlerts({
   autoRefresh = true,
   refreshInterval = 30000, // 30 seconds
+  branchId,
+  refreshTrigger,
   onProductClick,
 }: LowStockAlertsProps) {
   const params = useParams();
@@ -40,7 +44,10 @@ export default function LowStockAlerts({
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch(`/api/inventory/low-stock?tenant=${tenant}`);
+      const url = new URL(`/api/inventory/low-stock`, window.location.origin);
+      url.searchParams.set('tenant', tenant);
+      if (branchId) url.searchParams.set('branchId', branchId);
+      const res = await fetch(url.toString());
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
 
@@ -64,7 +71,7 @@ export default function LowStockAlerts({
       return () => clearInterval(interval);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tenant, autoRefresh, refreshInterval]);
+  }, [tenant, branchId, autoRefresh, refreshInterval, refreshTrigger]);
 
   if (loading && alerts.length === 0) {
     return (

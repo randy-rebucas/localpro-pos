@@ -911,11 +911,17 @@ export default function POSPage() {
   const printReceipt = async (transaction: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
     if (!settings) return;
 
+    // Resolve the active receipt template HTML (if configured)
+    const defaultTemplateId = settings.receiptTemplates?.default;
+    const templateHtml = defaultTemplateId
+      ? settings.receiptTemplates?.templates?.find((t) => t.id === defaultTemplateId)?.html
+      : undefined;
+
     const receiptData = {
       storeName: settings.companyName,
-      address: settings.address ? 
-        `${settings.address.street || ''}, ${settings.address.city || ''}, ${settings.address.state || ''} ${settings.address.zipCode || ''}`.trim() : 
-        undefined,
+      address: settings.address
+        ? `${settings.address.street || ''}, ${settings.address.city || ''}, ${settings.address.state || ''} ${settings.address.zipCode || ''}`.trim()
+        : undefined,
       phone: settings.phone,
       receiptNumber: transaction.receiptNumber || transaction._id?.slice(-8) || 'N/A',
       date: transaction.date || formatDateTime(new Date(transaction.createdAt || Date.now()), settings || getDefaultTenantSettings()),
@@ -923,20 +929,26 @@ export default function POSPage() {
       subtotal: transaction.subtotal || transaction.total,
       discountCode: transaction.discountCode,
       discountAmount: transaction.discountAmount,
-      tax: settings.taxEnabled && settings.taxRate ? 
-        ((transaction.subtotal || transaction.total) - (transaction.discountAmount || 0)) * (settings.taxRate / 100) : 
-        undefined,
+      tax: settings.taxEnabled && settings.taxRate
+        ? ((transaction.subtotal || transaction.total) - (transaction.discountAmount || 0)) * (settings.taxRate / 100)
+        : undefined,
+      taxLabel: settings.taxLabel,
       total: transaction.total,
       paymentMethod: transaction.paymentMethod,
       cashReceived: transaction.cashReceived,
       change: transaction.change,
       footer: settings.receiptFooter,
+      template: templateHtml,
     };
 
     try {
-      await hardwareService.printReceipt(receiptData);
+      const printed = await hardwareService.printReceipt(receiptData);
+      if (!printed) {
+        showToast.error(dict?.pos?.printFailed || 'Receipt could not be printed. Check printer settings.');
+      }
     } catch (error) {
       console.error('Failed to print receipt:', error);
+      showToast.error(dict?.pos?.printFailed || 'Receipt could not be printed. Check printer settings.');
     }
   };
 

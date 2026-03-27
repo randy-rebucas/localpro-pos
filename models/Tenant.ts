@@ -82,6 +82,9 @@ export interface ITenantSettings {
   hardwareConfig?: {
     printer?: {
       type: 'browser' | 'usb' | 'serial' | 'network';
+      profile?: string;
+      vendorId?: number;
+      productId?: number;
       ipAddress?: string;
       portNumber?: number;
     };
@@ -441,6 +444,9 @@ const TenantSchema: Schema = new Schema(
             type: String,
             enum: ['browser', 'usb', 'serial', 'network'],
           },
+          profile: String,
+          vendorId: Number,
+          productId: Number,
           ipAddress: String,
           portNumber: Number,
         },

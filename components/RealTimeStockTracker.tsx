@@ -40,7 +40,11 @@ export default function RealTimeStockTracker({
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [connected, setConnected] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [reconnectCount, setReconnectCount] = useState(0);
   const eventSourceRef = useRef<EventSource | null>(null);
+  // Keep a stable ref to the callback so it never needs to be in the deps array
+  const onStockUpdateRef = useRef(onStockUpdate);
+  useEffect(() => { onStockUpdateRef.current = onStockUpdate; }, [onStockUpdate]);
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -65,12 +69,12 @@ export default function RealTimeStockTracker({
     eventSource.onmessage = (event) => {
       try {
         const data: StockUpdate = JSON.parse(event.data);
-        
+
         if (data.type === 'connected') {
           setConnected(true);
         } else if (data.type === 'stock_update') {
           setLastUpdate(new Date());
-          onStockUpdate?.(data);
+          onStockUpdateRef.current?.(data);
         } else if (data.type === 'heartbeat') {
           // Keep connection alive
         } else if (data.type === 'error') {
@@ -82,24 +86,21 @@ export default function RealTimeStockTracker({
       }
     };
 
-    eventSource.onerror = (error) => {
-      console.error('SSE connection error:', error);
+    eventSource.onerror = () => {
       setConnected(false);
-      
-      // Attempt to reconnect after 5 seconds
-      setTimeout(() => {
-        if (eventSourceRef.current?.readyState === EventSource.CLOSED) {
-          eventSource.close();
-          // Reconnect will happen via useEffect
-        }
-      }, 5000);
+      eventSource.close();
+      eventSourceRef.current = null;
+      // Trigger a new EventSource by incrementing the reconnect counter
+      setTimeout(() => setReconnectCount((c) => c + 1), 5000);
     };
 
     return () => {
       eventSource.close();
       eventSourceRef.current = null;
     };
-  }, [tenant, productId, branchId, onStockUpdate]);
+  // onStockUpdate intentionally excluded — handled via ref above
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenant, productId, branchId, reconnectCount]);
 
   if (!showIndicator) {
     return null;

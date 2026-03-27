@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { hardwareService, HardwareConfig, PrinterConfig } from '@/lib/hardware';
+import { hardwareService, HardwareConfig, PrinterConfig, PRINTER_PROFILES } from '@/lib/hardware';
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
 import { showToast } from '@/lib/toast';
@@ -179,6 +179,8 @@ export default function HardwareSettings({
                   printer: {
                     ...config.printer,
                     type: e.target.value as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+                    // Clear profile when switching away from USB
+                    profile: e.target.value === 'usb' ? config.printer?.profile : undefined,
                   } as PrinterConfig,
                 })}
                 className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
@@ -189,6 +191,38 @@ export default function HardwareSettings({
                 <option value="network">{dict?.components?.hardwareSettings?.networkPrinter || 'Network Printer'}</option>
               </select>
             </div>
+
+            {config.printer?.type === 'usb' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  {dict?.components?.hardwareSettings?.printerModel || 'Printer Model'}
+                </label>
+                <select
+                  value={config.printer?.profile || ''}
+                  onChange={(e) => {
+                    const profile = PRINTER_PROFILES.find((p) => p.id === e.target.value);
+                    updateConfig({
+                      printer: {
+                        ...config.printer,
+                        type: 'usb',
+                        profile: profile?.id,
+                        // Auto-fill IDs from the profile; clear if switching to generic
+                        vendorId: profile?.vendorId,
+                        productId: profile?.productId,
+                      } as PrinterConfig,
+                    });
+                  }}
+                  className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                >
+                  <option value="">{dict?.components?.hardwareSettings?.selectModel || '— Select model —'}</option>
+                  {PRINTER_PROFILES.filter((p) => p.type === 'usb').map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {config.printer?.type === 'network' && (
               <>

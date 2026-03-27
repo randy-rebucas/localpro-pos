@@ -125,4 +125,6 @@ class HardwareService {
 
 export const hardwareService = new HardwareService();
 export type { PrinterConfig, ReceiptData, BarcodeScannerConfig, QRReaderConfig };
+export { PRINTER_PROFILES, findProfile } from './printer-profiles';
+export type { PrinterProfile } from './printer-profiles';
 

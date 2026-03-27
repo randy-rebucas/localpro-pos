@@ -63,24 +63,30 @@ export async function GET(request: NextRequest) {
               .limit(50)
               .lean();
 
-            for (const movement of recentMovements) {
-              const product = await Product.findById(movement.productId).lean();
-              if (product) {
-                send({
-                  type: 'stock_update',
-                  productId: movement.productId,
-                  branchId: movement.branchId,
-                  variation: movement.variation,
-                  movementType: movement.type,
-                  quantity: movement.quantity,
-                  newStock: movement.newStock,
-                  previousStock: movement.previousStock,
-                  timestamp: movement.createdAt,
-                });
-              }
-            }
-
             if (recentMovements.length > 0) {
+              // Batch-load all referenced products in one query
+              const productIds = [...new Set(recentMovements.map((m) => String(m.productId)))];
+              const products = await Product.find({ _id: { $in: productIds } })
+                .select('_id')
+                .lean();
+              const productSet = new Set(products.map((p) => String(p._id)));
+
+              for (const movement of recentMovements) {
+                if (productSet.has(String(movement.productId))) {
+                  send({
+                    type: 'stock_update',
+                    productId: movement.productId,
+                    branchId: movement.branchId,
+                    variation: movement.variation,
+                    movementType: movement.type,
+                    quantity: movement.quantity,
+                    newStock: movement.newStock,
+                    previousStock: movement.previousStock,
+                    timestamp: movement.createdAt,
+                  });
+                }
+              }
+
               lastCheck = recentMovements[0].createdAt;
             }
           } catch (error) {

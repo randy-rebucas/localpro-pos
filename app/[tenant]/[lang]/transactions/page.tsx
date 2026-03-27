@@ -10,6 +10,7 @@ import { getDictionaryClient } from '../dictionaries-client';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { formatDateTime } from '@/lib/formatting';
+import { hardwareService } from '@/lib/hardware';
 
 interface TransactionItem {
   product: string;
@@ -21,7 +22,11 @@ interface TransactionItem {
 
 interface Transaction {
   _id: string;
+  receiptNumber?: string;
   items: TransactionItem[];
+  subtotal?: number;
+  discountCode?: string;
+  discountAmount?: number;
   total: number;
   paymentMethod: 'cash' | 'card' | 'digital';
   cashReceived?: number;
@@ -96,6 +101,19 @@ export default function TransactionsPage() {
     getDictionaryClient(lang).then(setDict);
   }, [lang]);
 
+  // Initialize hardware config from localStorage or tenant settings
+  useEffect(() => {
+    if (!tenant) return;
+    const stored = localStorage.getItem(`hardware_config_${tenant}`);
+    if (stored) {
+      try {
+        hardwareService.setConfig(JSON.parse(stored));
+      } catch { /* ignore */ }
+    } else if (settings?.hardwareConfig) {
+      hardwareService.setConfig(settings.hardwareConfig);
+    }
+  }, [tenant, settings]);
+
   // Load display mode from localStorage
   useEffect(() => {
     const savedDisplayMode = localStorage.getItem(`transactionsDisplayMode_${tenant}`);
@@ -111,12 +129,17 @@ export default function TransactionsPage() {
 
   useEffect(() => {
     fetchTransactions();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, tenant]);
+
+  useEffect(() => {
     fetchExpenses();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, tenant, viewType]);
+  }, [tenant]);
 
   const fetchTransactions = async () => {
     try {
+      setLoading(true);
       const res = await fetch(`/api/transactions?page=${page}&limit=20&tenant=${tenant}`, { credentials: 'include' });
       const data = await res.json();
       if (data.success) {
@@ -125,6 +148,8 @@ export default function TransactionsPage() {
       }
     } catch (error) {
       console.error('Error fetching transactions:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -137,8 +162,6 @@ export default function TransactionsPage() {
       }
     } catch (error) {
       console.error('Error fetching expenses:', error);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -272,97 +295,30 @@ export default function TransactionsPage() {
     return formatDateTime(dateString, tenantSettings);
   };
 
-  const printReceipt = (transaction: Transaction) => {
+  const printReceipt = async (transaction: Transaction) => {
     if (!dict) return;
-    const receiptWindow = window.open('', '_blank');
-    if (!receiptWindow) return;
-
-    const receiptContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>${dict.pos.receipt || 'Receipt'}</title>
-          <style>
-            body {
-              font-family: 'Courier New', monospace;
-              width: 300px;
-              margin: 0 auto;
-              padding: 20px;
-            }
-            .header {
-              text-align: center;
-              border-bottom: 2px dashed #000;
-              padding-bottom: 10px;
-              margin-bottom: 10px;
-            }
-            .item {
-              display: flex;
-              justify-content: space-between;
-              margin-bottom: 5px;
-            }
-            .total {
-              border-top: 2px dashed #000;
-              padding-top: 10px;
-              margin-top: 10px;
-              font-weight: bold;
-            }
-            .footer {
-              text-align: center;
-              margin-top: 20px;
-              font-size: 12px;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h2>${dict.pos.receiptTitle || 'POS SYSTEM'}</h2>
-            <p>${dict.pos.receiptNumber || 'Receipt'} #${transaction._id.slice(-8)}</p>
-            <p>${formatDateForReceipt(transaction.createdAt)}</p>
-          </div>
-          ${transaction.items
-            .map(
-              (item) => `
-            <div class="item">
-              <div>
-                <div>${item.name} x${item.quantity}</div>
-                <div style="font-size: 12px;">@ $${item.price.toFixed(2)}</div>
-              </div>
-              <div>$${item.subtotal.toFixed(2)}</div>
-            </div>
-          `
-            )
-            .join('')}
-          <div class="total">
-            <div class="item">
-              <div>${dict.common.total}:</div>
-              <div>$${transaction.total.toFixed(2)}</div>
-            </div>
-            <div class="item">
-              <div>${dict.transactions.payment}: ${transaction.paymentMethod.toUpperCase()}</div>
-            </div>
-            ${transaction.cashReceived
-              ? `
-                <div class="item">
-                  <div>${dict.transactions.cash}:</div>
-                  <div>$${transaction.cashReceived.toFixed(2)}</div>
-                </div>
-                <div class="item">
-                  <div>${dict.transactions.change}:</div>
-                  <div>$${transaction.change?.toFixed(2) || '0.00'}</div>
-                </div>
-              `
-              : ''}
-          </div>
-          <div class="footer">
-            <p>${dict.pos.thankYou || 'Thank you for your business!'}</p>
-          </div>
-        </body>
-      </html>
-    `;
-
-    receiptWindow.document.write(receiptContent);
-    receiptWindow.document.close();
-    receiptWindow.print();
+    const receiptData = {
+      storeName: settings?.companyName || dict.pos.receiptTitle || 'POS SYSTEM',
+      receiptNumber: transaction.receiptNumber || transaction._id.slice(-8),
+      date: formatDateForReceipt(transaction.createdAt),
+      items: transaction.items.map((item) => ({
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price,
+        subtotal: item.subtotal,
+      })),
+      subtotal: transaction.subtotal ?? transaction.total,
+      discount: transaction.discountAmount,
+      total: transaction.total,
+      paymentMethod: transaction.paymentMethod,
+      cashReceived: transaction.cashReceived,
+      change: transaction.change,
+      footer: dict.pos.thankYou || 'Thank you for your business!',
+    };
+    const success = await hardwareService.printReceipt(receiptData);
+    if (!success) {
+      console.error('Failed to print receipt');
+    }
   };
 
   if (!dict) {
@@ -531,7 +487,7 @@ export default function TransactionsPage() {
                           <div className="text-xs text-gray-500 mb-1">{dict.transactions.date}</div>
                           <div className="text-sm text-gray-600"><FormattedDate date={transaction.createdAt} includeTime={true} /></div>
                         </div>
-                        <span className={`inline-block px-2.5 py-1 text-xs font-medium border ${transaction.status === 'completed' ? 'bg-green-100 text-green-800 border-green-300' : 'bg-red-100 text-red-800 border-red-300'}`}>
+                        <span className={`inline-block px-2.5 py-1 text-xs font-medium border ${transaction.status === 'completed' ? 'bg-green-100 text-green-800 border-green-300' : transaction.status === 'refunded' ? 'bg-orange-100 text-orange-800 border-orange-300' : 'bg-red-100 text-red-800 border-red-300'}`}>
                           {dict.transactions[transaction.status]}
                         </span>
                       </div>
@@ -631,7 +587,7 @@ export default function TransactionsPage() {
                             <div className="text-xs text-gray-500 mb-1">{dict.transactions.date}</div>
                             <div className="text-sm text-gray-600"><FormattedDate date={transaction.createdAt} includeTime={true} /></div>
                           </div>
-                          <span className={`inline-block px-2.5 py-1 text-xs font-medium border ${transaction.status === 'completed' ? 'bg-green-100 text-green-800 border-green-300' : 'bg-red-100 text-red-800 border-red-300'}`}>{dict.transactions[transaction.status]}</span>
+                          <span className={`inline-block px-2.5 py-1 text-xs font-medium border ${transaction.status === 'completed' ? 'bg-green-100 text-green-800 border-green-300' : transaction.status === 'refunded' ? 'bg-orange-100 text-orange-800 border-orange-300' : 'bg-red-100 text-red-800 border-red-300'}`}>{dict.transactions[transaction.status]}</span>
                         </div>
                         <div className="mb-2">
                           <div className="text-xs text-gray-500 mb-1">{dict.transactions.items}</div>
