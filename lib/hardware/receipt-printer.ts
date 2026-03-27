@@ -69,18 +69,51 @@ class ReceiptPrinterService {
 
     try {
       if (this.config.type === 'usb' && 'usb' in navigator) {
-        const device = await (navigator as any).usb.requestDevice({ // eslint-disable-line @typescript-eslint/no-explicit-any
-          filters: this.config.vendorId && this.config.productId
-            ? [{ vendorId: this.config.vendorId, productId: this.config.productId }]
-            : [],
-        });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const usb = (navigator as any).usb;
+
+        // Try previously-authorized devices first — works without a user gesture,
+        // which is required when printing is triggered programmatically after checkout.
+        const pairedDevices: USBDevice[] = await usb.getDevices();
+        let device: USBDevice | null = null;
+
+        if (pairedDevices.length > 0) {
+          device = this.config.vendorId && this.config.productId
+            ? pairedDevices.find(
+                (d: any) => d.vendorId === this.config!.vendorId && d.productId === this.config!.productId // eslint-disable-line @typescript-eslint/no-explicit-any
+              ) ?? pairedDevices[0]
+            : pairedDevices[0];
+        }
+
+        if (!device) {
+          // No paired device — fall back to the picker (requires a live user gesture,
+          // so this path only works from the hardware settings test button).
+          device = await usb.requestDevice({
+            filters: this.config.vendorId && this.config.productId
+              ? [{ vendorId: this.config.vendorId, productId: this.config.productId }]
+              : [],
+          });
+        }
+
         await device.open();
-        await device.selectConfiguration(1);
+        if (device.configuration === null) {
+          await device.selectConfiguration(1);
+        }
         await device.claimInterface(0);
         this.device = device;
         return true;
       } else if (this.config.type === 'serial' && 'serial' in navigator) {
-        const port = await (navigator as any).serial.requestPort(); // eslint-disable-line @typescript-eslint/no-explicit-any
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const serial = (navigator as any).serial;
+
+        // Try previously-authorized ports first (no user gesture required).
+        const pairedPorts: SerialPort[] = await serial.getPorts();
+        let port: SerialPort | null = pairedPorts[0] ?? null;
+
+        if (!port) {
+          port = await serial.requestPort();
+        }
+
         await port.open({ baudRate: 9600 });
         this.device = port;
         return true;
@@ -103,6 +136,21 @@ class ReceiptPrinterService {
     }
   }
 
+  /** Find the first bulk-OUT endpoint on the claimed interface. */
+  private getBulkOutEndpoint(): number {
+    try {
+      const iface = (this.device as USBDevice)?.configuration?.interfaces?.[0];
+      const alternate = iface?.alternates?.[0];
+      const ep = alternate?.endpoints?.find(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (e: any) => e.direction === 'out' && e.type === 'bulk'
+      );
+      return ep?.endpointNumber ?? 1; // fall back to 1 (works on most ESC/POS printers)
+    } catch {
+      return 1;
+    }
+  }
+
   private async sendData(data: Uint8Array): Promise<void> {
     if (!this.device || !this.config) {
       // Throw error to be caught by printReceipt's try-catch for fallback
@@ -111,7 +159,7 @@ class ReceiptPrinterService {
 
     try {
       if (this.config.type === 'usb') {
-        await (this.device as USBDevice).transferOut(1, data);
+        await (this.device as USBDevice).transferOut(this.getBulkOutEndpoint(), data);
       } else if (this.config.type === 'serial') {
         const writer = (this.device as SerialPort).writable.getWriter();
         await writer.write(data);
@@ -435,7 +483,7 @@ class ReceiptPrinterService {
 
   async openCashDrawer(): Promise<boolean> {
     try {
-      if (this.config?.type === 'browser' || !this.device) {
+      if (this.config?.type === 'browser') {
         return false;
       }
 
@@ -443,6 +491,23 @@ class ReceiptPrinterService {
       const command = new Uint8Array([
         this.ESC, 0x70, 0x00, 0x19, 0xFF // ESC p m t1 t2
       ]);
+
+      if (this.config?.type === 'network' && this.config.ipAddress) {
+        const response = await fetch(
+          `http://${this.config.ipAddress}:${this.config.portNumber || 9100}`,
+          {
+            method: 'POST',
+            body: command,
+            headers: { 'Content-Type': 'application/octet-stream' },
+          }
+        );
+        return response.ok;
+      }
+
+      if (!this.device) {
+        const connected = await this.connect();
+        if (!connected) return false;
+      }
 
       await this.sendData(command);
       return true;

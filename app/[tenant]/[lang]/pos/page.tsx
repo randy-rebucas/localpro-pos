@@ -178,7 +178,9 @@ export default function POSPage() {
   // Initialize hardware services
   useEffect(() => {
     if (settings) {
-      // Load hardware config from localStorage (per-tenant)
+      // Prefer localStorage (set by hardware admin page or standalone hardware settings modal),
+      // fall back to DB-saved settings.hardwareConfig so the POS works even without a prior
+      // localStorage write.
       const hardwareConfigKey = `hardware_config_${tenant}`;
       const savedConfig = localStorage.getItem(hardwareConfigKey);
       if (savedConfig) {
@@ -187,7 +189,12 @@ export default function POSPage() {
           hardwareService.setConfig(config);
         } catch (error) {
           console.error('Failed to load hardware config:', error);
+          if (settings.hardwareConfig) {
+            hardwareService.setConfig(settings.hardwareConfig);
+          }
         }
+      } else if (settings.hardwareConfig) {
+        hardwareService.setConfig(settings.hardwareConfig);
       }
     }
   }, [settings, tenant]);

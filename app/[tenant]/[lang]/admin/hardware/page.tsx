@@ -74,6 +74,10 @@ export default function HardwareAdminPage() {
       if (data.success) {
         setMessage({ type: 'success', text: dict?.admin?.hardwareSettingsSavedSuccess || 'Hardware settings saved successfully!' });
         setSettings(data.data);
+        // Sync to localStorage so the POS page picks up the new config immediately
+        if (data.data?.hardwareConfig !== undefined) {
+          localStorage.setItem(`hardware_config_${tenant}`, JSON.stringify(data.data.hardwareConfig));
+        }
         setTimeout(() => setMessage(null), 3000);
       } else {
         if (res.status === 401 || res.status === 403) {
