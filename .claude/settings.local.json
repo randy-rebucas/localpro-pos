@@ -40,7 +40,17 @@
       "Bash(xargs sed:*)",
       "Bash(xargs grep:*)",
       "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
-      "Bash(wc -l c:/Users/corew/localpro-pos/app/[tenant]/[lang]/pos/page.tsx)"
+      "Bash(wc -l c:/Users/corew/localpro-pos/app/[tenant]/[lang]/pos/page.tsx)",
+      "Bash(find /c/Users/corew/localpro-pos/lib -type f \\\\\\(-name *.ts -o -name *.tsx \\\\\\))",
+      "Bash(pnpm run:*)",
+      "Bash(for f:*)",
+      "Bash(do echo:*)",
+      "Bash(done)",
+      "Bash(grep -r \"hardware\\\\|printer\\\\|scanner\\\\|barcode\" c:/Users/corew/localpro-pos/app/api --include=*.ts -l)",
+      "Bash(grep \"\\\\.ts$\")",
+      "Bash(grep -r \"exchangeRates\\\\|multiCurrency\\\\|convertCurrency\\\\|exchangeRate\" c:/Users/corew/localpro-pos/app/api --include=*.ts -l)",
+      "Bash(cat c:/Users/corew/localpro-pos/app/api/tenants/[slug]/exchange-rates/route.ts)",
+      "Bash(head -10 c:/Users/corew/localpro-pos/app/[tenant]/[lang]/admin/layout.tsx)"
     ]
   },
   "hooks": {

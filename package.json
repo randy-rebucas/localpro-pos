@@ -21,6 +21,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:alignment": "tsx scripts/check-alignment.ts",
     "security:audit": "npm audit --omit=dev && echo '--- Full audit (including dev) ---' && npm audit",
     "tenant:set-plan": "tsx scripts/set-tenant-plan.ts"
   },
@@ -72,7 +73,7 @@
   "optionalDependencies": {
     "@aws-sdk/client-sns": "^3.958.0",
     "@sendgrid/mail": "^8.1.6",
-    "nodemailer": "^7.0.12",
+    "nodemailer": "^8.0.4",
     "resend": "^6.6.0",
     "twilio": "^5.11.1"
   }
