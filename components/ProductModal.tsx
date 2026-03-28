@@ -14,6 +14,8 @@ interface Product {
   price: number;
   stock: number;
   sku?: string;
+  barcode?: string;
+  image?: string;
   category?: string;
   trackInventory?: boolean;
   allowOutOfStockSales?: boolean;
@@ -84,6 +86,8 @@ export default function ProductModal({ product, onClose, lang = 'en' }: ProductM
     price: '',
     stock: '',
     sku: '',
+    barcode: '',
+    image: '',
     category: '',
     trackInventory: true,
     allowOutOfStockSales: false,
@@ -104,6 +108,8 @@ export default function ProductModal({ product, onClose, lang = 'en' }: ProductM
         price: product.price?.toString() || '',
         stock: product.stock?.toString() || '',
         sku: product.sku || '',
+        barcode: product.barcode || '',
+        image: product.image || '',
         category: product.category || '',
         trackInventory,
         allowOutOfStockSales,
@@ -118,6 +124,8 @@ export default function ProductModal({ product, onClose, lang = 'en' }: ProductM
         price: '',
         stock: '',
         sku: '',
+        barcode: '',
+        image: '',
         category: '',
         trackInventory: true,
         allowOutOfStockSales: false,
@@ -218,7 +226,13 @@ export default function ProductModal({ product, onClose, lang = 'en' }: ProductM
       if (formData.sku && formData.sku.trim().length > 50) {
         validationErrors.sku = dict?.products?.skuTooLong || 'SKU must be less than 50 characters';
       }
-      
+      if (formData.barcode && formData.barcode.trim().length > 100) {
+        validationErrors.barcode = 'Barcode must be less than 100 characters';
+      }
+      if (formData.image && formData.image.trim() && !/^https?:\/\/.+/.test(formData.image.trim())) {
+        validationErrors.image = 'Image must be a valid HTTP/HTTPS URL';
+      }
+
       if (Object.keys(validationErrors).length > 0) {
         setErrors(validationErrors);
         setLoading(false);
@@ -233,6 +247,8 @@ export default function ProductModal({ product, onClose, lang = 'en' }: ProductM
         price: priceValue,
         stock: stockNum,
         sku: formData.sku?.trim() || undefined,
+        barcode: formData.barcode?.trim() || undefined,
+        image: formData.image?.trim() || undefined,
         category: formData.category?.trim() || undefined,
         trackInventory: Boolean(formData.trackInventory),
         allowOutOfStockSales: Boolean(formData.allowOutOfStockSales),
@@ -431,6 +447,54 @@ export default function ProductModal({ product, onClose, lang = 'en' }: ProductM
             </div>
             {errors.sku && (
               <p className="mt-1 text-sm text-red-600">{errors.sku}</p>
+            )}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Barcode
+            </label>
+            <input
+              type="text"
+              value={formData.barcode}
+              onChange={(e) => {
+                setFormData(prev => ({ ...prev, barcode: e.target.value }));
+                if (errors.barcode) setErrors(prev => ({ ...prev, barcode: '' }));
+              }}
+              className={`w-full px-3 py-2.5 text-base border focus:ring-2 focus:ring-blue-500 bg-white ${
+                errors.barcode ? 'border-red-300 focus:ring-red-500' : 'border-gray-300'
+              }`}
+              placeholder="EAN-13, UPC, QR, etc."
+            />
+            {errors.barcode && (
+              <p className="mt-1 text-sm text-red-600">{errors.barcode}</p>
+            )}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Image URL
+            </label>
+            <input
+              type="url"
+              value={formData.image}
+              onChange={(e) => {
+                setFormData(prev => ({ ...prev, image: e.target.value }));
+                if (errors.image) setErrors(prev => ({ ...prev, image: '' }));
+              }}
+              className={`w-full px-3 py-2.5 text-base border focus:ring-2 focus:ring-blue-500 bg-white ${
+                errors.image ? 'border-red-300 focus:ring-red-500' : 'border-gray-300'
+              }`}
+              placeholder="https://example.com/image.jpg"
+            />
+            {errors.image && (
+              <p className="mt-1 text-sm text-red-600">{errors.image}</p>
+            )}
+            {formData.image && !errors.image && (
+              <img
+                src={formData.image}
+                alt="Preview"
+                className="mt-2 h-20 w-20 object-cover border border-gray-300"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+              />
             )}
           </div>
           <div className="relative">

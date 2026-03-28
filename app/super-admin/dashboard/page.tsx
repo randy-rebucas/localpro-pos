@@ -11,6 +11,13 @@ interface Stats {
   totalUsers: number;
 }
 
+const STAT_COLOR: Record<string, string> = {
+  blue: 'text-blue-600',
+  green: 'text-green-600',
+  red: 'text-red-600',
+  purple: 'text-purple-600',
+};
+
 export default function SuperAdminDashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -72,7 +79,7 @@ export default function SuperAdminDashboard() {
             {STAT_CARDS.map(stat => (
               <div key={stat.label} className="bg-white border border-gray-200 p-5">
                 <p className="text-sm text-gray-500">{stat.label}</p>
-                <p className={`text-3xl font-bold mt-1 text-${stat.color}-600`}>{stat.value}</p>
+                <p className={`text-3xl font-bold mt-1 ${STAT_COLOR[stat.color]}`}>{stat.value}</p>
                 {stat.href && (
                   <Link href={stat.href} className="text-xs text-blue-600 hover:underline mt-2 inline-block">
                     View →

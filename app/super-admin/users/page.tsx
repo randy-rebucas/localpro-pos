@@ -84,7 +84,6 @@ export default function UsersPage() {
   const handleFilter = (e: React.FormEvent) => {
     e.preventDefault();
     setPage(1);
-    fetchUsers();
   };
 
   const openAction = (user: AppUser, action: typeof actionModal extends { action: infer A } | null ? A : never) => {

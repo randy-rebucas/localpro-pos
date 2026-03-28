@@ -91,6 +91,14 @@ export function validateProduct(data: Record<string, unknown>, t?: TranslationFu
   if (sku && sku.length > 50) {
     errors.push({ field: 'sku', message: translate('validation.skuMaxLength', 'SKU must be less than 50 characters'), code: 'skuMaxLength' });
   }
+  const barcode = typeof data.barcode === 'string' ? data.barcode : '';
+  if (barcode && barcode.length > 100) {
+    errors.push({ field: 'barcode', message: translate('validation.barcodeMaxLength', 'Barcode must be less than 100 characters'), code: 'barcodeMaxLength' });
+  }
+  const image = typeof data.image === 'string' ? data.image : '';
+  if (image && !/^https?:\/\/.+/.test(image)) {
+    errors.push({ field: 'image', message: translate('validation.imageUrlInvalid', 'Image must be a valid HTTP/HTTPS URL'), code: 'imageUrlInvalid' });
+  }
   if (data.trackInventory !== undefined && typeof data.trackInventory !== 'boolean') {
     errors.push({ field: 'trackInventory', message: translate('validation.trackInventoryBoolean', 'Track inventory must be a boolean'), code: 'trackInventoryBoolean' });
   }

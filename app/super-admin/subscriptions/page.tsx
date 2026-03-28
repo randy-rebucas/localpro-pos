@@ -87,10 +87,14 @@ export default function SubscriptionsPage() {
 
   const executeAction = async () => {
     if (!actionModal) return;
-    setActionSaving(true);
     const { sub, action } = actionModal;
     const tenantSlug = sub.tenantId?.slug;
-    if (!tenantSlug) return;
+    if (!tenantSlug) {
+      showMsg('error', 'Tenant slug missing — cannot update subscription');
+      setActionModal(null);
+      return;
+    }
+    setActionSaving(true);
 
     const body: Record<string, unknown> = { action };
     if (action === 'assign-plan') body.planId = actionPlanId;

@@ -80,14 +80,27 @@ export async function PUT(
         if (!plan) {
           return NextResponse.json({ success: false, error: 'Plan not found' }, { status: 404 });
         }
+        const previousPlanId = String(subscription.planId);
         subscription.planId = planId;
+        subscription.status = 'active';
+        subscription.isTrial = false;
+        const nextBilling = new Date();
+        if (subscription.billingCycle === 'yearly') {
+          nextBilling.setFullYear(nextBilling.getFullYear() + 1);
+        } else {
+          nextBilling.setMonth(nextBilling.getMonth() + 1);
+        }
+        subscription.nextBillingDate = nextBilling;
         await subscription.save();
         await createAuditLog(request, {
           tenantId,
           action: 'subscription.assign_plan',
           entityType: 'Subscription',
           entityId: String(subscription._id),
-          changes: { planId: { from: previousStatus, to: planId } },
+          changes: {
+            planId: { from: previousPlanId, to: planId },
+            status: { from: previousStatus, to: 'active' },
+          },
         });
         break;
       }

@@ -530,9 +530,10 @@ export async function POST(request: NextRequest) {
       // Calculate change for cash payments
       if (finalPaymentMethod === 'cash' && finalCashReceived) {
         finalChange = finalCashReceived - total;
-        if (finalChange < 0) {
+        if (finalChange < -0.009) {
           return NextResponse.json({ success: false, error: t('validation.insufficientCashReceived', 'Insufficient cash received') }, { status: 400 });
         }
+        finalChange = Math.max(0, finalChange);
       }
     }
 

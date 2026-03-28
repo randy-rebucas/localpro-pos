@@ -69,7 +69,6 @@ export default function LogsPage() {
   const handleFilter = (e: React.FormEvent) => {
     e.preventDefault();
     setPage(1);
-    fetchLogs();
   };
 
   const formatDate = (d: string) => {

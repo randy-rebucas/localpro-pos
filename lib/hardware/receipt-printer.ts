@@ -322,7 +322,7 @@ class ReceiptPrinterService {
       commands.push(this.setAlign('center'));
       if (data.ptuNumber) commands.push(this.encodeText(`PTU No: ${data.ptuNumber}\n`));
       if (data.minNumber) commands.push(this.encodeText(`MIN: ${data.minNumber}\n`));
-      if (data.systemProvider) commands.push(this.encodeText(`Accredited By: ${data.systemProvider}\n`));
+      if (data.systemProvider) commands.push(this.encodeText(`Accredited System Provider: ${data.systemProvider}\n`));
       if (data.ptuDate) commands.push(this.encodeText(`Date Issued: ${data.ptuDate}\n`));
       commands.push(this.encodeText('\n'));
       commands.push(this.encodeText((isVAT ? 'THIS SERVES AS AN OFFICIAL RECEIPT' : 'NOT VALID FOR CLAIM OF INPUT TAX') + '\n'));
@@ -456,6 +456,10 @@ class ReceiptPrinterService {
     const vatableSales = isVAT && vatAmount > 0 ? discountedSubtotal - vatAmount : 0;
     const vatExemptSales = isVAT ? 0 : discountedSubtotal;
 
+    const vatPct = isVAT && vatAmount > 0 && discountedSubtotal > vatAmount
+      ? ((vatAmount / (discountedSubtotal - vatAmount)) * 100).toFixed(0)
+      : '12';
+
     return `<!DOCTYPE html>
 <html>
 <head>
@@ -472,6 +476,7 @@ class ReceiptPrinterService {
       margin: 0 auto;
       padding: 10px;
     }
+    h2 { font-size: 14px; margin: 0 0 4px 0; font-weight: bold; }
     .center { text-align: center; }
     .header { border-bottom: 2px dashed #000; padding-bottom: 8px; margin-bottom: 8px; }
     .item { display: flex; justify-content: space-between; margin-bottom: 4px; }
@@ -483,24 +488,24 @@ class ReceiptPrinterService {
 <body>
   <div class="header center">
     ${data.logo ? `<img src="${data.logo}" alt="Logo" style="max-width:100px;max-height:60px;display:block;margin:0 auto 4px;" />` : ''}
-    ${data.storeName ? `<strong>${data.storeName}</strong><br>` : ''}
-    ${data.businessStyle ? `<span>${data.businessStyle}</span><br>` : ''}
-    ${data.address ? `<span>${data.address}</span><br>` : ''}
-    ${data.phone ? `<span>${data.phone}</span><br>` : ''}
-    ${data.tin ? `<span>TIN: ${data.tin}</span><br>` : ''}
-    <span>${isVAT ? 'VAT' : 'NON-VAT'} Registered</span><br>
-    ${data.header ? `<span>${data.header}</span><br>` : ''}
+    ${data.storeName ? `<h2>${data.storeName}</h2>` : ''}
+    ${data.businessStyle ? `<div>${data.businessStyle}</div>` : ''}
+    ${data.address ? `<div>${data.address}</div>` : ''}
+    ${data.phone ? `<div>${data.phone}</div>` : ''}
+    ${data.tin ? `<div>TIN: ${data.tin}</div>` : ''}
+    <div>${isVAT ? 'VAT' : 'NON-VAT'} Registered</div>
     <br>
-    <strong>OFFICIAL RECEIPT</strong><br>
-    <span>Serial No: ${data.receiptNumber}</span><br>
-    <span>Date: ${data.date}${data.time ? ' ' + data.time : ''}</span>
+    <div><strong>OFFICIAL RECEIPT</strong></div>
+    <div>Serial No: ${data.receiptNumber}</div>
+    <div>Date: ${data.date}${data.time ? ' ' + data.time : ''}</div>
   </div>
 
   ${data.customerName ? `
   <div class="small">
     Customer: ${data.customerName}<br>
     ${data.customerTIN ? `TIN: ${data.customerTIN}<br>` : ''}
-  </div><br>` : ''}
+  </div>
+  <br>` : ''}
 
   ${data.items.map(item => `
   <div class="item">
@@ -516,7 +521,7 @@ class ReceiptPrinterService {
     ${data.discount ? `<div class="item"><div>Discount:</div><div>-${fmt(data.discount)}</div></div>` : ''}
     ${isVAT ? `
     <div class="item"><div>VATable Sales:</div><div>${fmt(vatableSales)}</div></div>
-    <div class="item"><div>${taxLabel} (${data.tax ? ((data.tax / (discountedSubtotal - vatAmount)) * 100).toFixed(0) : 0}%):</div><div>${fmt(vatAmount)}</div></div>
+    <div class="item"><div>${taxLabel} (${vatPct}%):</div><div>${fmt(vatAmount)}</div></div>
     <div class="item"><div>VAT-Exempt Sales:</div><div>${fmt(vatExemptSales)}</div></div>
     ` : `
     <div class="item"><div>VAT-Exempt Sales:</div><div>${fmt(discountedSubtotal)}</div></div>
@@ -530,7 +535,7 @@ class ReceiptPrinterService {
   <div class="footer">
     ${data.ptuNumber ? `<div>PTU No: ${data.ptuNumber}</div>` : ''}
     ${data.minNumber ? `<div>MIN: ${data.minNumber}</div>` : ''}
-    ${data.systemProvider ? `<div>Accredited By: ${data.systemProvider}</div>` : ''}
+    ${data.systemProvider ? `<div>Accredited System Provider: ${data.systemProvider}</div>` : ''}
     ${data.ptuDate ? `<div>Date Issued: ${data.ptuDate}</div>` : ''}
     <br>
     <div class="small">${isVAT ? 'THIS SERVES AS AN OFFICIAL RECEIPT' : 'THIS DOCUMENT IS NOT VALID FOR CLAIM OF INPUT TAX'}</div>

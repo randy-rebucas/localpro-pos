@@ -26,6 +26,8 @@ interface Product {
   price: number;
   stock: number;
   sku?: string;
+  barcode?: string;
+  image?: string;
   category?: string;
   pinned?: boolean;
   trackInventory?: boolean;
@@ -292,6 +294,18 @@ export default function ProductsPage() {
                 key={product._id}
                 className="group relative bg-white border border-gray-300 rounded-lg p-4 sm:p-5 hover:shadow-lg hover:border-blue-300 transition-all duration-200 flex flex-col"
               >
+                {/* Product Image */}
+                {product.image && (
+                  <div className="mb-3 -mx-4 -mt-4 sm:-mx-5 sm:-mt-5">
+                    <img
+                      src={product.image}
+                      alt={product.name}
+                      className="w-full h-36 object-cover rounded-t-lg"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  </div>
+                )}
+
                 {/* Header Section */}
                 <div className="flex-1 mb-4">
                   {/* Name and Pinned Indicator */}
@@ -319,6 +333,14 @@ export default function ProductsPage() {
                       <div className="flex items-center gap-1">
                         <span className="font-medium">{dict.products.sku}:</span>
                         <span>{product.sku}</span>
+                      </div>
+                    )}
+                    {product.barcode && (
+                      <div className="flex items-center gap-1">
+                        <svg className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h1v12H4V6zm2 0h1v12H6V6zm3 0h2v12H9V6zm3 0h1v12h-1V6zm2 0h2v12h-2V6zm3 0h1v12h-1V6z" />
+                        </svg>
+                        <span className="font-mono">{product.barcode}</span>
                       </div>
                     )}
                     {product.category && (
@@ -413,6 +435,22 @@ export default function ProductsPage() {
               >
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                   {/* Left Section */}
+                  <div className="flex gap-3 flex-1 min-w-0">
+                    {/* Thumbnail */}
+                    {product.image ? (
+                      <img
+                        src={product.image}
+                        alt={product.name}
+                        className="w-14 h-14 object-cover border border-gray-200 flex-shrink-0 self-start"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                      />
+                    ) : (
+                      <div className="w-14 h-14 bg-gray-100 border border-gray-200 flex-shrink-0 flex items-center justify-center self-start">
+                        <svg className="w-6 h-6 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                    )}
                   <div className="flex-1 min-w-0">
                     {/* Name and Pinned */}
                     <div className="flex items-start gap-2 mb-2">
@@ -441,6 +479,14 @@ export default function ProductsPage() {
                           <span>{product.sku}</span>
                         </div>
                       )}
+                      {product.barcode && (
+                        <div className="flex items-center gap-1 font-mono">
+                          <svg className="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m0 14v1M4.22 4.22l.707.707m12.728 12.728.707.707M1 12h1m20 0h1M4.22 19.778l.707-.707M18.95 5.05l.707-.707" />
+                          </svg>
+                          <span>{product.barcode}</span>
+                        </div>
+                      )}
                       {product.category && (
                         <div className="flex items-center gap-1">
                           <span className="flex items-center gap-1">
@@ -452,6 +498,7 @@ export default function ProductsPage() {
                         </div>
                       )}
                     </div>
+                  </div>
                   </div>
 
                   {/* Right Section */}

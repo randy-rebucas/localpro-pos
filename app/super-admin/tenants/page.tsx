@@ -134,6 +134,8 @@ export default function TenantsPage() {
   };
 
   const toggleActive = async (tenant: Tenant) => {
+    const action = tenant.isActive ? 'deactivate' : 'activate';
+    if (!confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} tenant "${tenant.name}"?`)) return;
     try {
       const res = await fetch(`/api/super-admin/tenants/${tenant.slug}`, {
         method: 'PUT',
