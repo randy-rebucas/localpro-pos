@@ -72,7 +72,6 @@ export default function Navbar() {
   // Base navigation items available to all authenticated users
   const baseNavItems: Array<{ href: string; key: string; featureFlag?: string }> = [
     { href: `/${tenant}/${lang}`, key: 'dashboard' },
-    { href: `/${tenant}/${lang}/pos`, key: 'pos' },
     { href: `/${tenant}/${lang}/products`, key: 'products' },
     { href: `/${tenant}/${lang}/transactions`, key: 'transactions' },
     { href: `/${tenant}/${lang}/reports`, key: 'reports' },
