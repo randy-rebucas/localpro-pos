@@ -20,6 +20,8 @@ interface CashDrawerSession {
   closingTime?: string;
   status: 'open' | 'closed';
   notes?: string;
+  totalVAT?: number;
+  totalDiscounts?: number;
   createdAt: string;
 }
 
@@ -34,34 +36,60 @@ export default function CashDrawerPage() {
   const [selectedSession, setSelectedSession] = useState<CashDrawerSession | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const { settings } = useTenantSettings(); // eslint-disable-line @typescript-eslint/no-unused-vars
 
    
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
+  }, [lang]);
+
+  useEffect(() => {
     fetchSessions();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lang, tenant, statusFilter]);
+  }, [tenant, statusFilter]);
 
   const fetchSessions = async () => {
     try {
-      let url = '/api/cash-drawer/sessions';
-      if (statusFilter) url += `?status=${statusFilter}`;
+      if (!tenant) {
+        setMessage({ type: 'error', text: 'Tenant not found' });
+        return;
+      }
+
+      let url = `/api/cash-drawer/sessions?tenant=${tenant}`;
+      if (statusFilter) url += `&status=${statusFilter}`;
       
       const res = await fetch(url, { credentials: 'include' });
       const data = await res.json();
+      
+      if (!res.ok) {
+        console.error('API Error:', { status: res.status, data });
+        setMessage({ type: 'error', text: data.error || `API Error: ${res.status}` });
+        setSessions([]);
+        return;
+      }
+
       if (data.success) {
-        setSessions(data.data);
+        setSessions(data.data || []);
         setMessage(null);
       } else {
+        console.error('API returned success: false', data);
         setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchCashDrawerSessions || 'Failed to fetch cash drawer sessions' });
+        setSessions([]);
       }
     } catch (error) {
       console.error('Error fetching cash drawer sessions:', error);
-      setMessage({ type: 'error', text: dict?.common?.failedToFetchCashDrawerSessions || 'Failed to fetch cash drawer sessions' });
+      setMessage({ type: 'error', text: `${dict?.common?.failedToFetchCashDrawerSessions || 'Failed to fetch cash drawer sessions'}: ${error instanceof Error ? error.message : 'Unknown error'}` });
+      setSessions([]);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    setLoading(true);
+    await fetchSessions();
   };
 
   if (!dict || loading) {
@@ -106,16 +134,30 @@ export default function CashDrawerPage() {
         )}
 
         <div className="bg-white border border-gray-300 p-6">
-          <div className="mb-4">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+          <div className="mb-4 flex gap-4 items-end">
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">{dict.admin?.filterByStatus || 'Filter by Status'}</label>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+              >
+                <option value="">{dict.admin?.allSessions || 'All Sessions'}</option>
+                <option value="open">{dict.admin?.openSessions || 'Open Sessions'}</option>
+                <option value="closed">{dict.admin?.closedSessions || 'Closed Sessions'}</option>
+              </select>
+            </div>
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-400 border border-blue-700 flex items-center gap-2 transition-colors"
+              title="Refresh cash drawer sessions"
             >
-              <option value="">{dict.admin?.allSessions || 'All Sessions'}</option>
-              <option value="open">{dict.admin?.openSessions || 'Open Sessions'}</option>
-              <option value="closed">{dict.admin?.closedSessions || 'Closed Sessions'}</option>
-            </select>
+              <svg className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.5a11 11 0 0120 0v-5m0 0a11 11 0 0120 5V9m-11 11a11 11 0 0120 0v5m0 0a11 11 0 01-20 0v-5m0 0a11 11 0 01-20 0" />
+              </svg>
+              {refreshing ? (dict.common?.loading || 'Loading...') : (dict.common?.refresh || 'Refresh')}
+            </button>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -272,6 +314,18 @@ function CashDrawerDetailModal({
                 <div className="flex justify-between">
                   <span className="text-gray-600">Expected Amount:</span>
                   <span className="font-medium"><Currency amount={session.expectedAmount} /></span>
+                </div>
+              )}
+              {session.totalDiscounts !== undefined && session.totalDiscounts > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Total Discounts:</span>
+                  <span className="font-semibold text-green-600">-<Currency amount={session.totalDiscounts} /></span>
+                </div>
+              )}
+              {session.totalVAT !== undefined && session.totalVAT > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Total VAT:</span>
+                  <span className="font-medium"><Currency amount={session.totalVAT} /></span>
                 </div>
               )}
               {session.closingAmount !== undefined && (

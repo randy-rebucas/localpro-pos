@@ -84,6 +84,8 @@ export default function Dashboard() {
   const [cartName, setCartName] = useState('');
   const [applyingDiscount, setApplyingDiscount] = useState(false);
   const [lookingUpRefund, setLookingUpRefund] = useState(false);
+  const [sessionId, setSessionId] = useState<string>('');
+  const [customerDisplayUrl, setCustomerDisplayUrl] = useState<string>('');
   const { confirm, Dialog: confirmDialog } = useConfirm();
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -155,6 +157,89 @@ export default function Dashboard() {
       }
     }
   }, [settings, tenant]);
+
+  // Initialize dual-screen terminal session
+  useEffect(() => {
+    const initSession = async () => {
+      const id = 'session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+      setSessionId(id);
+
+      // Initialize session on API
+      await fetch(`/api/pos/session/${id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenant,
+          action: 'init',
+          data: {
+            cart: [],
+            subtotal: 0,
+            discount: null,
+            taxAmount: 0,
+            taxRate: settings?.taxRate || 0,
+            taxLabel: settings?.taxLabel || 'Tax',
+            tip: 0,
+            total: 0,
+          },
+        }),
+      }).catch((err) => {
+        console.error('Failed to init session:', err);
+      });
+
+      const baseUrl = window.location.origin;
+      const displayUrl = `${baseUrl}/${tenant}/${lang}/customer-display?session=${id}`;
+      setCustomerDisplayUrl(displayUrl);
+    };
+
+    initSession();
+  }, [tenant, lang]);
+
+  // Sync cart to customer display
+  const syncToCustomerDisplay = useCallback(
+    async (cartItems?: CartItem[], discount?: any, tip?: number) => {
+      if (!sessionId) return;
+
+      try {
+        const items = cartItems || cart;
+        const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+        const discountAmount = discount?.amount || appliedDiscount?.amount || 0;
+        const taxableBase = Math.max(0, subtotal - discountAmount);
+        const taxAmount = settings?.taxEnabled && settings?.taxRate ? (taxableBase * (settings.taxRate / 100)) : 0;
+        const tipAmount = tip ?? 0;
+        const total = taxableBase + taxAmount + tipAmount;
+
+        await fetch(`/api/pos/session/${sessionId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tenant,
+            action: 'update-cart',
+            data: {
+              cart: items.map((item) => ({
+                productId: item.productId,
+                name: item.name,
+                price: item.price,
+                quantity: item.quantity,
+              })),
+              subtotal,
+              taxAmount: Math.round(taxAmount * 100) / 100,
+              taxRate: settings?.taxRate || 0,
+              taxLabel: settings?.taxLabel || 'Tax',
+              total: Math.round(total * 100) / 100,
+            },
+          }),
+        }).catch((err) => console.error('Failed to sync cart:', err));
+      } catch (error) {
+        console.error('Sync error:', error);
+      }
+    },
+    [sessionId, cart, appliedDiscount, tenant, settings]
+  );
+
+  // Sync cart whenever it changes
+  useEffect(() => {
+    syncToCustomerDisplay();
+  }, [cart, syncToCustomerDisplay]);
 
   // Refocus search box whenever any modal closes
   useEffect(() => {
@@ -373,11 +458,37 @@ export default function Dashboard() {
 
         const data = await res.json();
         if (data.success) {
-          setAppliedDiscount({
+          const discount = {
             code: data.data.code,
             amount: data.data.discountAmount,
             name: data.data.name,
-          });
+          };
+          setAppliedDiscount(discount);
+          
+          // Sync discount to customer display
+          if (sessionId) {
+            const subtotal = getSubtotal();
+            const afterDiscount = subtotal - discount.amount;
+            const taxableBase = Math.max(0, afterDiscount);
+            const taxAmount = settings?.taxEnabled && settings?.taxRate 
+              ? Math.round(taxableBase * (settings.taxRate / 100) * 100) / 100
+              : 0;
+            const total = afterDiscount + taxAmount;
+            fetch(`/api/pos/session/${sessionId}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                tenant,
+                action: 'update-discount',
+                data: { 
+                  discount, 
+                  taxAmount,
+                  total 
+                },
+              }),
+            }).catch((err) => console.error('Failed to sync discount:', err));
+          }
+          
           setPromoCode('');
           showToast.success(dict.pos.discountApplied || 'Discount applied successfully');
           return;
@@ -419,11 +530,37 @@ export default function Dashboard() {
           discountAmount = cachedDiscount.value;
         }
 
-        setAppliedDiscount({
+        const discount = {
           code: cachedDiscount.code,
           amount: Math.round(discountAmount * 100) / 100,
           name: cachedDiscount.name,
-        });
+        };
+
+        setAppliedDiscount(discount);
+        
+        // Sync discount to customer display
+        if (sessionId) {
+          const afterDiscount = subtotal - discount.amount;
+          const taxableBase = Math.max(0, afterDiscount);
+          const taxAmount = settings?.taxEnabled && settings?.taxRate 
+            ? Math.round(taxableBase * (settings.taxRate / 100) * 100) / 100
+            : 0;
+          const total = afterDiscount + taxAmount;
+          fetch(`/api/pos/session/${sessionId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tenant,
+              action: 'update-discount',
+              data: { 
+                discount, 
+                taxAmount,
+                total 
+              },
+            }),
+          }).catch((err) => console.error('Failed to sync discount:', err));
+        }
+        
         setPromoCode('');
         showToast.success((dict.pos.discountApplied || 'Discount applied') + ' (offline)');
       } else {
@@ -440,6 +577,28 @@ export default function Dashboard() {
   const removeDiscount = () => {
     setAppliedDiscount(null);
     setPromoCode('');
+    
+    // Sync removal to customer display - recalculate with tax
+    if (sessionId) {
+      const subtotal = getSubtotal();
+      const taxAmount = settings?.taxEnabled && settings?.taxRate 
+        ? Math.round(subtotal * (settings.taxRate / 100) * 100) / 100
+        : 0;
+      const total = subtotal + taxAmount;
+      fetch(`/api/pos/session/${sessionId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenant,
+          action: 'update-discount',
+          data: { 
+            discount: null,
+            taxAmount,
+            total,
+          },
+        }),
+      }).catch((err) => console.error('Failed to sync discount removal:', err));
+    }
   };
 
   const lookupTransaction = async () => {
@@ -661,6 +820,32 @@ export default function Dashboard() {
         : `${dict.pos.transactionSavedOffline || 'Transaction saved offline'} ${totalFormatted}. ${dict.pos.willSyncWhenOnline || 'Will sync when connection is restored.'}`;
       
       showToast.success(message);
+      
+      // Sync payment completion to customer display
+      if (sessionId) {
+        fetch(`/api/pos/session/${sessionId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tenant,
+            action: 'update-payment-status',
+            data: { status: 'completed' },
+          }),
+        }).catch((err) => console.error('Failed to update session:', err));
+        
+        // Clear session after a delay to let customer display show thank you screen
+        setTimeout(() => {
+          fetch(`/api/pos/session/${sessionId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tenant,
+              action: 'clear',
+            }),
+          }).catch((err) => console.error('Failed to clear session:', err));
+        }, 3000); // 3 second delay for customer to see thank you message
+      }
+      
       setCart([]);
       setShowPaymentModal(false);
       setCashReceived('');
@@ -975,7 +1160,7 @@ export default function Dashboard() {
                     </span>
                   )}
                 </h2>
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-2.5">
                   {cart.length > 0 && (
                     <>
                       <button
@@ -1010,6 +1195,17 @@ export default function Dashboard() {
                       <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                     </svg>
                   </button>
+                  {customerDisplayUrl && (
+                    <button
+                      onClick={() => window.open(customerDisplayUrl, 'customer_display', 'width=1024,height=768')}
+                      className="px-4 py-3 bg-purple-600 text-white hover:bg-purple-700 transition-colors border border-purple-700"
+                      title="Open Customer Display"
+                    >
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -1036,7 +1232,7 @@ export default function Dashboard() {
                           </div>
                           <button
                             onClick={() => removeFromCart(item.productId)}
-                            className="p-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors flex-shrink-0"
+                            className="p-2.5 text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors flex-shrink-0"
                             aria-label={dict?.pos?.removeItem || 'Remove item'}
                           >
                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1112,7 +1308,29 @@ export default function Dashboard() {
                                 }
 
                                 if (data.success) {
-                                  setAppliedDiscount({ code: data.data.code, amount: data.data.discountAmount, name: data.data.name });
+                                  const discount = { code: data.data.code, amount: data.data.discountAmount, name: data.data.name };
+                                  setAppliedDiscount(discount);
+                                  
+                                  // Sync to customer display with tax
+                                  if (sessionId) {
+                                    const subtotal = getSubtotal();
+                                    const afterDiscount = subtotal - discount.amount;
+                                    const taxableBase = Math.max(0, afterDiscount);
+                                    const taxAmount = settings?.taxEnabled && settings?.taxRate 
+                                      ? Math.round(taxableBase * (settings.taxRate / 100) * 100) / 100
+                                      : 0;
+                                    const total = afterDiscount + taxAmount;
+                                    fetch(`/api/pos/session/${sessionId}`, {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({
+                                        tenant,
+                                        action: 'update-discount',
+                                        data: { discount, taxAmount, total },
+                                      }),
+                                    }).catch((err) => console.error('Failed to sync discount:', err));
+                                  }
+                                  
                                   setPromoCode('');
                                   showToast.success(dict.pos.discountApplied || 'Discount applied');
                                 } else {
@@ -1125,7 +1343,7 @@ export default function Dashboard() {
                               }
                             }}
                             disabled={applyingDiscount || cart.length === 0}
-                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold border-2 border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:border-blue-300 transition-colors disabled:opacity-50"
+                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-semibold border-2 border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:border-blue-300 transition-colors disabled:opacity-50"
                           >
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
@@ -1157,7 +1375,29 @@ export default function Dashboard() {
                                 }
 
                                 if (data.success) {
-                                  setAppliedDiscount({ code: data.data.code, amount: data.data.discountAmount, name: data.data.name });
+                                  const discount = { code: data.data.code, amount: data.data.discountAmount, name: data.data.name };
+                                  setAppliedDiscount(discount);
+                                  
+                                  // Sync to customer display with tax
+                                  if (sessionId) {
+                                    const subtotal = getSubtotal();
+                                    const afterDiscount = subtotal - discount.amount;
+                                    const taxableBase = Math.max(0, afterDiscount);
+                                    const taxAmount = settings?.taxEnabled && settings?.taxRate 
+                                      ? Math.round(taxableBase * (settings.taxRate / 100) * 100) / 100
+                                      : 0;
+                                    const total = afterDiscount + taxAmount;
+                                    fetch(`/api/pos/session/${sessionId}`, {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({
+                                        tenant,
+                                        action: 'update-discount',
+                                        data: { discount, taxAmount, total },
+                                      }),
+                                    }).catch((err) => console.error('Failed to sync discount:', err));
+                                  }
+                                  
                                   setPromoCode('');
                                   showToast.success(dict.pos.discountApplied || 'Discount applied');
                                 } else {
@@ -1170,7 +1410,7 @@ export default function Dashboard() {
                               }
                             }}
                             disabled={applyingDiscount || cart.length === 0}
-                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold border-2 border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 hover:border-purple-300 transition-colors disabled:opacity-50"
+                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-semibold border-2 border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 hover:border-purple-300 transition-colors disabled:opacity-50"
                           >
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
@@ -1273,7 +1513,7 @@ export default function Dashboard() {
                       type="button"
                       onClick={handleCheckout}
                       disabled={processing}
-                      className="w-full bg-blue-600 text-white py-4 font-bold hover:bg-blue-700 active:bg-blue-800 transition-all duration-200 text-lg border border-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      className="w-full bg-green-600 text-white py-4 font-bold hover:bg-green-700 active:bg-green-800 transition-all duration-200 text-lg border border-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                       {processing ? (
                         <>
@@ -1383,7 +1623,7 @@ export default function Dashboard() {
                         e.preventDefault();
                         handleTogglePin(product._id, product.pinned || false);
                       }}
-                      className={`absolute top-2 right-2 z-10 p-1.5 transition-all duration-200 flex items-center justify-center border shadow-sm ${
+                      className={`absolute top-2 right-2 z-10 p-2.5 transition-all duration-200 flex items-center justify-center border shadow-sm ${
                         product.pinned
                           ? 'bg-amber-50 hover:bg-amber-100 text-amber-600 border-amber-300'
                           : 'bg-white/80 hover:bg-white text-gray-400 hover:text-gray-600 border-gray-300 backdrop-blur-sm'
@@ -1701,12 +1941,12 @@ export default function Dashboard() {
                                 const val = Math.max(0, Math.min(maxQty, parseInt(e.target.value) || 0));
                                 setRefundItems({ ...refundItems, [productId]: val });
                               }}
-                              className="w-16 px-2 py-1 text-center border border-gray-300"
+                              className="w-16 px-2 py-2 text-center border border-gray-300"
                             />
                             <button
                               type="button"
                               onClick={() => setRefundItems({ ...refundItems, [productId]: Math.min(maxQty, currentQty + 1) })}
-                              className="px-3 py-1 border border-gray-300 hover:bg-gray-100"
+                              className="px-3 py-2 border border-gray-300 hover:bg-gray-100"
                             >
                               +
                             </button>
