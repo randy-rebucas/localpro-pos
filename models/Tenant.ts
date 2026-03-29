@@ -53,6 +53,12 @@ export interface ITenantSettings {
   taxId?: string; // Tax ID or EIN
   registrationNumber?: string;
 
+  // Restaurant Configuration
+  restaurantConfig?: {
+    tableCount: number;    // number of tables on the floor (default 10)
+    sections?: string[];   // optional section labels e.g. ['Indoor', 'Outdoor', 'Bar']
+  };
+
   // BIR Compliance Settings
   birTin?: string; // PH Tax Identification Number, format: NNN-NNN-NNN-NNN
   birPtuNumber?: string; // Permit to Use number, e.g. "POS-0001-2024"
@@ -369,6 +375,12 @@ const TenantSchema: Schema = new Schema(
       businessType: String,
       taxId: String,
       registrationNumber: String,
+
+      // Restaurant Configuration
+      restaurantConfig: {
+        tableCount: { type: Number, default: 10, min: 1, max: 200 },
+        sections: [String],
+      },
 
       // BIR Compliance Settings
       birTin: {

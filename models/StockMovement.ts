@@ -32,6 +32,7 @@ const StockMovementSchema: Schema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'Tenant',
       required: [true, 'Tenant is required'],
+      index: true,
     },
     branchId: {
       type: Schema.Types.ObjectId,

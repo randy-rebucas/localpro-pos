@@ -19,6 +19,7 @@ const AuditLogSchema: Schema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'Tenant',
       required: [true, 'Tenant is required'],
+      index: true,
     },
     userId: {
       type: Schema.Types.ObjectId,

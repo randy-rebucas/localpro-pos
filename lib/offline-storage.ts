@@ -13,8 +13,12 @@ interface OfflineTransaction {
     productId: string;
     quantity: number;
   }>;
-  paymentMethod: 'cash' | 'card' | 'digital';
+  paymentMethod: 'cash' | 'card' | 'tap_to_pay' | 'digital_wallet' | 'qr_code' | 'bnpl' | 'digital';
   cashReceived?: number;
+  paymentProvider?: string;
+  paymentReference?: string;
+  bnplProvider?: string;
+  installmentTerms?: string;
   discountCode?: string;
   timestamp: number;
   synced: boolean;

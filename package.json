@@ -23,7 +23,8 @@
     "test:coverage": "vitest run --coverage",
     "test:alignment": "tsx scripts/check-alignment.ts",
     "security:audit": "npm audit --omit=dev && echo '--- Full audit (including dev) ---' && npm audit",
-    "tenant:set-plan": "tsx scripts/set-tenant-plan.ts"
+    "tenant:set-plan": "tsx scripts/set-tenant-plan.ts",
+    "cli": "tsx scripts/cli.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1014.0",

@@ -7,10 +7,14 @@ export interface IPaymentDetails {
   cardBrand?: string;
   // Digital payment details
   transactionId?: string;
-  provider?: string; // e.g., 'stripe', 'paypal', 'square'
+  provider?: string; // e.g., 'gcash', 'maya', 'apple_pay', 'google_pay'
+  referenceNumber?: string;
   // Cash payment details
   cashReceived?: number;
   change?: number;
+  // BNPL details
+  bnplProvider?: string; // e.g., 'ggives', 'billease', 'akulaku'
+  installmentTerms?: number; // months
   // Other payment details
   checkNumber?: string;
   notes?: string;
@@ -19,7 +23,7 @@ export interface IPaymentDetails {
 export interface IPayment extends Document {
   tenantId: mongoose.Types.ObjectId;
   transactionId: mongoose.Types.ObjectId; // Reference to Order/Ticket
-  method: 'cash' | 'card' | 'digital' | 'check' | 'other';
+  method: 'cash' | 'card' | 'tap_to_pay' | 'digital_wallet' | 'qr_code' | 'bnpl' | 'digital' | 'check' | 'other';
   amount: number;
   status: 'pending' | 'completed' | 'failed' | 'refunded';
   details?: IPaymentDetails;
@@ -38,8 +42,11 @@ const PaymentDetailsSchema: Schema = new Schema({
   cardBrand: String,
   transactionId: String,
   provider: String,
+  referenceNumber: String,
   cashReceived: Number,
   change: Number,
+  bnplProvider: String,
+  installmentTerms: Number,
   checkNumber: String,
   notes: String,
 }, { _id: false });
@@ -50,6 +57,7 @@ const PaymentSchema: Schema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'Tenant',
       required: [true, 'Tenant ID is required'],
+      index: true,
     },
     transactionId: {
       type: Schema.Types.ObjectId,
@@ -59,7 +67,7 @@ const PaymentSchema: Schema = new Schema(
     },
     method: {
       type: String,
-      enum: ['cash', 'card', 'digital', 'check', 'other'],
+      enum: ['cash', 'card', 'tap_to_pay', 'digital_wallet', 'qr_code', 'bnpl', 'digital', 'check', 'other'],
       required: [true, 'Payment method is required'],
     },
     amount: {

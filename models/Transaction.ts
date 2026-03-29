@@ -19,7 +19,7 @@ export interface ITransaction extends Document {
   taxExemptAmount?: number; // Amount exempt from VAT (BIR)
   taxAmount?: number; // Calculated tax amount
   total: number; // Total after discount and tax
-  paymentMethod: 'cash' | 'card' | 'digital';
+  paymentMethod: 'cash' | 'card' | 'tap_to_pay' | 'digital_wallet' | 'qr_code' | 'bnpl' | 'digital';
   cashReceived?: number;
   change?: number;
   status: 'completed' | 'cancelled' | 'refunded';
@@ -65,6 +65,7 @@ const TransactionSchema: Schema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'Tenant',
       required: [true, 'Tenant ID is required'],
+      index: true,
     },
     branchId: {
       type: Schema.Types.ObjectId,
@@ -110,7 +111,7 @@ const TransactionSchema: Schema = new Schema(
     },
     paymentMethod: {
       type: String,
-      enum: ['cash', 'card', 'digital'],
+      enum: ['cash', 'card', 'tap_to_pay', 'digital_wallet', 'qr_code', 'bnpl', 'digital'],
       required: true,
     },
     cashReceived: {

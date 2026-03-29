@@ -36,15 +36,18 @@ interface TransactionItemInput {
 }
 
 interface PaymentInput {
-  method: 'cash' | 'card' | 'digital' | 'check' | 'other';
+  method: 'cash' | 'card' | 'tap_to_pay' | 'digital_wallet' | 'qr_code' | 'bnpl' | 'digital' | 'check' | 'other';
   amount: number;
   cashReceived?: number;
   change?: number;
   provider?: string;
+  referenceNumber?: string;
   transactionId?: string;
   cardLast4?: string;
   cardType?: string;
   cardBrand?: string;
+  bnplProvider?: string;
+  installmentTerms?: number;
   checkNumber?: string;
   notes?: string;
 }
@@ -53,6 +56,10 @@ interface TransactionInput {
   items: TransactionItemInput[];
   paymentMethod: string;
   cashReceived?: number;
+  paymentProvider?: string;
+  paymentReference?: string;
+  bnplProvider?: string;
+  installmentTerms?: number;
   notes?: string;
   discountCode?: string;
   branchId?: string;
@@ -712,7 +719,7 @@ export async function POST(request: NextRequest) {
             const [paymentRecord] = await Payment.create([{
               tenantId,
               transactionId: transaction._id,
-              method: payment.method as 'cash' | 'card' | 'digital' | 'check' | 'other',
+              method: payment.method as 'cash' | 'card' | 'tap_to_pay' | 'digital_wallet' | 'qr_code' | 'bnpl' | 'digital' | 'check' | 'other',
               amount: payment.amount,
               status: 'completed',
               details: Object.keys(paymentDetails).length > 0 ? paymentDetails : undefined,
@@ -726,18 +733,33 @@ export async function POST(request: NextRequest) {
           if (finalPaymentMethod === 'cash') {
             paymentDetails.cashReceived = finalCashReceived;
             paymentDetails.change = finalChange;
-          } else if (finalPaymentMethod === 'card' || finalPaymentMethod === 'digital') {
-            paymentDetails.provider = body.paymentProvider;
-            paymentDetails.transactionId = body.paymentTransactionId;
+          } else if (finalPaymentMethod === 'card') {
             paymentDetails.cardLast4 = body.cardLast4;
             paymentDetails.cardType = body.cardType;
             paymentDetails.cardBrand = body.cardBrand;
+            if (body.paymentReference) paymentDetails.referenceNumber = body.paymentReference;
+          } else if (finalPaymentMethod === 'tap_to_pay') {
+            paymentDetails.provider = body.paymentProvider;
+            if (body.paymentReference) paymentDetails.referenceNumber = body.paymentReference;
+          } else if (finalPaymentMethod === 'digital_wallet') {
+            paymentDetails.provider = body.paymentProvider;
+            if (body.paymentReference) paymentDetails.referenceNumber = body.paymentReference;
+          } else if (finalPaymentMethod === 'qr_code') {
+            paymentDetails.provider = body.paymentProvider;
+            if (body.paymentReference) paymentDetails.referenceNumber = body.paymentReference;
+          } else if (finalPaymentMethod === 'bnpl') {
+            paymentDetails.bnplProvider = body.bnplProvider;
+            if (body.installmentTerms) paymentDetails.installmentTerms = body.installmentTerms;
+            if (body.paymentReference) paymentDetails.referenceNumber = body.paymentReference;
+          } else if (finalPaymentMethod === 'digital') {
+            paymentDetails.provider = body.paymentProvider;
+            paymentDetails.transactionId = body.paymentTransactionId;
           }
 
           const [paymentRecord] = await Payment.create([{
             tenantId,
             transactionId: transaction._id,
-            method: finalPaymentMethod as 'cash' | 'card' | 'digital' | 'check' | 'other',
+            method: finalPaymentMethod as 'cash' | 'card' | 'tap_to_pay' | 'digital_wallet' | 'qr_code' | 'bnpl' | 'digital' | 'check' | 'other',
             amount: total,
             status: 'completed',
             details: Object.keys(paymentDetails).length > 0 ? paymentDetails : undefined,

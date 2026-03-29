@@ -129,6 +129,10 @@ export async function getSalesReport(
   const salesByPaymentMethod = {
     cash: transactions.filter(t => t.paymentMethod === 'cash').reduce((sum, t) => sum + t.total, 0),
     card: transactions.filter(t => t.paymentMethod === 'card').reduce((sum, t) => sum + t.total, 0),
+    tap_to_pay: transactions.filter(t => t.paymentMethod === 'tap_to_pay').reduce((sum, t) => sum + t.total, 0),
+    digital_wallet: transactions.filter(t => t.paymentMethod === 'digital_wallet').reduce((sum, t) => sum + t.total, 0),
+    qr_code: transactions.filter(t => t.paymentMethod === 'qr_code').reduce((sum, t) => sum + t.total, 0),
+    bnpl: transactions.filter(t => t.paymentMethod === 'bnpl').reduce((sum, t) => sum + t.total, 0),
     digital: transactions.filter(t => t.paymentMethod === 'digital').reduce((sum, t) => sum + t.total, 0),
   };
 
@@ -302,6 +306,10 @@ export async function getProfitLossSummary(
     total: transactions.reduce((sum, t) => sum + t.total, 0),
     cash: transactions.filter(t => t.paymentMethod === 'cash').reduce((sum, t) => sum + t.total, 0),
     card: transactions.filter(t => t.paymentMethod === 'card').reduce((sum, t) => sum + t.total, 0),
+    tap_to_pay: transactions.filter(t => t.paymentMethod === 'tap_to_pay').reduce((sum, t) => sum + t.total, 0),
+    digital_wallet: transactions.filter(t => t.paymentMethod === 'digital_wallet').reduce((sum, t) => sum + t.total, 0),
+    qr_code: transactions.filter(t => t.paymentMethod === 'qr_code').reduce((sum, t) => sum + t.total, 0),
+    bnpl: transactions.filter(t => t.paymentMethod === 'bnpl').reduce((sum, t) => sum + t.total, 0),
     digital: transactions.filter(t => t.paymentMethod === 'digital').reduce((sum, t) => sum + t.total, 0),
   };
 

@@ -12,6 +12,22 @@ type USBDevice = any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SerialPort = any;
 
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  cash: 'Cash',
+  card: 'Card',
+  tap_to_pay: 'Tap to Pay',
+  digital_wallet: 'e-Wallet',
+  qr_code: 'QR Code',
+  bnpl: 'Buy Now Pay Later',
+  digital: 'Digital',
+  check: 'Check',
+  other: 'Other',
+};
+
+function formatPaymentMethod(method: string): string {
+  return PAYMENT_METHOD_LABELS[method] ?? method.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
 export interface PrinterConfig {
   type: 'usb' | 'serial' | 'network' | 'browser';
   /** Profile id from PRINTER_PROFILES (e.g. 'custom-psd200i'). When set,
@@ -313,7 +329,7 @@ class ReceiptPrinterService {
       commands.push(this.setBold(false));
       commands.push(this.encodeText(line));
       commands.push(this.setAlign('left'));
-      commands.push(this.encodeText(`Payment: ${data.paymentMethod.toUpperCase()}\n`));
+      commands.push(this.encodeText(`Payment: ${formatPaymentMethod(data.paymentMethod)}\n`));
       if (data.cashReceived) commands.push(this.encodeText(`Cash:     ${fmt(data.cashReceived)}\n`));
       if (data.change) commands.push(this.encodeText(`Change:   ${fmt(data.change)}\n`));
 
@@ -527,7 +543,7 @@ class ReceiptPrinterService {
     <div class="item"><div>VAT-Exempt Sales:</div><div>${fmt(discountedSubtotal)}</div></div>
     `}
     <div class="item"><div><strong>TOTAL:</strong></div><div>${fmt(data.total)}</div></div>
-    <div class="item"><div>Payment:</div><div>${data.paymentMethod.toUpperCase()}</div></div>
+    <div class="item"><div>Payment:</div><div>${formatPaymentMethod(data.paymentMethod)}</div></div>
     ${data.cashReceived ? `<div class="item"><div>Cash:</div><div>${fmt(data.cashReceived)}</div></div>` : ''}
     ${data.change ? `<div class="item"><div>Change:</div><div>${fmt(data.change)}</div></div>` : ''}
   </div>

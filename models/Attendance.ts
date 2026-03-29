@@ -31,6 +31,7 @@ const AttendanceSchema: Schema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'Tenant',
       required: [true, 'Tenant ID is required'],
+      index: true,
     },
     clockIn: {
       type: Date,

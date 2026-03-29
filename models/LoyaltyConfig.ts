@@ -14,6 +14,7 @@ const LoyaltyConfigSchema: Schema = new Schema(
   {
     tenantId: {
       type: Schema.Types.ObjectId,
+      ref: 'Tenant',
       required: [true, 'Tenant ID is required'],
       unique: true,
     },
@@ -42,7 +43,6 @@ const LoyaltyConfigSchema: Schema = new Schema(
   }
 );
 
-LoyaltyConfigSchema.index({ tenantId: 1 });
 
 const LoyaltyConfig: Model<ILoyaltyConfig> =
   mongoose.models.LoyaltyConfig ||

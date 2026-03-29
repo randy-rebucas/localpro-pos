@@ -129,7 +129,7 @@ export function validateTransaction(data: Record<string, unknown>, t?: Translati
     }
   });
   const paymentMethod = typeof data.paymentMethod === 'string' ? data.paymentMethod : '';
-  if (!paymentMethod || !['cash', 'card', 'digital'].includes(paymentMethod)) {
+  if (!paymentMethod || !['cash', 'card', 'tap_to_pay', 'digital_wallet', 'qr_code', 'bnpl', 'digital'].includes(paymentMethod)) {
     errors.push({ field: 'paymentMethod', message: translate('validation.paymentMethodRequired', 'Valid payment method is required'), code: 'paymentMethodRequired' });
   }
   if (paymentMethod === 'cash') {

@@ -20,7 +20,9 @@ const LoyaltyTransactionSchema: Schema = new Schema(
   {
     tenantId: {
       type: Schema.Types.ObjectId,
+      ref: 'Tenant',
       required: [true, 'Tenant ID is required'],
+      index: true,
     },
     customerId: {
       type: Schema.Types.ObjectId,

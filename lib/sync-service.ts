@@ -102,19 +102,24 @@ class SyncService {
 
         // Non-retryable errors (validation failures, etc.)
         if (response.status >= 400 && response.status < 500) {
-          await storage.markTransactionError(transaction.id, data.error || 'Validation error');
+          const errMsg = data.error || 'Validation error';
+          console.error(`[SyncService] Non-retryable error for tx ${transaction.id} (attempt ${attempt + 1}):`, errMsg, 'status:', response.status);
+          await storage.markTransactionError(transaction.id, errMsg);
           return false;
         }
 
         // Server error — retry
+        console.warn(`[SyncService] Server error for tx ${transaction.id} (attempt ${attempt + 1}/${MAX_RETRIES}), status:`, response.status);
         if (attempt < MAX_RETRIES - 1) {
           await this.delay(BASE_DELAY_MS * Math.pow(2, attempt));
         }
-      } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+      } catch (error: unknown) {
+        const errMsg = error instanceof Error ? error.message : 'Network error';
+        console.error(`[SyncService] Network error for tx ${transaction.id} (attempt ${attempt + 1}/${MAX_RETRIES}):`, error);
         if (attempt < MAX_RETRIES - 1) {
           await this.delay(BASE_DELAY_MS * Math.pow(2, attempt));
         } else {
-          await storage.markTransactionError(transaction.id, error.message || 'Network error');
+          await storage.markTransactionError(transaction.id, errMsg);
           return false;
         }
       }
