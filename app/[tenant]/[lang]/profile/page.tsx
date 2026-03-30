@@ -6,6 +6,8 @@ import ProtectedRoute from '@/components/ProtectedRoute'; // eslint-disable-line
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '../dictionaries-client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { getDefaultTenantSettings } from '@/lib/currency';
 import QRCodeDisplay from '@/components/QRCodeDisplay';
 
 export default function ProfilePage() {
@@ -13,6 +15,8 @@ export default function ProfilePage() {
   const tenant = params.tenant as string; // eslint-disable-line @typescript-eslint/no-unused-vars
   const lang = params.lang as 'en' | 'es';
   const { user } = useAuth(); // eslint-disable-line @typescript-eslint/no-unused-vars
+  const { settings } = useTenantSettings();
+  const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#3b82f6';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [profileData, setProfileData] = useState({
     name: '',
@@ -158,7 +162,7 @@ export default function ProfilePage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="inline-block animate-spin h-8 w-8 border-b-2" style={{ borderBottomColor: primaryColor }}></div>
           <p className="mt-4 text-gray-600">Loading profile...</p>
         </div>
       </div>
@@ -206,8 +210,16 @@ export default function ProfilePage() {
                       value={profileData.name}
                       onChange={(e) => setProfileData({ ...profileData, name: e.target.value })}
                       required
-                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                      className="w-full px-4 py-3 border-2 border-gray-300 transition-all bg-white"
                       placeholder={dict?.profile?.namePlaceholder || 'Enter your full name'}
+                      onFocus={(e) => {
+                        e.currentTarget.style.borderColor = primaryColor;
+                        e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                      }}
+                      onBlur={(e) => {
+                        e.currentTarget.style.borderColor = '#d1d5db';
+                        e.currentTarget.style.boxShadow = 'none';
+                      }}
                     />
                   </div>
                   <div>
@@ -219,8 +231,16 @@ export default function ProfilePage() {
                       value={profileData.email}
                       onChange={(e) => setProfileData({ ...profileData, email: e.target.value })}
                       required
-                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                      className="w-full px-4 py-3 border-2 border-gray-300 transition-all bg-white"
                       placeholder={dict?.profile?.emailPlaceholder || 'Enter your email'}
+                      onFocus={(e) => {
+                        e.currentTarget.style.borderColor = primaryColor;
+                        e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                      }}
+                      onBlur={(e) => {
+                        e.currentTarget.style.borderColor = '#d1d5db';
+                        e.currentTarget.style.boxShadow = 'none';
+                      }}
                     />
                   </div>
                 </div>
@@ -250,7 +270,16 @@ export default function ProfilePage() {
                   <button
                     type="submit"
                     disabled={saving}
-                    className="px-6 py-3 bg-blue-600 text-white hover:bg-blue-700 font-semibold transition-all duration-200 border border-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
+                    className="px-6 py-3 text-white font-semibold transition-all duration-200 border disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    onMouseEnter={(e) => {
+                      const elem = e.currentTarget as HTMLButtonElement;
+                      elem.style.backgroundColor = `${primaryColor}dd`;
+                    }}
+                    onMouseLeave={(e) => {
+                      const elem = e.currentTarget as HTMLButtonElement;
+                      elem.style.backgroundColor = primaryColor;
+                    }}
                   >
                     {saving ? (
                       <>
@@ -278,7 +307,16 @@ export default function ProfilePage() {
                 </h2>
                 <button
                   onClick={() => setShowPasswordSection(!showPasswordSection)}
-                  className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors border border-blue-300"
+                  style={{ color: primaryColor, backgroundColor: `${primaryColor}10`, borderColor: `${primaryColor}80` }}
+                  className="px-4 py-2 text-sm font-medium transition-colors border"
+                  onMouseEnter={(e) => {
+                    const elem = e.currentTarget as HTMLButtonElement;
+                    elem.style.backgroundColor = `${primaryColor}20`;
+                  }}
+                  onMouseLeave={(e) => {
+                    const elem = e.currentTarget as HTMLButtonElement;
+                    elem.style.backgroundColor = `${primaryColor}10`;
+                  }}
                 >
                   {showPasswordSection ? 'Cancel' : 'Change Password'}
                 </button>
@@ -296,8 +334,16 @@ export default function ProfilePage() {
                         value={passwordData.currentPassword}
                         onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
                         required
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                        className="w-full px-4 py-3 border-2 border-gray-300 transition-all bg-white"
                         placeholder={dict?.profile?.currentPasswordPlaceholder || 'Enter current password'}
+                        onFocus={(e) => {
+                          e.currentTarget.style.borderColor = primaryColor;
+                          e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                        }}
+                        onBlur={(e) => {
+                          e.currentTarget.style.borderColor = '#d1d5db';
+                          e.currentTarget.style.boxShadow = 'none';
+                        }}
                       />
                     </div>
                     <div>
@@ -310,8 +356,16 @@ export default function ProfilePage() {
                         onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
                         required
                         minLength={8}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                        className="w-full px-4 py-3 border-2 border-gray-300 transition-all bg-white"
                         placeholder={dict?.profile?.newPasswordPlaceholder || 'Enter new password (min 8 chars)'}
+                        onFocus={(e) => {
+                          e.currentTarget.style.borderColor = primaryColor;
+                          e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                        }}
+                        onBlur={(e) => {
+                          e.currentTarget.style.borderColor = '#d1d5db';
+                          e.currentTarget.style.boxShadow = 'none';
+                        }}
                       />
                     </div>
                     <div>
@@ -324,8 +378,16 @@ export default function ProfilePage() {
                         onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
                         required
                         minLength={8}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                        className="w-full px-4 py-3 border-2 border-gray-300 transition-all bg-white"
                         placeholder={dict?.profile?.confirmPasswordPlaceholder || 'Confirm new password'}
+                        onFocus={(e) => {
+                          e.currentTarget.style.borderColor = primaryColor;
+                          e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                        }}
+                        onBlur={(e) => {
+                          e.currentTarget.style.borderColor = '#d1d5db';
+                          e.currentTarget.style.boxShadow = 'none';
+                        }}
                       />
                     </div>
                   </div>
@@ -334,7 +396,16 @@ export default function ProfilePage() {
                     <button
                       type="submit"
                       disabled={saving}
-                      className="px-6 py-3 bg-blue-600 text-white hover:bg-blue-700 font-semibold transition-all duration-200 border border-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
+                      className="px-6 py-3 text-white font-semibold transition-all duration-200 border disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      onMouseEnter={(e) => {
+                        const elem = e.currentTarget as HTMLButtonElement;
+                        elem.style.backgroundColor = `${primaryColor}dd`;
+                      }}
+                      onMouseLeave={(e) => {
+                        const elem = e.currentTarget as HTMLButtonElement;
+                        elem.style.backgroundColor = primaryColor;
+                      }}
                     >
                       {saving ? (
                         <>
@@ -375,13 +446,22 @@ export default function ProfilePage() {
                   />
                 </div>
               ) : (
-                <div className="p-6 bg-blue-50 border-2 border-blue-300 text-center">
-                  <p className="text-blue-800 mb-4">
+                <div className="p-6 border-2 text-center" style={{ backgroundColor: `${primaryColor}10`, borderColor: `${primaryColor}40`, color: primaryColor }}>
+                  <p className="mb-4">
                     {dict?.profile?.qrNotAvailable || 'QR code not generated yet.'}
                   </p>
                   <button
                     onClick={handleRegenerateQR}
-                    className="px-6 py-3 bg-blue-600 text-white hover:bg-blue-700 font-semibold transition-all duration-200 border border-blue-700 flex items-center gap-2 mx-auto"
+                    style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
+                    className="px-6 py-3 text-white font-semibold transition-all duration-200 border flex items-center gap-2 mx-auto"
+                    onMouseEnter={(e) => {
+                      const elem = e.currentTarget as HTMLButtonElement;
+                      elem.style.backgroundColor = `${primaryColor}dd`;
+                    }}
+                    onMouseLeave={(e) => {
+                      const elem = e.currentTarget as HTMLButtonElement;
+                      elem.style.backgroundColor = primaryColor;
+                    }}
                   >
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />

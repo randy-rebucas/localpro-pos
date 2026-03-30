@@ -7,33 +7,15 @@ import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getDefaultTenantSettings } from '@/lib/currency';
-
-interface PreviewData {
-  businessType: string;
-  preview: { categories: number; products: number; customers: number; discounts: number };
-  existing: { categories: number; products: number; customers: number; discounts: number };
-  sample: {
-    categories: string[];
-    products: { name: string; price: number; type: string }[];
-    discounts: { code: string; name: string; value: number; type: string }[];
-  };
-}
-
-const BIZ_TYPE_LABELS: Record<string, string> = {
-  retail:     'Retail Store',
-  restaurant: 'Restaurant / Food Service',
-  laundry:    'Laundry Service',
-  service:    'Service Business (Salon, Spa, etc.)',
-  general:    'General Business',
-};
-
-const BIZ_TYPE_COLORS: Record<string, string> = {
-  retail:     'blue',
-  restaurant: 'orange',
-  laundry:    'cyan',
-  service:    'purple',
-  general:    'green',
-};
+import { useSampleDataManager, type PreviewData } from '@/hooks/useSampleDataManager';
+import {
+  BIZ_TYPE_LABELS,
+  BIZ_TYPE_COLORS,
+  COLOR_MAP,
+  getBusinessTypeLabel,
+  getBusinessTypeColor,
+  getColorStyles,
+} from '@/lib/sample-data-helpers';
 
 export default function SampleDataPage() {
   const params = useParams();
@@ -42,11 +24,7 @@ export default function SampleDataPage() {
 
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [pageLoading, setPageLoading] = useState(true);
-  const [preview, setPreview] = useState<PreviewData | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(true);
-  const [installing, setInstalling] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [installResults, setInstallResults] = useState<PreviewData['preview'] & { skipped?: PreviewData['preview'] } | null>(null);
+  const { preview, previewLoading, installing, message, installResults, loadPreview, installSampleData } = useSampleDataManager(tenant);
 
   const { settings } = useTenantSettings();
   const tenantSettings = settings || getDefaultTenantSettings();
@@ -60,58 +38,11 @@ export default function SampleDataPage() {
   }, [lang]);
 
   useEffect(() => {
-    async function loadPreview() {
-      try {
-        setPreviewLoading(true);
-        const res = await fetch(`/api/tenants/${tenant}/seed-sample-data`, { credentials: 'include' });
-        const data = await res.json();
-        if (data.success) setPreview(data.data);
-      } catch {
-        // silently fail — no preview
-      } finally {
-        setPreviewLoading(false);
-      }
-    }
     loadPreview();
-  }, [tenant]);
+  }, [tenant, loadPreview]);
 
   const handleInstall = async () => {
-    if (installing) return;
-    setInstalling(true);
-    setMessage(null);
-    setInstallResults(null);
-    try {
-      const res = await fetch(`/api/tenants/${tenant}/seed-sample-data`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ skipExisting: true }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        const r = data.data.results;
-        setInstallResults({
-          categories: r.categories.created,
-          products:   r.products.created,
-          customers:  r.customers.created,
-          discounts:  r.discounts.created,
-        });
-        setMessage({
-          type: 'success',
-          text: `Sample data installed successfully! ${r.categories.created + r.products.created + r.customers.created + r.discounts.created} records added.`,
-        });
-        // Refresh preview counts
-        const res2 = await fetch(`/api/tenants/${tenant}/seed-sample-data`, { credentials: 'include' });
-        const data2 = await res2.json();
-        if (data2.success) setPreview(data2.data);
-      } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to install sample data.' });
-      }
-    } catch {
-      setMessage({ type: 'error', text: 'An unexpected error occurred.' });
-    } finally {
-      setInstalling(false);
-    }
+    await installSampleData();
   };
 
   if (pageLoading || !dict) {
@@ -126,17 +57,9 @@ export default function SampleDataPage() {
   }
 
   const bizType = preview?.businessType ?? 'general';
-  const bizLabel = BIZ_TYPE_LABELS[bizType] ?? bizType;
-  const colorKey = BIZ_TYPE_COLORS[bizType] ?? 'blue';
-
-  const colorMap: Record<string, { bg: string; border: string; text: string; badge: string }> = {
-    blue:   { bg: 'bg-blue-50',   border: 'border-blue-200',  text: 'text-blue-700',   badge: 'bg-blue-100 text-blue-800'   },
-    orange: { bg: 'bg-orange-50', border: 'border-orange-200',text: 'text-orange-700', badge: 'bg-orange-100 text-orange-800'},
-    cyan:   { bg: 'bg-cyan-50',   border: 'border-cyan-200',  text: 'text-cyan-700',   badge: 'bg-cyan-100 text-cyan-800'   },
-    purple: { bg: 'bg-purple-50', border: 'border-purple-200',text: 'text-purple-700', badge: 'bg-purple-100 text-purple-800'},
-    green:  { bg: 'bg-green-50',  border: 'border-green-200', text: 'text-green-700',  badge: 'bg-green-100 text-green-800' },
-  };
-  const colors = colorMap[colorKey];
+  const bizLabel = getBusinessTypeLabel(bizType);
+  const colorKey = getBusinessTypeColor(bizType);
+  const colors = getColorStyles(colorKey);
 
   const hasData = preview && (
     preview.existing.categories > 0 ||

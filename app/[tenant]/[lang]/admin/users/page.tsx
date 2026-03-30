@@ -1,106 +1,84 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import toast from 'react-hot-toast';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { useAuth } from '@/contexts/AuthContext';
 import QRCodeDisplay from '@/components/QRCodeDisplay';
-import { showToast } from '@/lib/toast';
 import { useConfirm } from '@/lib/confirm';
-
-interface User {
-  _id: string;
-  email: string;
-  name: string;
-  role: 'owner' | 'admin' | 'manager' | 'cashier' | 'viewer';
-  isActive: boolean;
-  createdAt: string;
-  lastLogin?: string;
-  qrToken?: string;
-}
+import { useUsersList, type User } from '@/hooks/useUsersList';
+import { useUserForm } from '@/hooks/useUserForm';
+import { useQrCode } from '@/hooks/useQrCode';
+import {
+  getRoleLabel,
+  getStatusClasses,
+  getStatusLabel,
+  getToggleActionLabel,
+  getToggleActionClasses,
+  getDeleteConfirmMessage,
+  getRegenerateQRConfirmMessage,
+  USER_ROLES,
+} from '@/lib/users-helpers';
 
 export default function UsersPage() {
   const params = useParams();
   const router = useRouter(); // eslint-disable-line @typescript-eslint/no-unused-vars
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
+
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showUserModal, setShowUserModal] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+
   const { user: currentUser } = useAuth();
   const { confirm, Dialog: ConfirmDialog } = useConfirm();
+  const { users, loading, fetchUsers } = useUsersList();
+  const { deleteUser, toggleUserStatus } = useUsersList();
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
-    fetchUsers();
+  }, [lang]);
+
+  useEffect(() => {
+    fetchUsers((error) => toast.error(error));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lang, tenant]);
+  }, [tenant]);
 
-  const fetchUsers = async () => {
-    try {
-      const res = await fetch('/api/users', { credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
-        setUsers(data.data);
-        setMessage(null);
-      } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchUsers || 'Failed to fetch users' });
-      }
-    } catch (error) {
-      console.error('Error fetching users:', error);
-      setMessage({ type: 'error', text: dict?.common?.failedToFetchUsers || 'Failed to fetch users' });
-    } finally {
-      setLoading(false);
-    }
-  };
+  const handleDeleteUser = useCallback(
+    async (userId: string) => {
+      if (!dict) return;
 
-  const handleDeleteUser = async (userId: string) => {
-    if (!dict) return;
-    const confirmed = await confirm(
-      dict.common?.deleteUserConfirmTitle || 'Delete User',
-      dict.common?.deleteUserConfirm || 'Are you sure you want to delete this user?',
-      { variant: 'danger' }
-    );
-    if (!confirmed) return;
-    try {
-      const res = await fetch(`/api/users/${userId}`, { method: 'DELETE', credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
-        showToast.success(dict?.admin?.userDeletedSuccess || dict?.common?.userDeletedSuccess || 'User deleted successfully');
-        fetchUsers();
-      } else {
-        setMessage({ type: 'error', text: data.error || dict?.admin?.failedToDeleteUser || dict?.common?.failedToDeleteUser || 'Failed to delete user' });
-      }
-    } catch (error) {
-      setMessage({ type: 'error', text: dict?.admin?.failedToDeleteUser || dict?.common?.failedToDeleteUser || 'Failed to delete user' });
-    }
-  };
+      const { title, message } = getDeleteConfirmMessage(dict);
+      const confirmed = await confirm(title, message, { variant: 'danger' });
+      if (!confirmed) return;
 
-  const handleToggleUserStatus = async (user: User) => {
-    try {
-      const res = await fetch(`/api/users/${user._id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ isActive: !user.isActive }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setMessage({ type: 'success', text: `User ${!user.isActive ? (dict?.admin?.activated || 'activated') : (dict?.admin?.deactivated || 'deactivated')} ${dict?.admin?.successfully || 'successfully'}` });
-        fetchUsers();
-      } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToUpdateUser || 'Failed to update user' });
-      }
-    } catch (error) {
-      setMessage({ type: 'error', text: dict?.common?.failedToUpdateUser || 'Failed to update user' });
-    }
-  };
+      await deleteUser(
+        userId,
+        (message) => {
+          toast.success(message);
+        },
+        (error) => toast.error(error)
+      );
+    },
+    [dict, deleteUser, confirm]
+  );
+
+  const handleToggleUserStatus = useCallback(
+    async (user: User) => {
+      await toggleUserStatus(
+        user,
+        (message) => {
+          toast.success(message);
+        },
+        (error) => toast.error(error)
+      );
+    },
+    [toggleUserStatus]
+  );
 
   if (!dict || loading) {
     return (
@@ -138,12 +116,6 @@ export default function UsersPage() {
           </div>
         </div>
 
-        {message && (
-          <div className={`mb-6 p-4 border ${message.type === 'success' ? 'bg-green-50 text-green-800 border-green-300' : 'bg-red-50 text-red-800 border-red-300'}`}>
-            {message.text}
-          </div>
-        )}
-
         <div className="bg-white border border-gray-300 p-6">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold text-gray-900">{dict.admin?.users || 'Users'}</h2>
@@ -176,12 +148,12 @@ export default function UsersPage() {
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{user.email}</td>
                     <td className="px-4 py-4 whitespace-nowrap">
                       <span className="px-2 py-1 text-xs font-semibold border border-blue-300 bg-blue-100 text-blue-800 capitalize">
-                        {user.role}
+                        {getRoleLabel(user.role, dict)}
                       </span>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs font-semibold border ${user.isActive ? 'bg-green-100 text-green-800 border-green-300' : 'bg-red-100 text-red-800 border-red-300'}`}>
-                        {user.isActive ? (dict.admin?.active || 'Active') : (dict.admin?.inactive || 'Inactive')}
+                      <span className={`px-2 py-1 text-xs font-semibold border ${getStatusClasses(user.isActive)}`}>
+                        {getStatusLabel(user.isActive, dict)}
                       </span>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm">
@@ -209,9 +181,9 @@ export default function UsersPage() {
                         </button>
                         <button
                           onClick={() => handleToggleUserStatus(user)}
-                          className={user.isActive ? 'text-orange-600 hover:text-orange-900' : 'text-green-600 hover:text-green-900'}
+                          className={getToggleActionClasses(user.isActive)}
                         >
-                          {user.isActive ? (dict.admin?.deactivate || 'Deactivate') : (dict.admin?.activate || 'Activate')}
+                          {getToggleActionLabel(user.isActive, dict)}
                         </button>
                         {currentUser?._id !== user._id && (
                           <button
@@ -278,49 +250,18 @@ function UserModal({
   onSave: () => void;
   dict: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }) {
-  const [formData, setFormData] = useState({
-    email: user?.email || '',
-    name: user?.name || '',
-    password: '',
-    role: user?.role || 'cashier',
-  });
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const { formData, setFormData, saving, error, handleSubmit: submitForm } = useUserForm(user);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    setSaving(true);
-    try {
-      const url = user ? `/api/users/${user._id}` : '/api/users';
-      const method = user ? 'PUT' : 'POST';
-      const body: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
-        email: formData.email,
-        name: formData.name,
-        role: formData.role,
-      };
-      if (!user || formData.password) {
-        body.password = formData.password;
-      }
-
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(body),
-      });
-
-      const data = await res.json();
-      if (data.success) {
+    await submitForm(
+      () => {
         onSave();
-      } else {
-        setError(data.error || 'Failed to save user');
+      },
+      () => {
+        // Error already displayed via toast from hook
       }
-    } catch (error) {
-      setError('Failed to save user');
-    } finally {
-      setSaving(false);
-    }
+    );
   };
 
   return (
@@ -376,11 +317,11 @@ function UserModal({
                 onChange={(e) => setFormData({ ...formData, role: e.target.value as any })} // eslint-disable-line @typescript-eslint/no-explicit-any
                 className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               >
-                <option value="viewer">{dict.admin?.viewer || 'Viewer'}</option>
-                <option value="cashier">{dict.admin?.cashier || 'Cashier'}</option>
-                <option value="manager">{dict.admin?.manager || 'Manager'}</option>
-                <option value="admin">{dict.admin?.adminRole || 'Admin'}</option>
-                <option value="owner">{dict.admin?.owner || 'Owner'}</option>
+                {USER_ROLES.map((role) => (
+                  <option key={role.value} value={role.value}>
+                    {getRoleLabel(role.value, dict)}
+                  </option>
+                ))}
               </select>
             </div>
             {error && (
@@ -422,65 +363,28 @@ function QRModal({
   onRegenerate: () => void;
   dict: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }) {
-  const [qrData, setQrData] = useState<{ qrToken: string; name: string; email: string } | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [regenerating, setRegenerating] = useState(false);
-  const [error, setError] = useState('');
+  const { qrData, loading, regenerating, error, fetchQRCode, regenerateQRCode } = useQrCode(user._id);
   const { confirm, Dialog } = useConfirm();
 
   useEffect(() => {
-    fetchQRCode();
+    fetchQRCode((error) => toast.error(error));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user._id]);
 
-  const fetchQRCode = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const res = await fetch(`/api/users/${user._id}/qr-code`, {
-        credentials: 'include',
-      });
-      const data = await res.json();
-      if (data.success) {
-        setQrData(data.data);
-      } else {
-        setError(data.error || 'Failed to load QR code');
-      }
-    } catch (error) {
-      setError('Failed to load QR code');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleRegenerate = async () => {
     if (!dict) return;
-    const confirmed = await confirm(
-      dict.common?.regenerateQRConfirmTitle || 'Regenerate QR Code',
-      dict.common?.regenerateQRConfirm || dict.admin?.regenerateQRConfirm || 'Are you sure you want to regenerate the QR code? The old QR code will no longer work.',
-      { variant: 'warning' }
-    );
+
+    const { title, message } = getRegenerateQRConfirmMessage(dict);
+    const confirmed = await confirm(title, message, { variant: 'warning' });
     if (!confirmed) return;
-    
-    setRegenerating(true);
-    setError('');
-    try {
-      const res = await fetch(`/api/users/${user._id}/qr-code`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-      const data = await res.json();
-      if (data.success) {
-        setQrData({ ...qrData!, qrToken: data.data.qrToken });
+
+    await regenerateQRCode(
+      () => {
         onRegenerate();
-      } else {
-        setError(data.error || 'Failed to regenerate QR code');
-      }
-    } catch (error) {
-      setError('Failed to regenerate QR code');
-    } finally {
-      setRegenerating(false);
-    }
+        toast.success('QR code regenerated successfully');
+      },
+      (error) => toast.error(error)
+    );
   };
 
   if (loading) {

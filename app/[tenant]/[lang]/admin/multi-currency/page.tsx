@@ -5,18 +5,24 @@ import Navbar from '@/components/Navbar';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
-import { ITenantSettings } from '@/models/Tenant';
+import { useMultiCurrencySettings } from '@/hooks/useMultiCurrencySettings';
+import { useExchangeRateFetch } from '@/hooks/useExchangeRateFetch';
+import {
+  getSaveSuccessMessage,
+  getSaveErrorMessage,
+  getExchangeRateFetchSuccessMessage,
+  getExchangeRateFetchErrorMessage,
+} from '@/lib/multi-currency-helpers';
 
 export default function MultiCurrencyPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [settings, setSettings] = useState<ITenantSettings | null>(null);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [fetchingRates, setFetchingRates] = useState(false);
+
+  const { settings, loading, saving, message, setMessage, fetchSettings, updateSetting, saveSettings } =
+    useMultiCurrencySettings(tenant);
+  const { fetching: fetchingRates, fetchRates } = useExchangeRateFetch(tenant);
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -24,113 +30,30 @@ export default function MultiCurrencyPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang, tenant]);
 
-  const fetchSettings = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch(`/api/tenants/${tenant}/settings`);
-      const data = await res.json();
-      if (data.success) {
-        const defaultSettings = {
-          multiCurrency: {
-            enabled: false,
-            displayCurrencies: [],
-            exchangeRates: {},
-            exchangeRateSource: 'manual',
-            exchangeRateApiKey: '',
-          },
-          ...data.data,
-        };
-        setSettings(defaultSettings);
-      } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to load settings' });
-      }
-    } catch (error) {
-      console.error('Error fetching settings:', error);
-      setMessage({ type: 'error', text: 'Failed to load settings. Please check your connection.' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const updateSetting = (path: string, value: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (!settings) return;
-    
-    const keys = path.split('.');
-    const newSettings = JSON.parse(JSON.stringify(settings));
-    let current: any = newSettings; // eslint-disable-line @typescript-eslint/no-explicit-any
-    
-    for (let i = 0; i < keys.length - 1; i++) {
-      if (!current[keys[i]]) {
-        current[keys[i]] = {};
-      }
-      current = current[keys[i]];
-    }
-    
-    current[keys[keys.length - 1]] = value;
-    setSettings(newSettings);
-  };
-
-  const fetchExchangeRates = async () => {
-    if (!settings) return;
-    setFetchingRates(true);
-    setMessage(null);
-    try {
-      const res = await fetch(`/api/tenants/${tenant}/exchange-rates`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ action: 'fetch' }),
+  const handleFetchRates = async () => {
+    const result = await fetchRates();
+    if (result.success && result.data) {
+      setMessage({ type: 'success', text: getExchangeRateFetchSuccessMessage(dict) });
+      const multiCurrency = settings?.multiCurrency || {};
+      updateSetting('multiCurrency', {
+        ...multiCurrency,
+        exchangeRates: result.data.exchangeRates,
+        lastUpdated: new Date(result.data.lastUpdated),
       });
-      const data = await res.json();
-      if (data.success) {
-        setMessage({ type: 'success', text: dict?.admin?.exchangeRatesUpdated || 'Exchange rates updated successfully' });
-        updateSetting('multiCurrency', {
-          ...settings.multiCurrency,
-          exchangeRates: data.data.exchangeRates,
-          lastUpdated: new Date(data.data.lastUpdated),
-        });
-      } else {
-        setMessage({ type: 'error', text: data.error || dict?.admin?.failedToFetchRates || 'Failed to fetch exchange rates' });
-      }
-    } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      setMessage({ type: 'error', text: error.message || dict?.admin?.failedToFetchRates || 'Failed to fetch exchange rates' });
-    } finally {
-      setFetchingRates(false);
+    } else {
+      setMessage({ type: 'error', text: getExchangeRateFetchErrorMessage(dict) || result.error });
     }
   };
 
   const handleSave = async () => {
-    if (!settings) return;
+    if (!settings || !dict) return;
 
-    try {
-      setSaving(true);
-      setMessage(null);
-      const res = await fetch(`/api/tenants/${tenant}/settings`, {
-        method: 'PUT',
-        headers: { 
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({ settings }),
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        setMessage({ type: 'success', text: dict?.admin?.multiCurrencySaved || 'Multi-currency settings saved successfully!' });
-        setSettings(data.data);
-        setTimeout(() => setMessage(null), 3000);
-      } else {
-        if (res.status === 401 || res.status === 403) {
-          setMessage({ type: 'error', text: dict?.settings?.unauthorized || 'Unauthorized. Please login with admin account.' });
-        } else {
-          setMessage({ type: 'error', text: data.error || dict?.admin?.failedToSaveMultiCurrency || 'Failed to save settings' });
-        }
-      }
-    } catch (error) {
-      console.error('Error saving multi-currency settings:', error);
-      setMessage({ type: 'error', text: dict?.admin?.failedToSaveMultiCurrencyConnection || 'Failed to save settings. Please check your connection.' });
-    } finally {
-      setSaving(false);
+    const result = await saveSettings(settings);
+    if (result.success) {
+      setMessage({ type: 'success', text: getSaveSuccessMessage(dict) });
+      setTimeout(() => setMessage(null), 3000);
+    } else {
+      setMessage({ type: 'error', text: result.error || getSaveErrorMessage(dict) });
     }
   };
 
@@ -239,7 +162,7 @@ export default function MultiCurrencyPage() {
                 </h2>
                 <button
                   type="button"
-                  onClick={fetchExchangeRates}
+                  onClick={handleFetchRates}
                   disabled={fetchingRates || multiCurrency.exchangeRateSource !== 'api'}
                   className="px-4 py-2 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
                 >

@@ -2,91 +2,66 @@
 
 import { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import toast from 'react-hot-toast';
 import { getDictionaryClient } from '../../dictionaries-client';
-
-interface Category {
-  _id: string;
-  name: string;
-  description?: string;
-  isActive: boolean;
-  createdAt: string;
-}
+import { useCategoriesList, type Category } from '@/hooks/useCategoriesList';
+import { useCategoryForm } from '@/hooks/useCategoryForm';
+import {
+  getStatusBadgeClasses,
+  getStatusLabel,
+  getActionButtonColor,
+  getActionButtonLabel,
+  getDeleteConfirmMessage,
+  getDeleteSuccessMessage,
+  getStatusChangeMessage,
+} from '@/lib/categories-helpers';
 
 export default function CategoriesPage() {
   const params = useParams();
-  const router = useRouter(); // eslint-disable-line @typescript-eslint/no-unused-vars
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
 
-   
+  const { categories, loading, fetchCategories, deleteCategory, toggleCategoryStatus } = useCategoriesList();
+
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
-    fetchCategories();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lang, tenant]);
+  }, [lang]);
 
-  const fetchCategories = async () => {
-    try {
-      const res = await fetch('/api/categories', { credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
-        setCategories(data.data);
-        setMessage(null);
-      } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchCategories || 'Failed to fetch categories' });
-      }
-    } catch (error) {
-      console.error('Error fetching categories:', error);
-      setMessage({ type: 'error', text: dict?.common?.failedToFetchCategories || 'Failed to fetch categories' });
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    fetchCategories((error) => toast.error(error));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleDeleteCategory = async (categoryId: string) => {
     if (!dict) return;
-    if (!window.confirm(dict.common?.deleteCategoryConfirm || dict.admin?.deleteCategoryConfirm || 'Are you sure you want to delete this category?')) return;
-    try {
-      const res = await fetch(`/api/categories/${categoryId}`, { method: 'DELETE', credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
-        // Remove from local state immediately for instant feedback
-        setCategories(prev => prev.filter(c => c._id !== categoryId));
-        setMessage({ type: 'success', text: dict?.common?.categoryDeletedSuccess || 'Category deleted successfully' });
-      } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToDeleteCategory || 'Failed to delete category' });
-      }
-    } catch (_error) {
-      setMessage({ type: 'error', text: dict?.common?.failedToDeleteCategory || 'Failed to delete category' });
-    }
+    if (!window.confirm(getDeleteConfirmMessage(dict))) return;
+
+    await deleteCategory(
+      categoryId,
+      () => {
+        toast.success(getDeleteSuccessMessage(dict));
+      },
+      (error) => toast.error(error)
+    );
   };
 
   const handleToggleCategoryStatus = async (category: Category) => {
-    try {
-      const res = await fetch(`/api/categories/${category._id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ isActive: !category.isActive }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setMessage({ type: 'success', text: `Category ${!category.isActive ? (dict?.admin?.activated || 'activated') : (dict?.admin?.deactivated || 'deactivated')} ${dict?.admin?.successfully || 'successfully'}` });
-        fetchCategories();
-      } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToUpdateCategory || 'Failed to update category' });
-      }
-    } catch (_error) {
-      setMessage({ type: 'error', text: dict?.common?.failedToUpdateCategory || 'Failed to update category' });
-    }
+    if (!dict) return;
+
+    const newStatus = !category.isActive;
+    await toggleCategoryStatus(
+      category._id,
+      newStatus,
+      () => {
+        toast.success(getStatusChangeMessage(!category.isActive, dict));
+      },
+      (error) => toast.error(error)
+    );
   };
 
   if (!dict || loading) {
@@ -124,12 +99,6 @@ export default function CategoriesPage() {
           </div>
         </div>
 
-        {message && (
-          <div className={`mb-6 p-4 border ${message.type === 'success' ? 'bg-green-50 text-green-800 border-green-300' : 'bg-red-50 text-red-800 border-red-300'}`}>
-            {message.text}
-          </div>
-        )}
-
         <div className="bg-white border border-gray-300 p-6">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold text-gray-900">{dict.admin?.categories || 'Categories'}</h2>
@@ -159,8 +128,8 @@ export default function CategoriesPage() {
                     <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{category.name}</td>
                     <td className="px-4 py-4 text-sm text-gray-500">{category.description || '-'}</td>
                     <td className="px-4 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs font-semibold border ${category.isActive ? 'bg-green-100 text-green-800 border-green-300' : 'bg-red-100 text-red-800 border-red-300'}`}>
-                        {category.isActive ? (dict.admin?.active || 'Active') : (dict.admin?.inactive || 'Inactive')}
+                      <span className={`px-2 py-1 text-xs font-semibold border ${getStatusBadgeClasses(category.isActive)}`}>
+                        {getStatusLabel(category.isActive, dict)}
                       </span>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
@@ -176,9 +145,9 @@ export default function CategoriesPage() {
                         </button>
                         <button
                           onClick={() => handleToggleCategoryStatus(category)}
-                          className={category.isActive ? 'text-orange-600 hover:text-orange-900' : 'text-green-600 hover:text-green-900'}
+                          className={`${getActionButtonColor(category.isActive)}`}
                         >
-                          {category.isActive ? (dict.admin?.deactivate || 'Deactivate') : (dict.admin?.activate || 'Activate')}
+                          {getActionButtonLabel(category.isActive, dict)}
                         </button>
                         <button
                           onClick={() => handleDeleteCategory(category._id)}
@@ -206,7 +175,7 @@ export default function CategoriesPage() {
               setEditingCategory(null);
             }}
             onSave={() => {
-              fetchCategories();
+              fetchCategories((error) => toast.error(error));
               setShowCategoryModal(false);
               setEditingCategory(null);
             }}
@@ -229,43 +198,19 @@ function CategoryModal({
   onSave: () => void;
   dict: Record<string, Record<string, string>> | null;
 }) {
-  const [formData, setFormData] = useState({
-    name: category?.name || '',
-    description: category?.description || '',
-  });
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const { formData, setFormData, error, submitting, handleSubmit: submitForm } = useCategoryForm(category);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    setSaving(true);
-    try {
-      const url = category ? `/api/categories/${category._id}` : '/api/categories';
-      const method = category ? 'PUT' : 'POST';
-      const body = {
-        name: formData.name,
-        description: formData.description || undefined,
-      };
 
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(body),
-      });
-
-      const data = await res.json();
-      if (data.success) {
+    await submitForm(
+      () => {
         onSave();
-      } else {
-        setError(data.error || 'Failed to save category');
+      },
+      (error) => {
+        toast.error(error);
       }
-    } catch (_error) {
-      setError('Failed to save category');
-    } finally {
-      setSaving(false);
-    }
+    );
   };
 
   return (
@@ -316,10 +261,10 @@ function CategoryModal({
               </button>
               <button
                 type="submit"
-                disabled={saving}
+                disabled={submitting}
                 className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
               >
-                {saving ? (dict?.common?.loading || 'Saving...') : (dict?.common?.save || 'Save')}
+                {submitting ? (dict?.common?.loading || 'Saving...') : (dict?.common?.save || 'Save')}
               </button>
             </div>
           </form>

@@ -66,6 +66,7 @@ export default function Dashboard() {
   const [dict, setDict] = useState<TranslationDict | null>(null);
   const { isOnline } = useNetworkStatus(tenant);
   const { settings } = useTenantSettings();
+  const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#3b82f6';
   
   // Additional state for modals and UI
   const [savedCarts, setSavedCarts] = useState<any[]>([]); // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -724,12 +725,12 @@ export default function Dashboard() {
             <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:sticky lg:top-20 flex flex-col h-full max-h-[calc(100vh-6rem)]">
               <div className="flex justify-between items-center mb-4 pb-4 border-b border-gray-200">
                 <h2 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2">
-                  <svg className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} style={{ color: primaryColor }}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
                   </svg>
                   {dict.pos.cart}
                   {cart.length > 0 && (
-                    <span className="ml-2 px-2.5 py-1 bg-blue-600 text-white text-xs font-bold border border-blue-700">
+                    <span className="ml-2 px-2.5 py-1 text-white text-xs font-bold border" style={{ backgroundColor: primaryColor, borderColor: primaryColor }}>
                       {cart.length}
                     </span>
                   )}
@@ -762,7 +763,10 @@ export default function Dashboard() {
                       setShowSavedCartsModal(true);
                       loadSavedCarts();
                     }}
-                    className="px-4 py-3 bg-blue-600 text-white hover:bg-blue-700 transition-colors border border-blue-700"
+                    className="px-4 py-3 text-white transition-colors border"
+                    style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
+                    onMouseEnter={(e) => {e.currentTarget.style.backgroundColor = `${primaryColor}dd`;}}
+                    onMouseLeave={(e) => {e.currentTarget.style.backgroundColor = primaryColor;}}
                     title={dict.pos?.loadCart || 'Load Saved Cart'}
                   >
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2}>
@@ -914,7 +918,14 @@ export default function Dashboard() {
                               }
                             }}
                             disabled={applyingDiscount || cart.length === 0}
-                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-semibold border-2 border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:border-blue-300 transition-colors disabled:opacity-50"
+                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-semibold border-2 transition-colors disabled:opacity-50"
+                            style={{
+                              borderColor: `${primaryColor}80`,
+                              backgroundColor: `${primaryColor}10`,
+                              color: primaryColor,
+                            }}
+                            onMouseEnter={(e) => {e.currentTarget.style.backgroundColor = `${primaryColor}20`;}}
+                            onMouseLeave={(e) => {e.currentTarget.style.backgroundColor = `${primaryColor}10`;}}
                           >
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
@@ -1131,7 +1142,7 @@ export default function Dashboard() {
                     </div>
                     <div className="flex justify-between items-center mb-4 pt-3 border-t-2 border-gray-300">
                       <span className="text-lg sm:text-xl font-bold text-gray-900">{dict.common.total}:</span>
-                      <span className="text-2xl sm:text-3xl font-bold text-blue-600">
+                      <span className="text-2xl sm:text-3xl font-bold" style={{ color: primaryColor }}>
                         <Currency amount={getTotal()} />
                       </span>
                     </div>
@@ -1174,7 +1185,15 @@ export default function Dashboard() {
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     autoFocus
-                    className="w-full px-4 py-3 pl-11 text-base border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all"
+                    className="w-full px-4 py-3 pl-11 text-base border-2 border-gray-300 bg-white transition-all"
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = primaryColor;
+                      e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.borderColor = '#d1d5db';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
                   />
                   <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -1182,7 +1201,10 @@ export default function Dashboard() {
                 </div>
                 <button
                   onClick={() => setShowQRScanner(true)}
-                  className="px-4 py-3 bg-blue-600 text-white hover:bg-blue-700 transition-colors border border-blue-700"
+                  className="px-4 py-3 text-white transition-colors border"
+                  style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
+                  onMouseEnter={(e) => {e.currentTarget.style.backgroundColor = `${primaryColor}dd`;}}
+                  onMouseLeave={(e) => {e.currentTarget.style.backgroundColor = primaryColor;}}
                   title="Scan QR Code"
                 >
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1292,7 +1314,7 @@ export default function Dashboard() {
 
                       {/* Price + Stock row */}
                       <div className="flex items-end justify-between gap-2 mb-3 mt-auto">
-                        <div className="font-bold text-blue-600 text-xl leading-tight">
+                        <div className="font-bold text-xl leading-tight" style={{ color: primaryColor }}>
                           <Currency amount={product.price} />
                         </div>
                         <span
@@ -1317,11 +1339,15 @@ export default function Dashboard() {
                             addToCart(product);
                           }
                         }}
-                        className={`w-full px-4 py-2.5 font-medium text-sm transition-all duration-200 ${
+                        className={`w-full px-4 py-2.5 font-medium text-sm transition-all duration-200 text-white border ${
                           product.stock > 0 || product.allowOutOfStockSales
-                            ? 'bg-blue-600 text-white hover:bg-blue-700 border border-blue-700'
+                            ? ''
                             : 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300'
                         }`}
+                        style={product.stock > 0 || product.allowOutOfStockSales ? {
+                          backgroundColor: primaryColor,
+                          borderColor: primaryColor
+                        } : undefined}
                       >
                         {product.stock > 0 || product.allowOutOfStockSales
                           ? dict.common.add
@@ -1382,11 +1408,15 @@ export default function Dashboard() {
                           setPaymentMethod(method);
                           if (method !== 'cash') setCashReceived('');
                         }}
-                        className={`px-3 sm:px-4 py-2.5 border-2 font-medium text-sm sm:text-base transition-all duration-200 ${
+                        className={`px-3 sm:px-4 py-2.5 border-2 font-medium text-sm sm:text-base transition-all duration-200 text-white ${
                           paymentMethod === method
-                            ? 'bg-blue-600 text-white border-blue-700'
+                            ? ''
                             : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
                         }`}
+                        style={paymentMethod === method ? {
+                          backgroundColor: primaryColor,
+                          borderColor: primaryColor
+                        } : undefined}
                       >
                         {dict.pos[method]}
                       </button>
@@ -1407,8 +1437,16 @@ export default function Dashboard() {
                         const val = e.target.value;
                         if (val === '' || parseFloat(val) >= 0) setCashReceived(val);
                       }}
-                      className="w-full px-4 py-3 text-base border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-4 py-3 text-base border-2 border-gray-300 transition-all"
                       placeholder="0.00"
+                      onFocus={(e) => {
+                        e.currentTarget.style.borderColor = primaryColor;
+                        e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                      }}
+                      onBlur={(e) => {
+                        e.currentTarget.style.borderColor = '#d1d5db';
+                        e.currentTarget.style.boxShadow = 'none';
+                      }}
                     />
                     {cashReceived && parseFloat(cashReceived) >= getTotal() && (
                       <div className="mt-2 text-sm text-green-600 font-medium">
@@ -1461,7 +1499,13 @@ export default function Dashboard() {
                   }
                 }}
                 disabled={processing || (paymentMethod === 'cash' && (!cashReceived || parseFloat(cashReceived) < getTotal()))}
-                className="w-full sm:w-auto px-4 py-2.5 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors border border-blue-700"
+                className="w-full sm:w-auto px-4 py-2.5 text-white font-medium transition-colors border disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{
+                  backgroundColor: primaryColor,
+                  borderColor: primaryColor
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = `${primaryColor}dd`; }}
+                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = primaryColor; }}
               >
                 {processing ? dict.pos.processing : dict.pos.completePayment}
               </button>
@@ -1519,14 +1563,28 @@ export default function Dashboard() {
                       value={refundTransactionId}
                       onChange={(e) => setRefundTransactionId(e.target.value)}
                       onKeyPress={(e) => e.key === 'Enter' && lookupTransaction()}
-                      className="flex-1 px-4 py-3 text-base border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="flex-1 px-4 py-3 text-base border-2 border-gray-300 transition-all"
                       placeholder={dict.pos.transactionId}
+                      onFocus={(e) => {
+                        e.currentTarget.style.borderColor = primaryColor;
+                        e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                      }}
+                      onBlur={(e) => {
+                        e.currentTarget.style.borderColor = '#d1d5db';
+                        e.currentTarget.style.boxShadow = 'none';
+                      }}
                     />
                     <button
                       type="button"
                       onClick={lookupTransaction}
                       disabled={!refundTransactionId.trim()}
-                      className="px-4 py-3 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors border border-blue-700"
+                      className="px-4 py-3 text-white font-medium transition-colors border disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{
+                        backgroundColor: primaryColor,
+                        borderColor: primaryColor
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = `${primaryColor}dd`; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = primaryColor; }}
                     >
                       {dict.pos.lookupTransaction}
                     </button>
@@ -1634,7 +1692,14 @@ export default function Dashboard() {
                                   addRefundItem(productId, maxQty);
                                 }
                               }}
-                              className="ml-2 px-2 py-1 text-xs bg-blue-100 text-blue-700 border border-blue-300 hover:bg-blue-200"
+                              className="ml-2 px-2 py-1 text-xs border"
+                              style={{
+                                backgroundColor: `${primaryColor}15`,
+                                borderColor: primaryColor,
+                                color: primaryColor
+                              }}
+                              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = `${primaryColor}25`; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = `${primaryColor}15`; }}
                             >
                               {dict.pos.fullRefund}
                             </button>
@@ -1653,8 +1718,16 @@ export default function Dashboard() {
                     type="text"
                     value={refundReason}
                     onChange={(e) => setRefundReason(e.target.value)}
-                    className="w-full px-4 py-3 text-base border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-4 py-3 text-base border-2 border-gray-300 transition-all"
                     placeholder={dict?.pos?.refundReasonPlaceholder || 'Reason for refund'}
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = primaryColor;
+                      e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.borderColor = '#d1d5db';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
                   />
                 </div>
 
@@ -1667,8 +1740,16 @@ export default function Dashboard() {
                     onChange={(e) => setRefundNotes(e.target.value.slice(0, MAX_REFUND_NOTES_LENGTH))}
                     maxLength={MAX_REFUND_NOTES_LENGTH}
                     rows={3}
-                    className="w-full px-4 py-3 text-base border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-4 py-3 text-base border-2 border-gray-300 transition-all"
                     placeholder={dict?.pos?.refundNotesPlaceholder || 'Additional notes'}
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = primaryColor;
+                      e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.borderColor = '#d1d5db';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
                   />
                 </div>
 
@@ -1757,9 +1838,17 @@ export default function Dashboard() {
                 value={cartName}
                 onChange={(e) => setCartName(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && saveCart()}
-                className="w-full px-4 py-3 text-base border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-4 py-3 text-base border-2 border-gray-300 transition-all"
                 placeholder={dict.pos?.cartNamePlaceholder || 'Enter a name for this cart'}
                 autoFocus
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = primaryColor;
+                  e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = '#d1d5db';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
               />
               <p className="text-sm text-gray-500 mt-2">
                 {dict.pos?.cartNameHint || 'This cart will be saved for later processing'}
@@ -1817,7 +1906,7 @@ export default function Dashboard() {
 
             {loadingSavedCarts ? (
               <div className="text-center py-12">
-                <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+                <div className="inline-block animate-spin h-8 w-8 border-b-2" style={{ borderBottomColor: primaryColor }}></div>
                 <p className="mt-4 text-gray-600">{dict.common.loading || 'Loading...'}</p>
               </div>
             ) : savedCarts.length === 0 ? (
@@ -1832,7 +1921,9 @@ export default function Dashboard() {
                 {savedCarts.map((savedCart) => (
                   <div
                     key={savedCart._id}
-                    className="border-2 border-gray-300 p-4 hover:border-blue-500 transition-colors"
+                    className="border-2 border-gray-300 p-4 transition-colors"
+                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = primaryColor; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#d1d5db'; }}
                   >
                     <div className="flex justify-between items-start mb-3">
                       <div className="flex-1">
@@ -1845,7 +1936,7 @@ export default function Dashboard() {
                         </p>
                       </div>
                       <div className="text-right">
-                        <div className="font-bold text-lg text-blue-600 mb-2">
+                        <div className="font-bold text-lg mb-2" style={{ color: primaryColor }}>
                           <Currency amount={savedCart.total} />
                         </div>
                         {savedCart.discountCode && (
@@ -1858,7 +1949,13 @@ export default function Dashboard() {
                     <div className="flex gap-2">
                       <button
                         onClick={() => loadCart(savedCart)}
-                        className="flex-1 px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium transition-colors border border-blue-700"
+                        className="flex-1 px-4 py-2 text-white font-medium transition-colors border"
+                        style={{
+                          backgroundColor: primaryColor,
+                          borderColor: primaryColor
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = `${primaryColor}dd`; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = primaryColor; }}
                       >
                         {dict.pos?.loadCart || 'Load Cart'}
                       </button>

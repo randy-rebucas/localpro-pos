@@ -63,7 +63,7 @@ export default function SubscriptionPage() {
   const [currentPlanName, setCurrentPlanName] = useState<string | null>(null);
   const { settings } = useTenantSettings();
   const tenantSettings = settings || getDefaultTenantSettings();
-  const primaryColor = tenantSettings.primaryColor || '#2563eb';
+  const primaryColor = tenantSettings.primaryColor || '#3b82f6';
 
   // Match the current plan by name
   const currentPlan = plans.find((p) => p.name === currentPlanName);
@@ -271,37 +271,37 @@ export default function SubscriptionPage() {
                       <ul className="space-y-1.5">
                         {plan.birCompliance.auditTrailSystem && (
                           <li className="flex items-center">
-                            <CheckCircle className="h-3.5 w-3.5 text-blue-600 mr-2 flex-shrink-0" />
+                            <CheckCircle className="h-3.5 w-3.5 mr-2 flex-shrink-0" style={{ color: primaryColor }} />
                             <span className="text-xs text-gray-600">Audit Trail System</span>
                           </li>
                         )}
                         {plan.birCompliance.ptuAssistance && (
                           <li className="flex items-center">
-                            <CheckCircle className="h-3.5 w-3.5 text-blue-600 mr-2 flex-shrink-0" />
+                            <CheckCircle className="h-3.5 w-3.5 mr-2 flex-shrink-0" style={{ color: primaryColor }} />
                             <span className="text-xs text-gray-600">PTU Assistance</span>
                           </li>
                         )}
                         {plan.birCompliance.receiptFormatting && (
                           <li className="flex items-center">
-                            <CheckCircle className="h-3.5 w-3.5 text-blue-600 mr-2 flex-shrink-0" />
+                            <CheckCircle className="h-3.5 w-3.5 mr-2 flex-shrink-0" style={{ color: primaryColor }} />
                             <span className="text-xs text-gray-600">BIR Receipt Formatting</span>
                           </li>
                         )}
                         {plan.birCompliance.birDocumentation && (
                           <li className="flex items-center">
-                            <CheckCircle className="h-3.5 w-3.5 text-blue-600 mr-2 flex-shrink-0" />
+                            <CheckCircle className="h-3.5 w-3.5 mr-2 flex-shrink-0" style={{ color: primaryColor }} />
                             <span className="text-xs text-gray-600">BIR Documentation</span>
                           </li>
                         )}
                         {plan.birCompliance.casReporting && (
                           <li className="flex items-center">
-                            <CheckCircle className="h-3.5 w-3.5 text-blue-600 mr-2 flex-shrink-0" />
+                            <CheckCircle className="h-3.5 w-3.5 mr-2 flex-shrink-0" style={{ color: primaryColor }} />
                             <span className="text-xs text-gray-600">CAS-Ready Reporting</span>
                           </li>
                         )}
                         {plan.birCompliance.monthlySupport && (
                           <li className="flex items-center">
-                            <CheckCircle className="h-3.5 w-3.5 text-blue-600 mr-2 flex-shrink-0" />
+                            <CheckCircle className="h-3.5 w-3.5 mr-2 flex-shrink-0" style={{ color: primaryColor }} />
                             <span className="text-xs text-gray-600">Monthly Compliance Support</span>
                           </li>
                         )}

@@ -95,7 +95,8 @@ export default function TransactionsPage() {
   const [viewType, setViewType] = useState<ViewType>('all');
   const [displayMode, setDisplayMode] = useState<'grid' | 'list'>('list');
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const { settings } = useTenantSettings();
+  const { settings: tenantSettings } = useTenantSettings();
+  const primaryColor = (tenantSettings || getDefaultTenantSettings()).primaryColor || '#2563eb';
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -109,10 +110,10 @@ export default function TransactionsPage() {
       try {
         hardwareService.setConfig(JSON.parse(stored));
       } catch { /* ignore */ }
-    } else if (settings?.hardwareConfig) {
-      hardwareService.setConfig(settings.hardwareConfig);
+    } else if (tenantSettings?.hardwareConfig) {
+      hardwareService.setConfig(tenantSettings.hardwareConfig);
     }
-  }, [tenant, settings]);
+  }, [tenant, tenantSettings]);
 
   // Load display mode from localStorage
   useEffect(() => {
@@ -291,14 +292,14 @@ export default function TransactionsPage() {
   };
 
   const formatDateForReceipt = (dateString: string) => {
-    const tenantSettings = settings || getDefaultTenantSettings();
-    return formatDateTime(dateString, tenantSettings);
+    const settingsValue = tenantSettings || getDefaultTenantSettings();
+    return formatDateTime(dateString, settingsValue);
   };
 
   const printReceipt = async (transaction: Transaction) => {
     if (!dict) return;
     const receiptData = {
-      storeName: settings?.companyName || dict.pos.receiptTitle || 'POS SYSTEM',
+      storeName: tenantSettings?.companyName || dict.pos.receiptTitle || 'POS SYSTEM',
       receiptNumber: transaction.receiptNumber || transaction._id.slice(-8),
       date: formatDateForReceipt(transaction.createdAt),
       items: transaction.items.map((item) => ({
@@ -325,7 +326,16 @@ export default function TransactionsPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+          <div
+            className="inline-block animate-spin h-8 w-8"
+            style={{
+              borderTop: `2px solid ${primaryColor}`,
+              borderRight: `2px solid ${primaryColor}`,
+              borderBottom: '2px solid transparent',
+              borderLeft: `2px solid ${primaryColor}`,
+              borderRadius: '50%',
+            }}
+          />
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
@@ -381,9 +391,10 @@ export default function TransactionsPage() {
                   onClick={() => setViewType(view)}
                   className={`flex-1 sm:flex-none px-3 sm:px-4 py-2.5 sm:py-2 text-xs sm:text-sm font-semibold transition-all duration-200 touch-manipulation min-h-[44px] sm:min-h-0 border-r border-gray-300 last:border-r-0 ${
                     viewType === view
-                      ? 'text-white bg-blue-600'
+                      ? 'text-white'
                       : 'text-gray-700 hover:bg-gray-100 active:bg-gray-200 bg-white'
                   }`}
+                  style={viewType === view ? { backgroundColor: primaryColor } : {}}
                 >
                   {view === 'all' 
                     ? (dict.transactions?.all || 'All')
@@ -399,9 +410,10 @@ export default function TransactionsPage() {
                 onClick={() => setDisplayMode('grid')}
                 className={`px-4 py-2.5 sm:py-2 bg-white border-2 transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium touch-manipulation min-h-[44px] sm:min-h-0 ${
                   displayMode === 'grid'
-                    ? 'border-blue-600 bg-blue-50 text-blue-700'
-                    : 'border-gray-300 text-gray-700 hover:bg-gray-100 hover:border-blue-500'
+                    ? 'border-gray-300 text-gray-700 hover:bg-gray-100'
+                    : 'border-gray-300 text-gray-700 hover:bg-gray-100'
                 }`}
+                style={displayMode === 'grid' ? { borderColor: primaryColor, backgroundColor: `${primaryColor}10`, color: primaryColor } : {}}
                 title={dict?.common?.gridView || 'Grid View'}
                 aria-label={dict?.common?.gridView || 'Grid View'}
               >
@@ -414,9 +426,10 @@ export default function TransactionsPage() {
                 onClick={() => setDisplayMode('list')}
                 className={`px-4 py-2.5 sm:py-2 bg-white border-2 transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium touch-manipulation min-h-[44px] sm:min-h-0 ${
                   displayMode === 'list'
-                    ? 'border-blue-600 bg-blue-50 text-blue-700'
-                    : 'border-gray-300 text-gray-700 hover:bg-gray-100 hover:border-blue-500'
+                    ? 'border-gray-300 text-gray-700 hover:bg-gray-100'
+                    : 'border-gray-300 text-gray-700 hover:bg-gray-100'
                 }`}
+                style={displayMode === 'list' ? { borderColor: primaryColor, backgroundColor: `${primaryColor}10`, color: primaryColor } : {}}
                 title={dict?.common?.listView || 'List View'}
                 aria-label={dict?.common?.listView || 'List View'}
               >
@@ -498,7 +511,14 @@ export default function TransactionsPage() {
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-2 mb-3">
-                        <span className="inline-block px-2.5 py-1 text-xs font-medium bg-blue-100 text-blue-800 capitalize border border-blue-300">
+                        <span
+                          className="inline-block px-2.5 py-1 text-xs font-medium capitalize border"
+                          style={{
+                            backgroundColor: `${primaryColor}20`,
+                            color: primaryColor,
+                            borderColor: primaryColor,
+                          }}
+                        >
                           {dict.pos[transaction.paymentMethod]}
                         </span>
                         {transaction.cashReceived && (
@@ -513,7 +533,7 @@ export default function TransactionsPage() {
                       <div className="flex items-center justify-between mb-4">
                         <div>
                           <div className="text-xs text-gray-500 mb-1">{dict.common.total}</div>
-                          <div className="font-bold text-blue-600 text-xl sm:text-2xl"><Currency amount={transaction.total} /></div>
+                          <div className="font-bold text-xl sm:text-2xl" style={{ color: primaryColor }}><Currency amount={transaction.total} /></div>
                         </div>
                       </div>
                       <div className="flex gap-2">
@@ -521,7 +541,7 @@ export default function TransactionsPage() {
                           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                           <span className="hidden sm:inline">{selectedTransaction?._id === transaction._id ? dict.transactions.hide : dict.transactions.view}</span>
                         </button>
-                        <button onClick={() => printReceipt(transaction)} className="flex-1 px-4 py-2.5 bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 transition-all duration-200 border border-blue-700 flex items-center justify-center gap-2 touch-manipulation min-h-[44px] text-sm font-medium" title={dict.common.print} aria-label={dict.common.print}>
+                        <button onClick={() => printReceipt(transaction)} className="flex-1 px-4 py-2.5 text-white transition-all duration-200 border flex items-center justify-center gap-2 touch-manipulation min-h-[44px] text-sm font-medium hover:opacity-80" style={{ backgroundColor: primaryColor, borderColor: primaryColor }} title={dict.common.print} aria-label={dict.common.print}>
                           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
                           <span className="hidden sm:inline">{dict.common.print}</span>
                         </button>
@@ -594,7 +614,16 @@ export default function TransactionsPage() {
                           <div className="text-sm font-medium text-gray-900">{transaction.items.length} {transaction.items.length === 1 ? dict.transactions.item : dict.transactions.items}</div>
                         </div>
                         <div className="flex flex-wrap gap-2 text-xs sm:text-sm text-gray-600">
-                          <span className="inline-block px-2.5 py-1 text-xs font-medium bg-blue-100 text-blue-800 capitalize border border-blue-300">{dict.pos[transaction.paymentMethod]}</span>
+                          <span
+                            className="inline-block px-2.5 py-1 text-xs font-medium capitalize border"
+                            style={{
+                              backgroundColor: `${primaryColor}20`,
+                              color: primaryColor,
+                              borderColor: primaryColor,
+                            }}
+                          >
+                            {dict.pos[transaction.paymentMethod]}
+                          </span>
                           {transaction.cashReceived && (
                             <div className="text-xs text-gray-500">
                               {dict.transactions.cash}: <Currency amount={transaction.cashReceived} />
@@ -606,13 +635,13 @@ export default function TransactionsPage() {
                       <div className="flex items-center gap-4 sm:gap-6">
                         <div className="text-right">
                           <div className="text-xs text-gray-500 mb-1 hidden sm:block">{dict.common.total}</div>
-                          <div className="font-bold text-blue-600 text-lg sm:text-xl"><Currency amount={transaction.total} /></div>
+                          <div className="font-bold text-lg sm:text-xl" style={{ color: primaryColor }}><Currency amount={transaction.total} /></div>
                         </div>
                         <div className="flex gap-2 actions-touch-visible transition-opacity duration-200">
                           <button onClick={() => { setSelectedTransaction(selectedTransaction?._id === transaction._id ? null : transaction); setSelectedExpense(null); }} className="px-3 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 active:bg-gray-300 transition-all duration-200 border border-gray-300 flex items-center justify-center touch-manipulation min-h-[44px] sm:min-h-0" title={selectedTransaction?._id === transaction._id ? dict.transactions.hide : dict.transactions.view}>
                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                           </button>
-                          <button onClick={() => printReceipt(transaction)} className="px-3 py-2 bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 transition-all duration-200 border border-blue-700 flex items-center justify-center touch-manipulation min-h-[44px] sm:min-h-0" title={dict.common.print} aria-label={dict.common.print}>
+                          <button onClick={() => printReceipt(transaction)} className="px-3 py-2 text-white transition-all duration-200 border flex items-center justify-center touch-manipulation min-h-[44px] sm:min-h-0 hover:opacity-80" style={{ backgroundColor: primaryColor, borderColor: primaryColor }} title={dict.common.print} aria-label={dict.common.print}>
                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
                           </button>
                           {transaction.status === 'completed' && (
@@ -689,7 +718,7 @@ export default function TransactionsPage() {
               ))}
               <div className="flex justify-between items-center pt-2 sm:pt-3 border-t-2 border-gray-300 mt-2">
                 <span className="text-base sm:text-lg font-bold text-gray-900">{dict.common.total}:</span>
-                <span className="text-lg sm:text-xl font-bold text-blue-600">
+                <span className="text-lg sm:text-xl font-bold" style={{ color: primaryColor }}>
                   <Currency amount={selectedTransaction.total} />
                 </span>
               </div>

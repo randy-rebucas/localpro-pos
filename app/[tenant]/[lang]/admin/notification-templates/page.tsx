@@ -6,36 +6,21 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 import NotificationTemplatesManager from '@/components/settings/NotificationTemplatesManager';
-import { ITenantSettings } from '@/models/Tenant';
+import { useNotificationTemplatesSettings } from '@/hooks/useNotificationTemplatesSettings';
 
 export default function NotificationTemplatesPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [loading, setLoading] = useState(true);
-  const [settings, setSettings] = useState<ITenantSettings | null>(null);
+
+  const { settings, loading, fetchSettings, updateSettings } = useNotificationTemplatesSettings(tenant);
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
     fetchSettings();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang, tenant]);
-
-  const fetchSettings = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch(`/api/tenants/${tenant}/settings`);
-      const data = await res.json();
-      if (data.success) {
-        setSettings(data.data);
-      }
-    } catch (error) {
-      console.error('Error fetching settings:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (!dict || loading || !settings) {
     return (
@@ -75,7 +60,7 @@ export default function NotificationTemplatesPage() {
             settings={settings}
             tenant={tenant}
             onUpdate={(updates) => {
-              setSettings({ ...settings, ...updates });
+              updateSettings(updates);
             }}
           />
         </div>

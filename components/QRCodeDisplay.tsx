@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { getDefaultTenantSettings } from '@/lib/currency';
 
 interface QRCodeDisplayProps {
   qrToken: string;
@@ -16,6 +18,8 @@ export default function QRCodeDisplay({ qrToken, name, onRegenerate }: QRCodeDis
   const lang = (params?.lang as 'en' | 'es') || 'en';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [copied, setCopied] = useState(false);
+  const { settings } = useTenantSettings();
+  const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#3b82f6';
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -48,7 +52,14 @@ export default function QRCodeDisplay({ qrToken, name, onRegenerate }: QRCodeDis
       <div className="w-full space-y-2">
         <button
           onClick={copyToClipboard}
-          className="w-full px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors border border-blue-300"
+          className="w-full px-4 py-2 text-sm font-medium transition-colors border"
+          style={{
+            color: primaryColor,
+            backgroundColor: `${primaryColor}10`,
+            borderColor: primaryColor
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = `${primaryColor}20`; }}
+          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = `${primaryColor}10`; }}
         >
           {copied ? (dict?.components?.qrCodeDisplay?.copied || '✓ Copied!') : (dict?.components?.qrCodeDisplay?.copyToken || 'Copy Token')}
         </button>

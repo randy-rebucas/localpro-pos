@@ -9,26 +9,16 @@ import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { supportsFeature } from '@/lib/business-type-helpers';
 import { getBusinessTypeConfig } from '@/lib/business-types';
 import { getBusinessType } from '@/lib/business-type-helpers';
-
-interface StockMovement {
-  _id: string;
-  productId: string | { _id: string; name: string; sku?: string };
-  branchId?: string | { _id: string; name: string };
-  variation?: {
-    size?: string;
-    color?: string;
-    type?: string;
-  };
-  type: 'sale' | 'purchase' | 'adjustment' | 'return' | 'damage' | 'transfer';
-  quantity: number;
-  previousStock: number;
-  newStock: number;
-  reason?: string;
-  transactionId?: string | { receiptNumber?: string };
-  userId?: string | { name: string; email: string };
-  notes?: string;
-  createdAt: string;
-}
+import { useStockMovementsList, type StockMovement } from '@/hooks/useStockMovementsList';
+import {
+  getMovementTypeColor,
+  getFailedToFetchMovementsMessage,
+  getProductName,
+  getProductSku,
+  getUserName,
+  getReceiptNumber,
+  getNotes,
+} from '@/lib/stock-movements-helpers';
 
 export default function StockMovementsPage() {
   const params = useParams();
@@ -36,59 +26,18 @@ export default function StockMovementsPage() {
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [movements, setMovements] = useState<StockMovement[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [filters, setFilters] = useState({
-    type: '',
-    productId: '',
-  });
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const { movements, loading, page, totalPages, filters, message, fetchMovements, updateFilters, updatePage } = useStockMovementsList();
   const { settings } = useTenantSettings();
   const inventoryEnabled = supportsFeature(settings ?? undefined, 'inventory');
   const businessTypeConfig = settings ? getBusinessTypeConfig(getBusinessType(settings)) : null;
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
+  }, [lang]);
+
+  useEffect(() => {
     fetchMovements();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lang, tenant, page, filters]);
-
-  const fetchMovements = async () => {
-    try {
-      let url = `/api/stock-movements?page=${page}&limit=50`;
-      if (filters.type) url += `&type=${filters.type}`;
-      if (filters.productId) url += `&productId=${filters.productId}`;
-      
-      const res = await fetch(url, { credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
-        setMovements(data.data);
-        setTotalPages(data.pagination?.pages || 1);
-        setMessage(null);
-      } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchStockMovements || 'Failed to fetch stock movements' });
-      }
-    } catch (error) {
-      console.error('Error fetching stock movements:', error);
-      setMessage({ type: 'error', text: dict?.common?.failedToFetchStockMovements || 'Failed to fetch stock movements' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const getTypeColor = (type: string) => {
-    const colors: Record<string, string> = {
-      sale: 'bg-red-100 text-red-800',
-      purchase: 'bg-green-100 text-green-800',
-      adjustment: 'bg-blue-100 text-blue-800',
-      return: 'bg-yellow-100 text-yellow-800',
-      damage: 'bg-orange-100 text-orange-800',
-      transfer: 'bg-purple-100 text-purple-800',
-    };
-    return colors[type] || 'bg-gray-100 text-gray-800';
-  };
+  }, [page, filters, fetchMovements]);
 
   if (!dict || loading) {
     return (
@@ -158,7 +107,7 @@ export default function StockMovementsPage() {
           <div className="mb-4 flex gap-4">
             <select
               value={filters.type}
-              onChange={(e) => setFilters({ ...filters, type: e.target.value })}
+              onChange={(e) => updateFilters({ type: e.target.value })}
               className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
             >
               <option value="">{dict.admin?.allTypes || 'All Types'}</option>
@@ -186,14 +135,10 @@ export default function StockMovementsPage() {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {movements.map((movement) => {
-                  const productName = typeof movement.productId === 'object' && movement.productId !== null ? movement.productId.name : 'Unknown';
-                  const productSku = typeof movement.productId === 'object' && movement.productId !== null ? movement.productId.sku : '';
-                  const userName = typeof movement.userId === 'object' && movement.userId !== null ? movement.userId.name : 'System';
-                  const receiptNumber = typeof movement.transactionId === 'object' && movement.transactionId !== null && movement.transactionId?.receiptNumber 
-                    ? movement.transactionId.receiptNumber 
-                    : typeof movement.transactionId === 'string' 
-                    ? movement.transactionId 
-                    : '-';
+                  const productName = getProductName(movement.productId);
+                  const productSku = getProductSku(movement.productId);
+                  const userName = getUserName(movement.userId);
+                  const receiptNumber = getReceiptNumber(movement.transactionId);
                   
                   return (
                     <tr key={movement._id}>
@@ -212,7 +157,7 @@ export default function StockMovementsPage() {
                         )}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-semibold border ${getTypeColor(movement.type)}`}>
+                        <span className={`px-2 py-1 text-xs font-semibold border ${getMovementTypeColor(movement.type)}`}>
                           {({
                             sale: dict.admin?.sale || 'Sale',
                             purchase: dict.admin?.purchase || 'Purchase',
@@ -238,7 +183,7 @@ export default function StockMovementsPage() {
                         {receiptNumber}
                       </td>
                       <td className="px-4 py-4 text-sm text-gray-500">
-                        {movement.notes || movement.reason || '-'}
+                        {getNotes(movement.notes, movement.reason)}
                       </td>
                     </tr>
                   );
@@ -252,7 +197,7 @@ export default function StockMovementsPage() {
           {totalPages > 1 && (
             <div className="mt-4 flex justify-center gap-2">
               <button
-                onClick={() => setPage(p => Math.max(1, p - 1))}
+                onClick={() => updatePage(page - 1)}
                 disabled={page === 1}
                 className="px-4 py-2 border border-gray-300 disabled:opacity-50 bg-white"
               >
@@ -262,7 +207,7 @@ export default function StockMovementsPage() {
                 {dict.admin?.page || 'Page'} {page} / {totalPages}
               </span>
               <button
-                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                onClick={() => updatePage(page + 1)}
                 disabled={page === totalPages}
                 className="px-4 py-2 border border-gray-300 disabled:opacity-50 bg-white"
               >

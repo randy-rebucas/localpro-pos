@@ -368,7 +368,20 @@ export default function ReportsPage() {
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-[var(--primary-color)] focus:border-[var(--primary-color)] transition-all bg-white"
+                  style={{
+                    borderWidth: '2px',
+                    borderColor: '#d1d5db',
+                  }}
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = primaryColor;
+                    e.currentTarget.style.outline = 'none';
+                    e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = '#d1d5db';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }}
+                  className="px-4 py-3 transition-all bg-white"
                 />
               </div>
               <div>
@@ -379,7 +392,20 @@ export default function ReportsPage() {
                   type="date"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-[var(--primary-color)] focus:border-[var(--primary-color)] transition-all bg-white"
+                  style={{
+                    borderWidth: '2px',
+                    borderColor: '#d1d5db',
+                  }}
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = primaryColor;
+                    e.currentTarget.style.outline = 'none';
+                    e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = '#d1d5db';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }}
+                  className="px-4 py-3 transition-all bg-white"
                 />
               </div>
               {activeTab === 'sales' && (
@@ -390,7 +416,20 @@ export default function ReportsPage() {
                   <select
                     value={period}
                     onChange={(e) => setPeriod(e.target.value as any)} // eslint-disable-line @typescript-eslint/no-explicit-any
-                    className="px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-[var(--primary-color)] focus:border-[var(--primary-color)] transition-all bg-white"
+                    style={{
+                      borderWidth: '2px',
+                      borderColor: '#d1d5db',
+                    }}
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = primaryColor;
+                      e.currentTarget.style.outline = 'none';
+                      e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.borderColor = '#d1d5db';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
+                    className="px-4 py-3 transition-all bg-white"
                   >
                     <option value="daily">{dict.reports?.daily || 'Daily'}</option>
                     <option value="weekly">{dict.reports?.weekly || 'Weekly'}</option>
@@ -484,7 +523,7 @@ export default function ReportsPage() {
                   )}
                   {activeTab === 'sales-journal' && (
                     salesJournal ? (
-                      <SalesJournalView data={salesJournal} dict={dict} onExport={exportSalesJournal} />
+                      <SalesJournalView data={salesJournal} dict={dict} primaryColor={primaryColor} onExport={exportSalesJournal} />
                     ) : (
                       <div className="text-center py-16">
                         <svg className="mx-auto h-16 w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -515,11 +554,11 @@ function SalesReportView({ report, dict, primaryColor, colors }: { report: Sales
     <div className="space-y-6">
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
-        <div className="bg-blue-50 border border-blue-300 p-5 sm:p-6">
-          <div className="text-xs sm:text-sm text-blue-600 font-semibold mb-2 uppercase tracking-wide">
+        <div className="border p-5 sm:p-6" style={{ backgroundColor: `${primaryColor}10`, borderColor: `${primaryColor}40` }}>
+          <div className="font-semibold mb-2 uppercase tracking-wide text-xs sm:text-sm" style={{ color: primaryColor }}>
             {dict.reports?.totalSales || 'Total Sales'}
           </div>
-          <div className="text-2xl sm:text-3xl font-bold text-blue-900">
+          <div className="text-2xl sm:text-3xl font-bold" style={{ color: primaryColor }}>
             <Currency amount={report.totalSales} />
           </div>
         </div>
@@ -680,11 +719,11 @@ function VATReportView({ report, dict, primaryColor }: { report: VATReport; dict
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-        <div className="bg-blue-50 border border-blue-300 p-5 sm:p-6">
-          <div className="text-xs sm:text-sm text-blue-600 font-semibold mb-2 uppercase tracking-wide">
+        <div className="border p-5 sm:p-6" style={{ backgroundColor: `${primaryColor}10`, borderColor: `${primaryColor}40` }}>
+          <div className="font-semibold mb-2 uppercase tracking-wide text-xs sm:text-sm" style={{ color: primaryColor }}>
             {dict.reports?.vatSales || 'VAT Sales'}
           </div>
-          <div className="text-2xl sm:text-3xl font-bold text-blue-900">
+          <div className="text-2xl sm:text-3xl font-bold" style={{ color: primaryColor }}>
             <Currency amount={report.vatSales} />
           </div>
         </div>
@@ -775,11 +814,11 @@ function ProfitLossView({ summary, dict, primaryColor, colors }: { summary: Prof
             <Currency amount={summary.expenses.total} />
           </div>
         </div>
-        <div className="bg-blue-50 border border-blue-300 p-5 sm:p-6">
-          <div className="text-xs sm:text-sm text-blue-600 font-semibold mb-2 uppercase tracking-wide">
+        <div className="border p-5 sm:p-6" style={{ backgroundColor: `${primaryColor}10`, borderColor: `${primaryColor}40` }}>
+          <div className="font-semibold mb-2 uppercase tracking-wide text-xs sm:text-sm" style={{ color: primaryColor }}>
             {dict.reports?.netProfit || 'Net Profit'}
           </div>
-          <div className="text-2xl sm:text-3xl font-bold text-blue-900">
+          <div className="text-2xl sm:text-3xl font-bold" style={{ color: primaryColor }}>
             <Currency amount={summary.netProfit} />
           </div>
         </div>
@@ -945,16 +984,16 @@ function CashDrawerReportView({ reports, dict }: { reports: CashDrawerReport[]; 
   );
 }
 
-function SalesJournalView({ data, dict, onExport }: { data: SalesJournalData; dict: any; onExport: (format: 'csv' | 'excel' | 'pdf') => void }) { // eslint-disable-line @typescript-eslint/no-explicit-any
+function SalesJournalView({ data, dict, primaryColor, onExport }: { data: SalesJournalData; dict: any; primaryColor: string; onExport: (format: 'csv' | 'excel' | 'pdf') => void }) { // eslint-disable-line @typescript-eslint/no-explicit-any
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-6">
-        <div className="bg-blue-50 border border-blue-300 p-5 sm:p-6">
-          <div className="text-xs sm:text-sm text-blue-600 font-semibold mb-2 uppercase tracking-wide">
+        <div className="border p-5 sm:p-6" style={{ backgroundColor: `${primaryColor}10`, borderColor: `${primaryColor}40` }}>
+          <div className="font-semibold mb-2 uppercase tracking-wide text-xs sm:text-sm" style={{ color: primaryColor }}>
             {dict.reports?.totalTransactions || 'Transactions'}
           </div>
-          <div className="text-2xl sm:text-3xl font-bold text-blue-900">{data.summary.totalTransactions}</div>
+          <div className="text-2xl sm:text-3xl font-bold" style={{ color: primaryColor }}>{data.summary.totalTransactions}</div>
         </div>
         <div className="bg-green-50 border border-green-300 p-5 sm:p-6">
           <div className="text-xs sm:text-sm text-green-600 font-semibold mb-2 uppercase tracking-wide">

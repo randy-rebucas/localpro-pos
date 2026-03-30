@@ -17,7 +17,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const { settings } = useTenantSettings();
   const tenantSettings = settings || getDefaultTenantSettings();
-  const primaryColor = tenantSettings.primaryColor || '#2563eb';
+  const primaryColor = tenantSettings.primaryColor || '#3b82f6';
   const { subscriptionStatus } = useSubscription();
 
   useEffect(() => {

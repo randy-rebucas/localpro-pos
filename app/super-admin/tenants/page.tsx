@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { SuperAdminShell } from '@/components/super-admin/Shell';
+import { showToast } from '@/lib/toast';
 
 interface Tenant {
   _id: string;
@@ -15,6 +16,13 @@ interface Tenant {
   };
   isActive: boolean;
   createdAt: string;
+}
+
+interface Pagination {
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
 }
 
 interface TenantFormData {
@@ -37,7 +45,9 @@ const defaultForm: TenantFormData = {
 
 export default function TenantsPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [pagination, setPagination] = useState<Pagination>({ page: 1, limit: 20, total: 0, pages: 0 });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState('');
   const [showModal, setShowModal] = useState(false);
@@ -49,19 +59,35 @@ export default function TenantsPage() {
 
   const fetchTenants = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const params = new URLSearchParams();
       if (search) params.set('search', search);
       if (activeFilter) params.set('active', activeFilter);
+      params.set('page', String(pagination.page));
+      params.set('limit', String(pagination.limit));
       const res = await fetch(`/api/super-admin/tenants?${params}`, { credentials: 'include' });
       const data = await res.json();
-      if (data.success) setTenants(data.data);
-    } catch {
-      // silent
+      if (data.success) {
+        setTenants(data.data);
+        if (data.pagination) {
+          setPagination(data.pagination);
+        }
+      } else {
+        const errorMsg = data.error || 'Failed to load tenants';
+        setError(errorMsg);
+        showToast.error(errorMsg);
+        setTenants([]);
+      }
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to load tenants';
+      setError(errorMsg);
+      showToast.error(errorMsg);
+      setTenants([]);
     } finally {
       setLoading(false);
     }
-  }, [search, activeFilter]);
+  }, [search, activeFilter, pagination.page, pagination.limit]);
 
   useEffect(() => { fetchTenants(); }, [fetchTenants]);
 
@@ -203,12 +229,23 @@ export default function TenantsPage() {
               <div className="inline-block animate-spin h-6 w-6 border-2 border-blue-600 border-t-transparent rounded-full" />
               <p className="mt-3 text-gray-500 text-sm">Loading tenants...</p>
             </div>
+          ) : error ? (
+            <div className="p-12 text-center">
+              <p className="text-red-600 text-sm font-medium">{error}</p>
+              <button
+                onClick={fetchTenants}
+                className="mt-4 px-4 py-2 bg-blue-600 text-white text-sm hover:bg-blue-700"
+              >
+                Retry
+              </button>
+            </div>
           ) : tenants.length === 0 ? (
             <div className="p-12 text-center text-gray-500 text-sm">
               {search || activeFilter ? 'No tenants match your filters.' : 'No tenants yet. Create your first tenant.'}
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+              <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
@@ -260,6 +297,33 @@ export default function TenantsPage() {
                 </tbody>
               </table>
             </div>
+
+              {/* Pagination */}
+              <div className="border-t border-gray-200 px-4 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="text-sm text-gray-500">
+                  Showing {(pagination.page - 1) * pagination.limit + 1} to {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} tenants
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setPagination(prev => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
+                    disabled={pagination.page === 1}
+                    className="px-3 py-1 border border-gray-300 text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  <div className="text-sm text-gray-600">
+                    Page {pagination.page} of {pagination.pages}
+                  </div>
+                  <button
+                    onClick={() => setPagination(prev => ({ ...prev, page: Math.min(prev.pages, prev.page + 1) }))}
+                    disabled={pagination.page >= pagination.pages}
+                    className="px-3 py-1 border border-gray-300 text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            </>
           )}
         </div>
       </div>

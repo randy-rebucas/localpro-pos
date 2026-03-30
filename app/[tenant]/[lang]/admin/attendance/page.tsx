@@ -1,12 +1,16 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import Navbar from '@/components/Navbar';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
-// Export libs loaded on demand — see exportData()
 import dynamic from 'next/dynamic';
+import { useAttendance } from '@/hooks/useAttendance';
+import { useAttendanceFilters } from '@/hooks/useAttendanceFilters';
+import { useCurrentSessions } from '@/hooks/useCurrentSessions';
+import { getUserName, buildExportData, formatHours, calculateTotalHours, calculateAverageHours } from '@/lib/attendance-helpers';
+import toast from 'react-hot-toast';
 
 // Dynamically import charts to avoid SSR issues
 const AttendanceTrendsCharts = dynamic(() => import('@/components/AttendanceTrendsCharts'), {
@@ -21,23 +25,6 @@ const AttendanceTrendsCharts = dynamic(() => import('@/components/AttendanceTren
   ),
 });
 
-interface Attendance {
-  _id: string;
-  userId: string | { _id: string; name: string; email: string };
-  clockIn: string;
-  clockOut?: string;
-  breakStart?: string;
-  breakEnd?: string;
-  totalHours?: number;
-  notes?: string;
-  location?: {
-    latitude?: number;
-    longitude?: number;
-    address?: string;
-  };
-  createdAt: string;
-}
-
 interface User {
   _id: string;
   name: string;
@@ -49,154 +36,121 @@ export default function AttendancePage() {
   const router = useRouter();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [attendances, setAttendances] = useState<Attendance[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedUserId, setSelectedUserId] = useState<string>('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [currentSessions, setCurrentSessions] = useState<Attendance[]>([]);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [dict, setDict] = React.useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const [users, setUsers] = React.useState<User[]>([]);
+  const [usersLoading, setUsersLoading] = React.useState(true);
+  const [message, setMessage] = React.useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  const { attendances, loading, fetchAttendances } = useAttendance();
+  const { selectedUserId, setSelectedUserId, startDate, setStartDate, endDate, setEndDate, initializeDateRange } = useAttendanceFilters();
+  const { currentSessions, fetchCurrentSessions, calculateSessionHours } = useCurrentSessions();
+
+  // Load dictionary
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
-    fetchUsers();
-    // Set default date range (last 30 days)
-    const end = new Date();
-    const start = new Date();
-    start.setDate(start.getDate() - 30);
-    setEndDate(end.toISOString().split('T')[0]);
-    setStartDate(start.toISOString().split('T')[0]);
-     
-  }, [lang, tenant]);
+  }, [lang]);
 
+  // Initialize date range on mount
+  useEffect(() => {
+    const { startDate, endDate } = initializeDateRange();
+    setStartDate(startDate);
+    setEndDate(endDate);
+  }, [initializeDateRange, setStartDate, setEndDate]);
+
+  // Fetch users
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+        const res = await fetch('/api/users', {
+          credentials: 'include',
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        if (!res.ok) {
+          throw new Error(`Failed to fetch users: HTTP ${res.status}`);
+        }
+        
+        const data = await res.json();
+        if (data.success) {
+          setUsers(data.data);
+        } else {
+          throw new Error(data.error || 'Failed to fetch users');
+        }
+      } catch (error) {
+        console.error('Error fetching users:', error);
+        const errorMsg = error instanceof Error ? error.message : 'Failed to load employees';
+        setMessage({ type: 'error', text: errorMsg });
+      } finally {
+        setUsersLoading(false);
+      }
+    };
+
+    fetchUsers();
+  }, [tenant]);
+
+  // Fetch attendance records when filters change
   useEffect(() => {
     if (startDate && endDate) {
-      fetchAttendances();
+      fetchAttendances(
+        {
+          userId: selectedUserId,
+          startDate,
+          endDate,
+          limit: 100,
+        },
+        (error) => {
+          setMessage({ type: 'error', text: error });
+        }
+      );
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startDate, endDate, selectedUserId]);
+  }, [startDate, endDate, selectedUserId, fetchAttendances]);
 
+  // Fetch current sessions when users load
   useEffect(() => {
     if (users.length > 0) {
-      fetchCurrentSessions();
+      fetchCurrentSessions(users);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [users]);
+  }, [users, fetchCurrentSessions]);
 
-  const fetchUsers = async () => {
-    try {
-      const res = await fetch('/api/users', { credentials: 'include' });
-      const data = await res.json();
-      if (data.success) setUsers(data.data);
-    } catch (error) {
-      console.error('Error fetching users:', error);
-    }
-  };
+  const handleExport = useCallback(
+    async (format: 'csv' | 'excel' | 'pdf' = 'csv') => {
+      const headers = [
+        'Employee',
+        'Clock In',
+        'Clock Out',
+        'Break Start',
+        'Break End',
+        'Total Hours',
+        'Notes',
+        'Date',
+      ];
 
-  const fetchAttendances = async () => {
-    try {
-      setLoading(true);
-      const params = new URLSearchParams();
-      if (selectedUserId) params.append('userId', selectedUserId);
-      if (startDate) params.append('startDate', startDate);
-      if (endDate) params.append('endDate', endDate);
-      params.append('limit', '100');
+      const exportData = buildExportData(attendances, users);
+      const baseFilename = `attendance_export_${startDate || 'all'}_to_${endDate || 'today'}`;
 
-      const res = await fetch(`/api/attendance?${params}`, { credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
-        setAttendances(data.data);
-        setMessage(null);
-      } else {
-        setMessage({ type: 'error', text: data.error || dict?.admin?.fetchError || 'Failed to fetch attendance records' });
-      }
-    } catch (error) {
-      console.error('Error fetching attendance:', error);
-      setMessage({ type: 'error', text: dict?.admin?.fetchError || 'Failed to fetch attendance records' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchCurrentSessions = async () => {
-    try {
-      // Fetch all users and check their current sessions
-      const sessions: Attendance[] = [];
-      for (const user of users) {
-        try {
-          const res = await fetch(`/api/attendance/current?userId=${user._id}`, { credentials: 'include' });
-          const data = await res.json();
-          if (data.success && data.data) {
-            sessions.push({ ...data.data, userId: user });
-          }
-        } catch {
-          // Skip if error fetching for this user
+      try {
+        const { arrayToCSV, downloadCSV, downloadExcel, downloadPDF } = await import('@/lib/export');
+        if (format === 'csv') {
+          const csv = arrayToCSV(exportData, headers);
+          downloadCSV(csv, `${baseFilename}.csv`);
+        } else if (format === 'excel') {
+          await downloadExcel(exportData, headers, baseFilename);
+        } else if (format === 'pdf') {
+          await downloadPDF(exportData, headers, baseFilename, dict.admin?.attendance || 'Attendance Records');
         }
+        toast.success(`Successfully exported as ${format.toUpperCase()}`);
+      } catch (error) {
+        console.error('Error exporting:', error);
+        const errorMsg = error instanceof Error ? error.message : `Failed to export ${format}`;
+        toast.error(errorMsg);
       }
-      setCurrentSessions(sessions);
-    } catch (error) {
-      console.error('Error fetching current sessions:', error);
-    }
-  };
-
-  const formatHours = (hours?: number) => {
-    if (!hours) return '-';
-    const h = Math.floor(hours);
-    const m = Math.round((hours - h) * 60);
-    return `${h}h ${m}m`;
-  };
-
-  const calculateTotalHours = () => {
-    return attendances.reduce((total, att) => total + (att.totalHours || 0), 0);
-  };
-
-  const handleExport = async (format: 'csv' | 'excel' | 'pdf' = 'csv') => {
-    const headers = [
-      'Employee',
-      'Clock In',
-      'Clock Out',
-      'Break Start',
-      'Break End',
-      'Total Hours',
-      'Notes',
-      'Date',
-    ];
-    
-    const exportData = attendances.map(attendance => {
-      const userName = typeof attendance.userId === 'object' 
-        ? attendance.userId.name 
-        : users.find(u => u._id === attendance.userId)?.name || 'Unknown';
-      const clockIn = new Date(attendance.clockIn);
-      const clockOut = attendance.clockOut ? new Date(attendance.clockOut) : null;
-      const breakStart = attendance.breakStart ? new Date(attendance.breakStart) : null;
-      const breakEnd = attendance.breakEnd ? new Date(attendance.breakEnd) : null;
-      
-      return {
-        Employee: userName,
-        'Clock In': clockIn.toLocaleString(),
-        'Clock Out': clockOut ? clockOut.toLocaleString() : 'Active',
-        'Break Start': breakStart ? breakStart.toLocaleTimeString() : '',
-        'Break End': breakEnd ? breakEnd.toLocaleTimeString() : '',
-        'Total Hours': attendance.totalHours ? formatHours(attendance.totalHours) : '-',
-        Notes: attendance.notes || '',
-        Date: clockIn.toLocaleDateString(),
-      };
-    });
-
-    const baseFilename = `attendance_export_${startDate || 'all'}_to_${endDate || 'today'}`;
-    
-    const { arrayToCSV, downloadCSV, downloadExcel, downloadPDF } = await import('@/lib/export');
-    if (format === 'csv') {
-      const csv = arrayToCSV(exportData, headers);
-      downloadCSV(csv, `${baseFilename}.csv`);
-    } else if (format === 'excel') {
-      await downloadExcel(exportData, headers, baseFilename);
-    } else if (format === 'pdf') {
-      await downloadPDF(exportData, headers, baseFilename, dict.admin?.attendance || 'Attendance Records');
-    }
-  };
+    },
+    [attendances, users, startDate, endDate, dict]
+  );
 
   if (!dict) {
     return (
@@ -247,11 +201,10 @@ export default function AttendancePage() {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {currentSessions.map((session) => {
-                const userName = typeof session.userId === 'object' ? session.userId.name : users.find(u => u._id === session.userId)?.name || 'Unknown';
+                const userName = typeof session.userId === 'object' ? session.userId.name : getUserName(session, users);
                 const clockInTime = new Date(session.clockIn);
-                const now = new Date();
-                const hours = (now.getTime() - clockInTime.getTime()) / (1000 * 60 * 60);
-                
+                const hours = calculateSessionHours(session.clockIn);
+
                 return (
                   <div key={session._id} className="bg-white border border-blue-300 p-4">
                     <div className="font-semibold text-gray-900">{userName}</div>
@@ -296,7 +249,8 @@ export default function AttendancePage() {
               <select
                 value={selectedUserId}
                 onChange={(e) => setSelectedUserId(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                disabled={usersLoading}
+                className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white disabled:opacity-50"
               >
                 <option value="">{dict.common?.all || 'All Employees'}</option>
                 {users.map((user) => (
@@ -357,12 +311,6 @@ export default function AttendancePage() {
                   </button>
                 </div>
               </div>
-              <button
-                onClick={fetchAttendances}
-                className="w-full px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
-              >
-                {dict.common?.search || 'Search'}
-              </button>
             </div>
           </div>
         </div>
@@ -375,12 +323,12 @@ export default function AttendancePage() {
           </div>
           <div className="bg-white border border-gray-300 p-6">
             <div className="text-sm text-gray-600 mb-1">{dict.admin?.totalHours || 'Total Hours'}</div>
-            <div className="text-2xl font-bold text-gray-900">{formatHours(calculateTotalHours())}</div>
+            <div className="text-2xl font-bold text-gray-900">{formatHours(calculateTotalHours(attendances))}</div>
           </div>
           <div className="bg-white border border-gray-300 p-6">
             <div className="text-sm text-gray-600 mb-1">{dict.admin?.averageHours || 'Average Hours/Record'}</div>
             <div className="text-2xl font-bold text-gray-900">
-              {attendances.length > 0 ? formatHours(calculateTotalHours() / attendances.length) : '-'}
+              {attendances.length > 0 ? formatHours(calculateAverageHours(attendances)) : '-'}
             </div>
           </div>
         </div>
@@ -417,9 +365,7 @@ export default function AttendancePage() {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {attendances.map((attendance) => {
-                    const userName = typeof attendance.userId === 'object' 
-                      ? attendance.userId.name 
-                      : users.find(u => u._id === attendance.userId)?.name || 'Unknown';
+                    const userName = getUserName(attendance, users);
                     const clockIn = new Date(attendance.clockIn);
                     const clockOut = attendance.clockOut ? new Date(attendance.clockOut) : null;
                     const breakStart = attendance.breakStart ? new Date(attendance.breakStart) : null;

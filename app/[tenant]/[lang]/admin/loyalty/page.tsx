@@ -1,124 +1,41 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { showToast } from '@/lib/toast';
-
-interface LoyaltyConfig {
-  pointsPerPeso: number;
-  pesoPerPoint: number;
-  minRedemption: number;
-  isEnabled: boolean;
-}
-
-interface LoyaltyCustomer {
-  _id: string;
-  firstName: string;
-  lastName: string;
-  email?: string;
-  phone?: string;
-  loyaltyPointsBalance: number;
-  totalSpent?: number;
-  isActive: boolean;
-}
+import { useLoyaltyConfig } from '@/hooks/useLoyaltyConfig';
+import { useLoyaltyCustomers } from '@/hooks/useLoyaltyCustomers';
+import { getSaveSuccessMessage, getSaveErrorMessage } from '@/lib/loyalty-helpers';
 
 export default function LoyaltyPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as string;
 
-  const [config, setConfig] = useState<LoyaltyConfig | null>(null);
-  const [configForm, setConfigForm] = useState<LoyaltyConfig>({
-    pointsPerPeso: 1,
-    pesoPerPoint: 0.10,
-    minRedemption: 100,
-    isEnabled: true,
-  });
-  const [savingConfig, setSavingConfig] = useState(false);
-  const [configDirty, setConfigDirty] = useState(false);
+  const { config, configForm, loading: configLoading, saving: savingConfig, dirty: configDirty, fetchConfig, updateConfigForm, saveConfig } = useLoyaltyConfig();
+  const { customers, search, page, totalPages, totalCustomers, loading, enrolledCount, totalPoints, setSearch, setPage, fetchCustomers } = useLoyaltyCustomers();
 
-  const [customers, setCustomers] = useState<LoyaltyCustomer[]>([]);
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalCustomers, setTotalCustomers] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [configLoading, setConfigLoading] = useState(true);
+  useEffect(() => {
+    fetchConfig();
+  }, [fetchConfig]);
 
-  const fetchConfig = useCallback(async () => {
-    setConfigLoading(true);
-    try {
-      const res = await fetch('/api/loyalty/config', { credentials: 'include' });
-      const json = await res.json();
-      if (json.success) {
-        setConfig(json.data);
-        setConfigForm(json.data);
-        setConfigDirty(false);
-      }
-    } catch {
-      showToast.error('Failed to load loyalty configuration');
-    } finally {
-      setConfigLoading(false);
-    }
-  }, []);
-
-  const fetchCustomers = useCallback(async () => {
-    setLoading(true);
-    try {
-      const qs = new URLSearchParams({ page: String(page), limit: '20' });
-      if (search) qs.set('search', search);
-      const res = await fetch(`/api/customers?${qs}`, { credentials: 'include' });
-      const json = await res.json();
-      if (json.success) {
-        setCustomers(json.data);
-        setTotalPages(json.pagination?.pages ?? 1);
-        setTotalCustomers(json.pagination?.total ?? 0);
-      }
-    } catch {
-      showToast.error('Failed to load customers');
-    } finally {
-      setLoading(false);
-    }
-  }, [page, search]);
-
-  useEffect(() => { fetchConfig(); }, [fetchConfig]);
-  useEffect(() => { fetchCustomers(); }, [fetchCustomers]);
+  useEffect(() => {
+    fetchCustomers(1, '');
+  }, [fetchCustomers]);
 
   const handleConfigSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSavingConfig(true);
-    try {
-      const res = await fetch('/api/loyalty/config', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(configForm),
-      });
-      const json = await res.json();
-      if (json.success) {
-        setConfig(json.data);
-        setConfigDirty(false);
-        showToast.success('Loyalty settings saved');
-      } else {
-        showToast.error(json.error || 'Failed to save settings');
-      }
-    } catch {
-      showToast.error('Failed to save settings');
-    } finally {
-      setSavingConfig(false);
+    const result = await saveConfig(configForm);
+    if (result.success) {
+      showToast.success(getSaveSuccessMessage());
+    } else {
+      showToast.error(getSaveErrorMessage(result.error));
     }
   };
 
-  const updateConfigForm = (patch: Partial<LoyaltyConfig>) => {
-    setConfigForm(f => ({ ...f, ...patch }));
-    setConfigDirty(true);
-  };
-
-  // Stats derived from current customers list
-  const enrolledCount = customers.filter(c => (c.loyaltyPointsBalance ?? 0) > 0).length;
-  const totalPoints = customers.reduce((sum, c) => sum + (c.loyaltyPointsBalance ?? 0), 0);
+  // Stats derived from config and customers
   const pesoValue = config ? totalPoints * config.pesoPerPoint : 0;
 
   if (configLoading) {
@@ -286,7 +203,7 @@ export default function LoyaltyPage() {
                   type="text"
                   placeholder="Search customers..."
                   value={search}
-                  onChange={e => { setSearch(e.target.value); setPage(1); }}
+                  onChange={e => setSearch(e.target.value)}
                   className="px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-blue-500 w-52"
                 />
               </div>
@@ -360,10 +277,9 @@ export default function LoyaltyPage() {
                 </div>
               )}
 
-              {totalPages > 1 && (
                 <div className="flex justify-center gap-2 mt-4 pt-4 border-t border-gray-100">
                   <button
-                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    onClick={() => setPage(Math.max(1, page - 1))}
                     disabled={page === 1}
                     className="px-3 py-1 border border-gray-300 text-sm disabled:opacity-40"
                   >
@@ -371,14 +287,13 @@ export default function LoyaltyPage() {
                   </button>
                   <span className="px-3 py-1 text-sm text-gray-600">{page} / {totalPages}</span>
                   <button
-                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                    onClick={() => setPage(Math.min(totalPages, page + 1))}
                     disabled={page === totalPages}
                     className="px-3 py-1 border border-gray-300 text-sm disabled:opacity-40"
                   >
                     Next
                   </button>
                 </div>
-              )}
             </div>
           </div>
 

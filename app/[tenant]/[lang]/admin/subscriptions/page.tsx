@@ -10,80 +10,15 @@ import { getDefaultTenantSettings } from '@/lib/currency';
 import { CreditCard, AlertTriangle, ArrowUp, Receipt, CheckCircle } from 'lucide-react';
 import { useConfirm } from '@/lib/confirm';
 import Link from 'next/link';
-
-interface SubscriptionPlan {
-  _id: string;
-  name: string;
-  tier: string;
-  description?: string;
-  price: {
-    monthly: number;
-    setupFee?: number;
-    currency: string;
-  };
-  features: {
-    maxUsers: number;
-    maxBranches: number;
-    maxProducts: number;
-    maxTransactions: number;
-    enableInventory: boolean;
-    enableCategories: boolean;
-    enableDiscounts: boolean;
-    enableLoyaltyProgram: boolean;
-    enableCustomerManagement: boolean;
-    enableBookingScheduling: boolean;
-    enableReports: boolean;
-    enableMultiBranch: boolean;
-    enableHardwareIntegration: boolean;
-    prioritySupport: boolean;
-    customIntegrations: boolean;
-    dedicatedAccountManager: boolean;
-  };
-  birCompliance?: {
-    ptuAssistance: boolean;
-    receiptFormatting: boolean;
-    birDocumentation: boolean;
-    casReporting: boolean;
-    auditTrailSystem: boolean;
-    monthlySupport: boolean;
-  };
-  isActive: boolean;
-  isCustom: boolean;
-}
-
-interface Subscription {
-  _id: string;
-  tenantId: {
-    _id: string;
-    slug: string;
-    name: string;
-  };
-  planId: SubscriptionPlan;
-  status: 'active' | 'inactive' | 'cancelled' | 'suspended' | 'trial';
-  billingCycle: 'monthly' | 'yearly';
-  startDate: string;
-  endDate?: string;
-  trialEndDate?: string;
-  nextBillingDate?: string;
-  isTrial: boolean;
-  autoRenew: boolean;
-  usage: {
-    currentUsers: number;
-    currentBranches: number;
-    currentProducts: number;
-    currentTransactions: number;
-  };
-}
-
-interface BillingTransaction {
-  _id: string;
-  amount: number;
-  currency: string;
-  status: 'paid' | 'failed' | 'pending' | 'refunded';
-  date: string;
-  transactionId?: string;
-  invoiceUrl?: string;
-}
+import { useSubscriptionManager, type Subscription, type BillingTransaction } from '@/hooks/useSubscriptionManager';
+import {
+  formatDate,
+  getSubscriptionStatusBadgeStyles,
+  getSubscriptionStatusLabel,
+  getBillingTransactionStatusBadgeStyles,
+  getBillingTransactionStatusLabel,
+  getBillingTransactionIconStyles,
+} from '@/lib/subscriptions-helpers';
 
 export default function SubscriptionsPage() {
   const params = useParams();
@@ -91,58 +26,20 @@ export default function SubscriptionsPage() {
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
 
-  const formatDate = (value: string | Date | undefined | null) => {
-    if (!value) return '—';
-    const d = new Date(value);
-    return isNaN(d.getTime()) ? '—' : d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-  };
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [subscription, setSubscription] = useState<Subscription | null>(null);
-  const [billingHistory, setBillingHistory] = useState<BillingTransaction[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [billingLoading, setBillingLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'subscription' | 'billing'>('subscription');
+  const { subscription, billingHistory, loading, billingLoading, fetchSubscription, fetchBillingHistory } = useSubscriptionManager();
   const { subscriptionStatus, refreshSubscription } = useSubscription(); // eslint-disable-line @typescript-eslint/no-unused-vars
   const { Dialog: ConfirmDialog } = useConfirm();
   const { settings } = useTenantSettings();
   const tenantSettings = settings || getDefaultTenantSettings();
   const primaryColor = tenantSettings.primaryColor || '#2563eb';
 
-  const fetchSubscription = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch('/api/subscriptions/current', { credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
-        setSubscription(data.data);
-      }
-    } catch (error) {
-      console.error('Error fetching subscription:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchBillingHistory = async () => {
-    try {
-      setBillingLoading(true);
-      const res = await fetch('/api/subscriptions/billing-history', { credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
-        setBillingHistory(data.data || []);
-      }
-    } catch (error) {
-      console.error('Error fetching billing history:', error);
-    } finally {
-      setBillingLoading(false);
-    }
-  };
-
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
     fetchSubscription();
     fetchBillingHistory();
-  }, [lang, tenant]);
+  }, [lang, fetchSubscription, fetchBillingHistory]);
 
   if (!dict) {
     return (
@@ -239,11 +136,9 @@ export default function SubscriptionsPage() {
                   </div>
                   {subscription && (
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      subscription.status === 'active' ? 'bg-green-100 text-green-800' :
-                      subscription.status === 'trial' ? 'bg-blue-100 text-blue-800' :
-                      'bg-red-100 text-red-800'
+                      getSubscriptionStatusBadgeStyles(subscription.status)
                     }`}>
-                      {({ active: dict?.admin?.active || 'Active', inactive: dict?.admin?.inactive || 'Inactive', trial: dict?.admin?.trial || 'Trial', suspended: dict?.admin?.suspended || 'Suspended', cancelled: 'Cancelled' } as Record<string,string>)[subscription.status] ?? subscription.status}
+                      {getSubscriptionStatusLabel(subscription.status, dict)}
                     </span>
                   )}
                 </div>

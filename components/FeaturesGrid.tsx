@@ -45,12 +45,12 @@ const TABS: { key: Category; label: string; count: number }[] = [
 ];
 
 const CATEGORY_ACCENT: Record<Category, string> = {
-  all: 'bg-blue-500',
-  pos: 'bg-blue-500',
-  inventory: 'bg-emerald-500',
-  customers: 'bg-violet-500',
-  analytics: 'bg-orange-500',
-  platform: 'bg-gray-500',
+  all: '#3b82f6',
+  pos: '#3b82f6',
+  inventory: '#10b981',
+  customers: '#8b5cf6',
+  analytics: '#f97316',
+  platform: '#6b7280',
 };
 
 export default function FeaturesGrid() {

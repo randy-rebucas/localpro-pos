@@ -1,25 +1,39 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import Navbar from '@/components/Navbar';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
+import { useBackupCollections } from '@/hooks/useBackupCollections';
+import { useRestoreCollections } from '@/hooks/useRestoreCollections';
+import { useResetCollections } from '@/hooks/useResetCollections';
+import {
+  BACKUP_RESET_COLLECTIONS,
+  formatCollectionName,
+  formatFileSize,
+  hasSelectedCollections,
+  buildResetConfirmMessage,
+  buildClearExistingConfirmMessage,
+  canCreateBackup,
+  canRestore,
+  canReset,
+  formatResultsMessage,
+} from '@/lib/backup-reset-helpers';
+import toast from 'react-hot-toast';
 
 export default function BackupResetPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [selectedCollections, setSelectedCollections] = useState<string[]>([]);
-  const [resetResults, setResetResults] = useState<Record<string, { deleted: number }> | null>(null);
-  const [backingUp, setBackingUp] = useState(false);
-  const [restoring, setRestoring] = useState(false);
-  const [restoreFile, setRestoreFile] = useState<File | null>(null);
-  const [restoreResults, setRestoreResults] = useState<Record<string, { restored: number; cleared: number }> | null>(null);
-  const [resetting, setResetting] = useState(false);
+  const [dict, setDict] = React.useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const [loading, setLoading] = React.useState(true);
+  const [selectedCollections, setSelectedCollections] = React.useState<string[]>([]);
+  const [restoreFile, setRestoreFile] = React.useState<File | null>(null);
+
+  const { backing, createBackup } = useBackupCollections(tenant);
+  const { restoring, restoreResults, restore } = useRestoreCollections(tenant);
+  const { resetting, resetResults, reset } = useResetCollections(tenant);
 
   useEffect(() => {
     getDictionaryClient(lang).then((d) => {
@@ -38,6 +52,78 @@ export default function BackupResetPage() {
       </div>
     );
   }
+
+  const handleBackupClick = useCallback(async () => {
+    if (!canCreateBackup(selectedCollections)) {
+      toast.error(dict?.common?.selectAtLeastOneCollection || 'Please select at least one collection to backup.');
+      return;
+    }
+
+    const success = await createBackup(
+      selectedCollections,
+      (message) => toast.success(message),
+      (error) => toast.error(error)
+    );
+
+    if (!success) {
+      return;
+    }
+  }, [selectedCollections, createBackup, dict]);
+
+  const handleRestoreClick = useCallback(async () => {
+    if (!canRestore(restoreFile)) {
+      toast.error(dict?.common?.selectBackupFile || 'Please select a backup file to restore.');
+      return;
+    }
+
+    const clearExisting = (document.getElementById('clearExisting') as HTMLInputElement)?.checked || false;
+
+    if (!restoreFile) {
+      toast.error(dict?.common?.selectBackupFile || 'Please select a backup file to restore.');
+      return;
+    }
+
+    if (clearExisting) {
+      const message = buildClearExistingConfirmMessage(dict);
+      if (!confirm(message)) {
+        return;
+      }
+    }
+
+    const success = await restore(
+      restoreFile,
+      clearExisting,
+      (message) => {
+        toast.success(message);
+        setRestoreFile(null);
+        // Reset file input
+        const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+        if (fileInput) fileInput.value = '';
+      },
+      (error) => toast.error(error)
+    );
+  }, [restoreFile, restore, dict]);
+
+  const handleResetClick = useCallback(async () => {
+    if (!hasSelectedCollections(selectedCollections)) {
+      toast.error(dict?.common?.selectAtLeastOneCollectionReset || 'Please select at least one collection to reset.');
+      return;
+    }
+
+    const message = buildResetConfirmMessage(dict, selectedCollections.length, selectedCollections);
+    if (!confirm(message)) {
+      return;
+    }
+
+    const success = await reset(
+      selectedCollections,
+      (message) => {
+        toast.success(message);
+        setSelectedCollections([]);
+      },
+      (error) => toast.error(error)
+    );
+  }, [selectedCollections, reset, dict]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -61,18 +147,6 @@ export default function BackupResetPage() {
           </p>
         </div>
 
-        {message && (
-          <div
-            className={`mb-6 p-4 border ${
-              message.type === 'success'
-                ? 'bg-green-50 text-green-800 border-green-300'
-                : 'bg-red-50 text-red-800 border-red-300'
-            }`}
-          >
-            {message.text}
-          </div>
-        )}
-
         <div className="space-y-8">
           {/* Backup Section */}
           <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8">
@@ -81,60 +155,14 @@ export default function BackupResetPage() {
               <p className="text-sm text-blue-800 mb-4">
                 Export selected collections as a JSON backup file. You can restore this backup later.
               </p>
-              
+
               <div className="flex items-center gap-4">
                 <button
-                  onClick={async () => {
-                    if (selectedCollections.length === 0) {
-                      setMessage({ type: 'error', text: dict?.common?.selectAtLeastOneCollection || 'Please select at least one collection to backup.' });
-                      return;
-                    }
-
-                    try {
-                      setBackingUp(true);
-                      setMessage(null);
-
-                      const collectionsParam = selectedCollections.join(',');
-                      const url = `/api/tenants/${tenant}/reset-collections?collections=${collectionsParam}`;
-                      
-                      const res = await fetch(url, {
-                        method: 'GET',
-                        credentials: 'include',
-                      });
-
-                      if (!res.ok) {
-                        const data = await res.json();
-                        if (res.status === 401 || res.status === 403) {
-                          setMessage({ type: 'error', text: dict?.common?.unauthorizedBackup || 'Unauthorized. Only admins can backup collections.' });
-                        } else {
-                          setMessage({ type: 'error', text: data.error || dict?.common?.failedToCreateBackup || 'Failed to create backup' });
-                        }
-                        return;
-                      }
-
-                      // Download the file
-                      const blob = await res.blob();
-                      const downloadUrl = window.URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = downloadUrl;
-                      a.download = `backup-${tenant}-${new Date().toISOString().split('T')[0]}.json`;
-                      document.body.appendChild(a);
-                      a.click();
-                      window.URL.revokeObjectURL(downloadUrl);
-                      document.body.removeChild(a);
-
-                      setMessage({ type: 'success', text: `Backup created successfully for ${selectedCollections.length} collection(s)` });
-                    } catch (error) {
-                      console.error('Error creating backup:', error);
-                      setMessage({ type: 'error', text: dict?.common?.failedToCreateBackup || 'Failed to create backup. Please check your connection.' });
-                    } finally {
-                      setBackingUp(false);
-                    }
-                  }}
-                  disabled={backingUp || selectedCollections.length === 0}
+                  onClick={handleBackupClick}
+                  disabled={backing || !canCreateBackup(selectedCollections)}
                   className="px-6 py-3 bg-blue-600 text-white hover:bg-blue-700 font-semibold transition-all duration-200 border border-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  {backingUp ? (
+                  {backing ? (
                     <>
                       <div className="animate-spin h-5 w-5 border-b-2 border-white"></div>
                       <span>Creating Backup...</span>
@@ -159,7 +187,7 @@ export default function BackupResetPage() {
               <p className="text-sm text-green-800 mb-4">
                 Upload a backup JSON file to restore collections. You can choose to clear existing data before restoring.
               </p>
-              
+
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-green-900 mb-2">
@@ -172,7 +200,6 @@ export default function BackupResetPage() {
                       const file = e.target.files?.[0];
                       if (file) {
                         setRestoreFile(file);
-                        setRestoreResults(null);
                       }
                     }}
                     className="w-full px-4 py-2 border-2 border-green-300 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all bg-white"
@@ -182,7 +209,7 @@ export default function BackupResetPage() {
                 {restoreFile && (
                   <div className="p-3 bg-white border border-green-300">
                     <p className="text-sm text-green-800">
-                      <span className="font-medium">Selected:</span> {restoreFile.name} ({(restoreFile.size / 1024).toFixed(2)} KB)
+                      <span className="font-medium">Selected:</span> {restoreFile.name} ({formatFileSize(restoreFile.size)} KB)
                     </p>
                   </div>
                 )}
@@ -193,8 +220,7 @@ export default function BackupResetPage() {
                     <ul className="space-y-1">
                       {Object.entries(restoreResults).map(([collection, result]) => (
                         <li key={collection} className="text-sm text-green-800">
-                          <span className="font-medium capitalize">{collection.replace(/([A-Z])/g, ' $1').trim()}:</span> {result.restored} record(s) restored
-                          {result.cleared > 0 && `, ${result.cleared} cleared`}
+                          {formatResultsMessage(collection, result)}
                         </li>
                       ))}
                     </ul>
@@ -215,73 +241,8 @@ export default function BackupResetPage() {
                 </div>
 
                 <button
-                  onClick={async () => {
-                    if (!restoreFile) {
-                      setMessage({ type: 'error', text: dict?.common?.selectBackupFile || 'Please select a backup file to restore.' });
-                      return;
-                    }
-
-                    const clearExisting = (document.getElementById('clearExisting') as HTMLInputElement)?.checked || false;
-
-                    if (clearExisting && !confirm(
-                      dict?.common?.clearExistingDataConfirm || 
-                      'Are you sure you want to clear existing data before restoring?\n\n' +
-                      'This will delete all current data in the collections being restored!'
-                    )) {
-                      return;
-                    }
-
-                    try {
-                      setRestoring(true);
-                      setMessage(null);
-                      setRestoreResults(null);
-
-                      const fileContent = await restoreFile.text();
-                      let backupData;
-                      try {
-                        backupData = JSON.parse(fileContent);
-                      } catch (e) {
-                        setMessage({ type: 'error', text: dict?.common?.invalidBackupFormat || 'Invalid backup file format. Please select a valid JSON backup file.' });
-                        return;
-                      }
-
-                      if (!backupData.collections) {
-                        setMessage({ type: 'error', text: dict?.common?.invalidBackupFile || 'Invalid backup file. Missing collections data.' });
-                        return;
-                      }
-
-                      const res = await fetch(`/api/tenants/${tenant}/reset-collections`, {
-                        method: 'PUT',
-                        headers: {
-                          'Content-Type': 'application/json',
-                        },
-                        credentials: 'include',
-                        body: JSON.stringify({ backupData, clearExisting }),
-                      });
-
-                      const data = await res.json();
-                      if (data.success) {
-                        setMessage({ type: 'success', text: data.data.message });
-                        setRestoreResults(data.data.results);
-                        setRestoreFile(null);
-                        // Reset file input
-                        const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
-                        if (fileInput) fileInput.value = '';
-                      } else {
-                        if (res.status === 401 || res.status === 403) {
-                          setMessage({ type: 'error', text: dict?.common?.unauthorizedRestore || 'Unauthorized. Only admins can restore collections.' });
-                        } else {
-                          setMessage({ type: 'error', text: data.error || dict?.common?.failedToRestoreBackup || 'Failed to restore backup' });
-                        }
-                      }
-                    } catch (error) {
-                      console.error('Error restoring backup:', error);
-                      setMessage({ type: 'error', text: dict?.common?.failedToRestoreBackup || 'Failed to restore backup. Please check your connection.' });
-                    } finally {
-                      setRestoring(false);
-                    }
-                  }}
-                  disabled={restoring || !restoreFile}
+                  onClick={handleRestoreClick}
+                  disabled={restoring || !canRestore(restoreFile)}
                   className="px-6 py-3 bg-green-600 text-white hover:bg-green-700 font-semibold transition-all duration-200 border border-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   {restoring ? (
@@ -316,7 +277,7 @@ export default function BackupResetPage() {
                   <ul className="space-y-1">
                     {Object.entries(resetResults).map(([collection, result]) => (
                       <li key={collection} className="text-sm text-blue-800">
-                        <span className="font-medium capitalize">{collection.replace(/([A-Z])/g, ' $1').trim()}:</span> {result.deleted} record(s) deleted
+                        {formatResultsMessage(collection, result)}
                       </li>
                     ))}
                   </ul>
@@ -329,21 +290,7 @@ export default function BackupResetPage() {
                     Select Collections to Reset:
                   </label>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {[
-                      { key: 'products', label: 'Products' },
-                      { key: 'transactions', label: 'Transactions' },
-                      { key: 'categories', label: 'Categories' },
-                      { key: 'stockMovements', label: 'Stock Movements' },
-                      { key: 'expenses', label: 'Expenses' },
-                      { key: 'discounts', label: 'Discounts' },
-                      { key: 'branches', label: 'Branches' },
-                      { key: 'cashDrawerSessions', label: 'Cash Drawer Sessions' },
-                      { key: 'productBundles', label: 'Product Bundles' },
-                      { key: 'attendance', label: 'Attendance' },
-                      { key: 'bookings', label: 'Bookings' },
-                      { key: 'savedCarts', label: 'Saved Carts' },
-                      { key: 'auditLogs', label: 'Audit Logs' },
-                    ].map((collection) => (
+                    {BACKUP_RESET_COLLECTIONS.map((collection) => (
                       <label
                         key={collection.key}
                         className="flex items-center p-3 border-2 border-gray-300 hover:bg-gray-50 cursor-pointer transition-colors"
@@ -370,56 +317,8 @@ export default function BackupResetPage() {
 
                 <div className="flex items-center gap-4 pt-4 border-t border-gray-200">
                   <button
-                    onClick={async () => {
-                      if (selectedCollections.length === 0) {
-                        setMessage({ type: 'error', text: dict?.common?.selectAtLeastOneCollectionReset || 'Please select at least one collection to reset.' });
-                        return;
-                      }
-
-                      const resetConfirmText = dict?.common?.resetCollectionsConfirm
-                        ?.replace('{count}', selectedCollections.length.toString())
-                        ?.replace('{collections}', selectedCollections.join(', ')) ||
-                        `Are you sure you want to reset ${selectedCollections.length} collection(s)?\n\n` +
-                        `Selected: ${selectedCollections.join(', ')}\n\n` +
-                        `This action cannot be undone!`;
-                      if (!confirm(resetConfirmText)) {
-                        return;
-                      }
-
-                      try {
-                        setResetting(true);
-                        setMessage(null);
-                        setResetResults(null);
-
-                        const res = await fetch(`/api/tenants/${tenant}/reset-collections`, {
-                          method: 'POST',
-                          headers: {
-                            'Content-Type': 'application/json',
-                          },
-                          credentials: 'include',
-                          body: JSON.stringify({ collections: selectedCollections }),
-                        });
-
-                        const data = await res.json();
-                        if (data.success) {
-                          setMessage({ type: 'success', text: data.data.message });
-                          setResetResults(data.data.results);
-                          setSelectedCollections([]);
-                        } else {
-                          if (res.status === 401 || res.status === 403) {
-                            setMessage({ type: 'error', text: dict?.common?.unauthorizedReset || 'Unauthorized. Only admins can reset collections.' });
-                          } else {
-                            setMessage({ type: 'error', text: data.error || dict?.common?.failedToResetCollections || 'Failed to reset collections' });
-                          }
-                        }
-                      } catch (error) {
-                        console.error('Error resetting collections:', error);
-                        setMessage({ type: 'error', text: dict?.common?.failedToResetCollections || 'Failed to reset collections. Please check your connection.' });
-                      } finally {
-                        setResetting(false);
-                      }
-                    }}
-                    disabled={resetting || selectedCollections.length === 0}
+                    onClick={handleResetClick}
+                    disabled={!canReset(selectedCollections, resetting)}
                     className="px-6 py-3 bg-red-600 text-white hover:bg-red-700 font-semibold transition-all duration-200 border border-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   >
                     {resetting ? (
@@ -440,7 +339,6 @@ export default function BackupResetPage() {
                     <button
                       onClick={() => {
                         setSelectedCollections([]);
-                        setResetResults(null);
                       }}
                       className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 font-medium"
                     >

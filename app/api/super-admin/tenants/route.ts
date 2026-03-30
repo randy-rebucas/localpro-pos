@@ -15,6 +15,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search') || '';
     const activeFilter = searchParams.get('active');
+    const page = parseInt(searchParams.get('page') || '1', 10);
+    const limit = parseInt(searchParams.get('limit') || '20', 10);
 
     const query: Record<string, unknown> = {};
     if (search) {
@@ -26,12 +28,27 @@ export async function GET(request: NextRequest) {
     if (activeFilter === 'true') query.isActive = true;
     if (activeFilter === 'false') query.isActive = false;
 
+    const total = await Tenant.countDocuments(query);
+    const pages = Math.ceil(total / limit);
+    const skip = (page - 1) * limit;
+
     const tenants = await Tenant.find(query)
       .select('slug name settings.businessType settings.currency isActive createdAt')
       .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
       .lean();
 
-    return NextResponse.json({ success: true, data: tenants });
+    return NextResponse.json({
+      success: true,
+      data: tenants,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages,
+      },
+    });
   } catch (error: unknown) {
     if (error instanceof Error && (error.message === 'Unauthorized' || error.message.includes('Forbidden'))) {
       return NextResponse.json(

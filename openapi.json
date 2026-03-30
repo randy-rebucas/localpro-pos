@@ -1,0 +1,452 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "1POS API",
+    "description": "Enterprise-grade Point of Sale system API for Philippine businesses. Complete BIR-compliant POS with multi-tenant support, real-time inventory, booking & scheduling, and 30+ automated workflows.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "1POS Support",
+      "url": "https://1pos.app"
+    },
+    "license": {
+      "name": "Proprietary",
+      "url": "https://1pos.app/license"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://1pos.app",
+      "description": "Production environment"
+    },
+    {
+      "url": "http://localhost:3000",
+      "description": "Development environment"
+    }
+  ],
+  "paths": {
+    "/api/auth/login": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Login user",
+        "description": "Authenticate user with email and password. Returns JWT token in secure HTTP-only cookie.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "example": "admin@business.com"
+                  },
+                  "password": {
+                    "type": "string",
+                    "format": "password",
+                    "example": "SecurePassword123!"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "user": {
+                          "type": "object",
+                          "properties": {
+                            "_id": { "type": "string" },
+                            "email": { "type": "string" },
+                            "role": { "enum": ["admin", "staff", "cashier", "super_admin"] },
+                            "tenantId": { "type": "string" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid credentials or validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": false },
+                    "error": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many login attempts"
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Logout user",
+        "description": "Clear authentication cookie and end user session",
+        "responses": {
+          "200": {
+            "description": "Logout successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/register": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Register new user/tenant",
+        "description": "Create new user account and tenant business entity. Starts 14-day free trial.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password", "businessName", "businessType"],
+                "properties": {
+                  "email": { "type": "string", "format": "email" },
+                  "password": { "type": "string", "format": "password" },
+                  "businessName": { "type": "string" },
+                  "businessType": { "type": "string", "enum": ["retail", "restaurant", "salon", "laundry", "clinic", "fitness", "hotel"] },
+                  "phone": { "type": "string" },
+                  "address": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Registration successful"
+          },
+          "400": {
+            "description": "Validation error or user already exists"
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/transactions": {
+      "get": {
+        "tags": ["Point of Sale"],
+        "summary": "List transactions",
+        "description": "Get all transactions for current tenant with pagination and filtering",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": { "type": "integer", "default": 1 }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "default": 20 }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": { "enum": ["completed", "refunded", "pending"] }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Transactions retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "_id": { "type": "string" },
+                          "receiptNumber": { "type": "string" },
+                          "total": { "type": "number" },
+                          "items": { "type": "array" },
+                          "status": { "enum": ["completed", "refunded", "pending"] },
+                          "createdAt": { "type": "string", "format": "date-time" }
+                        }
+                      }
+                    },
+                    "pagination": {
+                      "type": "object",
+                      "properties": {
+                        "total": { "type": "integer" },
+                        "page": { "type": "integer" },
+                        "pages": { "type": "integer" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Point of Sale"],
+        "summary": "Create transaction",
+        "description": "Record a new sales transaction",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["items", "total", "paymentMethod"],
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "product": { "type": "string" },
+                        "quantity": { "type": "number" },
+                        "price": { "type": "number" }
+                      }
+                    }
+                  },
+                  "total": { "type": "number" },
+                  "paymentMethod": { "enum": ["cash", "card", "digital"] },
+                  "discountCode": { "type": "string" },
+                  "notes": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Transaction created successfully"
+          }
+        }
+      }
+    },
+    "/api/products": {
+      "get": {
+        "tags": ["Inventory & Products"],
+        "summary": "List products",
+        "description": "Get all products for current tenant with pagination and search",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Products retrieved successfully"
+          }
+        }
+      },
+      "post": {
+        "tags": ["Inventory & Products"],
+        "summary": "Create product",
+        "description": "Add new product to inventory",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "price"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "description": { "type": "string" },
+                  "price": { "type": "number" },
+                  "stock": { "type": "number" },
+                  "category": { "type": "string" },
+                  "sku": { "type": "string" },
+                  "barcode": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Product created successfully"
+          }
+        }
+      }
+    },
+    "/api/subscriptions": {
+      "get": {
+        "tags": ["Subscriptions & Plans"],
+        "summary": "Get subscription info",
+        "description": "Get current subscription status and plan details",
+        "responses": {
+          "200": {
+            "description": "Subscription retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "planName": { "type": "string" },
+                        "status": { "enum": ["active", "trial", "expired"] },
+                        "isActive": { "type": "boolean" },
+                        "isTrial": { "type": "boolean" },
+                        "trialEndDate": { "type": "string", "format": "date-time" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/health": {
+      "get": {
+        "tags": ["Utilities"],
+        "summary": "Health check",
+        "description": "Verify API and database connectivity",
+        "responses": {
+          "200": {
+            "description": "System healthy"
+          }
+        },
+        "security": []
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      },
+      "cookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "auth-token"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": false },
+          "error": { "type": "string" },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "field": { "type": "string" },
+                "message": { "type": "string" }
+              }
+            }
+          },
+          "code": { "type": "string" }
+        },
+        "required": ["success", "error"]
+      },
+      "Transaction": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "tenantId": { "type": "string" },
+          "receiptNumber": { "type": "string" },
+          "items": { "type": "array" },
+          "total": { "type": "number" },
+          "status": { "enum": ["completed", "refunded", "pending"] },
+          "paymentMethod": { "enum": ["cash", "card", "digital"] },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Product": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "tenantId": { "type": "string" },
+          "name": { "type": "string" },
+          "price": { "type": "number" },
+          "stock": { "type": "number" },
+          "category": { "type": "string" },
+          "sku": { "type": "string" },
+          "barcode": { "type": "string" }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Authentication",
+      "description": "User login, registration, and account management"
+    },
+    {
+      "name": "Point of Sale",
+      "description": "Sales transactions, payments, and receipts"
+    },
+    {
+      "name": "Inventory & Products",
+      "description": "Product management and stock tracking"
+    },
+    {
+      "name": "Subscriptions & Plans",
+      "description": "Subscription management and billing"
+    },
+    {
+      "name": "Utilities",
+      "description": "Health checks and system utilities"
+    }
+  ],
+  "security": [
+    {
+      "cookieAuth": []
+    },
+    {
+      "bearerAuth": []
+    }
+  ]
+}

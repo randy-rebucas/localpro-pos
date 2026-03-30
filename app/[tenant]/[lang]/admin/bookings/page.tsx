@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import toast from 'react-hot-toast';
 import Navbar from '@/components/Navbar';
 import BookingCalendar from '@/components/BookingCalendar';
 import { getDictionaryClient } from '../../dictionaries-client';
@@ -10,40 +10,15 @@ import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { supportsFeature } from '@/lib/business-type-helpers';
 import { getBusinessTypeConfig } from '@/lib/business-types';
 import { getBusinessType } from '@/lib/business-type-helpers';
-
-interface Booking {
-  _id: string;
-  customerName: string;
-  customerEmail?: string;
-  customerPhone?: string;
-  serviceName: string;
-  serviceDescription?: string;
-  startTime: string;
-  endTime: string;
-  duration: number;
-  status: 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'no-show';
-  staffId?: {
-    _id: string;
-    name: string;
-    email: string;
-  };
-  staffName?: string;
-  notes?: string;
-  reminderSent?: boolean;
-  confirmationSent?: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface User {
-  _id: string;
-  name: string;
-  email: string;
-}
-
-type BookingUpdate = Omit<Partial<Booking>, 'staffId'> & {
-  staffId?: string;
-};
+import { useBookingsList, type Booking } from '@/hooks/useBookingsList';
+import { useBookingForm } from '@/hooks/useBookingForm';
+import { useStaffList } from '@/hooks/useStaffList';
+import { useBookingDetail, type BookingUpdate } from '@/hooks/useBookingDetail';
+import {
+  getStatusColor,
+  formatBookingDateTime,
+  getDeleteBookingConfirmMessage,
+} from '@/lib/bookings-helpers';
 
 export default function BookingsPage() {
   const params = useParams();
@@ -51,300 +26,82 @@ export default function BookingsPage() {
   const lang = params.lang as 'en' | 'es';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
 
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [staff, setStaff] = useState<User[]>([]);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterStaff, setFilterStaff] = useState<string>('all');
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   const { settings } = useTenantSettings();
   const bookingEnabled = supportsFeature(settings ?? undefined, 'booking');
   const businessTypeConfig = settings ? getBusinessTypeConfig(getBusinessType(settings)) : null;
 
-  // Form state
-  const [formData, setFormData] = useState({
-    customerName: '',
-    customerEmail: '',
-    customerPhone: '',
-    serviceName: '',
-    serviceDescription: '',
-    startTime: '',
-    duration: 60,
-    staffId: '',
-    notes: '',
-    status: 'pending' as Booking['status'],
+  const { bookings, loading, fetchBookings, deleteBooking, sendReminder } = useBookingsList(tenant, {
+    status: filterStatus,
+    staffId: filterStaff,
   });
+  const { formData, setFormData, handleSubmit: submitForm, resetForm } = useBookingForm(tenant);
+  const { staff, fetchStaff } = useStaffList(tenant);
+  const { updateBooking } = useBookingDetail(tenant, selectedBooking?._id || '');
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
   }, [lang]);
 
   useEffect(() => {
-    fetchBookings();
+    fetchBookings((error) => toast.error(error));
     fetchStaff();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterStatus, filterStaff]);
 
-  const fetchBookings = async () => {
-    try {
-      setLoading(true);
-      const token = document.cookie
-        .split('; ')
-        .find((row) => row.startsWith('auth-token='))
-        ?.split('=')[1];
-
-      let url = `/api/bookings?tenant=${tenant}`;
-      if (filterStatus !== 'all') {
-        url += `&status=${filterStatus}`;
-      }
-      if (filterStaff !== 'all') {
-        url += `&staffId=${filterStaff}`;
-      }
-
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setBookings(data.data || []);
-          setMessage(null);
-        } else {
-          setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchBookings || 'Failed to fetch bookings' });
-        }
-      } else {
-        const data = await response.json();
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchBookings || 'Failed to fetch bookings' });
-      }
-    } catch (error) {
-      console.error('Failed to fetch bookings:', error);
-      setMessage({ type: 'error', text: dict?.common?.failedToFetchBookings || 'Failed to fetch bookings' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchStaff = async () => {
-    try {
-      const token = document.cookie
-        .split('; ')
-        .find((row) => row.startsWith('auth-token='))
-        ?.split('=')[1];
-
-      const response = await fetch(`/api/users?tenant=${tenant}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setStaff(data.data || []);
-        } else {
-          console.error('Failed to fetch staff:', data.error);
-        }
-      } else {
-        const data = await response.json();
-        console.error('Failed to fetch staff:', data.error);
-      }
-    } catch (error) {
-      console.error('Failed to fetch staff:', error);
-    }
-  };
-
   const handleCreateBooking = async (e: React.FormEvent) => {
     e.preventDefault();
-    try {
-      const token = document.cookie
-        .split('; ')
-        .find((row) => row.startsWith('auth-token='))
-        ?.split('=')[1];
-
-      const response = await fetch(`/api/bookings?tenant=${tenant}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(formData),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setMessage({ type: 'success', text: dict?.common?.bookingCreatedSuccess || 'Booking created successfully' });
-          await fetchBookings();
-          setShowCreateModal(false);
-          resetForm();
-        } else {
-          setMessage({ type: 'error', text: data.error || dict?.common?.failedToCreateBooking || 'Failed to create booking' });
-        }
-      } else {
-        const error = await response.json();
-        setMessage({ type: 'error', text: error.error || dict?.common?.failedToCreateBooking || 'Failed to create booking' });
-      }
-    } catch (error) {
-      console.error('Failed to create booking:', error);
-      setMessage({ type: 'error', text: dict?.common?.failedToCreateBooking || 'Failed to create booking' });
-    }
+    await submitForm(
+      async () => {
+        toast.success(dict?.common?.bookingCreatedSuccess || 'Booking created successfully');
+        await fetchBookings();
+        setShowCreateModal(false);
+        resetForm();
+      },
+      (error) => toast.error(error)
+    );
   };
 
-  const handleUpdateBooking = async (id: string, updates: BookingUpdate) => {
-    try {
-      const token = document.cookie
-        .split('; ')
-        .find((row) => row.startsWith('auth-token='))
-        ?.split('=')[1];
-
-      const response = await fetch(`/api/bookings/${id}?tenant=${tenant}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(updates),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setMessage({ type: 'success', text: dict?.common?.bookingUpdatedSuccess || 'Booking updated successfully' });
-          await fetchBookings();
-          setShowModal(false);
-          setSelectedBooking(null);
-        } else {
-          setMessage({ type: 'error', text: data.error || dict?.common?.failedToUpdateBooking || 'Failed to update booking' });
-        }
-      } else {
-        const error = await response.json();
-        setMessage({ type: 'error', text: error.error || dict?.common?.failedToUpdateBooking || 'Failed to update booking' });
-      }
-    } catch (error) {
-      console.error('Failed to update booking:', error);
-      setMessage({ type: 'error', text: dict?.common?.failedToUpdateBooking || 'Failed to update booking' });
-    }
+  const handleUpdateBooking = async (bookingId: string, updates: BookingUpdate) => {
+    await updateBooking(updates, async (message) => {
+      toast.success(message);
+      await fetchBookings();
+      setShowModal(false);
+      setSelectedBooking(null);
+    },
+    (error) => toast.error(error));
   };
 
-  const handleDeleteBooking = async (id: string) => {
+  const handleDeleteBooking = async (bookingId: string) => {
     if (!dict) return;
-    if (!confirm(dict.common?.deleteBookingConfirm || 'Are you sure you want to delete this booking?')) {
+    if (!confirm(getDeleteBookingConfirmMessage(dict))) {
       return;
     }
 
-    try {
-      const token = document.cookie
-        .split('; ')
-        .find((row) => row.startsWith('auth-token='))
-        ?.split('=')[1];
-
-      const response = await fetch(`/api/bookings/${id}?tenant=${tenant}`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setMessage({ type: 'success', text: dict?.common?.bookingDeletedSuccess || 'Booking deleted successfully' });
-          await fetchBookings();
-          setShowModal(false);
-          setSelectedBooking(null);
-        } else {
-          setMessage({ type: 'error', text: data.error || dict?.common?.failedToDeleteBooking || 'Failed to delete booking' });
-        }
-      } else {
-        const error = await response.json();
-        setMessage({ type: 'error', text: error.error || dict?.common?.failedToDeleteBooking || 'Failed to delete booking' });
-      }
-    } catch (error) {
-      console.error('Failed to delete booking:', error);
-      setMessage({ type: 'error', text: dict?.common?.failedToDeleteBooking || 'Failed to delete booking' });
-    }
+    await deleteBooking(
+      bookingId,
+      async (message) => {
+        toast.success(message);
+        await fetchBookings();
+        setShowModal(false);
+        setSelectedBooking(null);
+      },
+      (error) => toast.error(error)
+    );
   };
 
-  const handleSendReminder = async (id: string) => {
-    try {
-      const token = document.cookie
-        .split('; ')
-        .find((row) => row.startsWith('auth-token='))
-        ?.split('=')[1];
-
-      const response = await fetch(`/api/bookings/${id}/reminder?tenant=${tenant}`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setMessage({ type: 'success', text: dict?.common?.reminderSentSuccess || 'Reminder sent successfully' });
-        } else {
-          setMessage({ type: 'error', text: data.error || dict?.common?.failedToSendReminder || 'Failed to send reminder' });
-        }
-      } else {
-        const error = await response.json();
-        setMessage({ type: 'error', text: error.error || dict?.common?.failedToSendReminder || 'Failed to send reminder' });
-      }
-    } catch (error) {
-      console.error('Failed to send reminder:', error);
-      setMessage({ type: 'error', text: dict?.common?.failedToSendReminder || 'Failed to send reminder' });
-    }
-  };
-
-  const resetForm = () => {
-    setFormData({
-      customerName: '',
-      customerEmail: '',
-      customerPhone: '',
-      serviceName: '',
-      serviceDescription: '',
-      startTime: '',
-      duration: 60,
-      staffId: '',
-      notes: '',
-      status: 'pending',
-    });
-  };
-
-  const formatDateTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleString('en-US', {
-      weekday: 'short',
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
-  const getStatusColor = (status: Booking['status']) => {
-    switch (status) {
-      case 'confirmed':
-        return 'bg-green-100 text-green-800';
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'completed':
-        return 'bg-blue-100 text-blue-800';
-      case 'cancelled':
-        return 'bg-red-100 text-red-800';
-      case 'no-show':
-        return 'bg-gray-100 text-gray-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
+  const handleSendReminder = async (bookingId: string) => {
+    await sendReminder(
+      bookingId,
+      (message) => toast.success(message),
+      (error) => toast.error(error)
+    );
   };
 
   if (loading && bookings.length === 0) {
@@ -379,12 +136,6 @@ export default function BookingsPage() {
             {dict?.admin?.newBooking || 'New Booking'}
           </button>
         </div>
-
-        {message && (
-          <div className={`mb-6 p-4 border ${message.type === 'success' ? 'bg-green-50 text-green-800 border-green-300' : 'bg-red-50 text-red-800 border-red-300'}`}>
-            {message.text}
-          </div>
-        )}
 
         {!bookingEnabled && (
           <div className="mb-6 p-4 bg-yellow-50 border-2 border-yellow-300 text-yellow-800">
@@ -507,7 +258,7 @@ export default function BookingsPage() {
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{formatDateTime(booking.startTime)}</div>
+                      <div className="text-sm text-gray-900">{formatBookingDateTime(booking.startTime)}</div>
                       <div className="text-sm text-gray-500">{dict?.admin?.duration || 'Duration'}: {booking.duration} min</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -596,7 +347,7 @@ export default function BookingsPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Date & Time</label>
-                <p className="mt-1 text-sm text-gray-900">{formatDateTime(selectedBooking.startTime)}</p>
+                <p className="mt-1 text-sm text-gray-900">{formatBookingDateTime(selectedBooking.startTime)}</p>
                 <p className="mt-1 text-sm text-gray-500">Duration: {selectedBooking.duration} minutes</p>
               </div>
               <div>

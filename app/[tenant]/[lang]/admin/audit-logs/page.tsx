@@ -1,125 +1,83 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import Navbar from '@/components/Navbar';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
-
-interface AuditLog {
-  _id: string;
-  tenantId: string;
-  userId?: {
-    _id: string;
-    name: string;
-    email: string;
-  } | string;
-  action: string;
-  entityType: string;
-  entityId?: string;
-  changes?: Record<string, unknown>;
-  ipAddress?: string;
-  userAgent?: string;
-  metadata?: Record<string, unknown>;
-  createdAt: string;
-}
-
-interface User {
-  _id: string;
-  name: string;
-}
+import { useAuditLogs } from '@/hooks/useAuditLogs';
+import { useAuditFilters } from '@/hooks/useAuditFilters';
+import { useAuditUsers } from '@/hooks/useAuditUsers';
+import {
+  getActionOptions,
+  extractUserInfo,
+  formatAuditTimestamp,
+  getActionBadgeClass,
+  formatEntityId,
+  formatIpAddress,
+  getPaginationInfo,
+  canGoToPreviousPage,
+  canGoToNextPage,
+  isAuditLogEmpty,
+  shouldShowPagination,
+} from '@/lib/audit-helpers';
+import toast from 'react-hot-toast';
 
 export default function AuditLogsPage() {
   const params = useParams();
-  const router = useRouter(); // eslint-disable-line @typescript-eslint/no-unused-vars
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [auditLoading, setAuditLoading] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [auditFilters, setAuditFilters] = useState({
-    action: '',
-    entityType: '',
-    userId: '',
-    startDate: '',
-    endDate: '',
-  });
-  const [auditPagination, setAuditPagination] = useState({
-    page: 1,
-    limit: 50,
-    total: 0,
-    pages: 0,
-  });
+  const [dict, setDict] = React.useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const [currentPage, setCurrentPage] = React.useState(1);
 
+  const { auditLogs, pagination, loading: auditLoading, fetch: fetchAuditLogs } = useAuditLogs();
+  const { filters, handleFilterChange } = useAuditFilters();
+  const { users, loading: usersLoading, fetch: fetchUsers } = useAuditUsers();
+
+  // Load dictionary
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
-    fetchUsers();
-    fetchAuditLogs();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lang, tenant]);
+  }, [lang]);
 
+  // Load users on mount
   useEffect(() => {
-    fetchAuditLogs();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auditFilters.action, auditFilters.entityType, auditFilters.userId, auditFilters.startDate, auditFilters.endDate, auditPagination.page]);
-
-  const fetchUsers = async () => {
-    try {
-      const res = await fetch('/api/users', { credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
-        setUsers(data.data);
-        setLoading(false);
-      }
-    } catch (error) {
-      console.error('Error fetching users:', error);
-      setLoading(false);
-    }
-  };
-
-  const fetchAuditLogs = async () => {
-    setAuditLoading(true);
-    try {
-      const params = new URLSearchParams({
-        page: auditPagination.page.toString(),
-        limit: auditPagination.limit.toString(),
+    if (tenant) {
+      fetchUsers((error) => {
+        toast.error(error);
       });
-
-      if (auditFilters.action) params.append('action', auditFilters.action);
-      if (auditFilters.entityType) params.append('entityType', auditFilters.entityType);
-      if (auditFilters.userId) params.append('userId', auditFilters.userId);
-      if (auditFilters.startDate) params.append('startDate', auditFilters.startDate);
-      if (auditFilters.endDate) params.append('endDate', auditFilters.endDate);
-
-      const res = await fetch(`/api/audit-logs?${params.toString()}`, { credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
-        setAuditLogs(data.data);
-        setAuditPagination(data.pagination);
-      } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchAuditLogs || 'Failed to fetch audit logs' });
-      }
-    } catch (error) {
-      console.error('Error fetching audit logs:', error);
-      setMessage({ type: 'error', text: dict?.common?.failedToFetchAuditLogs || 'Failed to fetch audit logs' });
-    } finally {
-      setAuditLoading(false);
     }
-  };
+  }, [tenant, fetchUsers]);
 
-  const handleAuditFilterChange = (key: string, value: string) => {
-    setAuditFilters({ ...auditFilters, [key]: value });
-    setAuditPagination({ ...auditPagination, page: 1 });
-  };
+  // Fetch audit logs when filters or pagination changes
+  useEffect(() => {
+    if (dict && tenant) {
+      fetchAuditLogs(
+        {
+          page: currentPage,
+          limit: 50,
+          action: filters.action,
+          entityType: filters.entityType,
+          userId: filters.userId,
+          startDate: filters.startDate,
+          endDate: filters.endDate,
+        },
+        (error) => {
+          toast.error(error);
+        }
+      );
+    }
+  }, [filters, currentPage, dict, tenant, fetchAuditLogs]);
 
-  const handleAuditPageChange = (newPage: number) => {
-    setAuditPagination({ ...auditPagination, page: newPage });
-  };
+  const handleFilterChangeWrapper = useCallback((key: string, value: string) => {
+    handleFilterChange(key as any, value); // eslint-disable-line @typescript-eslint/no-explicit-any
+    setCurrentPage(1); // Reset to first page when filters change
+  }, [handleFilterChange]);
 
-  if (!dict || loading) {
+  const handlePageChange = useCallback((newPage: number) => {
+    setCurrentPage(newPage);
+  }, []);
+
+  if (!dict || usersLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -154,16 +112,10 @@ export default function AuditLogsPage() {
           </div>
         </div>
 
-        {message && (
-          <div className={`mb-6 p-4 border ${message.type === 'success' ? 'bg-green-50 text-green-800 border-green-300' : 'bg-red-50 text-red-800 border-red-300'}`}>
-            {message.text}
-          </div>
-        )}
-
         <div className="bg-white border border-gray-300 p-6">
           <div className="mb-6">
             <h2 className="text-xl font-bold text-gray-900 mb-4">{dict.admin?.auditLogs || 'Audit Logs'}</h2>
-            
+
             {/* Filters */}
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-4 p-4 bg-gray-50 border border-gray-300">
               <div>
@@ -171,17 +123,16 @@ export default function AuditLogsPage() {
                   {dict.admin?.action || 'Action'}
                 </label>
                 <select
-                  value={auditFilters.action}
-                  onChange={(e) => handleAuditFilterChange('action', e.target.value)}
+                  value={filters.action}
+                  onChange={(e) => handleFilterChangeWrapper('action', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 text-sm bg-white"
                 >
                   <option value="">All Actions</option>
-                  <option value="create">Create</option>
-                  <option value="update">Update</option>
-                  <option value="delete">Delete</option>
-                  <option value="view">View</option>
-                  <option value="login">Login</option>
-                  <option value="logout">Logout</option>
+                  {getActionOptions().map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div>
@@ -190,8 +141,8 @@ export default function AuditLogsPage() {
                 </label>
                 <input
                   type="text"
-                  value={auditFilters.entityType}
-                  onChange={(e) => handleAuditFilterChange('entityType', e.target.value)}
+                  value={filters.entityType}
+                  onChange={(e) => handleFilterChangeWrapper('entityType', e.target.value)}
                   placeholder="e.g., user, product"
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 text-sm bg-white"
                 />
@@ -201,8 +152,8 @@ export default function AuditLogsPage() {
                   {dict.admin?.user || 'User'}
                 </label>
                 <select
-                  value={auditFilters.userId}
-                  onChange={(e) => handleAuditFilterChange('userId', e.target.value)}
+                  value={filters.userId}
+                  onChange={(e) => handleFilterChangeWrapper('userId', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 text-sm bg-white"
                 >
                   <option value="">All Users</option>
@@ -219,8 +170,8 @@ export default function AuditLogsPage() {
                 </label>
                 <input
                   type="date"
-                  value={auditFilters.startDate}
-                  onChange={(e) => handleAuditFilterChange('startDate', e.target.value)}
+                  value={filters.startDate}
+                  onChange={(e) => handleFilterChangeWrapper('startDate', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 text-sm bg-white"
                 />
               </div>
@@ -230,8 +181,8 @@ export default function AuditLogsPage() {
                 </label>
                 <input
                   type="date"
-                  value={auditFilters.endDate}
-                  onChange={(e) => handleAuditFilterChange('endDate', e.target.value)}
+                  value={filters.endDate}
+                  onChange={(e) => handleFilterChangeWrapper('endDate', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 text-sm bg-white"
                 />
               </div>
@@ -271,27 +222,20 @@ export default function AuditLogsPage() {
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {auditLogs.map((log) => {
-                        const userName = typeof log.userId === 'object' && log.userId !== null
-                          ? log.userId.name
-                          : 'System';
-                        const userEmail = typeof log.userId === 'object' && log.userId !== null
-                          ? log.userId.email
-                          : '';
+                        const { name: userName, email: userEmail } = extractUserInfo(log.userId);
                         return (
                           <tr key={log._id} className="hover:bg-gray-50">
                             <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {new Date(log.createdAt).toLocaleString()}
+                              {formatAuditTimestamp(log.createdAt)}
                             </td>
                             <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                               <div>
                                 <div className="font-medium">{userName}</div>
-                                {userEmail && (
-                                  <div className="text-xs text-gray-500">{userEmail}</div>
-                                )}
+                                {userEmail && <div className="text-xs text-gray-500">{userEmail}</div>}
                               </div>
                             </td>
                             <td className="px-4 py-4 whitespace-nowrap">
-                              <span className="px-2 py-1 text-xs font-semibold border border-blue-300 bg-blue-100 text-blue-800">
+                              <span className={getActionBadgeClass(log.action)}>
                                 {log.action}
                               </span>
                             </td>
@@ -299,10 +243,10 @@ export default function AuditLogsPage() {
                               {log.entityType}
                             </td>
                             <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">
-                              {log.entityId || '-'}
+                              {formatEntityId(log.entityId)}
                             </td>
                             <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">
-                              {log.ipAddress || '-'}
+                              {formatIpAddress(log.ipAddress)}
                             </td>
                           </tr>
                         );
@@ -310,31 +254,29 @@ export default function AuditLogsPage() {
                     </tbody>
                   </table>
                 </div>
-                {auditLogs.length === 0 && !auditLoading && (
+                {isAuditLogEmpty(auditLogs) && !auditLoading && (
                   <div className="text-center py-8 text-gray-500">
                     {dict.common?.noResults || 'No audit logs found'}
                   </div>
                 )}
 
                 {/* Pagination */}
-                {auditPagination.pages > 1 && (
+                {shouldShowPagination(pagination.pages) && (
                   <div className="mt-6 flex items-center justify-between">
                     <div className="text-sm text-gray-700">
-                      {dict.admin?.showing || 'Showing'} {(auditPagination.page - 1) * auditPagination.limit + 1} {dict.admin?.to || 'to'}{' '}
-                      {Math.min(auditPagination.page * auditPagination.limit, auditPagination.total)} {dict.admin?.of || 'of'}{' '}
-                      {auditPagination.total} {dict.admin?.results || 'results'}
+                      {getPaginationInfo(currentPage, 50, pagination.total, dict)}
                     </div>
                     <div className="flex gap-2">
                       <button
-                        onClick={() => handleAuditPageChange(auditPagination.page - 1)}
-                        disabled={auditPagination.page === 1}
+                        onClick={() => handlePageChange(currentPage - 1)}
+                        disabled={!canGoToPreviousPage(currentPage)}
                         className="px-4 py-2 border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed bg-white"
                       >
                         {dict.common?.previous || 'Previous'}
                       </button>
                       <button
-                        onClick={() => handleAuditPageChange(auditPagination.page + 1)}
-                        disabled={auditPagination.page >= auditPagination.pages}
+                        onClick={() => handlePageChange(currentPage + 1)}
+                        disabled={!canGoToNextPage(currentPage, pagination.pages)}
                         className="px-4 py-2 border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed bg-white"
                       >
                         {dict.common?.next || 'Next'}

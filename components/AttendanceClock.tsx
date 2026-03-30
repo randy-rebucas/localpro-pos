@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { getDefaultTenantSettings } from '@/lib/currency';
 import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
 
 interface AttendanceSession {
@@ -18,6 +20,8 @@ export default function AttendanceClock() {
   const lang = (params?.lang as 'en' | 'es') || 'en';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const { user, isAuthenticated } = useAuth();
+  const { settings } = useTenantSettings();
+  const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#3b82f6';
   const [session, setSession] = useState<AttendanceSession | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -158,7 +162,10 @@ export default function AttendanceClock() {
       )}
 
       {isClockedIn && clockInTime && (
-        <div className="mb-4 p-4 bg-blue-50 border border-blue-300">
+        <div className="mb-4 p-4 border" style={{
+          backgroundColor: `${primaryColor}10`,
+          borderColor: primaryColor
+        }}>
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium text-gray-700">{dict?.components?.attendance?.clockedInAt || 'Clocked in at:'}</span>
             <span className="text-sm font-semibold text-gray-900">
@@ -167,7 +174,7 @@ export default function AttendanceClock() {
           </div>
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-gray-700">{dict?.components?.attendance?.hoursWorked || 'Hours worked:'}</span>
-            <span className="text-lg font-bold text-blue-600">
+            <span className="text-lg font-bold" style={{ color: primaryColor }}>
               {currentHours.toFixed(2)} hrs
             </span>
           </div>
@@ -184,7 +191,15 @@ export default function AttendanceClock() {
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder={dict?.common?.addShiftNotes || 'Add any notes about your shift...'}
-            className="w-full px-3 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none bg-white"
+            className="w-full px-3 py-2 border-2 border-gray-300 resize-none bg-white"
+            onFocus={(e) => {
+              e.currentTarget.style.borderColor = primaryColor;
+              e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+            }}
+            onBlur={(e) => {
+              e.currentTarget.style.borderColor = '#d1d5db';
+              e.currentTarget.style.boxShadow = 'none';
+            }}
             rows={2}
             disabled={loading}
           />

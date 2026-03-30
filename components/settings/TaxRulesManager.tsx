@@ -24,10 +24,11 @@ interface TaxRule {
 interface TaxRulesManagerProps {
   settings: ITenantSettings;
   tenant: string;
+  primaryColor?: string;
   onUpdate: (updates: Partial<ITenantSettings>) => void;
 }
 
-export default function TaxRulesManager({ settings, tenant, onUpdate }: TaxRulesManagerProps) { // eslint-disable-line @typescript-eslint/no-unused-vars
+export default function TaxRulesManager({ settings, tenant, primaryColor = '#2563eb', onUpdate }: TaxRulesManagerProps) { // eslint-disable-line @typescript-eslint/no-unused-vars
   const [rules, setRules] = useState<TaxRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<TaxRule | null>(null);
@@ -116,7 +117,8 @@ export default function TaxRulesManager({ settings, tenant, onUpdate }: TaxRules
             setEditing(null);
             setShowForm(true);
           }}
-          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
+          className="px-4 py-2 text-white text-sm font-medium transition-opacity hover:opacity-80"
+          style={{ backgroundColor: primaryColor }}
         >
           Add Tax Rule
         </button>
@@ -135,6 +137,7 @@ export default function TaxRulesManager({ settings, tenant, onUpdate }: TaxRules
       {showForm && (
         <TaxRuleForm
           rule={editing}
+          primaryColor={primaryColor}
           onSave={handleSave}
           onCancel={() => {
             setShowForm(false);
@@ -206,10 +209,12 @@ export default function TaxRulesManager({ settings, tenant, onUpdate }: TaxRules
 
 function TaxRuleForm({
   rule,
+  primaryColor = '#2563eb',
   onSave,
   onCancel,
 }: {
   rule: TaxRule | null;
+  primaryColor?: string;
   onSave: (rule: Partial<TaxRule>) => void;
   onCancel: () => void;
 }) {
@@ -235,7 +240,17 @@ function TaxRuleForm({
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:border-gray-400"
+            style={{ colorScheme: 'light' }}
+            onFocus={(e) => {
+              e.currentTarget.style.borderColor = primaryColor;
+              e.currentTarget.style.outline = 'none';
+              e.currentTarget.style.boxShadow = `0 0 0 3px ${primaryColor}30`;
+            }}
+            onBlur={(e) => {
+              e.currentTarget.style.borderColor = '#d1d5db';
+              e.currentTarget.style.boxShadow = 'none';
+            }}
             placeholder="e.g., California Sales Tax"
             required
           />
@@ -251,7 +266,15 @@ function TaxRuleForm({
               step="0.01"
               value={rate}
               onChange={(e) => setRate(e.target.value)}
-              className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:border-gray-400"
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = primaryColor;
+                e.currentTarget.style.boxShadow = `0 0 0 3px ${primaryColor}30`;
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = '#d1d5db';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
               required
             />
           </div>
@@ -261,7 +284,15 @@ function TaxRuleForm({
               type="text"
               value={label}
               onChange={(e) => setLabel(e.target.value)}
-              className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:border-gray-400"
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = primaryColor;
+                e.currentTarget.style.boxShadow = `0 0 0 3px ${primaryColor}30`;
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = '#d1d5db';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
               placeholder="e.g., VAT, GST, Sales Tax"
               required
             />
@@ -273,7 +304,15 @@ function TaxRuleForm({
           <select
             value={appliesTo}
             onChange={(e) => setAppliesTo(e.target.value as any)} // eslint-disable-line @typescript-eslint/no-explicit-any
-            className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:border-gray-400"
+            onFocus={(e) => {
+              e.currentTarget.style.borderColor = primaryColor;
+              e.currentTarget.style.boxShadow = `0 0 0 3px ${primaryColor}30`;
+            }}
+            onBlur={(e) => {
+              e.currentTarget.style.borderColor = '#d1d5db';
+              e.currentTarget.style.boxShadow = 'none';
+            }}
           >
             <option value="all">All Products & Services</option>
             <option value="products">Products Only</option>
@@ -289,21 +328,45 @@ function TaxRuleForm({
               type="text"
               value={country}
               onChange={(e) => setCountry(e.target.value)}
-              className="px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="px-4 py-2 border-2 border-gray-300 focus:border-gray-400"
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = primaryColor;
+                e.currentTarget.style.boxShadow = `0 0 0 3px ${primaryColor}30`;
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = '#d1d5db';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
               placeholder="Country"
             />
             <input
               type="text"
               value={state}
               onChange={(e) => setState(e.target.value)}
-              className="px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="px-4 py-2 border-2 border-gray-300 focus:border-gray-400"
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = primaryColor;
+                e.currentTarget.style.boxShadow = `0 0 0 3px ${primaryColor}30`;
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = '#d1d5db';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
               placeholder="State/Province"
             />
             <input
               type="text"
               value={city}
               onChange={(e) => setCity(e.target.value)}
-              className="px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="px-4 py-2 border-2 border-gray-300 focus:border-gray-400"
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = primaryColor;
+                e.currentTarget.style.boxShadow = `0 0 0 3px ${primaryColor}30`;
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = '#d1d5db';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
               placeholder="City"
             />
           </div>
@@ -311,7 +374,15 @@ function TaxRuleForm({
             type="text"
             value={zipCodes}
             onChange={(e) => setZipCodes(e.target.value)}
-            className="mt-2 w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="mt-2 w-full px-4 py-2 border-2 border-gray-300 focus:border-gray-400"
+            onFocus={(e) => {
+              e.currentTarget.style.borderColor = primaryColor;
+              e.currentTarget.style.boxShadow = `0 0 0 3px ${primaryColor}30`;
+            }}
+            onBlur={(e) => {
+              e.currentTarget.style.borderColor = '#d1d5db';
+              e.currentTarget.style.boxShadow = 'none';
+            }}
             placeholder="Zip Codes (comma-separated)"
           />
         </div>
@@ -323,7 +394,15 @@ function TaxRuleForm({
               type="number"
               value={priority}
               onChange={(e) => setPriority(e.target.value)}
-              className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-4 py-2 border-2 border-gray-300 focus:border-gray-400"
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = primaryColor;
+                e.currentTarget.style.boxShadow = `0 0 0 3px ${primaryColor}30`;
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = '#d1d5db';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
               placeholder="0"
             />
             <p className="text-xs text-gray-500 mt-1">Higher priority rules are applied first</p>
@@ -334,7 +413,8 @@ function TaxRuleForm({
               id="isActive"
               checked={isActive}
               onChange={(e) => setIsActive(e.target.checked)}
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              className="w-4 h-4 border-gray-300 rounded"
+              style={{ accentColor: primaryColor }}
             />
             <label htmlFor="isActive" className="ml-2 text-sm text-gray-700">
               Active
@@ -360,7 +440,8 @@ function TaxRuleForm({
                 } : undefined,
               })
             }
-            className="px-4 py-2 bg-blue-600 text-white font-medium hover:bg-blue-700"
+            className="px-4 py-2 text-white font-medium transition-opacity hover:opacity-80"
+            style={{ backgroundColor: primaryColor }}
           >
             Save Rule
           </button>

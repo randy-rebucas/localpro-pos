@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { getDefaultTenantSettings } from '@/lib/currency';
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -24,6 +26,8 @@ export default function ConfirmDialog({
   variant = 'info',
 }: ConfirmDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const { settings } = useTenantSettings();
+  const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#3b82f6';
 
   useEffect(() => {
     if (isOpen) {
@@ -67,9 +71,9 @@ export default function ConfirmDialog({
       ),
     },
     info: {
-      confirmButton: 'bg-blue-600 hover:bg-blue-700 border-blue-700 text-white',
+      confirmButton: 'text-white border',
       icon: (
-        <svg className="w-6 h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: '#3b82f6' }}>
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
       ),
@@ -105,7 +109,35 @@ export default function ConfirmDialog({
           </button>
           <button
             onClick={handleConfirm}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${styles.confirmButton}`}
+            className="px-4 py-2.5 font-medium transition-colors border text-white"
+            style={variant === 'info' ? {
+              backgroundColor: primaryColor,
+              borderColor: primaryColor,
+            } : variant === 'warning' ? {
+              backgroundColor: '#ca8a04',
+              borderColor: '#ca8a04',
+            } : {
+              backgroundColor: '#dc2626',
+              borderColor: '#dc2626',
+            }}
+            onMouseEnter={(e) => {
+              if (variant === 'info') {
+                e.currentTarget.style.backgroundColor = `${primaryColor}dd`;
+              } else if (variant === 'warning') {
+                e.currentTarget.style.backgroundColor = '#b45309';
+              } else {
+                e.currentTarget.style.backgroundColor = '#b91c1c';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (variant === 'info') {
+                e.currentTarget.style.backgroundColor = primaryColor;
+              } else if (variant === 'warning') {
+                e.currentTarget.style.backgroundColor = '#ca8a04';
+              } else {
+                e.currentTarget.style.backgroundColor = '#dc2626';
+              }
+            }}
           >
             {confirmText}
           </button>

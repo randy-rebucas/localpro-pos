@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { hardwareService, HardwareConfig, PrinterConfig, PRINTER_PROFILES } from '@/lib/hardware';
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { getDefaultTenantSettings } from '@/lib/currency';
 import { showToast } from '@/lib/toast';
 
 interface HardwareSettingsProps {
@@ -30,6 +32,8 @@ export default function HardwareSettings({
     cameras: Array<{ deviceId: string; label: string }>;
   }>({ printers: [], cameras: [] });
   const [testing, setTesting] = useState<string | null>(null);
+  const { settings } = useTenantSettings();
+  const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#3b82f6';
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -183,7 +187,15 @@ export default function HardwareSettings({
                     profile: e.target.value === 'usb' ? config.printer?.profile : undefined,
                   } as PrinterConfig,
                 })}
-                className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                className="w-full px-4 py-2 border border-gray-300 bg-white"
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = primaryColor;
+                  e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = '#d1d5db';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
               >
                 <option value="browser">{dict?.components?.hardwareSettings?.browserPrint || 'Browser Print'}</option>
                 <option value="usb">{dict?.components?.hardwareSettings?.usbPrinter || 'USB Printer'}</option>
@@ -212,7 +224,15 @@ export default function HardwareSettings({
                       } as PrinterConfig,
                     });
                   }}
-                  className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  className="w-full px-4 py-2 border border-gray-300 bg-white"
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = primaryColor;
+                    e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = '#d1d5db';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }}
                 >
                   <option value="">{dict?.components?.hardwareSettings?.selectModel || '— Select model —'}</option>
                   {PRINTER_PROFILES.filter((p) => p.type === 'usb').map((p) => (
@@ -240,7 +260,15 @@ export default function HardwareSettings({
                       } as PrinterConfig,
                     })}
                     placeholder="192.168.1.100"
-                    className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                    className="w-full px-4 py-2 border border-gray-300 bg-white"
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = primaryColor;
+                      e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.borderColor = '#d1d5db';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
                   />
                 </div>
                 <div>
@@ -256,7 +284,15 @@ export default function HardwareSettings({
                         portNumber: parseInt(e.target.value),
                       } as PrinterConfig,
                     })}
-                    className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                    className="w-full px-4 py-2 border border-gray-300 bg-white"
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = primaryColor;
+                      e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.borderColor = '#d1d5db';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
                   />
                 </div>
               </>
@@ -265,7 +301,13 @@ export default function HardwareSettings({
             <button
               onClick={testPrinter}
               disabled={testing === 'printer'}
-              className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
+              className="px-4 py-2 text-white disabled:opacity-50 border transition-colors"
+              style={{
+                backgroundColor: primaryColor,
+                borderColor: primaryColor
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = `${primaryColor}dd`; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = primaryColor; }}
             >
               {testing === 'printer' ? (dict?.components?.hardwareSettings?.testing || 'Testing...') : (dict?.components?.hardwareSettings?.testPrint || 'Test Print')}
             </button>
@@ -310,7 +352,13 @@ export default function HardwareSettings({
               <button
                 onClick={testCashDrawer}
                 disabled={testing === 'drawer'}
-                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
+                className="px-4 py-2 text-white disabled:opacity-50 border transition-colors"
+                style={{
+                  backgroundColor: primaryColor,
+                  borderColor: primaryColor
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = `${primaryColor}dd`; }}
+                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = primaryColor; }}
               >
                 {testing === 'drawer' ? (dict?.components?.hardwareSettings?.testing || 'Testing...') : (dict?.components?.hardwareSettings?.testCashDrawer || 'Test Cash Drawer')}
               </button>
@@ -373,7 +421,15 @@ export default function HardwareSettings({
                       cameraId: e.target.value,
                     },
                   })}
-                  className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  className="w-full px-4 py-2 border border-gray-300 bg-white"
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = primaryColor;
+                    e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = '#d1d5db';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }}
                 >
                   <option value="">{dict?.components?.hardwareSettings?.defaultCamera || 'Default Camera'}</option>
                   {devices.cameras.map((camera) => (
@@ -426,7 +482,13 @@ export default function HardwareSettings({
           <button
             onClick={saveConfig}
             disabled={loading}
-            className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
+            className="px-4 py-2 text-white disabled:opacity-50 border transition-colors"
+            style={{
+              backgroundColor: primaryColor,
+              borderColor: primaryColor
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = `${primaryColor}dd`; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = primaryColor; }}
           >
             {loading ? (dict?.components?.hardwareSettings?.saving || 'Saving...') : (dict?.components?.hardwareSettings?.saveSettings || 'Save Settings')}
           </button>

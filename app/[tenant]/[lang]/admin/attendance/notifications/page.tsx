@@ -1,177 +1,102 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import Navbar from '@/components/Navbar';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../../dictionaries-client';
-// Removed incorrect dict import
-
-interface Notification {
-  type: 'missing_clock_out' | 'late_arrival';
-  userId: string;
-  userName: string;
-  userEmail?: string;
-  attendanceId: string;
-  clockInTime: string;
-  hoursSinceClockIn?: string;
-  minutesLate?: number;
-  expectedTime?: string;
-  message: string;
-}
+import { useAttendanceNotifications } from '@/hooks/useAttendanceNotifications';
+import { useNotificationSettings } from '@/hooks/useNotificationSettings';
+import { useSendNotificationEmails } from '@/hooks/useSendNotificationEmails';
+import {
+  getNotificationsWithEmailCount,
+  hasNotificationsToSend,
+  formatNotificationType,
+  getNotificationBadgeClass,
+  formatClockInTime,
+  confirmSendEmails,
+} from '@/lib/notification-helpers';
+import toast from 'react-hot-toast';
 
 export default function AttendanceNotificationsPage() {
   const params = useParams();
-  const router = useRouter(); // eslint-disable-line @typescript-eslint/no-unused-vars
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [summary, setSummary] = useState<{ total: number; missingClockOut: number; lateArrivals: number } | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [expectedStartTime, setExpectedStartTime] = useState('09:00');
-  const [maxHours, setMaxHours] = useState('12');
-  const [sending, setSending] = useState(false);
-  const [savingSettings, setSavingSettings] = useState(false);
-  
+  const [dict, setDict] = React.useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+
+  const { notifications, loading, fetchNotifications } = useAttendanceNotifications();
+  const { expectedStartTime, setExpectedStartTime, maxHours, setMaxHours, savingSettings, loadDefaultSettings, saveDefaultSettings } = useNotificationSettings(tenant);
+  const { sending, sendEmails } = useSendNotificationEmails();
+
+  // Load dictionary
   useEffect(() => {
-    getDictionaryClient(lang).then((d) => setDict(d));
+    getDictionaryClient(lang).then(setDict);
   }, [lang]);
 
+  // Load default settings and fetch notifications
+  useEffect(() => {
+    if (tenant) {
+      loadDefaultSettings();
+    }
+  }, [tenant, loadDefaultSettings]);
+
+  // Fetch notifications when settings load or change
   useEffect(() => {
     if (dict) {
-      loadDefaultSettings();
-      fetchNotifications();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dict]);
-
-  const loadDefaultSettings = async () => {
-    try {
-      const res = await fetch(`/api/tenants/${tenant}/settings`);
-      const data = await res.json();
-      if (data.success && data.data.attendanceNotifications) {
-        const attSettings = data.data.attendanceNotifications;
-        if (attSettings.expectedStartTime) {
-          setExpectedStartTime(attSettings.expectedStartTime);
-        }
-        if (attSettings.maxHoursWithoutClockOut) {
-          setMaxHours(String(attSettings.maxHoursWithoutClockOut));
-        }
-      }
-    } catch (error) {
-      console.error('Error loading default settings:', error);
-      // Continue with defaults if loading fails
-    }
-  };
-
-  const handleSaveDefaultSettings = async () => {
-    setSavingSettings(true);
-    try {
-      const res = await fetch(`/api/tenants/${tenant}/settings`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          settings: {
-            attendanceNotifications: {
-              enabled: true,
-              expectedStartTime,
-              maxHoursWithoutClockOut: parseFloat(maxHours),
-            },
-          },
-        }),
+      fetchNotifications(expectedStartTime, maxHours, (error) => {
+        toast.error(error);
       });
-      
-      const data = await res.json();
-      if (data.success) {
-        setMessage({ 
-          type: 'success', 
-          text: dict && dict.admin?.settingsSaved ? dict.admin.settingsSaved : 'Settings saved as default' 
-        });
-        // Clear message after 3 seconds
-        setTimeout(() => setMessage(null), 3000);
-      } else {
-        setMessage({ type: 'error', text: data.error || (dict && dict.admin?.failedToSaveSettings ? dict.admin.failedToSaveSettings : 'Failed to save settings') });
-      }
-    } catch (error) {
-      console.error('Error saving settings:', error);
-      setMessage({ type: 'error', text: dict && dict.admin?.failedToSaveSettings ? dict.admin.failedToSaveSettings : 'Failed to save settings' });
-    } finally {
-      setSavingSettings(false);
     }
-  };
+  }, [expectedStartTime, maxHours, dict, fetchNotifications]);
 
-  const fetchNotifications = async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      params.append('expectedStartTime', expectedStartTime);
-      params.append('maxHoursWithoutClockOut', maxHours);
-
-      const res = await fetch(`/api/attendance/notifications?${params}`, { credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
-        setNotifications(data.data.notifications || []);
-        setSummary(data.data.summary || null);
-        setMessage(null);
-      } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchNotifications || 'Failed to fetch notifications' });
+  const handleSaveDefaultSettings = useCallback(async () => {
+    const success = await saveDefaultSettings(
+      () => {
+        toast.success(dict?.admin?.settingsSaved || 'Settings saved as default');
+      },
+      (error) => {
+        toast.error(error);
       }
-    } catch (error) {
-      console.error('Error fetching notifications:', error);
-      setMessage({ type: 'error', text: dict?.common?.failedToFetchNotifications || 'Failed to fetch notifications' });
-    } finally {
-      setLoading(false);
-    }
-  };
+    );
+    return success;
+  }, [saveDefaultSettings, dict]);
 
-  const handleSendEmails = async () => {
+  const handleRefreshNotifications = useCallback(() => {
+    fetchNotifications(expectedStartTime, maxHours, (error) => {
+      toast.error(error);
+    });
+  }, [expectedStartTime, maxHours, fetchNotifications]);
+
+  const handleSendEmails = useCallback(async () => {
     if (notifications.length === 0) {
-      setMessage({ type: 'error', text: dict && dict.admin?.noNotificationsToSend ? dict.admin.noNotificationsToSend : 'No notifications to send' });
+      toast.error(dict?.admin?.noNotificationsToSend || 'No notifications to send');
       return;
     }
 
-    const notificationsWithEmail = notifications.filter(n => n.userEmail);
-    if (notificationsWithEmail.length === 0) {
-      setMessage({ type: 'error', text: dict && dict.admin?.noEmailsToSend ? dict.admin.noEmailsToSend : 'No email addresses found for notifications' });
+    const emailCount = getNotificationsWithEmailCount(notifications);
+    if (emailCount === 0) {
+      toast.error(dict?.admin?.noEmailsToSend || 'No email addresses found for notifications');
       return;
     }
 
-    if (!confirm(dict && dict.admin?.confirmSendEmails ? dict.admin.confirmSendEmails.replace('{count}', notificationsWithEmail.length.toString()) : `Send emails to ${notificationsWithEmail.length} recipient(s)?`)) {
+    if (!confirmSendEmails(emailCount, dict)) {
       return;
     }
 
-    setSending(true);
-    try {
-      const params = new URLSearchParams();
-      params.append('expectedStartTime', expectedStartTime);
-      params.append('maxHoursWithoutClockOut', maxHours);
-
-      const res = await fetch(`/api/attendance/notifications?${params}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ notifications: notificationsWithEmail }),
-      });
-      
-      const data = await res.json();
-      if (data.success) {
-        setMessage({ 
-          type: 'success', 
-          text: data.message || (dict && dict.admin?.emailsSentSuccessfully ? dict.admin.emailsSentSuccessfully : 'Emails sent successfully') 
-        });
-      } else {
-        setMessage({ type: 'error', text: data.error || (dict && dict.admin?.failedToSendEmails ? dict.admin.failedToSendEmails : 'Failed to send emails') });
+    const success = await sendEmails(
+      notifications,
+      expectedStartTime,
+      maxHours,
+      () => {
+        toast.success(dict?.admin?.emailsSentSuccessfully || 'Emails sent successfully');
+      },
+      (error) => {
+        toast.error(error);
       }
-    } catch (error) {
-      console.error('Error sending emails:', error);
-      setMessage({ type: 'error', text: dict && dict.admin?.failedToSendEmails ? dict.admin.failedToSendEmails : 'Failed to send emails' });
-    } finally {
-      setSending(false);
-    }
-  };
+    );
+
+    return success;
+  }, [notifications, expectedStartTime, maxHours, dict, sendEmails]);
 
   if (!dict) {
     return (
@@ -208,12 +133,6 @@ export default function AttendanceNotificationsPage() {
           </div>
         </div>
 
-        {message && (
-          <div className={`mb-6 p-4 border ${message.type === 'success' ? 'bg-green-50 text-green-800 border-green-300' : 'bg-red-50 text-red-800 border-red-300'}`}>
-            {message.text}
-          </div>
-        )}
-
         {/* Settings */}
         <div className="bg-white border border-gray-300 p-6 mb-6">
           <h2 className="text-lg font-bold text-gray-900 mb-4">{dict.admin?.settings || 'Settings'}</h2>
@@ -248,10 +167,10 @@ export default function AttendanceNotificationsPage() {
                 disabled={savingSettings}
                 className="px-4 py-2 border border-gray-300 hover:bg-gray-50 bg-white font-medium disabled:bg-gray-100 disabled:cursor-not-allowed"
               >
-                {savingSettings ? (dict.common?.saving || 'Saving...') : (dict.admin?.saveAsDefault || 'Save as Default')}
+                {savingSettings ? dict.common?.saving || 'Saving...' : dict.admin?.saveAsDefault || 'Save as Default'}
               </button>
               <button
-                onClick={fetchNotifications}
+                onClick={handleRefreshNotifications}
                 className="flex-1 px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
               >
                 {dict.common?.search || 'Refresh'}
@@ -261,45 +180,46 @@ export default function AttendanceNotificationsPage() {
         </div>
 
         {/* Summary */}
-        {summary && (
+        {notifications.length > 0 && (
           <div className="mb-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
               <div className="bg-white border border-gray-300 p-6">
                 <div className="text-sm text-gray-600 mb-1">{dict.admin?.totalNotifications || 'Total Notifications'}</div>
-                <div className="text-2xl font-bold text-gray-900">{summary.total}</div>
+                <div className="text-2xl font-bold text-gray-900">{notifications.length}</div>
               </div>
               <div className="bg-red-50 border border-red-200 p-6">
                 <div className="text-sm text-red-600 mb-1">{dict.admin?.missingClockOut || 'Missing Clock Out'}</div>
-                <div className="text-2xl font-bold text-red-900">{summary.missingClockOut}</div>
+                <div className="text-2xl font-bold text-red-900">{notifications.filter((n) => n.type === 'missing_clock_out').length}</div>
               </div>
               <div className="bg-yellow-50 border border-yellow-200 p-6">
                 <div className="text-sm text-yellow-600 mb-1">{dict.admin?.lateArrivals || 'Late Arrivals'}</div>
-                <div className="text-2xl font-bold text-yellow-900">{summary.lateArrivals}</div>
+                <div className="text-2xl font-bold text-yellow-900">{notifications.filter((n) => n.type === 'late_arrival').length}</div>
               </div>
             </div>
-            {notifications.length > 0 && (
+
+            {hasNotificationsToSend(notifications) && (
               <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-blue-900">
                     {dict.admin?.sendEmailNotifications || 'Send email notifications to employees'}
                   </p>
                   <p className="text-xs text-blue-700 mt-1">
-                    {notifications.filter(n => n.userEmail).length} {dict.admin?.recipientsWithEmail || 'recipients with email addresses'}
+                    {getNotificationsWithEmailCount(notifications)} {dict.admin?.recipientsWithEmail || 'recipients with email addresses'}
                   </p>
                 </div>
                 <button
                   onClick={handleSendEmails}
-                  disabled={sending || notifications.filter(n => n.userEmail).length === 0}
+                  disabled={sending || !hasNotificationsToSend(notifications)}
                   className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
                 >
-                  {sending ? (dict.common?.sending || 'Sending...') : (dict.admin?.sendEmails || 'Send Emails')}
+                  {sending ? dict.common?.sending || 'Sending...' : dict.admin?.sendEmails || 'Send Emails'}
                 </button>
               </div>
             )}
           </div>
         )}
 
-        {/* Notifications List */}
+        {/* Notifications Table */}
         <div className="bg-white border border-gray-300 p-6">
           {loading ? (
             <div className="text-center py-8">
@@ -322,24 +242,16 @@ export default function AttendanceNotificationsPage() {
                   {notifications.map((notification) => (
                     <tr key={`${notification.attendanceId}-${notification.type}`}>
                       <td className="px-4 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-semibold border ${
-                          notification.type === 'missing_clock_out'
-                            ? 'bg-red-100 text-red-800 border-red-300'
-                            : 'bg-yellow-100 text-yellow-800 border-yellow-300'
-                        }`}>
-                          {notification.type === 'missing_clock_out'
-                            ? (dict.admin?.missingClockOut || 'Missing Clock Out')
-                            : (dict.admin?.lateArrival || 'Late Arrival')}
+                        <span className={`px-2 py-1 text-xs font-semibold border ${getNotificationBadgeClass(notification.type)}`}>
+                          {formatNotificationType(notification.type, dict)}
                         </span>
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         {notification.userName}
-                        {notification.userEmail && (
-                          <div className="text-xs text-gray-500">{notification.userEmail}</div>
-                        )}
+                        {notification.userEmail && <div className="text-xs text-gray-500">{notification.userEmail}</div>}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(notification.clockInTime).toLocaleString()}
+                        {formatClockInTime(notification.clockInTime)}
                       </td>
                       <td className="px-4 py-4 text-sm text-gray-500">
                         {notification.type === 'missing_clock_out' && notification.hoursSinceClockIn && (
