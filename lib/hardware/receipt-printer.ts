@@ -64,6 +64,7 @@ export interface ReceiptData {
   minNumber?: string;      // Machine Identification Number
   systemProvider?: string; // Accredited system provider name
   isVAT?: boolean;         // true = VAT-registered, false = NON-VAT
+  taxRate?: number;        // Tax rate from tenant settings (e.g. 12 for 12%)
   customerTIN?: string;    // Customer TIN (optional)
 }
 
@@ -456,9 +457,8 @@ class ReceiptPrinterService {
     const vatableSales = isVAT && vatAmount > 0 ? discountedSubtotal - vatAmount : 0;
     const vatExemptSales = isVAT ? 0 : discountedSubtotal;
 
-    const vatPct = isVAT && vatAmount > 0 && discountedSubtotal > vatAmount
-      ? ((vatAmount / (discountedSubtotal - vatAmount)) * 100).toFixed(0)
-      : '12';
+    // Use tenant-configured tax rate; never back-calculate from amounts (rounding errors)
+    const vatPct = data.taxRate ? String(data.taxRate) : '12';
 
     return `<!DOCTYPE html>
 <html>

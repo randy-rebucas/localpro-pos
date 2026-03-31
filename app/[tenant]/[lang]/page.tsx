@@ -669,6 +669,7 @@ export default function Dashboard() {
       discount: transaction.discountAmount || undefined,
       tax: taxAmount,
       taxLabel: settings.taxLabel,
+      taxRate: settings.taxRate,
       total: transaction.total,
       paymentMethod: transaction.paymentMethod,
       cashReceived: transaction.cashReceived,
