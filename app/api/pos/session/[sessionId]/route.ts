@@ -1,38 +1,43 @@
 import { NextRequest, NextResponse } from 'next/server';
+import connectDB from '@/lib/mongodb';
+import mongoose from 'mongoose';
+import { logger } from '@/lib/logger';
 
-// In-memory session storage (would use Redis in production)
-const sessionStore = new Map<string, {
-  tenant: string;
-  cart: any[];
-  subtotal: number;
-  discount: { code: string; amount: number; name?: string } | null;
-  taxAmount?: number;
-  taxRate?: number;
-  taxLabel?: string;
-  tip: number;
-  total: number;
-  paymentMethod: string | null;
-  paymentStatus: 'pending' | 'processing' | 'completed' | 'failed';
-  lastUpdate: number;
-}>()
+// MongoDB-backed POS session for serverless compatibility
+const posSessionSchema = new mongoose.Schema({
+  sessionId: { type: String, required: true, unique: true, index: true },
+  tenant: { type: String, required: true },
+  cart: { type: Array, default: [] },
+  subtotal: { type: Number, default: 0 },
+  discount: { type: mongoose.Schema.Types.Mixed, default: null },
+  taxAmount: { type: Number },
+  taxRate: { type: Number },
+  taxLabel: { type: String },
+  tip: { type: Number, default: 0 },
+  total: { type: Number, default: 0 },
+  paymentMethod: { type: String, default: null },
+  paymentStatus: { type: String, enum: ['pending', 'processing', 'completed', 'failed'], default: 'pending' },
+  lastUpdate: { type: Number, default: Date.now },
+}, {
+  timestamps: true,
+  // TTL index: auto-delete sessions older than 1 hour
+  expireAfterSeconds: 3600,
+});
 
-// Cleanup old sessions (older than 1 hour)
-setInterval(() => {
-  const now = Date.now();
-  for (const [sessionId, data] of sessionStore.entries()) {
-    if (now - data.lastUpdate > 60 * 60 * 1000) {
-      sessionStore.delete(sessionId);
-    }
-  }
-}, 5 * 60 * 1000); // Check every 5 minutes
+// Add TTL index on createdAt
+posSessionSchema.index({ lastUpdate: 1 }, { expireAfterSeconds: 3600 });
+
+const PosSession = mongoose.models.PosSession || mongoose.model('PosSession', posSessionSchema);
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ sessionId: string }> }
 ) {
   try {
+    await connectDB();
     const { sessionId } = await params;
-    const session = sessionStore.get(sessionId);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const session = await PosSession.findOne({ sessionId }).lean() as any;
 
     if (!session) {
       return NextResponse.json(
@@ -64,7 +69,7 @@ export async function GET(
       }
     });
   } catch (error) {
-    console.error('GET /api/pos/session/[sessionId] error:', error);
+    logger.error('GET /api/pos/session/[sessionId] error:', error);
     return NextResponse.json(
       { success: false, error: 'Internal server error' },
       { status: 500 }
@@ -77,6 +82,7 @@ export async function POST(
   { params }: { params: Promise<{ sessionId: string }> }
 ) {
   try {
+    await connectDB();
     const { sessionId } = await params;
     const body = await request.json();
     const { tenant, action, data } = body;
@@ -88,65 +94,74 @@ export async function POST(
       );
     }
 
-    let session = sessionStore.get(sessionId);
+    let session = await PosSession.findOne({ sessionId });
 
     if (action === 'init') {
-      // Initialize or reset session
-      session = {
-        tenant,
-        cart: data?.cart || [],
-        subtotal: data?.subtotal || 0,
-        discount: data?.discount || null,
-        taxAmount: data?.taxAmount,
-        taxRate: data?.taxRate,
-        taxLabel: data?.taxLabel,
-        tip: data?.tip || 0,
-        total: data?.total || 0,
-        paymentMethod: data?.paymentMethod || null,
-        paymentStatus: 'pending',
-        lastUpdate: Date.now(),
-      };
+      // Upsert: create or reset session
+      session = await PosSession.findOneAndUpdate(
+        { sessionId },
+        {
+          sessionId,
+          tenant,
+          cart: data?.cart || [],
+          subtotal: data?.subtotal || 0,
+          discount: data?.discount || null,
+          taxAmount: data?.taxAmount,
+          taxRate: data?.taxRate,
+          taxLabel: data?.taxLabel,
+          tip: data?.tip || 0,
+          total: data?.total || 0,
+          paymentMethod: data?.paymentMethod || null,
+          paymentStatus: 'pending',
+          lastUpdate: Date.now(),
+        },
+        { upsert: true, new: true }
+      );
     } else if (session) {
-      // Update existing session
+      const updates: Record<string, unknown> = { lastUpdate: Date.now() };
+
       if (action === 'update-cart') {
-        session.cart = data.cart || session.cart;
-        session.subtotal = data.subtotal ?? session.subtotal;
-        session.taxAmount = data.taxAmount ?? session.taxAmount;
-        session.taxRate = data.taxRate ?? session.taxRate;
-        session.taxLabel = data.taxLabel ?? session.taxLabel;
-        session.total = data.total ?? session.total;
+        if (data.cart) updates.cart = data.cart;
+        if (data.subtotal != null) updates.subtotal = data.subtotal;
+        if (data.taxAmount != null) updates.taxAmount = data.taxAmount;
+        if (data.taxRate != null) updates.taxRate = data.taxRate;
+        if (data.taxLabel != null) updates.taxLabel = data.taxLabel;
+        if (data.total != null) updates.total = data.total;
       } else if (action === 'update-discount') {
-        session.discount = data.discount;
-        session.taxAmount = data.taxAmount ?? session.taxAmount;
-        session.total = data.total ?? session.total;
+        updates.discount = data.discount;
+        if (data.taxAmount != null) updates.taxAmount = data.taxAmount;
+        if (data.total != null) updates.total = data.total;
       } else if (action === 'update-tip') {
-        session.tip = data.tip ?? 0;
-        session.total = data.total ?? session.total;
+        updates.tip = data.tip ?? 0;
+        if (data.total != null) updates.total = data.total;
       } else if (action === 'update-payment-method') {
-        session.paymentMethod = data.paymentMethod || null;
+        updates.paymentMethod = data.paymentMethod || null;
       } else if (action === 'update-payment-status') {
-        session.paymentStatus = data.status || 'pending';
+        updates.paymentStatus = data.status || 'pending';
       } else if (action === 'clear') {
-        session.cart = [];
-        session.subtotal = 0;
-        session.discount = null;
-        session.taxAmount = 0;
-        session.taxRate = undefined;
-        session.taxLabel = undefined;
-        session.tip = 0;
-        session.total = 0;
-        session.paymentMethod = null;
-        session.paymentStatus = 'pending';
+        updates.cart = [];
+        updates.subtotal = 0;
+        updates.discount = null;
+        updates.taxAmount = 0;
+        updates.taxRate = undefined;
+        updates.taxLabel = undefined;
+        updates.tip = 0;
+        updates.total = 0;
+        updates.paymentMethod = null;
+        updates.paymentStatus = 'pending';
       }
-      session.lastUpdate = Date.now();
+
+      session = await PosSession.findOneAndUpdate(
+        { sessionId },
+        { $set: updates },
+        { new: true }
+      );
     } else {
       return NextResponse.json(
-        { success: false, error: 'Session not found' },
+        { success: false, error: 'Session not found. Please reinitialize.' },
         { status: 404 }
       );
     }
-
-    sessionStore.set(sessionId, session);
 
     return NextResponse.json({
       success: true,
@@ -165,7 +180,7 @@ export async function POST(
       },
     });
   } catch (error) {
-    console.error('POST /api/pos/session/[sessionId] error:', error);
+    logger.error('POST /api/pos/session/[sessionId] error:', error);
     return NextResponse.json(
       { success: false, error: 'Internal server error' },
       { status: 500 }
