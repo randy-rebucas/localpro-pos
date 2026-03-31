@@ -6,6 +6,7 @@ import { requireAuth, requireRole } from '@/lib/auth'; // eslint-disable-line @t
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkFeatureAccess } from '@/lib/subscription';
+import { ensureLegalDiscounts } from '@/lib/discount-seeds';
 
 export async function GET(request: NextRequest) {
   try {
@@ -27,6 +28,9 @@ export async function GET(request: NextRequest) {
     }
     const t = await getValidationTranslatorFromRequest(request); // eslint-disable-line @typescript-eslint/no-unused-vars
     
+    // Auto-seed legal discounts (SC20, PWD20) for this tenant
+    await ensureLegalDiscounts(tenantId);
+
     const searchParams = request.nextUrl.searchParams;
     const code = searchParams.get('code');
     const activeOnly = searchParams.get('activeOnly') === 'true';
