@@ -65,6 +65,7 @@ export default function Dashboard() {
   const lang = (['en', 'es'] as const).includes(rawLang as 'en' | 'es') ? (rawLang as 'en' | 'es') : 'en';
   const [products, setProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [dict, setDict] = useState<TranslationDict | null>(null);
   const { isOnline } = useNetworkStatus(tenant);
@@ -122,7 +123,7 @@ export default function Dashboard() {
   );
   const { promoCode, setPromoCode, appliedDiscount, setAppliedDiscount, applyingDiscount, applyDiscount, removeDiscount } = useDiscount(fetchWithTimeout);
   const { paymentMethod, setPaymentMethod, cashReceived, setCashReceived, processing, processPayment } = usePayment();
-  const { currentRefundTransaction, setCurrentRefundTransaction, refundItems, setRefundItems, refundMethod, setRefundMethod, refundNotes, setRefundNotes, refunding, addRefundItem, removeRefundItem, updateRefundQty, processRefund, clearRefund } = useRefund();
+  const { currentRefundTransaction, setCurrentRefundTransaction, refundItems, setRefundItems, refundMethod, setRefundMethod, refundNotes, setRefundNotes, refunding, addRefundItem, removeRefundItem, updateRefundQty, calculateRefundAmount, processRefund, clearRefund } = useRefund();
   const { activeSession: cashDrawerSession, checkActiveSession, openDrawer, closeDrawer, loading: cashDrawerLoading } = useCashDrawer();
 
   // Cash drawer UI state
@@ -157,6 +158,12 @@ export default function Dashboard() {
   };
 
   // Create AbortController for session/cart sync that runs on every change
+
+  // Debounce search input (300ms)
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -363,8 +370,8 @@ export default function Dashboard() {
       if (cached.length > 0) {
         // Filter by search if provided
         let filtered = cached;
-        if (search) {
-          const searchLower = search.toLowerCase();
+        if (debouncedSearch) {
+          const searchLower = debouncedSearch.toLowerCase();
           filtered = cached.filter(
             p =>
               p.name.toLowerCase().includes(searchLower) ||
@@ -377,7 +384,7 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Error loading cached products:', error);
     }
-  }, [search, tenant]);
+  }, [debouncedSearch, tenant]);
 
   const fetchProducts = useCallback(async () => {
     try {
@@ -386,7 +393,7 @@ export default function Dashboard() {
       if (isOnline) {
         // Try to fetch from server
         try {
-          const res = await fetchWithTimeout(`/api/products?search=${encodeURIComponent(search)}&tenant=${tenant}`);
+          const res = await fetchWithTimeout(`/api/products?search=${encodeURIComponent(debouncedSearch)}&tenant=${tenant}`);
           const data = await res.json();
           if (data.success) {
             setProducts(data.data);
@@ -420,7 +427,7 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  }, [search, tenant, isOnline, loadCachedProducts, fetchWithTimeout]);
+  }, [debouncedSearch, tenant, isOnline, loadCachedProducts, fetchWithTimeout]);
 
   useEffect(() => {
     fetchProducts();
@@ -1517,11 +1524,12 @@ export default function Dashboard() {
 
                     {/* Product Image — consistent height */}
                     <div className="w-full h-28 bg-gray-50 overflow-hidden flex-shrink-0">
-                      {product.image ? (
+                      {product.image && (product.image.startsWith('http') || product.image.startsWith('/') || product.image.startsWith('data:image/')) ? (
                         <img // eslint-disable-line
                           src={product.image}
                           alt={product.name}
                           className="w-full h-full object-cover"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                         />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
@@ -1888,6 +1896,7 @@ export default function Dashboard() {
                               min="0"
                               max={maxQty}
                               value={currentQty}
+                              aria-label={`Refund quantity for ${item.name}`}
                               onChange={(e) => {
                                 const val = Math.max(0, Math.min(maxQty, parseInt(e.target.value) || 0));
                                 if (val > 0) {
@@ -1988,6 +1997,23 @@ export default function Dashboard() {
                     }}
                   />
                 </div>
+
+                {/* Refund Amount Preview */}
+                {refundItems.length > 0 && currentRefundTransaction && (
+                  <div className="mb-5 p-4 bg-red-50 border border-red-200 rounded-lg">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium text-red-800">
+                        {dict.pos?.refundAmount || 'Refund Amount'}
+                      </span>
+                      <span className="text-lg font-bold text-red-700">
+                        <Currency amount={calculateRefundAmount(currentRefundTransaction)} />
+                      </span>
+                    </div>
+                    <p className="text-xs text-red-600 mt-1">
+                      {refundItems.length} {refundItems.length === 1 ? 'item' : 'items'} selected for refund
+                    </p>
+                  </div>
+                )}
 
                 <div className="flex justify-end gap-3">
                   <button
