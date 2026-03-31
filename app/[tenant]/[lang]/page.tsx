@@ -1464,7 +1464,7 @@ export default function Dashboard() {
             </div>
 
             {loading ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((i) => (
                   <div key={i} className="bg-white border border-gray-300 overflow-hidden animate-pulse">
                     <div className="h-28 bg-gray-200"></div>
@@ -1488,7 +1488,7 @@ export default function Dashboard() {
                 <p className="text-gray-500 text-lg">{dict.common.noResults}</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                 {[...products]
                   .sort((a, b) => {
                     // Pinned products first
@@ -1499,8 +1499,13 @@ export default function Dashboard() {
                   .map((product) => (
                   <div
                     key={product._id}
-                    className={`bg-white border border-gray-300 hover:border-gray-400 transition-all duration-200 relative overflow-hidden flex flex-col ${
-                      product.stock === 0 && !product.allowOutOfStockSales ? 'opacity-60' : ''
+                    onClick={() => {
+                      if (product.stock > 0 || product.allowOutOfStockSales) {
+                        addToCart(product);
+                      }
+                    }}
+                    className={`relative overflow-hidden border border-gray-300 hover:border-gray-400 transition-all duration-200 group h-64 cursor-pointer hover:shadow-lg ${
+                      product.stock === 0 && !product.allowOutOfStockSales ? 'opacity-60 cursor-not-allowed' : ''
                     }`}
                   >
                     {/* Pin button — absolute over image */}
@@ -1511,7 +1516,7 @@ export default function Dashboard() {
                         e.preventDefault();
                         handleTogglePin(product._id, product.pinned || false);
                       }}
-                      className={`absolute top-2 right-2 z-10 p-2.5 transition-all duration-200 flex items-center justify-center border shadow-sm ${
+                      className={`absolute top-2 right-2 z-20 p-2.5 transition-all duration-200 flex items-center justify-center border shadow-sm ${
                         product.pinned
                           ? 'bg-amber-50 hover:bg-amber-100 text-amber-600 border-amber-300'
                           : 'bg-white/80 hover:bg-white text-gray-400 hover:text-gray-600 border-gray-300 backdrop-blur-sm'
@@ -1523,8 +1528,8 @@ export default function Dashboard() {
                       </svg>
                     </button>
 
-                    {/* Product Image — consistent height */}
-                    <div className="w-full h-28 bg-gray-50 overflow-hidden flex-shrink-0">
+                    {/* Product Image — full cover */}
+                    <div className="absolute inset-0 w-full h-full bg-gray-50 overflow-hidden">
                       {product.image && (product.image.startsWith('http') || product.image.startsWith('/') || product.image.startsWith('data:image/')) ? (
                         <img // eslint-disable-line
                           src={product.image}
@@ -1541,59 +1546,44 @@ export default function Dashboard() {
                       )}
                     </div>
 
-                    {/* Content */}
-                    <div className="flex flex-col flex-1 p-4">
-                      {/* Name — fixed 2-line height */}
-                      <h3 className="font-semibold text-gray-900 text-sm leading-5 line-clamp-2 min-h-[2.5rem] mb-1">
-                        {product.name}
-                      </h3>
+                    {/* Solid black overlay for bottom section */}
+                    <div className="absolute bottom-0 left-0 right-0 h-20 bg-black/70 group-hover:bg-black/80 transition-colors duration-200 z-10"></div>
 
-                      {/* Category */}
-                      <p className="text-xs text-gray-400 mb-2 truncate h-4">
-                        {product.category || '\u00A0'}
-                      </p>
-
-                      {/* Price + Stock row */}
-                      <div className="flex items-end justify-between gap-2 mb-3 mt-auto">
-                        <div className="font-bold text-xl leading-tight" style={{ color: primaryColor }}>
-                          <Currency amount={product.price} />
-                        </div>
-                        <span
-                          className={`text-[10px] font-semibold px-2 py-1 border whitespace-nowrap ${
-                            product.stock > 10
-                              ? 'bg-green-50 text-green-700 border-green-200'
-                              : product.stock > 0
-                              ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
-                              : 'bg-red-50 text-red-700 border-red-200'
-                          }`}
-                        >
-                          {product.stock} {dict.pos.inStock}
-                        </span>
+                    {/* Content overlay */}
+                    <div className="absolute inset-0 flex flex-col justify-between p-4 z-10">
+                      {/* Top section */}
+                      <div className="flex items-start justify-between gap-2">
+                        {/* Category */}
+                        <p className="text-xs text-gray-200 truncate h-4 opacity-90">
+                          {product.category || '\u00A0'}
+                        </p>
                       </div>
 
-                      {/* Add button — always at bottom */}
-                      <button
-                        type="button"
-                        disabled={product.stock === 0 && !product.allowOutOfStockSales}
-                        onClick={() => {
-                          if (product.stock > 0 || product.allowOutOfStockSales) {
-                            addToCart(product);
-                          }
-                        }}
-                        className={`w-full px-4 py-2.5 font-medium text-sm transition-all duration-200 text-white border ${
-                          product.stock > 0 || product.allowOutOfStockSales
-                            ? ''
-                            : 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300'
-                        }`}
-                        style={product.stock > 0 || product.allowOutOfStockSales ? {
-                          backgroundColor: primaryColor,
-                          borderColor: primaryColor
-                        } : undefined}
-                      >
-                        {product.stock > 0 || product.allowOutOfStockSales
-                          ? dict.common.add
-                          : dict.pos.outOfStock}
-                      </button>
+                      {/* Bottom section */}
+                      <div className="space-y-2">
+                        {/* Name — fixed 2-line height */}
+                        <h3 className="font-semibold text-white text-sm leading-5 line-clamp-2">
+                          {product.name}
+                        </h3>
+
+                        {/* Price + Stock row */}
+                        <div className="flex items-end justify-between gap-2">
+                          <div className="font-bold text-lg leading-tight text-white">
+                            <Currency amount={product.price} />
+                          </div>
+                          <span
+                            className={`text-[10px] font-semibold px-2 py-1 border whitespace-nowrap ${
+                              product.stock > 10
+                                ? 'bg-green-500/80 text-white border-green-400'
+                                : product.stock > 0
+                                ? 'bg-yellow-500/80 text-white border-yellow-400'
+                                : 'bg-red-500/80 text-white border-red-400'
+                            }`}
+                          >
+                            {product.stock} {dict.pos.inStock}
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 ))}
