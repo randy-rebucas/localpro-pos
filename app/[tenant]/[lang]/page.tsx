@@ -1455,113 +1455,87 @@ export default function Dashboard() {
                 <p className="text-gray-500 text-lg">{dict.common.noResults}</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2">
                 {[...products]
                   .sort((a, b) => {
-                    // Pinned products first
                     if (a.pinned && !b.pinned) return -1;
                     if (!a.pinned && b.pinned) return 1;
                     return 0;
                   })
                   .map((product) => (
-                  <div
+                  <button
                     key={product._id}
-                    className={`bg-white border border-gray-300 hover:border-gray-400 transition-all duration-200 relative overflow-hidden flex flex-col ${
-                      product.stock === 0 && !product.allowOutOfStockSales ? 'opacity-60' : ''
+                    type="button"
+                    disabled={product.stock === 0 && !product.allowOutOfStockSales}
+                    onClick={() => {
+                      if (product.stock > 0 || product.allowOutOfStockSales) {
+                        addToCart(product);
+                      }
+                    }}
+                    className={`relative aspect-square overflow-hidden rounded group cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-1 ${
+                      product.stock === 0 && !product.allowOutOfStockSales ? 'opacity-50 cursor-not-allowed' : ''
                     }`}
+                    style={{ focusRingColor: primaryColor } as React.CSSProperties}
                   >
-                    {/* Pin button — absolute over image */}
-                    <button
-                      type="button"
+                    {/* Background image or placeholder */}
+                    {product.image ? (
+                      <img // eslint-disable-line
+                        src={product.image}
+                        alt={product.name}
+                        className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                      />
+                    ) : (
+                      <div className="absolute inset-0 bg-gray-400 flex items-center justify-center">
+                        <svg className="w-12 h-12 text-white/50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                        </svg>
+                      </div>
+                    )}
+
+                    {/* Pin toggle button */}
+                    <div
+                      role="button"
+                      tabIndex={-1}
                       onClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
                         handleTogglePin(product._id, product.pinned || false);
                       }}
-                      className={`absolute top-2 right-2 z-10 p-2.5 transition-all duration-200 flex items-center justify-center border shadow-sm ${
+                      onKeyDown={() => {}}
+                      className={`absolute top-1 right-1 z-10 rounded-full p-1 transition-all ${
                         product.pinned
-                          ? 'bg-amber-50 hover:bg-amber-100 text-amber-600 border-amber-300'
-                          : 'bg-white/80 hover:bg-white text-gray-400 hover:text-gray-600 border-gray-300 backdrop-blur-sm'
+                          ? 'bg-amber-500 text-white'
+                          : 'bg-black/30 text-white/60 opacity-0 group-hover:opacity-100'
                       }`}
-                      title={product.pinned ? 'Unpin Product' : 'Pin Product'}
+                      title={product.pinned ? 'Unpin' : 'Pin'}
                     >
-                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12M8.5,12V4H15.5V12L17.5,14H14.3V20H9.7V14H6.5L8.5,12Z"/>
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12Z"/>
                       </svg>
-                    </button>
-
-                    {/* Product Image — consistent height */}
-                    <div className="w-full h-28 bg-gray-50 overflow-hidden flex-shrink-0">
-                      {product.image ? (
-                        <img // eslint-disable-line
-                          src={product.image}
-                          alt={product.name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <svg className="w-10 h-10 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                          </svg>
-                        </div>
-                      )}
                     </div>
 
-                    {/* Content */}
-                    <div className="flex flex-col flex-1 p-4">
-                      {/* Name — fixed 2-line height */}
-                      <h3 className="font-semibold text-gray-900 text-sm leading-5 line-clamp-2 min-h-[2.5rem] mb-1">
-                        {product.name}
-                      </h3>
-
-                      {/* Category */}
-                      <p className="text-xs text-gray-400 mb-2 truncate h-4">
-                        {product.category || '\u00A0'}
-                      </p>
-
-                      {/* Price + Stock row */}
-                      <div className="flex items-end justify-between gap-2 mb-3 mt-auto">
-                        <div className="font-bold text-xl leading-tight" style={{ color: primaryColor }}>
-                          <Currency amount={product.price} />
-                        </div>
-                        <span
-                          className={`text-[10px] font-semibold px-2 py-1 border whitespace-nowrap ${
-                            product.stock > 10
-                              ? 'bg-green-50 text-green-700 border-green-200'
-                              : product.stock > 0
-                              ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
-                              : 'bg-red-50 text-red-700 border-red-200'
-                          }`}
-                        >
-                          {product.stock} {dict.pos.inStock}
-                        </span>
+                    {/* Stock badge */}
+                    {product.stock <= 5 && product.stock > 0 && (
+                      <div className="absolute top-1 left-1 z-10 bg-yellow-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">
+                        {product.stock} left
                       </div>
+                    )}
+                    {product.stock === 0 && !product.allowOutOfStockSales && (
+                      <div className="absolute top-1 left-1 z-10 bg-red-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">
+                        {dict.pos.outOfStock}
+                      </div>
+                    )}
 
-                      {/* Add button — always at bottom */}
-                      <button
-                        type="button"
-                        disabled={product.stock === 0 && !product.allowOutOfStockSales}
-                        onClick={() => {
-                          if (product.stock > 0 || product.allowOutOfStockSales) {
-                            addToCart(product);
-                          }
-                        }}
-                        className={`w-full px-4 py-2.5 font-medium text-sm transition-all duration-200 text-white border ${
-                          product.stock > 0 || product.allowOutOfStockSales
-                            ? ''
-                            : 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300'
-                        }`}
-                        style={product.stock > 0 || product.allowOutOfStockSales ? {
-                          backgroundColor: primaryColor,
-                          borderColor: primaryColor
-                        } : undefined}
-                      >
-                        {product.stock > 0 || product.allowOutOfStockSales
-                          ? dict.common.add
-                          : dict.pos.outOfStock}
-                      </button>
+                    {/* Bottom overlay with name and price */}
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent pt-8 pb-2 px-2">
+                      <p className="text-white text-xs font-semibold leading-tight line-clamp-2 drop-shadow-sm">
+                        {product.name}
+                      </p>
+                      <p className="text-white/90 text-[11px] font-bold mt-0.5">
+                        <Currency amount={product.price} />
+                      </p>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             )}
