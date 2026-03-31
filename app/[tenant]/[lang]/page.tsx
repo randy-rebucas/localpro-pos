@@ -11,6 +11,7 @@ import { useCart } from '@/hooks/useCart';
 import { useDiscount } from '@/hooks/useDiscount';
 import { usePayment } from '@/hooks/usePayment';
 import { useRefund } from '@/hooks/useRefund';
+import { useCashDrawer } from '@/hooks/useCashDrawer';
 import { getOfflineStorage } from '@/lib/offline-storage';
 import { TranslationDict } from '@/types/dictionary';
 import dynamic from 'next/dynamic';
@@ -118,7 +119,14 @@ export default function Dashboard() {
   const { promoCode, setPromoCode, appliedDiscount, setAppliedDiscount, applyingDiscount, applyDiscount, removeDiscount } = useDiscount(fetchWithTimeout);
   const { paymentMethod, setPaymentMethod, cashReceived, setCashReceived, processing, processPayment } = usePayment();
   const { currentRefundTransaction, setCurrentRefundTransaction, refundItems, setRefundItems, refundMethod, setRefundMethod, refundNotes, setRefundNotes, refunding, addRefundItem, removeRefundItem, updateRefundQty, processRefund, clearRefund } = useRefund();
-  
+  const { activeSession: cashDrawerSession, checkActiveSession, openDrawer, closeDrawer, loading: cashDrawerLoading } = useCashDrawer();
+
+  // Cash drawer UI state
+  const [showCashDrawerModal, setShowCashDrawerModal] = useState<'open' | 'close' | null>(null);
+  const [drawerAmount, setDrawerAmount] = useState('');
+  const [drawerNotes, setDrawerNotes] = useState('');
+  const [closingSummary, setClosingSummary] = useState<{ expectedAmount?: number; closingAmount?: number; shortage?: number; overage?: number } | null>(null);
+
   // Aliases for backward compatibility with old code
   const setRefundTransaction = setCurrentRefundTransaction;
   const refundTransaction = currentRefundTransaction;
@@ -164,9 +172,11 @@ export default function Dashboard() {
         setShowSaveCartModal(false);
       } else if (showQRScanner) {
         setShowQRScanner(false);
+      } else if (showCashDrawerModal && !closingSummary) {
+        setShowCashDrawerModal(null);
       }
     }
-  }, [showPaymentModal, showRefundModal, showSavedCartsModal, showSaveCartModal, showQRScanner]);
+  }, [showPaymentModal, showRefundModal, showSavedCartsModal, showSaveCartModal, showQRScanner, showCashDrawerModal, closingSummary]);
 
   useEffect(() => {
     document.addEventListener('keydown', handleKeyDown);
@@ -401,6 +411,49 @@ export default function Dashboard() {
   useEffect(() => {
     fetchProducts();
   }, [fetchProducts]);
+
+  // Check for active cash drawer session on mount
+  useEffect(() => {
+    checkActiveSession();
+  }, [checkActiveSession]);
+
+  // Cash drawer handlers
+  const handleOpenDrawer = async () => {
+    const amount = parseFloat(drawerAmount);
+    if (isNaN(amount) || amount < 0) {
+      showToast.error('Please enter a valid opening amount');
+      return;
+    }
+    const success = await openDrawer(amount, drawerNotes || undefined);
+    if (success) {
+      showToast.success('Cash drawer opened. Shift started.');
+      setShowCashDrawerModal(null);
+      setDrawerAmount('');
+      setDrawerNotes('');
+    }
+  };
+
+  const handleCloseDrawer = async () => {
+    const amount = parseFloat(drawerAmount);
+    if (isNaN(amount) || amount < 0) {
+      showToast.error('Please enter the actual closing amount');
+      return;
+    }
+    const result = await closeDrawer(amount, drawerNotes || undefined);
+    if (result.success && result.session) {
+      setClosingSummary({
+        expectedAmount: result.session.expectedAmount,
+        closingAmount: result.session.closingAmount,
+        shortage: result.session.shortage,
+        overage: result.session.overage,
+      });
+      setDrawerAmount('');
+      setDrawerNotes('');
+      showToast.success('Cash drawer closed. Shift ended.');
+    } else {
+      showToast.error(result.error || 'Failed to close drawer');
+    }
+  };
 
   // Refund and transaction lookup helpers
   const lookupTransaction = async () => {
@@ -717,6 +770,157 @@ export default function Dashboard() {
       <div className="fixed bottom-4 right-4 z-40">
         <HardwareStatusChecker compact={true} autoRefresh={true} />
       </div>
+
+      {/* Cash Drawer Shift Bar */}
+      {cashDrawerSession && (
+        <div className="bg-green-50 border-b border-green-200 px-4 py-2 flex items-center justify-between text-sm">
+          <div className="flex items-center gap-2 text-green-800">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="font-medium">Shift Active</span>
+            <span className="text-green-600">
+              | Opened: {new Date(cashDrawerSession.openingTime).toLocaleTimeString()}
+              | Opening: <Currency amount={cashDrawerSession.openingAmount} />
+            </span>
+          </div>
+          <button
+            onClick={() => {
+              setDrawerAmount('');
+              setDrawerNotes('');
+              setClosingSummary(null);
+              setShowCashDrawerModal('close');
+            }}
+            className="px-3 py-1 bg-red-100 text-red-700 hover:bg-red-200 rounded text-xs font-medium transition-colors"
+          >
+            End Shift
+          </button>
+        </div>
+      )}
+
+      {/* Start Shift Overlay - blocks POS when no cash drawer session */}
+      {!cashDrawerSession && !cashDrawerLoading && !loading && (
+        <div className="fixed inset-0 z-50 bg-gray-900/60 flex items-center justify-center" style={{ top: '64px' }}>
+          <div className="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full mx-4 text-center">
+            <div className="w-16 h-16 mx-auto mb-4 bg-blue-100 rounded-full flex items-center justify-center">
+              <svg className="w-8 h-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">Start Your Shift</h2>
+            <p className="text-gray-600 mb-6">Open the cash drawer to begin processing transactions.</p>
+            <button
+              onClick={() => {
+                setDrawerAmount('');
+                setDrawerNotes('');
+                setShowCashDrawerModal('open');
+              }}
+              className="w-full py-3 text-white font-semibold rounded-lg transition-colors"
+              style={{ backgroundColor: primaryColor }}
+            >
+              Open Cash Drawer
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Cash Drawer Open/Close Modal */}
+      {showCashDrawerModal && (
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center">
+          <div className="bg-white rounded-lg shadow-2xl p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-bold text-gray-900 mb-4">
+              {showCashDrawerModal === 'open' ? 'Open Cash Drawer' : 'Close Cash Drawer'}
+            </h3>
+
+            {closingSummary ? (
+              <div className="space-y-3 mb-6">
+                <h4 className="font-semibold text-gray-800">Shift Summary</h4>
+                <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Expected Amount:</span>
+                    <span className="font-medium"><Currency amount={closingSummary.expectedAmount || 0} /></span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Actual Closing:</span>
+                    <span className="font-medium"><Currency amount={closingSummary.closingAmount || 0} /></span>
+                  </div>
+                  <div className="border-t pt-2 flex justify-between font-semibold">
+                    <span>Difference:</span>
+                    <span className={
+                      (closingSummary.shortage || 0) > 0 ? 'text-red-600' :
+                      (closingSummary.overage || 0) > 0 ? 'text-green-600' : 'text-gray-900'
+                    }>
+                      {(closingSummary.shortage || 0) > 0 && <>Short: <Currency amount={closingSummary.shortage || 0} /></>}
+                      {(closingSummary.overage || 0) > 0 && <>Over: <Currency amount={closingSummary.overage || 0} /></>}
+                      {!(closingSummary.shortage || 0) && !(closingSummary.overage || 0) && 'Balanced'}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setClosingSummary(null);
+                    setShowCashDrawerModal(null);
+                  }}
+                  className="w-full py-2 bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 transition-colors"
+                >
+                  Done
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-4 mb-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {showCashDrawerModal === 'open' ? 'Opening Amount' : 'Actual Closing Amount'}
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={drawerAmount}
+                      onChange={(e) => setDrawerAmount(e.target.value)}
+                      placeholder="0.00"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      autoFocus
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Notes (optional)</label>
+                    <input
+                      type="text"
+                      value={drawerNotes}
+                      onChange={(e) => setDrawerNotes(e.target.value)}
+                      placeholder="e.g. Morning shift"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setShowCashDrawerModal(null);
+                      setDrawerAmount('');
+                      setDrawerNotes('');
+                    }}
+                    className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={showCashDrawerModal === 'open' ? handleOpenDrawer : handleCloseDrawer}
+                    disabled={cashDrawerLoading || !drawerAmount}
+                    className="flex-1 py-2 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+                    style={{ backgroundColor: showCashDrawerModal === 'open' ? primaryColor : '#dc2626' }}
+                  >
+                    {cashDrawerLoading ? 'Processing...' : showCashDrawerModal === 'open' ? 'Open Drawer' : 'Close Drawer'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="mx-auto px-4 sm:px-5 lg:px-6 py-6 sm:py-8">
         {/* Mobile: Cart first (sticky at top), then products below */}
         {/* Desktop: Products left, Cart right */}
