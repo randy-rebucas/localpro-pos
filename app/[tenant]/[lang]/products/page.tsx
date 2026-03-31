@@ -265,7 +265,7 @@ export default function ProductsPage() {
 
         {loading ? (
           displayMode === 'grid' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-6">
               {[1, 2, 3, 4, 5, 6].map((i) => (
                 <div key={i} className="bg-white border border-gray-300 rounded-lg p-4 sm:p-5 animate-pulse">
                   <div className="h-6 bg-gray-200 w-3/4 mb-3"></div>
@@ -277,9 +277,9 @@ export default function ProductsPage() {
                       <div className="h-6 bg-gray-200 w-16"></div>
                     </div>
                     <div className="flex gap-2">
-                      <div className="h-10 bg-gray-200 flex-1"></div>
-                      <div className="h-10 bg-gray-200 flex-1"></div>
-                      <div className="h-10 bg-gray-200 flex-1"></div>
+                      <div className="h-10 bg-gray-200 flex-1 rounded"></div>
+                      <div className="h-10 bg-gray-200 flex-1 rounded"></div>
+                      <div className="h-10 bg-gray-200 flex-1 rounded"></div>
                     </div>
                   </div>
                 </div>
@@ -320,7 +320,7 @@ export default function ProductsPage() {
             <p className="text-gray-500 text-lg">{dict.common.noResults}</p>
           </div>
         ) : displayMode === 'grid' ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-6">
             {sortedProducts.map((product) => (
               <div
                 key={product._id}
@@ -433,14 +433,13 @@ export default function ProductsPage() {
                       {inventoryEnabled && (
                         <button
                           onClick={() => handleRefill(product)}
-                          className="flex-1 px-4 py-2.5 bg-green-600 text-white hover:bg-green-700 active:bg-green-800 transition-all duration-200 border border-green-700 flex items-center justify-center gap-2 touch-manipulation min-h-[44px] text-sm font-medium"
+                          className="flex-1 py-2.5 bg-green-600 text-white hover:bg-green-700 active:bg-green-800 transition-all duration-200 border border-green-700 flex items-center justify-center touch-manipulation min-h-[44px]"
                           title={dict.products.refill?.title || 'Refill Stock'}
                           aria-label={dict.products.refill?.title || 'Refill Stock'}
                         >
                           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                           </svg>
-                          <span className="hidden sm:inline">{dict.products.refill?.title || 'Refill'}</span>
                         </button>
                       )}
                       <button
@@ -449,25 +448,23 @@ export default function ProductsPage() {
                           backgroundColor: primaryColor,
                           borderColor: primaryColor,
                         }}
-                        className="flex-1 px-4 py-2.5 text-white active:opacity-80 transition-all duration-200 border flex items-center justify-center gap-2 touch-manipulation min-h-[44px] text-sm font-medium hover:opacity-90"
+                        className="flex-1 py-2.5 text-white active:opacity-80 transition-all duration-200 border flex items-center justify-center touch-manipulation min-h-[44px] hover:opacity-90"
                         title={dict.common.edit}
                         aria-label={dict.common.edit}
                       >
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
-                        <span className="hidden sm:inline">{dict.common.edit}</span>
                       </button>
                       <button
                         onClick={() => handleDelete(product._id)}
-                        className="flex-1 px-4 py-2.5 bg-red-600 text-white hover:bg-red-700 active:bg-red-800 transition-all duration-200 border border-red-700 flex items-center justify-center gap-2 touch-manipulation min-h-[44px] text-sm font-medium"
+                        className="flex-1 py-2.5 bg-red-600 text-white hover:bg-red-700 active:bg-red-800 transition-all duration-200 border border-red-700 flex items-center justify-center touch-manipulation min-h-[44px]"
                         title={dict.common.delete}
                         aria-label={dict.common.delete}
                       >
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
-                        <span className="hidden sm:inline">{dict.common.delete}</span>
                       </button>
                     </div>
                 </div>

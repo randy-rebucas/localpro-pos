@@ -1,6 +1,6 @@
 /**
  * In-memory sliding window rate limiter.
- * Works for single-server / self-hosted deployments.
+ * Suitable for single-server / self-hosted deployments (node-cron based).
  * For serverless/multi-instance (Vercel edge), swap the store for
  * @upstash/ratelimit + @upstash/redis.
  */
@@ -11,11 +11,11 @@ interface RateLimitEntry {
 
 const store = new Map<string, RateLimitEntry>();
 
-// Clean up old entries every 5 minutes to prevent memory leaks
+// Clean up stale entries every 5 minutes to prevent memory leaks
 setInterval(() => {
-  const now = Date.now();
+  const oneHourAgo = Date.now() - 60 * 60 * 1000;
   for (const [key, entry] of store.entries()) {
-    if (entry.timestamps.length === 0 || entry.timestamps[entry.timestamps.length - 1] < now - 60 * 60 * 1000) {
+    if (entry.timestamps.length === 0 || entry.timestamps[entry.timestamps.length - 1] < oneHourAgo) {
       store.delete(key);
     }
   }
@@ -57,6 +57,26 @@ export function checkRateLimit(
     remaining: limit - entry.timestamps.length,
     resetAfterMs: 0,
   };
+}
+
+/**
+ * Reset the rate-limit counter for a key.
+ * Use after a successful action that should clear the penalty
+ * (e.g. successful login clears the brute-force counter).
+ */
+export function resetRateLimit(key: string): void {
+  store.delete(key);
+}
+
+/**
+ * Return the current hit count for a key within the given window,
+ * without recording a new request. Useful for introspection/logging.
+ */
+export function getRateLimitCount(key: string, windowMs: number): number {
+  const entry = store.get(key);
+  if (!entry) return 0;
+  const windowStart = Date.now() - windowMs;
+  return entry.timestamps.filter(t => t > windowStart).length;
 }
 
 /**

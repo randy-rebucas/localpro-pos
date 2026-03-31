@@ -1,26 +1,38 @@
 /**
  * Automatic Audit Log Cleanup
- * Archive or delete old audit logs based on retention policy
+ * Archive expired audit logs to ArchivedAuditLog, then delete from the live collection.
+ * When archive=false, logs are deleted directly without archiving.
  */
 
 import connectDB from '@/lib/mongodb';
 import AuditLog from '@/models/AuditLog';
+import ArchivedAuditLog from '@/models/ArchivedAuditLog';
 import Tenant from '@/models/Tenant';
 import { AutomationResult } from './types';
 
 export interface AuditLogCleanupOptions {
   tenantId?: string;
-  retentionYears?: number; // Years to keep logs (default: 2)
-  archive?: boolean; // Archive instead of delete (default: false)
+  retentionYears?: number; // Years to keep logs in the live collection (default: 2)
+  archive?: boolean; // Copy to ArchivedAuditLog before deleting (default: true)
+  batchSize?: number; // Documents to process per tenant per run (default: 500)
 }
 
 /**
- * Clean up old audit logs based on retention policy
+ * Clean up old audit logs based on retention policy.
+ * When archive=true (default), expired logs are copied to the archived_audit_logs
+ * collection before being removed from the live audit_logs collection.
  */
 export async function cleanupAuditLogs(
   options: AuditLogCleanupOptions = {}
 ): Promise<AutomationResult> {
   await connectDB();
+
+  const retentionYears = options.retentionYears ?? 2;
+  const archive = options.archive ?? true;
+  const batchSize = options.batchSize ?? 500;
+
+  const cutoffDate = new Date();
+  cutoffDate.setFullYear(cutoffDate.getFullYear() - retentionYears);
 
   const results: AutomationResult = {
     success: true,
@@ -31,67 +43,67 @@ export async function cleanupAuditLogs(
   };
 
   try {
-    const retentionYears = options.retentionYears || 2;
-    const cutoffDate = new Date();
-    cutoffDate.setFullYear(cutoffDate.getFullYear() - retentionYears);
-
     // Get tenants to process
-    let tenants;
+    let tenants: { _id: { toString(): string }; name?: string }[];
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await Tenant.findById(options.tenantId).select('_id name').lean();
       tenants = tenant ? [tenant] : [];
     } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
+      tenants = await Tenant.find({ status: 'active' }).select('_id name').lean();
     }
 
-    let totalDeleted = 0;
-    let totalFailed = 0;
-
     for (const tenant of tenants) {
-      try {
-        const tenantId = tenant._id.toString();
+      const tenantId = tenant._id.toString();
 
-        // Find old audit logs
-        const oldLogs = await AuditLog.find({
+      try {
+        const expiredLogs = await AuditLog.find({
           tenantId,
           createdAt: { $lt: cutoffDate },
-        }).lean();
+        })
+          .limit(batchSize)
+          .lean();
 
-        if (oldLogs.length === 0) {
-          continue;
+        if (expiredLogs.length === 0) continue;
+
+        if (archive) {
+          // Build archive documents, preserving the original createdAt
+          const archiveDocs = expiredLogs.map(log => ({
+            tenantId: log.tenantId,
+            userId: log.userId,
+            action: log.action,
+            entityType: log.entityType,
+            entityId: log.entityId,
+            changes: log.changes,
+            ipAddress: log.ipAddress,
+            userAgent: log.userAgent,
+            metadata: log.metadata,
+            createdAt: log.createdAt,
+            archivedAt: new Date(),
+          }));
+
+          // Insert archive batch (ordered:false continues on partial failures)
+          await ArchivedAuditLog.insertMany(archiveDocs, { ordered: false });
         }
 
-        if (options.archive) {
-          // TODO: Archive to separate collection or database
-          // For now, we'll just delete
-          const deleteResult = await AuditLog.deleteMany({
-            tenantId,
-            createdAt: { $lt: cutoffDate },
-          });
-          totalDeleted += deleteResult.deletedCount || 0;
-        } else {
-          // Delete old logs
-          const deleteResult = await AuditLog.deleteMany({
-            tenantId,
-            createdAt: { $lt: cutoffDate },
-          });
-          totalDeleted += deleteResult.deletedCount || 0;
-        }
-      } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-        totalFailed++;
-        results.errors?.push(`Tenant ${tenant.name}: ${error.message}`);
+        // Delete the expired logs from the live collection
+        const ids = expiredLogs.map(l => l._id);
+        const deleteResult = await AuditLog.deleteMany({ _id: { $in: ids } });
+        results.processed += deleteResult.deletedCount ?? 0;
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        results.failed++;
+        results.errors?.push(`Tenant ${tenant.name ?? tenantId}: ${message}`);
       }
     }
 
-    results.processed = totalDeleted;
-    results.failed = totalFailed;
-    results.message = `${options.archive ? 'Archived' : 'Deleted'} ${totalDeleted} audit logs${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
-
+    const action = archive ? 'Archived and deleted' : 'Deleted';
+    results.message = `${action} ${results.processed} audit log(s)${results.failed > 0 ? `, ${results.failed} tenant(s) failed` : ''}`;
     return results;
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
     results.success = false;
-    results.message = `Error cleaning up audit logs: ${error.message}`;
-    results.errors?.push(error.message);
+    results.message = `Error cleaning up audit logs: ${message}`;
+    results.errors?.push(message);
     return results;
   }
 }

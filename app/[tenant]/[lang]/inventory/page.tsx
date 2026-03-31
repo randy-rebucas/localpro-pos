@@ -27,7 +27,7 @@ export default function InventoryPage() {
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [selectedBranch, setSelectedBranch] = useState<string>('');
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [branchLoading, setBranchLoading] = useState(true);
   const [stockRefreshTrigger, setStockRefreshTrigger] = useState(0);
 
   const inventoryEnabled = supportsFeature(settings ?? undefined, 'inventory');
@@ -44,7 +44,7 @@ export default function InventoryPage() {
 
   const fetchBranches = async () => {
     try {
-      setLoading(true);
+      setBranchLoading(true);
       const res = await fetch(`/api/branches?tenant=${tenant}&isActive=true`);
       const data = await res.json();
       if (data.success) {
@@ -53,12 +53,11 @@ export default function InventoryPage() {
     } catch (error) {
       console.error('Error fetching branches:', error);
     } finally {
-      setLoading(false);
+      setBranchLoading(false);
     }
   };
 
   const handleStockUpdate = useCallback(() => {
-    // Increment trigger so LowStockAlerts re-fetches immediately
     setStockRefreshTrigger((n) => n + 1);
   }, []);
 
@@ -67,41 +66,33 @@ export default function InventoryPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2" style={{ borderBottomColor: primaryColor }}></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
     );
   }
 
-  // If inventory is not enabled for this business type, show message
+  // Inventory not enabled for this business type
   if (!inventoryEnabled) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Navbar />
-        <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
+        <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+          <PageTitle />
           <div className="mb-6">
-            <PageTitle />
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-4">
-              {dict?.inventory?.title || 'Inventory Management'}
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+              {dict?.inventory?.title || 'Inventory'}
             </h1>
           </div>
-          <div className="bg-yellow-50 border-2 border-yellow-300 p-6 rounded-lg">
-            <div className="flex items-start gap-3">
-              <svg className="w-6 h-6 text-yellow-600 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-              <div>
-                <h3 className="text-lg font-semibold text-yellow-900 mb-2">
-                  Inventory Management Not Available
-                </h3>
-                <p className="text-yellow-800">
-                  Inventory management is not enabled for {businessTypeConfig?.name || 'your business type'}. 
-                  This feature is typically used for retail businesses that need to track physical stock.
-                </p>
-                <p className="text-sm text-yellow-700 mt-2">
-                  If you need inventory management, please update your business type in Settings.
-                </p>
-              </div>
+          <div className="bg-yellow-50 border border-yellow-300 p-5 sm:p-6 flex gap-4">
+            <svg className="w-6 h-6 text-yellow-600 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div>
+              <p className="font-semibold text-yellow-900 mb-1">Inventory Management Not Available</p>
+              <p className="text-sm text-yellow-800">
+                Inventory tracking is not enabled for {businessTypeConfig?.name || 'your business type'}.
+                To enable it, update your business type in Settings.
+              </p>
             </div>
           </div>
         </div>
@@ -112,51 +103,59 @@ export default function InventoryPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-6">
-          <PageTitle />
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-4">
-            {dict?.inventory?.title || 'Inventory Management'}
+      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+
+        {/* Page Header */}
+        <PageTitle />
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+            {dict?.inventory?.title || 'Inventory'}
           </h1>
-          <div className="mt-4 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <label className="text-sm font-medium text-gray-700">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Branch filter */}
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-600 whitespace-nowrap">
                 {dict?.inventory?.branch || 'Branch'}:
               </label>
               <select
                 value={selectedBranch}
                 onChange={(e) => setSelectedBranch(e.target.value)}
-                disabled={loading}
-                style={{
-                  borderWidth: '2px',
-                  borderColor: '#d1d5db',
-                }}
+                disabled={branchLoading}
+                className="text-sm bg-white border border-gray-300 px-3 py-2 disabled:opacity-50 transition-all min-w-[140px]"
                 onFocus={(e) => {
-                  (e.target as HTMLSelectElement).style.borderColor = primaryColor;
-                  (e.target as HTMLSelectElement).style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                  e.currentTarget.style.borderColor = primaryColor;
+                  e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
                 }}
                 onBlur={(e) => {
-                  (e.target as HTMLSelectElement).style.borderColor = '#d1d5db';
-                  (e.target as HTMLSelectElement).style.boxShadow = 'none';
+                  e.currentTarget.style.borderColor = '#d1d5db';
+                  e.currentTarget.style.boxShadow = 'none';
                 }}
-                className="block w-48 sm:text-sm bg-white disabled:opacity-50 transition-all"
               >
-                <option value="">{loading ? (dict?.common?.loading || 'Loading…') : (dict?.inventory?.allBranches || 'All Branches')}</option>
+                <option value="">
+                  {branchLoading ? (dict?.common?.loading || 'Loading…') : (dict?.inventory?.allBranches || 'All Branches')}
+                </option>
                 {branches.map((branch) => (
                   <option key={branch._id} value={branch._id}>
-                    {branch.name} {branch.code && `(${branch.code})`}
+                    {branch.name}{branch.code ? ` (${branch.code})` : ''}
                   </option>
                 ))}
               </select>
             </div>
-            <RealTimeStockTracker
-              branchId={selectedBranch || undefined}
-              onStockUpdate={handleStockUpdate}
-            />
+
+            {/* Live indicator */}
+            <div className="bg-white border border-gray-300 px-3 py-2 flex items-center">
+              <RealTimeStockTracker
+                branchId={selectedBranch || undefined}
+                onStockUpdate={handleStockUpdate}
+              />
+            </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Main content + sidebar */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+          {/* Low Stock Alerts — main panel */}
           <div className="lg:col-span-2">
             <LowStockAlerts
               autoRefresh={true}
@@ -168,60 +167,95 @@ export default function InventoryPage() {
               }}
             />
           </div>
-        </div>
 
-        <div className="mt-8 bg-white border border-gray-300 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            {dict?.inventory?.features || 'Inventory Features'}
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div className="p-4 border border-gray-300">
-              <h3 className="font-medium text-gray-900 mb-2">
-                ✓ {dict?.inventory?.realtimeTracking || 'Real-time Stock Tracking'}
-              </h3>
-              <p className="text-sm text-gray-600">
-                {dict?.inventory?.realtimeTrackingDesc || 'Monitor stock levels in real-time across all branches'}
-              </p>
+          {/* Sidebar — Quick Actions */}
+          <div className="space-y-4">
+            {/* Quick Actions */}
+            <div className="bg-white border border-gray-300">
+              <div className="px-4 py-3 border-b border-gray-200">
+                <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+                  {dict?.inventory?.quickActions || 'Quick Actions'}
+                </h2>
+              </div>
+              <div className="divide-y divide-gray-100">
+                <a
+                  href={`/${tenant}/${lang}/products`}
+                  className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors group"
+                >
+                  <div className="w-8 h-8 flex items-center justify-center border border-gray-200 group-hover:border-gray-300 transition-colors flex-shrink-0">
+                    <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900">{dict?.nav?.products || 'Products'}</p>
+                    <p className="text-xs text-gray-500">{dict?.inventory?.manageStock || 'Manage stock & refill'}</p>
+                  </div>
+                  <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </a>
+
+                <a
+                  href={`/${tenant}/${lang}/admin/stock-movements`}
+                  className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors group"
+                >
+                  <div className="w-8 h-8 flex items-center justify-center border border-gray-200 group-hover:border-gray-300 transition-colors flex-shrink-0">
+                    <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                    </svg>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900">{dict?.nav?.stockMovements || 'Stock Movements'}</p>
+                    <p className="text-xs text-gray-500">{dict?.inventory?.viewHistory || 'View movement history'}</p>
+                  </div>
+                  <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </a>
+
+                <a
+                  href={`/${tenant}/${lang}/admin/bundles`}
+                  className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors group"
+                >
+                  <div className="w-8 h-8 flex items-center justify-center border border-gray-200 group-hover:border-gray-300 transition-colors flex-shrink-0">
+                    <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                    </svg>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900">{dict?.nav?.bundles || 'Bundles'}</p>
+                    <p className="text-xs text-gray-500">{dict?.inventory?.manageBundles || 'Manage product bundles'}</p>
+                  </div>
+                  <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </a>
+              </div>
             </div>
-            <div className="p-4 border border-gray-300">
-              <h3 className="font-medium text-gray-900 mb-2">
-                ✓ {dict?.inventory?.lowStockAlerts || 'Low Stock Alerts'}
-              </h3>
-              <p className="text-sm text-gray-600">
-                {dict?.inventory?.lowStockAlertsDesc || 'Get notified when products fall below threshold'}
-              </p>
-            </div>
-            <div className="p-4 border border-gray-300">
-              <h3 className="font-medium text-gray-900 mb-2">
-                ✓ {dict?.inventory?.autoDecrement || 'Auto-decrement on Sale'}
-              </h3>
-              <p className="text-sm text-gray-600">
-                {dict?.inventory?.autoDecrementDesc || 'Stock automatically decreases when items are sold'}
-              </p>
-            </div>
-            <div className="p-4 border border-gray-300">
-              <h3 className="font-medium text-gray-900 mb-2">
-                ✓ {dict?.inventory?.multiBranch || 'Multi-branch Monitoring'}
-              </h3>
-              <p className="text-sm text-gray-600">
-                {dict?.inventory?.multiBranchDesc || 'Track inventory across multiple locations'}
-              </p>
-            </div>
-            <div className="p-4 border border-gray-300">
-              <h3 className="font-medium text-gray-900 mb-2">
-                ✓ {dict?.inventory?.itemVariations || 'Item Variations'}
-              </h3>
-              <p className="text-sm text-gray-600">
-                {dict?.inventory?.itemVariationsDesc || 'Support for size, color, and type variations'}
-              </p>
-            </div>
-            <div className="p-4 border border-gray-300">
-              <h3 className="font-medium text-gray-900 mb-2">
-                ✓ {dict?.inventory?.bundledProducts || 'Bundled Products'}
-              </h3>
-              <p className="text-sm text-gray-600">
-                {dict?.inventory?.bundledProductsDesc || 'Create service + materials packages'}
-              </p>
+
+            {/* Feature Summary */}
+            <div className="bg-white border border-gray-300">
+              <div className="px-4 py-3 border-b border-gray-200">
+                <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+                  {dict?.inventory?.features || 'Features'}
+                </h2>
+              </div>
+              <ul className="divide-y divide-gray-100">
+                {[
+                  { icon: 'M13 10V3L4 14h7v7l9-11h-7z', label: dict?.inventory?.realtimeTracking || 'Real-time tracking' },
+                  { icon: 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9', label: dict?.inventory?.lowStockAlerts || 'Low stock alerts' },
+                  { icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10', label: dict?.inventory?.bundledProducts || 'Bundled products' },
+                  { icon: 'M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z', label: dict?.inventory?.multiBranch || 'Multi-branch support' },
+                ].map(({ icon, label }, i) => (
+                  <li key={i} className="flex items-center gap-3 px-4 py-2.5">
+                    <svg className="w-4 h-4 flex-shrink-0" style={{ color: primaryColor }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icon} />
+                    </svg>
+                    <span className="text-sm text-gray-700">{label}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
         </div>
@@ -229,4 +263,3 @@ export default function InventoryPage() {
     </div>
   );
 }
-
