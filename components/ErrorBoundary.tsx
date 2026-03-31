@@ -3,7 +3,6 @@
 import React, { Component, ErrorInfo, ReactNode, useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
-import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getDefaultTenantSettings } from '@/lib/currency';
 
 interface Props {
@@ -55,8 +54,7 @@ function ErrorFallback({ error, onReset }: { error: Error | null; onReset: () =>
   const params = useParams();
   const lang = (params?.lang as 'en' | 'es') || 'en';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const { settings } = useTenantSettings();
-  const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#3b82f6';
+  const primaryColor = getDefaultTenantSettings().primaryColor || '#3b82f6';
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);

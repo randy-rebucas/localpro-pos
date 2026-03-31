@@ -177,6 +177,15 @@ export default function CustomersPage() {
             >
               {dict?.common?.add || 'Add'} {dict?.admin?.customer || 'Customer'}
             </button>
+            <Link
+              href={`/${tenant}/${lang}/admin/file-upload`}
+              className="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium border border-gray-300 inline-flex items-center gap-2 transition-colors whitespace-nowrap"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+              Upload Files
+            </Link>
           </div>
 
           {/* Table */}

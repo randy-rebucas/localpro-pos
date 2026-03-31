@@ -253,7 +253,7 @@ export default function Dashboard() {
         const tipAmount = tip ?? 0;
         const total = taxableBase + taxAmount + tipAmount;
 
-        const res = await fetch(`/api/pos/session/${sessionId}`, {
+        const res = await fetch(`/api/pos/session/${sessionId}?tenant=${tenant}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           signal: sessionSyncAbortRef.current.signal,
@@ -1484,9 +1484,13 @@ export default function Dashboard() {
                     clearCart();
                     setAppliedDiscount(null);
                     setShowPaymentModal(false);
+                    // Print receipt
+                    if (result.data) {
+                      printReceipt(result.data);
+                    }
                     // Sync transaction to customer display
                     if (sessionId) {
-                      fetch(`/api/pos/session/${sessionId}`, {
+                      fetch(`/api/pos/session/${sessionId}?tenant=${tenant}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({

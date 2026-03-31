@@ -42,17 +42,6 @@ export default function BackupResetPage() {
     });
   }, [lang]);
 
-  if (!dict || loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
-        </div>
-      </div>
-    );
-  }
-
   const handleBackupClick = useCallback(async () => {
     if (!canCreateBackup(selectedCollections)) {
       toast.error(dict?.common?.selectAtLeastOneCollection || 'Please select at least one collection to backup.');
@@ -124,6 +113,22 @@ export default function BackupResetPage() {
       (error) => toast.error(error)
     );
   }, [selectedCollections, reset, dict]);
+
+  const handleSelectAll = useCallback(() => {
+    const allCollectionKeys = BACKUP_RESET_COLLECTIONS.map(c => c.key);
+    setSelectedCollections(allCollectionKeys);
+  }, []);
+
+  if (!dict || loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -289,6 +294,20 @@ export default function BackupResetPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-3">
                     Select Collections to Reset:
                   </label>
+                  <div className="flex gap-2 mb-4">
+                    <button
+                      onClick={handleSelectAll}
+                      className="px-4 py-2 text-sm bg-blue-100 text-blue-700 hover:bg-blue-200 font-medium transition-colors"
+                    >
+                      Select All
+                    </button>
+                    <button
+                      onClick={() => setSelectedCollections([])}
+                      className="px-4 py-2 text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium transition-colors"
+                    >
+                      Clear All
+                    </button>
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {BACKUP_RESET_COLLECTIONS.map((collection) => (
                       <label
@@ -335,16 +354,6 @@ export default function BackupResetPage() {
                       </>
                     )}
                   </button>
-                  {selectedCollections.length > 0 && (
-                    <button
-                      onClick={() => {
-                        setSelectedCollections([]);
-                      }}
-                      className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 font-medium"
-                    >
-                      Clear Selection
-                    </button>
-                  )}
                 </div>
               </div>
             </div>

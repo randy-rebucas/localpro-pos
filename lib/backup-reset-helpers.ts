@@ -4,18 +4,47 @@ export interface CollectionOption {
 }
 
 export const BACKUP_RESET_COLLECTIONS: CollectionOption[] = [
+  // Products & Inventory
   { key: 'products', label: 'Products' },
-  { key: 'transactions', label: 'Transactions' },
+  { key: 'productBundles', label: 'Product Bundles' },
   { key: 'categories', label: 'Categories' },
   { key: 'stockMovements', label: 'Stock Movements' },
-  { key: 'expenses', label: 'Expenses' },
+  
+  // Sales & Transactions
+  { key: 'transactions', label: 'Transactions' },
+  { key: 'payments', label: 'Payments' },
+  { key: 'invoices', label: 'Invoices' },
+  
+  // Customer Management
+  { key: 'customers', label: 'Customers' },
+  { key: 'addresses', label: 'Customer Addresses' },
+  { key: 'customerOTPs', label: 'Customer OTPs' },
+  
+  // Discounts & Promotions
   { key: 'discounts', label: 'Discounts' },
-  { key: 'branches', label: 'Branches' },
-  { key: 'cashDrawerSessions', label: 'Cash Drawer Sessions' },
-  { key: 'productBundles', label: 'Product Bundles' },
-  { key: 'attendance', label: 'Attendance' },
-  { key: 'bookings', label: 'Bookings' },
   { key: 'savedCarts', label: 'Saved Carts' },
+  
+  // Loyalty Program
+  { key: 'loyaltyConfigs', label: 'Loyalty Program Config' },
+  { key: 'loyaltyTransactions', label: 'Loyalty Transactions' },
+  
+  // Tax & Compliance
+  { key: 'taxRules', label: 'Tax Rules' },
+  
+  // Organizational
+  { key: 'branches', label: 'Branches' },
+  { key: 'expenses', label: 'Expenses' },
+  
+  // Cash Management
+  { key: 'cashDrawerSessions', label: 'Cash Drawer Sessions' },
+  
+  // Staff & Operations
+  { key: 'attendance', label: 'Attendance Records' },
+  
+  // Bookings & Services
+  { key: 'bookings', label: 'Bookings' },
+  
+  // Audit & Compliance
   { key: 'auditLogs', label: 'Audit Logs' },
 ];
 

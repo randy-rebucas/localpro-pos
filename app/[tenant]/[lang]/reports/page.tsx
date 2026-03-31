@@ -455,7 +455,7 @@ export default function ReportsPage() {
                     }`}
                     style={activeTab === tab ? { borderBottomColor: primaryColor, color: primaryColor } : undefined}
                   >
-                    {dict.reports?.tabs?.[tab] || tab.replace('-', ' ')}
+                    {dict.reports?.tabs?.[tab] || tab.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
                   </button>
                 ))}
               </nav>

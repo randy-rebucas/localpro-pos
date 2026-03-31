@@ -123,7 +123,7 @@ export default function ProductsPage() {
         )}
 
         <div className="bg-white border border-gray-300 p-6">
-          <div className="flex justify-between items-center mb-6">
+          <div className="flex justify-between items-center mb-6 flex-wrap gap-2">
             <div className="flex-1 max-w-md">
               <input
                 type="text"
@@ -133,15 +133,26 @@ export default function ProductsPage() {
                 className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               />
             </div>
-            <button
-              onClick={() => {
-                setEditingProduct(null);
-                setShowProductModal(true);
-              }}
-              className="ml-4 px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
-            >
-              {dict.common?.add || 'Add'} {dict.admin?.product || 'Product'}
-            </button>
+            <div className="flex gap-2">
+              <Link
+                href={`/${tenant}/${lang}/admin/file-upload`}
+                className="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium border border-gray-300 inline-flex items-center gap-2 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                Upload Images
+              </Link>
+              <button
+                onClick={() => {
+                  setEditingProduct(null);
+                  setShowProductModal(true);
+                }}
+                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
+              >
+                {dict.common?.add || 'Add'} {dict.admin?.product || 'Product'}
+              </button>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">

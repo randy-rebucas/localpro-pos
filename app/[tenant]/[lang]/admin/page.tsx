@@ -32,7 +32,7 @@ export default function AdminPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div
-            className="inline-block animate-spin h-8 w-8 border-b-2 rounded-full"
+            className="inline-block animate-spin h-8 w-8 border-b-2"
             style={{ borderColor: primaryColor, borderBottomColor: 'transparent' }}
           ></div>
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
@@ -412,6 +412,81 @@ export default function AdminPage() {
         },
       ],
     },
+    {
+      title: dict.admin?.sectionUtilities || 'Utilities & System',
+      description: dict.admin?.sectionUtilitiesDesc || 'Documentation and utilities',
+      cards: [
+        {
+          title: dict.admin?.apiDocs || 'API Documentation',
+          description: dict.admin?.apiDocsDescription || 'View API endpoints, schemas, and integration guides',
+          href: `/${tenant}/${lang}/admin/api-docs`,
+          icon: (
+            <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C6.5 6.253 2 10.998 2 17s4.5 10.747 10 10.747c5.5 0 10-4.998 10-10.747C22 10.998 17.5 6.253 12 6.253z" />
+            </svg>
+          ),
+          color: 'blue',
+        },
+        {
+          title: dict.admin?.fileUpload || 'File Upload',
+          description: dict.admin?.fileUploadDescription || 'Upload images, documents, and media files',
+          href: `/${tenant}/${lang}/admin/file-upload`,
+          icon: (
+            <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+          ),
+          color: 'violet',
+        },
+        {
+          title: dict.admin?.businessTypes || 'Business Types',
+          description: dict.admin?.businessTypesDescription || 'Browse and manage business type templates',
+          href: `/${tenant}/${lang}/admin/business-types`,
+          icon: (
+            <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+            </svg>
+          ),
+          color: 'orange',
+        },
+        {
+          title: dict.admin?.loyaltyConfig || 'Loyalty Configuration',
+          description: dict.admin?.loyaltyConfigDescription || 'Configure loyalty program rules and benefits',
+          href: `/${tenant}/${lang}/admin/loyalty/config`,
+          featureFlag: 'enableLoyaltyProgram' as keyof typeof settings,
+          icon: (
+            <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+            </svg>
+          ),
+          color: 'yellow',
+        },
+        {
+          title: dict.admin?.loyaltyPoints || 'Loyalty Points',
+          description: dict.admin?.loyaltyPointsDescription || 'Adjust customer loyalty points and rewards',
+          href: `/${tenant}/${lang}/admin/loyalty/adjust`,
+          featureFlag: 'enableLoyaltyProgram' as keyof typeof settings,
+          icon: (
+            <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          ),
+          color: 'yellow',
+        },
+        {
+          title: dict.admin?.loyaltyCustomers || 'Customer Loyalty',
+          description: dict.admin?.loyaltyCustomersDescription || 'View and manage customer loyalty balances',
+          href: `/${tenant}/${lang}/admin/loyalty/customers`,
+          featureFlag: 'enableLoyaltyProgram' as keyof typeof settings,
+          icon: (
+            <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          ),
+          color: 'rose',
+        },
+      ],
+    },
   ];
 
   const colorClasses: Record<string, { icon: string; text: string }> = {
@@ -440,115 +515,129 @@ export default function AdminPage() {
     return settings[card.featureFlag] !== false;
   };
 
+  // Flatten all sections into a single array of cards for masonry layout
+  const allCards: (AdminCard & { sectionTitle?: string })[] = adminSections.flatMap((section) =>
+    section.cards.filter(isCardVisible).map((card) => ({
+      ...card,
+      sectionTitle: section.title,
+    }))
+  );
+
   return (
     <div>
       <Navbar />
       <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        <div className="mb-6 sm:mb-8">
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
+        {/* Header */}
+        <div className="mb-8 sm:mb-10">
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-gray-900 mb-3">
             {dict.admin?.title || 'Admin Management'}
           </h1>
-          <p className="text-gray-600">{dict.admin?.subtitle || 'Manage users, tenants, and system settings'}</p>
+          <p className="text-gray-600 text-lg">{dict.admin?.subtitle || 'Manage users, tenants, and system settings'}</p>
         </div>
-        {/* Subscription Usage Card */}
+
+        {/* Subscription Usage Card - Spanning Full Width */}
         {subscriptionStatus && (
           <Link
             href={`/${tenant}/${lang}/admin/subscriptions`}
-            className="mb-6 block bg-white border rounded-xl p-6 transition-all duration-200 hover:shadow-md"
+            className="mb-8 block bg-gradient-to-br from-white to-gray-50 border-2 p-8 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 group"
             style={{ borderColor: primaryColor }}
           >
-            <div className="flex items-start justify-between mb-4">
-              <div
-                className="inline-flex p-3 border"
-                style={{ background: `${primaryColor}11`, color: primaryColor, borderColor: primaryColor }}
-              >
-                <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
+              <div className="flex items-start gap-4">
+                <div
+                className="inline-flex p-4 border-2 flex-shrink-0"
+                  style={{ background: `${primaryColor}15`, color: primaryColor, borderColor: primaryColor }}
+                >
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">{dict.admin?.subscriptionUsage || 'Subscription Usage'}</h2>
+                  <p className="text-gray-600 text-sm mt-1">{subscriptionStatus.planName} {dict.admin?.plan || 'Plan'}</p>
+                </div>
               </div>
-              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+              <span className={`inline-flex items-center px-3 py-1 text-sm font-semibold flex-shrink-0 ${
                 subscriptionStatus.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
               }`}>
                 {subscriptionStatus.isActive ? (dict.admin?.active || 'Active') : (dict.admin?.inactive || 'Inactive')}
               </span>
             </div>
 
-            <h2 className="text-xl font-bold text-gray-900 mb-1">{dict.admin?.subscriptionUsage || 'Subscription Usage'}</h2>
-            <p className="text-gray-600 text-sm mb-4">{subscriptionStatus.planName} {dict.admin?.plan || 'Plan'}</p>
-
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-              <div className="bg-gray-50 rounded p-3 text-center">
-                <div className="text-2xl font-bold" style={{ color: primaryColor }}>{subscriptionStatus.usage.currentUsers}</div>
-                <div className="text-xs text-gray-500 mt-1">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="bg-white border border-gray-200 p-4 text-center hover:border-gray-300 transition-colors">
+                <div className="text-3xl font-bold" style={{ color: primaryColor }}>{subscriptionStatus.usage.currentUsers}</div>
+                <div className="text-xs text-gray-500 mt-2 font-medium">
                   {dict.admin?.users || 'Users'} / {subscriptionStatus.limits.maxUsers === -1 ? '∞' : subscriptionStatus.limits.maxUsers}
                 </div>
               </div>
-              <div className="bg-gray-50 rounded p-3 text-center">
-                <div className="text-2xl font-bold text-green-600">{subscriptionStatus.usage.currentBranches}</div>
-                <div className="text-xs text-gray-500 mt-1">
+              <div className="bg-white border border-gray-200 p-4 text-center hover:border-green-300 transition-colors">
+                <div className="text-3xl font-bold text-green-600">{subscriptionStatus.usage.currentBranches}</div>
+                <div className="text-xs text-gray-500 mt-2 font-medium">
                   {dict.admin?.branches || 'Branches'} / {subscriptionStatus.limits.maxBranches === -1 ? '∞' : subscriptionStatus.limits.maxBranches}
                 </div>
               </div>
-              <div className="bg-gray-50 rounded p-3 text-center">
-                <div className="text-2xl font-bold text-orange-600">{subscriptionStatus.usage.currentProducts}</div>
-                <div className="text-xs text-gray-500 mt-1">
+              <div className="bg-white border border-gray-200 p-4 text-center hover:border-orange-300 transition-colors">
+                <div className="text-3xl font-bold text-orange-600">{subscriptionStatus.usage.currentProducts}</div>
+                <div className="text-xs text-gray-500 mt-2 font-medium">
                   {dict.admin?.products || 'Products'} / {subscriptionStatus.limits.maxProducts === -1 ? '∞' : subscriptionStatus.limits.maxProducts}
                 </div>
               </div>
-              <div className="bg-gray-50 rounded p-3 text-center">
-                <div className="text-2xl font-bold text-purple-600">{subscriptionStatus.usage.currentTransactions}</div>
-                <div className="text-xs text-gray-500 mt-1">
+              <div className="bg-white border border-gray-200 p-4 text-center hover:border-purple-300 transition-colors">
+                <div className="text-3xl font-bold text-purple-600">{subscriptionStatus.usage.currentTransactions}</div>
+                <div className="text-xs text-gray-500 mt-2 font-medium">
                   {dict.admin?.transactions || 'Transactions'} / {subscriptionStatus.limits.maxTransactions === -1 ? '∞' : subscriptionStatus.limits.maxTransactions}
                 </div>
               </div>
             </div>
 
-            <div className="mt-4 flex items-center font-medium text-sm" style={{ color: primaryColor }}>
+            <div className="mt-6 flex items-center font-semibold text-base group-hover:translate-x-1 transition-transform" style={{ color: primaryColor }}>
               <span>{dict.admin?.manageSubscription || 'Manage Subscription'}</span>
-              <svg className="w-4 h-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-5 h-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </div>
           </Link>
         )}
-        {adminSections.map((section, sectionIndex) => {
-          const visibleCards = section.cards.filter(isCardVisible);
-          if (visibleCards.length === 0) return null;
 
-          return (
-            <div key={sectionIndex} className="mb-10">
-              <div className="mb-4">
-                <h2 className="text-xl font-bold text-gray-900">{section.title}</h2>
-                <p className="text-gray-500 text-sm">{section.description}</p>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {visibleCards.map((card, cardIndex) => {
-                  const cc = colorClasses[card.color] ?? colorClasses.gray;
-                  return (
-                    <Link
-                      key={cardIndex}
-                      href={card.href}
-                      className="group bg-white border rounded-xl p-6 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5"
-                      style={{ borderColor: `${primaryColor}40` }}
-                    >
-                      <div className={`inline-flex p-3 rounded-lg border mb-4 ${cc.icon}`}>
-                        {card.icon}
-                      </div>
-                      <h2 className="text-xl font-bold text-gray-900 mb-2">{card.title}</h2>
-                      <p className="text-gray-500 text-sm">{card.description}</p>
-                      <div className={`mt-4 flex items-center font-medium text-sm ${cc.text}`}>
-                        <span>{dict.common?.view || 'View'} {card.title}</span>
-                        <svg className="w-4 h-4 ml-1.5 transition-transform duration-150 group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
+        {/* Masonry Grid Layout */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 auto-rows-max">
+          {allCards.map((card, index) => {
+            const cc = colorClasses[card.color] ?? colorClasses.gray;
+            return (
+              <Link
+                key={index}
+                href={card.href}
+                className="group h-full bg-white border-2 p-5 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 hover:border-opacity-100 flex flex-col"
+                style={{ borderColor: `${primaryColor}30` }}
+              >
+                <div className={`inline-flex p-3 border-2 mb-4 w-fit ${cc.icon}`}>
+                  {card.icon}
+                </div>
+                
+                <h3 className="text-base font-bold text-gray-900 mb-2 flex-grow">{card.title}</h3>
+                <p className="text-gray-600 text-xs leading-relaxed flex-grow mb-4">{card.description}</p>
+                
+                <div className={`flex items-center font-medium text-xs ${cc.text} group-hover:gap-2 transition-all`}>
+                  <span>{dict.common?.view || 'View'}</span>
+                  <svg className="w-3.5 h-3.5 ml-auto transition-transform duration-200 group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+
+        {/* Empty State */}
+        {allCards.length === 0 && (
+          <div className="text-center py-16">
+            <svg className="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.172 16.172a4 4 0 015.656 0M9 10a4 4 0 018 0m-8 8l1-1m-1 1l-1-1m1 1l1 1m-1-1l-1 1" />
+            </svg>
+            <p className="text-gray-500 text-lg">{dict.admin?.noItemsAvailable || 'No admin features available'}</p>
+          </div>
+        )}
       </div>
     </div>
   );

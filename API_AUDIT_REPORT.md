@@ -471,6 +471,132 @@ The 1POS API system is **well-structured, functionally complete, and follows ent
 4. Product performance (`GET /reports/products`)
 5. **Status**: ✅ **COMPLETE**
 
+### ✅ **Refund Processing Flow**
+1. Search transaction (`GET /transactions/[id]`)
+2. Verify transaction status (must be "completed")
+3. Initiate refund (`POST /transactions/[id]/refund`)
+4. Select refund items and method (cash/card/store-credit)
+5. Process refund via payment processor
+6. Update transaction status to "refunded"
+7. Stock rollback if applicable
+8. Audit log created automatically
+9. **Status**: ✅ **COMPLETE**
+
+### ✅ **Loyalty Program Flow**
+1. Check loyalty configuration (`GET /loyalty/config`)
+2. Add customer loyalty account (on first transaction)
+3. Accumulate points during transactions (`points = subtotal / point-value-ratio`)
+4. View balance (`GET /loyalty/customers/[customerId]`)
+5. Apply points during checkout (if enabled)
+6. Manual adjustment (`POST /loyalty/adjust`)
+7. Redeem rewards on transaction
+8. **Status**: ✅ **COMPLETE**
+
+### ✅ **Expense Management Flow**
+1. Create expense (`POST /expenses`)
+2. Categorize expense (utilities, supplies, salaries, etc.)
+3. Attach receipts/notes
+4. Record date and amount
+5. List expenses (`GET /expenses?dateRange=X`)
+6. Review for P&L reporting
+7. **Status**: ✅ **COMPLETE**
+
+### ✅ **Staff Attendance & Management Flow**
+1. Create employee (`POST /users` with role assignment)
+2. Clock in/out (`POST /attendance/clock-in`, `POST /attendance/clock-out`)
+3. Track attendance history (`GET /attendance`)
+4. Detect violations (`automations/attendance/violations`)
+   - Overtime detection
+   - Undertime detection
+   - Break policy enforcement (`automations/attendance/break-detection`)
+5. Auto clock-out if forgotten (`automations/attendance/auto-clockout`)
+6. Generate attendance report
+7. **Status**: ✅ **COMPLETE**
+
+### ✅ **Hardware Configuration & Management**
+1. Configure printer (`PUT /tenants/[slug]/settings` → hardwareConfig)
+2. Test printer (`POST /hardware/test-print`)
+3. Configure barcode/QR scanner settings
+4. Set receipt template (`POST /tenants/[slug]/receipt-templates`)
+5. Configure receipt header/footer
+6. Select hardware provider (Epson, Star, etc.)
+7. Verify connection status (`GET /super-admin/system/health`)
+8. **Status**: ✅ **COMPLETE**
+
+### ✅ **File Upload & Asset Management**
+1. Upload file/image (`POST /upload` multipart)
+2. Store in `/public/uploads/{tenantId}/{filename}`
+3. Save metadata to MongoDB (`File` model)
+4. Get public URL for use in products/customers
+5. List recent uploads (`GET /upload`)
+6. Support multiple file types (images, PDF, CSV, Excel)
+7. Max file size: 10MB
+8. Retrieve and display on product/customer pages
+9. **Status**: ✅ **COMPLETE**
+
+### ✅ **Data Backup & Recovery**
+1. Auto-scheduled backups (`automations/backups/create`)
+2. Trigger manual backup (`POST /tenants/[slug]/backups`)
+3. List backups with timestamps
+4. Restore from backup (with confirmation)
+5. Archive old logs (`automations/audit-logs/cleanup`)
+6. Archive historical data (`automations/data/archive`)
+7. Reset collections with safety confirmation (`POST /tenants/[slug]/reset-collections`)
+8. **Status**: ✅ **COMPLETE**
+
+### ✅ **Tax & BIR Compliance Setup**
+1. Configure tax rules (`POST /tenants/[slug]/tax-rules`)
+2. Set tax rate and label (Tax, VAT, GST, etc.)
+3. Define tax categories per product
+4. Configure BIR settings (`PUT /tenants/[slug]/bir-settings`)
+   - PTU number + issue date
+   - CAS settings
+   - MIN number
+   - System provider info
+5. Generate VAT report (`GET /reports/vat`)
+6. Generate CAS report (`GET /reports/cas`)
+7. Compliance audit trail maintained
+8. **Status**: ✅ **COMPLETE**
+
+### ✅ **Multi-Branch Operations**
+1. Create branch via settings (`POST /tenants/[slug]/branches`)
+2. Assign users to branch
+3. Stock transfer between branches (`automations/stock/transfer`)
+4. Multi-location sync (`automations/sync/multi-branch`)
+5. Centralized sales reporting across branches
+6. Per-branch cash drawer management
+7. Merge reports for consolidated view
+8. **Status**: ✅ **COMPLETE**
+
+### ✅ **Cash Drawer Management**
+1. Open cash drawer session (`POST /cash-drawer/sessions`)
+2. Track drawer balance
+3. Record cash in/out
+4. Close session with reconciliation
+5. Reminder to close (`automations/cash-drawer/reminders`)
+6. Auto-close if forgotten (`automations/cash-drawer/auto-close`)
+7. Reconciliation report by date/period
+8. **Status**: ✅ **COMPLETE**
+
+### ✅ **Dynamic Pricing & Inventory Automation**
+1. Configure dynamic pricing rules (`automations/pricing/dynamic`)
+2. Set velocity-based price adjustments
+3. Demand forecasting (`automations/stock/predictive`)
+4. Low stock alerts (`automations/low-stock-alerts`)
+5. Auto-generate purchase orders (`automations/purchase-orders`)
+6. Bundle recommendations based on sales patterns
+7. **Status**: ✅ **COMPLETE**
+
+### ✅ **Offline Mode & Synchronization**
+1. Load products to IndexedDB cache (`GET /products`)
+2. Cache discounts locally (`GET /discounts`)
+3. Operate offline (no internet)
+4. Queue transactions locally
+5. Auto-sync when online (`automations/sync/offline`)
+6. Conflict resolution on duplicate transactions
+7. Inventory reconciliation post-sync
+8. **Status**: ✅ **COMPLETE**
+
 ---
 
 ## Security Audit Results
