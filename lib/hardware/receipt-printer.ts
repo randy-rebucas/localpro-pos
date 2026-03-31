@@ -545,10 +545,55 @@ class ReceiptPrinterService {
 </html>`;
   }
 
+  /**
+   * Open cash drawer via server-side proxy API.
+   * Falls back to triggering a blank browser print (some printers auto-kick drawer on print).
+   */
+  private async openDrawerViaPrintProxy(): Promise<boolean> {
+    // Try server-side proxy first (for network printers)
+    try {
+      const res = await fetch('/api/hardware/cash-drawer-kick', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) return true;
+      }
+    } catch {
+      // Proxy not available, fall through
+    }
+
+    // Fallback: print a blank page. Many POS printers have a DIP switch
+    // or driver setting to auto-open drawer on any print job.
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;';
+    document.body.appendChild(iframe);
+    const doc = iframe.contentDocument ?? iframe.contentWindow?.document;
+    if (!doc) {
+      document.body.removeChild(iframe);
+      return false;
+    }
+    doc.open();
+    doc.write('<html><body style="margin:0;padding:0;"><div style="height:1px;"></div></body></html>');
+    doc.close();
+    setTimeout(() => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      setTimeout(() => {
+        if (document.body.contains(iframe)) document.body.removeChild(iframe);
+      }, 500);
+    }, 100);
+    return true;
+  }
+
   async openCashDrawer(): Promise<boolean> {
     try {
       if (this.config?.type === 'browser') {
-        return false;
+        // Browser print mode: try server-side proxy for network printers,
+        // or trigger a blank print (some printers auto-kick drawer on any print job).
+        return this.openDrawerViaPrintProxy();
       }
 
       // ESC/POS command to open cash drawer (pulse pin 2)
@@ -568,12 +613,19 @@ class ReceiptPrinterService {
         return response.ok;
       }
 
-      // USB printer: only send if already connected.
-      // Do NOT call connect() here — it requires a user gesture for requestDevice().
-      // The printer should be connected first via the hardware settings page.
+      // USB printer: connect if not already (works when called from user gesture like button click).
+      // If called outside a user gesture, connect() will fail gracefully.
       if (!this.device) {
-        logger.info('Cash drawer: USB printer not connected. Connect via Hardware Settings first.');
-        return false;
+        try {
+          const connected = await this.connect();
+          if (!connected) {
+            logger.info('Cash drawer: Printer not connected. Use Hardware Settings to pair first.');
+            return false;
+          }
+        } catch {
+          logger.info('Cash drawer: Could not connect to printer.');
+          return false;
+        }
       }
 
       await this.sendData(command);
