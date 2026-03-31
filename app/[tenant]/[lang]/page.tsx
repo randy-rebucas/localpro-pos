@@ -141,7 +141,8 @@ export default function Dashboard() {
     const subtotal = getSubtotal();
     const discount = appliedDiscount?.amount || 0;
     const afterDiscount = Math.max(0, subtotal - discount);
-    const taxAmount = getTaxAmount({ taxEnabled: settings?.taxEnabled, taxRate: settings?.taxRate });
+    // Tax is calculated on the discounted amount (taxable base)
+    const taxAmount = getTaxAmount({ taxEnabled: settings?.taxEnabled, taxRate: settings?.taxRate }, afterDiscount);
     return Math.round((afterDiscount + taxAmount) * 100) / 100;
   }, [getSubtotal, getTaxAmount, appliedDiscount, settings]);
 
@@ -1370,11 +1371,11 @@ export default function Dashboard() {
                           </span>
                         </div>
                       )}
-                      {getTaxAmount() > 0 && (
+                      {settings?.taxEnabled && (
                         <div className="flex justify-between items-center text-sm">
                           <span className="text-gray-600">{settings?.taxLabel || 'Tax'} ({settings?.taxRate}%):</span>
                           <span className="font-semibold text-gray-900">
-                            <Currency amount={getTaxAmount()} />
+                            <Currency amount={getTaxAmount({ taxEnabled: settings?.taxEnabled, taxRate: settings?.taxRate }, Math.max(0, getSubtotal() - (appliedDiscount?.amount || 0)))} />
                           </span>
                         </div>
                       )}
@@ -1636,31 +1637,52 @@ export default function Dashboard() {
               </div>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-bold text-gray-900 mb-4">
                     {dict.pos.paymentMethod}
                   </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(['cash', 'card', 'digital'] as const).map((method) => (
-                      <button
-                        key={method}
-                        type="button"
-                        onClick={() => {
-                          setPaymentMethod(method);
-                          if (method !== 'cash') setCashReceived('');
-                        }}
-                        className={`px-3 sm:px-4 py-2.5 border-2 font-medium text-sm sm:text-base transition-all duration-200 text-white ${
-                          paymentMethod === method
-                            ? ''
-                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
-                        }`}
-                        style={paymentMethod === method ? {
-                          backgroundColor: primaryColor,
-                          borderColor: primaryColor
-                        } : undefined}
-                      >
-                        {dict.pos[method]}
-                      </button>
-                    ))}
+                  <div className="grid grid-cols-3 gap-3">
+                    {(['cash', 'card', 'digital'] as const).map((method) => {
+                      const isSelected = paymentMethod === method;
+                      const icons: Record<string, string> = {
+                        cash: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+                        card: 'M3 10h18M7 15h1m4 0h1m-7 4h12a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
+                        digital: 'M12 18h.01M8 20h8a2 2 0 002-2V4a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z'
+                      };
+                      const labels: Record<string, string> = {
+                        cash: 'Cash',
+                        card: 'Card',
+                        digital: 'Digital'
+                      };
+                      return (
+                        <button
+                          key={method}
+                          type="button"
+                          onClick={() => {
+                            setPaymentMethod(method);
+                            if (method !== 'cash') setCashReceived('');
+                          }}
+                          className={`p-4 border-2 transition-all duration-200 flex flex-col items-center justify-center gap-2 rounded-lg ${
+                            isSelected
+                              ? 'border-2'
+                              : 'bg-gray-50 border-gray-200 hover:border-gray-300 hover:bg-gray-100'
+                          }`}
+                          style={isSelected ? {
+                            backgroundColor: `${primaryColor}15`,
+                            borderColor: primaryColor
+                          } : undefined}
+                        >
+                          <svg className={`w-6 h-6 ${isSelected ? 'text-white' : 'text-gray-600'}`} 
+                            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                            style={isSelected ? { color: primaryColor } : undefined}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d={icons[method]} />
+                          </svg>
+                          <span className={`text-sm font-semibold ${isSelected ? 'text-gray-900' : 'text-gray-700'}`}
+                            style={isSelected ? { color: primaryColor } : undefined}>
+                            {labels[method]}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
                 {paymentMethod === 'cash' && (

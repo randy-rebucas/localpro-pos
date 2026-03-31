@@ -117,6 +117,27 @@ export async function POST(
         },
         { upsert: true, new: true }
       );
+    } else if (action === 'update-cart' && !session) {
+      // Auto-create session if it doesn't exist (handles race condition where cart syncs before init completes)
+      session = await PosSession.findOneAndUpdate(
+        { sessionId },
+        {
+          sessionId,
+          tenant,
+          cart: data?.cart || [],
+          subtotal: data?.subtotal || 0,
+          discount: null,
+          taxAmount: data?.taxAmount || 0,
+          taxRate: data?.taxRate || 0,
+          taxLabel: data?.taxLabel || 'Tax',
+          tip: 0,
+          total: data?.total || 0,
+          paymentMethod: null,
+          paymentStatus: 'pending',
+          lastUpdate: Date.now(),
+        },
+        { upsert: true, new: true }
+      );
     } else if (session) {
       const updates: Record<string, unknown> = { lastUpdate: Date.now() };
 

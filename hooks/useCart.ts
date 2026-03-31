@@ -17,7 +17,7 @@ interface UseCartReturn {
   clearCart: () => void;
   getSubtotal: () => number;
   getCartTotal: (settings?: { taxEnabled?: boolean; taxRate?: number }) => number;
-  getTaxAmount: (settings?: { taxEnabled?: boolean; taxRate?: number }) => number;
+  getTaxAmount: (settings?: { taxEnabled?: boolean; taxRate?: number }, taxableBase?: number) => number;
 }
 
 const MAX_QUANTITY = 9999;
@@ -29,10 +29,10 @@ export function useCart(showError: (msg: string) => void): UseCartReturn {
     return cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   }, [cart]);
 
-  const getTaxAmount = useCallback((settings?: { taxEnabled?: boolean; taxRate?: number }) => {
+  const getTaxAmount = useCallback((settings?: { taxEnabled?: boolean; taxRate?: number }, taxableBase?: number) => {
     if (!settings?.taxEnabled || !settings?.taxRate) return 0;
-    const subtotal = getSubtotal();
-    return Math.round(subtotal * (settings.taxRate / 100) * 100) / 100;
+    const base = taxableBase ?? getSubtotal();
+    return Math.round(base * (settings.taxRate / 100) * 100) / 100;
   }, [getSubtotal]);
 
   const getCartTotal = useCallback((settings?: { taxEnabled?: boolean; taxRate?: number }) => {
