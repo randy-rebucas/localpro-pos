@@ -568,9 +568,12 @@ class ReceiptPrinterService {
         return response.ok;
       }
 
+      // USB printer: only send if already connected.
+      // Do NOT call connect() here — it requires a user gesture for requestDevice().
+      // The printer should be connected first via the hardware settings page.
       if (!this.device) {
-        const connected = await this.connect();
-        if (!connected) return false;
+        logger.info('Cash drawer: USB printer not connected. Connect via Hardware Settings first.');
+        return false;
       }
 
       await this.sendData(command);

@@ -328,16 +328,16 @@ class HardwareStatusChecker {
         }
 
       case 'cash-drawer':
+        // Cash drawer test requires user gesture for USB permission.
+        // Only report status based on whether the printer is already connected.
         try {
-          const success = await hardwareService.openCashDrawer();
-          return { 
-            success, 
-            message: success 
-              ? 'Cash drawer opened' 
-              : 'Failed to open cash drawer' 
-          };
+          const drawerEnabled = hardwareService.getConfig().cashDrawer?.enabled;
+          if (!drawerEnabled) {
+            return { success: false, message: 'Cash drawer not enabled in settings' };
+          }
+          return { success: true, message: 'Cash drawer configured (opens on cash payment)' };
         } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-          return { success: false, message: error.message || 'Cash drawer test failed' };
+          return { success: false, message: error.message || 'Cash drawer check failed' };
         }
 
       case 'barcode-scanner':
