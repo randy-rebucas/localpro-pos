@@ -305,11 +305,14 @@ function ProductModal({
         cat => cat._id === (typeof product.categoryId === 'object' && product.categoryId?._id ? product.categoryId._id : product.categoryId)
       );
       if (currentCategory) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setCategorySearch(currentCategory.name);
       } else {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setCategorySearch('');
       }
     } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCategorySearch('');
     }
   }, [product, categories]);

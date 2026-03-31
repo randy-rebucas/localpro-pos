@@ -883,24 +883,28 @@ function BundleModal({
   }, [products, productSearch]);
 
   // Auto-select product if there's an exact match
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
     if (productSearch.trim()) {
       const exactMatch = products.find(
         p => p.name.toLowerCase() === productSearch.toLowerCase()
       );
       if (exactMatch) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setSelectedProduct(exactMatch);
       } else if (filteredProducts.length === 1) {
         // Auto-select if only one match
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setSelectedProduct(filteredProducts[0]);
       } else {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setSelectedProduct(null);
       }
     } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedProduct(null);
     }
     // Reset highlighted index when search changes
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setHighlightedIndex(-1);
   }, [productSearch, products, filteredProducts]);
 
