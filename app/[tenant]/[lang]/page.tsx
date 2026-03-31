@@ -29,6 +29,7 @@ const HardwareStatusChecker = dynamic(() => import('@/components/HardwareStatus'
 });
 import { hardwareService } from '@/lib/hardware';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { showToast } from '@/lib/toast';
 import { useConfirm } from '@/lib/confirm';
 import { formatCurrency, getDefaultTenantSettings } from '@/lib/currency';
@@ -60,13 +61,16 @@ export default function Dashboard() {
   const params = useParams();
   const router = useRouter();
   const tenant = params.tenant as string;
-  const lang = params.lang as 'en' | 'es';
+  const rawLang = params.lang as string;
+  const lang = (['en', 'es'] as const).includes(rawLang as 'en' | 'es') ? (rawLang as 'en' | 'es') : 'en';
   const [products, setProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [dict, setDict] = useState<TranslationDict | null>(null);
   const { isOnline } = useNetworkStatus(tenant);
   const { settings } = useTenantSettings();
+  const { logout, hasRole } = useAuth();
+  const isCashier = hasRole(['cashier']);
   const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#3b82f6';
   
   // Additional state for modals and UI
@@ -304,6 +308,16 @@ export default function Dashboard() {
   useEffect(() => {
     syncToCustomerDisplay();
   }, [cart, syncToCustomerDisplay]);
+
+  // Cleanup abort controller on unmount
+  useEffect(() => {
+    return () => {
+      if (sessionSyncAbortRef.current) {
+        sessionSyncAbortRef.current.abort();
+        sessionSyncAbortRef.current = null;
+      }
+    };
+  }, []);
 
   // Refocus search box whenever any modal closes
   useEffect(() => {
@@ -787,7 +801,9 @@ export default function Dashboard() {
             </span>
           </div>
           <button
-            onClick={() => {
+            onClick={async () => {
+              const ok = await confirm('End Shift', 'Are you sure you want to end your shift? You will need to count the cash in the drawer.');
+              if (!ok) return;
               setDrawerAmount('');
               setDrawerNotes('');
               setClosingSummary(null);
@@ -800,8 +816,8 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Start Shift Overlay - blocks POS when no cash drawer session */}
-      {!cashDrawerSession && !cashDrawerLoading && !loading && (
+      {/* Start Shift Overlay - only blocks cashier role when no cash drawer session */}
+      {isCashier && !cashDrawerSession && !cashDrawerLoading && !loading && (
         <div className="fixed inset-0 z-50 bg-gray-900/60 flex items-center justify-center" style={{ top: '64px' }}>
           <div className="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full mx-4 text-center">
             <div className="w-16 h-16 mx-auto mb-4 bg-blue-100 rounded-full flex items-center justify-center">
@@ -817,10 +833,19 @@ export default function Dashboard() {
                 setDrawerNotes('');
                 setShowCashDrawerModal('open');
               }}
-              className="w-full py-3 text-white font-semibold rounded-lg transition-colors"
+              className="w-full py-3 text-white font-semibold rounded-lg transition-colors mb-3"
               style={{ backgroundColor: primaryColor }}
             >
               Open Cash Drawer
+            </button>
+            <button
+              onClick={async () => {
+                await logout();
+                window.location.href = `/${tenant}/${lang}/login`;
+              }}
+              className="w-full py-2.5 text-gray-600 font-medium rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors text-sm"
+            >
+              Logout
             </button>
           </div>
         </div>
@@ -1657,7 +1682,7 @@ export default function Dashboard() {
                     />
                     {cashReceived && parseFloat(cashReceived) >= getTotal() && (
                       <div className="mt-2 text-sm text-green-600 font-medium">
-                        {dict.pos.change}: <Currency amount={parseFloat(cashReceived) - getTotal()} />
+                        {dict.pos.change}: <Currency amount={Math.round((parseFloat(cashReceived) - getTotal()) * 100) / 100} />
                       </div>
                     )}
                   </div>
