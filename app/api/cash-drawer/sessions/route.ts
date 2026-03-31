@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import CashDrawerSession from '@/models/CashDrawerSession';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
-import { requireAuth } from '@/lib/auth';
+import { requireAuth, requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import Transaction from '@/models/Transaction';
 import Expense from '@/models/Expense';
@@ -22,20 +22,33 @@ export async function GET(request: NextRequest) {
 
     const searchParams = request.nextUrl.searchParams;
     const status = searchParams.get('status');
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '50', 10)));
+    const skip = (page - 1) * limit;
 
-    const query: any = { tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const query: Record<string, unknown> = { tenantId };
     if (status) {
       query.status = status;
     }
 
-    const sessions = await CashDrawerSession.find(query)
-      .populate('userId', 'name email')
-      .sort({ openingTime: -1 });
+    const [sessions, total] = await Promise.all([
+      CashDrawerSession.find(query)
+        .populate('userId', 'name email')
+        .sort({ openingTime: -1 })
+        .skip(skip)
+        .limit(limit),
+      CashDrawerSession.countDocuments(query),
+    ]);
 
-    return NextResponse.json({ success: true, data: sessions });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+    return NextResponse.json({
+      success: true,
+      data: sessions,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    });
+  } catch (error: unknown) {
     logger.error('Error fetching cash drawer sessions:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Internal server error';
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
 
@@ -54,42 +67,80 @@ export async function POST(request: NextRequest) {
     const { action, openingAmount, closingAmount, notes } = body;
 
     if (action === 'open') {
-      // Check if there's an open session
-      const openSession = await CashDrawerSession.findOne({
-        tenantId,
-        status: 'open',
-      });
+      // Validate opening amount
+      const amount = parseFloat(openingAmount);
+      if (isNaN(amount) || amount < 0) {
+        return NextResponse.json(
+          { success: false, error: 'Opening amount must be a non-negative number' },
+          { status: 400 }
+        );
+      }
+      const roundedAmount = Math.round(amount * 100) / 100;
 
-      if (openSession) {
+      // Atomic check-and-create: prevent race condition where two requests
+      // both pass the "no open session" check simultaneously.
+      // findOneAndUpdate with upsert + unique index on {tenantId, status: 'open'} ensures only one.
+      const existing = await CashDrawerSession.findOne({ tenantId, status: 'open' });
+      if (existing) {
         return NextResponse.json(
           { success: false, error: t('validation.cashDrawerAlreadyOpen', 'There is already an open cash drawer session') },
           { status: 400 }
         );
       }
 
-      const session = await CashDrawerSession.create({
-        tenantId,
-        userId: user.userId,
-        openingAmount: parseFloat(openingAmount || 0),
-        openingTime: new Date(),
-        status: 'open',
-        notes,
-      });
+      let session;
+      try {
+        session = await CashDrawerSession.create({
+          tenantId,
+          userId: user.userId,
+          openingAmount: roundedAmount,
+          openingTime: new Date(),
+          status: 'open',
+          notes: notes || undefined,
+        });
+      } catch (err: unknown) {
+        // Duplicate key error (11000) means another request created a session between check and create
+        if (err instanceof Error && 'code' in err && (err as { code: number }).code === 11000) {
+          return NextResponse.json(
+            { success: false, error: t('validation.cashDrawerAlreadyOpen', 'There is already an open cash drawer session') },
+            { status: 400 }
+          );
+        }
+        throw err;
+      }
 
       await createAuditLog(request, {
         tenantId,
         action: AuditActions.CREATE,
         entityType: 'cashDrawerSession',
         entityId: session._id.toString(),
-        changes: { action: 'open', openingAmount },
+        changes: { action: 'open', openingAmount: roundedAmount },
       });
 
       return NextResponse.json({ success: true, data: session }, { status: 201 });
+
     } else if (action === 'close') {
-      const openSession = await CashDrawerSession.findOne({
+      // Validate closing amount
+      const amount = parseFloat(closingAmount);
+      if (isNaN(amount) || amount < 0) {
+        return NextResponse.json(
+          { success: false, error: 'Closing amount must be a non-negative number' },
+          { status: 400 }
+        );
+      }
+      const actualClosingAmount = Math.round(amount * 100) / 100;
+
+      // Find open session — prefer current user's session
+      let openSession = await CashDrawerSession.findOne({
         tenantId,
+        userId: user.userId,
         status: 'open',
       });
+      // Fallback: any open session (for managers closing another cashier's drawer)
+      if (!openSession) {
+        await requireRole(request, ['manager', 'admin', 'owner']);
+        openSession = await CashDrawerSession.findOne({ tenantId, status: 'open' });
+      }
 
       if (!openSession) {
         return NextResponse.json(
@@ -98,33 +149,39 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Calculate expected amount
+      // Calculate expected amount — filter by the session's userId to avoid mixing cashiers
       const sessionEnd = new Date();
-      const cashTransactions = await Transaction.find({
-        tenantId,
-        paymentMethod: 'cash',
-        createdAt: { $gte: openSession.openingTime, $lte: sessionEnd },
-        status: 'completed',
-      }).lean();
+      const sessionUserId = openSession.userId.toString();
 
-      const cashSales = cashTransactions.reduce((sum, t) => sum + t.total, 0);
-      const totalVAT = cashTransactions.reduce((sum, t) => sum + (t.taxAmount || 0), 0);
-      const totalDiscounts = cashTransactions.reduce((sum, t) => sum + (t.discountAmount || 0), 0);
+      const [cashTransactions, cashExpenses] = await Promise.all([
+        Transaction.find({
+          tenantId,
+          userId: sessionUserId,
+          paymentMethod: 'cash',
+          createdAt: { $gte: openSession.openingTime, $lte: sessionEnd },
+          status: 'completed',
+        }).lean(),
+        Expense.find({
+          tenantId,
+          paymentMethod: 'cash',
+          date: { $gte: openSession.openingTime, $lte: sessionEnd },
+        }).lean(),
+      ]);
 
-      const cashExpenses = await Expense.find({
-        tenantId,
-        paymentMethod: 'cash',
-        date: { $gte: openSession.openingTime, $lte: sessionEnd },
-      }).lean();
+      // Use integer math (cents) to avoid floating point errors
+      const cashSalesCents = cashTransactions.reduce((sum, t) => sum + Math.round((t.total || 0) * 100), 0);
+      const totalVATCents = cashTransactions.reduce((sum, t) => sum + Math.round((t.taxAmount || 0) * 100), 0);
+      const totalDiscountsCents = cashTransactions.reduce((sum, t) => sum + Math.round((t.discountAmount || 0) * 100), 0);
+      const cashExpensesCents = cashExpenses.reduce((sum, e) => sum + Math.round((e.amount || 0) * 100), 0);
 
-      const cashExpensesTotal = cashExpenses.reduce((sum, e) => sum + e.amount, 0);
+      const openingCents = Math.round(openSession.openingAmount * 100);
+      const expectedCents = openingCents + cashSalesCents - cashExpensesCents;
+      const closingCents = Math.round(actualClosingAmount * 100);
+      const differenceCents = closingCents - expectedCents;
 
-      const expectedAmount = openSession.openingAmount + cashSales - cashExpensesTotal;
-      const actualClosingAmount = parseFloat(closingAmount || 0);
-      const difference = actualClosingAmount - expectedAmount;
-
-      const shortage = difference < 0 ? Math.abs(difference) : undefined;
-      const overage = difference > 0 ? difference : undefined;
+      const expectedAmount = expectedCents / 100;
+      const shortage = differenceCents < 0 ? Math.abs(differenceCents) / 100 : 0;
+      const overage = differenceCents > 0 ? differenceCents / 100 : 0;
 
       openSession.closingAmount = actualClosingAmount;
       openSession.expectedAmount = expectedAmount;
@@ -132,8 +189,8 @@ export async function POST(request: NextRequest) {
       openSession.overage = overage;
       openSession.closingTime = sessionEnd;
       openSession.status = 'closed';
-      openSession.totalVAT = totalVAT;
-      openSession.totalDiscounts = totalDiscounts;
+      openSession.totalVAT = totalVATCents / 100;
+      openSession.totalDiscounts = totalDiscountsCents / 100;
       if (notes) {
         openSession.notes = notes;
       }
@@ -151,19 +208,21 @@ export async function POST(request: NextRequest) {
           expectedAmount,
           shortage,
           overage,
+          transactionCount: cashTransactions.length,
         },
       });
 
       return NextResponse.json({ success: true, data: openSession });
+
     } else {
       return NextResponse.json(
         { success: false, error: t('validation.invalidCashDrawerAction', 'Invalid action. Use "open" or "close"') },
         { status: 400 }
       );
     }
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  } catch (error: unknown) {
     logger.error('Error managing cash drawer session:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+    const message = error instanceof Error ? error.message : 'Internal server error';
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
-

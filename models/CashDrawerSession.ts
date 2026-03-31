@@ -90,6 +90,11 @@ const CashDrawerSessionSchema: Schema = new Schema(
 // Indexes for efficient queries
 CashDrawerSessionSchema.index({ tenantId: 1, status: 1 });
 CashDrawerSessionSchema.index({ tenantId: 1, openingTime: -1 });
+// Enforce only one open session per tenant (partial unique index)
+CashDrawerSessionSchema.index(
+  { tenantId: 1, status: 1 },
+  { unique: true, partialFilterExpression: { status: 'open' } }
+);
 
 const CashDrawerSession: Model<ICashDrawerSession> = 
   mongoose.models.CashDrawerSession || 
