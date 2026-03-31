@@ -9,12 +9,16 @@ import { ITenantSettings } from '@/models/Tenant';
 import { detectLocation, getCurrencySymbolForCode } from '@/lib/location-detection';
 import MultiCurrencyDisplaySettings from '@/components/settings/MultiCurrencyDisplaySettings';
 import ReceiptTemplatesManager from '@/components/settings/ReceiptTemplatesManager';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { getDefaultTenantSettings } from '@/lib/currency';
 
 export default function SettingsPage() {
   const params = useParams();
   const router = useRouter();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
+  const { settings: tenantSettings } = useTenantSettings();
+  const primaryColor = (tenantSettings || getDefaultTenantSettings()).primaryColor || '#2563eb';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -286,7 +290,7 @@ export default function SettingsPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="inline-block animate-spin h-8 w-8 border-b-2" style={{ borderBottomColor: primaryColor }}></div>
           <p className="mt-4 text-gray-600">{dict?.settings?.loading || 'Loading settings...'}</p>
         </div>
       </div>
@@ -355,61 +359,67 @@ export default function SettingsPage() {
               </button>
               <button
                 onClick={() => setActiveTab('branding')}
-                className={`px-6 py-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                  activeTab === 'branding'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
+                style={{
+                  borderBottomWidth: '2px',
+                  borderBottomColor: activeTab === 'branding' ? primaryColor : 'transparent',
+                  color: activeTab === 'branding' ? primaryColor : '#6b7280',
+                }}
+                className="px-6 py-4 text-sm font-medium whitespace-nowrap transition-colors hover:text-gray-700 hover:border-gray-300"
               >
                 {dict?.settings?.tabs?.branding || 'Branding'}
               </button>
               <button
                 onClick={() => setActiveTab('contact')}
-                className={`px-6 py-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                  activeTab === 'contact'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
+                style={{
+                  borderBottomWidth: '2px',
+                  borderBottomColor: activeTab === 'contact' ? primaryColor : 'transparent',
+                  color: activeTab === 'contact' ? primaryColor : '#6b7280',
+                }}
+                className="px-6 py-4 text-sm font-medium whitespace-nowrap transition-colors hover:text-gray-700 hover:border-gray-300"
               >
                 {dict?.settings?.tabs?.contact || 'Contact'}
               </button>
               <button
                 onClick={() => setActiveTab('receipt')}
-                className={`px-6 py-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                  activeTab === 'receipt'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
+                style={{
+                  borderBottomWidth: '2px',
+                  borderBottomColor: activeTab === 'receipt' ? primaryColor : 'transparent',
+                  color: activeTab === 'receipt' ? primaryColor : '#6b7280',
+                }}
+                className="px-6 py-4 text-sm font-medium whitespace-nowrap transition-colors hover:text-gray-700 hover:border-gray-300"
               >
                 {dict?.settings?.tabs?.receipt || 'Receipt'}
               </button>
               <button
                 onClick={() => setActiveTab('business')}
-                className={`px-6 py-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                  activeTab === 'business'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
+                style={{
+                  borderBottomWidth: '2px',
+                  borderBottomColor: activeTab === 'business' ? primaryColor : 'transparent',
+                  color: activeTab === 'business' ? primaryColor : '#6b7280',
+                }}
+                className="px-6 py-4 text-sm font-medium whitespace-nowrap transition-colors hover:text-gray-700 hover:border-gray-300"
               >
                 {dict?.settings?.tabs?.business || 'Business'}
               </button>
               <button
                 onClick={() => setActiveTab('notifications')}
-                className={`px-6 py-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                  activeTab === 'notifications'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
+                style={{
+                  borderBottomWidth: '2px',
+                  borderBottomColor: activeTab === 'notifications' ? primaryColor : 'transparent',
+                  color: activeTab === 'notifications' ? primaryColor : '#6b7280',
+                }}
+                className="px-6 py-4 text-sm font-medium whitespace-nowrap transition-colors hover:text-gray-700 hover:border-gray-300"
               >
                 {dict?.settings?.tabs?.notifications || 'Notifications'}
               </button>
               <button
                 onClick={() => setActiveTab('multiCurrency')}
-                className={`px-6 py-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                  activeTab === 'multiCurrency'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
+                style={{
+                  borderBottomWidth: '2px',
+                  borderBottomColor: activeTab === 'multiCurrency' ? primaryColor : 'transparent',
+                  color: activeTab === 'multiCurrency' ? primaryColor : '#6b7280',
+                }}
+                className="px-6 py-4 text-sm font-medium whitespace-nowrap transition-colors hover:text-gray-700 hover:border-gray-300"
               >
                 {dict?.settings?.tabs?.multiCurrency || 'Multi-Currency'}
               </button>

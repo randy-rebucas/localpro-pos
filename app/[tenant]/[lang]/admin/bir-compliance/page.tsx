@@ -1,26 +1,20 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import toast from 'react-hot-toast';
 import { getDictionaryClient } from '../../dictionaries-client';
-
-interface BirComplianceFeatures {
-  ptuAssistance: boolean;
-  receiptFormatting: boolean;
-  birDocumentation: boolean;
-  casReporting: boolean;
-  auditTrailSystem: boolean;
-  monthlySupport: boolean;
-}
-
-interface BirSettings {
-  birTin: string;
-  birPtuNumber: string;
-  birPtuIssuedDate: string;
-  birPtuExpiryDate: string;
-}
+import { useBirFeatures } from '@/hooks/useBirFeatures';
+import { useBirSettings } from '@/hooks/useBirSettings';
+import { useCasReport } from '@/hooks/useCasReport';
+import {
+  ptuExpiringSoon,
+  hasCompletePtuInfo,
+  isValidCasDateRange,
+  getPtuExpiryWarning,
+} from '@/lib/bir-compliance-helpers';
 
 interface Message {
   type: 'success' | 'error';
@@ -54,133 +48,46 @@ export default function BirCompliancePage() {
   const lang = params.lang as 'en' | 'es';
 
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [loading, setLoading] = useState(true);
-  const [birFeatures, setBirFeatures] = useState<BirComplianceFeatures | null>(null);
-  const [birSettings, setBirSettings] = useState<BirSettings>({
-    birTin: '',
-    birPtuNumber: '',
-    birPtuIssuedDate: '',
-    birPtuExpiryDate: '',
-  });
-  const [saving, setSaving] = useState(false);
-  const [casDateRange, setCasDateRange] = useState({ start: '', end: '' });
-  const [downloadingCas, setDownloadingCas] = useState(false);
-  const [message, setMessage] = useState<Message | null>(null);
+
+  const { birFeatures, loading: featuresLoading, fetchFeatures } = useBirFeatures();
+  const { birSettings, setBirSettings, loading: settingsLoading, saving, fetchSettings, saveSettings } = useBirSettings(tenant);
+  const { casDateRange, setCasDateRange, downloading: downloadingCas, downloadReport } = useCasReport();
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
-    fetchData();
+  }, [lang]);
+
+  useEffect(() => {
+    fetchFeatures((error) => toast.error(error));
+    fetchSettings((error) => toast.error(error));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lang, tenant]);
+  }, [tenant]);
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const [subRes, birRes] = await Promise.all([
-        fetch('/api/subscription/status'),
-        fetch(`/api/tenants/${tenant}/bir-settings`),
-      ]);
-
-      const subData = await subRes.json();
-      if (subData.success && subData.data?.birCompliance) {
-        setBirFeatures(subData.data.birCompliance);
-      } else if (subData.success && subData.data) {
-        // Fallback: no birCompliance in status means all locked
-        setBirFeatures({
-          ptuAssistance: false,
-          receiptFormatting: false,
-          birDocumentation: false,
-          casReporting: false,
-          auditTrailSystem: true,
-          monthlySupport: false,
-        });
-      }
-
-      const birData = await birRes.json();
-      if (birData.success && birData.data) {
-        setBirSettings({
-          birTin: birData.data.birTin || '',
-          birPtuNumber: birData.data.birPtuNumber || '',
-          birPtuIssuedDate: birData.data.birPtuIssuedDate
-            ? new Date(birData.data.birPtuIssuedDate).toISOString().split('T')[0]
-            : '',
-          birPtuExpiryDate: birData.data.birPtuExpiryDate
-            ? new Date(birData.data.birPtuExpiryDate).toISOString().split('T')[0]
-            : '',
-        });
-      }
-    } catch (err) {
-      console.error('Error fetching BIR data:', err);
-    } finally {
-      setLoading(false);
+  const handleSavePtuSettings = useCallback(async () => {
+    if (!birSettings.birTin && !birSettings.birPtuNumber && !birSettings.birPtuIssuedDate && !birSettings.birPtuExpiryDate) {
+      toast.error(dict?.common?.enterAtLeastOneField || 'Please enter at least one field.');
+      return;
     }
-  };
 
-  const savePtuSettings = async () => {
-    setSaving(true);
-    setMessage(null);
-    try {
-      const res = await fetch(`/api/tenants/${tenant}/bir-settings`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          birTin: birSettings.birTin || undefined,
-          birPtuNumber: birSettings.birPtuNumber || undefined,
-          birPtuIssuedDate: birSettings.birPtuIssuedDate || undefined,
-          birPtuExpiryDate: birSettings.birPtuExpiryDate || undefined,
-        }),
-      });
-      const data = await res.json();
-      setMessage(
-        data.success
-          ? { type: 'success', text: 'BIR settings saved successfully.' }
-          : { type: 'error', text: data.error || 'Failed to save.' }
-      );
-    } catch {
-      setMessage({ type: 'error', text: 'Network error. Please try again.' });
-    } finally {
-      setSaving(false);
+    await saveSettings(
+      (message) => toast.success(message),
+      (error) => toast.error(error)
+    );
+  }, [birSettings, saveSettings, dict]);
+
+  const handleDownloadCasReport = useCallback(async () => {
+    if (!isValidCasDateRange(casDateRange.start, casDateRange.end)) {
+      toast.error(dict?.common?.invalidDateRange || 'Invalid date range. End date must be after start date.');
+      return;
     }
-  };
 
-  const downloadCasReport = async () => {
-    setDownloadingCas(true);
-    setMessage(null);
-    try {
-      const params = new URLSearchParams();
-      if (casDateRange.start) params.set('startDate', casDateRange.start);
-      if (casDateRange.end) params.set('endDate', casDateRange.end);
+    await downloadReport(
+      (message) => toast.success(message),
+      (error) => toast.error(error)
+    );
+  }, [casDateRange, downloadReport, dict]);
 
-      const res = await fetch(`/api/reports/cas?${params}`, { credentials: 'include' });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Failed to generate report' }));
-        setMessage({ type: 'error', text: err.error });
-        return;
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `cas-report${casDateRange.start ? `-${casDateRange.start}` : ''}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      setMessage({ type: 'error', text: 'Failed to download CAS report.' });
-    } finally {
-      setDownloadingCas(false);
-    }
-  };
-
-  const ptuExpiringSoon = (): boolean => {
-    if (!birSettings.birPtuExpiryDate) return false;
-    const expiry = new Date(birSettings.birPtuExpiryDate);
-    const thirtyDays = new Date();
-    thirtyDays.setDate(thirtyDays.getDate() + 30);
-    return expiry <= thirtyDays;
-  };
-
-  if (!dict || loading) {
+  if (!dict || featuresLoading || settingsLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -213,13 +120,6 @@ export default function BirCompliancePage() {
             Manage your Bureau of Internal Revenue compliance settings, PTU, CAS reporting, and audit trail.
           </p>
         </div>
-
-        {/* Status message */}
-        {message && (
-          <div className={`mb-6 p-4 border ${message.type === 'success' ? 'bg-green-50 border-green-300 text-green-800' : 'bg-red-50 border-red-300 text-red-800'}`}>
-            {message.text}
-          </div>
-        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
@@ -297,9 +197,9 @@ export default function BirCompliancePage() {
               Store and track your BIR Permit to Use (PTU) details and Tax Identification Number (TIN) for your POS system.
             </p>
 
-            {ptuExpiringSoon() && birFeatures?.ptuAssistance && (
+            {ptuExpiringSoon(birSettings.birPtuExpiryDate) && birFeatures?.ptuAssistance && (
               <div className="mb-4 p-3 bg-orange-50 border border-orange-200 text-orange-800 text-sm">
-                <strong>Warning:</strong> Your PTU expires on {birSettings.birPtuExpiryDate}. Please renew with BIR.
+                {getPtuExpiryWarning(birSettings.birPtuExpiryDate, dict)}
               </div>
             )}
 
@@ -347,7 +247,7 @@ export default function BirCompliancePage() {
                 </div>
               </div>
               <button
-                onClick={savePtuSettings}
+                onClick={handleSavePtuSettings}
                 disabled={saving || !birFeatures?.ptuAssistance}
                 className="w-full bg-blue-600 text-white px-4 py-2 text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -395,7 +295,7 @@ export default function BirCompliancePage() {
                 </div>
               </div>
               <button
-                onClick={downloadCasReport}
+                onClick={handleDownloadCasReport}
                 disabled={downloadingCas || !birFeatures?.casReporting}
                 className="w-full inline-flex items-center justify-center gap-2 bg-purple-600 text-white px-4 py-2 text-sm font-medium hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >

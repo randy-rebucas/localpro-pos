@@ -2,66 +2,46 @@
 
 import { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import toast from 'react-hot-toast';
 import { getDictionaryClient } from '../../dictionaries-client';
 import Currency from '@/components/Currency';
-import { useTenantSettings } from '@/contexts/TenantSettingsContext';
-
-interface CashDrawerSession {
-  _id: string;
-  userId: string | { _id: string; name: string; email: string };
-  openingAmount: number;
-  closingAmount?: number;
-  expectedAmount?: number;
-  shortage?: number;
-  overage?: number;
-  openingTime: string;
-  closingTime?: string;
-  status: 'open' | 'closed';
-  notes?: string;
-  createdAt: string;
-}
+import { useCashDrawerSessions, type CashDrawerSession } from '@/hooks/useCashDrawerSessions';
+import {
+  getUserName,
+  getUserEmail,
+  calculateDifference,
+  getDifferenceColor,
+  getStatusBadgeClasses,
+  getStatusLabel,
+  formatSessionTime,
+} from '@/lib/cash-drawer-helpers';
 
 export default function CashDrawerPage() {
   const params = useParams();
-  const router = useRouter(); // eslint-disable-line @typescript-eslint/no-unused-vars
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [sessions, setSessions] = useState<CashDrawerSession[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedSession, setSelectedSession] = useState<CashDrawerSession | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('');
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const { settings } = useTenantSettings(); // eslint-disable-line @typescript-eslint/no-unused-vars
+  const [refreshing, setRefreshing] = useState(false);
 
-   
+  const { sessions, loading, fetchSessions } = useCashDrawerSessions();
+
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
-    fetchSessions();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lang, tenant, statusFilter]);
+  }, [lang]);
 
-  const fetchSessions = async () => {
-    try {
-      let url = '/api/cash-drawer/sessions';
-      if (statusFilter) url += `?status=${statusFilter}`;
-      
-      const res = await fetch(url, { credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
-        setSessions(data.data);
-        setMessage(null);
-      } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchCashDrawerSessions || 'Failed to fetch cash drawer sessions' });
-      }
-    } catch (error) {
-      console.error('Error fetching cash drawer sessions:', error);
-      setMessage({ type: 'error', text: dict?.common?.failedToFetchCashDrawerSessions || 'Failed to fetch cash drawer sessions' });
-    } finally {
-      setLoading(false);
-    }
+  useEffect(() => {
+    fetchSessions(statusFilter, (error) => toast.error(error));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter]);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchSessions(statusFilter, (error) => toast.error(error));
+    setRefreshing(false);
   };
 
   if (!dict || loading) {
@@ -99,23 +79,31 @@ export default function CashDrawerPage() {
           </div>
         </div>
 
-        {message && (
-          <div className={`mb-6 p-4 border ${message.type === 'success' ? 'bg-green-50 text-green-800 border-green-300' : 'bg-red-50 text-red-800 border-red-300'}`}>
-            {message.text}
-          </div>
-        )}
-
         <div className="bg-white border border-gray-300 p-6">
-          <div className="mb-4">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+          <div className="mb-4 flex gap-4 items-end">
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">{dict.admin?.filterByStatus || 'Filter by Status'}</label>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+              >
+                <option value="">{dict.admin?.allSessions || 'All Sessions'}</option>
+                <option value="open">{dict.admin?.openSessions || 'Open Sessions'}</option>
+                <option value="closed">{dict.admin?.closedSessions || 'Closed Sessions'}</option>
+              </select>
+            </div>
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-400 border border-blue-700 flex items-center gap-2 transition-colors"
+              title="Refresh cash drawer sessions"
             >
-              <option value="">{dict.admin?.allSessions || 'All Sessions'}</option>
-              <option value="open">{dict.admin?.openSessions || 'Open Sessions'}</option>
-              <option value="closed">{dict.admin?.closedSessions || 'Closed Sessions'}</option>
-            </select>
+              <svg className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.5a11 11 0 0120 0v-5m0 0a11 11 0 0120 5V9m-11 11a11 11 0 0120 0v5m0 0a11 11 0 01-20 0v-5m0 0a11 11 0 01-20 0" />
+              </svg>
+              {refreshing ? (dict.common?.loading || 'Loading...') : (dict.common?.refresh || 'Refresh')}
+            </button>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -134,22 +122,20 @@ export default function CashDrawerPage() {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {sessions.map((session) => {
-                  const userName = typeof session.userId === 'object' ? session.userId.name : 'Unknown';
-                  const difference = session.closingAmount !== undefined && session.expectedAmount !== undefined
-                    ? session.closingAmount - session.expectedAmount
-                    : null;
+                  const userName = getUserName(session);
+                  const difference = calculateDifference(session);
                   
                   return (
                     <tr key={session._id}>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">{userName}</td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(session.openingTime).toLocaleString()}
+                        {formatSessionTime(session.openingTime)}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         <Currency amount={session.openingAmount} />
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {session.closingTime ? new Date(session.closingTime).toLocaleString() : '-'}
+                        {session.closingTime ? formatSessionTime(session.closingTime) : '-'}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
                         {session.expectedAmount !== undefined ? <Currency amount={session.expectedAmount} /> : '-'}
@@ -167,10 +153,8 @@ export default function CashDrawerPage() {
                         ) : '-'}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-semibold border ${
-                          session.status === 'open' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                        }`}>
-                          {session.status === 'open' ? (dict.admin?.open || 'Open') : (dict.admin?.closed || 'Closed')}
+                        <span className={`px-2 py-1 text-xs font-semibold border ${getStatusBadgeClasses(session.status)}`}>
+                          {getStatusLabel(session.status, dict)}
                         </span>
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
@@ -213,8 +197,8 @@ function CashDrawerDetailModal({
   onClose: () => void;
   dict: Record<string, Record<string, string>> | null;
 }) {
-  const userName = typeof session.userId === 'object' ? session.userId.name : 'Unknown';
-  const userEmail = typeof session.userId === 'object' ? session.userId.email : '';
+  const userName = getUserName(session);
+  const userEmail = getUserEmail(session);
   
   return (
     <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -243,10 +227,8 @@ function CashDrawerDetailModal({
               <div>
                 <label className="text-sm font-medium text-gray-500">{dict?.admin?.status || 'Status'}</label>
                 <div>
-                  <span className={`px-2 py-1 text-xs font-semibold border ${
-                    session.status === 'open' ? 'bg-green-100 text-green-800 border-green-300' : 'bg-gray-100 text-gray-800 border-gray-300'
-                  }`}>
-                    {session.status === 'open' ? (dict?.admin?.open || 'Open') : (dict?.admin?.closed || 'Closed')}
+                  <span className={`px-2 py-1 text-xs font-semibold border ${getStatusBadgeClasses(session.status)}`}>
+                    {getStatusLabel(session.status, dict)}
                   </span>
                 </div>
               </div>
@@ -254,12 +236,12 @@ function CashDrawerDetailModal({
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium text-gray-500">{dict?.admin?.openingTime || 'Opening Time'}</label>
-                <div className="text-lg">{new Date(session.openingTime).toLocaleString()}</div>
+                <div className="text-lg">{formatSessionTime(session.openingTime)}</div>
               </div>
               {session.closingTime && (
                 <div>
                   <label className="text-sm font-medium text-gray-500">{dict?.admin?.closingTime || 'Closing Time'}</label>
-                  <div className="text-lg">{new Date(session.closingTime).toLocaleString()}</div>
+                  <div className="text-lg">{formatSessionTime(session.closingTime)}</div>
                 </div>
               )}
             </div>
@@ -272,6 +254,18 @@ function CashDrawerDetailModal({
                 <div className="flex justify-between">
                   <span className="text-gray-600">Expected Amount:</span>
                   <span className="font-medium"><Currency amount={session.expectedAmount} /></span>
+                </div>
+              )}
+              {session.totalDiscounts !== undefined && session.totalDiscounts > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Total Discounts:</span>
+                  <span className="font-semibold text-green-600">-<Currency amount={session.totalDiscounts} /></span>
+                </div>
+              )}
+              {session.totalVAT !== undefined && session.totalVAT > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Total VAT:</span>
+                  <span className="font-medium"><Currency amount={session.totalVAT} /></span>
                 </div>
               )}
               {session.closingAmount !== undefined && (
@@ -295,9 +289,9 @@ function CashDrawerDetailModal({
               {session.closingAmount !== undefined && session.expectedAmount !== undefined && (
                 <div className="flex justify-between text-lg font-bold border-t pt-2">
                   <span>Difference:</span>
-                  <span className={session.closingAmount >= session.expectedAmount ? 'text-green-600' : 'text-red-600'}>
-                    {session.closingAmount >= session.expectedAmount ? '+' : ''}
-                    <Currency amount={Math.abs(session.closingAmount - session.expectedAmount)} />
+                  <span className={getDifferenceColor(calculateDifference(session))}>
+                    {calculateDifference(session)! >= 0 ? '+' : ''}
+                    <Currency amount={Math.abs(calculateDifference(session)!)} />
                   </span>
                 </div>
               )}

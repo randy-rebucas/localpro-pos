@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { hardwareStatusChecker, DeviceStatus, HardwareStatus } from '@/lib/hardware/status-checker';
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { getDefaultTenantSettings } from '@/lib/currency';
 import { showToast } from '@/lib/toast';
 
 interface HardwareStatusProps {
@@ -28,6 +30,8 @@ export default function HardwareStatusChecker({
   const [status, setStatus] = useState<HardwareStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [testing, setTesting] = useState<string | null>(null);
+  const { settings } = useTenantSettings();
+  const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#3b82f6';
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -138,7 +142,7 @@ export default function HardwareStatusChecker({
     return (
       <div className="flex items-center gap-2">
         {loading ? (
-          <div className="animate-spin h-4 w-4 border-b-2 border-blue-600"></div>
+          <div className="animate-spin h-4 w-4 border-b-2" style={{ borderBottomColor: primaryColor }}></div>
         ) : status ? (
           <>
             <div className={`px-2 py-1 border border-gray-300 text-xs font-medium ${getOverallStatusColor()}`}>
@@ -164,7 +168,7 @@ export default function HardwareStatusChecker({
     return (
       <div className={`bg-white border border-gray-300 ${sidebar ? 'p-4' : 'p-6'}`}>
         <div className={`flex items-center justify-center ${sidebar ? 'py-4' : 'py-8'}`}>
-          <div className={`animate-spin border-b-2 border-blue-600 ${sidebar ? 'h-6 w-6' : 'h-8 w-8'}`}></div>
+          <div className={`animate-spin border-b-2 ${sidebar ? 'h-6 w-6' : 'h-8 w-8'}`} style={{ borderBottomColor: primaryColor }}></div>
           {!sidebar && <span className="ml-3 text-gray-600">{dict?.components?.hardwareStatus?.checkingHardwareStatus || 'Checking hardware status...'}</span>}
         </div>
       </div>
@@ -307,7 +311,13 @@ export default function HardwareStatusChecker({
                     <button
                       onClick={() => testDevice(device.type)}
                       disabled={testing === device.type || device.status === 'not-configured'}
-                      className="px-3 py-1.5 text-sm bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed border border-blue-700"
+                      className="px-3 py-1.5 text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed border transition-colors"
+                      style={{
+                        backgroundColor: primaryColor,
+                        borderColor: primaryColor
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = `${primaryColor}dd`; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = primaryColor; }}
                     >
                       {testing === device.type ? (dict?.components?.hardwareStatus?.testing || 'Testing...') : (dict?.components?.hardwareStatus?.test || 'Test')}
                     </button>

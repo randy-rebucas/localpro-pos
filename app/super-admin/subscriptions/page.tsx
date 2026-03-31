@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { SuperAdminShell } from '@/components/super-admin/Shell';
+import { showToast } from '@/lib/toast';
 
 interface Plan {
   _id: string;
@@ -39,6 +40,7 @@ export default function SubscriptionsPage() {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState('');
   const [search, setSearch] = useState('');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -59,6 +61,7 @@ export default function SubscriptionsPage() {
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const params = new URLSearchParams();
       if (statusFilter) params.set('status', statusFilter);
@@ -69,9 +72,18 @@ export default function SubscriptionsPage() {
       ]);
       const [subsData, plansData] = await Promise.all([subsRes.json(), plansRes.json()]);
       if (subsData.success) setSubscriptions(subsData.data);
+      else {
+        const errorMsg = subsData.error || 'Failed to load subscriptions';
+        setError(errorMsg);
+        showToast.error(errorMsg);
+        setSubscriptions([]);
+      }
       if (plansData.success) setPlans(plansData.data);
-    } catch {
-      // silent
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to load data';
+      setError(errorMsg);
+      showToast.error(errorMsg);
+      setSubscriptions([]);
     } finally {
       setLoading(false);
     }
@@ -168,6 +180,16 @@ export default function SubscriptionsPage() {
             <div className="p-12 text-center">
               <div className="inline-block animate-spin h-6 w-6 border-2 border-blue-600 border-t-transparent rounded-full" />
               <p className="mt-3 text-gray-500 text-sm">Loading subscriptions...</p>
+            </div>
+          ) : error ? (
+            <div className="p-12 text-center">
+              <p className="text-red-600 text-sm font-medium">{error}</p>
+              <button
+                onClick={fetchAll}
+                className="mt-4 px-4 py-2 bg-blue-600 text-white text-sm hover:bg-blue-700"
+              >
+                Retry
+              </button>
             </div>
           ) : subscriptions.length === 0 ? (
             <div className="p-12 text-center text-gray-500 text-sm">No subscriptions found.</div>

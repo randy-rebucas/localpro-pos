@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { SuperAdminShell } from '@/components/super-admin/Shell';
+import { showToast } from '@/lib/toast';
 
 interface AppUser {
   _id: string;
@@ -35,6 +36,7 @@ export default function UsersPage() {
   const [users, setUsers] = useState<AppUser[]>([]);
   const [pagination, setPagination] = useState<Pagination>({ page: 1, limit: 50, total: 0, pages: 0 });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Filters
@@ -58,6 +60,7 @@ export default function UsersPage() {
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const params = new URLSearchParams();
       if (search) params.set('search', search);
@@ -71,9 +74,17 @@ export default function UsersPage() {
       if (data.success) {
         setUsers(data.data);
         setPagination(data.pagination);
+      } else {
+        const errorMsg = data.error || 'Failed to load users';
+        setError(errorMsg);
+        showToast.error(errorMsg);
+        setUsers([]);
       }
-    } catch {
-      // silent
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to load users';
+      setError(errorMsg);
+      showToast.error(errorMsg);
+      setUsers([]);
     } finally {
       setLoading(false);
     }
@@ -178,6 +189,16 @@ export default function UsersPage() {
             <div className="p-12 text-center">
               <div className="inline-block animate-spin h-6 w-6 border-2 border-blue-600 border-t-transparent rounded-full" />
               <p className="mt-3 text-gray-500 text-sm">Loading users...</p>
+            </div>
+          ) : error ? (
+            <div className="p-12 text-center">
+              <p className="text-red-600 text-sm font-medium">{error}</p>
+              <button
+                onClick={fetchUsers}
+                className="mt-4 px-4 py-2 bg-blue-600 text-white text-sm hover:bg-blue-700"
+              >
+                Retry
+              </button>
             </div>
           ) : users.length === 0 ? (
             <div className="p-12 text-center text-gray-500 text-sm">No users found.</div>

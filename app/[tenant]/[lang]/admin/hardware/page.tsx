@@ -7,18 +7,18 @@ import HardwareSettings from '@/components/HardwareSettings';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
-import { ITenantSettings } from '@/models/Tenant';
 import { hardwareService } from '@/lib/hardware';
+import { useHardwareSettings } from '@/hooks/useHardwareSettings';
+import { getSaveSuccessMessage, getSaveErrorMessage } from '@/lib/hardware-helpers';
 
 export default function HardwareAdminPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [settings, setSettings] = useState<ITenantSettings | null>(null);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const { settings, loading, saving, message, setMessage, fetchSettings, updateHardwareConfig, saveSettings } =
+    useHardwareSettings(tenant);
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -33,64 +33,15 @@ export default function HardwareAdminPage() {
     }
   }, [settings?.hardwareConfig]);
 
-  const fetchSettings = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch(`/api/tenants/${tenant}/settings`);
-      const data = await res.json();
-      if (data.success) {
-        const defaultSettings = {
-          hardwareConfig: {},
-          ...data.data,
-        };
-        setSettings(defaultSettings);
-      } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to load settings' });
-      }
-    } catch (error) {
-      console.error('Error fetching settings:', error);
-      setMessage({ type: 'error', text: 'Failed to load settings. Please check your connection.' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleSave = async () => {
-    if (!settings) return;
+    if (!settings || !dict) return;
 
-    try {
-      setSaving(true);
-      setMessage(null);
-      const res = await fetch(`/api/tenants/${tenant}/settings`, {
-        method: 'PUT',
-        headers: { 
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({ settings }),
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        setMessage({ type: 'success', text: dict?.admin?.hardwareSettingsSavedSuccess || 'Hardware settings saved successfully!' });
-        setSettings(data.data);
-        // Sync to localStorage so the POS page picks up the new config immediately
-        if (data.data?.hardwareConfig !== undefined) {
-          localStorage.setItem(`hardware_config_${tenant}`, JSON.stringify(data.data.hardwareConfig));
-        }
-        setTimeout(() => setMessage(null), 3000);
-      } else {
-        if (res.status === 401 || res.status === 403) {
-          setMessage({ type: 'error', text: dict?.settings?.unauthorized || 'Unauthorized. Please login with admin account.' });
-        } else {
-          setMessage({ type: 'error', text: data.error || dict?.admin?.failedToSaveHardwareSettings || 'Failed to save hardware settings' });
-        }
-      }
-    } catch (error) {
-      console.error('Error saving hardware settings:', error);
-      setMessage({ type: 'error', text: dict?.admin?.failedToSaveHardwareSettingsConnection || 'Failed to save hardware settings. Please check your connection.' });
-    } finally {
-      setSaving(false);
+    const result = await saveSettings(settings);
+    if (result.success) {
+      setMessage({ type: 'success', text: getSaveSuccessMessage(dict) });
+      setTimeout(() => setMessage(null), 3000);
+    } else {
+      setMessage({ type: 'error', text: result.error || getSaveErrorMessage(dict) });
     }
   };
 
@@ -116,7 +67,7 @@ export default function HardwareAdminPage() {
               {message?.text || 'Unable to load tenant settings. Please check your connection and try again.'}
             </p>
             <button
-              onClick={fetchSettings}
+              onClick={() => fetchSettings()}
               className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 font-medium transition-colors border border-red-700"
             >
               Retry
@@ -168,7 +119,7 @@ export default function HardwareAdminPage() {
                 hideSaveButton={true}
                 config={settings.hardwareConfig}
                 onChange={(hardwareConfig) => {
-                  setSettings({ ...settings, hardwareConfig });
+                  updateHardwareConfig(hardwareConfig);
                 }}
               />
               <div className="flex justify-end pt-6 mt-8 border-t border-gray-200">

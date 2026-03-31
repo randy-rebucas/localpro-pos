@@ -7,33 +7,12 @@ import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getDefaultTenantSettings } from '@/lib/currency';
-
-interface PreviewData {
-  businessType: string;
-  preview: { categories: number; products: number; customers: number; discounts: number };
-  existing: { categories: number; products: number; customers: number; discounts: number };
-  sample: {
-    categories: string[];
-    products: { name: string; price: number; type: string }[];
-    discounts: { code: string; name: string; value: number; type: string }[];
-  };
-}
-
-const BIZ_TYPE_LABELS: Record<string, string> = {
-  retail:     'Retail Store',
-  restaurant: 'Restaurant / Food Service',
-  laundry:    'Laundry Service',
-  service:    'Service Business (Salon, Spa, etc.)',
-  general:    'General Business',
-};
-
-const BIZ_TYPE_COLORS: Record<string, string> = {
-  retail:     'blue',
-  restaurant: 'orange',
-  laundry:    'cyan',
-  service:    'purple',
-  general:    'green',
-};
+import { useSampleDataManager } from '@/hooks/useSampleDataManager';
+import {
+  getBusinessTypeLabel,
+  getBusinessTypeColor,
+  getColorStyles,
+} from '@/lib/sample-data-helpers';
 
 export default function SampleDataPage() {
   const params = useParams();
@@ -42,11 +21,9 @@ export default function SampleDataPage() {
 
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [pageLoading, setPageLoading] = useState(true);
-  const [preview, setPreview] = useState<PreviewData | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(true);
-  const [installing, setInstalling] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [installResults, setInstallResults] = useState<PreviewData['preview'] & { skipped?: PreviewData['preview'] } | null>(null);
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set(['categories', 'products', 'customers', 'discounts']));
+  const [productSearch, setProductSearch] = useState('');
+  const { preview, previewLoading, installing, message, installResults, loadPreview, installSampleData } = useSampleDataManager(tenant);
 
   const { settings } = useTenantSettings();
   const tenantSettings = settings || getDefaultTenantSettings();
@@ -60,58 +37,11 @@ export default function SampleDataPage() {
   }, [lang]);
 
   useEffect(() => {
-    async function loadPreview() {
-      try {
-        setPreviewLoading(true);
-        const res = await fetch(`/api/tenants/${tenant}/seed-sample-data`, { credentials: 'include' });
-        const data = await res.json();
-        if (data.success) setPreview(data.data);
-      } catch {
-        // silently fail — no preview
-      } finally {
-        setPreviewLoading(false);
-      }
-    }
     loadPreview();
-  }, [tenant]);
+  }, [tenant, loadPreview]);
 
   const handleInstall = async () => {
-    if (installing) return;
-    setInstalling(true);
-    setMessage(null);
-    setInstallResults(null);
-    try {
-      const res = await fetch(`/api/tenants/${tenant}/seed-sample-data`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ skipExisting: true }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        const r = data.data.results;
-        setInstallResults({
-          categories: r.categories.created,
-          products:   r.products.created,
-          customers:  r.customers.created,
-          discounts:  r.discounts.created,
-        });
-        setMessage({
-          type: 'success',
-          text: `Sample data installed successfully! ${r.categories.created + r.products.created + r.customers.created + r.discounts.created} records added.`,
-        });
-        // Refresh preview counts
-        const res2 = await fetch(`/api/tenants/${tenant}/seed-sample-data`, { credentials: 'include' });
-        const data2 = await res2.json();
-        if (data2.success) setPreview(data2.data);
-      } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to install sample data.' });
-      }
-    } catch {
-      setMessage({ type: 'error', text: 'An unexpected error occurred.' });
-    } finally {
-      setInstalling(false);
-    }
+    await installSampleData();
   };
 
   if (pageLoading || !dict) {
@@ -126,17 +56,9 @@ export default function SampleDataPage() {
   }
 
   const bizType = preview?.businessType ?? 'general';
-  const bizLabel = BIZ_TYPE_LABELS[bizType] ?? bizType;
-  const colorKey = BIZ_TYPE_COLORS[bizType] ?? 'blue';
-
-  const colorMap: Record<string, { bg: string; border: string; text: string; badge: string }> = {
-    blue:   { bg: 'bg-blue-50',   border: 'border-blue-200',  text: 'text-blue-700',   badge: 'bg-blue-100 text-blue-800'   },
-    orange: { bg: 'bg-orange-50', border: 'border-orange-200',text: 'text-orange-700', badge: 'bg-orange-100 text-orange-800'},
-    cyan:   { bg: 'bg-cyan-50',   border: 'border-cyan-200',  text: 'text-cyan-700',   badge: 'bg-cyan-100 text-cyan-800'   },
-    purple: { bg: 'bg-purple-50', border: 'border-purple-200',text: 'text-purple-700', badge: 'bg-purple-100 text-purple-800'},
-    green:  { bg: 'bg-green-50',  border: 'border-green-200', text: 'text-green-700',  badge: 'bg-green-100 text-green-800' },
-  };
-  const colors = colorMap[colorKey];
+  const bizLabel = getBusinessTypeLabel(bizType);
+  const colorKey = getBusinessTypeColor(bizType);
+  const colors = getColorStyles(colorKey);
 
   const hasData = preview && (
     preview.existing.categories > 0 ||
@@ -247,9 +169,24 @@ export default function SampleDataPage() {
                   const toAdd    = preview.preview[row.key];
                   const existing = preview.existing[row.key];
                   const willAdd  = Math.max(0, toAdd - existing);
+                  const isSelected = selectedItems.has(row.key);
                   return (
                     <div key={row.key} className="px-5 py-4 flex items-start gap-4">
-                      <span className="text-xl mt-0.5">{row.icon}</span>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => {
+                          const newSelected = new Set(selectedItems);
+                          if (e.target.checked) {
+                            newSelected.add(row.key);
+                          } else {
+                            newSelected.delete(row.key);
+                          }
+                          setSelectedItems(newSelected);
+                        }}
+                        className="w-4 h-4 mt-1 cursor-pointer accent-blue-600"
+                      />
+                      <span className="text-xl">{row.icon}</span>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-medium text-gray-900">{row.label}</span>
@@ -279,7 +216,14 @@ export default function SampleDataPage() {
           {preview && preview.sample.products.length > 0 && (
             <div className="bg-white border border-gray-300">
               <div className="px-5 py-4 border-b border-gray-200">
-                <h2 className="font-semibold text-gray-900">Sample Products Preview</h2>
+                <h2 className="font-semibold text-gray-900 mb-3">Sample Products Preview</h2>
+                <input
+                  type="text"
+                  placeholder="Search products..."
+                  value={productSearch}
+                  onChange={(e) => setProductSearch(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                />
               </div>
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-100">
@@ -291,7 +235,9 @@ export default function SampleDataPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {preview.sample.products.map((p, i) => (
+                    {preview.sample.products
+                      .filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase()))
+                      .map((p, i) => (
                       <tr key={i} className="hover:bg-gray-50">
                         <td className="px-5 py-3 text-sm text-gray-900">{p.name}</td>
                         <td className="px-5 py-3">
@@ -310,6 +256,11 @@ export default function SampleDataPage() {
                     ))}
                   </tbody>
                 </table>
+                {preview.sample.products.filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase())).length === 0 && (
+                  <div className="px-5 py-6 text-center text-gray-500">
+                    No products match your search
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -329,24 +280,58 @@ export default function SampleDataPage() {
             </div>
           )}
 
+          {/* Selected Items Summary */}
+          {selectedItems.size > 0 && (
+            <div className="bg-blue-50 border border-blue-200 p-4">
+              <p className="text-sm font-medium text-blue-900 mb-2">Selected for installation:</p>
+              <div className="flex flex-wrap gap-2">
+                {Array.from(selectedItems).map(item => (
+                  <span
+                    key={item}
+                    className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 text-sm font-medium rounded-full"
+                  >
+                    {item.charAt(0).toUpperCase() + item.slice(1)}
+                    <button
+                      onClick={() => {
+                        const newSelected = new Set(selectedItems);
+                        newSelected.delete(item);
+                        setSelectedItems(newSelected);
+                      }}
+                      className="ml-1 text-blue-600 hover:text-blue-800"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Action button */}
           <div className="bg-white border border-gray-300 p-5 sm:p-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
                 <h3 className="font-semibold text-gray-900">Ready to install</h3>
                 <p className="text-sm text-gray-500 mt-0.5">
-                  {preview
-                    ? `${preview.preview.products} products, ${preview.preview.categories} categories, ${preview.preview.customers} customers, and ${preview.preview.discounts} discount codes will be added to your store.`
-                    : 'Loading…'
+                  {preview && selectedItems.size > 0
+                    ? (() => {
+                        const items: string[] = [];
+                        if (selectedItems.has('categories')) items.push(`${preview.preview.categories} categories`);
+                        if (selectedItems.has('products')) items.push(`${preview.preview.products} products`);
+                        if (selectedItems.has('customers')) items.push(`${preview.preview.customers} customers`);
+                        if (selectedItems.has('discounts')) items.push(`${preview.preview.discounts} discounts`);
+                        return `Will add: ${items.join(', ')}`;
+                      })()
+                    : 'Select at least one item type to install'
                   }
                 </p>
               </div>
               <button
                 onClick={handleInstall}
-                disabled={installing || previewLoading}
-                style={{ backgroundColor: installing ? undefined : primaryColor }}
+                disabled={installing || previewLoading || selectedItems.size === 0}
+                style={{ backgroundColor: (installing || previewLoading || selectedItems.size === 0) ? undefined : primaryColor }}
                 className={`inline-flex items-center justify-center gap-2 px-6 py-3 text-white font-semibold transition-all min-w-[180px] ${
-                  installing || previewLoading
+                  installing || previewLoading || selectedItems.size === 0
                     ? 'bg-gray-400 cursor-not-allowed'
                     : 'hover:opacity-90 active:scale-95 cursor-pointer'
                 }`}

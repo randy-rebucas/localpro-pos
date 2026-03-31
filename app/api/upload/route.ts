@@ -1,22 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth';
+import { requireAuth, getCurrentUser } from '@/lib/auth';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import connectDB from '@/lib/mongodb';
 import { logger } from '@/lib/logger';
+import File from '@/models/File';
 import path from 'path';
 import fs from 'fs/promises';
 import crypto from 'crypto';
 
 const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads');
-const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const ALLOWED_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'application/pdf',
+  'text/csv',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+];
 
 export async function POST(request: NextRequest) {
   try {
     await requireAuth(request);
+    const user = await getCurrentUser(request);
     const tenantId = await getTenantIdFromRequest(request);
 
     if (!tenantId) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 403 });
+    }
+
+    if (!user || !user.userId) {
+      return NextResponse.json({ success: false, error: 'User not found' }, { status: 401 });
     }
 
     const formData = await request.formData();
@@ -64,12 +80,65 @@ export async function POST(request: NextRequest) {
     // Return public URL
     const url = `/uploads/${tenantId}/${filename}`;
 
+    // Connect to database and save file record
+    await connectDB();
+    const fileDoc = await File.create({
+      tenantId,
+      name: file.name,
+      filename,
+      size: file.size,
+      type: file.type,
+      url,
+      uploadedBy: user.userId,
+    });
+
     return NextResponse.json({
       success: true,
-      data: { url, filename, size: file.size, type: file.type },
+      data: {
+        id: fileDoc._id,
+        url,
+        filename,
+        size: file.size,
+        type: file.type,
+        uploadedAt: fileDoc.uploadedAt,
+      },
     });
   } catch (error: unknown) {
     logger.error('Error uploading file:', error);
     return NextResponse.json({ success: false, error: 'Failed to upload file' }, { status: 500 });
+  }
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    await requireAuth(request);
+    const tenantId = await getTenantIdFromRequest(request);
+
+    if (!tenantId) {
+      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 403 });
+    }
+
+    await connectDB();
+
+    const files = await File.find({ tenantId })
+      .select('_id name filename size type url uploadedAt uploadedBy')
+      .sort({ uploadedAt: -1 })
+      .limit(100)
+      .lean();
+
+    return NextResponse.json({
+      success: true,
+      data: files.map(file => ({
+        id: file._id,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        url: file.url,
+        uploadedAt: file.uploadedAt,
+      })),
+    });
+  } catch (error: unknown) {
+    logger.error('Error fetching files:', error);
+    return NextResponse.json({ success: false, error: 'Failed to fetch files' }, { status: 500 });
   }
 }

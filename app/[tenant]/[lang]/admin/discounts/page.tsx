@@ -10,25 +10,23 @@ import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { supportsFeature } from '@/lib/business-type-helpers';
 import { getBusinessTypeConfig } from '@/lib/business-types';
 import { getBusinessType } from '@/lib/business-type-helpers';
-
-interface Discount {
-  _id: string;
-  code: string;
-  name?: string;
-  description?: string;
-  type: 'percentage' | 'fixed';
-  value: number;
-  category?: 'general' | 'senior' | 'pwd' | 'employee' | 'promo';
-  requiresIdVerification?: boolean;
-  minPurchaseAmount?: number;
-  maxDiscountAmount?: number;
-  validFrom: string;
-  validUntil: string;
-  usageLimit?: number;
-  usageCount: number;
-  isActive: boolean;
-  createdAt: string;
-}
+import { useDiscountsList, type Discount } from '@/hooks/useDiscountsList';
+import { useDiscountsForm } from '@/hooks/useDiscountsForm';
+import {
+  getStatusBadgeClass,
+  getStatusLabel,
+  getTypeBadgeClass,
+  getDeleteConfirmMessage,
+  getDeleteSuccessMessage,
+  getDeleteErrorMessage,
+  getSaveSuccessMessage,
+  getSaveErrorMessage,
+  getToggleStatusMessage,
+  getToggleButtonLabel,
+  getToggleButtonClass,
+  formatDiscountValue,
+  formatDate,
+} from '@/lib/discounts-helpers';
 
 export default function DiscountsPage() {
   const params = useParams();
@@ -36,11 +34,19 @@ export default function DiscountsPage() {
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [discounts, setDiscounts] = useState<Discount[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showDiscountModal, setShowDiscountModal] = useState(false);
   const [editingDiscount, setEditingDiscount] = useState<Discount | null>(null);
+
+  const {
+    discounts,
+    loading,
+    message,
+    fetchDiscounts,
+    deleteDiscount,
+    toggleDiscountStatus,
+    clearMessage,
+  } = useDiscountsList();
+
   const { settings } = useTenantSettings();
   const discountsEnabled = supportsFeature(settings ?? undefined, 'discounts');
   const businessTypeConfig = settings ? getBusinessTypeConfig(getBusinessType(settings)) : null;
@@ -51,58 +57,22 @@ export default function DiscountsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang, tenant]);
 
-  const fetchDiscounts = async () => {
-    try {
-      const res = await fetch('/api/discounts', { credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
-        setDiscounts(data.data);
-        setMessage(null);
-      } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchDiscounts || 'Failed to fetch discounts' });
-      }
-    } catch (error) {
-      console.error('Error fetching discounts:', error);
-      setMessage({ type: 'error', text: dict?.common?.failedToFetchDiscounts || 'Failed to fetch discounts' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleDeleteDiscount = async (discountId: string) => {
     if (!dict) return;
-    if (!confirm(dict.admin?.deleteConfirm || 'Are you sure you want to delete this discount?')) return;
-    try {
-      const res = await fetch(`/api/discounts/${discountId}`, { method: 'DELETE', credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
-        setMessage({ type: 'success', text: dict.admin?.deleteSuccess || 'Discount deleted successfully' });
-        fetchDiscounts();
-      } else {
-        setMessage({ type: 'error', text: data.error || dict.admin?.deleteError || 'Failed to delete discount' });
-      }
-    } catch (error) {
-      setMessage({ type: 'error', text: dict.admin?.deleteError || 'Failed to delete discount' });
+    if (!confirm(getDeleteConfirmMessage(dict))) return;
+
+    const success = await deleteDiscount(discountId);
+    if (success) {
+      clearMessage();
+      await fetchDiscounts();
     }
   };
 
   const handleToggleDiscountStatus = async (discount: Discount) => {
-    try {
-      const res = await fetch(`/api/discounts/${discount._id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ isActive: !discount.isActive }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setMessage({ type: 'success', text: `${dict.admin?.discount || 'Discount'} ${!discount.isActive ? (dict.admin?.activated || 'activated') : (dict.admin?.deactivated || 'deactivated')} ${dict.admin?.successfully || 'successfully'}` });
-        fetchDiscounts();
-      } else {
-        setMessage({ type: 'error', text: data.error || dict.admin?.updateError || 'Failed to update discount' });
-      }
-    } catch (error) {
-      setMessage({ type: 'error', text: dict.admin?.updateError || 'Failed to update discount' });
+    const success = await toggleDiscountStatus(discount._id, !discount.isActive);
+    if (success) {
+      clearMessage();
+      await fetchDiscounts();
     }
   };
 
@@ -231,19 +201,15 @@ export default function DiscountsPage() {
                         )}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <div>{new Date(discount.validFrom).toLocaleDateString()}</div>
-                        <div className="text-xs">{dict.admin?.to || 'to'} {new Date(discount.validUntil).toLocaleDateString()}</div>
+                        <div>{formatDate(discount.validFrom)}</div>
+                        <div className="text-xs">{dict.admin?.to || 'to'} {formatDate(discount.validUntil)}</div>
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
                         {discount.usageCount} / {discount.usageLimit || '∞'}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-semibold border ${
-                          isValid ? 'bg-green-100 text-green-800 border-green-300' : 
-                          !discount.isActive ? 'bg-red-100 text-red-800 border-red-300' : 
-                          'bg-yellow-100 text-yellow-800 border-yellow-300'
-                        }`}>
-                          {isValid ? (dict.admin?.valid || 'Valid') : !discount.isActive ? (dict.admin?.inactive || 'Inactive') : (dict.admin?.expired || 'Expired')}
+                        <span className={`px-2 py-1 text-xs font-semibold border ${getStatusBadgeClass(discount)}`}>
+                          {getStatusLabel(discount, dict)}
                         </span>
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
@@ -259,9 +225,9 @@ export default function DiscountsPage() {
                           </button>
                           <button
                             onClick={() => handleToggleDiscountStatus(discount)}
-                            className={discount.isActive ? 'text-orange-600 hover:text-orange-900' : 'text-green-600 hover:text-green-900'}
+                            className={getToggleButtonClass(discount.isActive)}
                           >
-                            {discount.isActive ? (dict.admin?.deactivate || 'Deactivate') : (dict.admin?.activate || 'Activate')}
+                            {getToggleButtonLabel(discount.isActive, dict)}
                           </button>
                           <button
                             onClick={() => handleDeleteDiscount(discount._id)}
@@ -289,12 +255,13 @@ export default function DiscountsPage() {
               setShowDiscountModal(false);
               setEditingDiscount(null);
             }}
-            onSave={() => {
-              fetchDiscounts();
+            onSave={async () => {
+              await fetchDiscounts();
               setShowDiscountModal(false);
               setEditingDiscount(null);
             }}
             dict={dict}
+            settings={settings}
           />
         )}
       </div>
@@ -307,72 +274,39 @@ function DiscountModal({
   onClose,
   onSave,
   dict,
+  settings,
 }: {
   discount: Discount | null;
   onClose: () => void;
-  onSave: () => void;
+  onSave: () => Promise<void>;
   dict: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  settings: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }) {
-  const [formData, setFormData] = useState({
-    code: discount?.code || '',
-    name: discount?.name || '',
-    description: discount?.description || '',
-    type: discount?.type || 'percentage',
-    value: discount?.value || 0,
-    category: discount?.category || 'general',
-    requiresIdVerification: discount?.requiresIdVerification || false,
-    minPurchaseAmount: discount?.minPurchaseAmount || 0,
-    maxDiscountAmount: discount?.maxDiscountAmount || 0,
-    validFrom: discount ? new Date(discount.validFrom).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-    validUntil: discount ? new Date(discount.validUntil).toISOString().split('T')[0] : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    usageLimit: discount?.usageLimit || 0,
-    isActive: discount?.isActive !== undefined ? discount.isActive : true,
-  });
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const { settings } = useTenantSettings();
+  const { formData, setFormData, error, submitting, handleSubmit, initializeForm, resetForm } = useDiscountsForm();
+  const { createDiscount, updateDiscount } = useDiscountsList();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setSaving(true);
-    try {
-      const url = discount ? `/api/discounts/${discount._id}` : '/api/discounts';
-      const method = discount ? 'PUT' : 'POST';
-      const body = {
-        code: formData.code.toUpperCase(),
-        name: formData.name || undefined,
-        description: formData.description || undefined,
-        type: formData.type,
-        value: formData.value,
-        category: formData.category,
-        requiresIdVerification: formData.requiresIdVerification,
-        minPurchaseAmount: formData.minPurchaseAmount > 0 ? formData.minPurchaseAmount : undefined,
-        maxDiscountAmount: formData.maxDiscountAmount > 0 ? formData.maxDiscountAmount : undefined,
-        validFrom: new Date(formData.validFrom),
-        validUntil: new Date(formData.validUntil),
-        usageLimit: formData.usageLimit > 0 ? formData.usageLimit : undefined,
-        isActive: formData.isActive,
-      };
-
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(body),
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        onSave();
-      } else {
-        setError(data.error || dict.admin?.saveError || 'Failed to save discount');
-      }
-    } catch (error) {
-      setError(dict.admin?.saveError || 'Failed to save discount');
-    } finally {
-      setSaving(false);
+  useEffect(() => {
+    if (discount) {
+      initializeForm(discount);
+    } else {
+      resetForm();
     }
+  }, [discount, initializeForm, resetForm]);
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await handleSubmit(async (payload) => {
+      const isEdit = !!discount;
+      const success = isEdit ? await updateDiscount(discount._id, payload) : await createDiscount(payload);
+      if (success) {
+        const msg = isEdit
+          ? getSaveSuccessMessage(true, dict)
+          : getSaveSuccessMessage(false, dict);
+        // Show success message via toast or similar
+        await onSave();
+      }
+      return success;
+    });
   };
 
   return (
@@ -382,7 +316,7 @@ function DiscountModal({
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
             {discount ? (dict.admin?.editDiscount || 'Edit Discount') : (dict.admin?.addDiscount || 'Add Discount')}
           </h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={onSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -392,7 +326,7 @@ function DiscountModal({
                   type="text"
                   required
                   value={formData.code}
-                  onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
+                  onChange={(e) => setFormData({ code: e.target.value.toUpperCase() })}
                   readOnly={!!discount}
                   maxLength={50}
                   className={`w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 ${discount ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`}
@@ -405,7 +339,7 @@ function DiscountModal({
                 </label>
                 <select
                   value={formData.type}
-                  onChange={(e) => setFormData({ ...formData, type: e.target.value as any })} // eslint-disable-line @typescript-eslint/no-explicit-any
+                  onChange={(e) => setFormData({ type: e.target.value as any })} // eslint-disable-line @typescript-eslint/no-explicit-any
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                 >
                   <option value="percentage">{dict.admin?.percentage || 'Percentage'}</option>
@@ -420,7 +354,7 @@ function DiscountModal({
               <input
                 type="text"
                 value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                onChange={(e) => setFormData({ name: e.target.value })}
                 maxLength={100}
                 className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               />
@@ -432,7 +366,7 @@ function DiscountModal({
                 </label>
                 <select
                   value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value as 'general' | 'senior' | 'pwd' | 'employee' | 'promo' })}
+                  onChange={(e) => setFormData({ category: e.target.value as 'general' | 'senior' | 'pwd' | 'employee' | 'promo' })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                 >
                   <option value="general">{dict.admin?.categoryGeneral || 'General'}</option>
@@ -447,7 +381,7 @@ function DiscountModal({
                   <input
                     type="checkbox"
                     checked={formData.requiresIdVerification}
-                    onChange={(e) => setFormData({ ...formData, requiresIdVerification: e.target.checked })}
+                    onChange={(e) => setFormData({ requiresIdVerification: e.target.checked })}
                     className="w-4 h-4 rounded border-gray-300"
                   />
                   <span className="text-sm text-gray-700">{dict.admin?.requiresId || 'Requires ID verification'}</span>
@@ -460,7 +394,7 @@ function DiscountModal({
               </label>
               <textarea
                 value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                onChange={(e) => setFormData({ description: e.target.value })}
                 rows={2}
                 className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               />
@@ -476,7 +410,7 @@ function DiscountModal({
                   min="0"
                   required
                   value={formData.value}
-                  onChange={(e) => setFormData({ ...formData, value: parseFloat(e.target.value) || 0 })}
+                  onChange={(e) => setFormData({ value: parseFloat(e.target.value) || 0 })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                 />
               </div>
@@ -490,7 +424,7 @@ function DiscountModal({
                     step="0.01"
                     min="0"
                     value={formData.maxDiscountAmount}
-                    onChange={(e) => setFormData({ ...formData, maxDiscountAmount: parseFloat(e.target.value) || 0 })}
+                    onChange={(e) => setFormData({ maxDiscountAmount: parseFloat(e.target.value) || 0 })}
                     className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                   />
                 </div>
@@ -506,7 +440,7 @@ function DiscountModal({
                   step="0.01"
                   min="0"
                   value={formData.minPurchaseAmount}
-                  onChange={(e) => setFormData({ ...formData, minPurchaseAmount: parseFloat(e.target.value) || 0 })}
+                  onChange={(e) => setFormData({ minPurchaseAmount: parseFloat(e.target.value) || 0 })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                 />
               </div>
@@ -518,7 +452,7 @@ function DiscountModal({
                   type="number"
                   min="0"
                   value={formData.usageLimit}
-                  onChange={(e) => setFormData({ ...formData, usageLimit: parseInt(e.target.value) || 0 })}
+                  onChange={(e) => setFormData({ usageLimit: parseInt(e.target.value) || 0 })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                   placeholder={dict.admin?.unlimited || 'Unlimited if 0'}
                 />
@@ -533,7 +467,7 @@ function DiscountModal({
                   type="date"
                   required
                   value={formData.validFrom}
-                  onChange={(e) => setFormData({ ...formData, validFrom: e.target.value })}
+                  onChange={(e) => setFormData({ validFrom: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                 />
               </div>
@@ -545,7 +479,7 @@ function DiscountModal({
                   type="date"
                   required
                   value={formData.validUntil}
-                  onChange={(e) => setFormData({ ...formData, validUntil: e.target.value })}
+                  onChange={(e) => setFormData({ validUntil: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                 />
               </div>
@@ -555,7 +489,7 @@ function DiscountModal({
                 <input
                   type="checkbox"
                   checked={formData.isActive}
-                  onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+                  onChange={(e) => setFormData({ isActive: e.target.checked })}
                   className="mr-2"
                 />
                 <span className="text-sm font-medium text-gray-700">
@@ -578,10 +512,10 @@ function DiscountModal({
               </button>
               <button
                 type="submit"
-                disabled={saving}
+                disabled={submitting}
                 className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
               >
-                {saving ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
+                {submitting ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
               </button>
             </div>
           </form>

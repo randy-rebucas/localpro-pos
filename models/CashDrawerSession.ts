@@ -12,6 +12,8 @@ export interface ICashDrawerSession extends Document {
   closingTime?: Date;
   status: 'open' | 'closed';
   notes?: string;
+  totalVAT?: number;
+  totalDiscounts?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -68,6 +70,16 @@ const CashDrawerSessionSchema: Schema = new Schema(
     notes: {
       type: String,
       trim: true,
+    },
+    totalVAT: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    totalDiscounts: {
+      type: Number,
+      min: 0,
+      default: 0,
     },
   },
   {

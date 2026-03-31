@@ -7,7 +7,12 @@ import OfflineIndicator from '@/components/OfflineIndicator';
 import { useParams, useRouter } from 'next/navigation';
 import { getDictionaryClient } from './dictionaries-client';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+import { useCart } from '@/hooks/useCart';
+import { useDiscount } from '@/hooks/useDiscount';
+import { usePayment } from '@/hooks/usePayment';
+import { useRefund } from '@/hooks/useRefund';
 import { getOfflineStorage } from '@/lib/offline-storage';
+import { TranslationDict } from '@/types/dictionary';
 import dynamic from 'next/dynamic';
 
 const BarcodeScanner = dynamic(() => import('@/components/BarcodeScanner'), {
@@ -56,49 +61,49 @@ export default function Dashboard() {
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const [products, setProducts] = useState<Product[]>([]);
-  const [cart, setCart] = useState<CartItem[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
-  const [processing, setProcessing] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'digital'>('cash');
-  const [cashReceived, setCashReceived] = useState('');
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const [dict, setDict] = useState<TranslationDict | null>(null);
   const { isOnline } = useNetworkStatus(tenant);
   const { settings } = useTenantSettings();
-  const [showQRScanner, setShowQRScanner] = useState(false);
-  const [promoCode, setPromoCode] = useState('');
-  const [appliedDiscount, setAppliedDiscount] = useState<{ code: string; amount: number; name?: string } | null>(null);
-  const [showRefundModal, setShowRefundModal] = useState(false);
-  const [refundTransactionId, setRefundTransactionId] = useState('');
-  const [refundTransaction, setRefundTransaction] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [refundItems, setRefundItems] = useState<Record<string, number>>({});
-  const [refundReason, setRefundReason] = useState('');
-  const [refundNotes, setRefundNotes] = useState('');
-  const [processingRefund, setProcessingRefund] = useState(false);
-  const [showSavedCartsModal, setShowSavedCartsModal] = useState(false);
+  const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#3b82f6';
+  
+  // Additional state for modals and UI
   const [savedCarts, setSavedCarts] = useState<any[]>([]); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [loadingSavedCarts, setLoadingSavedCarts] = useState(false);
   const [savingCart, setSavingCart] = useState(false);
-  const [showSaveCartModal, setShowSaveCartModal] = useState(false);
   const [cartName, setCartName] = useState('');
-  const [applyingDiscount, setApplyingDiscount] = useState(false);
   const [lookingUpRefund, setLookingUpRefund] = useState(false);
+  const [refundTransactionId, setRefundTransactionId] = useState('');
+  const [refundReason, setRefundReason] = useState('');
+  const [sessionId, setSessionId] = useState<string>('');
+  const [customerDisplayUrl, setCustomerDisplayUrl] = useState<string>('');
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [showQRScanner, setShowQRScanner] = useState(false);
+  const [showSavedCartsModal, setShowSavedCartsModal] = useState(false);
+  const [showSaveCartModal, setShowSaveCartModal] = useState(false);
+  
   const { confirm, Dialog: confirmDialog } = useConfirm();
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const sessionSyncAbortRef = useRef<AbortController | null>(null);
 
   // Max limits
   const MAX_QUANTITY = 9999;
   const MAX_PROMO_CODE_LENGTH = 50;
   const MAX_REFUND_NOTES_LENGTH = 500;
 
-  // Fetch with timeout
+  // Fetch with timeout helper (defined early for use in hooks)
   const fetchWithTimeout = useCallback(async (url: string, options?: RequestInit, timeoutMs = 15000) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const res = await fetch(url, { ...options, signal: controller.signal });
       clearTimeout(timer);
+      if (!res.ok) {
+        const error = await res.text().catch(() => `HTTP ${res.status}`);
+        throw new Error(`HTTP ${res.status}: ${error}`);
+      }
       return res;
     } catch (err) {
       clearTimeout(timer);
@@ -106,31 +111,67 @@ export default function Dashboard() {
     }
   }, []);
 
+  // Custom hooks for state management (after fetchWithTimeout is defined)
+  const { cart, setCart, addToCart, removeFromCart, updateQuantity, getSubtotal, getTaxAmount, getCartTotal, clearCart: hookClearCart } = useCart(
+    (message: string) => showToast.error(message)
+  );
+  const { promoCode, setPromoCode, appliedDiscount, setAppliedDiscount, applyingDiscount, applyDiscount, removeDiscount } = useDiscount(fetchWithTimeout);
+  const { paymentMethod, setPaymentMethod, cashReceived, setCashReceived, processing, processPayment } = usePayment();
+  const { currentRefundTransaction, setCurrentRefundTransaction, refundItems, setRefundItems, refundMethod, setRefundMethod, refundNotes, setRefundNotes, refunding, addRefundItem, removeRefundItem, updateRefundQty, processRefund, clearRefund } = useRefund();
+  
+  // Aliases for backward compatibility with old code
+  const setRefundTransaction = setCurrentRefundTransaction;
+  const refundTransaction = currentRefundTransaction;
+
+  // Wrapper for getTotal that includes discount logic (needed by old code)
+  const getTotal = useCallback(() => {
+    const subtotal = getSubtotal();
+    const discount = appliedDiscount?.amount || 0;
+    const afterDiscount = Math.max(0, subtotal - discount);
+    const taxAmount = getTaxAmount({ taxEnabled: settings?.taxEnabled, taxRate: settings?.taxRate });
+    return Math.round((afterDiscount + taxAmount) * 100) / 100;
+  }, [getSubtotal, getTaxAmount, appliedDiscount, settings]);
+
+  // Safe dictionary accessor to avoid null checks throughout the code
+  const dictValue = (path: string, fallback: string = ''): string => {
+    if (!dict) return fallback;
+    const keys = path.split('.');
+    let value: any = dict; // eslint-disable-line @typescript-eslint/no-explicit-any
+    for (const key of keys) {
+      value = value?.[key];
+      if (value === undefined) return fallback;
+    }
+    return value || fallback;
+  };
+
+  // Create AbortController for session/cart sync that runs on every change
+
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
   }, [lang]);
 
   // Esc key to close modals
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (showPaymentModal) {
-          setShowPaymentModal(false);
-          setCashReceived('');
-        } else if (showRefundModal) {
-          setShowRefundModal(false);
-        } else if (showSavedCartsModal) {
-          setShowSavedCartsModal(false);
-        } else if (showSaveCartModal) {
-          setShowSaveCartModal(false);
-        } else if (showQRScanner) {
-          setShowQRScanner(false);
-        }
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      if (showPaymentModal) {
+        setShowPaymentModal(false);
+        setCashReceived('');
+      } else if (showRefundModal) {
+        setShowRefundModal(false);
+      } else if (showSavedCartsModal) {
+        setShowSavedCartsModal(false);
+      } else if (showSaveCartModal) {
+        setShowSaveCartModal(false);
+      } else if (showQRScanner) {
+        setShowQRScanner(false);
       }
-    };
+    }
+  }, [showPaymentModal, showRefundModal, showSavedCartsModal, showSaveCartModal, showQRScanner]);
+
+  useEffect(() => {
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [showPaymentModal, showRefundModal, showSavedCartsModal, showSaveCartModal, showQRScanner]);
+  }, [handleKeyDown]);
 
   // Initialize hardware services
   useEffect(() => {
@@ -156,54 +197,110 @@ export default function Dashboard() {
     }
   }, [settings, tenant]);
 
+  // Initialize dual-screen terminal session
+  useEffect(() => {
+    const initSession = async () => {
+      const id = 'session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+      setSessionId(id);
+
+      // Initialize session on API
+      await fetch(`/api/pos/session/${id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenant,
+          action: 'init',
+          data: {
+            cart: [],
+            subtotal: 0,
+            discount: null,
+            taxAmount: 0,
+            taxRate: settings?.taxRate || 0,
+            taxLabel: settings?.taxLabel || 'Tax',
+            tip: 0,
+            total: 0,
+          },
+        }),
+      }).catch((err) => {
+        console.error('Failed to init session:', err);
+      });
+
+      const baseUrl = window.location.origin;
+      const displayUrl = `${baseUrl}/${tenant}/${lang}/customer-display?session=${id}`;
+      setCustomerDisplayUrl(displayUrl);
+    };
+
+    initSession();
+  }, [tenant, lang]);
+
+  // Sync cart to customer display
+  const syncToCustomerDisplay = useCallback(
+    async (cartItems?: CartItem[], discount?: any, tip?: number) => {
+      if (!sessionId) return;
+
+      // Cancel previous sync if still in progress
+      if (sessionSyncAbortRef.current) {
+        sessionSyncAbortRef.current.abort();
+      }
+
+      try {
+        sessionSyncAbortRef.current = new AbortController();
+        const items = cartItems || cart;
+        const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+        const discountAmount = discount?.amount || appliedDiscount?.amount || 0;
+        const taxableBase = Math.max(0, subtotal - discountAmount);
+        const taxAmount = settings?.taxEnabled && settings?.taxRate ? (taxableBase * (settings.taxRate / 100)) : 0;
+        const tipAmount = tip ?? 0;
+        const total = taxableBase + taxAmount + tipAmount;
+
+        const res = await fetch(`/api/pos/session/${sessionId}?tenant=${tenant}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: sessionSyncAbortRef.current.signal,
+          body: JSON.stringify({
+            tenant,
+            action: 'update-cart',
+            data: {
+              cart: items.map((item) => ({
+                productId: item.productId,
+                name: item.name,
+                price: item.price,
+                quantity: item.quantity,
+              })),
+              subtotal,
+              taxAmount: Math.round(taxAmount * 100) / 100,
+              taxRate: settings?.taxRate || 0,
+              taxLabel: settings?.taxLabel || 'Tax',
+              total: Math.round(total * 100) / 100,
+            },
+          }),
+        });
+        
+        if (!res.ok) {
+          console.error(`Failed to sync cart: HTTP ${res.status}`);
+        }
+      } catch (error: unknown) {
+        // Ignore abort errors - expected when cart changes rapidly
+        if (error instanceof Error && error.name === 'AbortError') {
+          return;
+        }
+        console.error('Sync error:', error);
+      }
+    },
+    [sessionId, cart, appliedDiscount, tenant, settings]
+  );
+
+  // Sync cart whenever it changes
+  useEffect(() => {
+    syncToCustomerDisplay();
+  }, [cart, syncToCustomerDisplay]);
+
   // Refocus search box whenever any modal closes
   useEffect(() => {
     if (!showPaymentModal && !showQRScanner && !showRefundModal && !showSavedCartsModal && !showSaveCartModal) {
       searchInputRef.current?.focus();
     }
   }, [showPaymentModal, showQRScanner, showRefundModal, showSavedCartsModal, showSaveCartModal]);
-
-  // Add to cart function
-  const addToCart = useCallback((product: Product) => {
-    if (!dict) return;
-    
-    // Check if product is out of stock and if sales are allowed when out of stock
-    const isOutOfStock = product.stock === 0;
-    const canSellOutOfStock = product.allowOutOfStockSales === true;
-    const trackInventory = product.trackInventory !== false; // Default to true if not set
-    
-    if (isOutOfStock && !canSellOutOfStock) {
-      showToast.error(dict.pos.outOfStock);
-      return;
-    }
-
-    setCart((prevCart) => {
-      const existingItem = prevCart.find((item) => item.productId === product._id);
-      if (existingItem) {
-        // If tracking inventory and not allowing out of stock sales, check stock
-        if (trackInventory && !canSellOutOfStock && existingItem.quantity >= product.stock) {
-          showToast.error(dict.pos.insufficientStock);
-          return prevCart;
-        }
-        return prevCart.map((item) =>
-          item.productId === product._id
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
-        );
-      } else {
-        return [
-          ...prevCart,
-          {
-            productId: product._id,
-            name: product.name,
-            price: product.price,
-            quantity: 1,
-            stock: product.stock,
-          },
-        ];
-      }
-    });
-  }, [dict]);
 
   // Handle barcode scanning
   const handleBarcodeScan = useCallback((barcode: string) => {
@@ -305,143 +402,7 @@ export default function Dashboard() {
     fetchProducts();
   }, [fetchProducts]);
 
-  const updateQuantity = (productId: string, quantity: number) => {
-    if (!dict) return;
-    if (quantity <= 0) {
-      removeFromCart(productId);
-      return;
-    }
-    if (quantity > MAX_QUANTITY) {
-      showToast.error(dict.pos?.maxQuantityReached || `Maximum quantity is ${MAX_QUANTITY}`);
-      return;
-    }
-    const item = cart.find((item) => item.productId === productId);
-    const product = products.find(p => p._id === productId);
-    const canSellOutOfStock = product?.allowOutOfStockSales === true;
-    const trackInventory = product?.trackInventory !== false; // Default to true if not set
-    
-    // Check stock only if tracking inventory and not allowing out of stock sales
-    if (item && trackInventory && !canSellOutOfStock && quantity > item.stock) {
-      showToast.error(dict.pos.insufficientStock);
-      return;
-    }
-    setCart(
-      cart.map((item) =>
-        item.productId === productId ? { ...item, quantity } : item
-      )
-    );
-  };
-
-  const removeFromCart = (productId: string) => {
-    setCart(cart.filter((item) => item.productId !== productId));
-  };
-
-  const getSubtotal = () => {
-    return cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  };
-
-  const getTaxAmount = () => {
-    if (!settings?.taxEnabled || !settings?.taxRate) return 0;
-    const subtotal = getSubtotal();
-    const discount = appliedDiscount?.amount || 0;
-    const taxable = Math.max(0, subtotal - discount);
-    return Math.round(taxable * (settings.taxRate / 100) * 100) / 100;
-  };
-
-  const getTotal = () => {
-    const subtotal = getSubtotal();
-    const discount = appliedDiscount?.amount || 0;
-    const afterDiscount = Math.max(0, subtotal - discount);
-    const tax = getTaxAmount();
-    return Math.round((afterDiscount + tax) * 100) / 100;
-  };
-
-  const applyDiscount = async () => {
-    if (!dict || !promoCode.trim() || applyingDiscount) return;
-
-    setApplyingDiscount(true);
-    try {
-      const subtotal = getSubtotal();
-
-      // Try online validation first
-      if (navigator.onLine) {
-        const res = await fetchWithTimeout(`/api/discounts/validate?tenant=${tenant}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code: promoCode, subtotal }),
-        });
-
-        const data = await res.json();
-        if (data.success) {
-          setAppliedDiscount({
-            code: data.data.code,
-            amount: data.data.discountAmount,
-            name: data.data.name,
-          });
-          setPromoCode('');
-          showToast.success(dict.pos.discountApplied || 'Discount applied successfully');
-          return;
-        } else {
-          showToast.error(data.error || dict.pos.invalidDiscountCode);
-          return;
-        }
-      }
-
-      // Offline fallback: validate against cached discounts
-      const storage = await getOfflineStorage();
-      const cachedDiscount = await storage.getCachedDiscountByCode(promoCode.toUpperCase(), tenant);
-
-      if (cachedDiscount) {
-        // Basic offline validation
-        const now = new Date();
-        const validFrom = cachedDiscount.validFrom || cachedDiscount.startDate;
-        const validUntil = cachedDiscount.validUntil || cachedDiscount.endDate;
-        if (validFrom && new Date(validFrom) > now) {
-          showToast.error(dict.pos.invalidDiscountCode || 'Discount not yet active');
-          return;
-        }
-        if (validUntil && new Date(validUntil) < now) {
-          showToast.error(dict.pos.invalidDiscountCode || 'Discount expired');
-          return;
-        }
-        if (cachedDiscount.minPurchaseAmount && subtotal < cachedDiscount.minPurchaseAmount) {
-          showToast.error(dict.pos.invalidDiscountCode || 'Minimum purchase not met');
-          return;
-        }
-
-        let discountAmount = 0;
-        if (cachedDiscount.type === 'percentage') {
-          discountAmount = (subtotal * cachedDiscount.value) / 100;
-          if (cachedDiscount.maxDiscountAmount) {
-            discountAmount = Math.min(discountAmount, cachedDiscount.maxDiscountAmount);
-          }
-        } else {
-          discountAmount = cachedDiscount.value;
-        }
-
-        setAppliedDiscount({
-          code: cachedDiscount.code,
-          amount: Math.round(discountAmount * 100) / 100,
-          name: cachedDiscount.name,
-        });
-        setPromoCode('');
-        showToast.success((dict.pos.discountApplied || 'Discount applied') + ' (offline)');
-      } else {
-        showToast.error(dict.pos.invalidDiscountCode || 'Invalid discount code');
-      }
-    } catch (error) {
-      console.error('Error applying discount:', error);
-      showToast.error(dict.pos.invalidDiscountCode);
-    } finally {
-      setApplyingDiscount(false);
-    }
-  };
-
-  const removeDiscount = () => {
-    setAppliedDiscount(null);
-    setPromoCode('');
-  };
-
+  // Refund and transaction lookup helpers
   const lookupTransaction = async () => {
     if (!dict || !refundTransactionId.trim() || lookingUpRefund) return;
 
@@ -461,244 +422,46 @@ export default function Dashboard() {
           return;
         }
         setRefundTransaction(transaction);
-        // Initialize refund items with all items at full quantity
-        const items: Record<string, number> = {};
+        // Initialize refund items with all items - use hook method instead of direct setState
+        // Clear any existing refund items first
+        refundItems.forEach((item) => removeRefundItem(item.productId));
+        // Add all transaction items for refund selection
         transaction.items.forEach((item: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-          items[item.product.toString()] = item.quantity;
+          addRefundItem(item.product.toString(), item.quantity);
         });
-        setRefundItems(items);
       } else {
         showToast.error(data.error || dict.pos.noTransactionFound);
       }
     } catch (error) {
       console.error('Error looking up transaction:', error);
-      showToast.error(dict.pos.noTransactionFound);
+      if (dict) {
+        showToast.error(dict.pos?.noTransactionFound || 'Transaction not found');
+      }
     } finally {
       setLookingUpRefund(false);
     }
   };
 
-  const processRefund = async () => {
-    if (!dict || !refundTransaction) return;
-
-    const selectedItems = Object.entries(refundItems)
-      .filter(([_, qty]) => qty > 0)
-      .map(([productId, quantity]) => ({ productId, quantity }));
-
-    if (selectedItems.length === 0) {
-      showToast.error(dict.pos.selectAtLeastOneItem);
-      return;
-    }
-
-    setProcessingRefund(true);
-    try {
-      const res = await fetchWithTimeout(`/api/transactions/${refundTransaction._id}/refund?tenant=${tenant}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          items: selectedItems,
-          reason: refundReason,
-          notes: refundNotes,
-        }),
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        showToast.success(dict.pos.refundSuccess);
-        setShowRefundModal(false);
-        setRefundTransaction(null);
-        setRefundTransactionId('');
-        setRefundItems({});
-        setRefundReason('');
-        setRefundNotes('');
-        fetchProducts();
-      } else {
-        showToast.error(data.error || dict.pos.refundError);
-      }
-    } catch (error) {
-      console.error('Error processing refund:', error);
-      showToast.error(dict.pos.refundError);
-    } finally {
-      setProcessingRefund(false);
-    }
-  };
-
   const handleCheckout = () => {
-    if (!dict) return;
     if (cart.length === 0) {
-      showToast.error(dict.pos.cartEmptyAlert);
+      showToast.error(dictValue('pos.cartEmptyAlert', 'Cart is empty'));
       return;
     }
     setShowPaymentModal(true);
   };
 
-  const processPayment = async () => {
-    if (!dict) return;
-    if (paymentMethod === 'cash') {
-      const cash = parseFloat(cashReceived);
-      const total = getTotal();
-      if (isNaN(cash) || cash < total) {
-        showToast.error(dict.pos.insufficientCash);
-        return;
-      }
-    }
-
-    setProcessing(true);
-    try {
-      if (isOnline) {
-        // Try to process online
-        try {
-          const res = await fetchWithTimeout(`/api/transactions?tenant=${tenant}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              items: cart.map((item) => ({
-                productId: item.productId,
-                quantity: item.quantity,
-              })),
-              paymentMethod,
-              cashReceived: paymentMethod === 'cash' ? parseFloat(cashReceived) : undefined,
-              discountCode: appliedDiscount?.code,
-            }),
-          }, 30000); // 30s timeout for transactions
-
-          const data = await res.json();
-            if (data.success) {
-            const transaction = data.data;
-            const tenantSettings = settings || getDefaultTenantSettings();
-            const totalFormatted = formatCurrency(getTotal(), tenantSettings);
-            
-            // Print receipt if configured
-            if (settings) {
-              await printReceipt(transaction);
-              
-              // Open cash drawer if cash payment
-              if (paymentMethod === 'cash') {
-                await hardwareService.openCashDrawer();
-              }
-            }
-            
-            showToast.success(`${dict.pos.transactionCompleted} ${totalFormatted}`);
-            setCart([]);
-            setShowPaymentModal(false);
-            setCashReceived('');
-            setPaymentMethod('cash');
-            setAppliedDiscount(null);
-            setPromoCode('');
-            fetchProducts();
-            return;
-          } else {
-            throw new Error(data.error || 'Failed to process transaction');
-          }
-        } catch (error) {
-          // If online request fails, fall through to offline save
-          console.error('Online transaction failed, saving offline:', error);
-        }
-      }
-
-      // Save to offline storage
-      const storage = await getOfflineStorage();
-      await storage.saveTransaction({
-        tenant,
-        items: cart.map((item) => ({
-          productId: item.productId,
-          quantity: item.quantity,
-        })),
-        paymentMethod,
-        cashReceived: paymentMethod === 'cash' ? parseFloat(cashReceived) : undefined,
-        discountCode: appliedDiscount?.code,
-      });
-
-      // Update local product stock (optimistic update) - only if tracking inventory
-      for (const item of cart) {
-        const product = products.find(p => p._id === item.productId);
-        if (product && product.trackInventory !== false) {
-          const newStock = product.stock - item.quantity;
-          setProducts(products.map(p => 
-            p._id === item.productId ? { ...p, stock: Math.max(0, newStock) } : p
-          ));
-          // Update cache
-          await storage.updateProductStock(item.productId, newStock, tenant);
-        }
-      }
-
-      const tenantSettings = settings || getDefaultTenantSettings();
-      const totalFormatted = formatCurrency(getTotal(), tenantSettings);
-      
-      // Create transaction object for receipt printing (offline)
-      const subtotal = getSubtotal();
-      const discountAmount = appliedDiscount?.amount || 0;
-      const offlineTransaction = {
-        receiptNumber: `OFF-${Date.now()}`,
-        date: formatDateTime(new Date(), tenantSettings),
-        items: cart.map(item => ({
-          name: item.name,
-          quantity: item.quantity,
-          price: item.price,
-          subtotal: item.price * item.quantity,
-        })),
-        subtotal,
-        discountCode: appliedDiscount?.code,
-        discountAmount: discountAmount > 0 ? discountAmount : undefined,
-        total: getTotal(),
-        paymentMethod,
-        cashReceived: paymentMethod === 'cash' ? parseFloat(cashReceived) : undefined,
-        change: paymentMethod === 'cash' ? parseFloat(cashReceived) - getTotal() : undefined,
-      };
-      
-      // Print receipt if configured (even for offline transactions)
-      if (settings) {
-        await printReceipt(offlineTransaction as any); // eslint-disable-line @typescript-eslint/no-explicit-any
-        
-        // Open cash drawer if cash payment
-        if (paymentMethod === 'cash') {
-          await hardwareService.openCashDrawer();
-        }
-      }
-      
-      const message = isOnline 
-        ? `${dict.pos.transactionCompleted} ${totalFormatted}`
-        : `${dict.pos.transactionSavedOffline || 'Transaction saved offline'} ${totalFormatted}. ${dict.pos.willSyncWhenOnline || 'Will sync when connection is restored.'}`;
-      
-      showToast.success(message);
-      setCart([]);
-      setShowPaymentModal(false);
-      setCashReceived('');
-      setPaymentMethod('cash');
-      setAppliedDiscount(null);
-      setPromoCode('');
-      
-      // Refresh products if online
-      if (isOnline) {
-        fetchProducts();
-      }
-    } catch (error) {
-      console.error('Error processing transaction:', error);
-      showToast.error(dict.pos.transactionError || 'Failed to process transaction');
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const clearCart = async () => {
-    if (!dict) return;
-    const confirmed = await confirm(
-      dict.pos.clearCartConfirmTitle || 'Clear Cart',
-      dict.pos.clearCartConfirm,
-      { variant: 'warning' }
-    );
-    if (confirmed) {
-      setCart([]);
-      setAppliedDiscount(null);
-      setPromoCode('');
-      showToast.success(dict.pos.cartCleared || 'Cart cleared');
-    }
+  // Refund and saved carts functions
+  const clearCart = () => {
+    hookClearCart();
+    setAppliedDiscount(null);
+    setPromoCode('');
+    showToast.success(dictValue('pos.cartCleared', 'Cart cleared'));
   };
 
   const saveCart = async () => {
-    if (!dict || cart.length === 0) return;
+    if (cart.length === 0) return;
     if (!cartName.trim()) {
-      showToast.error(dict.pos?.cartNameRequired || 'Please enter a name for this cart');
+      showToast.error(dictValue('pos.cartNameRequired', 'Please enter a name for this cart'));
       return;
     }
 
@@ -723,16 +486,16 @@ export default function Dashboard() {
 
       const data = await res.json();
       if (data.success) {
-        showToast.success(dict.pos?.cartSaved || 'Cart saved successfully');
+        showToast.success(dictValue('pos.cartSaved', 'Cart saved successfully'));
         setShowSaveCartModal(false);
         setCartName('');
         loadSavedCarts();
       } else {
-        showToast.error(data.error || dict.pos?.saveCartError || 'Failed to save cart');
+        showToast.error(data.error || dictValue('pos.saveCartError', 'Failed to save cart'));
       }
     } catch (error) {
       console.error('Error saving cart:', error);
-      showToast.error(dict.pos?.saveCartError || 'Failed to save cart');
+      showToast.error(dictValue('pos.saveCartError', 'Failed to save cart'));
     } finally {
       setSavingCart(false);
     }
@@ -756,12 +519,10 @@ export default function Dashboard() {
   };
 
   const loadCart = async (savedCart: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (!dict) return;
-    
     if (cart.length > 0) {
       const confirmed = await confirm(
-        dict.pos?.loadCartConfirmTitle || 'Load Saved Cart',
-        dict.pos?.loadCartConfirm || 'Loading a saved cart will replace your current cart. Continue?',
+        dictValue('pos.loadCartConfirmTitle', 'Load Saved Cart'),
+        dictValue('pos.loadCartConfirm', 'Loading a saved cart will replace your current cart. Continue?'),
         { variant: 'warning' }
       );
       if (!confirmed) {
@@ -796,18 +557,17 @@ export default function Dashboard() {
       
       // Refresh products to get current stock
       fetchProducts();
-      showToast.success(dict.pos?.cartLoaded || 'Cart loaded successfully');
+      showToast.success(dictValue('pos.cartLoaded', 'Cart loaded successfully'));
     } catch (error) {
       console.error('Error loading cart:', error);
-      showToast.error(dict.pos?.loadCartError || 'Failed to load cart');
+      showToast.error(dictValue('pos.loadCartError', 'Failed to load cart'));
     }
   };
 
   const deleteSavedCart = async (cartId: string) => {
-    if (!dict) return;
     const confirmed = await confirm(
-      dict.pos?.deleteCartConfirmTitle || 'Delete Saved Cart',
-      dict.pos?.deleteCartConfirm || 'Are you sure you want to delete this saved cart?',
+      dictValue('pos.deleteCartConfirmTitle', 'Delete Saved Cart'),
+      dictValue('pos.deleteCartConfirm', 'Are you sure you want to delete this saved cart?'),
       { variant: 'danger' }
     );
     if (!confirmed) {
@@ -822,14 +582,14 @@ export default function Dashboard() {
 
       const data = await res.json();
       if (data.success) {
-        showToast.success(dict.pos?.cartDeleted || 'Cart deleted successfully');
+        showToast.success(dictValue('pos.cartDeleted', 'Cart deleted successfully'));
         loadSavedCarts();
       } else {
-        showToast.error(data.error || dict.pos?.deleteCartError || 'Failed to delete cart');
+        showToast.error(data.error || dictValue('pos.deleteCartError', 'Failed to delete cart'));
       }
     } catch (error) {
       console.error('Error deleting cart:', error);
-      showToast.error(dict.pos?.deleteCartError || 'Failed to delete cart');
+      showToast.error(dictValue('pos.deleteCartError', 'Failed to delete cart'));
     }
   };
 
@@ -863,7 +623,7 @@ export default function Dashboard() {
         setProducts(prev => prev.map(p => 
           p._id === productId ? { ...p, pinned: currentPinned } : p
         ));
-        showToast.error(data.error || dict?.common?.failedToTogglePin || 'Failed to toggle pin status');
+        showToast.error(data.error || dictValue('common.failedToTogglePin', 'Failed to toggle pin status'));
       }
     } catch (error) {
       // Revert optimistic update on error
@@ -871,7 +631,7 @@ export default function Dashboard() {
         p._id === productId ? { ...p, pinned: currentPinned } : p
       ));
       console.error('Error toggling pin:', error);
-      showToast.error(dict?.common?.failedToTogglePin || 'Failed to toggle pin status');
+      showToast.error(dictValue('common.failedToTogglePin', 'Failed to toggle pin status'));
     }
   };
 
@@ -933,12 +693,12 @@ export default function Dashboard() {
       }
     } catch (error) {
       console.error('Failed to print receipt:', error);
-      showToast.error(dict?.pos?.printFailed || 'Receipt could not be printed. Check printer settings.');
+      showToast.error(dictValue('pos.printFailed', 'Receipt could not be printed. Check printer settings.'));
     }
   };
 
   if (!dict) {
-    return <div className="text-center py-12">{dict?.common?.loading || 'Loading...'}</div>;
+    return <div className="text-center py-12">{'Loading...'}</div>;
   }
 
   return (
@@ -965,17 +725,17 @@ export default function Dashboard() {
             <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:sticky lg:top-20 flex flex-col h-full max-h-[calc(100vh-6rem)]">
               <div className="flex justify-between items-center mb-4 pb-4 border-b border-gray-200">
                 <h2 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2">
-                  <svg className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} style={{ color: primaryColor }}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
                   </svg>
                   {dict.pos.cart}
                   {cart.length > 0 && (
-                    <span className="ml-2 px-2.5 py-1 bg-blue-600 text-white text-xs font-bold border border-blue-700">
+                    <span className="ml-2 px-2.5 py-1 text-white text-xs font-bold border" style={{ backgroundColor: primaryColor, borderColor: primaryColor }}>
                       {cart.length}
                     </span>
                   )}
                 </h2>
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-2.5">
                   {cart.length > 0 && (
                     <>
                       <button
@@ -1003,13 +763,27 @@ export default function Dashboard() {
                       setShowSavedCartsModal(true);
                       loadSavedCarts();
                     }}
-                    className="px-4 py-3 bg-blue-600 text-white hover:bg-blue-700 transition-colors border border-blue-700"
+                    className="px-4 py-3 text-white transition-colors border"
+                    style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
+                    onMouseEnter={(e) => {e.currentTarget.style.backgroundColor = `${primaryColor}dd`;}}
+                    onMouseLeave={(e) => {e.currentTarget.style.backgroundColor = primaryColor;}}
                     title={dict.pos?.loadCart || 'Load Saved Cart'}
                   >
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                     </svg>
                   </button>
+                  {customerDisplayUrl && (
+                    <button
+                      onClick={() => window.open(customerDisplayUrl, 'customer_display', 'width=1024,height=768')}
+                      className="px-4 py-3 bg-purple-600 text-white hover:bg-purple-700 transition-colors border border-purple-700"
+                      title="Open Customer Display"
+                    >
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -1036,7 +810,7 @@ export default function Dashboard() {
                           </div>
                           <button
                             onClick={() => removeFromCart(item.productId)}
-                            className="p-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors flex-shrink-0"
+                            className="p-2.5 text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors flex-shrink-0"
                             aria-label={dict?.pos?.removeItem || 'Remove item'}
                           >
                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1048,7 +822,7 @@ export default function Dashboard() {
                           <div className="flex items-center border-2 border-gray-300 overflow-hidden bg-white">
                             <button
                               type="button"
-                              onClick={() => updateQuantity(item.productId, item.quantity - 1)}
+                              onClick={() => updateQuantity(item.productId, item.quantity - 1, (msg) => showToast.error(msg))}
                               className="px-3 py-2 hover:bg-gray-100 active:bg-gray-200 font-bold text-lg transition-colors"
                               aria-label={dict?.pos?.decreaseQuantity || 'Decrease quantity'}
                             >
@@ -1059,7 +833,7 @@ export default function Dashboard() {
                             </span>
                             <button
                               type="button"
-                              onClick={() => updateQuantity(item.productId, item.quantity + 1)}
+                              onClick={() => updateQuantity(item.productId, item.quantity + 1, (msg) => showToast.error(msg))}
                               className="px-3 py-2 hover:bg-gray-100 active:bg-gray-200 font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                               disabled={(() => {
                                 const product = products.find(p => p._id === item.productId);
@@ -1089,7 +863,6 @@ export default function Dashboard() {
                           <button
                             type="button"
                             onClick={async () => {
-                              setApplyingDiscount(true);
                               try {
                                 // Try applying SC20 directly
                                 const subtotal = getSubtotal();
@@ -1112,7 +885,29 @@ export default function Dashboard() {
                                 }
 
                                 if (data.success) {
-                                  setAppliedDiscount({ code: data.data.code, amount: data.data.discountAmount, name: data.data.name });
+                                  const discount = { code: data.data.code, amount: data.data.discountAmount, name: data.data.name };
+                                  setAppliedDiscount(discount);
+                                  
+                                  // Sync to customer display with tax
+                                  if (sessionId) {
+                                    const subtotal = getSubtotal();
+                                    const afterDiscount = subtotal - discount.amount;
+                                    const taxableBase = Math.max(0, afterDiscount);
+                                    const taxAmount = settings?.taxEnabled && settings?.taxRate 
+                                      ? Math.round(taxableBase * (settings.taxRate / 100) * 100) / 100
+                                      : 0;
+                                    const total = afterDiscount + taxAmount;
+                                    fetch(`/api/pos/session/${sessionId}`, {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({
+                                        tenant,
+                                        action: 'update-discount',
+                                        data: { discount, taxAmount, total },
+                                      }),
+                                    }).catch((err) => console.error('Failed to sync discount:', err));
+                                  }
+                                  
                                   setPromoCode('');
                                   showToast.success(dict.pos.discountApplied || 'Discount applied');
                                 } else {
@@ -1120,12 +915,17 @@ export default function Dashboard() {
                                 }
                               } catch {
                                 showToast.error('Failed to apply discount');
-                              } finally {
-                                setApplyingDiscount(false);
                               }
                             }}
                             disabled={applyingDiscount || cart.length === 0}
-                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold border-2 border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:border-blue-300 transition-colors disabled:opacity-50"
+                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-semibold border-2 transition-colors disabled:opacity-50"
+                            style={{
+                              borderColor: `${primaryColor}80`,
+                              backgroundColor: `${primaryColor}10`,
+                              color: primaryColor,
+                            }}
+                            onMouseEnter={(e) => {e.currentTarget.style.backgroundColor = `${primaryColor}20`;}}
+                            onMouseLeave={(e) => {e.currentTarget.style.backgroundColor = `${primaryColor}10`;}}
                           >
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
@@ -1135,7 +935,6 @@ export default function Dashboard() {
                           <button
                             type="button"
                             onClick={async () => {
-                              setApplyingDiscount(true);
                               try {
                                 const subtotal = getSubtotal();
                                 let res = await fetchWithTimeout(`/api/discounts/validate?tenant=${tenant}`, {
@@ -1157,7 +956,29 @@ export default function Dashboard() {
                                 }
 
                                 if (data.success) {
-                                  setAppliedDiscount({ code: data.data.code, amount: data.data.discountAmount, name: data.data.name });
+                                  const discount = { code: data.data.code, amount: data.data.discountAmount, name: data.data.name };
+                                  setAppliedDiscount(discount);
+                                  
+                                  // Sync to customer display with tax
+                                  if (sessionId) {
+                                    const subtotal = getSubtotal();
+                                    const afterDiscount = subtotal - discount.amount;
+                                    const taxableBase = Math.max(0, afterDiscount);
+                                    const taxAmount = settings?.taxEnabled && settings?.taxRate 
+                                      ? Math.round(taxableBase * (settings.taxRate / 100) * 100) / 100
+                                      : 0;
+                                    const total = afterDiscount + taxAmount;
+                                    fetch(`/api/pos/session/${sessionId}`, {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({
+                                        tenant,
+                                        action: 'update-discount',
+                                        data: { discount, taxAmount, total },
+                                      }),
+                                    }).catch((err) => console.error('Failed to sync discount:', err));
+                                  }
+                                  
                                   setPromoCode('');
                                   showToast.success(dict.pos.discountApplied || 'Discount applied');
                                 } else {
@@ -1165,12 +986,10 @@ export default function Dashboard() {
                                 }
                               } catch {
                                 showToast.error('Failed to apply discount');
-                              } finally {
-                                setApplyingDiscount(false);
                               }
                             }}
                             disabled={applyingDiscount || cart.length === 0}
-                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold border-2 border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 hover:border-purple-300 transition-colors disabled:opacity-50"
+                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-semibold border-2 border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 hover:border-purple-300 transition-colors disabled:opacity-50"
                           >
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
@@ -1186,12 +1005,70 @@ export default function Dashboard() {
                             placeholder={dict.pos.promoCode || 'Enter promo code'}
                             value={promoCode}
                             onChange={(e) => setPromoCode(e.target.value.toUpperCase().slice(0, MAX_PROMO_CODE_LENGTH))}
-                            onKeyDown={(e) => e.key === 'Enter' && applyDiscount()}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && promoCode.trim()) {
+                                applyDiscount(getSubtotal(), tenant, 
+                                  (discount) => {
+                                    setAppliedDiscount(discount);
+                                    setPromoCode('');
+                                    showToast.success(dict.pos.discountApplied || 'Discount applied');
+                                    // Sync to customer display
+                                    if (sessionId) {
+                                      const afterDiscount = getSubtotal() - discount.amount;
+                                      const taxableBase = Math.max(0, afterDiscount);
+                                      const taxAmount = settings?.taxEnabled && settings?.taxRate 
+                                        ? Math.round(taxableBase * (settings.taxRate / 100) * 100) / 100
+                                        : 0;
+                                      const total = afterDiscount + taxAmount;
+                                      fetch(`/api/pos/session/${sessionId}`, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                          tenant,
+                                          action: 'update-discount',
+                                          data: { discount, taxAmount, total },
+                                        }),
+                                      }).catch((err) => console.error('Failed to sync discount:', err));
+                                    }
+                                  },
+                                  (error) => showToast.error(error)
+                                );
+                              }
+                            }}
                             className="flex-1 min-w-0 px-4 py-3 text-base border-2 border-gray-300 focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white transition-all placeholder:text-gray-400"
                           />
                           <button
                             type="button"
-                            onClick={applyDiscount}
+                            onClick={() => {
+                              if (promoCode.trim()) {
+                                applyDiscount(getSubtotal(), tenant, 
+                                  (discount) => {
+                                    setAppliedDiscount(discount);
+                                    setPromoCode('');
+                                    showToast.success(dict.pos.discountApplied || 'Discount applied');
+                                    // Sync to customer display
+                                    if (sessionId) {
+                                      const afterDiscount = getSubtotal() - discount.amount;
+                                      const taxableBase = Math.max(0, afterDiscount);
+                                      const taxAmount = settings?.taxEnabled && settings?.taxRate 
+                                        ? Math.round(taxableBase * (settings.taxRate / 100) * 100) / 100
+                                        : 0;
+                                      const total = afterDiscount + taxAmount;
+                                      fetch(`/api/pos/session/${sessionId}`, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                          tenant,
+                                          action: 'update-discount',
+                                          data: { discount, taxAmount, total },
+                                        }),
+                                      }).catch((err) => console.error('Failed to sync discount:', err));
+                                    }
+                                  },
+                                  (error) => showToast.error(error)
+                                );
+                              }
+                            }}
                             disabled={!promoCode.trim() || applyingDiscount}
                             className="p-3 bg-green-600 text-white hover:bg-green-700 active:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 border border-green-700 flex items-center justify-center flex-shrink-0"
                             title={dict.pos.applyDiscount || 'Apply Discount'}
@@ -1265,7 +1142,7 @@ export default function Dashboard() {
                     </div>
                     <div className="flex justify-between items-center mb-4 pt-3 border-t-2 border-gray-300">
                       <span className="text-lg sm:text-xl font-bold text-gray-900">{dict.common.total}:</span>
-                      <span className="text-2xl sm:text-3xl font-bold text-blue-600">
+                      <span className="text-2xl sm:text-3xl font-bold" style={{ color: primaryColor }}>
                         <Currency amount={getTotal()} />
                       </span>
                     </div>
@@ -1273,7 +1150,7 @@ export default function Dashboard() {
                       type="button"
                       onClick={handleCheckout}
                       disabled={processing}
-                      className="w-full bg-blue-600 text-white py-4 font-bold hover:bg-blue-700 active:bg-blue-800 transition-all duration-200 text-lg border border-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      className="w-full bg-green-600 text-white py-4 font-bold hover:bg-green-700 active:bg-green-800 transition-all duration-200 text-lg border border-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                       {processing ? (
                         <>
@@ -1308,7 +1185,15 @@ export default function Dashboard() {
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     autoFocus
-                    className="w-full px-4 py-3 pl-11 text-base border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all"
+                    className="w-full px-4 py-3 pl-11 text-base border-2 border-gray-300 bg-white transition-all"
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = primaryColor;
+                      e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.borderColor = '#d1d5db';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
                   />
                   <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -1316,7 +1201,10 @@ export default function Dashboard() {
                 </div>
                 <button
                   onClick={() => setShowQRScanner(true)}
-                  className="px-4 py-3 bg-blue-600 text-white hover:bg-blue-700 transition-colors border border-blue-700"
+                  className="px-4 py-3 text-white transition-colors border"
+                  style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
+                  onMouseEnter={(e) => {e.currentTarget.style.backgroundColor = `${primaryColor}dd`;}}
+                  onMouseLeave={(e) => {e.currentTarget.style.backgroundColor = primaryColor;}}
                   title="Scan QR Code"
                 >
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1383,7 +1271,7 @@ export default function Dashboard() {
                         e.preventDefault();
                         handleTogglePin(product._id, product.pinned || false);
                       }}
-                      className={`absolute top-2 right-2 z-10 p-1.5 transition-all duration-200 flex items-center justify-center border shadow-sm ${
+                      className={`absolute top-2 right-2 z-10 p-2.5 transition-all duration-200 flex items-center justify-center border shadow-sm ${
                         product.pinned
                           ? 'bg-amber-50 hover:bg-amber-100 text-amber-600 border-amber-300'
                           : 'bg-white/80 hover:bg-white text-gray-400 hover:text-gray-600 border-gray-300 backdrop-blur-sm'
@@ -1426,7 +1314,7 @@ export default function Dashboard() {
 
                       {/* Price + Stock row */}
                       <div className="flex items-end justify-between gap-2 mb-3 mt-auto">
-                        <div className="font-bold text-blue-600 text-xl leading-tight">
+                        <div className="font-bold text-xl leading-tight" style={{ color: primaryColor }}>
                           <Currency amount={product.price} />
                         </div>
                         <span
@@ -1451,11 +1339,15 @@ export default function Dashboard() {
                             addToCart(product);
                           }
                         }}
-                        className={`w-full px-4 py-2.5 font-medium text-sm transition-all duration-200 ${
+                        className={`w-full px-4 py-2.5 font-medium text-sm transition-all duration-200 text-white border ${
                           product.stock > 0 || product.allowOutOfStockSales
-                            ? 'bg-blue-600 text-white hover:bg-blue-700 border border-blue-700'
+                            ? ''
                             : 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300'
                         }`}
+                        style={product.stock > 0 || product.allowOutOfStockSales ? {
+                          backgroundColor: primaryColor,
+                          borderColor: primaryColor
+                        } : undefined}
                       >
                         {product.stock > 0 || product.allowOutOfStockSales
                           ? dict.common.add
@@ -1516,11 +1408,15 @@ export default function Dashboard() {
                           setPaymentMethod(method);
                           if (method !== 'cash') setCashReceived('');
                         }}
-                        className={`px-3 sm:px-4 py-2.5 border-2 font-medium text-sm sm:text-base transition-all duration-200 ${
+                        className={`px-3 sm:px-4 py-2.5 border-2 font-medium text-sm sm:text-base transition-all duration-200 text-white ${
                           paymentMethod === method
-                            ? 'bg-blue-600 text-white border-blue-700'
+                            ? ''
                             : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
                         }`}
+                        style={paymentMethod === method ? {
+                          backgroundColor: primaryColor,
+                          borderColor: primaryColor
+                        } : undefined}
                       >
                         {dict.pos[method]}
                       </button>
@@ -1541,8 +1437,16 @@ export default function Dashboard() {
                         const val = e.target.value;
                         if (val === '' || parseFloat(val) >= 0) setCashReceived(val);
                       }}
-                      className="w-full px-4 py-3 text-base border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-4 py-3 text-base border-2 border-gray-300 transition-all"
                       placeholder="0.00"
+                      onFocus={(e) => {
+                        e.currentTarget.style.borderColor = primaryColor;
+                        e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                      }}
+                      onBlur={(e) => {
+                        e.currentTarget.style.borderColor = '#d1d5db';
+                        e.currentTarget.style.boxShadow = 'none';
+                      }}
                     />
                     {cashReceived && parseFloat(cashReceived) >= getTotal() && (
                       <div className="mt-2 text-sm text-green-600 font-medium">
@@ -1566,9 +1470,46 @@ export default function Dashboard() {
               </button>
               <button
                 type="button"
-                onClick={processPayment}
+                onClick={async () => {
+                  const result = await processPayment(
+                    cart,
+                    appliedDiscount,
+                    getTotal(),
+                    tenant,
+                    (msg) => showToast.error(msg),
+                    fetchWithTimeout
+                  );
+                  if (result?.success) {
+                    showToast.success(dict.pos.paymentCompleted || 'Payment completed');
+                    clearCart();
+                    setAppliedDiscount(null);
+                    setShowPaymentModal(false);
+                    // Print receipt
+                    if (result.data) {
+                      printReceipt(result.data);
+                    }
+                    // Sync transaction to customer display
+                    if (sessionId) {
+                      fetch(`/api/pos/session/${sessionId}?tenant=${tenant}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          tenant,
+                          action: 'transaction-complete',
+                          data: result.data,
+                        }),
+                      }).catch((err) => console.error('Failed to sync transaction:', err));
+                    }
+                  }
+                }}
                 disabled={processing || (paymentMethod === 'cash' && (!cashReceived || parseFloat(cashReceived) < getTotal()))}
-                className="w-full sm:w-auto px-4 py-2.5 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors border border-blue-700"
+                className="w-full sm:w-auto px-4 py-2.5 text-white font-medium transition-colors border disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{
+                  backgroundColor: primaryColor,
+                  borderColor: primaryColor
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = `${primaryColor}dd`; }}
+                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = primaryColor; }}
               >
                 {processing ? dict.pos.processing : dict.pos.completePayment}
               </button>
@@ -1586,9 +1527,8 @@ export default function Dashboard() {
             setShowRefundModal(false);
             setRefundTransactionId('');
             setRefundTransaction(null);
-            setRefundItems({});
+            clearRefund();
             setRefundReason('');
-            setRefundNotes('');
           }}
         >
           <div 
@@ -1602,7 +1542,7 @@ export default function Dashboard() {
                   setShowRefundModal(false);
                   setRefundTransactionId('');
                   setRefundTransaction(null);
-                  setRefundItems({});
+                  setRefundItems([]);
                   setRefundReason('');
                   setRefundNotes('');
                 }}
@@ -1627,14 +1567,28 @@ export default function Dashboard() {
                       value={refundTransactionId}
                       onChange={(e) => setRefundTransactionId(e.target.value)}
                       onKeyPress={(e) => e.key === 'Enter' && lookupTransaction()}
-                      className="flex-1 px-4 py-3 text-base border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="flex-1 px-4 py-3 text-base border-2 border-gray-300 transition-all"
                       placeholder={dict.pos.transactionId}
+                      onFocus={(e) => {
+                        e.currentTarget.style.borderColor = primaryColor;
+                        e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                      }}
+                      onBlur={(e) => {
+                        e.currentTarget.style.borderColor = '#d1d5db';
+                        e.currentTarget.style.boxShadow = 'none';
+                      }}
                     />
                     <button
                       type="button"
                       onClick={lookupTransaction}
                       disabled={!refundTransactionId.trim()}
-                      className="px-4 py-3 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors border border-blue-700"
+                      className="px-4 py-3 text-white font-medium transition-colors border disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{
+                        backgroundColor: primaryColor,
+                        borderColor: primaryColor
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = `${primaryColor}dd`; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = primaryColor; }}
                     >
                       {dict.pos.lookupTransaction}
                     </button>
@@ -1674,7 +1628,8 @@ export default function Dashboard() {
                     {refundTransaction.items.map((item: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
                       const productId = item.product.toString();
                       const maxQty = item.quantity;
-                      const currentQty = refundItems[productId] || 0;
+                      const refundItem = refundItems.find(ri => ri.productId === productId);
+                      const currentQty: number = refundItem?.refundQty || 0;
                       
                       return (
                         <div key={productId} className="flex items-center justify-between p-2 hover:bg-gray-50 border-b border-gray-200 last:border-b-0">
@@ -1687,7 +1642,11 @@ export default function Dashboard() {
                           <div className="flex items-center gap-2">
                             <button
                               type="button"
-                              onClick={() => setRefundItems({ ...refundItems, [productId]: Math.max(0, currentQty - 1) })}
+                              onClick={() => {
+                                if (currentQty > 0) {
+                                  updateRefundQty(productId, currentQty - 1, maxQty);
+                                }
+                              }}
                               className="px-3 py-1 border border-gray-300 hover:bg-gray-100"
                             >
                               −
@@ -1699,21 +1658,52 @@ export default function Dashboard() {
                               value={currentQty}
                               onChange={(e) => {
                                 const val = Math.max(0, Math.min(maxQty, parseInt(e.target.value) || 0));
-                                setRefundItems({ ...refundItems, [productId]: val });
+                                if (val > 0) {
+                                  if (refundItem) {
+                                    updateRefundQty(productId, val, maxQty);
+                                  } else {
+                                    addRefundItem(productId, maxQty);
+                                    // Update quantity after adding
+                                    setTimeout(() => updateRefundQty(productId, val, maxQty), 0);
+                                  }
+                                } else if (refundItem) {
+                                  removeRefundItem(productId);
+                                }
                               }}
-                              className="w-16 px-2 py-1 text-center border border-gray-300"
+                              className="w-16 px-2 py-2 text-center border border-gray-300"
                             />
                             <button
                               type="button"
-                              onClick={() => setRefundItems({ ...refundItems, [productId]: Math.min(maxQty, currentQty + 1) })}
-                              className="px-3 py-1 border border-gray-300 hover:bg-gray-100"
+                              onClick={() => {
+                                if (currentQty < maxQty) {
+                                  if (refundItem) {
+                                    updateRefundQty(productId, currentQty + 1, maxQty);
+                                  } else {
+                                    addRefundItem(productId, maxQty);
+                                  }
+                                }
+                              }}
+                              className="px-3 py-2 border border-gray-300 hover:bg-gray-100"
                             >
                               +
                             </button>
                             <button
                               type="button"
-                              onClick={() => setRefundItems({ ...refundItems, [productId]: maxQty })}
-                              className="ml-2 px-2 py-1 text-xs bg-blue-100 text-blue-700 border border-blue-300 hover:bg-blue-200"
+                              onClick={() => {
+                                if (refundItem) {
+                                  updateRefundQty(productId, maxQty, maxQty);
+                                } else {
+                                  addRefundItem(productId, maxQty);
+                                }
+                              }}
+                              className="ml-2 px-2 py-1 text-xs border"
+                              style={{
+                                backgroundColor: `${primaryColor}15`,
+                                borderColor: primaryColor,
+                                color: primaryColor
+                              }}
+                              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = `${primaryColor}25`; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = `${primaryColor}15`; }}
                             >
                               {dict.pos.fullRefund}
                             </button>
@@ -1732,8 +1722,16 @@ export default function Dashboard() {
                     type="text"
                     value={refundReason}
                     onChange={(e) => setRefundReason(e.target.value)}
-                    className="w-full px-4 py-3 text-base border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-4 py-3 text-base border-2 border-gray-300 transition-all"
                     placeholder={dict?.pos?.refundReasonPlaceholder || 'Reason for refund'}
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = primaryColor;
+                      e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.borderColor = '#d1d5db';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
                   />
                 </div>
 
@@ -1746,8 +1744,16 @@ export default function Dashboard() {
                     onChange={(e) => setRefundNotes(e.target.value.slice(0, MAX_REFUND_NOTES_LENGTH))}
                     maxLength={MAX_REFUND_NOTES_LENGTH}
                     rows={3}
-                    className="w-full px-4 py-3 text-base border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-4 py-3 text-base border-2 border-gray-300 transition-all"
                     placeholder={dict?.pos?.refundNotesPlaceholder || 'Additional notes'}
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = primaryColor;
+                      e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.borderColor = '#d1d5db';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
                   />
                 </div>
 
@@ -1758,7 +1764,7 @@ export default function Dashboard() {
                       setShowRefundModal(false);
                       setRefundTransaction(null);
                       setRefundTransactionId('');
-                      setRefundItems({});
+                      setRefundItems([]);
                       setRefundReason('');
                       setRefundNotes('');
                     }}
@@ -1768,11 +1774,26 @@ export default function Dashboard() {
                   </button>
                   <button
                     type="button"
-                    onClick={processRefund}
-                    disabled={processingRefund || Object.values(refundItems).every(qty => qty === 0)}
+                    onClick={async () => {
+                      const result = await processRefund(currentRefundTransaction, fetchWithTimeout);
+                      if (result?.success) {
+                        showToast.success(dict.pos.refundProcessed || 'Refund processed successfully');
+                        setShowRefundModal(false);
+                        setRefundTransaction(null);
+                        setRefundTransactionId('');
+                        setRefundItems([]);
+                        setRefundReason('');
+                        setRefundNotes('');
+                      } else if (result?.errors && result.errors.length > 0) {
+                        showToast.error(result.errors.join(', '));
+                      } else {
+                        showToast.error(result?.error || 'Failed to process refund');
+                      }
+                    }}
+                    disabled={refunding || refundItems.length === 0}
                     className="px-4 py-2.5 bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors border border-red-700"
                   >
-                    {processingRefund ? dict.pos.processing : dict.pos.processRefund}
+                    {refunding ? dict.pos.processing : dict.pos.processRefund}
                   </button>
                 </div>
               </div>
@@ -1821,9 +1842,17 @@ export default function Dashboard() {
                 value={cartName}
                 onChange={(e) => setCartName(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && saveCart()}
-                className="w-full px-4 py-3 text-base border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-4 py-3 text-base border-2 border-gray-300 transition-all"
                 placeholder={dict.pos?.cartNamePlaceholder || 'Enter a name for this cart'}
                 autoFocus
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = primaryColor;
+                  e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = '#d1d5db';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
               />
               <p className="text-sm text-gray-500 mt-2">
                 {dict.pos?.cartNameHint || 'This cart will be saved for later processing'}
@@ -1881,7 +1910,7 @@ export default function Dashboard() {
 
             {loadingSavedCarts ? (
               <div className="text-center py-12">
-                <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+                <div className="inline-block animate-spin h-8 w-8 border-b-2" style={{ borderBottomColor: primaryColor }}></div>
                 <p className="mt-4 text-gray-600">{dict.common.loading || 'Loading...'}</p>
               </div>
             ) : savedCarts.length === 0 ? (
@@ -1896,7 +1925,9 @@ export default function Dashboard() {
                 {savedCarts.map((savedCart) => (
                   <div
                     key={savedCart._id}
-                    className="border-2 border-gray-300 p-4 hover:border-blue-500 transition-colors"
+                    className="border-2 border-gray-300 p-4 transition-colors"
+                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = primaryColor; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#d1d5db'; }}
                   >
                     <div className="flex justify-between items-start mb-3">
                       <div className="flex-1">
@@ -1909,7 +1940,7 @@ export default function Dashboard() {
                         </p>
                       </div>
                       <div className="text-right">
-                        <div className="font-bold text-lg text-blue-600 mb-2">
+                        <div className="font-bold text-lg mb-2" style={{ color: primaryColor }}>
                           <Currency amount={savedCart.total} />
                         </div>
                         {savedCart.discountCode && (
@@ -1922,7 +1953,13 @@ export default function Dashboard() {
                     <div className="flex gap-2">
                       <button
                         onClick={() => loadCart(savedCart)}
-                        className="flex-1 px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium transition-colors border border-blue-700"
+                        className="flex-1 px-4 py-2 text-white font-medium transition-colors border"
+                        style={{
+                          backgroundColor: primaryColor,
+                          borderColor: primaryColor
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = `${primaryColor}dd`; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = primaryColor; }}
                       >
                         {dict.pos?.loadCart || 'Load Cart'}
                       </button>

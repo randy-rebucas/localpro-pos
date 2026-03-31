@@ -5,6 +5,8 @@ import Navbar from '@/components/Navbar';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { getDefaultTenantSettings } from '@/lib/currency';
 
 interface Tenant {
   _id: string;
@@ -35,6 +37,8 @@ export default function TenantsPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null); // eslint-disable-line @typescript-eslint/no-unused-vars
   const [showTenantModal, setShowTenantModal] = useState(false);
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
+  const { settings: tenantSettings } = useTenantSettings();
+  const primaryColor = (tenantSettings || getDefaultTenantSettings()).primaryColor || '#2563eb';
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -63,7 +67,16 @@ export default function TenantsPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+          <div
+            className="inline-block animate-spin h-8 w-8"
+            style={{
+              borderTop: `2px solid ${primaryColor}`,
+              borderRight: `2px solid ${primaryColor}`,
+              borderBottom: '2px solid transparent',
+              borderLeft: `2px solid ${primaryColor}`,
+              borderRadius: '50%',
+            }}
+          />
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
@@ -77,7 +90,10 @@ export default function TenantsPage() {
         <div className="mb-6 sm:mb-8">
           <Link
             href={`/${tenant}/${lang}/admin`}
-            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium mb-4 transition-colors"
+            className="inline-flex items-center font-medium mb-4 transition-colors"
+            style={{ color: primaryColor }}
+            onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.8')}
+            onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
           >
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -109,7 +125,12 @@ export default function TenantsPage() {
                   setEditingTenant(tenants[0]);
                   setShowTenantModal(true);
                 }}
-                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
+                className="px-4 py-2 text-white font-medium transition-opacity hover:opacity-80"
+                style={{
+                  backgroundColor: primaryColor,
+                  borderColor: primaryColor,
+                  border: `1px solid ${primaryColor}`,
+                }}
               >
                 {dict.common?.edit || 'Edit'} {dict.admin?.settings || 'Settings'}
               </button>
@@ -134,7 +155,14 @@ export default function TenantsPage() {
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{tenantItem.slug}</td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
                       {tenantItem.settings.businessType ? (
-                        <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 border border-blue-300">
+                        <span
+                          className="px-2 py-1 text-xs font-medium border"
+                          style={{
+                            backgroundColor: `${primaryColor}20`,
+                            color: primaryColor,
+                            borderColor: primaryColor,
+                          }}
+                        >
                           {tenantItem.settings.businessType}
                         </span>
                       ) : (
@@ -153,7 +181,8 @@ export default function TenantsPage() {
                           setEditingTenant(tenantItem);
                           setShowTenantModal(true);
                         }}
-                        className="text-blue-600 hover:text-blue-900"
+                        style={{ color: primaryColor }}
+                        className="hover:opacity-70 transition-opacity"
                       >
                         {dict.common?.edit || 'Edit'}
                       </button>
@@ -171,6 +200,7 @@ export default function TenantsPage() {
         {showTenantModal && (
           <TenantModal
             tenant={editingTenant}
+            primaryColor={primaryColor}
             onClose={() => {
               setShowTenantModal(false);
               setEditingTenant(null);
@@ -190,11 +220,13 @@ export default function TenantsPage() {
 
 function TenantModal({
   tenant,
+  primaryColor = '#2563eb',
   onClose,
   onSave,
   dict,
 }: {
   tenant: Tenant | null;
+  primaryColor?: string;
   onClose: () => void;
   onSave: () => void;
   dict: any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -299,7 +331,16 @@ function TenantModal({
                 required
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full px-3 py-2 border border-gray-300 bg-white"
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = primaryColor;
+                  e.currentTarget.style.outline = 'none';
+                  e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = '#d1d5db';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
               />
             </div>
             <div>
@@ -310,7 +351,16 @@ function TenantModal({
                 type="text"
                 value={formData.domain}
                 onChange={(e) => setFormData({ ...formData, domain: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full px-3 py-2 border border-gray-300 bg-white"
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = primaryColor;
+                  e.currentTarget.style.outline = 'none';
+                  e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = '#d1d5db';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
               />
             </div>
             <div>
@@ -321,7 +371,16 @@ function TenantModal({
                 type="text"
                 value={formData.subdomain}
                 onChange={(e) => setFormData({ ...formData, subdomain: e.target.value.toLowerCase() })}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full px-3 py-2 border border-gray-300 bg-white"
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = primaryColor;
+                  e.currentTarget.style.outline = 'none';
+                  e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = '#d1d5db';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
               />
             </div>
             <div>
@@ -333,8 +392,17 @@ function TenantModal({
                 required
                 value={formData.currency}
                 onChange={(e) => setFormData({ ...formData, currency: e.target.value.toUpperCase() })}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full px-3 py-2 border border-gray-300 bg-white"
                 maxLength={3}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = primaryColor;
+                  e.currentTarget.style.outline = 'none';
+                  e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = '#d1d5db';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
               />
             </div>
             <div>
@@ -344,7 +412,16 @@ function TenantModal({
               <select
                 value={formData.language}
                 onChange={(e) => setFormData({ ...formData, language: e.target.value as 'en' | 'es' })}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full px-3 py-2 border border-gray-300 bg-white"
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = primaryColor;
+                  e.currentTarget.style.outline = 'none';
+                  e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = '#d1d5db';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
               >
                 <option value="en">English</option>
                 <option value="es">Español</option>
@@ -374,7 +451,16 @@ function TenantModal({
                       }
                       setFormData({ ...formData, businessType: newType });
                     }}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                    className="w-full px-3 py-2 border border-gray-300 bg-white"
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = primaryColor;
+                      e.currentTarget.style.outline = 'none';
+                      e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.borderColor = '#d1d5db';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
                   >
                     {businessTypes.map((type) => (
                       <option key={type.type} value={type.type}>
@@ -393,11 +479,23 @@ function TenantModal({
                     </div>
                   )}
                   {formData.businessType && !loadingBusinessTypes && (
-                    <div className="mt-2 p-3 bg-blue-50 border border-blue-200">
-                      <p className="text-xs text-blue-900 font-medium mb-1">
+                    <div
+                      className="mt-2 p-3 border"
+                      style={{
+                        backgroundColor: `${primaryColor}10`,
+                        borderColor: `${primaryColor}40`,
+                      }}
+                    >
+                      <p
+                        className="text-xs font-medium mb-1"
+                        style={{ color: primaryColor }}
+                      >
                         {businessTypes.find((t) => t.type === formData.businessType)?.name || 'Business Type'}
                       </p>
-                      <p className="text-xs text-blue-700">
+                      <p
+                        className="text-xs"
+                        style={{ color: primaryColor }}
+                      >
                         {businessTypes.find((t) => t.type === formData.businessType)?.description || ''}
                       </p>
                     </div>
@@ -413,7 +511,16 @@ function TenantModal({
                 type="email"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full px-3 py-2 border border-gray-300 bg-white"
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = primaryColor;
+                  e.currentTarget.style.outline = 'none';
+                  e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = '#d1d5db';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
               />
             </div>
             <div>
@@ -424,7 +531,16 @@ function TenantModal({
                 type="tel"
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full px-3 py-2 border border-gray-300 bg-white"
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = primaryColor;
+                  e.currentTarget.style.outline = 'none';
+                  e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = '#d1d5db';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
               />
             </div>
             <div>
@@ -435,7 +551,16 @@ function TenantModal({
                 type="text"
                 value={formData.companyName}
                 onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full px-3 py-2 border border-gray-300 bg-white"
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = primaryColor;
+                  e.currentTarget.style.outline = 'none';
+                  e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = '#d1d5db';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
               />
             </div>
             {error && (
@@ -454,7 +579,12 @@ function TenantModal({
               <button
                 type="submit"
                 disabled={saving}
-                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
+                className="px-4 py-2 text-white disabled:opacity-50 transition-opacity hover:opacity-90"
+                style={{
+                  backgroundColor: primaryColor,
+                  borderColor: primaryColor,
+                  border: `1px solid ${primaryColor}`,
+                }}
               >
                 {saving ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
               </button>

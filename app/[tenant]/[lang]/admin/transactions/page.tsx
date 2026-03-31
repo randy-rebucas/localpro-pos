@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 import Currency from '@/components/Currency';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { getDefaultTenantSettings } from '@/lib/currency';
 
 interface Transaction {
   _id: string;
@@ -43,7 +44,8 @@ export default function TransactionsPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const { settings } = useTenantSettings(); // eslint-disable-line @typescript-eslint/no-unused-vars
+  const { settings: tenantSettings } = useTenantSettings();
+  const primaryColor = (tenantSettings || getDefaultTenantSettings()).primaryColor || '#2563eb';
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -77,7 +79,16 @@ export default function TransactionsPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+          <div
+            className="inline-block animate-spin h-8 w-8"
+            style={{
+              borderTop: `2px solid ${primaryColor}`,
+              borderRight: `2px solid ${primaryColor}`,
+              borderBottom: '2px solid transparent',
+              borderLeft: `2px solid ${primaryColor}`,
+              borderRadius: '50%',
+            }}
+          />
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
@@ -91,7 +102,10 @@ export default function TransactionsPage() {
         <div className="mb-6 sm:mb-8">
           <Link
             href={`/${tenant}/${lang}/admin`}
-            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium mb-4 transition-colors"
+            className="inline-flex items-center font-medium mb-4 transition-colors"
+            style={{ color: primaryColor }}
+            onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.8')}
+            onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
           >
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -157,7 +171,14 @@ export default function TransactionsPage() {
                       <Currency amount={transaction.total} />
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap">
-                      <span className="px-2 py-1 text-xs font-semibold border border-blue-300 bg-blue-100 text-blue-800">
+                      <span
+                        className="px-2 py-1 text-xs font-semibold border"
+                        style={{
+                          backgroundColor: `${primaryColor}20`,
+                          color: primaryColor,
+                          borderColor: primaryColor,
+                        }}
+                      >
                         {transaction.paymentMethod}
                       </span>
                       {transaction.paymentMethod === 'cash' && transaction.change !== undefined && (
@@ -179,7 +200,8 @@ export default function TransactionsPage() {
                     <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
                       <button
                         onClick={() => setSelectedTransaction(transaction)}
-                        className="text-blue-600 hover:text-blue-900"
+                        style={{ color: primaryColor }}
+                        className="hover:opacity-70 transition-opacity"
                       >
                         {dict.common?.view || 'View'}
                       </button>
@@ -218,6 +240,7 @@ export default function TransactionsPage() {
         {selectedTransaction && (
           <TransactionDetailModal
             transaction={selectedTransaction}
+            primaryColor={primaryColor}
             onClose={() => setSelectedTransaction(null)}
             dict={dict}
           />
@@ -229,10 +252,12 @@ export default function TransactionsPage() {
 
 function TransactionDetailModal({
   transaction,
+  primaryColor = '#2563eb',
   onClose,
   dict,
 }: {
   transaction: Transaction;
+  primaryColor?: string;
   onClose: () => void;
   dict: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }) {

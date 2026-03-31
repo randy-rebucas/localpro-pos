@@ -98,7 +98,7 @@ export default function BookingCalendar({
       case 'pending':
         return 'bg-yellow-100 text-yellow-800 border-yellow-300';
       case 'completed':
-        return 'bg-blue-100 text-blue-800 border-blue-300';
+        return `border` // Use dynamic style below
       case 'cancelled':
         return 'bg-red-100 text-red-800 border-red-300';
       case 'no-show':
@@ -106,6 +106,14 @@ export default function BookingCalendar({
       default:
         return 'bg-gray-100 text-gray-800 border-gray-300';
     }
+  };
+
+  const getCompletedStatusStyles = () => {
+    return {
+      backgroundColor: `${settings?.primaryColor || '#3b82f6'}15`,
+      borderColor: settings?.primaryColor || '#3b82f6',
+      color: settings?.primaryColor || '#3b82f6'
+    };
   };
 
   const formatTime = (dateString: string) => {
@@ -154,7 +162,13 @@ export default function BookingCalendar({
           </button>
           <button
             onClick={() => setCurrentDate(new Date())}
-            className="ml-4 px-4 py-2 text-sm bg-blue-600 text-white hover:bg-blue-700 transition-colors border border-blue-700"
+            className="ml-4 px-4 py-2 text-sm text-white transition-colors border"
+            style={{
+              backgroundColor: settings?.primaryColor || '#3b82f6',
+              borderColor: settings?.primaryColor || '#3b82f6'
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = `${settings?.primaryColor || '#3b82f6'}dd`; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = settings?.primaryColor || '#3b82f6'; }}
           >
             {dict?.components?.bookingCalendar?.today || 'Today'}
           </button>
@@ -162,25 +176,73 @@ export default function BookingCalendar({
         <div className="flex gap-2">
           <button
             onClick={() => setView('month')}
-            className={`px-4 py-2 text-sm border border-gray-300 transition-colors ${
-              view === 'month' ? 'bg-blue-600 text-white border-blue-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
+            className="px-4 py-2 text-sm border border-gray-300 transition-colors font-medium"
+            style={view === 'month' ? {
+              backgroundColor: settings?.primaryColor || '#3b82f6',
+              color: 'white',
+              borderColor: settings?.primaryColor || '#3b82f6'
+            } : {
+              backgroundColor: '#f3f4f6',
+              color: '#374151'
+            }}
+            onMouseEnter={(e) => {
+              if (view !== 'month') {
+                e.currentTarget.style.backgroundColor = '#e5e7eb';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (view !== 'month') {
+                e.currentTarget.style.backgroundColor = '#f3f4f6';
+              }
+            }}
           >
             {dict?.components?.bookingCalendar?.month || 'Month'}
           </button>
           <button
             onClick={() => setView('week')}
-            className={`px-4 py-2 text-sm border border-gray-300 transition-colors ${
-              view === 'week' ? 'bg-blue-600 text-white border-blue-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
+            className="px-4 py-2 text-sm border border-gray-300 transition-colors font-medium"
+            style={view === 'week' ? {
+              backgroundColor: settings?.primaryColor || '#3b82f6',
+              color: 'white',
+              borderColor: settings?.primaryColor || '#3b82f6'
+            } : {
+              backgroundColor: '#f3f4f6',
+              color: '#374151'
+            }}
+            onMouseEnter={(e) => {
+              if (view !== 'week') {
+                e.currentTarget.style.backgroundColor = '#e5e7eb';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (view !== 'week') {
+                e.currentTarget.style.backgroundColor = '#f3f4f6';
+              }
+            }}
           >
             {dict?.components?.bookingCalendar?.week || 'Week'}
           </button>
           <button
             onClick={() => setView('day')}
-            className={`px-4 py-2 text-sm border border-gray-300 transition-colors ${
-              view === 'day' ? 'bg-blue-600 text-white border-blue-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
+            className="px-4 py-2 text-sm border border-gray-300 transition-colors font-medium"
+            style={view === 'day' ? {
+              backgroundColor: settings?.primaryColor || '#3b82f6',
+              color: 'white',
+              borderColor: settings?.primaryColor || '#3b82f6'
+            } : {
+              backgroundColor: '#f3f4f6',
+              color: '#374151'
+            }}
+            onMouseEnter={(e) => {
+              if (view !== 'day') {
+                e.currentTarget.style.backgroundColor = '#e5e7eb';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (view !== 'day') {
+                e.currentTarget.style.backgroundColor = '#f3f4f6';
+              }
+            }}
           >
             {dict?.components?.bookingCalendar?.day || 'Day'}
           </button>
@@ -210,18 +272,25 @@ export default function BookingCalendar({
                     onDateSelect(date);
                   }
                 }}
-                className={`min-h-[100px] p-2 border border-gray-300 cursor-pointer transition-colors ${
-                  !date ? 'bg-gray-50' :
-                  isToday ? 'bg-blue-50 border-blue-300' :
-                  isSelected ? 'bg-blue-100 border-blue-400' :
-                  'bg-white border-gray-200 hover:bg-gray-50'
-                }`}
+                className="min-h-[100px] p-2 border cursor-pointer transition-colors"
+                style={{
+                  borderColor: !date ? '#f3f4f6' : isToday ? (settings?.primaryColor || '#3b82f6') : isSelected ? (settings?.primaryColor || '#3b82f6') : '#e5e7eb',
+                  backgroundColor: !date ? '#f3f4f6' : isToday ? `${settings?.primaryColor || '#3b82f6'}15` : isSelected ? `${settings?.primaryColor || '#3b82f6'}25` : '#ffffff'
+                }}
+                onMouseEnter={(e) => {
+                  if (date && !isToday && !isSelected) {
+                    e.currentTarget.style.backgroundColor = '#f9fafb';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = !date ? '#f3f4f6' : isToday ? `${settings?.primaryColor || '#3b82f6'}15` : isSelected ? `${settings?.primaryColor || '#3b82f6'}25` : '#ffffff';
+                }}
               >
                 {date && (
                   <>
-                    <div className={`text-sm font-semibold mb-1 ${
-                      isToday ? 'text-blue-600' : 'text-gray-900'
-                    }`}>
+                    <div className="text-sm font-semibold mb-1" style={{
+                      color: isToday ? (settings?.primaryColor || '#3b82f6') : '#111827'
+                    }}>
                       {date.getDate()}
                     </div>
                     <div className="space-y-1">

@@ -8,6 +8,7 @@ import LowStockAlerts from '@/components/LowStockAlerts';
 import RealTimeStockTracker from '@/components/RealTimeStockTracker';
 import { getDictionaryClient } from '../dictionaries-client';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { getDefaultTenantSettings } from '@/lib/currency';
 import { getBusinessTypeConfig } from '@/lib/business-types';
 import { getBusinessType, supportsFeature } from '@/lib/business-type-helpers';
 
@@ -22,6 +23,7 @@ export default function InventoryPage() {
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const { settings } = useTenantSettings();
+  const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#3b82f6';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [selectedBranch, setSelectedBranch] = useState<string>('');
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -64,7 +66,7 @@ export default function InventoryPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="inline-block animate-spin h-8 w-8 border-b-2" style={{ borderBottomColor: primaryColor }}></div>
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
@@ -125,7 +127,19 @@ export default function InventoryPage() {
                 value={selectedBranch}
                 onChange={(e) => setSelectedBranch(e.target.value)}
                 disabled={loading}
-                className="block w-48 border-2 border-gray-300 focus:border-blue-500 focus:ring-blue-500 sm:text-sm bg-white disabled:opacity-50"
+                style={{
+                  borderWidth: '2px',
+                  borderColor: '#d1d5db',
+                }}
+                onFocus={(e) => {
+                  (e.target as HTMLSelectElement).style.borderColor = primaryColor;
+                  (e.target as HTMLSelectElement).style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                }}
+                onBlur={(e) => {
+                  (e.target as HTMLSelectElement).style.borderColor = '#d1d5db';
+                  (e.target as HTMLSelectElement).style.boxShadow = 'none';
+                }}
+                className="block w-48 sm:text-sm bg-white disabled:opacity-50 transition-all"
               >
                 <option value="">{loading ? (dict?.common?.loading || 'Loading…') : (dict?.inventory?.allBranches || 'All Branches')}</option>
                 {branches.map((branch) => (

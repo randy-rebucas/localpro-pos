@@ -2,15 +2,22 @@
 
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import Navbar from '@/components/Navbar';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import toast from 'react-hot-toast';
 import { getDictionaryClient } from '../../dictionaries-client';
 import Currency from '@/components/Currency';
-// Export libs loaded on demand — see handleExport()
 import dynamic from 'next/dynamic';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getBusinessTypeConfig } from '@/lib/business-types';
 import { getBusinessType } from '@/lib/business-type-helpers';
+import { useBundlesList, type Bundle, type BundleItem } from '@/hooks/useBundlesList';
+import { useBundleForm } from '@/hooks/useBundleForm';
+import { useBundlesAnalytics } from '@/hooks/useBundlesAnalytics';
+import {
+  getDeleteConfirmMessage,
+  getBulkActionConfirmMessage,
+} from '@/lib/bundles-helpers';
 
 // Dynamically import charts to avoid SSR issues
 const BundlePerformanceCharts = dynamic(() => import('@/components/BundlePerformanceCharts'), {
@@ -24,30 +31,6 @@ const BundlePerformanceCharts = dynamic(() => import('@/components/BundlePerform
     </div>
   ),
 });
-
-interface BundleItem {
-  productId: string | { _id: string; name: string; price: number; stock: number };
-  productName: string;
-  quantity: number;
-  variation?: {
-    size?: string;
-    color?: string;
-    type?: string;
-  };
-}
-
-interface Bundle {
-  _id: string;
-  name: string;
-  description?: string;
-  price: number;
-  items: BundleItem[];
-  sku?: string;
-  categoryId?: string | { _id: string; name: string };
-  trackInventory: boolean;
-  isActive: boolean;
-  createdAt: string;
-}
 
 interface Product {
   _id: string;
@@ -67,16 +50,12 @@ interface Category {
 
 export default function BundlesPage() {
   const params = useParams();
-  const router = useRouter(); // eslint-disable-line @typescript-eslint/no-unused-vars
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [bundles, setBundles] = useState<Bundle[]>([]);
+  const [dict, setDict] = useState<Record<string, any> | null>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
   const [productsLoading, setProductsLoading] = useState(true);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showBundleModal, setShowBundleModal] = useState(false);
   const [editingBundle, setEditingBundle] = useState<Bundle | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -89,17 +68,30 @@ export default function BundlesPage() {
   const [selectedBundles, setSelectedBundles] = useState<Set<string>>(new Set());
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
-  const [analytics, setAnalytics] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [analyticsStartDate, setAnalyticsStartDate] = useState('');
   const [analyticsEndDate, setAnalyticsEndDate] = useState('');
+
   const { settings } = useTenantSettings();
   const businessTypeConfig = settings ? getBusinessTypeConfig(getBusinessType(settings)) : null;
   const bundlesAllowed = businessTypeConfig?.productTypes?.includes('bundle') ?? true;
 
+  const { bundles, loading, fetchBundles, deleteBundle, toggleBundleStatus, bulkToggleStatus } = useBundlesList();
+  const { analytics, loading: analyticsLoading, fetchAnalytics: fetchAnalyticsData } = useBundlesAnalytics();
+
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
-    fetchBundles();
+  }, [lang]);
+
+  useEffect(() => {
+    fetchBundles({
+      search: searchTerm,
+      isActive: filterActive,
+      categoryId: filterCategory,
+      minPrice: filterMinPrice,
+      maxPrice: filterMaxPrice,
+      startDate: filterStartDate,
+      endDate: filterEndDate,
+    });
     fetchProducts();
     fetchCategories();
     // Set default analytics date range (last 30 days)
@@ -108,66 +100,30 @@ export default function BundlesPage() {
     start.setDate(start.getDate() - 30);
     setAnalyticsEndDate(end.toISOString().split('T')[0]);
     setAnalyticsStartDate(start.toISOString().split('T')[0]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lang, tenant]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const fetchAnalytics = async () => {
-    if (!analyticsStartDate || !analyticsEndDate) return;
-    
-    setAnalyticsLoading(true);
-    try {
-      const params = new URLSearchParams();
-      params.append('startDate', analyticsStartDate);
-      params.append('endDate', analyticsEndDate);
-      
-      const res = await fetch(`/api/bundles/analytics?${params}`, { credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
-        setAnalytics(data.data);
-      } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchAnalytics || 'Failed to fetch analytics' });
-      }
-    } catch (error) {
-      console.error('Error fetching analytics:', error);
-      setMessage({ type: 'error', text: dict?.common?.failedToFetchAnalytics || 'Failed to fetch analytics' });
-    } finally {
-      setAnalyticsLoading(false);
+  useEffect(() => {
+    if (!loading && (searchTerm || filterActive !== null || filterCategory || filterMinPrice || filterMaxPrice || filterStartDate || filterEndDate)) {
+      fetchBundles({
+        search: searchTerm,
+        isActive: filterActive,
+        categoryId: filterCategory,
+        minPrice: filterMinPrice,
+        maxPrice: filterMaxPrice,
+        startDate: filterStartDate,
+        endDate: filterEndDate,
+      });
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, filterActive, filterCategory, filterMinPrice, filterMaxPrice, filterStartDate, filterEndDate]);
 
   useEffect(() => {
     if (showAnalytics && analyticsStartDate && analyticsEndDate) {
-      fetchAnalytics();
+      fetchAnalyticsData(analyticsStartDate, analyticsEndDate, (error) => toast.error(error));
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showAnalytics, analyticsStartDate, analyticsEndDate]);
-
-  const fetchBundles = async () => {
-    try {
-      const params = new URLSearchParams();
-      if (searchTerm) params.append('search', searchTerm);
-      if (filterActive !== null) params.append('isActive', filterActive.toString());
-      if (filterCategory) params.append('categoryId', filterCategory);
-      if (filterMinPrice) params.append('minPrice', filterMinPrice);
-      if (filterMaxPrice) params.append('maxPrice', filterMaxPrice);
-      if (filterStartDate) params.append('startDate', filterStartDate);
-      if (filterEndDate) params.append('endDate', filterEndDate);
-      
-      const res = await fetch(`/api/bundles?${params}`, { credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
-        setBundles(data.data);
-        setMessage(null);
-      } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchBundles || 'Failed to fetch bundles' });
-      }
-    } catch (error) {
-      console.error('Error fetching bundles:', error);
-      setMessage({ type: 'error', text: dict?.common?.failedToFetchBundles || 'Failed to fetch bundles' });
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const fetchProducts = async () => {
     setProductsLoading(true);
@@ -202,81 +158,80 @@ export default function BundlesPage() {
     }
   };
 
-  useEffect(() => {
-    if (!loading) {
-      fetchBundles();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm, filterActive, filterCategory, filterMinPrice, filterMaxPrice, filterStartDate, filterEndDate]);
-
   const handleDeleteBundle = async (bundleId: string) => {
-    if (!confirm(dict?.admin?.deleteBundleConfirm || 'Are you sure you want to delete this bundle?')) return;
-    try {
-      const res = await fetch(`/api/bundles/${bundleId}`, { method: 'DELETE', credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
-        setMessage({ type: 'success', text: dict?.admin?.deleteBundleSuccess || 'Bundle deleted successfully' });
-        fetchBundles();
-      } else {
-        setMessage({ type: 'error', text: data.error || dict?.admin?.deleteBundleError || 'Failed to delete bundle' });
-      }
-    } catch (error) {
-      setMessage({ type: 'error', text: dict?.admin?.deleteBundleError || 'Failed to delete bundle' });
-    }
+    if (!dict) return;
+    if (!confirm(getDeleteConfirmMessage(dict))) return;
+
+    await deleteBundle(
+      bundleId,
+      async (message) => {
+        toast.success(message);
+        await fetchBundles({
+          search: searchTerm,
+          isActive: filterActive,
+          categoryId: filterCategory,
+          minPrice: filterMinPrice,
+          maxPrice: filterMaxPrice,
+          startDate: filterStartDate,
+          endDate: filterEndDate,
+        });
+      },
+      (error) => toast.error(error)
+    );
   };
 
   const handleToggleStatus = async (bundle: Bundle) => {
-    try {
-      const res = await fetch(`/api/bundles/${bundle._id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ isActive: !bundle.isActive }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setMessage({ type: 'success', text: `Bundle ${!bundle.isActive ? (dict?.admin?.activated || 'activated') : (dict?.admin?.deactivated || 'deactivated')} ${dict?.admin?.successfully || 'successfully'}` });
-        fetchBundles();
-      } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToUpdateBundle || 'Failed to update bundle' });
-      }
-    } catch (error) {
-      setMessage({ type: 'error', text: dict?.common?.failedToUpdateBundle || 'Failed to update bundle' });
-    }
+    if (!dict) return;
+    if (!confirm(getDeleteConfirmMessage(dict))) return;
+
+    await toggleBundleStatus(
+      bundle._id,
+      bundle.isActive,
+      (message) => {
+        toast.success(message);
+        fetchBundles({
+          search: searchTerm,
+          isActive: filterActive,
+          categoryId: filterCategory,
+          minPrice: filterMinPrice,
+          maxPrice: filterMaxPrice,
+          startDate: filterStartDate,
+          endDate: filterEndDate,
+        });
+      },
+      (error) => toast.error(error)
+    );
   };
 
   const handleBulkOperation = async (action: 'activate' | 'deactivate') => {
     if (selectedBundles.size === 0) {
-      setMessage({ type: 'error', text: dict?.common?.selectAtLeastOneBundle || 'Please select at least one bundle' });
+      toast.error(dict?.common?.selectAtLeastOneBundle || 'Please select at least one bundle');
       return;
     }
 
-    const confirmText = dict?.common?.bulkActionBundleConfirm?.replace('{action}', action).replace('{count}', selectedBundles.size.toString()) || `Are you sure you want to ${action} ${selectedBundles.size} bundle(s)?`;
-    if (!confirm(confirmText)) {
+    if (!dict) return;
+    if (!confirm(getBulkActionConfirmMessage(action, selectedBundles.size, dict))) {
       return;
     }
 
-    try {
-      const res = await fetch('/api/bundles/bulk', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          bundleIds: Array.from(selectedBundles),
-          action,
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setMessage({ type: 'success', text: data.message || `Bundles ${action}d successfully` });
+    await bulkToggleStatus(
+      Array.from(selectedBundles),
+      action,
+      async (message) => {
+        toast.success(message);
         setSelectedBundles(new Set());
-        fetchBundles();
-      } else {
-        setMessage({ type: 'error', text: data.error || `Failed to ${action} bundles` });
-      }
-    } catch (error) {
-      setMessage({ type: 'error', text: `Failed to ${action} bundles` });
-    }
+        await fetchBundles({
+          search: searchTerm,
+          isActive: filterActive,
+          categoryId: filterCategory,
+          minPrice: filterMinPrice,
+          maxPrice: filterMaxPrice,
+          startDate: filterStartDate,
+          endDate: filterEndDate,
+        });
+      },
+      (error) => toast.error(error)
+    );
   };
 
   const handleSelectAll = () => {
@@ -298,6 +253,8 @@ export default function BundlesPage() {
   };
 
   const handleExport = async (format: 'csv' | 'excel' | 'pdf' = 'csv') => {
+    if (!dict) return;
+
     const headers = [
       'Name',
       'SKU',
@@ -343,6 +300,12 @@ export default function BundlesPage() {
     setFilterEndDate('');
   };
 
+  const handleLoadAnalytics = () => {
+    if (analyticsStartDate && analyticsEndDate) {
+      fetchAnalyticsData(analyticsStartDate, analyticsEndDate, (error) => toast.error(error));
+    }
+  };
+
   if (!dict || loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -377,12 +340,6 @@ export default function BundlesPage() {
             </div>
           </div>
         </div>
-
-        {message && (
-          <div className={`mb-6 p-4 border ${message.type === 'success' ? 'bg-green-50 text-green-800 border-green-300' : 'bg-red-50 text-red-800 border-red-300'}`}>
-            {message.text}
-          </div>
-        )}
 
         {!bundlesAllowed && (
           <div className="mb-6 p-4 bg-yellow-50 border-2 border-yellow-300 text-yellow-800">
@@ -444,7 +401,7 @@ export default function BundlesPage() {
                 </div>
                 <div className="flex items-end">
                   <button
-                    onClick={fetchAnalytics}
+                    onClick={handleLoadAnalytics}
                     className="w-full px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
                   >
                     {dict.admin?.loadAnalytics || 'Load Analytics'}
@@ -483,7 +440,20 @@ export default function BundlesPage() {
 
                   {/* Bundle Performance Charts */}
                   {analytics.analytics && analytics.analytics.length > 0 && (
-                    <BundlePerformanceCharts analytics={analytics.analytics} dict={dict} />
+                    <BundlePerformanceCharts 
+                      analytics={analytics.analytics.map((item: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+                        bundleId: item.bundleId,
+                        bundleName: item.bundleName,
+                        bundlePrice: 0, // Not available in API response
+                        totalSales: item.totalRevenue,
+                        totalQuantity: item.unitsSold,
+                        transactionCount: item.unitsSold, // Use unitsSold as transaction count
+                        averageOrderValue: item.averageOrderValue,
+                        averageQuantity: item.unitsSold,
+                        revenuePerUnit: item.totalRevenue / (item.unitsSold || 1),
+                      }))} 
+                      dict={dict} 
+                    />
                   )}
 
                   {/* Analytics Table */}
@@ -503,10 +473,10 @@ export default function BundlesPage() {
                         {analytics.analytics.map((item: any) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
                           <tr key={item.bundleId}>
                             <td className="px-4 py-4 text-sm font-medium text-gray-900">{item.bundleName}</td>
-                            <td className="px-4 py-4 text-sm text-gray-500"><Currency amount={item.bundlePrice} /></td>
-                            <td className="px-4 py-4 text-sm font-medium text-gray-900"><Currency amount={item.totalSales} /></td>
-                            <td className="px-4 py-4 text-sm text-gray-500">{item.totalQuantity}</td>
-                            <td className="px-4 py-4 text-sm text-gray-500">{item.transactionCount}</td>
+                            <td className="px-4 py-4 text-sm text-gray-500">-</td>
+                            <td className="px-4 py-4 text-sm font-medium text-gray-900"><Currency amount={item.totalRevenue} /></td>
+                            <td className="px-4 py-4 text-sm text-gray-500">{item.unitsSold}</td>
+                            <td className="px-4 py-4 text-sm text-gray-500">{item.unitsSold}</td>
                             <td className="px-4 py-4 text-sm text-gray-500"><Currency amount={item.averageOrderValue} /></td>
                           </tr>
                         ))}
@@ -583,15 +553,26 @@ export default function BundlesPage() {
                 </div>
               </div>
               {bundlesAllowed && (
-                <button
-                  onClick={() => {
-                    setEditingBundle(null);
-                    setShowBundleModal(true);
-                  }}
-                  className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
-                >
-                  {dict.common?.add || 'Add'} {dict.admin?.bundle || 'Bundle'}
-                </button>
+                <>
+                  <Link
+                    href={`/${tenant}/${lang}/admin/file-upload`}
+                    className="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium border border-gray-300 inline-flex items-center gap-2 transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                    {dict.admin?.uploadImages || 'Upload Images'}
+                  </Link>
+                  <button
+                    onClick={() => {
+                      setEditingBundle(null);
+                      setShowBundleModal(true);
+                    }}
+                    className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
+                  >
+                    {dict.common?.add || 'Add'} {dict.admin?.bundle || 'Bundle'}
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -839,22 +820,13 @@ function BundleModal({
   onSave: () => void;
   dict: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }) {
-  const [formData, setFormData] = useState({
-    name: bundle?.name || '',
-    description: bundle?.description || '',
-    price: bundle?.price || 0,
-    sku: bundle?.sku || '',
-    categoryId: typeof bundle?.categoryId === 'object' && bundle.categoryId?._id ? bundle.categoryId._id : bundle?.categoryId || '',
-    trackInventory: bundle?.trackInventory !== undefined ? bundle.trackInventory : true,
-    items: bundle?.items || [] as BundleItem[],
-  });
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const { formData, setFormData, error, submitting, handleSubmit: submitForm } = useBundleForm(bundle);
   const [productSearch, setProductSearch] = useState('');
   const [showProductSuggestions, setShowProductSuggestions] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [itemQuantity, setItemQuantity] = useState(1);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [localError, setLocalError] = useState(''); // Local error for product validation
   const searchInputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
   const suggestionItemsRef = useRef<(HTMLButtonElement | null)[]>([]);
@@ -911,6 +883,7 @@ function BundleModal({
   }, [products, productSearch]);
 
   // Auto-select product if there's an exact match
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
     if (productSearch.trim()) {
       const exactMatch = products.find(
@@ -977,8 +950,8 @@ function BundleModal({
     );
     
     if (alreadyAdded) {
-      setError(dict?.admin?.productAlreadyInBundle || 'This product is already in the bundle');
-      setTimeout(() => setError(''), 3000);
+      setLocalError(dict?.admin?.productAlreadyInBundle || 'This product is already in the bundle');
+      setTimeout(() => setLocalError(''), 3000);
       return;
     }
     
@@ -1040,8 +1013,8 @@ function BundleModal({
         );
         
         if (alreadyAdded) {
-          setError(dict?.admin?.productAlreadyInBundle || 'This product is already in the bundle');
-          setTimeout(() => setError(''), 3000);
+          setLocalError(dict?.admin?.productAlreadyInBundle || 'This product is already in the bundle');
+          setTimeout(() => setLocalError(''), 3000);
           return;
         }
         
@@ -1090,50 +1063,16 @@ function BundleModal({
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setError('');
     
-    if (formData.items.length === 0) {
-      setError(dict?.admin?.bundleItemsRequired || 'At least one item is required');
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const url = bundle ? `/api/bundles/${bundle._id}` : '/api/bundles';
-      const method = bundle ? 'PUT' : 'POST';
-      const body = {
-        name: formData.name,
-        description: formData.description || undefined,
-        price: formData.price,
-        sku: formData.sku || undefined,
-        categoryId: formData.categoryId || undefined,
-        trackInventory: formData.trackInventory,
-        items: formData.items.map(item => ({
-          productId: typeof item.productId === 'object' ? item.productId._id : item.productId,
-          productName: item.productName,
-          quantity: item.quantity,
-          variation: item.variation,
-        })),
-      };
-
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(body),
-      });
-
-      const data = await res.json();
-      if (data.success) {
+    await submitForm(
+      async () => {
+        toast.success(dict?.admin?.bundleSavedSuccessfully || 'Bundle saved successfully');
         onSave();
-      } else {
-        setError(data.error || dict?.admin?.saveBundleError || 'Failed to save bundle');
+      },
+      (errorMsg) => {
+        toast.error(errorMsg);
       }
-    } catch (error) {
-      setError(dict?.admin?.saveBundleError || 'Failed to save bundle');
-    } finally {
-      setSaving(false);
-    }
+    );
   };
 
   return (
@@ -1198,7 +1137,7 @@ function BundleModal({
                   {dict.admin?.category || 'Category'}
                 </label>
                 <select
-                  value={typeof formData.categoryId === 'string' ? formData.categoryId : formData.categoryId?._id || ''}
+                  value={formData.categoryId || ''}
                   onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                 >
@@ -1268,8 +1207,8 @@ function BundleModal({
                                 type="button"
                                 onClick={() => {
                                   if (isAlreadyAdded) {
-                                    setError(dict?.admin?.productAlreadyInBundle || 'This product is already in the bundle');
-                                    setTimeout(() => setError(''), 3000);
+                                    setLocalError(dict?.admin?.productAlreadyInBundle || 'This product is already in the bundle');
+                                    setTimeout(() => setLocalError(''), 3000);
                                     return;
                                   }
                                   setSelectedProduct(product);
@@ -1393,10 +1332,10 @@ function BundleModal({
               </button>
               <button
                 type="submit"
-                disabled={saving}
+                disabled={submitting}
                 className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
               >
-                {saving ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
+                {submitting ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
               </button>
             </div>
           </form>

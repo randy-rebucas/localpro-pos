@@ -5,37 +5,27 @@ import Navbar from '@/components/Navbar';
 import BusinessHoursManager from '@/components/settings/BusinessHoursManager';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import toast from 'react-hot-toast';
 import { getDictionaryClient } from '../../dictionaries-client';
-import { ITenantSettings } from '@/models/Tenant';
+import { useBusinessHoursSettings } from '@/hooks/useBusinessHoursSettings';
+import { getUpdateSuccessMessage, getUpdateErrorMessage } from '@/lib/business-hours-helpers';
 
 export default function BusinessHoursAdminPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [loading, setLoading] = useState(true);
-  const [settings, setSettings] = useState<ITenantSettings | null>(null);
+
+  const { settings, loading, fetchSettings, updateSettings } = useBusinessHoursSettings(tenant);
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
-    fetchSettings();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lang, tenant]);
+  }, [lang]);
 
-  const fetchSettings = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch(`/api/tenants/${tenant}/settings`);
-      const data = await res.json();
-      if (data.success) {
-        setSettings(data.data);
-      }
-    } catch (error) {
-      console.error('Error fetching settings:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    fetchSettings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenant]);
 
   if (!dict || loading || !settings) {
     return (
@@ -75,7 +65,15 @@ export default function BusinessHoursAdminPage() {
             settings={settings}
             tenant={tenant}
             onUpdate={(updates) => {
-              setSettings({ ...settings, ...updates });
+              updateSettings(
+                updates,
+                () => {
+                  toast.success(dict?.admin?.businessHoursUpdated || 'Business hours updated successfully');
+                },
+                (error) => {
+                  toast.error(error || dict?.admin?.updateBusinessHoursError || 'Failed to update business hours');
+                }
+              );
             }}
           />
         </div>

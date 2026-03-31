@@ -1,8 +1,9 @@
 'use client';
 
-import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { useParams } from 'next/navigation'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import React, { Component, ErrorInfo, ReactNode, useState, useEffect } from 'react';
+import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
+import { getDefaultTenantSettings } from '@/lib/currency';
 
 interface Props {
   children: ReactNode;
@@ -12,24 +13,12 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
-  dict: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
-export default class ErrorBoundary extends Component<Props, State> {
+class ErrorBoundaryClass extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null, dict: null };
-  }
-
-  async componentDidMount() {
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const lang = params.get('lang') || 'en';
-      const dict = await getDictionaryClient(lang as 'en' | 'es');
-      this.setState({ dict });
-    } catch (error) {
-      console.error('Failed to load dictionary:', error);
-    }
+    this.state = { hasError: false, error: null };
   }
 
   static getDerivedStateFromError(error: Error): Partial<State> {
@@ -54,49 +43,69 @@ export default class ErrorBoundary extends Component<Props, State> {
         return this.props.fallback;
       }
 
-      return (
-        <div className="min-h-screen flex items-center justify-center px-4 py-12">
-          <div className="max-w-md w-full bg-white border-2 border-red-300 p-6 sm:p-8 text-center">
-            <div className="mb-6">
-              <svg
-                className="mx-auto h-16 w-16 text-red-400"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                />
-              </svg>
-            </div>
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">
-              {this.state.dict?.components?.errorBoundary?.somethingWentWrong || this.state.dict?.common?.somethingWentWrong || 'Something went wrong'}
-            </h1>
-            <p className="text-gray-600 mb-6 text-sm sm:text-base">
-              {this.state.error?.message || (this.state.dict?.components?.errorBoundary?.unexpectedError || this.state.dict?.common?.unexpectedError || 'An unexpected error occurred. Please try again.')}
-            </p>
-            <div className="space-y-3">
-              <button
-                onClick={this.handleReset}
-                className="w-full bg-blue-600 text-white px-4 py-2.5 sm:py-3 rounded-md hover:bg-blue-700 font-medium transition-colors text-sm sm:text-base"
-              >
-                {this.state.dict?.components?.errorBoundary?.tryAgain || this.state.dict?.common?.tryAgain || 'Try Again'}
-              </button>
-              <button
-                onClick={() => window.location.reload()}
-                className="w-full bg-gray-100 text-gray-700 px-4 py-2.5 sm:py-3 rounded-md hover:bg-gray-200 font-medium transition-colors text-sm sm:text-base"
-              >
-                {this.state.dict?.components?.errorBoundary?.reloadPage || this.state.dict?.common?.reloadPage || 'Reload Page'}
-              </button>
-            </div>
-          </div>
-        </div>
-      );
+      return <ErrorFallback error={this.state.error} onReset={this.handleReset} />;
     }
 
     return this.props.children;
   }
 }
+
+function ErrorFallback({ error, onReset }: { error: Error | null; onReset: () => void }) {
+  const params = useParams();
+  const lang = (params?.lang as 'en' | 'es') || 'en';
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const primaryColor = getDefaultTenantSettings().primaryColor || '#3b82f6';
+
+  useEffect(() => {
+    getDictionaryClient(lang).then(setDict);
+  }, [lang]);
+
+  return (
+    <div className="min-h-screen flex items-center justify-center px-4 py-12">
+      <div className="max-w-md w-full bg-white border-2 border-red-300 p-6 sm:p-8 text-center">
+        <div className="mb-6">
+          <svg
+            className="mx-auto h-16 w-16 text-red-400"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+            />
+          </svg>
+        </div>
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">
+          {dict?.components?.errorBoundary?.somethingWentWrong || dict?.common?.somethingWentWrong || 'Something went wrong'}
+        </h1>
+        <p className="text-gray-600 mb-6 text-sm sm:text-base">
+          {error?.message || (dict?.components?.errorBoundary?.unexpectedError || dict?.common?.unexpectedError || 'An unexpected error occurred. Please try again.')}
+        </p>
+        <div className="space-y-3">
+          <button
+            onClick={onReset}
+            className="w-full text-white px-4 py-2.5 sm:py-3 rounded-md font-medium transition-colors text-sm sm:text-base"
+            style={{
+              backgroundColor: primaryColor,
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = `${primaryColor}dd`; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = primaryColor; }}
+          >
+            {dict?.components?.errorBoundary?.tryAgain || dict?.common?.tryAgain || 'Try Again'}
+          </button>
+          <button
+            onClick={() => window.location.reload()}
+            className="w-full bg-gray-100 text-gray-700 px-4 py-2.5 sm:py-3 rounded-md hover:bg-gray-200 font-medium transition-colors text-sm sm:text-base"
+          >
+            {dict?.components?.errorBoundary?.reloadPage || dict?.common?.reloadPage || 'Reload Page'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default ErrorBoundaryClass;

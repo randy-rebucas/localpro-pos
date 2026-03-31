@@ -1,84 +1,57 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { showToast } from '@/lib/toast';
 import { useConfirm } from '@/lib/confirm';
-
-interface Customer {
-  _id: string;
-  firstName: string;
-  lastName: string;
-  email?: string;
-  phone?: string;
-  tags?: string[];
-  totalSpent?: number;
-  lastPurchaseDate?: string;
-  isActive: boolean;
-  createdAt: string;
-}
-
-interface CustomerForm {
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  notes: string;
-  tags: string;
-}
-
-const emptyForm: CustomerForm = {
-  firstName: '',
-  lastName: '',
-  email: '',
-  phone: '',
-  notes: '',
-  tags: '',
-};
+import { useCustomersList, type Customer } from '@/hooks/useCustomersList';
+import { useCustomersForm } from '@/hooks/useCustomersForm';
+import {
+  getStatusBadgeClass,
+  getStatusLabel,
+  getDeleteConfirmMessage,
+  getDeleteSuccessMessage,
+  getDeleteErrorMessage,
+  getSaveSuccessMessage,
+  getSaveErrorMessage,
+  getToggleStatusMessage,
+  formatCurrency,
+} from '@/lib/customers-helpers';
 
 export default function CustomersPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const [dict, setDict] = useState<Record<string, any>>(null!); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const [showModal, setShowModal] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
-  const [form, setForm] = useState<CustomerForm>(emptyForm);
-  const [saving, setSaving] = useState(false);
-  const [filterActive, setFilterActive] = useState<string>('all');
+
+  const {
+    customers,
+    loading,
+    page,
+    totalPages,
+    search,
+    filterActive,
+    setPage,
+    setSearch,
+    setFilterActive,
+    fetchCustomers,
+    createCustomer,
+    updateCustomer,
+    deleteCustomer,
+    toggleCustomerStatus,
+  } = useCustomersList();
+
+  const { formData, setFormData, error, submitting, handleSubmit, resetForm, initializeForm } = useCustomersForm();
   const { confirm, Dialog: ConfirmDialog } = useConfirm();
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
   }, [lang]);
-
-  const fetchCustomers = useCallback(async () => {
-    try {
-      setLoading(true);
-      const params = new URLSearchParams({ page: String(page), limit: '20' });
-      if (search) params.set('search', search);
-      if (filterActive !== 'all') params.set('isActive', filterActive);
-
-      const res = await fetch(`/api/customers?${params}`, { credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
-        setCustomers(data.data);
-        setTotalPages(data.pagination?.pages || 1);
-      }
-    } catch (error) {
-      console.error('Error fetching customers:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [page, search, filterActive]);
 
   useEffect(() => {
     if (dict) fetchCustomers();
@@ -86,112 +59,59 @@ export default function CustomersPage() {
 
   const openCreate = () => {
     setEditingCustomer(null);
-    setForm(emptyForm);
+    resetForm();
     setShowModal(true);
   };
 
   const openEdit = (customer: Customer) => {
     setEditingCustomer(customer);
-    setForm({
-      firstName: customer.firstName,
-      lastName: customer.lastName,
-      email: customer.email || '',
-      phone: customer.phone || '',
-      notes: '',
-      tags: (customer.tags || []).join(', '),
-    });
+    initializeForm(customer);
     setShowModal(true);
   };
 
   const handleSave = async () => {
-    if (!form.firstName.trim() || !form.lastName.trim()) {
-      showToast.error(dict?.common?.requiredFields || 'First name and last name are required');
-      return;
-    }
-    setSaving(true);
-    try {
-      const payload = {
-        firstName: form.firstName.trim(),
-        lastName: form.lastName.trim(),
-        email: form.email.trim() || undefined,
-        phone: form.phone.trim() || undefined,
-        notes: form.notes.trim() || undefined,
-        tags: form.tags ? form.tags.split(',').map((t: string) => t.trim()).filter(Boolean) : [],
-      };
+    await handleSubmit(async (data) => {
+      const isEdit = !!editingCustomer;
+      const success = isEdit
+        ? await updateCustomer(editingCustomer._id, data)
+        : await createCustomer(data);
 
-      const url = editingCustomer ? `/api/customers/${editingCustomer._id}` : '/api/customers';
-      const method = editingCustomer ? 'PATCH' : 'POST';
-
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (data.success) {
-        showToast.success(editingCustomer ? 'Customer updated' : 'Customer created');
+      if (success) {
+        showToast.success(getSaveSuccessMessage(isEdit, dict));
         setShowModal(false);
-        fetchCustomers();
+        await fetchCustomers();
       } else {
-        showToast.error(data.error || 'Failed to save customer');
+        showToast.error(getSaveErrorMessage(dict));
       }
-    } catch {
-      showToast.error('Failed to save customer');
-    } finally {
-      setSaving(false);
-    }
+      return success;
+    });
   };
 
   const handleDelete = async (customer: Customer) => {
     const confirmed = await confirm(
       'Delete Customer',
-      `Are you sure you want to deactivate ${customer.firstName} ${customer.lastName}?`,
+      getDeleteConfirmMessage(dict),
       { variant: 'danger' }
     );
     if (!confirmed) return;
-    try {
-      const res = await fetch(`/api/customers/${customer._id}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-      const data = await res.json();
-      if (data.success) {
-        showToast.success('Customer deactivated');
-        fetchCustomers();
-      } else {
-        showToast.error(data.error || 'Failed to delete customer');
-      }
-    } catch {
-      showToast.error('Failed to delete customer');
+
+    const success = await deleteCustomer(customer._id);
+    if (success) {
+      showToast.success(getDeleteSuccessMessage(dict));
+      await fetchCustomers();
+    } else {
+      showToast.error(getDeleteErrorMessage(dict));
     }
   };
 
   const handleToggleStatus = async (customer: Customer) => {
-    try {
-      const res = await fetch(`/api/customers/${customer._id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ isActive: !customer.isActive }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        showToast.success(`Customer ${!customer.isActive ? 'activated' : 'deactivated'}`);
-        fetchCustomers();
-      } else {
-        showToast.error(data.error || 'Failed to update customer');
-      }
-    } catch {
-      showToast.error('Failed to update customer');
+    const success = await toggleCustomerStatus(customer._id, !customer.isActive);
+    if (success) {
+      showToast.success(getToggleStatusMessage(!customer.isActive, dict));
+      await fetchCustomers();
+    } else {
+      showToast.error(getDeleteErrorMessage(dict));
     }
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat(lang === 'es' ? 'es' : 'en', {
-      style: 'currency',
-      currency: 'PHP',
-    }).format(amount);
   };
 
   if (!dict || loading) {
@@ -257,6 +177,15 @@ export default function CustomersPage() {
             >
               {dict?.common?.add || 'Add'} {dict?.admin?.customer || 'Customer'}
             </button>
+            <Link
+              href={`/${tenant}/${lang}/admin/file-upload`}
+              className="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium border border-gray-300 inline-flex items-center gap-2 transition-colors whitespace-nowrap"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+              Upload Files
+            </Link>
           </div>
 
           {/* Table */}
@@ -294,7 +223,7 @@ export default function CustomersPage() {
                         {customer.phone || '-'}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatCurrency(customer.totalSpent || 0)}
+                        {formatCurrency(customer.totalSpent || 0, lang)}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap">
                         <div className="flex gap-1 flex-wrap">
@@ -311,13 +240,9 @@ export default function CustomersPage() {
                       <td className="px-4 py-4 whitespace-nowrap">
                         <button
                           onClick={() => handleToggleStatus(customer)}
-                          className={`px-2 py-1 text-xs font-semibold border ${
-                            customer.isActive
-                              ? 'bg-green-100 text-green-800 border-green-300'
-                              : 'bg-red-100 text-red-800 border-red-300'
-                          }`}
+                          className={`px-2 py-1 text-xs font-semibold border ${getStatusBadgeClass(customer.isActive)}`}
                         >
-                          {customer.isActive ? (dict?.common?.active || 'Active') : (dict?.common?.inactive || 'Inactive')}
+                          {getStatusLabel(customer.isActive, dict)}
                         </button>
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm">
@@ -392,8 +317,8 @@ export default function CustomersPage() {
                   </label>
                   <input
                     type="text"
-                    value={form.firstName}
-                    onChange={(e) => setForm({ ...form, firstName: e.target.value })}
+                    value={formData.firstName}
+                    onChange={(e) => setFormData({ firstName: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-blue-500"
                   />
                 </div>
@@ -403,8 +328,8 @@ export default function CustomersPage() {
                   </label>
                   <input
                     type="text"
-                    value={form.lastName}
-                    onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+                    value={formData.lastName}
+                    onChange={(e) => setFormData({ lastName: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-blue-500"
                   />
                 </div>
@@ -415,8 +340,8 @@ export default function CustomersPage() {
                 </label>
                 <input
                   type="email"
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  value={formData.email}
+                  onChange={(e) => setFormData({ email: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-blue-500"
                 />
               </div>
@@ -426,8 +351,8 @@ export default function CustomersPage() {
                 </label>
                 <input
                   type="tel"
-                  value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ phone: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-blue-500"
                 />
               </div>
@@ -437,8 +362,8 @@ export default function CustomersPage() {
                 </label>
                 <input
                   type="text"
-                  value={form.tags}
-                  onChange={(e) => setForm({ ...form, tags: e.target.value })}
+                  value={formData.tags}
+                  onChange={(e) => setFormData({ tags: e.target.value })}
                   placeholder="VIP, Regular, Wholesale"
                   className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-blue-500"
                 />
@@ -448,12 +373,13 @@ export default function CustomersPage() {
                   {dict?.common?.notes || 'Notes'}
                 </label>
                 <textarea
-                  value={form.notes}
-                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ notes: e.target.value })}
                   rows={3}
                   className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-blue-500 resize-none"
                 />
               </div>
+              {error && <div className="text-sm text-red-600">{error}</div>}
             </div>
             <div className="flex justify-end gap-3 p-6 border-t border-gray-200">
               <button
@@ -464,10 +390,10 @@ export default function CustomersPage() {
               </button>
               <button
                 onClick={handleSave}
-                disabled={saving}
+                disabled={submitting}
                 className="px-4 py-2 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 border border-blue-700 disabled:opacity-50"
               >
-                {saving ? (dict?.common?.saving || 'Saving...') : (dict?.common?.save || 'Save')}
+                {submitting ? (dict?.common?.saving || 'Saving...') : (dict?.common?.save || 'Save')}
               </button>
             </div>
           </div>

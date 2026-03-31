@@ -12,55 +12,21 @@ import { useConfirm } from '@/lib/confirm';
 import { getBusinessTypeConfig, getAllowedProductTypes } from '@/lib/business-types'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getBusinessType } from '@/lib/business-type-helpers';
 import { RefreshCw } from 'lucide-react';
+import { useProductsList, type Product, type Category } from '@/hooks/useProductsList';
+import { useProductsForm } from '@/hooks/useProductsForm';
+import {
+  getProductDeletedMessage,
+  getProductDeleteErrorMessage,
+  getProductsFetchErrorMessage,
+  getDeleteProductConfirmTitle,
+  getDeleteProductConfirmMessage,
+  getNoCategoryFoundMessage,
+  getSearchCategoryPlaceholder,
+  generateEAN13 as generateEAN13Helper,
+  getCategoryNameFromProduct,
+} from '@/lib/products-helpers';
 
-interface Product {
-  _id: string;
-  name: string;
-  description?: string;
-  price: number;
-  stock: number;
-  sku?: string;
-  barcode?: string;
-  category?: string;
-  categoryId?: {
-    _id: string;
-    name: string;
-  } | string;
-  image?: string;
-  productType: 'regular' | 'bundle' | 'service';
-  hasVariations: boolean;
-  variations?: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
-  trackInventory: boolean;
-  lowStockThreshold?: number;
-  createdAt: string;
-  // Restaurant-specific fields
-  modifiers?: Array<{
-    name: string;
-    options: Array<{ name: string; price: number }>;
-    required: boolean;
-  }>;
-  allergens?: string[];
-  nutritionInfo?: {
-    calories?: number;
-    protein?: number;
-    carbs?: number;
-    fat?: number;
-  };
-  // Laundry-specific fields
-  serviceType?: 'wash' | 'dry-clean' | 'press' | 'repair' | 'other';
-  weightBased?: boolean;
-  pickupDelivery?: boolean;
-  estimatedDuration?: number;
-  // Service-specific fields
-  serviceDuration?: number;
-  staffRequired?: number;
-  equipmentRequired?: string[];
-}
 
-interface Category {
-  _id: string;
-  name: string;
-}
 
 export default function ProductsPage() {
   const params = useParams();
@@ -68,16 +34,13 @@ export default function ProductsPage() {
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showProductModal, setShowProductModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const { settings } = useTenantSettings();
   const { confirm, Dialog } = useConfirm();
   const [businessTypeConfig, setBusinessTypeConfig] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const { products, categories, loading, message, fetchProducts, fetchCategories, deleteProduct, updateMessage } = useProductsList(tenant);
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -94,57 +57,19 @@ export default function ProductsPage() {
     }
   }, [settings]);
 
-  const fetchProducts = async () => {
-    try {
-      const res = await fetch('/api/products', { credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
-        setProducts(data.data);
-        setMessage(null);
-      } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchProducts || 'Failed to fetch products' });
-      }
-    } catch (error) {
-      console.error('Error fetching products:', error);
-      setMessage({ type: 'error', text: dict?.common?.failedToFetchProducts || 'Failed to fetch products' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchCategories = async () => {
-    try {
-      const res = await fetch('/api/categories', { credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
-        setCategories(data.data);
-      } else {
-        console.error('Error fetching categories:', data.error);
-      }
-    } catch (error) {
-      console.error('Error fetching categories:', error);
-    }
-  };
-
   const handleDeleteProduct = async (productId: string) => {
     if (!dict) return;
     const confirmed = await confirm(
-      dict.common?.deleteProductConfirmTitle || 'Delete Product',
-      dict.common?.deleteProductConfirm || 'Are you sure you want to delete this product?',
+      getDeleteProductConfirmTitle(dict),
+      getDeleteProductConfirmMessage(dict),
       { variant: 'danger' }
     );
     if (!confirmed) return;
-    try {
-      const res = await fetch(`/api/products/${productId}`, { method: 'DELETE', credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
-        showToast.success(dict.common?.productDeletedSuccess || 'Product deleted successfully');
-        fetchProducts();
-      } else {
-        showToast.error(data.error || dict.common?.failedToDeleteProduct || 'Failed to delete product');
-      }
-    } catch (error) {
-      showToast.error(dict.common?.failedToDeleteProduct || 'Failed to delete product');
+    const result = await deleteProduct(productId);
+    if (result.success) {
+      showToast.success(getProductDeletedMessage(dict));
+    } else {
+      showToast.error(result.error || getProductDeleteErrorMessage(dict));
     }
   };
 
@@ -198,7 +123,7 @@ export default function ProductsPage() {
         )}
 
         <div className="bg-white border border-gray-300 p-6">
-          <div className="flex justify-between items-center mb-6">
+          <div className="flex justify-between items-center mb-6 flex-wrap gap-2">
             <div className="flex-1 max-w-md">
               <input
                 type="text"
@@ -208,15 +133,26 @@ export default function ProductsPage() {
                 className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               />
             </div>
-            <button
-              onClick={() => {
-                setEditingProduct(null);
-                setShowProductModal(true);
-              }}
-              className="ml-4 px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
-            >
-              {dict.common?.add || 'Add'} {dict.admin?.product || 'Product'}
-            </button>
+            <div className="flex gap-2">
+              <Link
+                href={`/${tenant}/${lang}/admin/file-upload`}
+                className="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium border border-gray-300 inline-flex items-center gap-2 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                Upload Images
+              </Link>
+              <button
+                onClick={() => {
+                  setEditingProduct(null);
+                  setShowProductModal(true);
+                }}
+                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
+              >
+                {dict.common?.add || 'Add'} {dict.admin?.product || 'Product'}
+              </button>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -356,64 +292,7 @@ function ProductModal({
   businessTypeConfig: any; // eslint-disable-line @typescript-eslint/no-explicit-any
   settings: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }) {
-  const [formData, setFormData] = useState({
-    name: product?.name || '',
-    description: product?.description || '',
-    image: product?.image || '',
-    price: product?.price || 0,
-    stock: product?.stock || 0,
-    sku: product?.sku || '',
-    barcode: product?.barcode || '',
-    categoryId: typeof product?.categoryId === 'object' && product.categoryId?._id ? product.categoryId._id : product?.categoryId || '',
-    productType: product?.productType || (businessTypeConfig?.productTypes?.[0] || 'regular'),
-    trackInventory: product?.trackInventory !== undefined ? product.trackInventory : (businessTypeConfig?.defaultFeatures?.enableInventory ?? true),
-    lowStockThreshold: product?.lowStockThreshold || 10,
-    // Restaurant-specific fields
-    modifiers: product?.modifiers || [],
-    allergens: product?.allergens || [],
-    nutritionInfo: product?.nutritionInfo || { calories: undefined, protein: undefined, carbs: undefined, fat: undefined },
-    // Laundry-specific fields
-    serviceType: product?.serviceType || 'wash',
-    weightBased: product?.weightBased || false,
-    pickupDelivery: product?.pickupDelivery || false,
-    estimatedDuration: product?.estimatedDuration || undefined,
-    // Service-specific fields
-    serviceDuration: product?.serviceDuration || undefined,
-    staffRequired: product?.staffRequired || 1,
-    equipmentRequired: product?.equipmentRequired || [],
-  });
-
-  // Update formData when product or businessTypeConfig changes
-  useEffect(() => {
-    setFormData({
-      name: product?.name || '',
-      description: product?.description || '',
-      image: product?.image || '',
-      price: product?.price || 0,
-      stock: product?.stock || 0,
-      sku: product?.sku || '',
-      barcode: product?.barcode || '',
-      categoryId: typeof product?.categoryId === 'object' && product.categoryId?._id ? product.categoryId._id : product?.categoryId || '',
-      productType: product?.productType || (businessTypeConfig?.productTypes?.[0] || 'regular'),
-      trackInventory: product?.trackInventory !== undefined ? product.trackInventory : (businessTypeConfig?.defaultFeatures?.enableInventory ?? true),
-      lowStockThreshold: product?.lowStockThreshold || 10,
-      // Restaurant-specific fields
-      modifiers: product?.modifiers || [],
-      allergens: product?.allergens || [],
-      nutritionInfo: product?.nutritionInfo || { calories: undefined, protein: undefined, carbs: undefined, fat: undefined },
-      // Laundry-specific fields
-      serviceType: product?.serviceType || 'wash',
-      weightBased: product?.weightBased || false,
-      pickupDelivery: product?.pickupDelivery || false,
-      estimatedDuration: product?.estimatedDuration || undefined,
-      // Service-specific fields
-      serviceDuration: product?.serviceDuration || undefined,
-      staffRequired: product?.staffRequired || 1,
-      equipmentRequired: product?.equipmentRequired || [],
-    });
-  }, [product, businessTypeConfig]);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const { formData, saving, error, updateFormData, submitForm } = useProductsForm(product, businessTypeConfig);
   const [categorySearch, setCategorySearch] = useState('');
   const [showCategorySuggestions, setShowCategorySuggestions] = useState(false);
   const categoryInputRef = useRef<HTMLInputElement>(null);
@@ -445,7 +324,7 @@ function ProductModal({
 
   // Handle category selection
   const handleCategorySelect = (category: Category) => {
-    setFormData({ ...formData, categoryId: category._id });
+    updateFormData({ categoryId: category._id });
     setCategorySearch(category.name);
     setShowCategorySuggestions(false);
   };
@@ -469,76 +348,9 @@ function ProductModal({
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setError('');
-    setSaving(true);
-    try {
-      const url = product ? `/api/products/${product._id}` : '/api/products';
-      const method = product ? 'PUT' : 'POST';
-      const body: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
-        name: formData.name,
-        description: formData.description || undefined,
-        image: formData.image || undefined,
-        price: formData.price,
-        stock: formData.stock,
-        sku: formData.sku || undefined,
-        barcode: formData.barcode || undefined,
-        categoryId: formData.categoryId || undefined,
-        productType: formData.productType,
-        trackInventory: formData.trackInventory,
-        lowStockThreshold: formData.lowStockThreshold,
-      };
-
-      // Add restaurant-specific fields
-      if (settings?.businessType?.toLowerCase() === 'restaurant') {
-        if (formData.allergens && formData.allergens.length > 0) {
-          body.allergens = formData.allergens;
-        }
-        if (formData.nutritionInfo && (formData.nutritionInfo.calories || formData.nutritionInfo.protein)) {
-          body.nutritionInfo = formData.nutritionInfo;
-        }
-        if (formData.modifiers && formData.modifiers.length > 0) {
-          body.modifiers = formData.modifiers;
-        }
-      }
-
-      // Add laundry-specific fields
-      if (settings?.businessType?.toLowerCase() === 'laundry') {
-        body.serviceType = formData.serviceType;
-        body.weightBased = formData.weightBased;
-        body.pickupDelivery = formData.pickupDelivery;
-        if (formData.estimatedDuration) {
-          body.estimatedDuration = formData.estimatedDuration;
-        }
-      }
-
-      // Add service-specific fields
-      if (settings?.businessType?.toLowerCase() === 'service') {
-        if (formData.serviceDuration) {
-          body.serviceDuration = formData.serviceDuration;
-        }
-        body.staffRequired = formData.staffRequired;
-        if (formData.equipmentRequired && formData.equipmentRequired.length > 0) {
-          body.equipmentRequired = formData.equipmentRequired;
-        }
-      }
-
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(body),
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        onSave();
-      } else {
-        setError(data.error || 'Failed to save product');
-      }
-    } catch (error) {
-      setError('Failed to save product');
-    } finally {
-      setSaving(false);
+    const result = await submitForm(settings);
+    if (result.success) {
+      onSave();
     }
   };
 
@@ -574,7 +386,7 @@ function ProductModal({
                   type="text"
                   required
                   value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  onChange={(e) => updateFormData({ name: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                 />
               </div>
@@ -586,7 +398,7 @@ function ProductModal({
                   type="text"
                   required={businessTypeConfig?.requiredFields?.includes('sku')}
                   value={formData.sku}
-                  onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
+                  onChange={(e) => updateFormData({ sku: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                 />
               </div>
@@ -599,13 +411,13 @@ function ProductModal({
                 <input
                   type="text"
                   value={formData.barcode}
-                  onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
+                  onChange={(e) => updateFormData({ barcode: e.target.value })}
                   className="flex-1 px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white font-mono"
                   placeholder="Scan or enter barcode"
                 />
                 <button
                   type="button"
-                  onClick={() => setFormData({ ...formData, barcode: generateEAN13() })}
+                  onClick={() => updateFormData({ barcode: generateEAN13Helper() })}
                   className="px-3 py-2 border border-gray-300 bg-gray-50 hover:bg-gray-100 text-gray-700 text-sm font-medium flex items-center gap-1.5 transition-colors whitespace-nowrap"
                   title="Generate EAN-13 barcode"
                 >
@@ -620,7 +432,7 @@ function ProductModal({
               </label>
               <textarea
                 value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                onChange={(e) => updateFormData({ description: e.target.value })}
                 rows={3}
                 className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               />
@@ -665,7 +477,7 @@ function ProductModal({
                           });
                           const data = await res.json();
                           if (data.success) {
-                            setFormData(prev => ({ ...prev, image: data.data.url }));
+                            updateFormData({ image: data.data.url });
                           } else {
                             alert(data.error || 'Failed to upload image');
                           }
@@ -680,7 +492,7 @@ function ProductModal({
                             canvas.width = Math.round(img.width * ratio);
                             canvas.height = Math.round(img.height * ratio);
                             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                            setFormData(prev => ({ ...prev, image: canvas.toDataURL('image/jpeg', 0.75) }));
+                            updateFormData({ image: canvas.toDataURL('image/jpeg', 0.75) });
                           };
                           img.src = URL.createObjectURL(file);
                         }
@@ -690,14 +502,14 @@ function ProductModal({
                   <input
                     type="url"
                     value={formData.image.startsWith('data:') ? '' : formData.image}
-                    onChange={(e) => setFormData(prev => ({ ...prev, image: e.target.value }))}
+                    onChange={(e) => updateFormData({ image: e.target.value })}
                     placeholder="Or paste image URL (https://...)"
                     className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white text-sm"
                   />
                   {formData.image && (
                     <button
                       type="button"
-                      onClick={() => setFormData(prev => ({ ...prev, image: '' }))}
+                      onClick={() => updateFormData({ image: '' })}
                       className="text-xs text-red-600 hover:text-red-800"
                     >
                       Remove image
@@ -717,7 +529,7 @@ function ProductModal({
                   min="0"
                   required
                   value={formData.price}
-                  onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })}
+                  onChange={(e) => updateFormData({ price: parseFloat(e.target.value) || 0 })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                 />
               </div>
@@ -730,7 +542,7 @@ function ProductModal({
                     type="number"
                     min="0"
                     value={formData.stock}
-                    onChange={(e) => setFormData({ ...formData, stock: parseInt(e.target.value) || 0 })}
+                    onChange={(e) => updateFormData({ stock: parseInt(e.target.value) || 0 })}
                     className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                     disabled={!formData.trackInventory}
                   />
@@ -745,7 +557,7 @@ function ProductModal({
                     type="number"
                     min="0"
                     value={formData.lowStockThreshold}
-                    onChange={(e) => setFormData({ ...formData, lowStockThreshold: parseInt(e.target.value) || 10 })}
+                    onChange={(e) => updateFormData({ lowStockThreshold: parseInt(e.target.value) || 10 })}
                     className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                   />
                 </div>
@@ -769,9 +581,9 @@ function ProductModal({
                         cat => cat.name.toLowerCase() === value.toLowerCase()
                       );
                       if (matchingCategory) {
-                        setFormData({ ...formData, categoryId: matchingCategory._id });
+                        updateFormData({ categoryId: matchingCategory._id });
                       } else {
-                        setFormData({ ...formData, categoryId: '' });
+                        updateFormData({ categoryId: '' });
                       }
                     }}
                     onFocus={() => setShowCategorySuggestions(true)}
@@ -813,7 +625,7 @@ function ProductModal({
                 </label>
                 <select
                   value={formData.productType}
-                  onChange={(e) => setFormData({ ...formData, productType: e.target.value as any })} // eslint-disable-line @typescript-eslint/no-explicit-any
+                  onChange={(e) => updateFormData({ productType: e.target.value as any })} // eslint-disable-line @typescript-eslint/no-explicit-any
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                 >
                   {businessTypeConfig?.productTypes?.map((type: string) => (
@@ -843,7 +655,7 @@ function ProductModal({
                   <input
                     type="checkbox"
                     checked={formData.trackInventory}
-                    onChange={(e) => setFormData({ ...formData, trackInventory: e.target.checked })}
+                    onChange={(e) => updateFormData({ trackInventory: e.target.checked })}
                     className="mr-2"
                   />
                   <span className="text-sm font-medium text-gray-700">
@@ -865,7 +677,7 @@ function ProductModal({
                     value={Array.isArray(formData.allergens) ? formData.allergens.join(', ') : formData.allergens || ''}
                     onChange={(e) => {
                       const allergens = e.target.value.split(',').map(a => a.trim()).filter(a => a);
-                      setFormData({ ...formData, allergens });
+                      updateFormData({ allergens });
                     }}
                     className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                     placeholder="e.g., gluten, dairy, nuts"
@@ -879,7 +691,7 @@ function ProductModal({
                       type="number"
                       min="0"
                       value={formData.nutritionInfo?.calories || ''}
-                      onChange={(e) => setFormData({
+                      onChange={(e) => updateFormData({
                         ...formData,
                         nutritionInfo: { ...formData.nutritionInfo, calories: parseInt(e.target.value) || undefined }
                       })}
@@ -893,7 +705,7 @@ function ProductModal({
                       min="0"
                       step="0.1"
                       value={formData.nutritionInfo?.protein || ''}
-                      onChange={(e) => setFormData({
+                      onChange={(e) => updateFormData({
                         ...formData,
                         nutritionInfo: { ...formData.nutritionInfo, protein: parseFloat(e.target.value) || undefined }
                       })}
@@ -913,7 +725,7 @@ function ProductModal({
                   <label className="block text-sm font-medium text-gray-700 mb-1">Service Type</label>
                   <select
                     value={formData.serviceType}
-                    onChange={(e) => setFormData({ ...formData, serviceType: e.target.value as any })} // eslint-disable-line @typescript-eslint/no-explicit-any
+                    onChange={(e) => updateFormData({ serviceType: e.target.value as any })} // eslint-disable-line @typescript-eslint/no-explicit-any
                     className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                   >
                     <option value="wash">Wash</option>
@@ -930,7 +742,7 @@ function ProductModal({
                       <input
                         type="checkbox"
                         checked={formData.weightBased}
-                        onChange={(e) => setFormData({ ...formData, weightBased: e.target.checked })}
+                        onChange={(e) => updateFormData({ weightBased: e.target.checked })}
                         className="mr-2"
                       />
                       <span className="text-sm font-medium text-gray-700">Weight-based pricing</span>
@@ -941,7 +753,7 @@ function ProductModal({
                       <input
                         type="checkbox"
                         checked={formData.pickupDelivery}
-                        onChange={(e) => setFormData({ ...formData, pickupDelivery: e.target.checked })}
+                        onChange={(e) => updateFormData({ pickupDelivery: e.target.checked })}
                         className="mr-2"
                       />
                       <span className="text-sm font-medium text-gray-700">Pickup & Delivery</span>
@@ -955,7 +767,7 @@ function ProductModal({
                     type="number"
                     min="0"
                     value={formData.estimatedDuration || ''}
-                    onChange={(e) => setFormData({ ...formData, estimatedDuration: parseInt(e.target.value) || undefined })}
+                    onChange={(e) => updateFormData({ estimatedDuration: parseInt(e.target.value) || undefined })}
                     className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                   />
                 </div>
@@ -974,7 +786,7 @@ function ProductModal({
                       type="number"
                       min="0"
                       value={formData.serviceDuration || ''}
-                      onChange={(e) => setFormData({ ...formData, serviceDuration: parseInt(e.target.value) || undefined })}
+                      onChange={(e) => updateFormData({ serviceDuration: parseInt(e.target.value) || undefined })}
                       className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                     />
                   </div>
@@ -984,7 +796,7 @@ function ProductModal({
                       type="number"
                       min="1"
                       value={formData.staffRequired || 1}
-                      onChange={(e) => setFormData({ ...formData, staffRequired: parseInt(e.target.value) || 1 })}
+                      onChange={(e) => updateFormData({ staffRequired: parseInt(e.target.value) || 1 })}
                       className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                     />
                   </div>
@@ -997,7 +809,7 @@ function ProductModal({
                     value={Array.isArray(formData.equipmentRequired) ? formData.equipmentRequired.join(', ') : formData.equipmentRequired || ''}
                     onChange={(e) => {
                       const equipment = e.target.value.split(',').map(e => e.trim()).filter(e => e);
-                      setFormData({ ...formData, equipmentRequired: equipment });
+                      updateFormData({ equipmentRequired: equipment });
                     }}
                     className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                     placeholder="e.g., scissors, clippers, styling chair"

@@ -7,23 +7,20 @@ import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 import Currency from '@/components/Currency';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
-
-interface Expense {
-  _id: string;
-  name: string;
-  description: string;
-  amount: number;
-  date: string;
-  paymentMethod: 'cash' | 'card' | 'digital' | 'other';
-  receipt?: string;
-  notes?: string;
-  userId?: {
-    _id: string;
-    name: string;
-    email: string;
-  } | string;
-  createdAt: string;
-}
+import { useExpensesList, type Expense, type ExpenseFilters } from '@/hooks/useExpensesList';
+import { useExpensesForm } from '@/hooks/useExpensesForm';
+import {
+  getPaymentMethodLabel,
+  formatDate,
+  validateDateRange,
+  getDeleteConfirmMessage,
+  getDeleteSuccessMessage,
+  getDeleteErrorMessage,
+  getSaveSuccessMessage,
+  getSaveErrorMessage,
+  getDateValidationError,
+  getExpenseNameBadgeClass,
+} from '@/lib/expenses-helpers';
 
 export default function ExpensesPage() {
   const params = useParams();
@@ -31,10 +28,28 @@ export default function ExpensesPage() {
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  
+  const [showExpenseModal, setShowExpenseModal] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+
+  const {
+    expenses,
+    loading,
+    message,
+    filters,
+    expenseNames,
+    deletingId,
+    totalAmount,
+    setFilters,
+    setMessage,
+    fetchExpenses,
+    deleteExpense,
+    createExpense,
+    updateExpense,
+    setDeletingId,
+  } = useExpensesList();
+
+  const { settings } = useTenantSettings(); // eslint-disable-line @typescript-eslint/no-unused-vars
+
   // Auto-dismiss messages after 5 seconds
   useEffect(() => {
     if (message) {
@@ -43,16 +58,7 @@ export default function ExpensesPage() {
       }, 5000);
       return () => clearTimeout(timer);
     }
-  }, [message]);
-  const [showExpenseModal, setShowExpenseModal] = useState(false);
-  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
-  const [filters, setFilters] = useState({
-    startDate: '',
-    endDate: '',
-    name: '',
-  });
-  const [expenseNames, setExpenseNames] = useState<string[]>([]);
-  const { settings } = useTenantSettings(); // eslint-disable-line @typescript-eslint/no-unused-vars
+  }, [message, setMessage]);
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -60,74 +66,32 @@ export default function ExpensesPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang, tenant]);
 
-  useEffect(() => {
-    fetchExpenses();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.startDate, filters.endDate, filters.name]);
-
   // Validate date range
   const handleDateFilterChange = (field: 'startDate' | 'endDate', value: string) => {
-    if (field === 'endDate' && filters.startDate && value && new Date(filters.startDate) > new Date(value)) {
-      setMessage({ type: 'error', text: dict?.common?.endDateAfterStartDate || 'End date must be after start date' });
+    const newFilters = { ...filters, [field]: value };
+    const validation = validateDateRange(newFilters.startDate, newFilters.endDate);
+    if (!validation.valid) {
+      setMessage({ type: 'error', text: getDateValidationError(field, dict) });
       return;
     }
-    if (field === 'startDate' && filters.endDate && value && new Date(value) > new Date(filters.endDate)) {
-      setMessage({ type: 'error', text: dict?.common?.startDateBeforeEndDate || 'Start date must be before end date' });
-      return;
-    }
-    setFilters({ ...filters, [field]: value });
+    setFilters(newFilters);
   };
-
-  const fetchExpenses = async () => {
-    try {
-      setLoading(true);
-      const params = new URLSearchParams();
-      if (filters.startDate) params.append('startDate', filters.startDate);
-      if (filters.endDate) params.append('endDate', filters.endDate);
-      if (filters.name) params.append('name', filters.name);
-
-      const res = await fetch(`/api/expenses?${params.toString()}`, { credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
-        setExpenses(data.data);
-        // Extract unique expense names
-        const uniqueNames = Array.from(new Set(data.data.map((e: Expense) => e.name))).sort() as string[];
-        setExpenseNames(uniqueNames);
-        setMessage(null);
-      } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchExpenses || 'Failed to fetch expenses' });
-      }
-    } catch (error) {
-      console.error('Error fetching expenses:', error);
-      setMessage({ type: 'error', text: dict?.common?.failedToFetchExpenses || 'Failed to fetch expenses' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const handleDeleteExpense = async (expenseId: string) => {
     if (!dict) return;
-    if (!confirm(dict.common?.deleteExpenseConfirm || dict.admin?.deleteExpenseConfirm || 'Are you sure you want to delete this expense?')) return;
+    if (!confirm(getDeleteConfirmMessage(dict))) return;
+
     setDeletingId(expenseId);
-    try {
-      const res = await fetch(`/api/expenses/${expenseId}`, { method: 'DELETE', credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
-        setMessage({ type: 'success', text: data.message || dict?.admin?.expenseDeletedSuccess || 'Expense deleted successfully' });
-        fetchExpenses();
-      } else {
-        setMessage({ type: 'error', text: data.error || dict?.admin?.failedToDeleteExpense || 'Failed to delete expense' });
-      }
-    } catch (error) {
-      setMessage({ type: 'error', text: dict?.admin?.failedToDeleteExpense || 'Failed to delete expense' });
-    } finally {
-      setDeletingId(null);
+    const success = await deleteExpense(expenseId);
+    setDeletingId(null);
+
+    if (success) {
+      setMessage({ type: 'success', text: getDeleteSuccessMessage(dict) });
+      await fetchExpenses();
+    } else {
+      setMessage({ type: 'error', text: getDeleteErrorMessage(dict) });
     }
   };
-
-  const totalAmount = expenses.reduce((sum, expense) => sum + expense.amount, 0);
 
   if (!dict || loading) {
     return (
@@ -285,10 +249,10 @@ export default function ExpensesPage() {
                   return (
                     <tr key={expense._id} className="hover:bg-gray-50">
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {new Date(expense.date).toLocaleDateString()}
+                        {formatDate(expense.date)}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <span className="px-2 py-1 text-xs font-semibold border border-blue-300 bg-blue-100 text-blue-800">
+                        <span className={getExpenseNameBadgeClass()}>
                           {expense.name}
                         </span>
                       </td>
@@ -296,8 +260,8 @@ export default function ExpensesPage() {
                       <td className="px-4 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
                         <Currency amount={expense.amount} />
                       </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">
-                        {expense.paymentMethod}
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {getPaymentMethodLabel(expense.paymentMethod, dict)}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{userName}</td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
@@ -338,13 +302,15 @@ export default function ExpensesPage() {
               setShowExpenseModal(false);
               setEditingExpense(null);
             }}
-            onSave={() => {
-              fetchExpenses();
+            onSave={async () => {
+              await fetchExpenses();
               setShowExpenseModal(false);
               setEditingExpense(null);
               setMessage({ type: 'success', text: editingExpense ? (dict?.common?.expenseUpdatedSuccess || 'Expense updated successfully') : (dict?.common?.expenseCreatedSuccess || 'Expense created successfully') });
             }}
             dict={dict}
+            createExpense={createExpense}
+            updateExpense={updateExpense}
           />
         )}
       </div>
@@ -357,114 +323,36 @@ function ExpenseModal({
   onClose,
   onSave,
   dict,
+  createExpense,
+  updateExpense,
 }: {
   expense: Expense | null;
   onClose: () => void;
-  onSave: () => void;
+  onSave: () => Promise<void>;
   dict: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  createExpense: (form: any) => Promise<boolean>;
+  updateExpense: (id: string, form: any) => Promise<boolean>;
 }) {
-  const getInitialFormData = () => ({
-    name: expense?.name || '',
-    description: expense?.description || '',
-    amount: expense?.amount?.toString() || '',
-    date: expense?.date ? new Date(expense.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-    paymentMethod: expense?.paymentMethod || 'cash',
-    receipt: expense?.receipt || '',
-    notes: expense?.notes || '',
-  });
+  const { formData, setFormData, error, submitting, handleSubmit, initializeForm, resetForm } = useExpensesForm();
 
-  const [formData, setFormData] = useState(getInitialFormData());
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
-  // Reset form when expense changes (for edit mode)
   useEffect(() => {
-    setFormData({
-      name: expense?.name || '',
-      description: expense?.description || '',
-      amount: expense?.amount?.toString() || '',
-      date: expense?.date ? new Date(expense.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-      paymentMethod: expense?.paymentMethod || 'cash',
-      receipt: expense?.receipt || '',
-      notes: expense?.notes || '',
-    });
-    setError('');
-  }, [expense]);
+    if (expense) {
+      initializeForm(expense);
+    } else {
+      resetForm();
+    }
+  }, [expense, initializeForm, resetForm]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const onFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    
-    // Validation
-    if (!formData.name?.trim()) {
-      setError('Name of expense is required');
-      return;
-    }
-    
-    if (!formData.description?.trim()) {
-      setError('Description is required');
-      return;
-    }
-    
-    if (!formData.amount || formData.amount === '') {
-      setError('Amount is required');
-      return;
-    }
-    
-    const amountValue = parseFloat(formData.amount);
-    if (isNaN(amountValue) || amountValue <= 0) {
-      setError('Amount must be a positive number');
-      return;
-    }
-    
-    if (!formData.date) {
-      setError('Date is required');
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const url = expense ? `/api/expenses/${expense._id}` : '/api/expenses';
-      const method = expense ? 'PUT' : 'POST';
-      const body = {
-        name: formData.name.trim(),
-        description: formData.description.trim(),
-        amount: amountValue,
-        date: formData.date,
-        paymentMethod: formData.paymentMethod,
-        receipt: formData.receipt?.trim() || undefined,
-        notes: formData.notes?.trim() || undefined,
-      };
-
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(body),
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        // Reset form on success
-        setFormData({
-          name: '',
-          description: '',
-          amount: '',
-          date: new Date().toISOString().split('T')[0],
-          paymentMethod: 'cash',
-          receipt: '',
-          notes: '',
-        });
-        setError('');
-        onSave();
-      } else {
-        setError(data.error || 'Failed to save expense');
+    await handleSubmit(async (payload) => {
+      const isEdit = !!expense;
+      const success = isEdit ? await updateExpense(expense._id, payload) : await createExpense(payload);
+      if (success) {
+        await onSave();
       }
-    } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      setError(error.message || 'Failed to save expense. Please try again.');
-    } finally {
-      setSaving(false);
-    }
+      return success;
+    });
   };
 
 
@@ -475,7 +363,7 @@ function ExpenseModal({
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
             {expense ? (dict.admin?.editExpense || 'Edit Expense') : (dict.admin?.addExpense || 'Add Expense')}
           </h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={onFormSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -484,7 +372,7 @@ function ExpenseModal({
                 <input
                   type="text"
                   value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  onChange={(e) => setFormData({ name: e.target.value })}
                   placeholder={dict.admin?.expenseNamePlaceholder || 'Enter expense name (e.g., Office Supplies, Rent, Utilities)'}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                   required
@@ -502,9 +390,8 @@ function ExpenseModal({
                   value={formData.amount}
                   onChange={(e) => {
                     const value = e.target.value;
-                    // Allow empty, numbers, and one decimal point
                     if (value === '' || /^\d*\.?\d*$/.test(value)) {
-                      setFormData({ ...formData, amount: value });
+                      setFormData({ amount: value });
                     }
                   }}
                   placeholder="0.00"
@@ -519,7 +406,7 @@ function ExpenseModal({
                 <textarea
                   required
                   value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  onChange={(e) => setFormData({ description: e.target.value })}
                   rows={2}
                   placeholder={dict?.admin?.expenseDescriptionPlaceholder || 'Enter expense description'}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
@@ -534,7 +421,7 @@ function ExpenseModal({
                   type="date"
                   required
                   value={formData.date}
-                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                  onChange={(e) => setFormData({ date: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                 />
               </div>
@@ -544,7 +431,7 @@ function ExpenseModal({
                 </label>
                 <select
                   value={formData.paymentMethod}
-                  onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value as any })} // eslint-disable-line @typescript-eslint/no-explicit-any
+                  onChange={(e) => setFormData({ paymentMethod: e.target.value as any })} // eslint-disable-line @typescript-eslint/no-explicit-any
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                   required
                 >
@@ -562,7 +449,7 @@ function ExpenseModal({
               <input
                 type="text"
                 value={formData.receipt}
-                onChange={(e) => setFormData({ ...formData, receipt: e.target.value })}
+                onChange={(e) => setFormData({ receipt: e.target.value })}
                 placeholder={dict?.admin?.receiptURLPlaceholder || 'Receipt URL or reference'}
                 className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               />
@@ -573,7 +460,7 @@ function ExpenseModal({
               </label>
               <textarea
                 value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                onChange={(e) => setFormData({ notes: e.target.value })}
                 rows={3}
                 className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
               />
@@ -593,10 +480,10 @@ function ExpenseModal({
               </button>
               <button
                 type="submit"
-                disabled={saving}
+                disabled={submitting}
                 className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
               >
-                {saving ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
+                {submitting ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
               </button>
             </div>
           </form>

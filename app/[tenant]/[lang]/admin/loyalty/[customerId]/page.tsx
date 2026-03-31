@@ -1,34 +1,17 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { showToast } from '@/lib/toast';
-
-interface LoyaltyEntry {
-  _id: string;
-  type: 'earn' | 'redeem' | 'adjust';
-  points: number;
-  balanceBefore: number;
-  balanceAfter: number;
-  description: string;
-  createdAt: string;
-}
-
-interface LoyaltyData {
-  customerId: string;
-  customerName: string;
-  loyaltyPointsBalance: number;
-  history: LoyaltyEntry[];
-  pagination: { total: number; page: number; limit: number; totalPages: number };
-}
-
-const typeColors: Record<string, string> = {
-  earn: 'bg-green-100 text-green-700',
-  redeem: 'bg-orange-100 text-orange-700',
-  adjust: 'bg-blue-100 text-blue-700',
-};
+import { useLoyaltyCustomerData } from '@/hooks/useLoyaltyCustomerData';
+import { useLoyaltyAdjustment } from '@/hooks/useLoyaltyAdjustment';
+import {
+  typeColors,
+  getAdjustPointsSuccessMessage,
+  getAdjustPointsErrorMessage,
+} from '@/lib/loyalty-customer-helpers';
 
 export default function LoyaltyCustomerPage() {
   const params = useParams();
@@ -36,69 +19,18 @@ export default function LoyaltyCustomerPage() {
   const lang = params.lang as string;
   const customerId = params.customerId as string;
 
-  const [data, setData] = useState<LoyaltyData | null>(null);
-  const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(true);
-
-  const [adjustPoints, setAdjustPoints] = useState('');
-  const [adjustDesc, setAdjustDesc] = useState('');
-  const [adjusting, setAdjusting] = useState(false);
-
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(
-        `/api/loyalty/customers/${customerId}?page=${page}&limit=20`
-      );
-      const json = await res.json();
-      if (json.success) {
-        setData(json.data);
-      } else {
-        showToast.error(json.error || 'Failed to load loyalty data');
-      }
-    } catch {
-      showToast.error('Failed to load loyalty data');
-    } finally {
-      setLoading(false);
-    }
-  }, [customerId, page]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  const { data, page, loading, setPage, refetch } = useLoyaltyCustomerData(customerId);
+  const { form, saving: adjusting, updateForm, submitAdjustment } = useLoyaltyAdjustment(customerId);
 
   const handleAdjust = async (e: React.FormEvent) => {
     e.preventDefault();
-    const points = parseInt(adjustPoints);
-    if (!points || points === 0) {
-      showToast.error('Enter a non-zero point value');
-      return;
-    }
-    if (!adjustDesc.trim()) {
-      showToast.error('Description is required');
-      return;
-    }
-    setAdjusting(true);
-    try {
-      const res = await fetch(`/api/loyalty/adjust`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customerId, points, description: adjustDesc }),
-      });
-      const json = await res.json();
-      if (json.success) {
-        showToast.success('Points adjusted successfully');
-        setAdjustPoints('');
-        setAdjustDesc('');
-        setPage(1);
-        fetchData();
-      } else {
-        showToast.error(json.error || 'Adjustment failed');
-      }
-    } catch {
-      showToast.error('Adjustment failed');
-    } finally {
-      setAdjusting(false);
+    const result = await submitAdjustment();
+    if (result.success) {
+      showToast.success(getAdjustPointsSuccessMessage());
+      setPage(1);
+      refetch();
+    } else {
+      showToast.error(getAdjustPointsErrorMessage(result.error));
     }
   };
 
@@ -142,15 +74,15 @@ export default function LoyaltyCustomerPage() {
                 <input
                   type="number"
                   placeholder="Points (+ to add, - to deduct)"
-                  value={adjustPoints}
-                  onChange={e => setAdjustPoints(e.target.value)}
+                  value={form.points}
+                  onChange={(e) => updateForm({ points: e.target.value })}
                   className="border border-gray-300 rounded px-3 py-2 text-sm w-full sm:w-48 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <input
                   type="text"
                   placeholder="Reason / description"
-                  value={adjustDesc}
-                  onChange={e => setAdjustDesc(e.target.value)}
+                  value={form.description}
+                  onChange={(e) => updateForm({ description: e.target.value })}
                   className="border border-gray-300 rounded px-3 py-2 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <button
@@ -195,7 +127,7 @@ export default function LoyaltyCustomerPage() {
               {data.pagination.totalPages > 1 && (
                 <div className="flex justify-center gap-2 mt-4">
                   <button
-                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    onClick={() => setPage(Math.max(1, page - 1))}
                     disabled={page === 1}
                     className="px-3 py-1 border rounded text-sm disabled:opacity-40"
                   >
@@ -205,7 +137,7 @@ export default function LoyaltyCustomerPage() {
                     {page} / {data.pagination.totalPages}
                   </span>
                   <button
-                    onClick={() => setPage(p => Math.min(data.pagination.totalPages, p + 1))}
+                    onClick={() => setPage(Math.min(data.pagination.totalPages, page + 1))}
                     disabled={page === data.pagination.totalPages}
                     className="px-3 py-1 border rounded text-sm disabled:opacity-40"
                   >

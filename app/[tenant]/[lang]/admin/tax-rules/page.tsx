@@ -7,6 +7,8 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { ITenantSettings } from '@/models/Tenant';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { getDefaultTenantSettings } from '@/lib/currency';
 
 export default function TaxRulesAdminPage() {
   const params = useParams();
@@ -15,6 +17,8 @@ export default function TaxRulesAdminPage() {
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState<ITenantSettings | null>(null);
+  const { settings: tenantSettings } = useTenantSettings();
+  const primaryColor = (tenantSettings || getDefaultTenantSettings()).primaryColor || '#2563eb';
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -55,7 +59,10 @@ export default function TaxRulesAdminPage() {
         <div className="mb-6 sm:mb-8">
           <Link
             href={`/${tenant}/${lang}/admin`}
-            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium mb-4 transition-colors"
+            className="inline-flex items-center font-medium mb-4 transition-colors"
+            style={{ color: primaryColor }}
+            onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.8')}
+            onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
           >
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -74,6 +81,7 @@ export default function TaxRulesAdminPage() {
           <TaxRulesManager
             settings={settings}
             tenant={tenant}
+            primaryColor={primaryColor}
             onUpdate={(updates) => {
               setSettings({ ...settings, ...updates });
             }}

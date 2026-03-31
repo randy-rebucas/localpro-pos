@@ -2,125 +2,68 @@
 
 import { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import toast from 'react-hot-toast';
 import { getDictionaryClient } from '../../dictionaries-client';
-interface Branch {
-  _id: string;
-  name: string;
-  code?: string;
-  address?: {
-    street?: string;
-    city?: string;
-    state?: string;
-    zipCode?: string;
-    country?: string;
-  };
-  phone?: string;
-  email?: string;
-  managerId?: {
-    _id: string;
-    name: string;
-    email: string;
-  } | string;
-  isActive: boolean;
-  createdAt: string;
-}
-
-interface User {
-  _id: string;
-  name: string;
-  email: string;
-}
+import { useBranchesList, type Branch } from '@/hooks/useBranchesList';
+import { useBranchForm } from '@/hooks/useBranchForm';
+import { useUsersList } from '@/hooks/useUsersList';
+import {
+  getStatusColor,
+  formatAddress,
+  getManagerName,
+  getDeactivateConfirmMessage,
+  getDeleteConfirmMessage,
+} from '@/lib/branches-helpers';
 
 export default function BranchesPage() {
   const params = useParams();
-  const router = useRouter(); // eslint-disable-line @typescript-eslint/no-unused-vars
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const [dict, setDict] = useState<Record<string, any> | null>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showBranchModal, setShowBranchModal] = useState(false);
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
 
+  const { branches, loading, fetchBranches, deleteBranch, toggleBranchStatus } = useBranchesList();
+  const { users: staff } = useUsersList();
+
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
-    fetchBranches();
-    fetchUsers();
+  }, [lang]);
+
+  useEffect(() => {
+    fetchBranches((error) => toast.error(error));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lang, tenant]);
-  
-
-  const fetchBranches = async () => {
-    try {
-      const res = await fetch('/api/branches', { credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
-        setBranches(data.data);
-        setMessage(null);
-      } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchBranches || 'Failed to fetch branches' });
-      }
-    } catch (error) {
-      console.error('Error fetching branches:', error);
-      setMessage({ type: 'error', text: dict?.common?.failedToFetchBranches || 'Failed to fetch branches' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchUsers = async () => {
-    try {
-      const res = await fetch('/api/users', { credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
-        setUsers(data.data);
-      } else {
-        console.error('Error fetching users:', data.error);
-      }
-    } catch (error) {
-      console.error('Error fetching users:', error);
-    }
-  };
+  }, []);
 
   const handleDeleteBranch = async (branchId: string) => {
     if (!dict) return;
-    if (!confirm(dict.common?.deactivateBranchConfirm || dict.admin?.deactivateBranchConfirm || 'Are you sure you want to deactivate this branch?')) return;
-    try {
-      const res = await fetch(`/api/branches/${branchId}`, { method: 'DELETE', credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
-        setMessage({ type: 'success', text: dict?.common?.branchDeactivatedSuccess || 'Branch deactivated successfully' });
-        fetchBranches();
-      } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToDeactivateBranch || 'Failed to deactivate branch' });
-      }
-    } catch {
-      setMessage({ type: 'error', text: dict?.common?.failedToDeactivateBranch || 'Failed to deactivate branch' });
-    }
+    if (!confirm(getDeleteConfirmMessage(dict))) return;
+
+    await deleteBranch(
+      branchId,
+      async (message) => {
+        toast.success(message);
+        await fetchBranches();
+      },
+      (error) => toast.error(error)
+    );
   };
 
   const handleToggleBranchStatus = async (branch: Branch) => {
-    try {
-      const res = await fetch(`/api/branches/${branch._id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ isActive: !branch.isActive }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setMessage({ type: 'success', text: `Branch ${!branch.isActive ? (dict?.admin?.activated || 'activated') : (dict?.admin?.deactivated || 'deactivated')} ${dict?.admin?.successfully || 'successfully'}` });
+    if (!dict) return;
+    if (!confirm(getDeactivateConfirmMessage(dict))) return;
+
+    await toggleBranchStatus(
+      branch._id,
+      branch.isActive,
+      (message) => {
+        toast.success(message);
         fetchBranches();
-      } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToUpdateBranch || 'Failed to update branch' });
-      }
-    } catch {
-      setMessage({ type: 'error', text: dict?.common?.failedToUpdateBranch || 'Failed to update branch' });
-    }
+      },
+      (error) => toast.error(error)
+    );
   };
 
   if (!dict || loading) {
@@ -158,12 +101,6 @@ export default function BranchesPage() {
           </div>
         </div>
 
-        {message && (
-          <div className={`mb-6 p-4 border ${message.type === 'success' ? 'bg-green-50 text-green-800 border-green-300' : 'bg-red-50 text-red-800 border-red-300'}`}>
-            {message.text}
-          </div>
-        )}
-
         <div className="bg-white border border-gray-300 p-6">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold text-gray-900">{dict.admin?.branches || 'Branches'}</h2>
@@ -190,52 +127,47 @@ export default function BranchesPage() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {branches.map((branch) => {
-                  const managerName = typeof branch.managerId === 'object' && branch.managerId !== null
-                    ? branch.managerId.name
-                    : '-';
-                  const addressStr = branch.address
-                    ? `${branch.address.street || ''} ${branch.address.city || ''} ${branch.address.state || ''}`.trim()
-                    : '-';
-                  return (
-                    <tr key={branch._id}>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{branch.name}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">{branch.code || '-'}</td>
-                      <td className="px-4 py-4 text-sm text-gray-500">{addressStr}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{managerName}</td>
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-semibold border ${branch.isActive ? 'bg-green-100 text-green-800 border-green-300' : 'bg-red-100 text-red-800 border-red-300'}`}>
+                {branches.map((branch) => (
+                  <tr key={branch._id}>
+                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{branch.name}</td>
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">{branch.code || '-'}</td>
+                    <td className="px-4 py-4 text-sm text-gray-500">{formatAddress(branch.address)}</td>
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{getManagerName(branch.managerId)}</td>
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <span className={`px-2 py-1 text-xs font-semibold border ${getStatusColor(branch.isActive)}`}>
                           {branch.isActive ? (dict.admin?.active || 'Active') : (dict.admin?.inactive || 'Inactive')}
                         </span>
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => {
-                              setEditingBranch(branch);
-                              setShowBranchModal(true);
-                            }}
-                            className="text-blue-600 hover:text-blue-900"
-                          >
-                            {dict.common?.edit || 'Edit'}
-                          </button>
-                          <button
-                            onClick={() => handleToggleBranchStatus(branch)}
-                            className={branch.isActive ? 'text-orange-600 hover:text-orange-900' : 'text-green-600 hover:text-green-900'}
-                          >
-                            {branch.isActive ? (dict.admin?.deactivate || 'Deactivate') : (dict.admin?.activate || 'Activate')}
-                          </button>
-                          <button
-                            onClick={() => handleDeleteBranch(branch._id)}
-                            className="text-red-600 hover:text-red-900"
-                          >
-                            {dict.common?.delete || 'Delete'}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                      <span className={`px-2 py-1 text-xs font-semibold border ${getStatusColor(branch.isActive)}`}>
+                        {branch.isActive ? (dict.admin?.active || 'Active') : (dict.admin?.inactive || 'Inactive')}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setEditingBranch(branch);
+                            setShowBranchModal(true);
+                          }}
+                          className="text-blue-600 hover:text-blue-900"
+                        >
+                          {dict.common?.edit || 'Edit'}
+                        </button>
+                        <button
+                          onClick={() => handleToggleBranchStatus(branch)}
+                          className={branch.isActive ? 'text-orange-600 hover:text-orange-900' : 'text-green-600 hover:text-green-900'}
+                        >
+                          {branch.isActive ? (dict.admin?.deactivate || 'Deactivate') : (dict.admin?.activate || 'Activate')}
+                        </button>
+                        <button
+                          onClick={() => handleDeleteBranch(branch._id)}
+                          className="text-red-600 hover:text-red-900"
+                        >
+                          {dict.common?.delete || 'Delete'}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
             {branches.length === 0 && (
@@ -247,7 +179,7 @@ export default function BranchesPage() {
         {showBranchModal && (
           <BranchModal
             branch={editingBranch}
-            users={users}
+            users={staff}
             onClose={() => {
               setShowBranchModal(false);
               setEditingBranch(null);
@@ -273,64 +205,22 @@ function BranchModal({
   dict,
 }: {
   branch: Branch | null;
-  users: User[];
+  users: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
   onClose: () => void;
   onSave: () => void;
   dict: Record<string, Record<string, string>> | null;
 }) {
-  const [formData, setFormData] = useState({
-    name: branch?.name || '',
-    code: branch?.code || '',
-    address: {
-      street: branch?.address?.street || '',
-      city: branch?.address?.city || '',
-      state: branch?.address?.state || '',
-      zipCode: branch?.address?.zipCode || '',
-      country: branch?.address?.country || '',
-    },
-    phone: branch?.phone || '',
-    email: branch?.email || '',
-    managerId: typeof branch?.managerId === 'object' && branch?.managerId !== null
-      ? branch.managerId._id
-      : branch?.managerId || '',
-  });
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const { formData, setFormData, error, handleSubmit } = useBranchForm(branch);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    setSaving(true);
-    try {
-      const url = branch ? `/api/branches/${branch._id}` : '/api/branches';
-      const method = branch ? 'PUT' : 'POST';
-      const body: Record<string, unknown> = {
-        name: formData.name,
-        code: formData.code || undefined,
-        address: formData.address.street || formData.address.city ? formData.address : undefined,
-        phone: formData.phone || undefined,
-        email: formData.email || undefined,
-        managerId: formData.managerId || undefined,
-      };
-
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(body),
-      });
-
-      const data = await res.json();
-      if (data.success) {
+    await handleSubmit(
+      async () => {
+        toast.success(dict?.common?.branchSavedSuccess || 'Branch saved successfully');
         onSave();
-      } else {
-        setError(data.error || 'Failed to save branch');
-      }
-    } catch {
-      setError('Failed to save branch');
-    } finally {
-      setSaving(false);
-    }
+      },
+      (errorMsg) => toast.error(errorMsg)
+    );
   };
 
   return (
@@ -340,7 +230,7 @@ function BranchModal({
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
             {branch ? (dict?.admin?.editBranch || 'Edit Branch') : (dict?.admin?.addBranch || 'Add Branch')}
           </h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleFormSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -374,36 +264,36 @@ function BranchModal({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <input
                   type="text"
-                  value={formData.address.street}
-                  onChange={(e) => setFormData({ ...formData, address: { ...formData.address, street: e.target.value } })}
+                  value={formData.address?.street || ''}
+                  onChange={(e) => setFormData({ ...formData, address: { ...(formData.address || {}), street: e.target.value } })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                   placeholder={dict?.admin?.streetPlaceholder || 'Street'}
                 />
                 <input
                   type="text"
-                  value={formData.address.city}
-                  onChange={(e) => setFormData({ ...formData, address: { ...formData.address, city: e.target.value } })}
+                  value={formData.address?.city || ''}
+                  onChange={(e) => setFormData({ ...formData, address: { ...(formData.address || {}), city: e.target.value } })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                   placeholder={dict?.admin?.cityPlaceholder || 'City'}
                 />
                 <input
                   type="text"
-                  value={formData.address.state}
-                  onChange={(e) => setFormData({ ...formData, address: { ...formData.address, state: e.target.value } })}
+                  value={formData.address?.state || ''}
+                  onChange={(e) => setFormData({ ...formData, address: { ...(formData.address || {}), state: e.target.value } })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                   placeholder={dict?.admin?.statePlaceholder || 'State'}
                 />
                 <input
                   type="text"
-                  value={formData.address.zipCode}
-                  onChange={(e) => setFormData({ ...formData, address: { ...formData.address, zipCode: e.target.value } })}
+                  value={formData.address?.zipCode || ''}
+                  onChange={(e) => setFormData({ ...formData, address: { ...(formData.address || {}), zipCode: e.target.value } })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                   placeholder={dict?.admin?.zipPlaceholder || 'ZIP Code'}
                 />
                 <input
                   type="text"
-                  value={formData.address.country}
-                  onChange={(e) => setFormData({ ...formData, address: { ...formData.address, country: e.target.value } })}
+                  value={formData.address?.country || ''}
+                  onChange={(e) => setFormData({ ...formData, address: { ...(formData.address || {}), country: e.target.value } })}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                   placeholder={dict?.admin?.countryPlaceholder || 'Country'}
                 />
@@ -465,10 +355,9 @@ function BranchModal({
               </button>
               <button
                 type="submit"
-                disabled={saving}
-                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
+                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 border border-blue-700"
               >
-                {saving ? (dict?.common?.loading || 'Saving...') : (dict?.common?.save || 'Save')}
+                {dict?.common?.save || 'Save'}
               </button>
             </div>
           </form>
@@ -477,4 +366,3 @@ function BranchModal({
     </div>
   );
 }
-

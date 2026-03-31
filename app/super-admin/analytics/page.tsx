@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { SuperAdminShell } from '@/components/super-admin/Shell';
+import { showToast } from '@/lib/toast';
 
 interface AnalyticsData {
   mrr: number;
@@ -59,10 +60,14 @@ export default function AnalyticsPage() {
       if (json.success) {
         setData(json.data);
       } else {
-        setError(json.error || 'Failed to load analytics');
+        const errorMsg = json.error || 'Failed to load analytics';
+        setError(errorMsg);
+        showToast.error(errorMsg);
       }
-    } catch {
-      setError('Failed to reach analytics endpoint');
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to reach analytics endpoint';
+      setError(errorMsg);
+      showToast.error(errorMsg);
     } finally {
       setLoading(false);
     }

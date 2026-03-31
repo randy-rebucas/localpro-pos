@@ -1,98 +1,63 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import Navbar from '@/components/Navbar';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
-import { ITenantSettings } from '@/models/Tenant';
+import { useBrandingSettings } from '@/hooks/useBrandingSettings';
+import { useBrandingSave } from '@/hooks/useBrandingSave';
+import {
+  getFontSourceOptions,
+  getThemeOptions,
+  getBorderRadiusOptions,
+  shouldShowGoogleFontUrl,
+  shouldShowCustomFontUrl,
+  shouldShowCustomBorderRadius,
+  shouldShowCustomThemeCSS,
+  getPlaceholderForFontFamily,
+  getPlaceholderForGoogleFontUrl,
+  getPlaceholderForCustomFontUrl,
+  getPlaceholderForCustomBorderRadius,
+  getPlaceholderForCustomCSS,
+  getCustomCSSHint,
+} from '@/lib/branding-helpers';
+import toast from 'react-hot-toast';
 
 export default function AdvancedBrandingPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [settings, setSettings] = useState<ITenantSettings | null>(null);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [dict, setDict] = React.useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
 
+  const { settings, loading, error, fetchSettings, updateSetting } = useBrandingSettings(tenant);
+  const { saving, message, save } = useBrandingSave(tenant);
+
+  // Load dictionary
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
-    fetchSettings();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lang, tenant]);
+  }, [lang]);
 
-  const fetchSettings = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch(`/api/tenants/${tenant}/settings`);
-      const data = await res.json();
-      if (data.success) {
-        setSettings(data.data);
-      } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to load settings' });
-      }
-    } catch (error) {
-      console.error('Error fetching settings:', error);
-      setMessage({ type: 'error', text: 'Failed to load settings. Please check your connection.' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const updateSetting = (path: string, value: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (!settings) return;
-    
-    const keys = path.split('.');
-    const newSettings = JSON.parse(JSON.stringify(settings));
-    let current: any = newSettings; // eslint-disable-line @typescript-eslint/no-explicit-any
-    
-    for (let i = 0; i < keys.length - 1; i++) {
-      if (!current[keys[i]]) {
-        current[keys[i]] = {};
-      }
-      current = current[keys[i]];
-    }
-    
-    current[keys[keys.length - 1]] = value;
-    setSettings(newSettings);
-  };
-
-  const handleSave = async () => {
-    if (!settings) return;
-
-    try {
-      setSaving(true);
-      setMessage(null);
-      const res = await fetch(`/api/tenants/${tenant}/settings`, {
-        method: 'PUT',
-        headers: { 
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({ settings }),
+  // Load settings on mount
+  useEffect(() => {
+    if (tenant) {
+      fetchSettings((error) => {
+        toast.error(error);
       });
-
-      const data = await res.json();
-      if (data.success) {
-        setMessage({ type: 'success', text: dict?.admin?.advancedBrandingSaved || 'Advanced branding settings saved successfully!' });
-        setSettings(data.data);
-        setTimeout(() => setMessage(null), 3000);
-      } else {
-        if (res.status === 401 || res.status === 403) {
-          setMessage({ type: 'error', text: dict?.settings?.unauthorized || 'Unauthorized. Please login with admin account.' });
-        } else {
-          setMessage({ type: 'error', text: data.error || dict?.admin?.failedToSaveAdvancedBranding || 'Failed to save settings' });
-        }
-      }
-    } catch (error) {
-      console.error('Error saving advanced branding settings:', error);
-      setMessage({ type: 'error', text: dict?.admin?.failedToSaveAdvancedBrandingConnection || 'Failed to save settings. Please check your connection.' });
-    } finally {
-      setSaving(false);
     }
-  };
+  }, [tenant, fetchSettings]);
+
+  const handleSave = useCallback(async () => {
+    if (!settings) return;
+
+    const success = await save(settings, () => {
+      toast.success(dict?.admin?.advancedBrandingSaved || 'Advanced branding settings saved successfully!');
+    }, (error) => {
+      toast.error(error);
+    });
+
+    return success;
+  }, [settings, save, dict]);
 
   if (!dict || loading) {
     return (
@@ -113,10 +78,10 @@ export default function AdvancedBrandingPage() {
           <div className="bg-red-50 border-2 border-red-300 p-5 sm:p-6">
             <h2 className="text-xl font-bold text-red-800 mb-2">{dict?.settings?.failedToLoad || 'Failed to Load Settings'}</h2>
             <p className="text-red-700 mb-4">
-              {message?.text || 'Unable to load tenant settings. Please check your connection and try again.'}
+              {error || 'Unable to load tenant settings. Please check your connection and try again.'}
             </p>
             <button
-              onClick={fetchSettings}
+              onClick={() => fetchSettings()}
               className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 font-medium transition-colors border border-red-700"
             >
               {dict?.settings?.retry || 'Retry'}
@@ -182,9 +147,11 @@ export default function AdvancedBrandingPage() {
                   }}
                   className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                 >
-                  <option value="system">{dict?.admin?.systemFont || 'System Font'}</option>
-                  <option value="google">{dict?.admin?.googleFont || 'Google Font'}</option>
-                  <option value="custom">{dict?.admin?.customFont || 'Custom Font'}</option>
+                  {getFontSourceOptions().map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {dict?.admin?.[option.value === 'system' ? 'systemFont' : option.value === 'google' ? 'googleFont' : 'customFont'] || option.label}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div>
@@ -199,10 +166,10 @@ export default function AdvancedBrandingPage() {
                     fontFamily: e.target.value,
                   })}
                   className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
-                  placeholder={dict?.admin?.fontFamilyPlaceholder || 'e.g., Roboto, Inter, Arial'}
+                  placeholder={getPlaceholderForFontFamily(dict)}
                 />
               </div>
-              {settings.advancedBranding?.fontSource === 'google' && (
+              {shouldShowGoogleFontUrl(settings.advancedBranding?.fontSource) && (
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     {dict?.admin?.googleFontURL || 'Google Font URL'}
@@ -215,11 +182,11 @@ export default function AdvancedBrandingPage() {
                       googleFontUrl: e.target.value,
                     })}
                     className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
-                    placeholder={dict?.admin?.googleFontURLPlaceholder || 'https://fonts.googleapis.com/css2?family=Roboto'}
+                    placeholder={getPlaceholderForGoogleFontUrl(dict)}
                   />
                 </div>
               )}
-              {settings.advancedBranding?.fontSource === 'custom' && (
+              {shouldShowCustomFontUrl(settings.advancedBranding?.fontSource) && (
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     {dict?.admin?.customFontURL || 'Custom Font URL'}
@@ -232,7 +199,7 @@ export default function AdvancedBrandingPage() {
                       customFontUrl: e.target.value,
                     })}
                     className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
-                    placeholder={dict?.admin?.customFontURLPlaceholder || 'https://example.com/fonts/custom-font.woff2'}
+                    placeholder={getPlaceholderForCustomFontUrl(dict)}
                   />
                 </div>
               )}
@@ -248,10 +215,11 @@ export default function AdvancedBrandingPage() {
                   })}
                   className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                 >
-                  <option value="light">{dict?.admin?.light || 'Light'}</option>
-                  <option value="dark">{dict?.admin?.dark || 'Dark'}</option>
-                  <option value="auto">{dict?.admin?.autoSystem || 'Auto (System)'}</option>
-                  <option value="custom">{dict?.admin?.custom || 'Custom'}</option>
+                  {getThemeOptions().map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {dict?.admin?.[option.value === 'light' ? 'light' : option.value === 'dark' ? 'dark' : option.value === 'auto' ? 'autoSystem' : 'custom'] || option.label}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div>
@@ -266,15 +234,14 @@ export default function AdvancedBrandingPage() {
                   })}
                   className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                 >
-                  <option value="none">{dict?.admin?.none || 'None'}</option>
-                  <option value="sm">{dict?.admin?.small || 'Small'}</option>
-                  <option value="md">{dict?.admin?.medium || 'Medium'}</option>
-                  <option value="lg">{dict?.admin?.large || 'Large'}</option>
-                  <option value="xl">{dict?.admin?.extraLarge || 'Extra Large'}</option>
-                  <option value="custom">{dict?.admin?.custom || 'Custom'}</option>
+                  {getBorderRadiusOptions().map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {dict?.admin?.[option.value === 'none' ? 'none' : option.value === 'sm' ? 'small' : option.value === 'md' ? 'medium' : option.value === 'lg' ? 'large' : option.value === 'xl' ? 'extraLarge' : 'custom'] || option.label}
+                    </option>
+                  ))}
                 </select>
               </div>
-              {settings.advancedBranding?.borderRadius === 'custom' && (
+              {shouldShowCustomBorderRadius(settings.advancedBranding?.borderRadius) && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     {dict?.admin?.customBorderRadius || 'Custom Border Radius'}
@@ -287,11 +254,11 @@ export default function AdvancedBrandingPage() {
                       customBorderRadius: e.target.value,
                     })}
                     className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
-                    placeholder={dict?.admin?.customBorderRadiusPlaceholder || 'e.g., 8px, 0.5rem, 12px 8px'}
+                    placeholder={getPlaceholderForCustomBorderRadius(dict)}
                   />
                 </div>
               )}
-              {settings.advancedBranding?.theme === 'custom' && (
+              {shouldShowCustomThemeCSS(settings.advancedBranding?.theme) && (
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     {dict?.admin?.customCSS || 'Custom CSS'}
@@ -307,10 +274,10 @@ export default function AdvancedBrandingPage() {
                     })}
                     rows={10}
                     className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white font-mono text-sm"
-                    placeholder={dict?.admin?.customCSSPlaceholder || ':root { --primary-color: #2563eb; }'}
+                    placeholder={getPlaceholderForCustomCSS(dict)}
                   />
                   <p className="mt-2 text-xs text-gray-500">
-                    {dict?.admin?.customCSSHint || 'Add custom CSS variables or styles. Use CSS variables for better theme integration.'}
+                    {getCustomCSSHint(dict)}
                   </p>
                 </div>
               )}

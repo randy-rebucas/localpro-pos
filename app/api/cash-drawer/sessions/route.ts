@@ -30,8 +30,7 @@ export async function GET(request: NextRequest) {
 
     const sessions = await CashDrawerSession.find(query)
       .populate('userId', 'name email')
-      .sort({ openingTime: -1 })
-      .lean();
+      .sort({ openingTime: -1 });
 
     return NextResponse.json({ success: true, data: sessions });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -109,6 +108,8 @@ export async function POST(request: NextRequest) {
       }).lean();
 
       const cashSales = cashTransactions.reduce((sum, t) => sum + t.total, 0);
+      const totalVAT = cashTransactions.reduce((sum, t) => sum + (t.taxAmount || 0), 0);
+      const totalDiscounts = cashTransactions.reduce((sum, t) => sum + (t.discountAmount || 0), 0);
 
       const cashExpenses = await Expense.find({
         tenantId,
@@ -131,6 +132,8 @@ export async function POST(request: NextRequest) {
       openSession.overage = overage;
       openSession.closingTime = sessionEnd;
       openSession.status = 'closed';
+      openSession.totalVAT = totalVAT;
+      openSession.totalDiscounts = totalDiscounts;
       if (notes) {
         openSession.notes = notes;
       }

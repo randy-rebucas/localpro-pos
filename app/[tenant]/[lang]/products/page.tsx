@@ -17,6 +17,7 @@ import { getDictionaryClient } from '../dictionaries-client';
 import { showToast } from '@/lib/toast';
 import { useConfirm } from '@/lib/confirm';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { getDefaultTenantSettings } from '@/lib/currency';
 import { supportsFeature } from '@/lib/business-type-helpers';
 
 interface Product {
@@ -49,6 +50,7 @@ export default function ProductsPage() {
   const [displayMode, setDisplayMode] = useState<'grid' | 'list'>('grid');
   const { confirm, Dialog: ConfirmDialog } = useConfirm();
   const { settings } = useTenantSettings();
+  const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#3b82f6';
   const inventoryEnabled = supportsFeature(settings ?? undefined, 'inventory');
 
   useEffect(() => {
@@ -174,7 +176,11 @@ export default function ProductsPage() {
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">{dict.products.title}</h1>
           <button
             onClick={() => setIsModalOpen(true)}
-            className="w-full sm:w-auto bg-blue-600 text-white px-5 py-2.5 hover:bg-blue-700 font-semibold transition-all duration-200 border border-blue-700 flex items-center justify-center gap-2"
+            style={{
+              backgroundColor: primaryColor,
+              borderColor: primaryColor,
+            }}
+            className="w-full sm:w-auto text-white px-5 py-2.5 font-semibold transition-all duration-200 border flex items-center justify-center gap-2 hover:opacity-90"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -190,7 +196,19 @@ export default function ProductsPage() {
               placeholder={dict.products.searchPlaceholder}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full px-4 py-3 pl-11 text-base border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all"
+              style={{
+                borderWidth: '2px',
+                borderColor: '#d1d5db',
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = primaryColor;
+                e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = '#d1d5db';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+              className="w-full px-4 py-3 pl-11 text-base bg-white transition-all"
             />
             <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -200,11 +218,18 @@ export default function ProductsPage() {
           <div className="flex gap-2">
             <button
               onClick={() => setDisplayMode('grid')}
-              className={`px-4 py-3 bg-white border-2 transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium ${
-                displayMode === 'grid'
-                  ? 'border-blue-600 bg-blue-50 text-blue-700'
-                  : 'border-gray-300 text-gray-700 hover:bg-gray-100 hover:border-blue-500'
-              }`}
+              style={{
+                borderWidth: '2px',
+                ...(displayMode === 'grid' ? {
+                  borderColor: primaryColor,
+                  backgroundColor: `${primaryColor}10`,
+                  color: primaryColor,
+                } : {
+                  borderColor: '#d1d5db',
+                  color: '#374151',
+                }),
+              }}
+              className="px-4 py-3 bg-white transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium hover:bg-gray-100"
               title={dict?.common?.gridView || 'Grid View'}
               aria-label={dict?.common?.gridView || 'Grid View'}
             >
@@ -215,11 +240,18 @@ export default function ProductsPage() {
             </button>
             <button
               onClick={() => setDisplayMode('list')}
-              className={`px-4 py-3 bg-white border-2 transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium ${
-                displayMode === 'list'
-                  ? 'border-blue-600 bg-blue-50 text-blue-700'
-                  : 'border-gray-300 text-gray-700 hover:bg-gray-100 hover:border-blue-500'
-              }`}
+              style={{
+                borderWidth: '2px',
+                ...(displayMode === 'list' ? {
+                  borderColor: primaryColor,
+                  backgroundColor: `${primaryColor}10`,
+                  color: primaryColor,
+                } : {
+                  borderColor: '#d1d5db',
+                  color: '#374151',
+                }),
+              }}
+              className="px-4 py-3 bg-white transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium hover:bg-gray-100"
               title={dict?.common?.listView || 'List View'}
               aria-label={dict?.common?.listView || 'List View'}
             >
@@ -292,7 +324,19 @@ export default function ProductsPage() {
             {sortedProducts.map((product) => (
               <div
                 key={product._id}
-                className="group relative bg-white border border-gray-300 rounded-lg p-4 sm:p-5 hover:shadow-lg hover:border-blue-300 transition-all duration-200 flex flex-col"
+                className="group relative bg-white border border-gray-300 rounded-lg p-4 sm:p-5 transition-all duration-200 flex flex-col"
+                style={{
+                  boxShadow: 'none',
+                  borderColor: '#d1d5db',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.1)';
+                  e.currentTarget.style.borderColor = primaryColor;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.boxShadow = 'none';
+                  e.currentTarget.style.borderColor = '#d1d5db';
+                }}
               >
                 {/* Product Image */}
                 {product.image && (
@@ -313,7 +357,7 @@ export default function ProductsPage() {
                     <h3 className="font-semibold text-gray-900 text-lg sm:text-xl pr-2 flex-1">
                       {product.name}
                       {product.pinned && (
-                        <svg className="inline-block w-4 h-4 ml-2 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                        <svg className="inline-block w-4 h-4 ml-2" style={{ color: primaryColor }} fill="currentColor" viewBox="0 0 20 20">
                           <path d="M10 2a1 1 0 011 1v1.323l3.954 1.582 1.599-.8a1 1 0 01.894 1.79l-1.233.616 1.738 5.42a1 1 0 01-.285 1.05A3.989 3.989 0 0115 15a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.715-5.349L11 6.477V16a1 1 0 11-2 0V6.477L5.237 7.582l1.715 5.349a1 1 0 01-.285 1.05A3.989 3.989 0 013 15a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.738-5.42-1.233-.617a1 1 0 01.894-1.788l1.599.799L9 4.323V3a1 1 0 011-1z" />
                         </svg>
                       )}
@@ -360,7 +404,7 @@ export default function ProductsPage() {
                     {/* Price */}
                     <div>
                       <div className="text-xs text-gray-500 mb-1">{dict.products.price}</div>
-                      <div className="font-bold text-blue-600 text-xl sm:text-2xl">
+                      <div className="font-bold text-xl sm:text-2xl" style={{ color: primaryColor }}>
                         <Currency amount={product.price} />
                       </div>
                     </div>
@@ -401,7 +445,11 @@ export default function ProductsPage() {
                       )}
                       <button
                         onClick={() => handleEdit(product)}
-                        className="flex-1 px-4 py-2.5 bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 transition-all duration-200 border border-blue-700 flex items-center justify-center gap-2 touch-manipulation min-h-[44px] text-sm font-medium"
+                        style={{
+                          backgroundColor: primaryColor,
+                          borderColor: primaryColor,
+                        }}
+                        className="flex-1 px-4 py-2.5 text-white active:opacity-80 transition-all duration-200 border flex items-center justify-center gap-2 touch-manipulation min-h-[44px] text-sm font-medium hover:opacity-90"
                         title={dict.common.edit}
                         aria-label={dict.common.edit}
                       >
@@ -456,8 +504,8 @@ export default function ProductsPage() {
                     <div className="flex items-start gap-2 mb-2">
                       <h3 className="font-semibold text-gray-900 text-base sm:text-lg flex-1">
                         {product.name}
-                        {product.pinned && (
-                          <svg className="inline-block w-4 h-4 ml-2 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                    {product.pinned && (
+                          <svg className="inline-block w-4 h-4 ml-2" style={{ color: primaryColor }} fill="currentColor" viewBox="0 0 20 20">
                             <path d="M10 2a1 1 0 011 1v1.323l3.954 1.582 1.599-.8a1 1 0 01.894 1.79l-1.233.616 1.738 5.42a1 1 0 01-.285 1.05A3.989 3.989 0 0115 15a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.715-5.349L11 6.477V16a1 1 0 11-2 0V6.477L5.237 7.582l1.715 5.349a1 1 0 01-.285 1.05A3.989 3.989 0 013 15a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.738-5.42-1.233-.617a1 1 0 01.894-1.788l1.599.799L9 4.323V3a1 1 0 011-1z" />
                           </svg>
                         )}
@@ -506,7 +554,7 @@ export default function ProductsPage() {
                     {/* Price */}
                     <div className="text-right">
                       <div className="text-xs text-gray-500 mb-1 hidden sm:block">{dict.products.price}</div>
-                      <div className="font-bold text-blue-600 text-lg sm:text-xl">
+                      <div className="font-bold text-lg sm:text-xl" style={{ color: primaryColor }}>
                         <Currency amount={product.price} />
                       </div>
                     </div>
@@ -545,7 +593,11 @@ export default function ProductsPage() {
                         )}
                         <button
                           onClick={() => handleEdit(product)}
-                          className="px-3 py-2 bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 transition-all duration-200 border border-blue-700 flex items-center justify-center touch-manipulation min-h-[44px] sm:min-h-0"
+                          style={{
+                            backgroundColor: primaryColor,
+                            borderColor: primaryColor,
+                          }}
+                          className="px-3 py-2 text-white active:opacity-80 transition-all duration-200 border flex items-center justify-center touch-manipulation min-h-[44px] sm:min-h-0 hover:opacity-90"
                           title={dict.common.edit}
                           aria-label={dict.common.edit}
                         >

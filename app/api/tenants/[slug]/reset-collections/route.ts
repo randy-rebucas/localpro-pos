@@ -16,24 +16,51 @@ import Attendance from '@/models/Attendance';
 import Booking from '@/models/Booking';
 import SavedCart from '@/models/SavedCart';
 import AuditLog from '@/models/AuditLog';
+import Customer from '@/models/Customer';
+import Address from '@/models/Address';
+import Invoice from '@/models/Invoice';
+import Payment from '@/models/Payment';
+import LoyaltyConfig from '@/models/LoyaltyConfig';
+import LoyaltyTransaction from '@/models/LoyaltyTransaction';
+import TaxRule from '@/models/TaxRule';
+import CustomerOTP from '@/models/CustomerOTP';
 import mongoose from 'mongoose';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
 
 // Map collection names to their models
 const COLLECTION_MODELS: Record<string, any> = { // eslint-disable-line @typescript-eslint/no-explicit-any
+  // Products & Inventory
   products: Product,
-  transactions: Transaction,
+  productBundles: ProductBundle,
   categories: Category,
   stockMovements: StockMovement,
-  expenses: Expense,
+  // Sales & Transactions
+  transactions: Transaction,
+  payments: Payment,
+  invoices: Invoice,
+  // Customer Management
+  customers: Customer,
+  addresses: Address,
+  customerOTPs: CustomerOTP,
+  // Discounts & Promotions
   discounts: Discount,
-  branches: Branch,
-  cashDrawerSessions: CashDrawerSession,
-  productBundles: ProductBundle,
-  attendance: Attendance,
-  bookings: Booking,
   savedCarts: SavedCart,
+  // Loyalty Program
+  loyaltyConfigs: LoyaltyConfig,
+  loyaltyTransactions: LoyaltyTransaction,
+  // Tax & Compliance
+  taxRules: TaxRule,
+  // Organizational
+  branches: Branch,
+  expenses: Expense,
+  // Cash Management
+  cashDrawerSessions: CashDrawerSession,
+  // Staff & Operations
+  attendance: Attendance,
+  // Bookings & Services
+  bookings: Booking,
+  // Audit & Compliance
   auditLogs: AuditLog,
 };
 
@@ -44,7 +71,7 @@ export async function GET(
 ) {
   try {
     await connectDB();
-    await requireRole(request, ['admin']);
+    const user = await requireRole(request, ['admin']);
     const { slug } = await params;
     const t = await getValidationTranslatorFromRequest(request);
     
@@ -53,6 +80,14 @@ export async function GET(
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
         { status: 404 }
+      );
+    }
+
+    // Verify user owns this tenant (unless super_admin)
+    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+      return NextResponse.json(
+        { success: false, error: t('validation.forbidden', 'You do not have access to this tenant') },
+        { status: 403 }
       );
     }
 
@@ -133,7 +168,7 @@ export async function POST(
 ) {
   try {
     await connectDB();
-    await requireRole(request, ['admin']);
+    const user = await requireRole(request, ['admin']);
     const { slug } = await params;
     
     const tenant = await Tenant.findOne({ slug, isActive: true });
@@ -142,6 +177,14 @@ export async function POST(
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
         { status: 404 }
+      );
+    }
+
+    // Verify user owns this tenant (unless super_admin)
+    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+      return NextResponse.json(
+        { success: false, error: t('validation.forbidden', 'You do not have access to this tenant') },
+        { status: 403 }
       );
     }
 
@@ -217,7 +260,7 @@ export async function PUT(
 ) {
   try {
     await connectDB();
-    await requireRole(request, ['admin']);
+    const user = await requireRole(request, ['admin']);
     const { slug } = await params;
     
     const tenant = await Tenant.findOne({ slug, isActive: true });
@@ -226,6 +269,14 @@ export async function PUT(
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
         { status: 404 }
+      );
+    }
+
+    // Verify user owns this tenant (unless super_admin)
+    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+      return NextResponse.json(
+        { success: false, error: t('validation.forbidden', 'You do not have access to this tenant') },
+        { status: 403 }
       );
     }
 
