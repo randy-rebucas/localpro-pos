@@ -115,13 +115,20 @@ class ReceiptPrinterService {
           });
         }
 
-        await device.open();
-        if (device.configuration === null) {
-          await device.selectConfiguration(1);
+        try {
+          await device.open();
+          if (device.configuration === null) {
+            await device.selectConfiguration(1);
+          }
+          await device.claimInterface(0);
+          this.device = device;
+          return true;
+        } catch (usbError) {
+          // "Access denied" — device is claimed by OS print driver or another process.
+          // This is normal when the printer is used via OS driver (browser print mode).
+          logger.info('USB device access denied (likely claimed by OS driver). Use browser print mode instead.');
+          return false;
         }
-        await device.claimInterface(0);
-        this.device = device;
-        return true;
       } else if (this.config.type === 'serial' && 'serial' in navigator) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const serial = (navigator as any).serial;
@@ -134,9 +141,14 @@ class ReceiptPrinterService {
           port = await serial.requestPort();
         }
 
-        await port.open({ baudRate: 9600 });
-        this.device = port;
-        return true;
+        try {
+          await port.open({ baudRate: 9600 });
+          this.device = port;
+          return true;
+        } catch (serialError) {
+          logger.info('Serial port access denied (likely in use). Use browser print mode instead.');
+          return false;
+        }
       }
       return false;
     } catch (error) {
