@@ -738,6 +738,8 @@ export default function Dashboard() {
       minNumber: settings.birMinNumber,
       systemProvider: settings.birSystemProvider,
       isVAT: isVAT || false,
+      // Auto-kick cash drawer on cash payments (drawer connected to printer via RJ11)
+      openDrawerOnPrint: transaction.paymentMethod === 'cash' && !!cashDrawerSession,
     };
 
     try {

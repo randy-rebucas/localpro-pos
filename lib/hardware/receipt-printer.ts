@@ -66,6 +66,7 @@ export interface ReceiptData {
   isVAT?: boolean;         // true = VAT-registered, false = NON-VAT
   taxRate?: number;        // Tax rate from tenant settings (e.g. 12 for 12%)
   customerTIN?: string;    // Customer TIN (optional)
+  openDrawerOnPrint?: boolean; // Kick cash drawer after printing (for cash payments)
 }
 
 class ReceiptPrinterService {
@@ -231,8 +232,14 @@ class ReceiptPrinterService {
   async printReceipt(data: ReceiptData): Promise<boolean> {
     try {
       if (this.config?.type === 'browser') {
-        // Fallback to browser print dialog
-        return this.printViaBrowser(data);
+        const printed = this.printViaBrowser(data);
+        // After browser print, kick drawer via server API if requested
+        if (printed && data.openDrawerOnPrint) {
+          this.openDrawerViaPrintProxy().catch(() => {
+            // Silent fail — drawer kick is best-effort in browser mode
+          });
+        }
+        return printed;
       }
 
       if (!this.device && this.config && this.config.type !== 'network') {
@@ -347,6 +354,12 @@ class ReceiptPrinterService {
         await this.sendData(cmd);
       }
 
+      // Kick cash drawer after print if requested (drawer connected to printer via RJ11)
+      if (data.openDrawerOnPrint) {
+        const kickCmd = new Uint8Array([this.ESC, 0x70, 0x00, 0x19, 0xFF]);
+        await this.sendData(kickCmd);
+      }
+
       return true;
     } catch (error) {
       logger.error('Print error:', error);
@@ -363,9 +376,20 @@ class ReceiptPrinterService {
     try {
       // Send ESC/POS commands via HTTP POST to printer
       const commands = await this.buildEscPosCommands(data);
+
+      // Append cash drawer kick if requested
+      let payload = commands;
+      if (data.openDrawerOnPrint) {
+        const kickCmd = new Uint8Array([0x1B, 0x70, 0x00, 0x19, 0xFF]);
+        const combined = new Uint8Array(commands.length + kickCmd.length);
+        combined.set(commands);
+        combined.set(kickCmd, commands.length);
+        payload = combined;
+      }
+
       const response = await fetch(`http://${this.config.ipAddress}:${this.config.portNumber || 9100}`, {
         method: 'POST',
-        body: commands as unknown as BodyInit,
+        body: payload as unknown as BodyInit,
         headers: {
           'Content-Type': 'application/octet-stream',
         },
