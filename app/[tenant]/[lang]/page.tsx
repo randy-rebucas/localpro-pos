@@ -70,8 +70,8 @@ export default function Dashboard() {
   const [dict, setDict] = useState<TranslationDict | null>(null);
   const { isOnline } = useNetworkStatus(tenant);
   const { settings } = useTenantSettings();
-  const { logout, hasRole } = useAuth();
-  const isCashier = hasRole(['cashier']);
+  const { logout, user: authUser } = useAuth();
+  const isCashier = authUser?.role === 'cashier';
   const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#3b82f6';
   
   // Additional state for modals and UI
