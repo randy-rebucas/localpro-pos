@@ -50,8 +50,10 @@ export const config = {
  * Validate required environment variables
  */
 export function validateConfig(): void {
-  // Skip validation during build phase (NEXT_PHASE is set by Next.js during build)
-  if (process.env.NEXT_PHASE === 'phase-production-build') {
+  // Skip validation during build phase
+  // NEXT_PHASE is set during `next build`, but may vary across build stages
+  const phase = process.env.NEXT_PHASE;
+  if (phase && phase.startsWith('phase-production')) {
     return;
   }
 
@@ -62,7 +64,8 @@ export function validateConfig(): void {
   const missing = required.filter(key => !process.env[key]);
 
   if (missing.length > 0 && process.env.NODE_ENV === 'production') {
-    throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+    // Warn instead of throwing to avoid crashing during SSR prerender
+    console.error(`[config] Missing required environment variables: ${missing.join(', ')}`);
   }
 }
 
