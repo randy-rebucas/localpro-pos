@@ -178,19 +178,28 @@ export default function MultiCurrencyPage() {
               )}
               <div className="space-y-2">
                 {multiCurrency.displayCurrencies.map((currency: string) => {
-                  const rate = multiCurrency.exchangeRates?.[currency];
+                  // exchangeRates may be a Mongoose Map or a plain object — handle both
+                  const ratesRaw = multiCurrency.exchangeRates as unknown;
+                  const rate: number | undefined =
+                    ratesRaw instanceof Map
+                      ? (ratesRaw as Map<string, number>).get(currency)
+                      : (ratesRaw as Record<string, number> | undefined)?.[currency];
                   return (
                     <div key={currency} className="flex items-center justify-between p-3 bg-gray-50 rounded border border-gray-200">
                       <span className="text-sm font-medium text-gray-900">{currency}</span>
                       <input
                         type="number"
                         step="0.0001"
-                        value={rate || ''}
+                        min="0.0001"
+                        value={rate ?? ''}
                         onChange={(e) => {
-                          const newRates = {
-                            ...(multiCurrency.exchangeRates || {}),
-                            [currency]: parseFloat(e.target.value) || 0,
-                          };
+                          // Build a plain-object copy so the spread below always works
+                          const existing: Record<string, number> =
+                            ratesRaw instanceof Map
+                              ? Object.fromEntries(ratesRaw as Map<string, number>)
+                              : { ...((ratesRaw as Record<string, number>) || {}) };
+                          const parsed = parseFloat(e.target.value);
+                          const newRates = { ...existing, [currency]: isNaN(parsed) ? 0 : parsed };
                           updateSetting('multiCurrency.exchangeRates', newRates);
                         }}
                         className="w-32 px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"

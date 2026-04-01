@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { useParams } from 'next/navigation';
-import { ITenantSettings } from '@/models/Tenant';
+import { ITenantSettings } from '@/types/tenant';
 import { getDefaultTenantSettings } from '@/lib/currency';
 
 interface TenantSettingsContextType {

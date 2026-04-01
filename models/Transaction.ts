@@ -19,7 +19,10 @@ export interface ITransaction extends Document {
   taxExemptAmount?: number; // Amount exempt from VAT (BIR)
   taxAmount?: number; // Calculated tax amount
   total: number; // Total after discount and tax
-  paymentMethod: 'cash' | 'card' | 'digital';
+  paymentMethod: 'cash' | 'card' | 'digital' | 'tap_to_pay' | 'wallet' | 'qr_code' | 'bnpl';
+  paymentProvider?: string; // e.g. 'gcash', 'maya', 'applepay', 'billease', 'qrph'
+  paymentReference?: string; // Reference/transaction ID from the payment provider
+  bnplInstallments?: number; // Number of installments for BNPL
   cashReceived?: number;
   change?: number;
   status: 'completed' | 'cancelled' | 'refunded';
@@ -29,6 +32,8 @@ export interface ITransaction extends Document {
   userId?: mongoose.Types.ObjectId;
   receiptNumber?: string;
   notes?: string;
+  displayCurrency?: string; // Currency code the customer chose to view the total in
+  displayTotal?: number;    // Total converted to displayCurrency at time of sale
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -110,8 +115,20 @@ const TransactionSchema: Schema = new Schema(
     },
     paymentMethod: {
       type: String,
-      enum: ['cash', 'card', 'digital'],
+      enum: ['cash', 'card', 'digital', 'tap_to_pay', 'wallet', 'qr_code', 'bnpl'],
       required: true,
+    },
+    paymentProvider: {
+      type: String,
+      trim: true,
+    },
+    paymentReference: {
+      type: String,
+      trim: true,
+    },
+    bnplInstallments: {
+      type: Number,
+      min: 1,
     },
     cashReceived: {
       type: Number,
@@ -150,6 +167,14 @@ const TransactionSchema: Schema = new Schema(
     notes: {
       type: String,
       trim: true,
+    },
+    displayCurrency: {
+      type: String,
+      trim: true,
+    },
+    displayTotal: {
+      type: Number,
+      min: 0,
     },
     isActive: {
       type: Boolean,

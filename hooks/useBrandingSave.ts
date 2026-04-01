@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { ITenantSettings } from '@/models/Tenant';
+import { ITenantSettings } from '@/types/tenant';
 
 export function useBrandingSave(tenant: string) {
   const [saving, setSaving] = useState(false);

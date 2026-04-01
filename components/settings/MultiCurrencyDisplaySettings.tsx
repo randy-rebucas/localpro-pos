@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react'; // eslint-disable-line @typescript-eslint/no-unused-vars
-import { ITenantSettings } from '@/models/Tenant';
+import { ITenantSettings } from '@/types/tenant';
 import Link from 'next/link';
 
 interface MultiCurrencyDisplaySettingsProps {

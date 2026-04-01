@@ -126,6 +126,18 @@ export default function AdminPage() {
           color: 'yellow',
         },
         {
+          title: 'CRM',
+          description: 'Customer segments, loyalty milestones, and email/SMS campaigns',
+          href: `/${tenant}/${lang}/admin/crm`,
+          featureFlag: 'enableCustomerManagement' as keyof typeof settings,
+          icon: (
+            <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+          ),
+          color: 'purple',
+        },
+        {
           title: dict.admin?.transactions || 'Transactions',
           description: dict.admin?.transactionsDescription || 'View and manage all sales transactions',
           href: `/${tenant}/${lang}/admin/transactions`,
@@ -534,71 +546,6 @@ export default function AdminPage() {
           </h1>
           <p className="text-gray-600 text-lg">{dict.admin?.subtitle || 'Manage users, tenants, and system settings'}</p>
         </div>
-
-        {/* Subscription Usage Card - Spanning Full Width */}
-        {subscriptionStatus && (
-          <Link
-            href={`/${tenant}/${lang}/admin/subscriptions`}
-            className="mb-8 block bg-gradient-to-br from-white to-gray-50 border-2 p-8 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 group"
-            style={{ borderColor: primaryColor }}
-          >
-            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
-              <div className="flex items-start gap-4">
-                <div
-                className="inline-flex p-4 border-2 flex-shrink-0"
-                  style={{ background: `${primaryColor}15`, color: primaryColor, borderColor: primaryColor }}
-                >
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900">{dict.admin?.subscriptionUsage || 'Subscription Usage'}</h2>
-                  <p className="text-gray-600 text-sm mt-1">{subscriptionStatus.planName} {dict.admin?.plan || 'Plan'}</p>
-                </div>
-              </div>
-              <span className={`inline-flex items-center px-3 py-1 text-sm font-semibold flex-shrink-0 ${
-                subscriptionStatus.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-              }`}>
-                {subscriptionStatus.isActive ? (dict.admin?.active || 'Active') : (dict.admin?.inactive || 'Inactive')}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div className="bg-white border border-gray-200 p-4 text-center hover:border-gray-300 transition-colors">
-                <div className="text-3xl font-bold" style={{ color: primaryColor }}>{subscriptionStatus.usage.currentUsers}</div>
-                <div className="text-xs text-gray-500 mt-2 font-medium">
-                  {dict.admin?.users || 'Users'} / {subscriptionStatus.limits.maxUsers === -1 ? '∞' : subscriptionStatus.limits.maxUsers}
-                </div>
-              </div>
-              <div className="bg-white border border-gray-200 p-4 text-center hover:border-green-300 transition-colors">
-                <div className="text-3xl font-bold text-green-600">{subscriptionStatus.usage.currentBranches}</div>
-                <div className="text-xs text-gray-500 mt-2 font-medium">
-                  {dict.admin?.branches || 'Branches'} / {subscriptionStatus.limits.maxBranches === -1 ? '∞' : subscriptionStatus.limits.maxBranches}
-                </div>
-              </div>
-              <div className="bg-white border border-gray-200 p-4 text-center hover:border-orange-300 transition-colors">
-                <div className="text-3xl font-bold text-orange-600">{subscriptionStatus.usage.currentProducts}</div>
-                <div className="text-xs text-gray-500 mt-2 font-medium">
-                  {dict.admin?.products || 'Products'} / {subscriptionStatus.limits.maxProducts === -1 ? '∞' : subscriptionStatus.limits.maxProducts}
-                </div>
-              </div>
-              <div className="bg-white border border-gray-200 p-4 text-center hover:border-purple-300 transition-colors">
-                <div className="text-3xl font-bold text-purple-600">{subscriptionStatus.usage.currentTransactions}</div>
-                <div className="text-xs text-gray-500 mt-2 font-medium">
-                  {dict.admin?.transactions || 'Transactions'} / {subscriptionStatus.limits.maxTransactions === -1 ? '∞' : subscriptionStatus.limits.maxTransactions}
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-6 flex items-center font-semibold text-base group-hover:translate-x-1 transition-transform" style={{ color: primaryColor }}>
-              <span>{dict.admin?.manageSubscription || 'Manage Subscription'}</span>
-              <svg className="w-5 h-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </div>
-          </Link>
-        )}
 
         {/* Masonry Grid Layout */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 auto-rows-max">

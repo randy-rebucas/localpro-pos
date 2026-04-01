@@ -42,7 +42,7 @@ const LoyaltyConfigSchema: Schema = new Schema(
   }
 );
 
-LoyaltyConfigSchema.index({ tenantId: 1 });
+// tenantId has unique: true in the schema field definition, which already creates an index
 
 const LoyaltyConfig: Model<ILoyaltyConfig> =
   mongoose.models.LoyaltyConfig ||

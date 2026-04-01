@@ -66,7 +66,7 @@ export async function POST(
     const { action } = body;
 
     await connectDB();
-
+    console.log(`Received exchange rate update request for tenant ${slug} with action: ${action}`);
     const tenant = await Tenant.findOne({ slug });
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
@@ -75,25 +75,38 @@ export async function POST(
     if (action === 'fetch') {
       // Fetch fresh rates from API
       const multiCurrency = tenant.settings.multiCurrency;
-      if (!multiCurrency?.enabled || !multiCurrency.displayCurrencies) {
-        return NextResponse.json({ success: false, error: 'Multi-currency not configured' }, { status: 400 });
+      if (!multiCurrency?.enabled) {
+        return NextResponse.json({ success: false, error: 'Multi-currency not enabled' }, { status: 400 });
+      }
+      if (!multiCurrency.displayCurrencies || multiCurrency.displayCurrencies.length === 0) {
+        return NextResponse.json({ success: false, error: 'No display currencies configured' }, { status: 400 });
       }
 
       const baseCurrency = tenant.settings.currency;
+      if (!baseCurrency) {
+        return NextResponse.json({ success: false, error: 'Base currency not set in tenant settings' }, { status: 400 });
+      }
+
       const rates = await fetchExchangeRates(
         baseCurrency,
         multiCurrency.displayCurrencies,
         multiCurrency.exchangeRateApiKey
       );
-
+      console.log(`Fetched exchange rates for tenant ${slug}:`, rates);
       if (!rates) {
-        return NextResponse.json({ success: false, error: 'Failed to fetch exchange rates' }, { status: 500 });
+        logger.error(`Exchange rate fetch failed for tenant ${slug} (base: ${baseCurrency})`);
+        return NextResponse.json(
+          { success: false, error: 'Exchange rate provider unavailable. Try again later or enter rates manually.' },
+          { status: 502 }
+        );
       }
 
-      // Update tenant settings
+      // Use toObject() so spreading a Mongoose subdocument works correctly
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const mcObj = typeof (multiCurrency as any).toObject === 'function' ? (multiCurrency as any).toObject() : { ...multiCurrency };
       tenant.settings.multiCurrency = {
-        ...multiCurrency,
-        exchangeRates: rates as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+        ...mcObj,
+        exchangeRates: rates,
         lastUpdated: new Date(),
       };
 
@@ -102,22 +115,31 @@ export async function POST(
 
       return NextResponse.json({
         success: true,
-        data: {
-          exchangeRates: rates,
-          lastUpdated: new Date(),
-        },
+        data: { exchangeRates: rates, lastUpdated: new Date() },
       });
     } else if (action === 'update') {
       // Manually update rates
       const { exchangeRates } = body;
-      if (!exchangeRates || typeof exchangeRates !== 'object') {
+      if (!exchangeRates || typeof exchangeRates !== 'object' || Array.isArray(exchangeRates)) {
         return NextResponse.json({ success: false, error: 'Invalid exchange rates' }, { status: 400 });
       }
 
-      const multiCurrency = tenant.settings.multiCurrency || { enabled: false };
+      // Validate each rate value is a positive number
+      for (const [currency, rate] of Object.entries(exchangeRates)) {
+        if (typeof rate !== 'number' || rate <= 0) {
+          return NextResponse.json(
+            { success: false, error: `Invalid rate for ${currency}: must be a positive number` },
+            { status: 400 }
+          );
+        }
+      }
+
+      const multiCurrency = tenant.settings.multiCurrency;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const mcObj = multiCurrency && typeof (multiCurrency as any).toObject === 'function' ? (multiCurrency as any).toObject() : { ...(multiCurrency || { enabled: false }) };
       tenant.settings.multiCurrency = {
-        ...multiCurrency,
-        exchangeRates: exchangeRates as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+        ...mcObj,
+        exchangeRates,
         lastUpdated: new Date(),
       };
 
@@ -126,10 +148,7 @@ export async function POST(
 
       return NextResponse.json({
         success: true,
-        data: {
-          exchangeRates,
-          lastUpdated: new Date(),
-        },
+        data: { exchangeRates, lastUpdated: new Date() },
       });
     }
 

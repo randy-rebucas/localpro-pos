@@ -65,7 +65,6 @@ const CashDrawerSessionSchema: Schema = new Schema(
       type: String,
       enum: ['open', 'closed'],
       default: 'open',
-      index: true,
     },
     notes: {
       type: String,
@@ -88,9 +87,9 @@ const CashDrawerSessionSchema: Schema = new Schema(
 );
 
 // Indexes for efficient queries
-CashDrawerSessionSchema.index({ tenantId: 1, status: 1 });
 CashDrawerSessionSchema.index({ tenantId: 1, openingTime: -1 });
-// Enforce only one open session per tenant (partial unique index)
+// Enforce only one open session per tenant; this partial unique index also serves as the
+// general { tenantId, status } query index — no separate plain index needed.
 CashDrawerSessionSchema.index(
   { tenantId: 1, status: 1 },
   { unique: true, partialFilterExpression: { status: 'open' } }

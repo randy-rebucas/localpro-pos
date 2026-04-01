@@ -1,4 +1,4 @@
-import { ITenantSettings } from '@/models/Tenant';
+import { ITenantSettings } from '@/types/tenant';
 
 /**
  * Get currency symbol for a currency code

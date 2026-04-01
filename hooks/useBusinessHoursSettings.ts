@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import type { ITenantSettings } from '@/models/Tenant';
+import type { ITenantSettings } from '@/types/tenant';
 
 export function useBusinessHoursSettings(tenantId: string) {
   const [settings, setSettings] = useState<ITenantSettings | null>(null);

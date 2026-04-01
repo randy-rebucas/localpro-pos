@@ -70,7 +70,6 @@ const BookingSchema: Schema = new Schema(
       type: String,
       enum: ['pending', 'confirmed', 'completed', 'cancelled', 'no-show'],
       default: 'pending',
-      index: true,
     },
     staffId: {
       type: Schema.Types.ObjectId,
@@ -105,10 +104,9 @@ const BookingSchema: Schema = new Schema(
 
 // Compound indexes for efficient queries
 BookingSchema.index({ tenantId: 1, startTime: 1 });
-BookingSchema.index({ tenantId: 1, status: 1 });
 BookingSchema.index({ tenantId: 1, staffId: 1, startTime: 1 });
 BookingSchema.index({ startTime: 1, endTime: 1 }); // For conflict detection
-// Compound index for filtering pending/completed bookings sorted by creation date
+// Covers both status filtering and date-sorted queries; replaces the simpler { tenantId, status } index
 BookingSchema.index({ tenantId: 1, status: 1, createdAt: -1 });
 
 // Virtual to check if booking is in the past

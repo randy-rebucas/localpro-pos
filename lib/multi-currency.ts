@@ -23,29 +23,37 @@ export async function fetchExchangeRates(
   apiKey?: string
 ): Promise<Record<string, number> | null> {
   try {
-    // Try exchangerate-api.com first (free, no API key needed for basic usage)
+    // Free tier: open.er-api.com returns { result, base_code, rates: {...} } — no API key required.
+    // Fallback: exchangerate-api.com v6 standard endpoint returns conversion_rates when an API key is provided.
     if (!apiKey) {
-      const response = await fetch(`https://api.exchangerate-api.com/v4/latest/${baseCurrency}`);
+      const response = await fetch(`https://open.er-api.com/v6/latest/${baseCurrency}`);
       if (response.ok) {
         const data = await response.json();
+        // open.er-api.com uses `rates`; guard against non-success results
+        if (data.result && data.result !== 'success') return null;
+        const ratesMap: Record<string, number> = data.rates || {};
         const rates: Record<string, number> = {};
         targetCurrencies.forEach((currency) => {
-          if (data.rates && data.rates[currency]) {
-            rates[currency] = data.rates[currency];
-          }
+          if (ratesMap[currency]) rates[currency] = ratesMap[currency];
         });
-        return rates;
+        return Object.keys(rates).length > 0 ? rates : null;
       }
     }
 
-    // Try Fixer.io if API key is provided
+    // exchangerate-api.com v6 with API key — standard (not pair) endpoint returns conversion_rates
     if (apiKey) {
       const response = await fetch(
-        `https://api.fixer.io/latest?access_key=${apiKey}&base=${baseCurrency}&symbols=${targetCurrencies.join(',')}`
+        `https://v6.exchangerate-api.com/v6/${apiKey}/latest/${baseCurrency}`
       );
       if (response.ok) {
-        const data: ExchangeRateResponse = await response.json();
-        return data.rates || null;
+        const data = await response.json();
+        if (data.result && data.result !== 'success') return null;
+        const ratesMap: Record<string, number> = data.conversion_rates || data.rates || {};
+        const rates: Record<string, number> = {};
+        targetCurrencies.forEach((currency) => {
+          if (ratesMap[currency]) rates[currency] = ratesMap[currency];
+        });
+        return Object.keys(rates).length > 0 ? rates : null;
       }
     }
 
@@ -57,50 +65,73 @@ export async function fetchExchangeRates(
 }
 
 /**
- * Convert amount from one currency to another
+ * Safely read a rate from a rates map that may be a Mongoose Map or plain object.
+ */
+function getRate(
+  rates: Record<string, number> | Map<string, number> | undefined,
+  currency: string
+): number | undefined {
+  if (!rates) return undefined;
+  if (rates instanceof Map) return rates.get(currency);
+  return (rates as Record<string, number>)[currency];
+}
+
+/**
+ * Convert amount from one currency to another.
+ * All exchange rates are expressed as: 1 baseCurrency = N targetCurrency.
+ * Returns null when conversion is not possible.
  */
 export function convertCurrency(
   amount: number,
   fromCurrency: string,
   toCurrency: string,
-  exchangeRates: Record<string, number>
-): number {
-  if (fromCurrency === toCurrency) {
-    return amount;
+  exchangeRates: Record<string, number> | Map<string, number>,
+  baseCurrency: string
+): number | null {
+  if (fromCurrency === toCurrency) return round2(amount);
+
+  // base → target
+  if (fromCurrency === baseCurrency) {
+    const rate = getRate(exchangeRates, toCurrency);
+    if (rate == null || rate <= 0) return null;
+    return round2(amount * rate);
   }
 
-  // If converting from base currency
-  if (exchangeRates[toCurrency]) {
-    return amount * exchangeRates[toCurrency];
+  // target → base
+  if (toCurrency === baseCurrency) {
+    const rate = getRate(exchangeRates, fromCurrency);
+    if (rate == null || rate <= 0) return null;
+    return round2(amount / rate);
   }
 
-  // If converting to base currency
-  if (exchangeRates[fromCurrency]) {
-    return amount / exchangeRates[fromCurrency];
-  }
+  // cross-currency: target A → base → target B
+  const rateFrom = getRate(exchangeRates, fromCurrency);
+  const rateTo = getRate(exchangeRates, toCurrency);
+  if (rateFrom == null || rateFrom <= 0 || rateTo == null || rateTo <= 0) return null;
+  return round2((amount / rateFrom) * rateTo);
+}
 
-  // Cross-currency conversion (via base)
-  // This assumes base currency is in the rates
-  // For simplicity, we'll use direct rate if available
-  return amount;
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
 }
 
 /**
- * Format amount in multiple currencies
+ * Format amount in multiple currencies.
+ * Skips currencies whose exchange rate is missing or invalid.
  */
 export function formatMultiCurrency(
   amount: number,
   baseCurrency: string,
   displayCurrencies: string[],
-  exchangeRates: Record<string, number>,
+  exchangeRates: Record<string, number> | Map<string, number>,
   settings: ITenantSettings
 ): Array<{ currency: string; formatted: string; amount: number }> {
   const results: Array<{ currency: string; formatted: string; amount: number }> = [];
 
-  displayCurrencies.forEach((currency) => {
-    const convertedAmount = convertCurrency(amount, baseCurrency, currency, exchangeRates);
-    
-    // Create temporary settings for this currency
+  for (const currency of displayCurrencies) {
+    const convertedAmount = convertCurrency(amount, baseCurrency, currency, exchangeRates, baseCurrency);
+    if (convertedAmount === null) continue; // skip currencies with missing rates
+
     const tempSettings: ITenantSettings = {
       ...settings,
       currency,
@@ -112,26 +143,20 @@ export function formatMultiCurrency(
       formatted: formatCurrency(convertedAmount, tempSettings),
       amount: convertedAmount,
     });
-  });
+  }
 
   return results;
 }
 
 /**
- * Get exchange rate for a specific currency pair
+ * Get exchange rate for a specific currency pair (base → target).
  */
 export function getExchangeRate(
   fromCurrency: string,
   toCurrency: string,
-  exchangeRates: Record<string, number>
+  exchangeRates: Record<string, number> | Map<string, number>
 ): number | null {
-  if (fromCurrency === toCurrency) {
-    return 1;
-  }
-
-  if (exchangeRates[toCurrency]) {
-    return exchangeRates[toCurrency];
-  }
-
-  return null;
+  if (fromCurrency === toCurrency) return 1;
+  const rate = getRate(exchangeRates, toCurrency);
+  return rate != null && rate > 0 ? rate : null;
 }

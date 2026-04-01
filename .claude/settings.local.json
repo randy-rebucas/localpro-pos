@@ -40,7 +40,10 @@
       "Bash(xargs sed:*)",
       "Bash(xargs grep:*)",
       "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
-      "Bash(wc -l c:/Users/corew/localpro-pos/app/[tenant]/[lang]/pos/page.tsx)"
+      "Bash(wc -l c:/Users/corew/localpro-pos/app/[tenant]/[lang]/pos/page.tsx)",
+      "Bash(grep -r \"multiCurrency\\\\|exchangeRates\" /c/Users/corew/localpro-pos/app/api --include=*.ts)",
+      "Bash(grep -n \"className.*button\\\\|className.*btn\\\\|style=\\\\|className=.*flex.*gap\" /c/Users/corew/localpro-pos/app/[tenant]/[lang]/page.tsx)",
+      "Bash(grep -n \"product.*grid\\\\|grid.*product\\\\|product.*button\\\\|card\" /c/Users/corew/localpro-pos/app/[tenant]/[lang]/page.tsx)"
     ]
   },
   "hooks": {

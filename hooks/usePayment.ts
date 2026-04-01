@@ -2,25 +2,43 @@ import { useState, useCallback } from 'react';
 import { CartItem } from './useCart';
 import { Discount } from './useDiscount';
 
+export type PaymentMethodType =
+  | 'cash'
+  | 'card'
+  | 'tap_to_pay'
+  | 'wallet'
+  | 'qr_code'
+  | 'bnpl'
+  | 'digital'; // kept for backwards compatibility
+
 interface PaymentInputData {
   items: Array<{ productId: string; quantity: number }>;
-  paymentMethod: 'cash' | 'card' | 'digital';
+  paymentMethod: PaymentMethodType;
   cashReceived?: number;
   discountCode?: string;
+  paymentProvider?: string;
+  paymentReference?: string;
+  bnplInstallments?: number;
 }
 
 export interface PaymentResult {
   success: boolean;
   error?: string;
   errors?: Array<{ field: string; message: string }>;
-  data?: any;
+  data?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
 interface UsePaymentReturn {
-  paymentMethod: 'cash' | 'card' | 'digital';
-  setPaymentMethod: (method: 'cash' | 'card' | 'digital') => void;
+  paymentMethod: PaymentMethodType;
+  setPaymentMethod: (method: PaymentMethodType) => void;
   cashReceived: string;
   setCashReceived: (amount: string) => void;
+  paymentProvider: string;
+  setPaymentProvider: (provider: string) => void;
+  paymentReference: string;
+  setPaymentReference: (ref: string) => void;
+  bnplInstallments: number;
+  setBnplInstallments: (n: number) => void;
   processing: boolean;
   processPayment: (
     cart: CartItem[],
@@ -33,27 +51,33 @@ interface UsePaymentReturn {
 }
 
 export function usePayment(): UsePaymentReturn {
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'digital'>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodType>('cash');
   const [cashReceived, setCashReceived] = useState('');
+  const [paymentProvider, setPaymentProvider] = useState('');
+  const [paymentReference, setPaymentReference] = useState('');
+  const [bnplInstallments, setBnplInstallments] = useState(3);
   const [processing, setProcessing] = useState(false);
 
   const validatePayment = useCallback(
-    (cart: CartItem[], total: number, method: string, cash: string, onError: (msg: string) => void): boolean => {
-      // Validate cart
+    (
+      cart: CartItem[],
+      total: number,
+      method: PaymentMethodType,
+      cash: string,
+      provider: string,
+      onError: (msg: string) => void
+    ): boolean => {
       if (cart.length === 0) {
         onError('Cart is empty');
         return false;
       }
 
-      // Validate payment method
-      const validMethods = ['cash', 'card', 'digital'];
+      const validMethods: PaymentMethodType[] = ['cash', 'card', 'tap_to_pay', 'wallet', 'qr_code', 'bnpl', 'digital'];
       if (!validMethods.includes(method)) {
         onError(`Invalid payment method: ${method}`);
-        console.error('Invalid paymentMethod state:', method);
         return false;
       }
 
-      // Validate cash payment
       if (method === 'cash') {
         const cashAmount = parseFloat(cash);
         if (isNaN(cashAmount)) {
@@ -66,7 +90,11 @@ export function usePayment(): UsePaymentReturn {
         }
       }
 
-      // Validate cart items
+      if ((method === 'wallet' || method === 'bnpl') && !provider) {
+        onError(`Please select a ${method === 'bnpl' ? 'BNPL' : 'wallet'} provider`);
+        return false;
+      }
+
       const validItems = cart.every(
         (item) =>
           item.productId &&
@@ -74,12 +102,7 @@ export function usePayment(): UsePaymentReturn {
           typeof item.quantity === 'number' &&
           item.quantity > 0
       );
-
       if (!validItems) {
-        const badItems = cart.filter(
-          (item) => !item.productId || typeof item.quantity !== 'number' || item.quantity <= 0
-        );
-        console.error('Invalid cart items:', badItems);
         onError('Cart contains invalid items');
         return false;
       }
@@ -98,8 +121,7 @@ export function usePayment(): UsePaymentReturn {
       onValidationError: (msg: string) => void,
       fetchWithTimeout: (url: string, options?: RequestInit, timeoutMs?: number) => Promise<Response>
     ): Promise<PaymentResult | null> => {
-      // Validate before processing
-      if (!validatePayment(cart, total, paymentMethod, cashReceived, onValidationError)) {
+      if (!validatePayment(cart, total, paymentMethod, cashReceived, paymentProvider, onValidationError)) {
         return null;
       }
 
@@ -113,6 +135,9 @@ export function usePayment(): UsePaymentReturn {
           paymentMethod,
           cashReceived: paymentMethod === 'cash' ? parseFloat(cashReceived) : undefined,
           discountCode: appliedDiscount?.code,
+          paymentProvider: paymentProvider || undefined,
+          paymentReference: paymentReference || undefined,
+          bnplInstallments: paymentMethod === 'bnpl' ? bnplInstallments : undefined,
         };
 
         const res = await fetchWithTimeout(
@@ -122,7 +147,7 @@ export function usePayment(): UsePaymentReturn {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
           },
-          30000 // 30s timeout for transactions
+          30000
         );
 
         const data = await res.json();
@@ -136,7 +161,7 @@ export function usePayment(): UsePaymentReturn {
         setProcessing(false);
       }
     },
-    [paymentMethod, cashReceived, validatePayment]
+    [paymentMethod, cashReceived, paymentProvider, paymentReference, bnplInstallments, validatePayment]
   );
 
   return {
@@ -144,6 +169,12 @@ export function usePayment(): UsePaymentReturn {
     setPaymentMethod,
     cashReceived,
     setCashReceived,
+    paymentProvider,
+    setPaymentProvider,
+    paymentReference,
+    setPaymentReference,
+    bnplInstallments,
+    setBnplInstallments,
     processing,
     processPayment,
   };
