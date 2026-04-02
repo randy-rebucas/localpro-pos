@@ -110,7 +110,7 @@ export function SubscriptionStatusBar() {
       icon: <CheckCircle className="w-5 h-5 text-green-600" />,
       title: `Active: ${subscriptionStatus.planName} Plan`,
       description: subscriptionStatus.nextBillingDate
-        ? `Next billing: ${new Date(subscriptionStatus.nextBillingDate).toLocaleDateString()}`
+        ? `Next billing: ${new Date(subscriptionStatus.nextBillingDate).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}`
         : 'Subscription active',
       badge: <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Active</span>,
       action: 'Manage',

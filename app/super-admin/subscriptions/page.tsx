@@ -52,6 +52,7 @@ export default function SubscriptionsPage() {
   } | null>(null);
   const [actionPlanId, setActionPlanId] = useState('');
   const [actionDays, setActionDays] = useState('30');
+  const [actionBillingDate, setActionBillingDate] = useState('');
   const [actionSaving, setActionSaving] = useState(false);
 
   const showMsg = (type: 'success' | 'error', text: string) => {
@@ -95,6 +96,10 @@ export default function SubscriptionsPage() {
     setActionModal({ sub, action });
     setActionPlanId(sub.planId?._id || '');
     setActionDays('30');
+    // Default billing date to 1 month from today
+    const defaultDate = new Date();
+    defaultDate.setMonth(defaultDate.getMonth() + 1);
+    setActionBillingDate(defaultDate.toISOString().split('T')[0]);
   };
 
   const executeAction = async () => {
@@ -109,7 +114,10 @@ export default function SubscriptionsPage() {
     setActionSaving(true);
 
     const body: Record<string, unknown> = { action };
-    if (action === 'assign-plan') body.planId = actionPlanId;
+    if (action === 'assign-plan') {
+      body.planId = actionPlanId;
+      if (actionBillingDate) body.nextBillingDate = actionBillingDate;
+    }
     if (action === 'extend-trial') body.days = parseInt(actionDays);
 
     try {
@@ -136,7 +144,7 @@ export default function SubscriptionsPage() {
     }
   };
 
-  const formatDate = (d?: string) => d ? new Date(d).toLocaleDateString() : '—';
+  const formatDate = (d?: string) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) : '—';
 
   return (
     <SuperAdminShell>
@@ -225,9 +233,7 @@ export default function SubscriptionsPage() {
                         </span>
                       </td>
                       <td className="px-4 py-4 text-sm text-gray-500 capitalize">{sub.billingCycle}</td>
-                      <td className="px-4 py-4 text-sm text-gray-500">
-                        {sub.status === 'trial' ? formatDate(sub.trialEndDate) : formatDate(sub.nextBillingDate)}
-                      </td>
+                      <td className="px-4 py-4 text-sm text-gray-500">{sub.status === 'trial' ? formatDate(sub.trialEndDate) : formatDate(sub.nextBillingDate)}</td>
                       <td className="px-4 py-4">
                         <div className="flex flex-wrap gap-2">
                           <button onClick={() => openAction(sub, 'assign-plan')} className="text-xs text-blue-600 hover:text-blue-800 font-medium">
@@ -274,18 +280,34 @@ export default function SubscriptionsPage() {
             </p>
 
             {actionModal.action === 'assign-plan' && (
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Select Plan</label>
-                <select
-                  value={actionPlanId}
-                  onChange={e => setActionPlanId(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 bg-white"
-                >
-                  <option value="">— choose a plan —</option>
-                  {plans.map(p => (
-                    <option key={p._id} value={p._id}>{p.name} ({p.tier})</option>
-                  ))}
-                </select>
+              <div className="space-y-3 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Select Plan</label>
+                  <select
+                    value={actionPlanId}
+                    onChange={e => setActionPlanId(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    <option value="">— choose a plan —</option>
+                    {plans.map(p => (
+                      <option key={p._id} value={p._id}>{p.name} ({p.tier})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Next Billing Date</label>
+                  <input
+                    type="date"
+                    value={actionBillingDate}
+                    onChange={e => setActionBillingDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                  />
+                  {actionBillingDate && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      {new Date(actionBillingDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}
+                    </p>
+                  )}
+                </div>
               </div>
             )}
 

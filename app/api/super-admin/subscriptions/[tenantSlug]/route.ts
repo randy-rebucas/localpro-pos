@@ -81,16 +81,30 @@ export async function PUT(
           return NextResponse.json({ success: false, error: 'Plan not found' }, { status: 404 });
         }
         const previousPlanId = String(subscription.planId);
+        const now = new Date();
+        let nextBilling: Date;
+        if (body.nextBillingDate) {
+          nextBilling = new Date(body.nextBillingDate as string);
+          if (isNaN(nextBilling.getTime())) {
+            return NextResponse.json({ success: false, error: 'Invalid nextBillingDate' }, { status: 400 });
+          }
+        } else {
+          nextBilling = new Date(now);
+          if (subscription.billingCycle === 'yearly') {
+            nextBilling.setFullYear(nextBilling.getFullYear() + 1);
+          } else {
+            nextBilling.setMonth(nextBilling.getMonth() + 1);
+          }
+        }
         subscription.planId = planId;
         subscription.status = 'active';
         subscription.isTrial = false;
-        const nextBilling = new Date();
-        if (subscription.billingCycle === 'yearly') {
-          nextBilling.setFullYear(nextBilling.getFullYear() + 1);
-        } else {
-          nextBilling.setMonth(nextBilling.getMonth() + 1);
-        }
+        subscription.startDate = now;
         subscription.nextBillingDate = nextBilling;
+        subscription.trialEndDate = undefined;
+        subscription.endDate = undefined;
+        subscription.cancelledAt = undefined;
+        subscription.suspendedAt = undefined;
         await subscription.save();
         await createAuditLog(request, {
           tenantId,
@@ -100,6 +114,8 @@ export async function PUT(
           changes: {
             planId: { from: previousPlanId, to: planId },
             status: { from: previousStatus, to: 'active' },
+            isTrial: { from: true, to: false },
+            startDate: now,
           },
         });
         break;

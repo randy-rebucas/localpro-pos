@@ -71,7 +71,8 @@
       "Bash(grep -n \"setTables\\\\|data\\\\.data\\\\|tables\\\\?\" app/[tenant]/[lang]/admin/tables/page.tsx)",
       "Bash(grep -n \"fetchTables\\\\|useCallback\\\\|showInactive\" app/[tenant]/[lang]/admin/tables/page.tsx)",
       "Bash(grep -n \"button\\\\|type\\\\|submit\\\\|Save\\\\|Add Table\" app/[tenant]/[lang]/admin/tables/page.tsx)",
-      "Bash(grep -n \"primaryColor\" app/[tenant]/[lang]/admin/tables/page.tsx)"
+      "Bash(grep -n \"primaryColor\" app/[tenant]/[lang]/admin/tables/page.tsx)",
+      "Bash(cat app/api/super-admin/subscriptions/[tenantSlug]/route.ts)"
     ]
   },
   "hooks": {

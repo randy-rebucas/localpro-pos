@@ -33,7 +33,13 @@
     "stress:transactions": "k6 run load-tests/stress-transactions.js",
     "stress:spike": "k6 run load-tests/stress-spike.js",
     "stress:endurance": "k6 run load-tests/stress-endurance.js",
-    "stress:all": "k6 run load-tests/stress-api.js && k6 run load-tests/stress-spike.js && k6 run load-tests/stress-endurance.js"
+    "stress:all": "k6 run load-tests/stress-api.js && k6 run load-tests/stress-spike.js && k6 run load-tests/stress-endurance.js",
+    "security:test:master": "k6 run scripts/tests/security/master-security-test.ts",
+    "security:test:injection": "k6 run scripts/tests/security/injection-tests.ts",
+    "security:test:auth": "k6 run scripts/tests/security/auth-security-tests.ts",
+    "security:test:exposure": "k6 run scripts/tests/security/data-exposure-tests.ts",
+    "security:test:api": "k6 run scripts/tests/security/api-security-tests.ts",
+    "security:test:all": "k6 run scripts/tests/security/master-security-test.ts && k6 run scripts/tests/security/injection-tests.ts && k6 run scripts/tests/security/auth-security-tests.ts && k6 run scripts/tests/security/data-exposure-tests.ts && k6 run scripts/tests/security/api-security-tests.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1014.0",
