@@ -1,9 +1,12 @@
 'use client';
 
 import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
+import dynamic from 'next/dynamic';
 import Navbar from '@/components/Navbar';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+
+const BarcodeModal = dynamic(() => import('@/components/BarcodeModal'), { ssr: false });
 import { getDictionaryClient } from '../../dictionaries-client';
 import Currency from '@/components/Currency';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
@@ -31,6 +34,7 @@ export default function ProductsPage() {
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [showProductModal, setShowProductModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [barcodeProduct, setBarcodeProduct] = useState<Product | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const { settings } = useTenantSettings();
   const { confirm, Dialog } = useConfirm();
@@ -210,6 +214,12 @@ export default function ProductsPage() {
                     <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex gap-2">
                         <button
+                          onClick={() => setBarcodeProduct(product)}
+                          className="text-gray-600 hover:text-gray-900"
+                        >
+                          Barcode
+                        </button>
+                        <button
                           onClick={() => {
                             setEditingProduct(product);
                             setShowProductModal(true);
@@ -237,6 +247,14 @@ export default function ProductsPage() {
             )}
           </div>
         </div>
+
+        {barcodeProduct && (
+          <BarcodeModal
+            value={barcodeProduct.barcode || barcodeProduct.sku || barcodeProduct._id}
+            productName={barcodeProduct.name}
+            onClose={() => setBarcodeProduct(null)}
+          />
+        )}
 
         {showProductModal && (
           <ProductModal
