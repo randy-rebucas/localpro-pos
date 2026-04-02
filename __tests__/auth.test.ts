@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 
 // Set env vars before importing modules
 process.env.JWT_SECRET = 'test-secret-for-unit-tests-only-32chars!!';

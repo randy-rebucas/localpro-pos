@@ -1,4 +1,4 @@
-import { ITenantSettings } from '@/models/Tenant';
+import { ITenantSettings } from '@/types/tenant';
 
 /**
  * Format date based on tenant settings

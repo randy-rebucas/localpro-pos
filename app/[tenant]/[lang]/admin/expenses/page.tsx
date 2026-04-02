@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
+import { type TranslationDict } from '@/types/dictionary';
 import Currency from '@/components/Currency';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
-import { useExpensesList, type Expense, type ExpenseFilters } from '@/hooks/useExpensesList';
-import { useExpensesForm } from '@/hooks/useExpensesForm';
+import { useExpensesList, type Expense } from '@/hooks/useExpensesList';
+import { useExpensesForm, type ExpenseFormData } from '@/hooks/useExpensesForm';
 import {
   getPaymentMethodLabel,
   formatDate,
@@ -16,18 +17,15 @@ import {
   getDeleteConfirmMessage,
   getDeleteSuccessMessage,
   getDeleteErrorMessage,
-  getSaveSuccessMessage,
-  getSaveErrorMessage,
   getDateValidationError,
   getExpenseNameBadgeClass,
 } from '@/lib/expenses-helpers';
 
 export default function ExpensesPage() {
   const params = useParams();
-  const router = useRouter(); // eslint-disable-line @typescript-eslint/no-unused-vars
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const [dict, setDict] = useState<TranslationDict | null>(null);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
 
@@ -329,9 +327,9 @@ function ExpenseModal({
   expense: Expense | null;
   onClose: () => void;
   onSave: () => Promise<void>;
-  dict: any; // eslint-disable-line @typescript-eslint/no-explicit-any
-  createExpense: (form: any) => Promise<boolean>;
-  updateExpense: (id: string, form: any) => Promise<boolean>;
+  dict: TranslationDict | null;
+  createExpense: (form: ExpenseFormData) => Promise<boolean>;
+  updateExpense: (id: string, form: ExpenseFormData) => Promise<boolean>;
 }) {
   const { formData, setFormData, error, submitting, handleSubmit, initializeForm, resetForm } = useExpensesForm();
 
@@ -361,26 +359,26 @@ function ExpenseModal({
       <div className="bg-white border border-gray-300 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
-            {expense ? (dict.admin?.editExpense || 'Edit Expense') : (dict.admin?.addExpense || 'Add Expense')}
+            {expense ? (dict?.admin?.editExpense || 'Edit Expense') : (dict?.admin?.addExpense || 'Add Expense')}
           </h2>
           <form onSubmit={onFormSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.expenseName || 'Name of Expense'} *
+                  {dict?.admin?.expenseName || 'Name of Expense'} *
                 </label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ name: e.target.value })}
-                  placeholder={dict.admin?.expenseNamePlaceholder || 'Enter expense name (e.g., Office Supplies, Rent, Utilities)'}
+                  placeholder={dict?.admin?.expenseNamePlaceholder || 'Enter expense name (e.g., Office Supplies, Rent, Utilities)'}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                   required
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.amount || 'Amount'} *
+                  {dict?.admin?.amount || 'Amount'} *
                 </label>
                 <input
                   type="number"
@@ -401,7 +399,7 @@ function ExpenseModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.description || 'Description'} *
+                {dict?.admin?.description || 'Description'} *
               </label>
                 <textarea
                   required
@@ -415,7 +413,7 @@ function ExpenseModal({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.date || 'Date'} *
+                  {dict?.admin?.date || 'Date'} *
                 </label>
                 <input
                   type="date"
@@ -427,7 +425,7 @@ function ExpenseModal({
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {dict.admin?.paymentMethod || 'Payment Method'} *
+                  {dict?.admin?.paymentMethod || 'Payment Method'} *
                 </label>
                 <select
                   value={formData.paymentMethod}
@@ -444,7 +442,7 @@ function ExpenseModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.receipt || 'Receipt'} (optional)
+                {dict?.admin?.receipt || 'Receipt'} (optional)
               </label>
               <input
                 type="text"
@@ -456,7 +454,7 @@ function ExpenseModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.notes || 'Notes'} (optional)
+                {dict?.admin?.notes || 'Notes'} (optional)
               </label>
               <textarea
                 value={formData.notes}
@@ -476,14 +474,14 @@ function ExpenseModal({
                 onClick={onClose}
                 className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
               >
-                {dict.common?.cancel || 'Cancel'}
+                {dict?.common?.cancel || 'Cancel'}
               </button>
               <button
                 type="submit"
                 disabled={submitting}
                 className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
               >
-                {submitting ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
+                {submitting ? (dict?.common?.loading || 'Saving...') : (dict?.common?.save || 'Save')}
               </button>
             </div>
           </form>

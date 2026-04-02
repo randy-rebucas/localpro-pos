@@ -7,7 +7,7 @@ import Transaction from '@/models/Transaction';
 import Expense from '@/models/Expense';
 import CashDrawerSession from '@/models/CashDrawerSession';
 import Product from '@/models/Product';
-import { ITenantSettings } from '@/models/Tenant';
+import { ITenantSettings } from '@/types/tenant';
 
 export interface SalesReport {
   period: string;

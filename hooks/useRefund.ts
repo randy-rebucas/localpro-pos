@@ -14,11 +14,30 @@ interface RefundData {
   notes: string;
 }
 
+interface TransactionItem {
+  productId: string;
+  name: string;
+  price: number;
+  quantity: number;
+  product?: string;
+}
+
+interface RefundTransaction {
+  _id?: string;
+  id?: string;
+  items: TransactionItem[];
+  discountAmount?: number;
+  receiptNumber?: string;
+  createdAt?: string;
+  total?: number;
+  status?: string;
+}
+
 interface RefundResult {
   success: boolean;
   error?: string;
   errors?: string[];
-  data?: any;
+  data?: unknown;
 }
 
 /**
@@ -26,7 +45,7 @@ interface RefundResult {
  * Handles partial and full refunds with validation
  */
 export function useRefund() {
-  const [currentRefundTransaction, setCurrentRefundTransaction] = useState<any>(null);
+  const [currentRefundTransaction, setCurrentRefundTransaction] = useState<RefundTransaction | null>(null);
   const [refundItems, setRefundItems] = useState<RefundItem[]>([]);
   const [refundMethod, setRefundMethod] = useState<string>('cash');
   const [refundNotes, setRefundNotes] = useState<string>('');
@@ -70,13 +89,13 @@ export function useRefund() {
     );
   }, []);
 
-  const calculateRefundAmount = useCallback((originalTransaction: any) => {
+  const calculateRefundAmount = useCallback((originalTransaction: RefundTransaction | null) => {
     if (!originalTransaction || !refundItems.length) return 0;
 
     let amount = 0;
     refundItems.forEach(refundItem => {
       const originalItem = originalTransaction.items.find(
-        (item: any) => item.productId === refundItem.productId
+        (item: TransactionItem) => item.productId === refundItem.productId
       );
       if (originalItem) {
         amount += originalItem.price * refundItem.refundQty;
@@ -87,17 +106,17 @@ export function useRefund() {
     if (originalTransaction.discountAmount && originalTransaction.items.length > 0) {
       const discountRatio = refundItems.reduce((sum: number, ri) => {
         const originalItem = originalTransaction.items.find(
-          (item: any) => item.productId === ri.productId
+          (item: TransactionItem) => item.productId === ri.productId
         );
         return sum + (originalItem ? ri.refundQty : 0);
-      }, 0) / originalTransaction.items.reduce((sum: number, item: any) => sum + item.quantity, 0);
+      }, 0) / originalTransaction.items.reduce((sum: number, item: TransactionItem) => sum + item.quantity, 0);
       amount -= (originalTransaction.discountAmount * discountRatio);
     }
 
     return Math.max(0, amount);
   }, [refundItems]);
 
-  const validateRefund = useCallback((originalTransaction: any): string[] => {
+  const validateRefund = useCallback((originalTransaction: RefundTransaction | null): string[] => {
     const errors: string[] = [];
 
     if (!originalTransaction) {
@@ -115,7 +134,7 @@ export function useRefund() {
     // Validate quantities
     refundItems.forEach(refundItem => {
       const originalItem = originalTransaction?.items.find(
-        (item: any) => item.productId === refundItem.productId
+        (item: TransactionItem) => item.productId === refundItem.productId
       );
       if (originalItem && refundItem.refundQty > originalItem.quantity) {
         errors.push(`Cannot refund more than ${originalItem.quantity} units of ${originalItem.name}`);
@@ -130,8 +149,8 @@ export function useRefund() {
 
   const processRefund = useCallback(
     async (
-      originalTransaction: any,
-      fetchWithTimeout: (url: string, options: any) => Promise<any>
+      originalTransaction: RefundTransaction | null,
+      fetchWithTimeout: (url: string, options?: RequestInit) => Promise<Response>
     ): Promise<RefundResult> => {
       const validationErrors = validateRefund(originalTransaction);
       if (validationErrors.length > 0) {
@@ -147,6 +166,9 @@ export function useRefund() {
           notes: refundNotes
         };
 
+        if (!originalTransaction) {
+          return { success: false, error: 'No transaction selected for refund' };
+        }
         const response = await fetchWithTimeout('/api/refunds', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

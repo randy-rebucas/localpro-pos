@@ -8,7 +8,6 @@ import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { useBusinessHoursSettings } from '@/hooks/useBusinessHoursSettings';
-import { getUpdateSuccessMessage, getUpdateErrorMessage } from '@/lib/business-hours-helpers';
 
 export default function BusinessHoursAdminPage() {
   const params = useParams();

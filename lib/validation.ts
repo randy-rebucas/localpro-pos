@@ -128,8 +128,9 @@ export function validateTransaction(data: Record<string, unknown>, t?: Translati
       errors.push({ field: `items[${index}].quantity`, message: translate('validation.quantityGreaterThanZero', 'Quantity must be greater than 0'), code: 'quantityGreaterThanZero' });
     }
   });
+  const VALID_PAYMENT_METHODS = ['cash', 'card', 'digital', 'tap_to_pay', 'wallet', 'qr_code', 'bnpl'];
   const paymentMethod = typeof data.paymentMethod === 'string' ? data.paymentMethod : '';
-  if (!paymentMethod || !['cash', 'card', 'digital'].includes(paymentMethod)) {
+  if (!paymentMethod || !VALID_PAYMENT_METHODS.includes(paymentMethod)) {
     errors.push({ field: 'paymentMethod', message: translate('validation.paymentMethodRequired', 'Valid payment method is required'), code: 'paymentMethodRequired' });
   }
   if (paymentMethod === 'cash') {

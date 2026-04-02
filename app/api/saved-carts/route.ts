@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, items, subtotal, discountCode, discountAmount, total } = body;
+    const { name, items, discountCode, discountAmount, total } = body;
 
     // Validate required fields
     if (!name || !name.trim()) {

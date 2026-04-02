@@ -22,6 +22,7 @@ export interface ISubscriptionPlan extends Document {
     enableLoyaltyProgram: boolean;
     enableCustomerManagement: boolean;
     enableBookingScheduling: boolean;
+    enableTableManagement: boolean;
     enableReports: boolean;
     enableMultiBranch: boolean;
     enableHardwareIntegration: boolean;
@@ -142,6 +143,10 @@ const SubscriptionPlanSchema: Schema = new Schema(
         default: false,
       },
       enableBookingScheduling: {
+        type: Boolean,
+        default: false,
+      },
+      enableTableManagement: {
         type: Boolean,
         default: false,
       },

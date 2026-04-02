@@ -37,7 +37,7 @@ export function useUserForm(editingUser: User | null) {
         const url = editingUser ? `/api/users/${editingUser._id}` : '/api/users';
         const method = editingUser ? 'PUT' : 'POST';
 
-        const body: any = {
+        const body: Record<string, unknown> = {
           email: formData.email,
           name: formData.name,
           role: formData.role,

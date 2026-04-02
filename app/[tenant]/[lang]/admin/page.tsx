@@ -126,6 +126,18 @@ export default function AdminPage() {
           color: 'yellow',
         },
         {
+          title: 'CRM',
+          description: 'Customer segments, loyalty milestones, and email/SMS campaigns',
+          href: `/${tenant}/${lang}/admin/crm`,
+          featureFlag: 'enableCustomerManagement' as keyof typeof settings,
+          icon: (
+            <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+          ),
+          color: 'purple',
+        },
+        {
           title: dict.admin?.transactions || 'Transactions',
           description: dict.admin?.transactionsDescription || 'View and manage all sales transactions',
           href: `/${tenant}/${lang}/admin/transactions`,
@@ -159,6 +171,17 @@ export default function AdminPage() {
           color: 'red',
         },
         {
+          title: 'Tables',
+          description: 'Manage dining tables, seating capacity, and floor layout',
+          href: `/${tenant}/${lang}/admin/tables`,
+          icon: (
+            <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18M10 4v16M14 4v16" />
+            </svg>
+          ),
+          color: 'orange',
+        },
+        {
           title: dict.admin?.bookings || 'Bookings',
           description: dict.admin?.bookingsDescription || 'Manage appointments, scheduling, and bookings',
           href: `/${tenant}/${lang}/admin/bookings`,
@@ -169,6 +192,18 @@ export default function AdminPage() {
             </svg>
           ),
           color: 'violet',
+        },
+        {
+          title: dict.admin?.tables || 'Tables',
+          description: dict.admin?.tablesDescription || 'Manage restaurant tables and seating arrangements',
+          href: `/${tenant}/${lang}/admin/tables`,
+          featureFlag: 'enableTableManagement' as keyof typeof settings,
+          icon: (
+            <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 015.646 5.646 9.001 9.001 0 0120.354 15.354z" />
+            </svg>
+          ),
+          color: 'blue',
         },
       ],
     },
@@ -449,42 +484,6 @@ export default function AdminPage() {
           ),
           color: 'orange',
         },
-        {
-          title: dict.admin?.loyaltyConfig || 'Loyalty Configuration',
-          description: dict.admin?.loyaltyConfigDescription || 'Configure loyalty program rules and benefits',
-          href: `/${tenant}/${lang}/admin/loyalty/config`,
-          featureFlag: 'enableLoyaltyProgram' as keyof typeof settings,
-          icon: (
-            <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-            </svg>
-          ),
-          color: 'yellow',
-        },
-        {
-          title: dict.admin?.loyaltyPoints || 'Loyalty Points',
-          description: dict.admin?.loyaltyPointsDescription || 'Adjust customer loyalty points and rewards',
-          href: `/${tenant}/${lang}/admin/loyalty/adjust`,
-          featureFlag: 'enableLoyaltyProgram' as keyof typeof settings,
-          icon: (
-            <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          ),
-          color: 'yellow',
-        },
-        {
-          title: dict.admin?.loyaltyCustomers || 'Customer Loyalty',
-          description: dict.admin?.loyaltyCustomersDescription || 'View and manage customer loyalty balances',
-          href: `/${tenant}/${lang}/admin/loyalty/customers`,
-          featureFlag: 'enableLoyaltyProgram' as keyof typeof settings,
-          icon: (
-            <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-          ),
-          color: 'rose',
-        },
       ],
     },
   ];
@@ -534,71 +533,6 @@ export default function AdminPage() {
           </h1>
           <p className="text-gray-600 text-lg">{dict.admin?.subtitle || 'Manage users, tenants, and system settings'}</p>
         </div>
-
-        {/* Subscription Usage Card - Spanning Full Width */}
-        {subscriptionStatus && (
-          <Link
-            href={`/${tenant}/${lang}/admin/subscriptions`}
-            className="mb-8 block bg-gradient-to-br from-white to-gray-50 border-2 p-8 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 group"
-            style={{ borderColor: primaryColor }}
-          >
-            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
-              <div className="flex items-start gap-4">
-                <div
-                className="inline-flex p-4 border-2 flex-shrink-0"
-                  style={{ background: `${primaryColor}15`, color: primaryColor, borderColor: primaryColor }}
-                >
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900">{dict.admin?.subscriptionUsage || 'Subscription Usage'}</h2>
-                  <p className="text-gray-600 text-sm mt-1">{subscriptionStatus.planName} {dict.admin?.plan || 'Plan'}</p>
-                </div>
-              </div>
-              <span className={`inline-flex items-center px-3 py-1 text-sm font-semibold flex-shrink-0 ${
-                subscriptionStatus.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-              }`}>
-                {subscriptionStatus.isActive ? (dict.admin?.active || 'Active') : (dict.admin?.inactive || 'Inactive')}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div className="bg-white border border-gray-200 p-4 text-center hover:border-gray-300 transition-colors">
-                <div className="text-3xl font-bold" style={{ color: primaryColor }}>{subscriptionStatus.usage.currentUsers}</div>
-                <div className="text-xs text-gray-500 mt-2 font-medium">
-                  {dict.admin?.users || 'Users'} / {subscriptionStatus.limits.maxUsers === -1 ? '∞' : subscriptionStatus.limits.maxUsers}
-                </div>
-              </div>
-              <div className="bg-white border border-gray-200 p-4 text-center hover:border-green-300 transition-colors">
-                <div className="text-3xl font-bold text-green-600">{subscriptionStatus.usage.currentBranches}</div>
-                <div className="text-xs text-gray-500 mt-2 font-medium">
-                  {dict.admin?.branches || 'Branches'} / {subscriptionStatus.limits.maxBranches === -1 ? '∞' : subscriptionStatus.limits.maxBranches}
-                </div>
-              </div>
-              <div className="bg-white border border-gray-200 p-4 text-center hover:border-orange-300 transition-colors">
-                <div className="text-3xl font-bold text-orange-600">{subscriptionStatus.usage.currentProducts}</div>
-                <div className="text-xs text-gray-500 mt-2 font-medium">
-                  {dict.admin?.products || 'Products'} / {subscriptionStatus.limits.maxProducts === -1 ? '∞' : subscriptionStatus.limits.maxProducts}
-                </div>
-              </div>
-              <div className="bg-white border border-gray-200 p-4 text-center hover:border-purple-300 transition-colors">
-                <div className="text-3xl font-bold text-purple-600">{subscriptionStatus.usage.currentTransactions}</div>
-                <div className="text-xs text-gray-500 mt-2 font-medium">
-                  {dict.admin?.transactions || 'Transactions'} / {subscriptionStatus.limits.maxTransactions === -1 ? '∞' : subscriptionStatus.limits.maxTransactions}
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-6 flex items-center font-semibold text-base group-hover:translate-x-1 transition-transform" style={{ color: primaryColor }}>
-              <span>{dict.admin?.manageSubscription || 'Manage Subscription'}</span>
-              <svg className="w-5 h-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </div>
-          </Link>
-        )}
 
         {/* Masonry Grid Layout */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 auto-rows-max">

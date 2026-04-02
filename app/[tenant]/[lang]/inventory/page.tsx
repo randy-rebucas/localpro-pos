@@ -18,6 +18,16 @@ interface Branch {
   code?: string;
 }
 
+interface StockPrediction {
+  productId: string;
+  name: string;
+  image: string | null;
+  category: string | null;
+  currentStock: number;
+  avgDailySales: number;
+  daysUntilStockout: number;
+}
+
 export default function InventoryPage() {
   const params = useParams();
   const tenant = params.tenant as string;
@@ -30,6 +40,9 @@ export default function InventoryPage() {
   const [branchLoading, setBranchLoading] = useState(true);
   const [stockRefreshTrigger, setStockRefreshTrigger] = useState(0);
 
+  const [stockPredictions, setStockPredictions] = useState<StockPrediction[]>([]);
+  const [predictionsLoading, setPredictionsLoading] = useState(false);
+
   const inventoryEnabled = supportsFeature(settings ?? undefined, 'inventory');
   const businessTypeConfig = settings ? getBusinessTypeConfig(getBusinessType(settings)) : null;
 
@@ -39,6 +52,7 @@ export default function InventoryPage() {
 
   useEffect(() => {
     fetchBranches();
+    fetchStockPredictions();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenant]);
 
@@ -54,6 +68,21 @@ export default function InventoryPage() {
       console.error('Error fetching branches:', error);
     } finally {
       setBranchLoading(false);
+    }
+  };
+
+  const fetchStockPredictions = async () => {
+    try {
+      setPredictionsLoading(true);
+      const res = await fetch(`/api/insights/stock-predictions?tenant=${tenant}`, {
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (data.success) setStockPredictions(data.data as StockPrediction[]);
+    } catch {
+      // non-critical
+    } finally {
+      setPredictionsLoading(false);
     }
   };
 
@@ -232,6 +261,81 @@ export default function InventoryPage() {
                   </svg>
                 </a>
               </div>
+            </div>
+
+            {/* AI Stock Predictions */}
+            <div className="bg-white border border-gray-300">
+              <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide flex items-center gap-1.5">
+                  <svg className="w-4 h-4" style={{ color: primaryColor }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  Predicted Stockouts
+                </h2>
+                <button
+                  type="button"
+                  onClick={fetchStockPredictions}
+                  disabled={predictionsLoading}
+                  className="text-xs text-gray-400 hover:text-gray-600 disabled:opacity-40 transition-colors"
+                  title="Refresh predictions"
+                >
+                  <svg className={`w-4 h-4 ${predictionsLoading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </button>
+              </div>
+              {predictionsLoading ? (
+                <div className="px-4 py-6 flex justify-center">
+                  <div className="w-5 h-5 border-2 border-gray-200 border-t-gray-500 rounded-full animate-spin" />
+                </div>
+              ) : stockPredictions.length === 0 ? (
+                <div className="px-4 py-5 text-center">
+                  <svg className="w-8 h-8 text-green-400 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-xs text-gray-500">No stockouts predicted in the next 14 days</p>
+                </div>
+              ) : (
+                <ul className="divide-y divide-gray-100">
+                  {stockPredictions.map((p) => (
+                    <li key={p.productId} className="px-4 py-3 flex items-center gap-3">
+                      <div className="w-8 h-8 flex-shrink-0 bg-gray-100 overflow-hidden">
+                        {p.image ? (
+                          <img // eslint-disable-line
+                            src={p.image}
+                            alt={p.name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <svg className="w-4 h-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                            </svg>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{p.name}</p>
+                        <p className="text-xs text-gray-500">
+                          {p.currentStock} left · ~{p.avgDailySales}/day sold
+                        </p>
+                      </div>
+                      <span
+                        className={`flex-shrink-0 text-xs font-bold px-2 py-1 border whitespace-nowrap ${
+                          p.daysUntilStockout <= 3
+                            ? 'bg-red-50 text-red-700 border-red-300'
+                            : p.daysUntilStockout <= 7
+                            ? 'bg-orange-50 text-orange-700 border-orange-300'
+                            : 'bg-yellow-50 text-yellow-700 border-yellow-300'
+                        }`}
+                      >
+                        {p.daysUntilStockout}d
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             {/* Feature Summary */}

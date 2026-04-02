@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import Navbar from '@/components/Navbar';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 import Currency from '@/components/Currency';
@@ -17,20 +17,15 @@ import { useProductsForm } from '@/hooks/useProductsForm';
 import {
   getProductDeletedMessage,
   getProductDeleteErrorMessage,
-  getProductsFetchErrorMessage,
   getDeleteProductConfirmTitle,
   getDeleteProductConfirmMessage,
-  getNoCategoryFoundMessage,
-  getSearchCategoryPlaceholder,
   generateEAN13 as generateEAN13Helper,
-  getCategoryNameFromProduct,
 } from '@/lib/products-helpers';
 
 
 
 export default function ProductsPage() {
   const params = useParams();
-  const router = useRouter(); // eslint-disable-line @typescript-eslint/no-unused-vars
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -40,7 +35,7 @@ export default function ProductsPage() {
   const { settings } = useTenantSettings();
   const { confirm, Dialog } = useConfirm();
   const [businessTypeConfig, setBusinessTypeConfig] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const { products, categories, loading, message, fetchProducts, fetchCategories, deleteProduct, updateMessage } = useProductsList(tenant);
+  const { products, categories, loading, message, fetchProducts, fetchCategories, deleteProduct } = useProductsList(tenant);
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -266,14 +261,6 @@ export default function ProductsPage() {
   );
 }
 
-/** Generate a valid EAN-13 barcode string */
-function generateEAN13(): string {
-  // 12 random digits then compute check digit
-  const digits: number[] = Array.from({ length: 12 }, () => Math.floor(Math.random() * 10));
-  const checksum = digits.reduce((sum, d, i) => sum + d * (i % 2 === 0 ? 1 : 3), 0);
-  const checkDigit = (10 - (checksum % 10)) % 10;
-  return [...digits, checkDigit].join('');
-}
 
 function ProductModal({
   product,
@@ -308,11 +295,9 @@ function ProductModal({
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setCategorySearch(currentCategory.name);
       } else {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setCategorySearch('');
       }
     } else {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCategorySearch('');
     }
   }, [product, categories]);
@@ -714,6 +699,134 @@ function ProductModal({
                       })}
                       className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                     />
+                  </div>
+                </div>
+
+                {/* Modifier Groups */}
+                <div className="pt-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-semibold text-gray-700">Modifier Groups</label>
+                    <button
+                      type="button"
+                      onClick={() => updateFormData({
+                        modifiers: [
+                          ...(formData.modifiers || []),
+                          { name: '', options: [{ name: '', price: 0 }], required: false },
+                        ],
+                      })}
+                      className="text-xs px-2 py-1 bg-orange-50 border border-orange-300 text-orange-700 hover:bg-orange-100 font-semibold"
+                    >
+                      + Add Group
+                    </button>
+                  </div>
+                  <div className="space-y-3">
+                    {(formData.modifiers || []).map((group, gi) => (
+                      <div key={gi} className="border border-gray-200 p-3 bg-gray-50 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={group.name}
+                            onChange={(e) => {
+                              const mods = [...(formData.modifiers || [])];
+                              mods[gi] = { ...mods[gi], name: e.target.value };
+                              updateFormData({ modifiers: mods });
+                            }}
+                            placeholder="Group name (e.g. Temperature)"
+                            className="flex-1 px-2 py-1.5 text-sm border border-gray-300 bg-white focus:ring-1 focus:ring-orange-400 focus:outline-none"
+                          />
+                          <label className="flex items-center gap-1 text-xs text-gray-600 flex-shrink-0 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={group.required}
+                              onChange={(e) => {
+                                const mods = [...(formData.modifiers || [])];
+                                mods[gi] = { ...mods[gi], required: e.target.checked };
+                                updateFormData({ modifiers: mods });
+                              }}
+                              className="rounded"
+                            />
+                            Required
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const mods = [...(formData.modifiers || [])];
+                              mods.splice(gi, 1);
+                              updateFormData({ modifiers: mods });
+                            }}
+                            className="text-red-500 hover:text-red-700 p-1"
+                            title="Remove group"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                        {/* Options */}
+                        <div className="pl-2 space-y-1.5">
+                          {group.options.map((opt, oi) => (
+                            <div key={oi} className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={opt.name}
+                                onChange={(e) => {
+                                  const mods = [...(formData.modifiers || [])];
+                                  const opts = [...mods[gi].options];
+                                  opts[oi] = { ...opts[oi], name: e.target.value };
+                                  mods[gi] = { ...mods[gi], options: opts };
+                                  updateFormData({ modifiers: mods });
+                                }}
+                                placeholder="Option (e.g. Rare)"
+                                className="flex-1 px-2 py-1 text-sm border border-gray-300 bg-white focus:ring-1 focus:ring-orange-400 focus:outline-none"
+                              />
+                              <span className="text-xs text-gray-400 flex-shrink-0">+$</span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={opt.price || ''}
+                                onChange={(e) => {
+                                  const mods = [...(formData.modifiers || [])];
+                                  const opts = [...mods[gi].options];
+                                  opts[oi] = { ...opts[oi], price: parseFloat(e.target.value) || 0 };
+                                  mods[gi] = { ...mods[gi], options: opts };
+                                  updateFormData({ modifiers: mods });
+                                }}
+                                placeholder="0.00"
+                                className="w-20 px-2 py-1 text-sm border border-gray-300 bg-white focus:ring-1 focus:ring-orange-400 focus:outline-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const mods = [...(formData.modifiers || [])];
+                                  const opts = [...mods[gi].options];
+                                  opts.splice(oi, 1);
+                                  mods[gi] = { ...mods[gi], options: opts };
+                                  updateFormData({ modifiers: mods });
+                                }}
+                                className="text-red-400 hover:text-red-600 p-0.5"
+                                title="Remove option"
+                              >
+                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            </div>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const mods = [...(formData.modifiers || [])];
+                              mods[gi] = { ...mods[gi], options: [...mods[gi].options, { name: '', price: 0 }] };
+                              updateFormData({ modifiers: mods });
+                            }}
+                            className="text-xs text-orange-600 hover:text-orange-800 font-medium"
+                          >
+                            + Add option
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>

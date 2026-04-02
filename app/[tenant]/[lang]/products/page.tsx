@@ -5,6 +5,7 @@ import Navbar from '@/components/Navbar';
 import Currency from '@/components/Currency';
 import PageTitle from '@/components/PageTitle';
 import dynamic from 'next/dynamic';
+import Image from 'next/image';
 
 const ProductModal = dynamic(() => import('@/components/ProductModal'), {
   loading: () => <div className="p-4 text-center text-gray-500">Loading...</div>,
@@ -339,16 +340,32 @@ export default function ProductsPage() {
                 }}
               >
                 {/* Product Image */}
-                {product.image && (
-                  <div className="mb-3 -mx-4 -mt-4 sm:-mx-5 sm:-mt-5">
-                    <img
-                      src={product.image}
-                      alt={product.name}
-                      className="w-full h-36 object-cover rounded-t-lg"
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                    />
+                <div className="mb-3 -mx-4 -mt-4 sm:-mx-5 sm:-mt-5">
+                  {product.image ? (
+                    <div className="relative w-full h-36">
+                      <Image
+                        src={product.image}
+                        alt={product.name}
+                        fill
+                        className="object-cover rounded-t-lg"
+                        onError={(e) => {
+                          const img = e.target as HTMLImageElement;
+                          img.style.display = 'none';
+                          const placeholder = img.parentElement?.nextElementSibling as HTMLElement | null;
+                          if (placeholder) placeholder.style.display = 'flex';
+                        }}
+                      />
+                    </div>
+                  ) : null}
+                  <div
+                    className="w-full h-36 bg-gray-100 rounded-t-lg flex items-center justify-center"
+                    style={{ display: product.image ? 'none' : 'flex' }}
+                  >
+                    <svg className="w-10 h-10 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
                   </div>
-                )}
+                </div>
 
                 {/* Header Section */}
                 <div className="flex-1 mb-4">
@@ -483,19 +500,29 @@ export default function ProductsPage() {
                   <div className="flex gap-3 flex-1 min-w-0">
                     {/* Thumbnail */}
                     {product.image ? (
-                      <img
-                        src={product.image}
-                        alt={product.name}
-                        className="w-14 h-14 object-cover border border-gray-200 flex-shrink-0 self-start"
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                      />
-                    ) : (
-                      <div className="w-14 h-14 bg-gray-100 border border-gray-200 flex-shrink-0 flex items-center justify-center self-start">
-                        <svg className="w-6 h-6 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
+                      <div className="relative w-14 h-14 flex-shrink-0 self-start">
+                        <Image
+                          src={product.image}
+                          alt={product.name}
+                          fill
+                          className="object-cover border border-gray-200"
+                          onError={(e) => {
+                            const img = e.target as HTMLImageElement;
+                            img.style.display = 'none';
+                            const placeholder = img.parentElement?.nextElementSibling as HTMLElement | null;
+                            if (placeholder) placeholder.style.display = 'flex';
+                          }}
+                        />
                       </div>
-                    )}
+                    ) : null}
+                    <div
+                      className="w-14 h-14 bg-gray-100 border border-gray-200 flex-shrink-0 items-center justify-center self-start"
+                      style={{ display: product.image ? 'none' : 'flex' }}
+                    >
+                      <svg className="w-6 h-6 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    </div>
                   <div className="flex-1 min-w-0">
                     {/* Name and Pinned */}
                     <div className="flex items-start gap-2 mb-2">

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { Expense } from './useExpensesList';
 
 export interface ExpenseFormData {
@@ -18,7 +18,7 @@ interface UseExpensesFormReturn {
   setFormData: (data: Partial<ExpenseFormData>) => void;
   error: string;
   submitting: boolean;
-  handleSubmit: (onSubmit: (data: any) => Promise<boolean>) => Promise<void>;
+  handleSubmit: (onSubmit: (data: ExpenseFormData) => Promise<boolean>) => Promise<void>;
   resetForm: () => void;
   initializeForm: (expense: Expense) => void;
 }
@@ -61,7 +61,7 @@ export function useExpensesForm(): UseExpensesFormReturn {
   }, []);
 
   const handleSubmit = useCallback(
-    async (onSubmit: (data: any) => Promise<boolean>) => {
+    async (onSubmit: (data: ExpenseFormData) => Promise<boolean>) => {
       setError('');
 
       // Validate required fields
@@ -91,14 +91,14 @@ export function useExpensesForm(): UseExpensesFormReturn {
 
       setSubmitting(true);
       try {
-        const payload = {
+        const payload: ExpenseFormData = {
           name: formData.name.trim(),
           description: formData.description.trim(),
-          amount: amountValue,
+          amount: amountValue.toString(),
           date: formData.date,
           paymentMethod: formData.paymentMethod,
-          receipt: formData.receipt?.trim() || undefined,
-          notes: formData.notes?.trim() || undefined,
+          receipt: formData.receipt?.trim() || '',
+          notes: formData.notes?.trim() || '',
         };
 
         const success = await onSubmit(payload);

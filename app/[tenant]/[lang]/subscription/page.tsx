@@ -1,14 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '../dictionaries-client';
 import { showToast } from '@/lib/toast';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
-import { Users, Building, Package, CheckCircle, ArrowUp, Star, Zap, CreditCard, Loader2 } from 'lucide-react'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import { Users, Building, Package, CheckCircle, ArrowUp, Star, Zap, CreditCard, Loader2 } from 'lucide-react';
 
 interface SubscriptionPlan {
   _id: string;
@@ -52,8 +52,7 @@ interface SubscriptionPlan {
 
 export default function SubscriptionPage() {
   const params = useParams();
-  const router = useRouter(); // eslint-disable-line @typescript-eslint/no-unused-vars
-  const tenant = params.tenant as string; // eslint-disable-line @typescript-eslint/no-unused-vars
+  const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);

@@ -252,7 +252,7 @@ export default function TransactionsPage() {
 
 function TransactionDetailModal({
   transaction,
-  primaryColor = '#2563eb',
+  primaryColor: _primaryColor = '#2563eb',
   onClose,
   dict,
 }: {

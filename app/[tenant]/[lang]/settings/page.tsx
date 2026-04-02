@@ -5,7 +5,7 @@ import Navbar from '@/components/Navbar';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../dictionaries-client';
-import { ITenantSettings } from '@/models/Tenant';
+import { ITenantSettings } from '@/types/tenant';
 import { detectLocation, getCurrencySymbolForCode } from '@/lib/location-detection';
 import MultiCurrencyDisplaySettings from '@/components/settings/MultiCurrencyDisplaySettings';
 import ReceiptTemplatesManager from '@/components/settings/ReceiptTemplatesManager';

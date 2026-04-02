@@ -11,15 +11,9 @@ import { useBirSettings } from '@/hooks/useBirSettings';
 import { useCasReport } from '@/hooks/useCasReport';
 import {
   ptuExpiringSoon,
-  hasCompletePtuInfo,
   isValidCasDateRange,
   getPtuExpiryWarning,
 } from '@/lib/bir-compliance-helpers';
-
-interface Message {
-  type: 'success' | 'error';
-  text: string;
-}
 
 function LockOverlay({ plan }: { plan?: string }) {
   const { tenant, lang } = useParams() as { tenant: string; lang: string };

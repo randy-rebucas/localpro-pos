@@ -40,7 +40,7 @@ export async function createDatabaseBackup(
     const fs = await _importFs();
     const path = await _importPath();
 
-    const backupDir = options.backupPath || path.join(process.cwd(), 'backups');
+    const backupDir = options.backupPath || path.join(/*turbopackIgnore: true*/ process.cwd(), 'backups');
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const backupFileName = `backup-${timestamp}.json`;
     const backupFilePath = path.join(backupDir, backupFileName);

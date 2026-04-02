@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { ITenantSettings } from '@/models/Tenant';
+import { ITenantSettings } from '@/types/tenant';
 
 export interface HardwareSettingsMessage {
   type: 'success' | 'error';
@@ -53,7 +53,7 @@ export const useHardwareSettings = (tenant: string) => {
     }
   }, [tenant]);
 
-  const updateHardwareConfig = useCallback((hardwareConfig: any) => {
+  const updateHardwareConfig = useCallback((hardwareConfig: ITenantSettings['hardwareConfig']) => {
     setSettings((prevSettings) => {
       if (!prevSettings) return prevSettings;
       return { ...prevSettings, hardwareConfig };

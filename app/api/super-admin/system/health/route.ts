@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import { requireRole } from '@/lib/auth';
-import { handleApiError } from '@/lib/error-handler';
 import mongoose from 'mongoose';
 
 const KEY_COLLECTIONS = [

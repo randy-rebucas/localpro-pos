@@ -103,6 +103,20 @@ textarea {
   animation: slideInRight 0.3s ease-out;
 }
 
+/* Slide in from bottom animation */
+@keyframes slideInBottom {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-in-bottom {
+  animation: slideInBottom 0.3s ease-out;
+}
+
 /* Card hover effect */
 .card-hover {
   transition: transform 0.2s ease, box-shadow 0.2s ease;

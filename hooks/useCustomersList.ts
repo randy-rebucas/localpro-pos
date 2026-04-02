@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
+import { CustomerFormData } from './useCustomersForm';
 
 export interface Customer {
   _id: string;
@@ -26,8 +27,8 @@ interface UseCustomersListReturn {
   filterActive: string;
   setFilterActive: (filter: string) => void;
   fetchCustomers: () => Promise<void>;
-  createCustomer: (form: any) => Promise<boolean>;
-  updateCustomer: (id: string, form: any) => Promise<boolean>;
+  createCustomer: (form: CustomerFormData) => Promise<boolean>;
+  updateCustomer: (id: string, form: CustomerFormData) => Promise<boolean>;
   deleteCustomer: (id: string) => Promise<boolean>;
   toggleCustomerStatus: (id: string, isActive: boolean) => Promise<boolean>;
 }
@@ -72,7 +73,7 @@ export function useCustomersList(): UseCustomersListReturn {
   }, [page, search, filterActive]);
 
   const createCustomer = useCallback(
-    async (form: any) => {
+    async (form: CustomerFormData) => {
       try {
         const tags = form.tags && typeof form.tags === 'string'
           ? form.tags.split(',').map((t: string) => t.trim())
@@ -99,7 +100,7 @@ export function useCustomersList(): UseCustomersListReturn {
   );
 
   const updateCustomer = useCallback(
-    async (id: string, form: any) => {
+    async (id: string, form: CustomerFormData) => {
       try {
         const tags = form.tags && typeof form.tags === 'string'
           ? form.tags.split(',').map((t: string) => t.trim())

@@ -5,7 +5,7 @@
  */
 
 import { getBusinessTypeConfig, BusinessType, getAllowedProductTypes } from './business-types'; // eslint-disable-line @typescript-eslint/no-unused-vars
-import { ITenantSettings } from '@/models/Tenant';
+import { ITenantSettings } from '@/types/tenant';
 import { IProduct } from '@/models/Product';
 
 /**

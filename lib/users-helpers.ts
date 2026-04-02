@@ -16,7 +16,9 @@ export type UserRole = typeof USER_ROLES[number]['value'];
 /**
  * Get display name for a user role
  */
-export function getRoleLabel(role: UserRole, dict?: any): string {
+type Dict = Record<string, Record<string, string | undefined> | undefined>;
+
+export function getRoleLabel(role: UserRole, dict?: Dict): string {
   const labels: Record<UserRole, string> = {
     viewer: dict?.admin?.viewer || 'Viewer',
     cashier: dict?.admin?.cashier || 'Cashier',
@@ -40,7 +42,7 @@ export function getStatusClasses(isActive: boolean): string {
 /**
  * Get status label text
  */
-export function getStatusLabel(isActive: boolean, dict?: any): string {
+export function getStatusLabel(isActive: boolean, dict?: Dict): string {
   if (isActive) {
     return dict?.admin?.active || 'Active';
   }
@@ -50,7 +52,7 @@ export function getStatusLabel(isActive: boolean, dict?: any): string {
 /**
  * Get action label for toggle button
  */
-export function getToggleActionLabel(isActive: boolean, dict?: any): string {
+export function getToggleActionLabel(isActive: boolean, dict?: Dict): string {
   if (isActive) {
     return dict?.admin?.deactivate || 'Deactivate';
   }
@@ -108,7 +110,7 @@ export function getUserInitials(name: string): string {
 /**
  * Build delete confirmation message
  */
-export function getDeleteConfirmMessage(dict?: any): { title: string; message: string } {
+export function getDeleteConfirmMessage(dict?: Dict): { title: string; message: string } {
   return {
     title: dict?.common?.deleteUserConfirmTitle || 'Delete User',
     message: dict?.common?.deleteUserConfirm || 'Are you sure you want to delete this user?',
@@ -118,7 +120,7 @@ export function getDeleteConfirmMessage(dict?: any): { title: string; message: s
 /**
  * Build regenerate QR confirmation message
  */
-export function getRegenerateQRConfirmMessage(dict?: any): { title: string; message: string } {
+export function getRegenerateQRConfirmMessage(dict?: Dict): { title: string; message: string } {
   return {
     title: dict?.common?.regenerateQRConfirmTitle || 'Regenerate QR Code',
     message:

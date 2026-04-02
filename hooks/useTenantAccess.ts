@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface TenantAccessCheck {
   isValid: boolean;
@@ -19,7 +20,8 @@ export function useTenantAccess(): TenantAccessCheck {
   const params = useParams();
   const router = useRouter();
   const requestedTenant = params?.tenant as string;
-  
+  const { isAuthenticated, loading: authLoading } = useAuth();
+
   const [isValid, setIsValid] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +29,11 @@ export function useTenantAccess(): TenantAccessCheck {
 
   useEffect(() => {
     async function checkTenantAccess() {
-      if (!requestedTenant) {
+      if (!requestedTenant || authLoading) {
+        return;
+      }
+
+      if (!isAuthenticated) {
         setLoading(false);
         return;
       }
@@ -73,7 +79,7 @@ export function useTenantAccess(): TenantAccessCheck {
     }
 
     checkTenantAccess();
-  }, [requestedTenant, router]);
+  }, [requestedTenant, router, isAuthenticated, authLoading]);
 
   return {
     isValid,

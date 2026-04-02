@@ -1,19 +1,48 @@
 import { useState, useCallback } from 'react';
 
+export interface CartItemVariation {
+  size?: string;
+  color?: string;
+  type?: string;
+}
+
+export interface CartItemModifier {
+  name: string;        // e.g. "Temperature"
+  chosenOption: string; // e.g. "Medium Rare"
+  price: number;        // 0 for free options
+}
+
 export interface CartItem {
   productId: string;
+  cartItemId: string; // unique per line: productId or productId:variationSku or productId:modHash
   name: string;
   price: number;
   quantity: number;
   stock: number;
+  variationLabel?: string; // e.g. "S / Blue"
+  variation?: CartItemVariation;
+  selectedModifiers?: CartItemModifier[];
+  modifierSurcharge?: number; // sum of all chosen modifier prices
+}
+
+export interface CartVariant {
+  sku: string;
+  label: string;
+  price?: number;
+  stock?: number;
+  variation: CartItemVariation;
 }
 
 interface UseCartReturn {
   cart: CartItem[];
   setCart: (items: CartItem[]) => void;
-  addToCart: (product: { _id: string; name: string; price: number; stock: number; trackInventory?: boolean; allowOutOfStockSales?: boolean }) => void;
-  removeFromCart: (productId: string) => void;
-  updateQuantity: (productId: string, quantity: number, onError: (message: string) => void) => void;
+  addToCart: (
+    product: { _id: string; name: string; price: number; stock: number; trackInventory?: boolean; allowOutOfStockSales?: boolean },
+    variant?: CartVariant,
+    modifiers?: CartItemModifier[]
+  ) => void;
+  removeFromCart: (cartItemId: string) => void;
+  updateQuantity: (cartItemId: string, quantity: number, onError: (message: string) => void) => void;
   clearCart: () => void;
   getSubtotal: () => number;
   getCartTotal: (settings?: { taxEnabled?: boolean; taxRate?: number }) => number;
@@ -41,8 +70,30 @@ export function useCart(showError: (msg: string) => void): UseCartReturn {
     return Math.round((subtotal + tax) * 100) / 100;
   }, [getSubtotal, getTaxAmount]);
 
-  const addToCart = useCallback((product: { _id: string; name: string; price: number; stock: number; trackInventory?: boolean; allowOutOfStockSales?: boolean }) => {
-    const isOutOfStock = product.stock === 0;
+  const addToCart = useCallback((
+    product: { _id: string; name: string; price: number; stock: number; trackInventory?: boolean; allowOutOfStockSales?: boolean },
+    variant?: CartVariant,
+    modifiers?: CartItemModifier[]
+  ) => {
+    const effectiveStock = variant?.stock ?? product.stock;
+    const basePrice = variant?.price ?? product.price;
+    const surcharge = modifiers ? modifiers.reduce((s, m) => s + m.price, 0) : 0;
+    const effectivePrice = basePrice + surcharge;
+
+    // Build a stable cartItemId that includes modifier choices so different
+    // modifier combos on the same product become separate cart lines.
+    let cartItemId = variant ? `${product._id}:${variant.sku}` : product._id;
+    if (modifiers && modifiers.length > 0) {
+      const modHash = modifiers
+        .map((m) => `${m.name}=${m.chosenOption}`)
+        .sort()
+        .join('|');
+      cartItemId = `${cartItemId}:${modHash}`;
+    }
+
+    const displayName = variant ? `${product.name} (${variant.label})` : product.name;
+
+    const isOutOfStock = effectiveStock === 0;
     const canSellOutOfStock = product.allowOutOfStockSales === true;
     const trackInventory = product.trackInventory !== false;
 
@@ -52,14 +103,14 @@ export function useCart(showError: (msg: string) => void): UseCartReturn {
     }
 
     setCart((prevCart) => {
-      const existingItem = prevCart.find((item) => item.productId === product._id);
+      const existingItem = prevCart.find((item) => item.cartItemId === cartItemId);
       if (existingItem) {
-        if (trackInventory && !canSellOutOfStock && existingItem.quantity >= product.stock) {
+        if (trackInventory && !canSellOutOfStock && existingItem.quantity >= effectiveStock) {
           showError('Cannot exceed available stock');
           return prevCart;
         }
         return prevCart.map((item) =>
-          item.productId === product._id
+          item.cartItemId === cartItemId
             ? { ...item, quantity: Math.min(item.quantity + 1, MAX_QUANTITY) }
             : item
         );
@@ -68,30 +119,35 @@ export function useCart(showError: (msg: string) => void): UseCartReturn {
           ...prevCart,
           {
             productId: product._id,
-            name: product.name,
-            price: product.price,
+            cartItemId,
+            name: displayName,
+            price: effectivePrice,
             quantity: 1,
-            stock: product.stock,
+            stock: effectiveStock,
+            variationLabel: variant?.label,
+            variation: variant?.variation,
+            selectedModifiers: modifiers && modifiers.length > 0 ? modifiers : undefined,
+            modifierSurcharge: surcharge > 0 ? surcharge : undefined,
           },
         ];
       }
     });
   }, [showError]);
 
-  const removeFromCart = useCallback((productId: string) => {
-    setCart((prevCart) => prevCart.filter((item) => item.productId !== productId));
+  const removeFromCart = useCallback((cartItemId: string) => {
+    setCart((prevCart) => prevCart.filter((item) => item.cartItemId !== cartItemId));
   }, []);
 
-  const updateQuantity = useCallback((productId: string, quantity: number, onError: (message: string) => void) => {
+  const updateQuantity = useCallback((cartItemId: string, quantity: number, onError: (message: string) => void) => {
     if (quantity <= 0) {
-      removeFromCart(productId);
+      removeFromCart(cartItemId);
       return;
     }
     if (quantity > MAX_QUANTITY) {
       onError(`Maximum quantity is ${MAX_QUANTITY}`);
       return;
     }
-    const item = cart.find((item) => item.productId === productId);
+    const item = cart.find((item) => item.cartItemId === cartItemId);
     if (!item) return;
 
     // Check stock constraints
@@ -102,7 +158,7 @@ export function useCart(showError: (msg: string) => void): UseCartReturn {
 
     setCart((prevCart) =>
       prevCart.map((item) =>
-        item.productId === productId ? { ...item, quantity } : item
+        item.cartItemId === cartItemId ? { ...item, quantity } : item
       )
     );
   }, [cart, removeFromCart]);

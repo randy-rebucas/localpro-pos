@@ -40,7 +40,9 @@ export function getStatusColor(status: BookingStatus): string {
 /**
  * Get status label text
  */
-export function getStatusLabel(status: BookingStatus, dict?: any): string {
+type Dict = Record<string, Record<string, string | undefined> | undefined>;
+
+export function getStatusLabel(status: BookingStatus, dict?: Dict): string {
   const labels: Record<BookingStatus, string> = {
     pending: dict?.admin?.pending || 'Pending',
     confirmed: dict?.admin?.confirmed || 'Confirmed',
@@ -69,7 +71,7 @@ export function formatBookingDateTime(dateString: string): string {
 /**
  * Get staff display name
  */
-export function getStaffName(staffName?: string, staffId?: { _id: string; name: string; email: string }, dict?: any): string {
+export function getStaffName(staffName?: string, staffId?: { _id: string; name: string; email: string }, dict?: Dict): string {
   if (staffName) return staffName;
   if (staffId?.name) return staffId.name;
   return dict?.admin?.unassigned || 'Unassigned';
@@ -92,21 +94,21 @@ export function canEditBooking(status: BookingStatus): boolean {
 /**
  * Get delete confirmation message
  */
-export function getDeleteBookingConfirmMessage(dict?: any): string {
+export function getDeleteBookingConfirmMessage(dict?: Dict): string {
   return dict?.common?.deleteBookingConfirm || 'Are you sure you want to delete this booking?';
 }
 
 /**
  * Get reminder confirmation message
  */
-export function getSendReminderConfirmMessage(dict?: any): string {
+export function getSendReminderConfirmMessage(dict?: Dict): string {
   return dict?.admin?.sendReminderConfirm || 'Send a reminder to the customer?';
 }
 
 /**
  * Format duration with label
  */
-export function formatDuration(duration: number, dict?: any): string {
+export function formatDuration(duration: number, dict?: Dict): string {
   return `${duration} ${dict?.admin?.minutes || 'min'}`;
 }
 

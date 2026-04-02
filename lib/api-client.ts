@@ -54,7 +54,9 @@ export async function handleApiResponse<T = any>(
 }
 
 /**
- * Enhanced fetch wrapper that automatically handles 403 responses
+ * Enhanced fetch wrapper that automatically:
+ * 1. Includes credentials (cookies/auth tokens) by default
+ * 2. Handles 403 responses (tenant access violations)
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function apiFetch<T = any>(
@@ -66,6 +68,9 @@ export async function apiFetch<T = any>(
 ): Promise<T> {
   const { redirectOn403, defaultRedirect, ...fetchOptions } = options || {};
   
-  const response = await fetch(url, fetchOptions);
+  // Automatically include credentials unless explicitly set to 'omit'
+  const credentials = fetchOptions.credentials || 'include';
+  
+  const response = await fetch(url, { ...fetchOptions, credentials });
   return handleApiResponse<T>(response, { redirectOn403, defaultRedirect });
 }

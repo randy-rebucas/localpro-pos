@@ -51,12 +51,13 @@ const nextConfig: NextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV !== 'production' ? " 'unsafe-eval'" : ''} https://vercel.live https://*.vercel.live`,
-              "style-src 'self' 'unsafe-inline' https://vercel.live",
+              `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV !== 'production' ? " 'unsafe-eval'" : ''} https://vercel.live https://*.vercel.live https://*.live`,
+              "style-src 'self' 'unsafe-inline' https://vercel.live https://*.vercel.live https://*.live",
               "img-src 'self' data: blob: https:",
-              "font-src 'self' data: https://vercel.live",
-              "connect-src 'self' https://api-m.paypal.com https://api-m.sandbox.paypal.com https://vercel.live https://*.vercel.live wss://*.vercel.live",
-              "frame-src https://vercel.live",
+              "font-src 'self' data: https://vercel.live https://*.vercel.live https://*.live",
+              "connect-src 'self' https://api-m.paypal.com https://api-m.sandbox.paypal.com https://vercel.live https://*.vercel.live https://*.live wss://vercel.live wss://*.vercel.live wss://*.live",
+              "frame-src https://vercel.live https://*.vercel.live https://*.live",
+              "worker-src 'self'",
               "object-src 'none'",
               "base-uri 'self'",
               "form-action 'self'",
@@ -73,7 +74,16 @@ const nextConfig: NextConfig = {
         headers: [
           { key: 'Content-Type', value: 'application/javascript; charset=utf-8' },
           { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
-          { key: 'Content-Security-Policy', value: "default-src 'self'; script-src 'self'" },
+          {
+            key: 'Content-Security-Policy',
+            value: [
+              "default-src 'self'",
+              "script-src 'self'",
+              process.env.NODE_ENV !== 'production'
+                ? "connect-src 'self' https://vercel.live https://*.vercel.live wss://vercel.live wss://*.vercel.live"
+                : "connect-src 'self'",
+            ].join('; '),
+          },
         ],
       },
       {

@@ -98,8 +98,6 @@ export default function RealTimeStockTracker({
       eventSource.close();
       eventSourceRef.current = null;
     };
-  // onStockUpdate intentionally excluded — handled via ref above
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenant, productId, branchId, reconnectCount]);
 
   if (!showIndicator) {

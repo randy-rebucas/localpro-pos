@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
+import { DiscountFormData } from './useDiscountsForm';
 
 export interface Discount {
   _id: string;
@@ -26,8 +27,8 @@ interface UseDiscountsListReturn {
   loading: boolean;
   message: { type: 'success' | 'error'; text: string } | null;
   fetchDiscounts: () => Promise<void>;
-  createDiscount: (form: any) => Promise<boolean>;
-  updateDiscount: (id: string, form: any) => Promise<boolean>;
+  createDiscount: (form: DiscountFormData) => Promise<boolean>;
+  updateDiscount: (id: string, form: DiscountFormData) => Promise<boolean>;
   deleteDiscount: (id: string) => Promise<boolean>;
   toggleDiscountStatus: (id: string, isActive: boolean) => Promise<boolean>;
   clearMessage: () => void;
@@ -68,7 +69,7 @@ export function useDiscountsList(): UseDiscountsListReturn {
     }
   }, []);
 
-  const createDiscount = useCallback(async (form: any) => {
+  const createDiscount = useCallback(async (form: DiscountFormData) => {
     try {
       const res = await fetch('/api/discounts', {
         method: 'POST',
@@ -89,7 +90,7 @@ export function useDiscountsList(): UseDiscountsListReturn {
     }
   }, []);
 
-  const updateDiscount = useCallback(async (id: string, form: any) => {
+  const updateDiscount = useCallback(async (id: string, form: DiscountFormData) => {
     try {
       const res = await fetch(`/api/discounts/${id}`, {
         method: 'PUT',

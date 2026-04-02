@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { useParams } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
 
 // Define types locally to avoid importing mongoose models in client code
 interface SubscriptionLimits {
@@ -18,6 +19,7 @@ interface SubscriptionFeatures {
   enableLoyaltyProgram: boolean;
   enableCustomerManagement: boolean;
   enableBookingScheduling: boolean;
+  enableTableManagement: boolean;
   enableReports: boolean;
   enableMultiBranch: boolean;
   enableHardwareIntegration: boolean;
@@ -80,13 +82,14 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
   const tenantId = params.tenant as string;
   const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const { isAuthenticated } = useAuth();
 
   const refreshSubscription = async () => {
-    if (!tenantId) return;
+    if (!tenantId || !isAuthenticated) return;
 
     try {
       setLoading(true);
-      const response = await fetch('/api/subscription/status');
+      const response = await fetch('/api/subscription/status', { credentials: 'include' });
 
       // 401 means the user is not authenticated (e.g. on the login page) — not an error
       if (response.status === 401) {
@@ -113,7 +116,7 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
   useEffect(() => {
     refreshSubscription();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tenantId]);
+  }, [tenantId, isAuthenticated]);
 
   // Refresh subscription status every 5 minutes
   useEffect(() => {

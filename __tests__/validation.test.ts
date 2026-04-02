@@ -77,7 +77,7 @@ describe('validatePassword', () => {
   });
 
   it('uses custom translation function', () => {
-    const t = (key: string, fallback: string) => `[${key}]`;
+    const t = (key: string, _fallback: string) => `[${key}]`;
     const result = validatePassword('short', t);
     expect(result.errors[0]).toMatch(/^\[/);
   });

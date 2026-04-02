@@ -86,7 +86,9 @@ export function isValidCasDateRange(startDate: string, endDate: string): boolean
 /**
  * Get warning message for expiring PTU
  */
-export function getPtuExpiryWarning(expiryDate: string, dict?: any): string {
+type Dict = Record<string, Record<string, string | undefined> | undefined>;
+
+export function getPtuExpiryWarning(expiryDate: string, dict?: Dict): string {
   if (!expiryDate) return '';
   return (
     dict?.admin?.ptuExpiryWarning ||
