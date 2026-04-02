@@ -1,11 +1,25 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 
+export interface ITransactionItemModifier {
+  name: string;       // e.g. "Temperature"
+  chosenOption: string; // e.g. "Medium Rare"
+  price: number;       // 0 for free options
+}
+
 export interface ITransactionItem {
   product: mongoose.Types.ObjectId;
   name: string;
   price: number;
   quantity: number;
   subtotal: number;
+  modifiers?: ITransactionItemModifier[];
+}
+
+export interface ISplitPayment {
+  guestIndex: number;
+  method: string;
+  amount: number;
+  reference?: string;
 }
 
 export interface ITransaction extends Document {
@@ -34,10 +48,23 @@ export interface ITransaction extends Document {
   notes?: string;
   displayCurrency?: string; // Currency code the customer chose to view the total in
   displayTotal?: number;    // Total converted to displayCurrency at time of sale
+  // Restaurant-specific
+  orderType?: 'dine-in' | 'takeout' | 'delivery';
+  tableNumber?: string;
+  tableId?: mongoose.Types.ObjectId;
+  // Split billing
+  splitCount?: number;
+  splitPayments?: ISplitPayment[];
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
+
+const TransactionItemModifierSchema: Schema = new Schema({
+  name: { type: String, required: true },
+  chosenOption: { type: String, required: true },
+  price: { type: Number, required: true, default: 0 },
+}, { _id: false });
 
 const TransactionItemSchema: Schema = new Schema({
   product: {
@@ -62,7 +89,18 @@ const TransactionItemSchema: Schema = new Schema({
     type: Number,
     required: true,
   },
+  modifiers: {
+    type: [TransactionItemModifierSchema],
+    default: undefined,
+  },
 });
+
+const SplitPaymentSchema: Schema = new Schema({
+  guestIndex: { type: Number, required: true },
+  method: { type: String, required: true },
+  amount: { type: Number, required: true, min: 0 },
+  reference: { type: String, trim: true },
+}, { _id: false });
 
 const TransactionSchema: Schema = new Schema(
   {
@@ -175,6 +213,28 @@ const TransactionSchema: Schema = new Schema(
     displayTotal: {
       type: Number,
       min: 0,
+    },
+    // Restaurant-specific
+    orderType: {
+      type: String,
+      enum: ['dine-in', 'takeout', 'delivery'],
+    },
+    tableNumber: {
+      type: String,
+      trim: true,
+    },
+    tableId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Table',
+    },
+    // Split billing
+    splitCount: {
+      type: Number,
+      min: 2,
+    },
+    splitPayments: {
+      type: [SplitPaymentSchema],
+      default: undefined,
     },
     isActive: {
       type: Boolean,

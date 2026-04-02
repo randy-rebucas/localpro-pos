@@ -10,14 +10,11 @@ import { getDefaultTenantSettings } from '@/lib/currency';
 import { CreditCard, AlertTriangle, ArrowUp, Receipt, CheckCircle } from 'lucide-react';
 import { useConfirm } from '@/lib/confirm';
 import Link from 'next/link';
-import { useSubscriptionManager, type Subscription, type BillingTransaction } from '@/hooks/useSubscriptionManager';
+import { useSubscriptionManager } from '@/hooks/useSubscriptionManager';
 import {
   formatDate,
   getSubscriptionStatusBadgeStyles,
   getSubscriptionStatusLabel,
-  getBillingTransactionStatusBadgeStyles,
-  getBillingTransactionStatusLabel,
-  getBillingTransactionIconStyles,
 } from '@/lib/subscriptions-helpers';
 
 export default function SubscriptionsPage() {

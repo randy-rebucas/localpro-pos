@@ -27,7 +27,6 @@ export function useStockSync({
   const [connected, setConnected] = useState(false);
   const [reconnectCount, setReconnectCount] = useState(0);
   const onStockUpdateRef = useRef(onStockUpdate);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { onStockUpdateRef.current = onStockUpdate; }, [onStockUpdate]);
 
   const scheduleReconnect = useCallback(() => {
@@ -36,6 +35,7 @@ export function useStockSync({
 
   useEffect(() => {
     if (!tenant || !isOnline) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setConnected(false);
       return;
     }
@@ -80,8 +80,6 @@ export function useStockSync({
       eventSource.close();
       setConnected(false);
     };
-  // reconnectCount intentionally triggers re-subscription after disconnect
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenant, branchId, isOnline, reconnectCount, scheduleReconnect]);
 
   return { connected };

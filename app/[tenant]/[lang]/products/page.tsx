@@ -5,6 +5,7 @@ import Navbar from '@/components/Navbar';
 import Currency from '@/components/Currency';
 import PageTitle from '@/components/PageTitle';
 import dynamic from 'next/dynamic';
+import Image from 'next/image';
 
 const ProductModal = dynamic(() => import('@/components/ProductModal'), {
   loading: () => <div className="p-4 text-center text-gray-500">Loading...</div>,
@@ -341,17 +342,20 @@ export default function ProductsPage() {
                 {/* Product Image */}
                 <div className="mb-3 -mx-4 -mt-4 sm:-mx-5 sm:-mt-5">
                   {product.image ? (
-                    <img
-                      src={product.image}
-                      alt={product.name}
-                      className="w-full h-36 object-cover rounded-t-lg"
-                      onError={(e) => {
-                        const img = e.target as HTMLImageElement;
-                        img.style.display = 'none';
-                        const placeholder = img.nextElementSibling as HTMLElement | null;
-                        if (placeholder) placeholder.style.display = 'flex';
-                      }}
-                    />
+                    <div className="relative w-full h-36">
+                      <Image
+                        src={product.image}
+                        alt={product.name}
+                        fill
+                        className="object-cover rounded-t-lg"
+                        onError={(e) => {
+                          const img = e.target as HTMLImageElement;
+                          img.style.display = 'none';
+                          const placeholder = img.parentElement?.nextElementSibling as HTMLElement | null;
+                          if (placeholder) placeholder.style.display = 'flex';
+                        }}
+                      />
+                    </div>
                   ) : null}
                   <div
                     className="w-full h-36 bg-gray-100 rounded-t-lg flex items-center justify-center"
@@ -496,17 +500,20 @@ export default function ProductsPage() {
                   <div className="flex gap-3 flex-1 min-w-0">
                     {/* Thumbnail */}
                     {product.image ? (
-                      <img
-                        src={product.image}
-                        alt={product.name}
-                        className="w-14 h-14 object-cover border border-gray-200 flex-shrink-0 self-start"
-                        onError={(e) => {
-                          const img = e.target as HTMLImageElement;
-                          img.style.display = 'none';
-                          const placeholder = img.nextElementSibling as HTMLElement | null;
-                          if (placeholder) placeholder.style.display = 'flex';
-                        }}
-                      />
+                      <div className="relative w-14 h-14 flex-shrink-0 self-start">
+                        <Image
+                          src={product.image}
+                          alt={product.name}
+                          fill
+                          className="object-cover border border-gray-200"
+                          onError={(e) => {
+                            const img = e.target as HTMLImageElement;
+                            img.style.display = 'none';
+                            const placeholder = img.parentElement?.nextElementSibling as HTMLElement | null;
+                            if (placeholder) placeholder.style.display = 'flex';
+                          }}
+                        />
+                      </div>
                     ) : null}
                     <div
                       className="w-14 h-14 bg-gray-100 border border-gray-200 flex-shrink-0 items-center justify-center self-start"

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
+import { ExpenseFormData } from './useExpensesForm';
 
 export interface Expense {
   _id: string;
@@ -36,8 +37,8 @@ interface UseExpensesListReturn {
   setFilters: (filters: ExpenseFilters) => void;
   setMessage: (message: { type: 'success' | 'error'; text: string } | null) => void;
   fetchExpenses: () => Promise<void>;
-  createExpense: (form: any) => Promise<boolean>;
-  updateExpense: (id: string, form: any) => Promise<boolean>;
+  createExpense: (form: ExpenseFormData) => Promise<boolean>;
+  updateExpense: (id: string, form: ExpenseFormData) => Promise<boolean>;
   deleteExpense: (id: string) => Promise<boolean>;
   setDeletingId: (id: string | null) => void;
 }
@@ -91,7 +92,7 @@ export function useExpensesList(): UseExpensesListReturn {
     }
   }, [filters]);
 
-  const createExpense = useCallback(async (form: any) => {
+  const createExpense = useCallback(async (form: ExpenseFormData) => {
     try {
       const res = await fetch('/api/expenses', {
         method: 'POST',
@@ -112,7 +113,7 @@ export function useExpensesList(): UseExpensesListReturn {
     }
   }, []);
 
-  const updateExpense = useCallback(async (id: string, form: any) => {
+  const updateExpense = useCallback(async (id: string, form: ExpenseFormData) => {
     try {
       const res = await fetch(`/api/expenses/${id}`, {
         method: 'PUT',

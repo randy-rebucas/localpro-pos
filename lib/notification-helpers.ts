@@ -38,7 +38,9 @@ export function hasNotificationsToSend(notifications: Notification[]): boolean {
 /**
  * Format notification type display text
  */
-export function formatNotificationType(type: Notification['type'], dict: any): string {
+type Dict = Record<string, Record<string, string | undefined> | undefined>;
+
+export function formatNotificationType(type: Notification['type'], dict: Dict): string {
   if (type === 'missing_clock_out') {
     return dict.admin?.missingClockOut || 'Missing Clock Out';
   }
@@ -65,7 +67,7 @@ export function formatClockInTime(clockInTime: string): string {
 /**
  * Confirm before sending emails
  */
-export function confirmSendEmails(count: number, dict: any): boolean {
+export function confirmSendEmails(count: number, dict: Dict): boolean {
   const message =
     dict.admin?.confirmSendEmails?.replace('{count}', count.toString()) ||
     `Send emails to ${count} recipient(s)?`;

@@ -226,6 +226,10 @@ const TenantSchema: Schema = new Schema(
         type: Boolean,
         default: false,
       },
+      enableTableManagement: {
+        type: Boolean,
+        default: false,
+      },
       
       // Hardware Configuration
       hardwareConfig: {

@@ -34,9 +34,15 @@ export interface ProductFormData {
   equipmentRequired: string[];
 }
 
+interface BusinessTypeConfig {
+  productTypes?: string[];
+  defaultFeatures?: { enableInventory?: boolean };
+  [key: string]: unknown;
+}
+
 const getDefaultFormData = (
   product: Product | null,
-  businessTypeConfig: any
+  businessTypeConfig: BusinessTypeConfig | null
 ): ProductFormData => {
   const extractCategoryId = (): string => {
     if (!product?.categoryId) return '';
@@ -58,7 +64,7 @@ const getDefaultFormData = (
     sku: product?.sku || '',
     barcode: product?.barcode || '',
     categoryId: extractCategoryId(),
-    productType: product?.productType || (businessTypeConfig?.productTypes?.[0] || 'regular'),
+    productType: (product?.productType || businessTypeConfig?.productTypes?.[0] || 'regular') as 'service' | 'regular' | 'bundle',
     trackInventory: product?.trackInventory !== undefined ? product.trackInventory : (businessTypeConfig?.defaultFeatures?.enableInventory ?? true),
     lowStockThreshold: product?.lowStockThreshold || 10,
     modifiers: product?.modifiers || [],
@@ -74,7 +80,7 @@ const getDefaultFormData = (
   };
 };
 
-export const useProductsForm = (product: Product | null, businessTypeConfig: any) => {
+export const useProductsForm = (product: Product | null, businessTypeConfig: BusinessTypeConfig | null) => {
   const [formData, setFormData] = useState<ProductFormData>(
     getDefaultFormData(product, businessTypeConfig)
   );
@@ -94,14 +100,14 @@ export const useProductsForm = (product: Product | null, businessTypeConfig: any
   }, []);
 
   const submitForm = useCallback(
-    async (settings: any): Promise<{ success: boolean; error?: string }> => {
+    async (settings: { businessType?: string } | null): Promise<{ success: boolean; error?: string }> => {
       setSaving(true);
       setError('');
 
       try {
         const url = product ? `/api/products/${product._id}` : '/api/products';
         const method = product ? 'PUT' : 'POST';
-        const body: any = {
+        const body: Record<string, unknown> = {
           name: formData.name,
           description: formData.description || undefined,
           image: formData.image || undefined,

@@ -84,6 +84,7 @@ export interface ITenantSettings {
   enableLoyaltyProgram?: boolean;
   enableCustomerManagement?: boolean;
   enableBookingScheduling?: boolean;
+  enableTableManagement?: boolean;
 
   // Hardware Configuration
   hardwareConfig?: {

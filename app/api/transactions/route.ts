@@ -20,6 +20,7 @@ import { calculateTax } from '@/lib/tax-calculation';
 import Customer from '@/models/Customer';
 import LoyaltyConfig from '@/models/LoyaltyConfig';
 import LoyaltyTransaction from '@/models/LoyaltyTransaction';
+import Table from '@/models/Table';
 import { checkRateLimit } from '@/lib/rate-limit';
 
 interface VariationInput {
@@ -68,6 +69,7 @@ interface TransactionItemRecord {
   bundleId?: unknown;
   categoryId?: string;
   taxExempt?: boolean;
+  modifiers?: Array<{ name: string; chosenOption: string; price: number }>;
 }
 
 export async function GET(request: NextRequest) {
@@ -91,15 +93,21 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(Math.max(1, rawLimit), 200); // cap at 200
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
     const skip = (page - 1) * limit;
+    const customerIdFilter = searchParams.get('customerId');
 
-    const transactions = await Transaction.find({ tenantId, isActive: { $ne: false } })
+    const txQuery: Record<string, unknown> = { tenantId, isActive: { $ne: false } };
+    if (customerIdFilter) {
+      txQuery.customerId = customerIdFilter;
+    }
+
+    const transactions = await Transaction.find(txQuery)
       .sort({ createdAt: -1 })
       .limit(limit)
       .skip(skip)
       .populate('items.product', 'name')
       .lean();
 
-    const total = await Transaction.countDocuments({ tenantId, isActive: { $ne: false } });
+    const total = await Transaction.countDocuments(txQuery);
 
     return NextResponse.json({
       success: true,
@@ -157,6 +165,13 @@ export async function POST(request: NextRequest) {
     const { items, paymentMethod, cashReceived, notes, discountCode, branchId, payments } = data as unknown as TransactionInput;
     const customerId = body.customerId as string | undefined;
     const loyaltyPointsToRedeem = typeof body.loyaltyPointsToRedeem === 'number' ? Math.floor(body.loyaltyPointsToRedeem) : 0;
+
+    // Restaurant & split-billing fields
+    const orderType = typeof body.orderType === 'string' ? body.orderType : undefined;
+    const tableNumber = typeof body.tableNumber === 'string' ? body.tableNumber : undefined;
+    const tableId = typeof body.tableId === 'string' ? body.tableId : undefined;
+    const splitCount = typeof body.splitCount === 'number' ? body.splitCount : undefined;
+    const splitPayments = Array.isArray(body.splitPayments) ? body.splitPayments : undefined;
 
     // Check subscription transaction limits
     const currentTransactionCount = await Transaction.countDocuments({
@@ -278,6 +293,7 @@ export async function POST(request: NextRequest) {
 
     for (const item of items) {
       const { productId, quantity, variation, bundleId } = item;
+      const itemModifiers = Array.isArray((item as any).modifiers) ? (item as any).modifiers : undefined; // eslint-disable-line @typescript-eslint/no-explicit-any
 
       // Handle bundles
       if (bundleId) {
@@ -385,16 +401,22 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        const itemSubtotal = itemPrice * quantity;
+        // Add modifier surcharge to item price
+        const modifierSurcharge = itemModifiers
+          ? (itemModifiers as Array<{ price: number }>).reduce((s, m) => s + (m.price || 0), 0)
+          : 0;
+        const effectiveItemPrice = itemPrice + modifierSurcharge;
+        const itemSubtotal = effectiveItemPrice * quantity;
         subtotal += itemSubtotal;
 
         transactionItems.push({
           product: product._id,
           name: product.name,
-          price: itemPrice,
+          price: effectiveItemPrice,
           quantity: quantity,
           subtotal: itemSubtotal,
           taxExempt: product.taxExempt || false,
+          modifiers: itemModifiers || undefined,
         });
       }
     }
@@ -612,6 +634,12 @@ export async function POST(request: NextRequest) {
         userId: user.userId,
         receiptNumber,
         notes,
+        // Restaurant & split billing
+        orderType: orderType || undefined,
+        tableNumber: tableNumber || undefined,
+        tableId: tableId || undefined,
+        splitCount: splitCount || undefined,
+        splitPayments: splitPayments || undefined,
       }], { session });
       transaction = txn;
 
@@ -754,6 +782,19 @@ export async function POST(request: NextRequest) {
       throw sessionError;
     } finally {
       session.endSession();
+    }
+
+    // Reset table status to 'open' after dine-in payment completes
+    if (tableId && orderType === 'dine-in') {
+      try {
+        await Table.findOneAndUpdate(
+          { _id: tableId, tenantId },
+          { status: 'open', currentOrderId: undefined }
+        );
+      } catch (tableErr) {
+        logger.error('Failed to reset table status:', tableErr);
+        // Non-critical — don't fail the response
+      }
     }
 
     // Create audit log

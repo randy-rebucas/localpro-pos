@@ -6,13 +6,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyCronAuth } from '@/lib/automation-auth';
 import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
-import Booking from '@/models/Booking';
 import Discount from '@/models/Discount';
 import Attendance from '@/models/Attendance';
 import CashDrawerSession from '@/models/CashDrawerSession';
 import Transaction from '@/models/Transaction';
-import { getLowStockProducts } from '@/lib/stock';
 import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {

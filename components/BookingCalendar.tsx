@@ -108,14 +108,6 @@ export default function BookingCalendar({
     }
   };
 
-  const getCompletedStatusStyles = () => {
-    return {
-      backgroundColor: `${settings?.primaryColor || '#3b82f6'}15`,
-      borderColor: settings?.primaryColor || '#3b82f6',
-      color: settings?.primaryColor || '#3b82f6'
-    };
-  };
-
   const formatTime = (dateString: string) => {
     return formatTimeUtil(dateString, tenantSettings);
   };

@@ -12,8 +12,6 @@ import { useFeatureFlagsSettings } from '@/hooks/useFeatureFlagsSettings';
 import {
   getSaveSuccessMessage,
   getSaveErrorMessage,
-  getConnectionErrorMessage,
-  getLoadConnectionErrorMessage,
   getFeatureFlagLabel,
   getFeatureFlagDescription,
   FEATURE_FLAGS,

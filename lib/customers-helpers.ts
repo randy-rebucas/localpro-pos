@@ -1,37 +1,39 @@
+type Dict = Record<string, Record<string, string | undefined> | undefined>;
+
 export function getStatusBadgeClass(isActive: boolean): string {
   return isActive
     ? 'bg-green-100 text-green-800 border-green-300'
     : 'bg-red-100 text-red-800 border-red-300';
 }
 
-export function getStatusLabel(isActive: boolean, dict: any): string {
+export function getStatusLabel(isActive: boolean, dict: Dict): string {
   return isActive ? (dict?.common?.active || 'Active') : (dict?.common?.inactive || 'Inactive');
 }
 
-export function getDeleteConfirmMessage(dict: any): string {
+export function getDeleteConfirmMessage(dict: Dict): string {
   return dict?.admin?.deleteCustomerConfirm || 'Are you sure you want to deactivate this customer?';
 }
 
-export function getDeleteSuccessMessage(dict: any): string {
+export function getDeleteSuccessMessage(dict: Dict): string {
   return dict?.admin?.customerDeactivated || 'Customer deactivated';
 }
 
-export function getDeleteErrorMessage(dict: any): string {
+export function getDeleteErrorMessage(dict: Dict): string {
   return dict?.admin?.deleteCustomerError || 'Failed to deactivate customer';
 }
 
-export function getSaveSuccessMessage(isEdit: boolean, dict: any): string {
+export function getSaveSuccessMessage(isEdit: boolean, dict: Dict): string {
   if (isEdit) {
     return dict?.admin?.customerUpdated || 'Customer updated successfully';
   }
   return dict?.admin?.customerCreated || 'Customer created successfully';
 }
 
-export function getSaveErrorMessage(dict: any): string {
+export function getSaveErrorMessage(dict: Dict): string {
   return dict?.admin?.saveCustomerError || 'Failed to save customer';
 }
 
-export function getToggleStatusMessage(isActive: boolean, dict: any): string {
+export function getToggleStatusMessage(isActive: boolean, dict: Dict): string {
   return isActive
     ? (dict?.admin?.customerActivated || 'Customer activated')
     : (dict?.admin?.customerDeactivated || 'Customer deactivated');

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
 
 interface Tenant {
   slug: string;
@@ -71,10 +72,12 @@ function StoreCard({ tenant }: { tenant: Tenant }) {
 
         <div className="flex items-center gap-3 relative z-10">
           {logo ? (
-            <img
+            <Image
               src={logo}
               alt={displayName}
-              className="w-12 h-12 object-contain bg-white/20 backdrop-blur-sm p-1 shadow"
+              width={48}
+              height={48}
+              className="object-contain bg-white/20 backdrop-blur-sm p-1 shadow"
             />
           ) : (
             <div className="w-12 h-12 bg-white/25 backdrop-blur-sm flex items-center justify-center text-lg font-extrabold text-white shadow">

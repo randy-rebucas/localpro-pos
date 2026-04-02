@@ -826,7 +826,7 @@ function BundleModal({
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [itemQuantity, setItemQuantity] = useState(1);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
-  const [localError, setLocalError] = useState(''); // Local error for product validation
+  const [, setLocalError] = useState(''); // Local error for product validation
   const searchInputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
   const suggestionItemsRef = useRef<(HTMLButtonElement | null)[]>([]);
@@ -893,18 +893,14 @@ function BundleModal({
         setSelectedProduct(exactMatch);
       } else if (filteredProducts.length === 1) {
         // Auto-select if only one match
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setSelectedProduct(filteredProducts[0]);
       } else {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setSelectedProduct(null);
       }
     } else {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedProduct(null);
     }
     // Reset highlighted index when search changes
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setHighlightedIndex(-1);
   }, [productSearch, products, filteredProducts]);
 

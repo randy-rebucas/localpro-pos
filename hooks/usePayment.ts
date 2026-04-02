@@ -11,14 +11,38 @@ export type PaymentMethodType =
   | 'bnpl'
   | 'digital'; // kept for backwards compatibility
 
+export interface SplitPaymentEntry {
+  guestIndex: number;
+  method: string;
+  amount: number;
+  reference?: string;
+}
+
+export interface RestaurantMeta {
+  orderType?: string;
+  tableNumber?: string;
+  tableId?: string;
+}
+
 interface PaymentInputData {
-  items: Array<{ productId: string; quantity: number }>;
+  items: Array<{
+    productId: string;
+    quantity: number;
+    variation?: { size?: string; color?: string; type?: string };
+    modifiers?: Array<{ name: string; chosenOption: string; price: number }>;
+  }>;
   paymentMethod: PaymentMethodType;
   cashReceived?: number;
   discountCode?: string;
   paymentProvider?: string;
   paymentReference?: string;
   bnplInstallments?: number;
+  customerId?: string;
+  orderType?: string;
+  tableNumber?: string;
+  tableId?: string;
+  splitCount?: number;
+  splitPayments?: SplitPaymentEntry[];
 }
 
 export interface PaymentResult {
@@ -46,7 +70,10 @@ interface UsePaymentReturn {
     total: number,
     tenant: string,
     onValidationError: (msg: string) => void,
-    fetchWithTimeout: (url: string, options?: RequestInit, timeoutMs?: number) => Promise<Response>
+    fetchWithTimeout: (url: string, options?: RequestInit, timeoutMs?: number) => Promise<Response>,
+    customerId?: string,
+    restaurantMeta?: RestaurantMeta,
+    splitPayments?: SplitPaymentEntry[]
   ) => Promise<PaymentResult | null>;
 }
 
@@ -119,25 +146,46 @@ export function usePayment(): UsePaymentReturn {
       total: number,
       tenant: string,
       onValidationError: (msg: string) => void,
-      fetchWithTimeout: (url: string, options?: RequestInit, timeoutMs?: number) => Promise<Response>
+      fetchWithTimeout: (url: string, options?: RequestInit, timeoutMs?: number) => Promise<Response>,
+      customerId?: string,
+      restaurantMeta?: RestaurantMeta,
+      splitPayments?: SplitPaymentEntry[]
     ): Promise<PaymentResult | null> => {
-      if (!validatePayment(cart, total, paymentMethod, cashReceived, paymentProvider, onValidationError)) {
+      // For split payments, use the first guest's method for validation; skip cash check
+      const methodForValidation = splitPayments ? (splitPayments[0]?.method as PaymentMethodType ?? paymentMethod) : paymentMethod;
+      // When split, skip the cash-amount validation (each guest pays separately)
+      const cashForValidation = splitPayments ? '999999' : cashReceived;
+
+      if (!validatePayment(cart, total, methodForValidation, cashForValidation, paymentProvider, onValidationError)) {
         return null;
       }
 
       setProcessing(true);
       try {
+        // Determine the "primary" payment method: for splits, use most common method
+        const primaryMethod: PaymentMethodType = splitPayments
+          ? (splitPayments[0]?.method as PaymentMethodType ?? paymentMethod)
+          : paymentMethod;
+
         const payload: PaymentInputData = {
           items: cart.map((item) => ({
             productId: item.productId,
             quantity: item.quantity,
+            variation: item.variation,
+            modifiers: item.selectedModifiers,
           })),
-          paymentMethod,
-          cashReceived: paymentMethod === 'cash' ? parseFloat(cashReceived) : undefined,
+          paymentMethod: primaryMethod,
+          cashReceived: primaryMethod === 'cash' && !splitPayments ? parseFloat(cashReceived) : undefined,
           discountCode: appliedDiscount?.code,
           paymentProvider: paymentProvider || undefined,
           paymentReference: paymentReference || undefined,
-          bnplInstallments: paymentMethod === 'bnpl' ? bnplInstallments : undefined,
+          bnplInstallments: primaryMethod === 'bnpl' ? bnplInstallments : undefined,
+          customerId: customerId || undefined,
+          orderType: restaurantMeta?.orderType,
+          tableNumber: restaurantMeta?.tableNumber,
+          tableId: restaurantMeta?.tableId,
+          splitCount: splitPayments ? splitPayments.length : undefined,
+          splitPayments: splitPayments,
         };
 
         const res = await fetchWithTimeout(

@@ -2,17 +2,16 @@
 
 import { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { supportsFeature } from '@/lib/business-type-helpers';
 import { getBusinessTypeConfig } from '@/lib/business-types';
 import { getBusinessType } from '@/lib/business-type-helpers';
-import { useStockMovementsList, type StockMovement } from '@/hooks/useStockMovementsList';
+import { useStockMovementsList } from '@/hooks/useStockMovementsList';
 import {
   getMovementTypeColor,
-  getFailedToFetchMovementsMessage,
   getProductName,
   getProductSku,
   getUserName,
@@ -22,7 +21,6 @@ import {
 
 export default function StockMovementsPage() {
   const params = useParams();
-  const router = useRouter(); // eslint-disable-line @typescript-eslint/no-unused-vars
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any

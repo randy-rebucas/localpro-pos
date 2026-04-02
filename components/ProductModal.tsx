@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
+import Image from 'next/image';
 import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getBusinessTypeConfig } from '@/lib/business-types';
@@ -552,10 +553,12 @@ export default function ProductModal({ product, onClose, lang = 'en' }: ProductM
               <p className="mt-1 text-sm text-red-600">{errors.image}</p>
             )}
             {formData.image && !errors.image && (
-              <img
+              <Image
                 src={formData.image}
                 alt="Preview"
-                className="mt-2 h-20 w-20 object-cover border border-gray-300"
+                width={80}
+                height={80}
+                className="mt-2 object-cover border border-gray-300"
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
               />
             )}

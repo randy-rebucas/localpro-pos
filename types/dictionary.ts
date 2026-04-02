@@ -14,6 +14,9 @@ export interface TranslationDict {
     failedToTogglePin?: string;
     [key: string]: string | undefined;
   };
+  admin?: {
+    [key: string]: string | undefined;
+  };
   pos: {
     // Cart
     cartEmpty?: string;
@@ -85,11 +88,11 @@ export function getDictionaryValue(
   if (!dict) return fallback;
 
   const parts = path.split('.');
-  let value: any = dict;
+  let value: unknown = dict;
 
   for (const part of parts) {
     if (value && typeof value === 'object' && part in value) {
-      value = value[part];
+      value = (value as Record<string, unknown>)[part];
     } else {
       return fallback;
     }

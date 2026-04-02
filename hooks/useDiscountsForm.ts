@@ -24,7 +24,7 @@ interface UseDiscountsFormReturn {
   setFormData: (data: Partial<DiscountFormData>) => void;
   error: string;
   submitting: boolean;
-  handleSubmit: (onSubmit: (data: any) => Promise<boolean>) => Promise<void>;
+  handleSubmit: (onSubmit: (data: DiscountFormData) => Promise<boolean>) => Promise<void>;
   resetForm: () => void;
   initializeForm: (discount: Discount) => void;
 }
@@ -79,7 +79,7 @@ export function useDiscountsForm(): UseDiscountsFormReturn {
   }, []);
 
   const handleSubmit = useCallback(
-    async (onSubmit: (data: any) => Promise<boolean>) => {
+    async (onSubmit: (data: DiscountFormData) => Promise<boolean>) => {
       setError('');
 
       // Validate required fields
@@ -94,19 +94,19 @@ export function useDiscountsForm(): UseDiscountsFormReturn {
 
       setSubmitting(true);
       try {
-        const payload = {
+        const payload: DiscountFormData = {
           code: formData.code.toUpperCase(),
-          name: formData.name || undefined,
-          description: formData.description || undefined,
+          name: formData.name || '',
+          description: formData.description || '',
           type: formData.type,
           value: formData.value,
           category: formData.category,
           requiresIdVerification: formData.requiresIdVerification,
-          minPurchaseAmount: formData.minPurchaseAmount > 0 ? formData.minPurchaseAmount : undefined,
-          maxDiscountAmount: formData.maxDiscountAmount > 0 ? formData.maxDiscountAmount : undefined,
-          validFrom: new Date(formData.validFrom),
-          validUntil: new Date(formData.validUntil),
-          usageLimit: formData.usageLimit > 0 ? formData.usageLimit : undefined,
+          minPurchaseAmount: formData.minPurchaseAmount > 0 ? formData.minPurchaseAmount : 0,
+          maxDiscountAmount: formData.maxDiscountAmount > 0 ? formData.maxDiscountAmount : 0,
+          validFrom: formData.validFrom,
+          validUntil: formData.validUntil,
+          usageLimit: formData.usageLimit > 0 ? formData.usageLimit : 0,
           isActive: formData.isActive,
         };
 

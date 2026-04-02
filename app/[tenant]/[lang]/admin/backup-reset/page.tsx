@@ -10,7 +10,6 @@ import { useRestoreCollections } from '@/hooks/useRestoreCollections';
 import { useResetCollections } from '@/hooks/useResetCollections';
 import {
   BACKUP_RESET_COLLECTIONS,
-  formatCollectionName,
   formatFileSize,
   hasSelectedCollections,
   buildResetConfirmMessage,
@@ -79,7 +78,7 @@ export default function BackupResetPage() {
       }
     }
 
-    const success = await restore(
+    await restore(
       restoreFile,
       clearExisting,
       (message) => {
@@ -104,7 +103,7 @@ export default function BackupResetPage() {
       return;
     }
 
-    const success = await reset(
+    await reset(
       selectedCollections,
       (message) => {
         toast.success(message);

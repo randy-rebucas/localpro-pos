@@ -19,6 +19,7 @@ export interface SubscriptionFeatures {
   enableLoyaltyProgram: boolean;
   enableCustomerManagement: boolean;
   enableBookingScheduling: boolean;
+  enableTableManagement: boolean;
   enableReports: boolean;
   enableMultiBranch: boolean;
   enableHardwareIntegration: boolean;
@@ -121,6 +122,7 @@ export class SubscriptionService {
           prioritySupport: plan.features.prioritySupport,
           customIntegrations: plan.features.customIntegrations,
           dedicatedAccountManager: plan.features.dedicatedAccountManager,
+          enableTableManagement: plan.features.enableTableManagement ?? false,
         },
         birCompliance: {
           ptuAssistance: plan.birCompliance?.ptuAssistance ?? false,

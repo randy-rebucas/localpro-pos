@@ -58,19 +58,19 @@ export const useFeatureFlagsSettings = (tenant: string) => {
     }
   }, [tenant]);
 
-  const updateSetting = useCallback((path: string, value: any) => {
+  const updateSetting = useCallback((path: string, value: unknown) => {
     setSettings((prevSettings) => {
       if (!prevSettings) return prevSettings;
 
       const keys = path.split('.');
       const newSettings = JSON.parse(JSON.stringify(prevSettings));
-      let current: any = newSettings;
+      let current: Record<string, unknown> = newSettings;
 
       for (let i = 0; i < keys.length - 1; i++) {
         if (!current[keys[i]]) {
           current[keys[i]] = {};
         }
-        current = current[keys[i]];
+        current = current[keys[i]] as Record<string, unknown>;
       }
 
       current[keys[keys.length - 1]] = value;

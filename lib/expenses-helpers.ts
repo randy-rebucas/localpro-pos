@@ -1,4 +1,8 @@
-export function getPaymentMethodLabel(method: string, dict: any): string {
+import { type TranslationDict } from '@/types/dictionary';
+
+type Dict = TranslationDict | null | undefined;
+
+export function getPaymentMethodLabel(method: string, dict: Dict): string {
   const labels: Record<string, string> = {
     cash: dict?.admin?.cash || 'Cash',
     card: dict?.admin?.card || 'Card',
@@ -27,30 +31,30 @@ export function validateDateRange(startDate: string, endDate: string): { valid: 
   return { valid: true };
 }
 
-export function getDeleteConfirmMessage(dict: any): string {
+export function getDeleteConfirmMessage(dict: Dict): string {
   return dict?.common?.deleteExpenseConfirm || dict?.admin?.deleteExpenseConfirm || 'Are you sure you want to delete this expense?';
 }
 
-export function getDeleteSuccessMessage(dict: any): string {
+export function getDeleteSuccessMessage(dict: Dict): string {
   return dict?.admin?.expenseDeletedSuccess || 'Expense deleted successfully';
 }
 
-export function getDeleteErrorMessage(dict: any): string {
+export function getDeleteErrorMessage(dict: Dict): string {
   return dict?.admin?.failedToDeleteExpense || 'Failed to delete expense';
 }
 
-export function getSaveSuccessMessage(isEdit: boolean, dict: any): string {
+export function getSaveSuccessMessage(isEdit: boolean, dict: Dict): string {
   if (isEdit) {
     return dict?.common?.expenseUpdatedSuccess || 'Expense updated successfully';
   }
   return dict?.common?.expenseCreatedSuccess || 'Expense created successfully';
 }
 
-export function getSaveErrorMessage(dict: any): string {
+export function getSaveErrorMessage(dict: Dict): string {
   return dict?.admin?.failedToSaveExpense || 'Failed to save expense';
 }
 
-export function getDateValidationError(field: 'startDate' | 'endDate', dict: any): string {
+export function getDateValidationError(field: 'startDate' | 'endDate', dict?: Dict): string {
   if (field === 'endDate') {
     return dict?.common?.endDateAfterStartDate || 'End date must be after start date';
   }

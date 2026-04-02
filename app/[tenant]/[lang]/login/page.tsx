@@ -223,7 +223,7 @@ export default function LoginPage() {
 
         <div className="mt-6 pt-6 border-t border-gray-200 text-center">
           <Link
-            href="/login"
+            href="/stores"
             className="text-sm text-blue-600 hover:text-blue-800 font-medium"
           >
             {dict?.login?.switchStore || 'Switch to different store'}

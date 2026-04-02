@@ -16,7 +16,7 @@ export interface Product {
   image?: string;
   productType: 'regular' | 'bundle' | 'service';
   hasVariations: boolean;
-  variations?: any[];
+  variations?: Record<string, unknown>[];
   trackInventory: boolean;
   lowStockThreshold?: number;
   createdAt: string;
@@ -46,7 +46,7 @@ export interface Category {
   name: string;
 }
 
-export const useProductsList = (tenant: string) => {
+export const useProductsList = (_tenant: string) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);

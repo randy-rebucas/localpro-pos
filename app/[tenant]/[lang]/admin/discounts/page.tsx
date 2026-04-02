@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 import Currency from '@/components/Currency';
@@ -15,22 +15,14 @@ import { useDiscountsForm } from '@/hooks/useDiscountsForm';
 import {
   getStatusBadgeClass,
   getStatusLabel,
-  getTypeBadgeClass,
   getDeleteConfirmMessage,
-  getDeleteSuccessMessage,
-  getDeleteErrorMessage,
-  getSaveSuccessMessage,
-  getSaveErrorMessage,
-  getToggleStatusMessage,
   getToggleButtonLabel,
   getToggleButtonClass,
-  formatDiscountValue,
   formatDate,
 } from '@/lib/discounts-helpers';
 
 export default function DiscountsPage() {
   const params = useParams();
-  const router = useRouter(); // eslint-disable-line @typescript-eslint/no-unused-vars
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -74,13 +66,6 @@ export default function DiscountsPage() {
       clearMessage();
       await fetchDiscounts();
     }
-  };
-
-  const isDiscountValid = (discount: Discount) => {
-    const now = new Date();
-    const validFrom = new Date(discount.validFrom);
-    const validUntil = new Date(discount.validUntil);
-    return now >= validFrom && now <= validUntil && discount.isActive;
   };
 
   if (!dict || loading) {
@@ -177,7 +162,6 @@ export default function DiscountsPage() {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {discounts.map((discount) => {
-                  const isValid = isDiscountValid(discount);
                   return (
                     <tr key={discount._id}>
                       <td className="px-4 py-4 whitespace-nowrap">
@@ -299,10 +283,6 @@ function DiscountModal({
       const isEdit = !!discount;
       const success = isEdit ? await updateDiscount(discount._id, payload) : await createDiscount(payload);
       if (success) {
-        const msg = isEdit
-          ? getSaveSuccessMessage(true, dict)
-          : getSaveSuccessMessage(false, dict);
-        // Show success message via toast or similar
         await onSave();
       }
       return success;
