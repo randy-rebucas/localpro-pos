@@ -23,13 +23,14 @@ export default function FileUploadPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [dragActive, setDragActive] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [viewingFile, setViewingFile] = useState<UploadedFile | null>(null);
+  const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
   const { settings } = useTenantSettings();
   const tenantSettings = settings || getDefaultTenantSettings();
   const primaryColor = tenantSettings.primaryColor || '#3b82f6';
@@ -54,10 +55,11 @@ export default function FileUploadPage() {
       });
 
       if (res.ok) {
-        const data = await res.json();
+        const data = await res.json() as { success: boolean; data?: UploadedFile[] };
         if (data.success && data.data) {
           setUploadedFiles(
-            data.data.map((file: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+            data.data.map((file: UploadedFile) => ({
+              id: file.id,
               name: file.name,
               size: file.size,
               type: file.type,
@@ -138,8 +140,12 @@ export default function FileUploadPage() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to upload file');
+        try {
+          const data = await res.json();
+          throw new Error(data.error || 'Failed to upload file');
+        } catch {
+          throw new Error('Failed to upload file');
+        }
       }
 
       const data = await res.json();
@@ -180,6 +186,37 @@ export default function FileUploadPage() {
     toast.success('URL copied to clipboard');
   };
 
+  const deleteFile = async (fileId: string | undefined) => {
+    if (!fileId) {
+      toast.error('File ID not found');
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/upload?id=${fileId}&tenant=${tenant}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+
+      if (!res.ok) {
+        try {
+          const data = await res.json();
+          throw new Error(data.error || 'Failed to delete file');
+        } catch {
+          throw new Error('Failed to delete file');
+        }
+      }
+
+      // Remove file from state
+      setUploadedFiles(uploadedFiles.filter(f => f.id !== fileId));
+      toast.success('File deleted successfully');
+      setDeletingFileId(null);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Delete failed';
+      toast.error(errorMsg);
+    }
+  };
+
   if (!dict || loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -188,7 +225,7 @@ export default function FileUploadPage() {
             className="inline-block animate-spin h-8 w-8 border-b-2"
             style={{ borderColor: primaryColor, borderBottomColor: 'transparent' }}
           ></div>
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+          <p className="mt-4 text-gray-600">{(dict as Record<string, any>)?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
     );
@@ -206,7 +243,7 @@ export default function FileUploadPage() {
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
-            {dict?.admin?.backToAdmin || 'Back to Admin'}
+            {(dict as Record<string, any>)?.admin?.backToAdmin || 'Back to Admin'}
           </Link>
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
             File Upload
@@ -216,22 +253,24 @@ export default function FileUploadPage() {
           </p>
         </div>
 
-        <div className="space-y-8">
-          {/* Upload Section */}
-          <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8">
-            <h2 className="text-xl font-bold text-gray-900 mb-6">Upload File</h2>
-            
-            {/* Drag & Drop Area */}
-            <div
-              onDragEnter={handleDrag}
-              onDragLeave={handleDrag}
-              onDragOver={handleDrag}
-              onDrop={handleDrop}
-              className={`w-full border-2 border-dashed rounded p-8 text-center cursor-pointer transition-colors ${
-                dragActive
-                  ? 'border-blue-500 bg-blue-50'
-                  : 'border-gray-300 bg-gray-50 hover:border-gray-400'
-              }`}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+          {/* Right Column (lg:col-span-1) - Upload Section & File Types */}
+          <div className="lg:col-span-1 order-2 lg:order-1">
+            {/* Upload Section */}
+            <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8 mb-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-6">Upload File</h2>
+              
+              {/* Drag & Drop Area */}
+              <div
+                onDragEnter={handleDrag}
+                onDragLeave={handleDrag}
+                onDragOver={handleDrag}
+                onDrop={handleDrop}
+                className={`w-full border-2 border-dashed rounded p-8 text-center cursor-pointer transition-colors ${
+                  dragActive
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-300 bg-gray-50 hover:border-gray-400'
+                }`}
             >
               <input
                 type="file"
@@ -293,66 +332,61 @@ export default function FileUploadPage() {
                 </div>
               </div>
             )}
-          </div>
+            </div>
 
-          {/* File Type Info */}
-          <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Allowed File Types</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="p-4 border border-gray-300">
-                <h3 className="font-semibold text-gray-900 mb-2">Images</h3>
-                <p className="text-sm text-gray-600">
-                  PNG, JPG, GIF, WebP - Perfect for logos, product photos, and branding
-                </p>
-              </div>
-              <div className="p-4 border border-gray-300">
-                <h3 className="font-semibold text-gray-900 mb-2">Documents</h3>
-                <p className="text-sm text-gray-600">
-                  PDF - For invoices, receipts, and reports
-                </p>
-              </div>
-              <div className="p-4 border border-gray-300">
-                <h3 className="font-semibold text-gray-900 mb-2">Spreadsheets</h3>
-                <p className="text-sm text-gray-600">
-                  CSV, XLS, XLSX - For data imports and exports
-                </p>
-              </div>
-              <div className="p-4 border border-gray-300">
-                <h3 className="font-semibold text-gray-900 mb-2">Size Limit</h3>
-                <p className="text-sm text-gray-600">
-                  Maximum 10MB per file
-                </p>
+            {/* File Type Info */}
+            <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8 mt-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Allowed File Types</h2>
+              <div className="grid grid-cols-1 gap-4">
+                <div className="p-4 border border-gray-300">
+                  <h3 className="font-semibold text-gray-900 mb-2">Images</h3>
+                  <p className="text-sm text-gray-600">
+                    PNG, JPG, GIF, WebP - Perfect for logos, product photos, and branding
+                  </p>
+                </div>
+                <div className="p-4 border border-gray-300">
+                  <h3 className="font-semibold text-gray-900 mb-2">Documents</h3>
+                  <p className="text-sm text-gray-600">
+                    PDF - For invoices, receipts, and reports
+                  </p>
+                </div>
+                <div className="p-4 border border-gray-300">
+                  <h3 className="font-semibold text-gray-900 mb-2">Spreadsheets</h3>
+                  <p className="text-sm text-gray-600">
+                    CSV, XLS, XLSX - For data imports and exports
+                  </p>
+                </div>
+                <div className="p-4 border border-gray-300">
+                  <h3 className="font-semibold text-gray-900 mb-2">Size Limit</h3>
+                  <p className="text-sm text-gray-600">
+                    Maximum 10MB per file
+                  </p>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Uploaded Files List */}
-          {uploadedFiles.length > 0 && (
-            <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8">
-              <h2 className="text-xl font-bold text-gray-900 mb-6">Recent Uploads</h2>
-              <div className="space-y-3">
-                {uploadedFiles.map((file, idx) => (
+          {/* Left Column (lg:col-span-2) - Uploaded Files List */}
+          <div className="lg:col-span-2 order-1 lg:order-2">
+            {uploadedFiles.length > 0 && (
+              <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8">
+                <h2 className="text-xl font-bold text-gray-900 mb-6">Uploaded Files</h2>
+                <div className="space-y-3">
+                  {uploadedFiles.map((file, idx) => (
                   <div
                     key={idx}
                     className="border border-gray-300 p-4 hover:shadow-md transition-shadow"
                   >
                     <div className="flex items-start gap-4 flex-wrap">
                       <div className="flex-shrink-0">
-                        <div className="w-12 h-12 bg-gray-100 flex items-center justify-center">
+                        <div className="w-12 h-12 bg-gray-100 flex items-center justify-center overflow-hidden rounded">
                           {file.type.startsWith('image/') ? (
-                            <svg
-                              className="w-6 h-6 text-gray-400"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                              />
-                            </svg>
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img 
+                              src={file.url}
+                              alt={file.name}
+                              className="w-12 h-12 object-cover"
+                            />
                           ) : (
                             <svg
                               className="w-6 h-6 text-gray-400"
@@ -402,36 +436,71 @@ export default function FileUploadPage() {
                         >
                           View
                         </button>
+                        <button
+                          onClick={() => setDeletingFileId(file.id || '')}
+                          className="ml-2 px-3 py-1 bg-red-100 text-red-700 hover:bg-red-200 text-sm font-medium transition-colors"
+                          title="Delete file"
+                        >
+                          Delete
+                        </button>
                       </div>
                     </div>
                   </div>
                 ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Empty State */}
-          {uploadedFiles.length === 0 && !uploading && (
-            <div className="bg-white border border-gray-300 p-12 text-center">
-              <svg
-                className="mx-auto h-12 w-12 text-gray-400 mb-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                />
-              </svg>
-              <p className="text-gray-500">No files uploaded yet</p>
-              <p className="text-gray-400 text-sm mt-1">Upload your first file to get started</p>
-            </div>
-          )}
+            {uploadedFiles.length === 0 && !uploading && (
+              <div className="bg-white border border-gray-300 p-12 text-center">
+                <svg
+                  className="mx-auto h-12 w-12 text-gray-400 mb-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
+                </svg>
+                <p className="text-gray-500">No files uploaded yet</p>
+                <p className="text-gray-400 text-sm mt-1">Upload your first file to get started</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      {deletingFileId && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white border border-gray-300 rounded-lg max-w-sm w-full">
+            <div className="p-6">
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Delete File?</h3>
+              <p className="text-gray-600 mb-6">
+                This action cannot be undone. The file will be permanently deleted from both storage and your account.
+              </p>
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setDeletingFileId(null)}
+                  className="px-4 py-2 bg-gray-200 text-gray-900 hover:bg-gray-300 font-medium transition-colors rounded"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => deleteFile(deletingFileId)}
+                  className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 font-medium transition-colors rounded"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* File View Modal */}
       {showModal && viewingFile && (

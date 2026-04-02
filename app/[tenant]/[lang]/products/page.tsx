@@ -6,12 +6,17 @@ import Currency from '@/components/Currency';
 import PageTitle from '@/components/PageTitle';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
+import { normalizeImageUrl } from '@/lib/image-utils';
 
 const ProductModal = dynamic(() => import('@/components/ProductModal'), {
   loading: () => <div className="p-4 text-center text-gray-500">Loading...</div>,
 });
 const StockRefillModal = dynamic(() => import('@/components/StockRefillModal'), {
   loading: () => <div className="p-4 text-center text-gray-500">Loading...</div>,
+});
+const BarcodeModal = dynamic(() => import('@/components/BarcodeModal'), {
+  loading: () => null,
+  ssr: false,
 });
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '../dictionaries-client';
@@ -47,6 +52,7 @@ export default function ProductsPage() {
   const [isRefillModalOpen, setIsRefillModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [refillingProduct, setRefillingProduct] = useState<Product | null>(null);
+  const [barcodeProduct, setBarcodeProduct] = useState<Product | null>(null);
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [displayMode, setDisplayMode] = useState<'grid' | 'list'>('grid');
   const { confirm, Dialog: ConfirmDialog } = useConfirm();
@@ -344,9 +350,11 @@ export default function ProductsPage() {
                   {product.image ? (
                     <div className="relative w-full h-36">
                       <Image
-                        src={product.image}
+                        src={normalizeImageUrl(product.image)}
                         alt={product.name}
                         fill
+                        sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 16vw"
+                        loading="eager"
                         className="object-cover rounded-t-lg"
                         onError={(e) => {
                           const img = e.target as HTMLImageElement;
@@ -460,6 +468,16 @@ export default function ProductsPage() {
                         </button>
                       )}
                       <button
+                        onClick={() => setBarcodeProduct(product)}
+                        className="flex-1 py-2.5 bg-gray-700 text-white hover:bg-gray-800 active:bg-gray-900 transition-all duration-200 border border-gray-800 flex items-center justify-center touch-manipulation min-h-[44px]"
+                        title="View Barcode"
+                        aria-label="View Barcode"
+                      >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h1v12H4V6zm2 0h1v12H6V6zm3 0h2v12H9V6zm3 0h1v12h-1V6zm2 0h2v12h-2V6zm3 0h1v12h-1V6z" />
+                        </svg>
+                      </button>
+                      <button
                         onClick={() => handleEdit(product)}
                         style={{
                           backgroundColor: primaryColor,
@@ -505,6 +523,7 @@ export default function ProductsPage() {
                           src={product.image}
                           alt={product.name}
                           fill
+                          sizes="56px"
                           className="object-cover border border-gray-200"
                           onError={(e) => {
                             const img = e.target as HTMLImageElement;
@@ -616,6 +635,16 @@ export default function ProductsPage() {
                           </button>
                         )}
                         <button
+                          onClick={() => setBarcodeProduct(product)}
+                          className="px-3 py-2 bg-gray-700 text-white hover:bg-gray-800 active:bg-gray-900 transition-all duration-200 border border-gray-800 flex items-center justify-center touch-manipulation min-h-[44px] sm:min-h-0"
+                          title="View Barcode"
+                          aria-label="View Barcode"
+                        >
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h1v12H4V6zm2 0h1v12H6V6zm3 0h2v12H9V6zm3 0h1v12h-1V6zm2 0h2v12h-2V6zm3 0h1v12h-1V6z" />
+                          </svg>
+                        </button>
+                        <button
                           onClick={() => handleEdit(product)}
                           style={{
                             backgroundColor: primaryColor,
@@ -661,6 +690,14 @@ export default function ProductsPage() {
             onClose={handleCloseRefillModal}
             onSuccess={handleRefillSuccess}
             lang={lang}
+          />
+        )}
+
+        {barcodeProduct && (
+          <BarcodeModal
+            value={barcodeProduct.barcode || barcodeProduct.sku || barcodeProduct._id}
+            productName={barcodeProduct.name}
+            onClose={() => setBarcodeProduct(null)}
           />
         )}
       </div>

@@ -33,6 +33,33 @@ const nextConfig: NextConfig = {
   images: {
     formats: ['image/avif', 'image/webp'],
     minimumCacheTTL: 60 * 60 * 24, // 24 hours
+    remotePatterns: [
+      // Allow localhost (development) - handles both /uploads and //uploads
+      {
+        protocol: 'http',
+        hostname: 'localhost',
+        port: '3000',
+      },
+      // Allow Cloudinary (tenant file storage) - all subdomains
+      {
+        protocol: 'https',
+        hostname: 'res.cloudinary.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.cloudinary.com',
+      },
+      // Allow OpenAI DALL-E images
+      {
+        protocol: 'https',
+        hostname: '*.blob.core.windows.net',
+      },
+      // Allow external CDN/image hosts
+      {
+        protocol: 'https',
+        hostname: '*.example.com',
+      },
+    ],
   },
 
   async headers() {
@@ -55,7 +82,7 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline' https://vercel.live https://*.vercel.live https://*.live",
               "img-src 'self' data: blob: https:",
               "font-src 'self' data: https://vercel.live https://*.vercel.live https://*.live",
-              "connect-src 'self' https://api-m.paypal.com https://api-m.sandbox.paypal.com https://vercel.live https://*.vercel.live https://*.live wss://vercel.live wss://*.vercel.live wss://*.live",
+              "connect-src 'self' https://api-m.paypal.com https://api-m.sandbox.paypal.com https://vercel.live https://*.vercel.live https://*.live wss://vercel.live wss://*.vercel.live wss://*.live https://res.cloudinary.com https://api.cloudinary.com https://*.cloudinary.com",
               "frame-src https://vercel.live https://*.vercel.live https://*.live",
               "worker-src 'self'",
               "object-src 'none'",
@@ -80,8 +107,8 @@ const nextConfig: NextConfig = {
               "default-src 'self'",
               "script-src 'self'",
               process.env.NODE_ENV !== 'production'
-                ? "connect-src 'self' https://vercel.live https://*.vercel.live wss://vercel.live wss://*.vercel.live"
-                : "connect-src 'self'",
+                ? "connect-src 'self' https://vercel.live https://*.vercel.live wss://vercel.live wss://*.vercel.live https://res.cloudinary.com https://api.cloudinary.com https://*.cloudinary.com"
+                : "connect-src 'self' https://res.cloudinary.com https://api.cloudinary.com https://*.cloudinary.com",
             ].join('; '),
           },
         ],

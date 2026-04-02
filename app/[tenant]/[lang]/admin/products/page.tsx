@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import Navbar from '@/components/Navbar';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -285,6 +285,56 @@ function ProductModal({
   const categoryInputRef = useRef<HTMLInputElement>(null);
   const categoryListRef = useRef<HTMLDivElement>(null);
 
+  // Image picker state
+  const [showImagePicker, setShowImagePicker] = useState(false);
+  const [pickerFiles, setPickerFiles] = useState<{ id: string; name: string; url: string }[]>([]);
+  const [pickerLoading, setPickerLoading] = useState(false);
+  const [pickerUploading, setPickerUploading] = useState(false);
+  const [pickerSearch, setPickerSearch] = useState('');
+  const pickerFileInputRef = useRef<HTMLInputElement>(null);
+
+  const loadPickerFiles = useCallback(async () => {
+    setPickerLoading(true);
+    try {
+      const res = await fetch('/api/upload', { credentials: 'include' });
+      const data = await res.json();
+      if (data.success) {
+        setPickerFiles(data.data.filter((f: { type: string }) => f.type.startsWith('image/')));
+      }
+    } catch {
+      // silent
+    } finally {
+      setPickerLoading(false);
+    }
+  }, []);
+
+  const openImagePicker = () => {
+    setShowImagePicker(true);
+    setPickerSearch('');
+    loadPickerFiles();
+  };
+
+  const handlePickerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPickerUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch('/api/upload', { method: 'POST', credentials: 'include', body: fd });
+      const data = await res.json();
+      if (data.success) {
+        updateFormData({ image: data.data.url });
+        setShowImagePicker(false);
+      }
+    } catch {
+      // silent
+    } finally {
+      setPickerUploading(false);
+      if (pickerFileInputRef.current) pickerFileInputRef.current.value = '';
+    }
+  };
+
   // Initialize category search with current category name
   useEffect(() => {
     if (product?.categoryId) {
@@ -343,6 +393,7 @@ function ProductModal({
   };
 
   return (
+    <>
     <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white border border-gray-300 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
@@ -439,54 +490,51 @@ function ProductModal({
                   />
                 )}
                 <div className="flex-1 space-y-2">
-                  <label className="flex items-center gap-2 px-3 py-2 border border-gray-300 bg-gray-50 hover:bg-gray-100 cursor-pointer text-sm text-gray-700 transition-colors">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                    </svg>
-                    Upload image
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp,image/gif"
-                      className="hidden"
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        if (file.size > 2 * 1024 * 1024) {
-                          alert('File too large. Maximum size: 2MB');
-                          return;
-                        }
-                        try {
-                          const fd = new FormData();
-                          fd.append('file', file);
-                          const res = await fetch('/api/upload', {
-                            method: 'POST',
-                            credentials: 'include',
-                            body: fd,
-                          });
-                          const data = await res.json();
-                          if (data.success) {
-                            updateFormData({ image: data.data.url });
-                          } else {
-                            alert(data.error || 'Failed to upload image');
+                  <div className="flex gap-2">
+                    <label className="flex items-center gap-2 px-3 py-2 border border-gray-300 bg-gray-50 hover:bg-gray-100 cursor-pointer text-sm text-gray-700 transition-colors">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                      </svg>
+                      Upload
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          if (file.size > 10 * 1024 * 1024) {
+                            alert('File too large. Maximum size: 10MB');
+                            return;
                           }
-                        } catch {
-                          // Fallback to base64 if upload API unavailable
-                          const canvas = document.createElement('canvas');
-                          const ctx = canvas.getContext('2d')!;
-                          const img = new window.Image();
-                          img.onload = () => {
-                            const MAX = 400;
-                            const ratio = Math.min(MAX / img.width, MAX / img.height, 1);
-                            canvas.width = Math.round(img.width * ratio);
-                            canvas.height = Math.round(img.height * ratio);
-                            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                            updateFormData({ image: canvas.toDataURL('image/jpeg', 0.75) });
-                          };
-                          img.src = URL.createObjectURL(file);
-                        }
-                      }}
-                    />
-                  </label>
+                          try {
+                            const fd = new FormData();
+                            fd.append('file', file);
+                            const res = await fetch('/api/upload', {
+                              method: 'POST',
+                              credentials: 'include',
+                              body: fd,
+                            });
+                            const data = await res.json();
+                            if (data.success) {
+                              updateFormData({ image: data.data.url });
+                            } else {
+                              alert(data.error || 'Failed to upload image');
+                            }
+                          } catch {
+                            alert('Upload failed');
+                          }
+                        }}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={openImagePicker}
+                      className="px-3 py-2 border border-gray-300 bg-gray-50 hover:bg-gray-100 text-sm text-gray-700 transition-colors"
+                    >
+                      Browse
+                    </button>
+                  </div>
                   <input
                     type="url"
                     value={formData.image.startsWith('data:') ? '' : formData.image}
@@ -958,6 +1006,88 @@ function ProductModal({
         </div>
       </div>
     </div>
+
+      {/* Image Picker Modal */}
+      {showImagePicker && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+          <div className="bg-white border border-gray-200 shadow-xl w-full max-w-2xl flex flex-col max-h-[80vh]">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+              <h3 className="text-base font-semibold text-gray-900">Select Image</h3>
+              <button type="button" onClick={() => setShowImagePicker(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+            </div>
+            {/* Toolbar */}
+            <div className="flex items-center gap-3 px-5 py-3 border-b border-gray-100">
+              <input
+                type="text"
+                placeholder="Search images..."
+                value={pickerSearch}
+                onChange={e => setPickerSearch(e.target.value)}
+                className="flex-1 px-3 py-2 border border-gray-300 text-sm bg-white"
+              />
+              <label className={`px-4 py-2 text-sm font-medium text-white cursor-pointer bg-blue-600 hover:bg-blue-700 ${pickerUploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                {pickerUploading ? 'Uploading...' : 'Upload New'}
+                <input
+                  ref={pickerFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  disabled={pickerUploading}
+                  onChange={handlePickerUpload}
+                />
+              </label>
+            </div>
+            {/* Grid */}
+            <div className="flex-1 overflow-y-auto p-4">
+              {pickerLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin h-6 w-6 border-2 border-gray-400 border-t-transparent rounded-full" />
+                </div>
+              ) : pickerFiles.filter(f => f.name.toLowerCase().includes(pickerSearch.toLowerCase())).length === 0 ? (
+                <div className="text-center py-12 text-gray-400 text-sm">
+                  {pickerSearch ? 'No images match your search.' : 'No images uploaded yet. Upload one above.'}
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                  {pickerFiles
+                    .filter(f => f.name.toLowerCase().includes(pickerSearch.toLowerCase()))
+                    .map(file => (
+                      <button
+                        key={file.id}
+                        type="button"
+                        onClick={() => {
+                          updateFormData({ image: file.url });
+                          setShowImagePicker(false);
+                        }}
+                        className={`relative group aspect-square border-2 overflow-hidden bg-gray-50 ${
+                          formData.image === file.url ? 'border-blue-500' : 'border-gray-200 hover:border-gray-400'
+                        }`}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={file.url} alt={file.name} className="w-full h-full object-cover" />
+                        {formData.image === file.url && (
+                          <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                            <span className="text-white text-lg">✓</span>
+                          </div>
+                        )}
+                        <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs px-1 py-0.5 truncate opacity-0 group-hover:opacity-100 transition-opacity">
+                          {file.name}
+                        </div>
+                      </button>
+                    ))}
+                </div>
+              )}
+            </div>
+            {/* Footer */}
+            <div className="flex justify-end px-5 py-3 border-t border-gray-200">
+              <button type="button" onClick={() => setShowImagePicker(false)} className="px-4 py-2 border border-gray-300 text-gray-700 text-sm hover:bg-gray-50 bg-white">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

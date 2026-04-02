@@ -72,7 +72,11 @@
       "Bash(grep -n \"fetchTables\\\\|useCallback\\\\|showInactive\" app/[tenant]/[lang]/admin/tables/page.tsx)",
       "Bash(grep -n \"button\\\\|type\\\\|submit\\\\|Save\\\\|Add Table\" app/[tenant]/[lang]/admin/tables/page.tsx)",
       "Bash(grep -n \"primaryColor\" app/[tenant]/[lang]/admin/tables/page.tsx)",
-      "Bash(cat app/api/super-admin/subscriptions/[tenantSlug]/route.ts)"
+      "Bash(cat app/api/super-admin/subscriptions/[tenantSlug]/route.ts)",
+      "Bash(grep -n \"AI\\\\|ai\\\\|openai\\\\|Ai\\\\|generate\\\\|Generate\\\\|dalle\\\\|DALL\\\\|gpt\\\\|GPT\\\\|anthropic\\\\|claude\\\\|magic\\\\|Magic\" app/[tenant]/[lang]/products/page.tsx)",
+      "Bash(grep -n \"AI\\\\|ai\\\\|openai\\\\|generate\\\\|Generate\\\\|dalle\\\\|gpt\\\\|anthropic\\\\|magic\\\\|Magic\\\\|✨\\\\|🤖\\\\|ImageGenerat\\\\|AiImage\\\\|aiImage\" app/[tenant]/[lang]/products/page.tsx components/ProductModal.tsx)",
+      "Bash(node -e \"const d=require\\(''''fs''''\\).readFileSync\\(''''/dev/stdin'''',''''utf8''''\\);const j=JSON.parse\\(d\\);j[0]?.messages?.forEach\\(m=>console.log\\(m.ruleId, m.line, m.message\\)\\)\")",
+      "Bash(node -e \"process.stdin.resume\\(\\);let d='''''''';process.stdin.on\\(''''data'''',c=>d+=c\\);process.stdin.on\\(''''end'''',\\(\\)=>{const cfg=JSON.parse\\(d\\);const rules=cfg.rules||{};Object.entries\\(rules\\).filter\\(\\([k]\\)=>/effect|state/i.test\\(k\\)\\).forEach\\(\\([k,v]\\)=>console.log\\(k,JSON.stringify\\(v\\)\\)\\)}\\)\")"
     ]
   },
   "hooks": {

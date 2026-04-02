@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
+import { normalizeImageUrl } from '@/lib/image-utils';
 
 interface Tenant {
   slug: string;
@@ -73,7 +74,7 @@ function StoreCard({ tenant }: { tenant: Tenant }) {
         <div className="flex items-center gap-3 relative z-10">
           {logo ? (
             <Image
-              src={logo}
+              src={normalizeImageUrl(logo)}
               alt={displayName}
               width={48}
               height={48}
