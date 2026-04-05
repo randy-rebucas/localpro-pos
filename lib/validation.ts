@@ -187,6 +187,112 @@ export function validateCategory(data: Record<string, unknown>, t?: TranslationF
 /**
  * Sanitize string input
  */
+/**
+ * Validate credit data
+ */
+export function validateCredit(data: Record<string, unknown>, t?: TranslationFunction): ValidationError[] {
+  const errors: ValidationError[] = [];
+  const translate = (key: string, fallback: string) => t ? t(key, fallback) : fallback;
+
+  const amount = typeof data.amount === 'number' ? data.amount : null;
+  if (amount === null || amount === undefined) {
+    errors.push({ field: 'amount', message: translate('validation.amountRequired', 'Amount is required'), code: 'amountRequired' });
+  } else if (typeof amount !== 'number' || amount <= 0) {
+    errors.push({ field: 'amount', message: translate('validation.amountMustBePositive', 'Amount must be a positive number'), code: 'amountMustBePositive' });
+  }
+
+  const type = typeof data.type === 'string' ? data.type : 'top_up';
+  if (!['top_up', 'adjustment', 'refund'].includes(type)) {
+    errors.push({ field: 'type', message: translate('validation.invalidCreditType', 'Invalid credit type'), code: 'invalidCreditType' });
+  }
+
+  const reason = typeof data.reason === 'string' ? data.reason : '';
+  if (reason && reason.length > 500) {
+    errors.push({ field: 'reason', message: translate('validation.reasonMaxLength', 'Reason must be less than 500 characters'), code: 'reasonMaxLength' });
+  }
+
+  return errors;
+}
+
+/**
+ * Validate payment data
+ */
+export function validatePayment(data: Record<string, unknown>, t?: TranslationFunction): ValidationError[] {
+  const errors: ValidationError[] = [];
+  const translate = (key: string, fallback: string) => t ? t(key, fallback) : fallback;
+
+  const amount = typeof data.amount === 'number' ? data.amount : null;
+  if (amount === null || amount === undefined) {
+    errors.push({ field: 'amount', message: translate('validation.amountRequired', 'Amount is required'), code: 'amountRequired' });
+  } else if (typeof amount !== 'number' || amount <= 0) {
+    errors.push({ field: 'amount', message: translate('validation.amountMustBePositive', 'Amount must be a positive number'), code: 'amountMustBePositive' });
+  }
+
+  const paymentMethod = typeof data.paymentMethod === 'string' ? data.paymentMethod : 'cash';
+  if (!['cash', 'card', 'check', 'bank_transfer', 'digital_wallet'].includes(paymentMethod)) {
+    errors.push({ field: 'paymentMethod', message: translate('validation.invalidPaymentMethod', 'Invalid payment method'), code: 'invalidPaymentMethod' });
+  }
+
+  const reference = typeof data.reference === 'string' ? data.reference : '';
+  if (reference && reference.length > 200) {
+    errors.push({ field: 'reference', message: translate('validation.referenceMaxLength', 'Reference must be less than 200 characters'), code: 'referenceMaxLength' });
+  }
+
+  const notes = typeof data.notes === 'string' ? data.notes : '';
+  if (notes && notes.length > 500) {
+    errors.push({ field: 'notes', message: translate('validation.notesMaxLength', 'Notes must be less than 500 characters'), code: 'notesMaxLength' });
+  }
+
+  return errors;
+}
+
+/**
+ * Validate receivable data
+ */
+export function validateReceivable(data: Record<string, unknown>, t?: TranslationFunction): ValidationError[] {
+  const errors: ValidationError[] = [];
+  const translate = (key: string, fallback: string) => t ? t(key, fallback) : fallback;
+
+  const customerId = typeof data.customerId === 'string' ? data.customerId : '';
+  if (!customerId || customerId.trim().length === 0) {
+    errors.push({ field: 'customerId', message: translate('validation.customerIdRequired', 'Customer ID is required'), code: 'customerIdRequired' });
+  }
+
+  const transactionId = typeof data.transactionId === 'string' ? data.transactionId : '';
+  if (!transactionId || transactionId.trim().length === 0) {
+    errors.push({ field: 'transactionId', message: translate('validation.transactionIdRequired', 'Transaction ID is required'), code: 'transactionIdRequired' });
+  }
+
+  const originalAmount = typeof data.originalAmount === 'number' ? data.originalAmount : null;
+  if (originalAmount === null || originalAmount === undefined) {
+    errors.push({ field: 'originalAmount', message: translate('validation.amountRequired', 'Amount is required'), code: 'amountRequired' });
+  } else if (typeof originalAmount !== 'number' || originalAmount <= 0) {
+    errors.push({ field: 'originalAmount', message: translate('validation.amountMustBePositive', 'Amount must be a positive number'), code: 'amountMustBePositive' });
+  }
+
+  const dueDate = typeof data.dueDate === 'string' ? data.dueDate : '';
+  if (!dueDate) {
+    errors.push({ field: 'dueDate', message: translate('validation.dueDateRequired', 'Due date is required'), code: 'dueDateRequired' });
+  } else {
+    const date = new Date(dueDate);
+    if (isNaN(date.getTime())) {
+      errors.push({ field: 'dueDate', message: translate('validation.invalidDueDate', 'Invalid due date format'), code: 'invalidDueDate' });
+    }
+  }
+
+  const notes = typeof data.notes === 'string' ? data.notes : '';
+  if (notes && notes.length > 500) {
+    errors.push({ field: 'notes', message: translate('validation.notesMaxLength', 'Notes must be less than 500 characters'), code: 'notesMaxLength' });
+  }
+
+  const invoiceNumber = typeof data.invoiceNumber === 'string' ? data.invoiceNumber : '';
+  if (invoiceNumber && invoiceNumber.length > 100) {
+    errors.push({ field: 'invoiceNumber', message: translate('validation.invoiceNumberMaxLength', 'Invoice number must be less than 100 characters'), code: 'invoiceNumberMaxLength' });
+  }
+
+  return errors;
+}
+
 export function sanitizeString(input: string): string {
   return input
     .trim()

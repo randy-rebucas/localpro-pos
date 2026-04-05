@@ -2,78 +2,44 @@
 
 import { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 import Currency from '@/components/Currency';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getDefaultTenantSettings } from '@/lib/currency';
-
-interface Transaction {
-  _id: string;
-  receiptNumber?: string;
-  items: Array<{
-    product: string | { name: string };
-    name: string;
-    price: number;
-    quantity: number;
-    subtotal: number;
-  }>;
-  subtotal: number;
-  discountCode?: string;
-  discountAmount?: number;
-  total: number;
-  paymentMethod: 'cash' | 'card' | 'digital';
-  cashReceived?: number;
-  change?: number;
-  status: 'completed' | 'cancelled' | 'refunded';
-  userId?: string | { name: string; email: string };
-  notes?: string;
-  createdAt: string;
-}
+import { useTransactionsList, type Transaction } from '@/hooks/useTransactionsList';
+import {
+  getStatusColor,
+  formatStatusLabel,
+  formatTransactionDate,
+  getItemCountLabel,
+  formatPaymentMethod,
+  hasDiscount,
+  hasCashChange,
+  hasCashReceived,
+} from '@/lib/transactions-helpers';
 
 export default function TransactionsPage() {
   const params = useParams();
-  const router = useRouter(); // eslint-disable-line @typescript-eslint/no-unused-vars
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const { settings: tenantSettings } = useTenantSettings();
   const primaryColor = (tenantSettings || getDefaultTenantSettings()).primaryColor || '#2563eb';
 
+  const { transactions, loading, page, totalPages, message, fetchTransactions, goToPage } =
+    useTransactionsList();
+
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
-    fetchTransactions();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lang, tenant, page]);
+  }, [lang]);
 
-  const fetchTransactions = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/transactions?page=${page}&limit=50`, { credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
-        setTransactions(data.data || []);
-        setTotalPages(data.pagination?.pages || 1);
-        setMessage(null);
-      } else {
-        setMessage({ type: 'error', text: data.error || dict?.common?.failedToFetchTransactions || 'Failed to fetch transactions' });
-        setTransactions([]);
-      }
-    } catch (error) {
-      console.error('Error fetching transactions:', error);
-      setMessage({ type: 'error', text: dict?.common?.failedToFetchTransactions || 'Failed to fetch transactions' });
-      setTransactions([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    fetchTransactions(1, dict);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dict]);
 
   if (!dict || loading) {
     return (
@@ -151,19 +117,19 @@ export default function TransactionsPage() {
                       {transaction.receiptNumber || '-'}
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(transaction.createdAt).toLocaleString()}
+                      {formatTransactionDate(transaction.createdAt)}
                     </td>
                     <td className="px-4 py-4 text-sm text-gray-500">
-                      {transaction.items.length} {transaction.items.length === 1 ? (dict.transactions?.item || 'item') : (dict.transactions?.items || 'items')}
+                      {getItemCountLabel(transaction.items.length, dict)}
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                       <Currency amount={transaction.subtotal} />
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {transaction.discountAmount ? (
+                      {hasDiscount(transaction) ? (
                         <div>
                           <div className="text-xs text-gray-400">{transaction.discountCode}</div>
-                          <div className="text-red-600">-<Currency amount={transaction.discountAmount} /></div>
+                          <div className="text-red-600">-<Currency amount={transaction.discountAmount!} /></div>
                         </div>
                       ) : '-'}
                     </td>
@@ -179,22 +145,22 @@ export default function TransactionsPage() {
                           borderColor: primaryColor,
                         }}
                       >
-                        {transaction.paymentMethod}
+                        {formatPaymentMethod(transaction.paymentMethod)}
                       </span>
-                      {transaction.paymentMethod === 'cash' && transaction.change !== undefined && (
-                        <div className="text-xs text-gray-500 mt-1">{dict.transactions?.change || dict.admin?.change || 'Change'}: <Currency amount={transaction.change} /></div>
+                      {hasCashChange(transaction) && (
+                        <div className="text-xs text-gray-500 mt-1">
+                          {dict && typeof dict.transactions === 'object' && 'change' in dict.transactions
+                            ? String(dict.transactions.change)
+                            : dict && typeof dict.admin === 'object' && 'change' in dict.admin
+                            ? String(dict.admin.change)
+                            : 'Change'}
+                          : <Currency amount={transaction.change!} />
+                        </div>
                       )}
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs font-semibold border ${
-                        transaction.status === 'completed' ? 'bg-green-100 text-green-800' :
-                        transaction.status === 'refunded' ? 'bg-orange-100 text-orange-800' :
-                        'bg-red-100 text-red-800'
-                      }`}>
-                        {transaction.status === 'completed' ? (dict.transactions?.completed || dict.admin?.completed || 'completed') :
-                         transaction.status === 'cancelled' ? (dict.transactions?.cancelled || dict.admin?.cancelled || 'cancelled') :
-                         transaction.status === 'refunded' ? (dict.transactions?.refunded || 'refunded') :
-                         transaction.status}
+                      <span className={`px-2 py-1 text-xs font-semibold border ${getStatusColor(transaction.status)}`}>
+                        {formatStatusLabel(transaction.status, dict)}
                       </span>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
@@ -203,7 +169,9 @@ export default function TransactionsPage() {
                         style={{ color: primaryColor }}
                         className="hover:opacity-70 transition-opacity"
                       >
-                        {dict.common?.view || 'View'}
+                        {dict && typeof dict.common === 'object' && 'view' in dict.common
+                          ? String(dict.common.view)
+                          : 'View'}
                       </button>
                     </td>
                   </tr>
@@ -217,7 +185,7 @@ export default function TransactionsPage() {
           {totalPages > 1 && (
             <div className="mt-4 flex justify-center gap-2">
               <button
-                onClick={() => setPage(p => Math.max(1, p - 1))}
+                onClick={() => goToPage(page - 1, dict)}
                 disabled={page === 1}
                 className="px-4 py-2 border border-gray-300 disabled:opacity-50 bg-white"
               >
@@ -227,7 +195,7 @@ export default function TransactionsPage() {
                 {dict.transactions?.page || dict.admin?.page || 'Page'} {page} {dict.transactions?.of || dict.admin?.of || 'of'} {totalPages}
               </span>
               <button
-                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                onClick={() => goToPage(page + 1, dict)}
                 disabled={page === totalPages}
                 className="px-4 py-2 border border-gray-300 disabled:opacity-50 bg-white"
               >
@@ -286,26 +254,19 @@ function TransactionDetailModal({
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-500">{dict.transactions?.date || dict.admin?.date || 'Date'}</label>
-                <div className="text-lg">{new Date(transaction.createdAt).toLocaleString()}</div>
+                <div className="text-lg">{formatTransactionDate(transaction.createdAt)}</div>
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-500">{dict.admin?.status || 'Status'}</label>
                 <div>
-                  <span className={`px-2 py-1 text-xs font-semibold border ${
-                    transaction.status === 'completed' ? 'bg-green-100 text-green-800 border-green-300' :
-                    transaction.status === 'refunded' ? 'bg-orange-100 text-orange-800 border-orange-300' :
-                    'bg-red-100 text-red-800 border-red-300'
-                  }`}>
-                    {transaction.status === 'completed' ? (dict.transactions?.completed || dict.admin?.completed || 'completed') :
-                     transaction.status === 'cancelled' ? (dict.transactions?.cancelled || dict.admin?.cancelled || 'cancelled') :
-                     transaction.status === 'refunded' ? (dict.transactions?.refunded || 'refunded') :
-                     transaction.status}
+                  <span className={`px-2 py-1 text-xs font-semibold border ${getStatusColor(transaction.status)}`}>
+                    {formatStatusLabel(transaction.status, dict)}
                   </span>
                 </div>
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-500">{dict.transactions?.payment || 'Payment Method'}</label>
-                <div className="text-lg capitalize">{transaction.paymentMethod}</div>
+                <div className="text-lg capitalize">{formatPaymentMethod(transaction.paymentMethod)}</div>
               </div>
             </div>
             <div>
@@ -327,26 +288,26 @@ function TransactionDetailModal({
                 <span className="text-gray-600">{dict.admin?.subtotal || 'Subtotal'}:</span>
                 <span className="font-medium"><Currency amount={transaction.subtotal} /></span>
               </div>
-              {transaction.discountAmount && (
+              {hasDiscount(transaction) && (
                 <div className="flex justify-between text-red-600">
                   <span>Discount ({transaction.discountCode}):</span>
-                  <span>-<Currency amount={transaction.discountAmount} /></span>
+                  <span>-<Currency amount={transaction.discountAmount!} /></span>
                 </div>
               )}
               <div className="flex justify-between text-lg font-bold border-t pt-2">
                 <span>Total:</span>
                 <span><Currency amount={transaction.total} /></span>
               </div>
-              {transaction.paymentMethod === 'cash' && transaction.cashReceived && (
+              {hasCashReceived(transaction) && (
                 <div className="flex justify-between text-sm text-gray-500">
-                  <span>Cash Received:</span>
-                  <span><Currency amount={transaction.cashReceived} /></span>
+                  <span>{dict.transactions?.cashReceived || 'Cash Received'}:</span>
+                  <span><Currency amount={transaction.cashReceived!} /></span>
                 </div>
               )}
-              {transaction.paymentMethod === 'cash' && transaction.change !== undefined && (
+              {hasCashChange(transaction) && (
                 <div className="flex justify-between text-sm text-gray-500">
-                  <span>Change:</span>
-                  <span><Currency amount={transaction.change} /></span>
+                  <span>{dict.admin?.change || dict.transactions?.change || 'Change'}:</span>
+                  <span><Currency amount={transaction.change!} /></span>
                 </div>
               )}
             </div>

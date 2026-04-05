@@ -8,6 +8,7 @@ import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getBusinessTypeConfig } from '@/lib/business-types';
 import { getBusinessType } from '@/lib/business-type-helpers';
 import { normalizeImageUrl } from '@/lib/image-utils';
+import type { ITenantSettings } from '@/types/tenant';
 
 interface Product {
   _id?: string;
@@ -27,6 +28,11 @@ interface ProductModalProps {
   product: Product | null;
   onClose: () => void;
   lang?: 'en' | 'es';
+  categories?: string[];
+  dict?: Record<string, unknown> | null; // eslint-disable-line @typescript-eslint/no-explicit-any
+  businessTypeConfig?: unknown; // eslint-disable-line @typescript-eslint/no-explicit-any
+  settings?: unknown; // eslint-disable-line @typescript-eslint/no-explicit-any
+  onSave?: () => void;
 }
 
 const generateSKU = (name: string): string => {
@@ -42,23 +48,40 @@ const generateSKU = (name: string): string => {
   return `${prefix}-${suffix}`;
 };
 
-export default function ProductModal({ product, onClose, lang = 'en' }: ProductModalProps) {
+export default function ProductModal({
+  product,
+  onClose,
+  lang = 'en',
+  categories: initialCategories,
+  dict: initialDict,
+  businessTypeConfig: initialBusinessTypeConfig,
+  settings: initialSettings,
+  onSave,
+}: ProductModalProps) {
   const params = useParams();
   const tenant = (params?.tenant as string) || 'default';
-  const { settings } = useTenantSettings();
-  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [categories, setCategories] = useState<string[]>([]);
+  const { settings: contextSettings } = useTenantSettings();
+  const settings = (initialSettings as ITenantSettings) || contextSettings;
+  const [dict, setDict] = useState<any>(
+    (initialDict as any) || null
+  ); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const [categories, setCategories] = useState<string[]>(initialCategories || []);
   const [showCategorySuggestions, setShowCategorySuggestions] = useState(false);
   const [filteredCategories, setFilteredCategories] = useState<string[]>([]);
   const categoryInputRef = useRef<HTMLInputElement>(null);
   const categoryListRef = useRef<HTMLDivElement>(null);
-  const businessTypeConfig = settings ? getBusinessTypeConfig(getBusinessType(settings)) : null;
+  const businessTypeConfig = initialBusinessTypeConfig || (settings ? getBusinessTypeConfig(getBusinessType(settings)) : null);
 
   useEffect(() => {
-    getDictionaryClient(lang).then(setDict);
-  }, [lang]);
+    if (!initialDict) {
+      getDictionaryClient(lang).then(setDict);
+    }
+  }, [lang, initialDict]);
 
   useEffect(() => {
+    if (initialCategories && initialCategories.length > 0) {
+      return; // Skip fetching if categories provided as props
+    }
     // Fetch existing categories from products
     const fetchCategories = async () => {
       try {
@@ -80,7 +103,7 @@ export default function ProductModal({ product, onClose, lang = 'en' }: ProductM
       }
     };
     fetchCategories();
-  }, [tenant]);
+  }, [tenant, initialCategories]);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -501,12 +524,14 @@ export default function ProductModal({ product, onClose, lang = 'en' }: ProductM
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              {dict.products.sku} {businessTypeConfig?.requiredFields?.includes('sku') && <span className="text-red-500">*</span>}
+              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+              {dict.products.sku} {(businessTypeConfig as any)?.requiredFields?.includes('sku') && <span className="text-red-500">*</span>}
             </label>
             <div className="flex gap-2">
+              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
               <input
                 type="text"
-                required={businessTypeConfig?.requiredFields?.includes('sku')}
+                required={(businessTypeConfig as any)?.requiredFields?.includes('sku')}
                 value={formData.sku}
                 onChange={(e) => {
                   setFormData(prev => ({ ...prev, sku: e.target.value }));
@@ -703,7 +728,8 @@ export default function ProductModal({ product, onClose, lang = 'en' }: ProductM
           </div>
           
           {/* Inventory Settings - Only show if inventory is enabled for business type */}
-          {businessTypeConfig?.defaultFeatures?.enableInventory !== false && (
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+          {(businessTypeConfig as any)?.defaultFeatures?.enableInventory !== false && (
             <div className="border-t border-gray-200 pt-4 space-y-4">
               <h3 className="text-sm font-semibold text-gray-700 mb-3">
                 {dict?.products?.inventorySettings || 'Inventory Settings'}
