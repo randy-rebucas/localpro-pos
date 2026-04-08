@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import connectDB from './mongodb';
 import User from '@/models/User';
 import { isTokenRevoked, isTokenIssuedBeforeRevocation } from '@/lib/token-blacklist';
@@ -10,6 +11,8 @@ export interface JWTPayload {
   tenantId: string;
   email: string;
   role: string;
+  /** Present only for API key auth. Scoped permissions e.g. ['transactions:read', 'products:write'] */
+  apiKeyPermissions?: string[];
 }
 
 const JWT_SECRET: string = (() => {
@@ -46,7 +49,59 @@ export function verifyToken(token: string): JWTPayload | null {
 }
 
 /**
- * Get user from request (from JWT token or session)
+ * Authenticate via API key (Bearer sk_live_... header)
+ * Returns a synthetic user-like payload for API key requests
+ */
+async function authenticateApiKey(rawKey: string): Promise<JWTPayload | null> {
+  try {
+    const { default: ApiKey } = await import('@/models/ApiKey');
+    const keyHash = crypto.createHash('sha256').update(rawKey).digest('hex');
+    const apiKey = await ApiKey.findOne({ keyHash, isActive: true }).lean();
+    if (!apiKey) return null;
+    if (apiKey.expiresAt && new Date(apiKey.expiresAt) < new Date()) return null;
+
+    // Update lastUsedAt without awaiting to not block the request
+    ApiKey.findByIdAndUpdate(apiKey._id, { lastUsedAt: new Date() }).exec();
+
+    // Derive role from permissions: empty permissions = full owner access;
+    // any write/delete/admin permission = admin; read-only = viewer
+    let role = 'owner';
+    const perms: string[] = apiKey.permissions || [];
+    if (perms.length > 0) {
+      const hasWrite = perms.some(p => p.endsWith(':write') || p.endsWith(':delete') || p.endsWith(':admin') || p.endsWith(':*'));
+      role = hasWrite ? 'admin' : 'viewer';
+    }
+
+    return {
+      userId: apiKey.createdBy.toString(),
+      tenantId: apiKey.tenantId.toString(),
+      email: `apikey:${apiKey._id}`,
+      role,
+      apiKeyPermissions: perms.length > 0 ? perms : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Check if an API key user has a specific scoped permission.
+ * For non-API-key users (no apiKeyPermissions), this always returns true (role-based auth applies instead).
+ * Format: 'resource:action' e.g. 'transactions:read', 'products:write'
+ */
+export function hasApiKeyPermission(user: JWTPayload, permission: string): boolean {
+  if (!user.apiKeyPermissions) return true; // Not an API key, use role-based auth
+  return user.apiKeyPermissions.some(p => {
+    if (p === permission) return true;
+    // Wildcard: 'transactions:*' matches 'transactions:read'
+    const [pResource, pAction] = p.split(':');
+    const [rResource, rAction] = permission.split(':');
+    return pResource === rResource && (pAction === '*' || pAction === rAction);
+  });
+}
+
+/**
+ * Get user from request (from JWT token, session, or API key)
  */
 export async function getCurrentUser(request: NextRequest): Promise<{
   userId: string;
@@ -55,8 +110,16 @@ export async function getCurrentUser(request: NextRequest): Promise<{
   role: string;
 } | null> {
   try {
-    const token = request.cookies.get('auth-token')?.value || 
-                  request.headers.get('authorization')?.replace('Bearer ', '');
+    const authHeader = request.headers.get('authorization');
+    const rawToken = request.cookies.get('auth-token')?.value || authHeader?.replace('Bearer ', '');
+
+    // Detect API key (starts with sk_live_)
+    if (rawToken?.startsWith('sk_live_')) {
+      await connectDB();
+      return await authenticateApiKey(rawToken);
+    }
+
+    const token = rawToken;
 
     if (!token) {
       return null;

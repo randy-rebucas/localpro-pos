@@ -22,6 +22,7 @@ export interface ICustomer extends Document {
   totalSpent?: number; // Total amount spent (calculated)
   lastPurchaseDate?: Date;
   loyaltyPointsBalance?: number;
+  engagementScore?: number; // 0-100, calculated by engagement-score automation
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -94,6 +95,11 @@ const CustomerSchema: Schema = new Schema(
       default: 0,
       min: 0,
     },
+    engagementScore: {
+      type: Number,
+      min: 0,
+      max: 100,
+    },
     isActive: {
       type: Boolean,
       default: true,
@@ -109,6 +115,7 @@ CustomerSchema.index({ tenantId: 1, email: 1 }, { unique: true, sparse: true });
 CustomerSchema.index({ tenantId: 1, phone: 1 }, { sparse: true });
 CustomerSchema.index({ tenantId: 1, isActive: 1 });
 CustomerSchema.index({ tenantId: 1, tags: 1 });
+CustomerSchema.index({ tenantId: 1, engagementScore: 1 });
 
 // Virtual for full name
 CustomerSchema.virtual('fullName').get(function() {

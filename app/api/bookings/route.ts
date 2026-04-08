@@ -4,7 +4,9 @@ import Booking from '@/models/Booking';
 import User from '@/models/User';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireRole, getCurrentUser } from '@/lib/auth';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { createAuditLog, AuditActions } from '@/lib/audit';
+import { dispatchWebhook } from '@/lib/webhooks';
 import { sendBookingConfirmation } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -117,6 +119,13 @@ export async function POST(request: NextRequest) {
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
         { status: 404 }
       );
+    }
+
+    // Rate limit: 20 booking creations per minute per tenant+IP
+    const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
+    const { allowed } = checkRateLimit(`write:bookings:${tenantId}:${ip}`, 20, 60_000);
+    if (!allowed) {
+      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
     // Check if booking scheduling feature is enabled in subscription
@@ -273,6 +282,13 @@ export async function POST(request: NextRequest) {
     const bookingData = await Booking.findById(booking._id)
       .populate('staffId', 'name email')
       .lean();
+
+    if (bookingData) {
+      dispatchWebhook(tenantId, 'booking.created', {
+        bookingId: (bookingData as any)._id?.toString(), // eslint-disable-line @typescript-eslint/no-explicit-any
+        status: (bookingData as any).status, // eslint-disable-line @typescript-eslint/no-explicit-any
+      }).catch(() => {});
+    }
 
     return NextResponse.json(
       { success: true, data: bookingData },

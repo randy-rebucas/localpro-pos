@@ -76,7 +76,9 @@
       "Bash(grep -n \"AI\\\\|ai\\\\|openai\\\\|Ai\\\\|generate\\\\|Generate\\\\|dalle\\\\|DALL\\\\|gpt\\\\|GPT\\\\|anthropic\\\\|claude\\\\|magic\\\\|Magic\" app/[tenant]/[lang]/products/page.tsx)",
       "Bash(grep -n \"AI\\\\|ai\\\\|openai\\\\|generate\\\\|Generate\\\\|dalle\\\\|gpt\\\\|anthropic\\\\|magic\\\\|Magic\\\\|✨\\\\|🤖\\\\|ImageGenerat\\\\|AiImage\\\\|aiImage\" app/[tenant]/[lang]/products/page.tsx components/ProductModal.tsx)",
       "Bash(node -e \"const d=require\\(''''fs''''\\).readFileSync\\(''''/dev/stdin'''',''''utf8''''\\);const j=JSON.parse\\(d\\);j[0]?.messages?.forEach\\(m=>console.log\\(m.ruleId, m.line, m.message\\)\\)\")",
-      "Bash(node -e \"process.stdin.resume\\(\\);let d='''''''';process.stdin.on\\(''''data'''',c=>d+=c\\);process.stdin.on\\(''''end'''',\\(\\)=>{const cfg=JSON.parse\\(d\\);const rules=cfg.rules||{};Object.entries\\(rules\\).filter\\(\\([k]\\)=>/effect|state/i.test\\(k\\)\\).forEach\\(\\([k,v]\\)=>console.log\\(k,JSON.stringify\\(v\\)\\)\\)}\\)\")"
+      "Bash(node -e \"process.stdin.resume\\(\\);let d='''''''';process.stdin.on\\(''''data'''',c=>d+=c\\);process.stdin.on\\(''''end'''',\\(\\)=>{const cfg=JSON.parse\\(d\\);const rules=cfg.rules||{};Object.entries\\(rules\\).filter\\(\\([k]\\)=>/effect|state/i.test\\(k\\)\\).forEach\\(\\([k,v]\\)=>console.log\\(k,JSON.stringify\\(v\\)\\)\\)}\\)\")",
+      "Bash(node -e \"const o = require\\('otplib'\\); console.log\\(typeof o.TOTP, typeof o.generate, typeof o.verify, typeof o.generateSecret\\)\")",
+      "Bash(grep -rn \"const { tenantId, userId\" c:/Users/corew/localpro-pos/app/api/ --include=\"*.ts\")"
     ]
   },
   "hooks": {

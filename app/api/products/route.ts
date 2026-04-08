@@ -25,7 +25,8 @@ export async function GET(request: NextRequest) {
     }
     
     const searchParams = request.nextUrl.searchParams;
-    const search = searchParams.get('search') || '';
+    const rawSearch = searchParams.get('search') || '';
+    const search = typeof rawSearch === 'string' ? rawSearch.slice(0, 255) : '';
     const category = searchParams.get('category') || '';
     const categoryId = searchParams.get('categoryId') || '';
 

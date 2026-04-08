@@ -6,7 +6,7 @@ import { logger } from '@/lib/logger';
 import { uploadToCloudinary, deleteFromCloudinary } from '@/lib/cloudinary';
 import File from '@/models/File';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { createAuditLog } from '@/lib/audit';
+import { createAuditLog, AuditActions } from '@/lib/audit';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = [
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
     // Create audit log for file upload
     await createAuditLog(request, {
       tenantId,
-      action: 'upload_file',
+      action: AuditActions.FILE_UPLOAD,
       entityType: 'File',
       entityId: fileDoc._id.toString(),
       metadata: {
@@ -205,7 +205,7 @@ export async function DELETE(request: NextRequest) {
     // Create audit log for file deletion
     await createAuditLog(request, {
       tenantId,
-      action: 'delete_file',
+      action: AuditActions.FILE_DELETE,
       entityType: 'File',
       entityId: fileId,
       metadata: {

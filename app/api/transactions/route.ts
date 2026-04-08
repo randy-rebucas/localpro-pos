@@ -7,6 +7,7 @@ import Product from '@/models/Product';
 import Discount from '@/models/Discount';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { createAuditLog, AuditActions } from '@/lib/audit';
+import { dispatchWebhook } from '@/lib/webhooks';
 import { validateAndSanitize, validateTransaction } from '@/lib/validation';
 import { generateReceiptNumber } from '@/lib/receipt';
 import { updateStock, updateBundleStock, getProductStock } from '@/lib/stock';
@@ -840,6 +841,13 @@ export async function POST(request: NextRequest) {
         status: p.status,
       }));
     }
+
+    // Dispatch webhook (fire-and-forget)
+    dispatchWebhook(tenantId.toString(), 'transaction.created', {
+      transactionId: transaction._id.toString(),
+      receiptNumber: (transaction as any).receiptNumber, // eslint-disable-line @typescript-eslint/no-explicit-any
+      total: (transaction as any).total, // eslint-disable-line @typescript-eslint/no-explicit-any
+    }).catch(() => {});
 
     return NextResponse.json({ success: true, data: responseData }, { status: 201 });
   } catch (error: unknown) {

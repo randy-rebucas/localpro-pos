@@ -10,7 +10,7 @@ import Discount from '@/models/Discount';
 import Attendance from '@/models/Attendance';
 import CashDrawerSession from '@/models/CashDrawerSession';
 import Transaction from '@/models/Transaction';
-import { logger } from '@/lib/logger';
+import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(request: NextRequest) {
   try {
@@ -89,14 +89,7 @@ export async function GET(request: NextRequest) {
       data: stats,
       timestamp: now.toISOString(),
     });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    logger.error('Automation status error:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error.message,
-      },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, 'Failed to fetch automation status');
   }
 }

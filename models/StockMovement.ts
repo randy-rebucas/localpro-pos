@@ -16,6 +16,7 @@ export interface IStockMovement extends Document {
   reason?: string;
   transactionId?: mongoose.Types.ObjectId;
   userId?: mongoose.Types.ObjectId;
+  batchId?: mongoose.Types.ObjectId; // Optional reference to a ProductBatch
   notes?: string;
   createdAt: Date;
 }
@@ -72,6 +73,10 @@ const StockMovementSchema: Schema = new Schema(
     userId: {
       type: Schema.Types.ObjectId,
       ref: 'User',
+    },
+    batchId: {
+      type: Schema.Types.ObjectId,
+      ref: 'ProductBatch',
     },
     notes: {
       type: String,

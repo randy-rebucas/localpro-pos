@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Customer from '@/models/Customer';
-import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
+import { requireTenantAccess } from '@/lib/api-tenant';
 import { createAuditLog, AuditActions } from '@/lib/audit';
+import { dispatchWebhook } from '@/lib/webhooks';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
 import { checkFeatureAccess } from '@/lib/subscription';
@@ -12,10 +13,16 @@ import { handleApiError } from '@/lib/error-handler';
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
-    const tenantId = await getTenantIdFromRequest(request);
-    
-    if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found or access denied' }, { status: 403 });
+
+    // SECURITY: Require authentication for customer PII data
+    let tenantId: string;
+    try {
+      const tenantAccess = await requireTenantAccess(request);
+      tenantId = tenantAccess.tenantId;
+    } catch (authError: unknown) {
+      const msg = authError instanceof Error ? authError.message : 'Access denied';
+      const status = msg.includes('Unauthorized') ? 401 : 403;
+      return NextResponse.json({ success: false, error: msg }, { status });
     }
     
     const searchParams = request.nextUrl.searchParams;
@@ -109,10 +116,38 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    
+
+    if (firstName.trim().length > 100) {
+      return NextResponse.json(
+        { success: false, error: t('validation.firstNameTooLong', 'First name must be 100 characters or fewer') },
+        { status: 400 }
+      );
+    }
+
     if (!lastName || !lastName.trim()) {
       return NextResponse.json(
         { success: false, error: t('validation.lastNameRequired', 'Last name is required') },
+        { status: 400 }
+      );
+    }
+
+    if (lastName.trim().length > 100) {
+      return NextResponse.json(
+        { success: false, error: t('validation.lastNameTooLong', 'Last name must be 100 characters or fewer') },
+        { status: 400 }
+      );
+    }
+
+    if (email && email.length > 254) {
+      return NextResponse.json(
+        { success: false, error: t('validation.emailTooLong', 'Email must be 254 characters or fewer') },
+        { status: 400 }
+      );
+    }
+
+    if (phone && phone.length > 30) {
+      return NextResponse.json(
+        { success: false, error: t('validation.phoneTooLong', 'Phone number must be 30 characters or fewer') },
         { status: 400 }
       );
     }
@@ -166,6 +201,11 @@ export async function POST(request: NextRequest) {
       }
     }
     
+    dispatchWebhook(tenantId, 'customer.created', {
+      customerId: customer._id.toString(),
+      email: customer.email,
+    }).catch(() => {});
+
     return NextResponse.json({ success: true, data: customer }, { status: 201 });
   } catch (error) {
     return handleApiError(error, 'Failed to create customer');

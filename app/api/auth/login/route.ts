@@ -8,6 +8,7 @@ import bcrypt from 'bcryptjs';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
+import MFAConfig from '@/models/MFAConfig';
 
 export async function POST(request: NextRequest) {
   let t: (key: string, fallback: string) => string;
@@ -104,6 +105,20 @@ export async function POST(request: NextRequest) {
         { success: false, error: t('validation.invalidCredentials', 'Invalid credentials') },
         { status: 401 }
       );
+    }
+
+    // Check if MFA is enabled for this user
+    const mfaConfig = await MFAConfig.findOne({ userId: user._id, isEnabled: true });
+    if (mfaConfig) {
+      // Return a partial response requiring MFA verification
+      return NextResponse.json({
+        success: true,
+        data: {
+          mfaRequired: true,
+          userId: user._id.toString(),
+          message: 'MFA verification required',
+        },
+      });
     }
 
     // Update last login
