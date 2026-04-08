@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
-import { requireAuth } from '@/lib/auth';
+import { requireRole } from '@/lib/auth';
 import { updateStock } from '@/lib/stock';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
@@ -10,7 +10,7 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await connectDB();
-    const user = await requireAuth(request);
+    const user = await requireRole(request, ['manager', 'admin', 'owner']);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);

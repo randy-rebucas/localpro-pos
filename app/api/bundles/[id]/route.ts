@@ -3,7 +3,7 @@ import connectDB from '@/lib/mongodb';
 import ProductBundle from '@/models/ProductBundle';
 import '@/models/Category'; // register schema for populate
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
-import { requireAuth } from '@/lib/auth';
+import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
@@ -44,7 +44,7 @@ export async function PUT(
 ) {
   try {
     await connectDB();
-    await requireAuth(request);
+    await requireRole(request, ['manager', 'admin', 'owner']);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
 
@@ -100,7 +100,7 @@ export async function DELETE(
 ) {
   try {
     await connectDB();
-    await requireAuth(request);
+    await requireRole(request, ['manager', 'admin', 'owner']);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);

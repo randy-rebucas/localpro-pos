@@ -48,6 +48,13 @@ export async function POST(request: NextRequest) {
     // Verify current password
     const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
     if (!isCurrentPasswordValid) {
+      await createAuditLog(request, {
+        tenantId: currentUser.tenantId,
+        action: AuditActions.UPDATE,
+        entityType: 'user',
+        entityId: currentUser.userId,
+        changes: { passwordChangeFailed: 'incorrect_current_password' },
+      });
       return NextResponse.json(
         { success: false, error: t('validation.currentPasswordIncorrect', 'Current password is incorrect') },
         { status: 401 }

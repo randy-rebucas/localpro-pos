@@ -137,5 +137,6 @@ export const AuditActions = {
   INVOICE_MARK_PAID: 'invoice.mark_paid',
   FILE_UPLOAD: 'file.upload',
   FILE_DELETE: 'file.delete',
+  USER_ROLE_CHANGE: 'user.role_change',
 } as const;
 

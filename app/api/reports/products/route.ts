@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
-import { requireAuth } from '@/lib/auth';
+import { requireRole } from '@/lib/auth';
 import { getProductPerformance } from '@/lib/analytics';
 import Product from '@/models/Product'; // Ensure Product model is registered
 import Transaction from '@/models/Transaction'; // Ensure Transaction model is registered
@@ -13,7 +13,7 @@ import { logger } from '@/lib/logger';
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
-    await requireAuth(request);
+    await requireRole(request, ['manager', 'admin', 'owner']);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
 

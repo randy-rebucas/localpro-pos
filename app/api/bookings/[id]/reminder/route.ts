@@ -67,7 +67,7 @@ export async function POST(
     }, tenantSettings || undefined);
 
     // Update reminder sent status
-    await Booking.findByIdAndUpdate(id, { reminderSent: true });
+    await Booking.findOneAndUpdate({ _id: id, tenantId }, { reminderSent: true });
 
     return NextResponse.json({
       success: true,

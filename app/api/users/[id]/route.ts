@@ -141,7 +141,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     await createAuditLog(request, {
       tenantId,
-      action: AuditActions.UPDATE,
+      action: changes.role ? AuditActions.USER_ROLE_CHANGE : AuditActions.UPDATE,
       entityType: 'user',
       entityId: id,
       changes,

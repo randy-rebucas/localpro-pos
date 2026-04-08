@@ -23,7 +23,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ success: false, error: 'You can only confirm your own shifts' }, { status: 403 });
     }
 
-    await Shift.findByIdAndUpdate(id, { status: 'confirmed' });
+    await Shift.findOneAndUpdate({ _id: id, tenantId }, { status: 'confirmed' });
     return NextResponse.json({ success: true, data: { message: 'Shift confirmed' } });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return handleApiError(error, 'Failed to confirm shift');

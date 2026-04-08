@@ -25,18 +25,11 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const body = await request.json();
 
     // Find the address and verify ownership
-    const address = await Address.findById(addressId);
+    const address = await Address.findOne({ _id: addressId, userId: currentUser.userId });
     if (!address) {
       return NextResponse.json(
         { success: false, error: t('validation.addressNotFound', 'Address not found') },
         { status: 404 }
-      );
-    }
-
-    if (address.userId.toString() !== currentUser.userId) {
-      return NextResponse.json(
-        { success: false, error: t('validation.forbidden', 'You can only update your own addresses') },
-        { status: 403 }
       );
     }
 
@@ -68,8 +61,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const updatedAddress = await Address.findByIdAndUpdate(
-      addressId,
+    const updatedAddress = await Address.findOneAndUpdate(
+      { _id: addressId, userId: currentUser.userId },
       { $set: updates },
       { new: true }
     ).lean();

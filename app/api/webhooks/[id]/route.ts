@@ -31,7 +31,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
     if (body.isActive !== undefined) updates.isActive = Boolean(body.isActive);
 
-    const updated = await Webhook.findByIdAndUpdate(id, updates, { new: true }).select('-secret');
+    const updated = await Webhook.findOneAndUpdate({ _id: id, tenantId }, updates, { new: true }).select('-secret');
 
     await createAuditLog(request, {
       tenantId,

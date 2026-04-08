@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
 import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
-import { requireAuth } from '@/lib/auth'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import { hasRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateAndSanitize, validateProduct } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -47,6 +47,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     try {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
+      if (!hasRole(tenantAccess.user.role, ['manager', 'admin', 'owner'])) {
+        throw new Error('Forbidden: Insufficient permissions');
+      }
     } catch (authError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
         return NextResponse.json(
@@ -153,6 +156,9 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     try {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
+      if (!hasRole(tenantAccess.user.role, ['manager', 'admin', 'owner'])) {
+        throw new Error('Forbidden: Insufficient permissions');
+      }
     } catch (authError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
         return NextResponse.json(

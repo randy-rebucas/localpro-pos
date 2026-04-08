@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'You can only request swaps for your own shifts' }, { status: 403 });
     }
 
-    await Shift.findByIdAndUpdate(shiftId, {
+    await Shift.findOneAndUpdate({ _id: shiftId, tenantId }, {
       status: 'swap_requested',
       swapRequestedTo: targetStaffId,
     });

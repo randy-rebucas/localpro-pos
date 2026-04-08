@@ -186,8 +186,8 @@ export async function PUT(
     if (notes !== undefined) updateData.notes = notes;
     if (status !== undefined) updateData.status = status;
 
-    const updatedBooking = await Booking.findByIdAndUpdate(
-      id,
+    const updatedBooking = await Booking.findOneAndUpdate(
+      { _id: id, tenantId },
       { $set: updateData },
       { new: true }
     ).populate('staffId', 'name email');
@@ -208,7 +208,7 @@ export async function PUT(
             notes: updatedBooking!.notes,
             bookingId: id,
           }, tenantSettings || undefined);
-          await Booking.findByIdAndUpdate(id, { confirmationSent: true });
+          await Booking.findOneAndUpdate({ _id: id, tenantId }, { confirmationSent: true });
         } else if (status === 'cancelled') {
           await sendBookingCancellation({
             customerName: updatedBooking!.customerName,

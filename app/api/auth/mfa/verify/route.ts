@@ -5,6 +5,7 @@ import MFAConfig from '@/models/MFAConfig';
 import { verifyTOTP } from '@/lib/totp';
 import { handleApiError } from '@/lib/error-handler';
 import { createAuditLog, AuditActions } from '@/lib/audit';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
 /**
  * POST /api/auth/mfa/verify
@@ -27,6 +28,15 @@ export async function POST(request: NextRequest) {
     let isLoginChallenge = false;
 
     if (challengeUserId) {
+      // Rate-limit unauthenticated TOTP verification by IP + userId to prevent brute-force
+      const ip = getClientIp(request);
+      const rl = checkRateLimit(`mfa-verify:${ip}:${challengeUserId}`, 5, 15 * 60 * 1000);
+      if (!rl.allowed) {
+        return NextResponse.json(
+          { success: false, error: 'Too many verification attempts. Please try again later.' },
+          { status: 429 }
+        );
+      }
       userId = challengeUserId;
       isLoginChallenge = true;
     } else {

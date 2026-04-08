@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import ProductBundle from '@/models/ProductBundle';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
-import { requireAuth } from '@/lib/auth';
+import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { logger } from '@/lib/logger';
 
@@ -12,7 +12,7 @@ import { logger } from '@/lib/logger';
 export async function PUT(request: NextRequest) {
   try {
     await connectDB();
-    await requireAuth(request);
+    await requireRole(request, ['manager', 'admin', 'owner']);
     const tenantId = await getTenantIdFromRequest(request);
 
     if (!tenantId) {
