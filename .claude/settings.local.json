@@ -86,7 +86,8 @@
       "Bash(grep -E \"models/\\(.*\\\\.ts|index\\\\.ts\\)$\")",
       "Bash(grep -l \"Navbar\" c:/Users/corew/localpro-pos/app/\\\\[tenant\\\\]/\\\\[lang\\\\]/admin/*/page.tsx)",
       "Bash(grep -rL \"Navbar\" c:/Users/corew/localpro-pos/app/\\\\[tenant\\\\]/\\\\[lang\\\\]/admin/*/page.tsx)",
-      "Bash(python -)"
+      "Bash(python -)",
+      "Bash(grep -n \"^\\\\s*<\\\\/div>$\" \"c:/Users/corew/localpro-pos/app/[tenant]/[lang]/page.tsx\")"
     ]
   },
   "hooks": {

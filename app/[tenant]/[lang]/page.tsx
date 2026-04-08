@@ -935,7 +935,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="h-screen flex flex-col overflow-hidden">
       <OfflineIndicator />
       <BarcodeScanner onScan={handleBarcodeScan} enabled={true} />
       {showQRScanner && (
@@ -945,7 +945,6 @@ export default function Dashboard() {
           enabled={true}
         />
       )}
-      <Navbar />
       <div className="fixed bottom-4 right-4 z-40">
         <HardwareStatusChecker compact={true} autoRefresh={true} />
       </div>
@@ -1140,14 +1139,13 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="mx-auto px-4 sm:px-5 lg:px-6 py-6 sm:py-8">
-        {/* Mobile: Cart first (sticky at top), then products below */}
-        {/* Desktop: Products left, Cart right */}
-        <div className={`flex flex-col gap-4 sm:gap-6 ${roamingMode ? '' : 'lg:grid lg:grid-cols-3'}`}>
+      <div className="flex-1 min-h-0 overflow-hidden">
+        {/* Desktop: Products left 60%, Cart right 40% */}
+        <div className={`flex flex-col h-full ${roamingMode ? '' : 'lg:grid lg:grid-cols-[3fr_2fr]'}`}>
           {/* Cart Section - hidden in roaming mode (replaced by FAB + bottom sheet) */}
-          <div className={`lg:col-span-1 order-1 lg:order-2 ${roamingMode ? 'hidden' : ''}`}>
-            <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:sticky lg:top-20 flex flex-col h-full max-h-[calc(100vh-6rem)]">
-              <div className="flex justify-between items-center mb-4 pb-4 border-b border-gray-200">
+          <div className={`order-1 lg:order-2 lg:h-full lg:overflow-hidden lg:border-l lg:border-gray-200 ${roamingMode ? 'hidden' : ''}`}>
+            <div className="bg-white flex flex-col h-full overflow-hidden px-5 sm:px-6">
+              <div className="flex justify-between items-center h-16 flex-shrink-0 border-b border-gray-200">
                 <h2 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2">
                   <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} style={{ color: primaryColor }}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -1235,7 +1233,7 @@ export default function Dashboard() {
                   </div>
                 </div>
               ) : (
-                <>
+                <div className="flex flex-col flex-1 min-h-0">
                   <div className="flex-1 overflow-y-auto pr-2 -mr-2 space-y-3 mb-4">
                     {cart.map((item) => (
                       <div key={item.cartItemId} className="bg-gray-50 p-4 border border-gray-300 hover:border-gray-400 transition-colors">
@@ -1667,13 +1665,15 @@ export default function Dashboard() {
                       )}
                     </button>
                   </div>
-                </>
+                </div>
               )}
             </div>
           </div>
 
           {/* Products Section */}
-          <div className={`order-2 lg:order-1 ${roamingMode ? 'w-full' : 'lg:col-span-2'}`}>
+          <div className={`order-2 lg:order-1 flex flex-col lg:h-full lg:overflow-hidden ${roamingMode ? 'w-full' : ''}`}>
+            <Navbar />
+            <div className="flex-1 overflow-y-auto px-4 sm:px-5 lg:px-6 py-4 sm:py-6">
             <div className="mb-6 sm:mb-8">
               <div className="flex items-center justify-between mb-4 sm:mb-6 gap-4">
                 {/* Restaurant: order-type selector + table number */}
@@ -2075,6 +2075,7 @@ export default function Dashboard() {
                   })}
               </div>
             )}
+          </div>
           </div>
         </div>
       </div>
