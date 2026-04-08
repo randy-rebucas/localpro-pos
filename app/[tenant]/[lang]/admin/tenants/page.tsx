@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import Navbar from '@/components/Navbar';
+import React, { useEffect, useState } from 'react';
+import AdminNavBar from '@/components/AdminNavBar';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
@@ -34,7 +34,6 @@ export default function TenantsPage() {
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null); // eslint-disable-line @typescript-eslint/no-unused-vars
   const [showTenantModal, setShowTenantModal] = useState(false);
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
   const { settings: tenantSettings } = useTenantSettings();
@@ -65,7 +64,7 @@ export default function TenantsPage() {
 
   if (!dict || loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div
             className="inline-block animate-spin h-8 w-8"
@@ -83,119 +82,111 @@ export default function TenantsPage() {
     );
   }
 
+  const t = tenants[0] ?? null;
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        <div className="mb-6 sm:mb-8">
-          <Link
-            href={`/${tenant}/${lang}/admin`}
-            className="inline-flex items-center font-medium mb-4 transition-colors"
-            style={{ color: primaryColor }}
-            onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.8')}
-            onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            {dict?.admin?.backToAdmin || 'Back to Admin'}
-          </Link>
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
-                {dict.admin?.tenants || 'Tenants'}
-              </h1>
-              <p className="text-gray-600">{dict.admin?.tenantsSubtitle || 'View and manage your organization settings'}</p>
+    <div className="bg-gray-50">
+      <AdminNavBar />
+      <div className="px-6 py-5">
+
+        {/* Page header */}
+        <div className="flex items-center justify-between mb-5">
+          <h1 className="text-xl font-bold text-gray-900">{dict.admin?.tenants || 'Tenant Details'}</h1>
+          {t && (
+            <button
+              onClick={() => { setEditingTenant(t); setShowTenantModal(true); }}
+              className="px-4 py-2 text-sm text-white font-medium transition-opacity hover:opacity-80"
+              style={{ backgroundColor: primaryColor, border: `1px solid ${primaryColor}` }}
+            >
+              {dict.common?.edit || 'Edit'} {dict.admin?.settings || 'Settings'}
+            </button>
+          )}
+        </div>
+
+        {!t ? (
+          <div className="bg-white border border-gray-200 p-8 text-center text-gray-500 text-sm">
+            {dict.common?.noData || 'No tenant information available'}
+          </div>
+        ) : (
+          <div className="space-y-4">
+
+            {/* Identity card */}
+            <div className="bg-white border border-gray-200 p-5">
+              <div className="flex items-center gap-4">
+                <div
+                  className="w-12 h-12 flex items-center justify-center text-white text-lg font-bold flex-shrink-0"
+                  style={{ background: `linear-gradient(135deg, ${primaryColor}, ${primaryColor}cc)` }}
+                >
+                  {(t.settings.companyName || t.name).charAt(0).toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="text-base font-bold text-gray-900">{t.settings.companyName || t.name}</h2>
+                    <span className={`px-2 py-0.5 text-xs font-semibold border ${t.isActive ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                      {t.isActive ? (dict.admin?.active || 'Active') : (dict.admin?.inactive || 'Inactive')}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-400 mt-0.5 font-mono">{t.slug}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Detail sections */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+              {/* General */}
+              <div className="bg-white border border-gray-200 p-5">
+                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">General</h3>
+                <dl className="space-y-2.5">
+                  <DetailRow label={dict.admin?.name || 'Name'} value={t.name} />
+                  <DetailRow label={dict.admin?.slug || 'Slug'} value={<span className="font-mono text-xs">{t.slug}</span>} />
+                  {t.domain && <DetailRow label={dict.admin?.domain || 'Domain'} value={t.domain} />}
+                  {t.subdomain && <DetailRow label={dict.admin?.subdomain || 'Subdomain'} value={t.subdomain} />}
+                  <DetailRow
+                    label={dict.admin?.created || 'Created'}
+                    value={new Date(t.createdAt).toLocaleDateString()}
+                  />
+                </dl>
+              </div>
+
+              {/* Settings */}
+              <div className="bg-white border border-gray-200 p-5">
+                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Settings</h3>
+                <dl className="space-y-2.5">
+                  <DetailRow
+                    label={dict.admin?.businessType || 'Business Type'}
+                    value={
+                      t.settings.businessType ? (
+                        <span
+                          className="px-2 py-0.5 text-xs font-medium border"
+                          style={{ backgroundColor: `${primaryColor}15`, color: primaryColor, borderColor: `${primaryColor}40` }}
+                        >
+                          {t.settings.businessType}
+                        </span>
+                      ) : <span className="text-gray-400 italic text-xs">Not set</span>
+                    }
+                  />
+                  <DetailRow label={dict.admin?.currency || 'Currency'} value={t.settings.currency} />
+                  <DetailRow
+                    label={dict.admin?.language || 'Language'}
+                    value={t.settings.language === 'en' ? 'English' : 'Español'}
+                  />
+                </dl>
+              </div>
+
+              {/* Contact */}
+              <div className="bg-white border border-gray-200 p-5">
+                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Contact</h3>
+                <dl className="space-y-2.5">
+                  <DetailRow label={dict.admin?.companyName || 'Company Name'} value={t.settings.companyName || <span className="text-gray-400 italic text-xs">Not set</span>} />
+                  <DetailRow label={dict.admin?.email || 'Email'} value={t.settings.email || <span className="text-gray-400 italic text-xs">Not set</span>} />
+                  <DetailRow label={dict.admin?.phone || 'Phone'} value={t.settings.phone || <span className="text-gray-400 italic text-xs">Not set</span>} />
+                </dl>
+              </div>
+
             </div>
           </div>
-        </div>
-
-        {message && (
-          <div className={`mb-6 p-4 border ${message.type === 'success' ? 'bg-green-50 text-green-800 border-green-300' : 'bg-red-50 text-red-800 border-red-300'}`}>
-            {message.text}
-          </div>
         )}
-
-        <div className="bg-white border border-gray-300 p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold text-gray-900">{dict.admin?.tenantInfo || 'Tenant Information'}</h2>
-            {tenants.length > 0 && (
-              <button
-                onClick={() => {
-                  setEditingTenant(tenants[0]);
-                  setShowTenantModal(true);
-                }}
-                className="px-4 py-2 text-white font-medium transition-opacity hover:opacity-80"
-                style={{
-                  backgroundColor: primaryColor,
-                  borderColor: primaryColor,
-                  border: `1px solid ${primaryColor}`,
-                }}
-              >
-                {dict.common?.edit || 'Edit'} {dict.admin?.settings || 'Settings'}
-              </button>
-            )}
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.name || 'Name'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.slug || 'Slug'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.businessType || 'Business Type'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.currency || 'Currency'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.status || 'Status'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.actions || 'Actions'}</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {tenants.map((tenantItem) => (
-                  <tr key={tenantItem._id}>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{tenantItem.name}</td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{tenantItem.slug}</td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {tenantItem.settings.businessType ? (
-                        <span
-                          className="px-2 py-1 text-xs font-medium border"
-                          style={{
-                            backgroundColor: `${primaryColor}20`,
-                            color: primaryColor,
-                            borderColor: primaryColor,
-                          }}
-                        >
-                          {tenantItem.settings.businessType}
-                        </span>
-                      ) : (
-                        <span className="text-gray-400 italic">Not set</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{tenantItem.settings.currency}</td>
-                    <td className="px-4 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs font-semibold border ${tenantItem.isActive ? 'bg-green-100 text-green-800 border-green-300' : 'bg-red-100 text-red-800 border-red-300'}`}>
-                        {tenantItem.isActive ? (dict.admin?.active || 'Active') : (dict.admin?.inactive || 'Inactive')}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                      <button
-                        onClick={() => {
-                          setEditingTenant(tenantItem);
-                          setShowTenantModal(true);
-                        }}
-                        style={{ color: primaryColor }}
-                        className="hover:opacity-70 transition-opacity"
-                      >
-                        {dict.common?.edit || 'Edit'}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {tenants.length === 0 && (
-              <div className="text-center py-8 text-gray-500">{dict.common?.noData || 'No tenant information available'}</div>
-            )}
-          </div>
-        </div>
 
         {showTenantModal && (
           <TenantModal
@@ -214,6 +205,15 @@ export default function TenantsPage() {
           />
         )}
       </div>
+    </div>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <dt className="text-xs text-gray-400 shrink-0">{label}</dt>
+      <dd className="text-xs text-gray-800 font-medium text-right">{value}</dd>
     </div>
   );
 }
@@ -318,7 +318,7 @@ function TenantModal({
     <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white border border-gray-300 max-w-md w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">
+          <h2 className="text-xl font-bold text-gray-900 mb-4">
             {tenant ? (dict.admin?.editTenant || 'Edit Tenant') : (dict.admin?.addTenant || 'Add Tenant')}
           </h2>
           <form onSubmit={handleSubmit} className="space-y-4">

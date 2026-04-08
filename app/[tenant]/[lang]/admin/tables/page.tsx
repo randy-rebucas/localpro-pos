@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import toast from 'react-hot-toast';
-import Navbar from '@/components/Navbar';
+import AdminNavBar from '@/components/AdminNavBar';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 
 interface TableRow {
@@ -154,8 +154,8 @@ export default function TablesPage() {
 
   return (
     <div>
-      <Navbar />
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      <AdminNavBar />
+      <div className="px-6 py-5">
         {/* Header */}
         <div className="mb-8 flex flex-wrap gap-3 justify-between items-center">
           <div>
@@ -210,11 +210,11 @@ export default function TablesPage() {
                   <div className="flex justify-between items-start mb-2">
                     <h3 className="text-lg font-bold text-gray-900">{table.name}</h3>
                     {table.isActive ? (
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusCfg.cls}`}>
+                      <span className={`px-2 py-0.5 text-xs font-medium ${statusCfg.cls}`}>
                         {statusCfg.label}
                       </span>
                     ) : (
-                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
+                      <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-500">
                         Inactive
                       </span>
                     )}
@@ -290,7 +290,7 @@ export default function TablesPage() {
         {!loading && activeTables.length > 0 && (
           <div className="flex flex-wrap gap-3 mt-4 text-xs text-gray-500">
             {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
-              <span key={key} className={`px-2 py-0.5 rounded-full font-medium ${cfg.cls}`}>{cfg.label}</span>
+              <span key={key} className={`px-2 py-0.5 font-medium ${cfg.cls}`}>{cfg.label}</span>
             ))}
             <span className="ml-auto">&ldquo;Reset to Open&rdquo; clears stuck occupied status</span>
           </div>

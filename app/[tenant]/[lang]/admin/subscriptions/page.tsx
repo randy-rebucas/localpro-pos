@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Navbar from '@/components/Navbar';
+import AdminNavBar from '@/components/AdminNavBar';
 import { useParams, useRouter } from 'next/navigation';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { useSubscription } from '@/contexts/SubscriptionContext';
@@ -40,10 +40,10 @@ export default function SubscriptionsPage() {
 
   if (!dict) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div
-            className="inline-block animate-spin h-8 w-8 rounded-full"
+            className="inline-block animate-spin h-8 w-8"
             style={{ borderTop: `2px solid ${primaryColor}`, borderRight: `2px solid ${primaryColor}`, borderBottom: '2px solid transparent', borderLeft: `2px solid ${primaryColor}` }}
           />
           <p className="mt-4 text-gray-600">Loading...</p>
@@ -55,19 +55,10 @@ export default function SubscriptionsPage() {
   return (
     <div>
       {ConfirmDialog}
-      <Navbar />
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        <div className="mb-6 sm:mb-8">
-          <Link
-            href={`/${tenant}/${lang}/admin`}
-            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium mb-4 transition-colors"
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            {dict?.admin?.backToAdmin || 'Back to Admin'}
-          </Link>
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
+      <AdminNavBar />
+      <div className="px-6 py-5">
+        <div className="mb-5">
+          <h1 className="text-xl font-bold text-gray-900 mb-1">
             {dict.admin?.subscriptions || 'My Subscription'}
           </h1>
           <p className="text-gray-600">{dict.admin?.subscriptionDescription || 'Manage your subscription, billing, and plans'}</p>
@@ -104,7 +95,7 @@ export default function SubscriptionsPage() {
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div
-              className="inline-block animate-spin h-8 w-8 rounded-full"
+              className="inline-block animate-spin h-8 w-8"
               style={{ borderTop: `2px solid ${primaryColor}`, borderRight: `2px solid ${primaryColor}`, borderBottom: '2px solid transparent', borderLeft: `2px solid ${primaryColor}` }}
             />
           </div>
@@ -132,7 +123,7 @@ export default function SubscriptionsPage() {
                     </div>
                   </div>
                   {subscription && (
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    <span className={`inline-flex items-center px-2.5 py-0.5 text-xs font-medium ${
                       getSubscriptionStatusBadgeStyles(subscription.status)
                     }`}>
                       {getSubscriptionStatusLabel(subscription.status, dict)}
@@ -144,7 +135,7 @@ export default function SubscriptionsPage() {
                   <div className="space-y-6">
                     {/* Usage Limits */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div className="bg-gray-50 rounded p-4 text-center">
+                      <div className="bg-gray-50 p-4 text-center">
                         <div className="text-2xl font-bold mb-1" style={{ color: primaryColor }}>
                           {subscription.usage.currentUsers}
                         </div>
@@ -152,7 +143,7 @@ export default function SubscriptionsPage() {
                           {dict?.admin?.users || 'Users'} / {subscription.planId?.features.maxUsers === -1 ? '∞' : subscription.planId?.features.maxUsers}
                         </div>
                       </div>
-                      <div className="bg-gray-50 rounded p-4 text-center">
+                      <div className="bg-gray-50 p-4 text-center">
                         <div className="text-2xl font-bold text-green-600 mb-1">
                           {subscription.usage.currentBranches}
                         </div>
@@ -160,7 +151,7 @@ export default function SubscriptionsPage() {
                           {dict?.admin?.branches || 'Branches'} / {subscription.planId?.features.maxBranches === -1 ? '∞' : subscription.planId?.features.maxBranches}
                         </div>
                       </div>
-                      <div className="bg-gray-50 rounded p-4 text-center">
+                      <div className="bg-gray-50 p-4 text-center">
                         <div className="text-2xl font-bold text-orange-600 mb-1">
                           {subscription.usage.currentProducts}
                         </div>
@@ -168,7 +159,7 @@ export default function SubscriptionsPage() {
                           {dict?.admin?.products || 'Products'} / {subscription.planId?.features.maxProducts === -1 ? '∞' : subscription.planId?.features.maxProducts}
                         </div>
                       </div>
-                      <div className="bg-gray-50 rounded p-4 text-center">
+                      <div className="bg-gray-50 p-4 text-center">
                         <div className="text-2xl font-bold text-purple-600 mb-1">
                           {subscription.usage.currentTransactions}
                         </div>
@@ -300,7 +291,7 @@ export default function SubscriptionsPage() {
                             )}
                           </div>
                         </div>
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        <span className={`inline-flex items-center px-2.5 py-0.5 text-xs font-medium ${
                           transaction.status === 'paid' ? 'bg-green-100 text-green-800' :
                           transaction.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
                           transaction.status === 'failed' ? 'bg-red-100 text-red-800' :

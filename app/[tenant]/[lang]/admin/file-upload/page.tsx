@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import Navbar from '@/components/Navbar';
+import AdminNavBar from '@/components/AdminNavBar';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
@@ -219,7 +219,7 @@ export default function FileUploadPage() {
 
   if (!dict || loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div
             className="inline-block animate-spin h-8 w-8 border-b-2"
@@ -232,20 +232,11 @@ export default function FileUploadPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        <div className="mb-6 sm:mb-8">
-          <Link
-            href={`/${tenant}/${lang}/admin`}
-            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium mb-4 transition-colors"
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            {(dict as Record<string, any>)?.admin?.backToAdmin || 'Back to Admin'}
-          </Link>
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
+    <div className="bg-gray-50">
+      <AdminNavBar />
+      <div className="px-6 py-5">
+        <div className="mb-5">
+          <h1 className="text-xl font-bold text-gray-900 mb-1">
             File Upload
           </h1>
           <p className="text-gray-600">
@@ -257,7 +248,7 @@ export default function FileUploadPage() {
           {/* Right Column (lg:col-span-1) - Upload Section & File Types */}
           <div className="lg:col-span-1 order-2 lg:order-1">
             {/* Upload Section */}
-            <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8 mb-6">
+            <div className="bg-white border border-gray-200 p-5 mb-6">
               <h2 className="text-xl font-bold text-gray-900 mb-6">Upload File</h2>
               
               {/* Drag & Drop Area */}
@@ -266,7 +257,7 @@ export default function FileUploadPage() {
                 onDragLeave={handleDrag}
                 onDragOver={handleDrag}
                 onDrop={handleDrop}
-                className={`w-full border-2 border-dashed rounded p-8 text-center cursor-pointer transition-colors ${
+                className={`w-full border-2 border-dashed p-8 text-center cursor-pointer transition-colors ${
                   dragActive
                     ? 'border-blue-500 bg-blue-50'
                     : 'border-gray-300 bg-gray-50 hover:border-gray-400'
@@ -335,7 +326,7 @@ export default function FileUploadPage() {
             </div>
 
             {/* File Type Info */}
-            <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8 mt-6">
+            <div className="bg-white border border-gray-200 p-5 mt-6">
               <h2 className="text-xl font-bold text-gray-900 mb-4">Allowed File Types</h2>
               <div className="grid grid-cols-1 gap-4">
                 <div className="p-4 border border-gray-300">
@@ -369,7 +360,7 @@ export default function FileUploadPage() {
           {/* Left Column (lg:col-span-2) - Uploaded Files List */}
           <div className="lg:col-span-2 order-1 lg:order-2">
             {uploadedFiles.length > 0 && (
-              <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8">
+              <div className="bg-white border border-gray-200 p-5">
                 <h2 className="text-xl font-bold text-gray-900 mb-6">Uploaded Files</h2>
                 <div className="space-y-3">
                   {uploadedFiles.map((file, idx) => (
@@ -379,7 +370,7 @@ export default function FileUploadPage() {
                   >
                     <div className="flex items-start gap-4 flex-wrap">
                       <div className="flex-shrink-0">
-                        <div className="w-12 h-12 bg-gray-100 flex items-center justify-center overflow-hidden rounded">
+                        <div className="w-12 h-12 bg-gray-100 flex items-center justify-center overflow-hidden">
                           {file.type.startsWith('image/') ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img 
@@ -477,7 +468,7 @@ export default function FileUploadPage() {
       {/* Delete Confirmation Dialog */}
       {deletingFileId && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white border border-gray-300 rounded-lg max-w-sm w-full">
+          <div className="bg-white border border-gray-300 max-w-sm w-full">
             <div className="p-6">
               <h3 className="text-lg font-bold text-gray-900 mb-2">Delete File?</h3>
               <p className="text-gray-600 mb-6">
@@ -486,13 +477,13 @@ export default function FileUploadPage() {
               <div className="flex gap-3 justify-end">
                 <button
                   onClick={() => setDeletingFileId(null)}
-                  className="px-4 py-2 bg-gray-200 text-gray-900 hover:bg-gray-300 font-medium transition-colors rounded"
+                  className="px-4 py-2 bg-gray-200 text-gray-900 hover:bg-gray-300 font-medium transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={() => deleteFile(deletingFileId)}
-                  className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 font-medium transition-colors rounded"
+                  className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 font-medium transition-colors"
                 >
                   Delete
                 </button>

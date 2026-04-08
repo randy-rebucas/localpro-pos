@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import Navbar from '@/components/Navbar';
+import AdminNavBar from '@/components/AdminNavBar';
 import KPICards from '@/components/dashboard/KPICards';
 import SalesTrendChart from '@/components/dashboard/SalesTrendChart';
 import TopProductsTable from '@/components/dashboard/TopProductsTable';
@@ -40,12 +40,12 @@ export default function DashboardPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <main className="max-w-7xl mx-auto px-4 py-6">
-        <div className="flex items-center justify-between mb-6">
+    <div className="bg-gray-50">
+      <AdminNavBar />
+      <div className="px-6 py-5">
+        <div className="flex items-center justify-between mb-5">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+            <h1 className="text-xl font-bold text-gray-900">Dashboard</h1>
             {data?.generatedAt && (
               <p className="text-xs text-gray-400 mt-0.5">
                 Updated {new Date(data.generatedAt).toLocaleTimeString()}
@@ -54,14 +54,14 @@ export default function DashboardPage() {
           </div>
           <button
             onClick={() => { setLoading(true); setError(''); fetch('/api/dashboard/summary').then(r => r.json()).then(res => { if (res.success) setData(res.data); }).finally(() => setLoading(false)); }}
-            className="px-3 py-1.5 text-sm text-blue-600 border border-blue-200 rounded hover:bg-blue-50"
+            className="px-3 py-1.5 text-sm text-blue-600 border border-blue-200 hover:bg-blue-50"
           >
             Refresh
           </button>
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm">
             {error}
           </div>
         )}
@@ -81,7 +81,7 @@ export default function DashboardPage() {
 
             {/* Alert strip */}
             {(data.alerts.lowStock > 0 || data.alerts.pendingBookings > 0) && (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 flex flex-wrap gap-4 text-sm">
+              <div className="bg-yellow-50 border border-yellow-200 p-3 flex flex-wrap gap-4 text-sm">
                 {data.alerts.lowStock > 0 && (
                   <a href={`/${tenant}/${lang}/admin/stock-movements`} className="text-yellow-800 hover:underline">
                     ⚠ {data.alerts.lowStock} products below reorder threshold
@@ -96,7 +96,7 @@ export default function DashboardPage() {
             )}
           </div>
         ) : null}
-      </main>
+      </div>
     </div>
   );
 }

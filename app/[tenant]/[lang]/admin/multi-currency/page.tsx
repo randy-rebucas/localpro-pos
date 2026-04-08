@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Navbar from '@/components/Navbar';
+import AdminNavBar from '@/components/AdminNavBar';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
@@ -59,7 +59,7 @@ export default function MultiCurrencyPage() {
 
   if (!dict || loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
@@ -77,20 +77,11 @@ export default function MultiCurrencyPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+    <div className="bg-gray-50">
+      <AdminNavBar />
+      <div className="px-6 py-5">
         <div className="mb-6">
-          <Link
-            href={`/${tenant}/${lang}/admin`}
-            className="text-blue-600 hover:text-blue-700 font-medium mb-4 inline-flex items-center"
-          >
-            <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            {dict?.common?.back || 'Back'} to Admin
-          </Link>
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
+          <h1 className="text-xl font-bold text-gray-900 mb-1">
             {dict?.admin?.multiCurrency || 'Multi-Currency Management'}
           </h1>
           <p className="text-gray-600">
@@ -110,7 +101,7 @@ export default function MultiCurrencyPage() {
           </div>
         )}
 
-        <div className="bg-white border border-gray-300 p-6 space-y-6">
+        <div className="bg-white border border-gray-200 p-5 space-y-6">
           <div>
             <h2 className="text-xl font-bold text-gray-900 mb-4">
               {dict?.admin?.exchangeRateSource || 'Exchange Rate Source'}
@@ -185,7 +176,7 @@ export default function MultiCurrencyPage() {
                       ? (ratesRaw as Map<string, number>).get(currency)
                       : (ratesRaw as Record<string, number> | undefined)?.[currency];
                   return (
-                    <div key={currency} className="flex items-center justify-between p-3 bg-gray-50 rounded border border-gray-200">
+                    <div key={currency} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200">
                       <span className="text-sm font-medium text-gray-900">{currency}</span>
                       <input
                         type="number"
@@ -202,7 +193,7 @@ export default function MultiCurrencyPage() {
                           const newRates = { ...existing, [currency]: isNaN(parsed) ? 0 : parsed };
                           updateSetting('multiCurrency.exchangeRates', newRates);
                         }}
-                        className="w-32 px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-32 px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         placeholder={dict?.admin?.ratePlaceholder || 'Rate'}
                       />
                     </div>
@@ -213,7 +204,7 @@ export default function MultiCurrencyPage() {
           )}
 
           {(!multiCurrency.displayCurrencies || multiCurrency.displayCurrencies.length === 0) && (
-            <div className="p-4 bg-yellow-50 border border-yellow-300 rounded">
+            <div className="p-4 bg-yellow-50 border border-yellow-300">
               <p className="text-sm text-yellow-800">
                 {dict?.admin?.noDisplayCurrencies || 'No display currencies configured. Please configure display currencies in Settings → Multi-Currency.'}
               </p>

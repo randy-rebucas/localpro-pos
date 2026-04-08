@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Navbar from '@/components/Navbar';
+import AdminNavBar from '@/components/AdminNavBar';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -19,7 +19,7 @@ function LockOverlay({ plan }: { plan?: string }) {
   const { tenant, lang } = useParams() as { tenant: string; lang: string };
   const label = plan || 'Pro';
   return (
-    <div className="absolute inset-0 bg-gray-50 bg-opacity-90 flex items-center justify-center z-10 rounded">
+    <div className="absolute inset-0 bg-gray-50 bg-opacity-90 flex items-center justify-center z-10">
       <div className="text-center px-4">
         <svg className="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -83,7 +83,7 @@ export default function BirCompliancePage() {
 
   if (!dict || featuresLoading || settingsLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
           <p className="mt-4 text-gray-600">Loading...</p>
@@ -93,21 +93,12 @@ export default function BirCompliancePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+    <div className="bg-gray-50">
+      <AdminNavBar />
+      <div className="px-6 py-5">
         {/* Header */}
-        <div className="mb-6 sm:mb-8">
-          <Link
-            href={`/${tenant}/${lang}/admin`}
-            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium mb-4 transition-colors"
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            {dict?.admin?.backToAdmin || 'Back to Admin'}
-          </Link>
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
+        <div className="mb-5">
+          <h1 className="text-xl font-bold text-gray-900 mb-1">
             BIR Compliance
           </h1>
           <p className="text-gray-600">
@@ -118,16 +109,16 @@ export default function BirCompliancePage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
           {/* 1. Audit Trail — always available */}
-          <div className="bg-white border border-gray-300 p-6">
+          <div className="bg-white border border-gray-200 p-5">
             <div className="flex items-start gap-3 mb-4">
-              <div className="flex-shrink-0 w-10 h-10 bg-green-100 flex items-center justify-center rounded">
+              <div className="flex-shrink-0 w-10 h-10 bg-green-100 flex items-center justify-center">
                 <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">Audit Trail</h2>
-                <span className="inline-block text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded mt-1">All Plans</span>
+                <span className="inline-block text-xs bg-green-100 text-green-700 px-2 py-0.5 mt-1">All Plans</span>
               </div>
             </div>
             <p className="text-sm text-gray-600 mb-4">
@@ -145,17 +136,17 @@ export default function BirCompliancePage() {
           </div>
 
           {/* 2. Receipt Formatting */}
-          <div className="relative bg-white border border-gray-300 p-6 overflow-hidden">
+          <div className="relative bg-white border border-gray-200 p-5 overflow-hidden">
             {!birFeatures?.receiptFormatting && <LockOverlay plan="Pro" />}
             <div className="flex items-start gap-3 mb-4">
-              <div className="flex-shrink-0 w-10 h-10 bg-blue-100 flex items-center justify-center rounded">
+              <div className="flex-shrink-0 w-10 h-10 bg-blue-100 flex items-center justify-center">
                 <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">Receipt Formatting</h2>
-                <span className="inline-block text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded mt-1">Pro+</span>
+                <span className="inline-block text-xs bg-blue-100 text-blue-700 px-2 py-0.5 mt-1">Pro+</span>
               </div>
             </div>
             <p className="text-sm text-gray-600 mb-4">
@@ -174,17 +165,17 @@ export default function BirCompliancePage() {
           </div>
 
           {/* 3. PTU Assistance */}
-          <div className="relative bg-white border border-gray-300 p-6 overflow-hidden">
+          <div className="relative bg-white border border-gray-200 p-5 overflow-hidden">
             {!birFeatures?.ptuAssistance && <LockOverlay plan="Pro" />}
             <div className="flex items-start gap-3 mb-4">
-              <div className="flex-shrink-0 w-10 h-10 bg-yellow-100 flex items-center justify-center rounded">
+              <div className="flex-shrink-0 w-10 h-10 bg-yellow-100 flex items-center justify-center">
                 <svg className="w-5 h-5 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 9l-3 3m0 0l-3-3m3 3V4m0 13a9 9 0 110-18 9 9 0 010 18z" />
                 </svg>
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">PTU Assistance</h2>
-                <span className="inline-block text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded mt-1">Pro+</span>
+                <span className="inline-block text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 mt-1">Pro+</span>
               </div>
             </div>
             <p className="text-sm text-gray-600 mb-4">
@@ -251,17 +242,17 @@ export default function BirCompliancePage() {
           </div>
 
           {/* 4. CAS Reporting */}
-          <div className="relative bg-white border border-gray-300 p-6 overflow-hidden">
+          <div className="relative bg-white border border-gray-200 p-5 overflow-hidden">
             {!birFeatures?.casReporting && <LockOverlay plan="Business" />}
             <div className="flex items-start gap-3 mb-4">
-              <div className="flex-shrink-0 w-10 h-10 bg-purple-100 flex items-center justify-center rounded">
+              <div className="flex-shrink-0 w-10 h-10 bg-purple-100 flex items-center justify-center">
                 <svg className="w-5 h-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">CAS Reporting</h2>
-                <span className="inline-block text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded mt-1">Business+</span>
+                <span className="inline-block text-xs bg-purple-100 text-purple-700 px-2 py-0.5 mt-1">Business+</span>
               </div>
             </div>
             <p className="text-sm text-gray-600 mb-4">
@@ -302,32 +293,32 @@ export default function BirCompliancePage() {
           </div>
 
           {/* 5. Monthly Support */}
-          <div className="relative bg-white border border-gray-300 p-6 overflow-hidden lg:col-span-2">
+          <div className="relative bg-white border border-gray-200 p-5 overflow-hidden lg:col-span-2">
             {!birFeatures?.monthlySupport && <LockOverlay plan="Business" />}
             <div className="flex items-start gap-3 mb-4">
-              <div className="flex-shrink-0 w-10 h-10 bg-green-100 flex items-center justify-center rounded">
+              <div className="flex-shrink-0 w-10 h-10 bg-green-100 flex items-center justify-center">
                 <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" />
                 </svg>
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">Monthly BIR Compliance Support</h2>
-                <span className="inline-block text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded mt-1">Business+</span>
+                <span className="inline-block text-xs bg-green-100 text-green-700 px-2 py-0.5 mt-1">Business+</span>
               </div>
             </div>
             <p className="text-sm text-gray-600 mb-4">
               Get dedicated monthly support for BIR compliance — including assistance with VAT filings, PTU renewals, CAS submissions, and documentation review.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="border border-gray-200 p-4 rounded">
+              <div className="border border-gray-200 p-4">
                 <div className="text-sm font-medium text-gray-900 mb-1">VAT Filing Assistance</div>
                 <p className="text-xs text-gray-500">Monthly 2550M and quarterly 2550Q filing guidance</p>
               </div>
-              <div className="border border-gray-200 p-4 rounded">
+              <div className="border border-gray-200 p-4">
                 <div className="text-sm font-medium text-gray-900 mb-1">PTU Renewal</div>
                 <p className="text-xs text-gray-500">Annual Permit to Use renewal reminders and support</p>
               </div>
-              <div className="border border-gray-200 p-4 rounded">
+              <div className="border border-gray-200 p-4">
                 <div className="text-sm font-medium text-gray-900 mb-1">CAS Submission</div>
                 <p className="text-xs text-gray-500">Help with BIR CAS accreditation and periodic submissions</p>
               </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Navbar from '@/components/Navbar';
+import AdminNavBar from '@/components/AdminNavBar';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
@@ -77,7 +77,7 @@ export default function TransactionsPage() {
 
   if (!dict || loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div
             className="inline-block animate-spin h-8 w-8"
@@ -96,25 +96,13 @@ export default function TransactionsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        <div className="mb-6 sm:mb-8">
-          <Link
-            href={`/${tenant}/${lang}/admin`}
-            className="inline-flex items-center font-medium mb-4 transition-colors"
-            style={{ color: primaryColor }}
-            onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.8')}
-            onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            {dict?.admin?.backToAdmin || 'Back to Admin'}
-          </Link>
+    <div className="bg-gray-50">
+      <AdminNavBar />
+      <div className="px-6 py-5">
+        <div className="mb-5">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
+              <h1 className="text-xl font-bold text-gray-900 mb-1">
                 {dict.admin?.transactions || 'Transactions'}
               </h1>
               <p className="text-gray-600">{dict.admin?.transactionsSubtitle || 'View and manage all sales transactions'}</p>
@@ -128,7 +116,7 @@ export default function TransactionsPage() {
           </div>
         )}
 
-        <div className="bg-white border border-gray-300 p-6">
+        <div className="bg-white border border-gray-200 p-5">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
@@ -266,7 +254,7 @@ function TransactionDetailModal({
       <div className="bg-white border border-gray-300 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-bold text-gray-900">
+            <h2 className="text-xl font-bold text-gray-900">
               {dict.admin?.transactionDetails || 'Transaction Details'}
             </h2>
             <button

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import dynamic from 'next/dynamic';
-import Navbar from '@/components/Navbar';
+import AdminNavBar from '@/components/AdminNavBar';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 
@@ -81,7 +81,7 @@ export default function ProductsPage() {
 
   if (!dict || loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
@@ -91,23 +91,14 @@ export default function ProductsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="bg-gray-50">
       {Dialog}
-      <Navbar />
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        <div className="mb-6 sm:mb-8">
-          <Link
-            href={`/${tenant}/${lang}/admin`}
-            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium mb-4 transition-colors"
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            {dict?.admin?.backToAdmin || 'Back to Admin'}
-          </Link>
+      <AdminNavBar />
+      <div className="px-6 py-5">
+        <div className="mb-5">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
+              <h1 className="text-xl font-bold text-gray-900 mb-1">
                 {dict.admin?.products || 'Products'}
               </h1>
               <p className="text-gray-600">{dict.admin?.productsSubtitle || 'Manage products, variations, and bundles'}</p>
@@ -121,7 +112,7 @@ export default function ProductsPage() {
           </div>
         )}
 
-        <div className="bg-white border border-gray-300 p-6">
+        <div className="bg-white border border-gray-200 p-5">
           <div className="flex justify-between items-center mb-6 flex-wrap gap-2">
             <div className="flex-1 max-w-md">
               <input
@@ -173,9 +164,9 @@ export default function ProductsPage() {
                     <td className="px-4 py-4 w-14">
                       {product.image ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={product.image} alt={product.name} className="w-10 h-10 object-cover border border-gray-200 rounded" />
+                        <img src={product.image} alt={product.name} className="w-10 h-10 object-cover border border-gray-200" />
                       ) : (
-                        <div className="w-10 h-10 bg-gray-100 border border-gray-200 rounded flex items-center justify-center">
+                        <div className="w-10 h-10 bg-gray-100 border border-gray-200 flex items-center justify-center">
                           <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                           </svg>
@@ -415,11 +406,11 @@ function ProductModal({
     <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white border border-gray-300 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">
+          <h2 className="text-xl font-bold text-gray-900 mb-4">
             {product ? (dict.admin?.editProduct || 'Edit Product') : (dict.admin?.addProduct || 'Add Product')}
           </h2>
           {businessTypeConfig && (
-            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded">
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200">
               <p className="text-sm text-blue-900">
                 <strong>Business Type:</strong> {businessTypeConfig.name}
               </p>
@@ -504,7 +495,7 @@ function ProductModal({
                   <img
                     src={formData.image}
                     alt="Preview"
-                    className="w-20 h-20 object-cover border border-gray-200 rounded flex-shrink-0"
+                    className="w-20 h-20 object-cover border border-gray-200 flex-shrink-0"
                   />
                 )}
                 <div className="flex-1 space-y-2">
@@ -666,7 +657,7 @@ function ProductModal({
                   {showCategorySuggestions && categorySearch && filteredCategories.length === 0 && (
                     <div
                       ref={categoryListRef}
-                      className="absolute z-50 w-full mt-1 bg-white border border-gray-300 p-4 text-sm text-gray-500"
+                      className="absolute z-50 w-full mt-1 bg-white border border-gray-200 p-4 text-sm text-gray-500"
                     >
                       {dict.admin?.noCategoryFound || 'No category found'}
                     </div>
@@ -1059,7 +1050,7 @@ function ProductModal({
             <div className="flex-1 overflow-y-auto p-4">
               {pickerLoading ? (
                 <div className="flex items-center justify-center py-12">
-                  <div className="animate-spin h-6 w-6 border-2 border-gray-400 border-t-transparent rounded-full" />
+                  <div className="animate-spin h-6 w-6 border-2 border-gray-400 border-t-transparent" />
                 </div>
               ) : pickerFiles.filter(f => f.name.toLowerCase().includes(pickerSearch.toLowerCase())).length === 0 ? (
                 <div className="text-center py-12 text-gray-400 text-sm">

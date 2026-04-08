@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Navbar from '@/components/Navbar';
+import AdminNavBar from '@/components/AdminNavBar';
 import TaxRulesManager from '@/components/settings/TaxRulesManager';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -43,7 +43,7 @@ export default function TaxRulesAdminPage() {
 
   if (!dict || loading || !settings) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
@@ -53,23 +53,11 @@ export default function TaxRulesAdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        <div className="mb-6 sm:mb-8">
-          <Link
-            href={`/${tenant}/${lang}/admin`}
-            className="inline-flex items-center font-medium mb-4 transition-colors"
-            style={{ color: primaryColor }}
-            onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.8')}
-            onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            {dict?.admin?.backToAdmin || 'Back to Admin'}
-          </Link>
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
+    <div className="bg-gray-50">
+      <AdminNavBar />
+      <div className="px-6 py-5">
+        <div className="mb-5">
+          <h1 className="text-xl font-bold text-gray-900 mb-1">
             {dict?.admin?.taxRules || 'Tax Rules'}
           </h1>
           <p className="text-gray-600">
@@ -77,7 +65,7 @@ export default function TaxRulesAdminPage() {
           </p>
         </div>
 
-        <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8">
+        <div className="bg-white border border-gray-200 p-5">
           <TaxRulesManager
             settings={settings}
             tenant={tenant}

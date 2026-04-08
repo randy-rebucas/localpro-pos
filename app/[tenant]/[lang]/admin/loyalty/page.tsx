@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import Navbar from '@/components/Navbar';
+import AdminNavBar from '@/components/AdminNavBar';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { showToast } from '@/lib/toast';
@@ -40,7 +40,7 @@ export default function LoyaltyPage() {
 
   if (configLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600" />
           <p className="mt-4 text-gray-600">Loading...</p>
@@ -50,21 +50,12 @@ export default function LoyaltyPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+    <div className="bg-gray-50">
+      <AdminNavBar />
+      <div className="px-6 py-5">
 
         {/* Header */}
-        <div className="mb-6 sm:mb-8">
-          <Link
-            href={`/${tenant}/${lang}/admin`}
-            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium mb-4 transition-colors"
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            Back to Admin
-          </Link>
+        <div className="mb-5">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">Loyalty Program</h1>
@@ -90,7 +81,7 @@ export default function LoyaltyPage() {
             { label: 'Points Outstanding', value: totalPoints.toLocaleString() },
             { label: 'Est. Liability', value: `₱${pesoValue.toFixed(2)}` },
           ].map(stat => (
-            <div key={stat.label} className="bg-white border border-gray-300 p-4">
+            <div key={stat.label} className="bg-white border border-gray-200 p-4">
               <p className="text-xs text-gray-500 uppercase font-medium mb-1">{stat.label}</p>
               <p className="text-xl font-bold text-gray-900">{stat.value}</p>
             </div>
@@ -101,7 +92,7 @@ export default function LoyaltyPage() {
 
           {/* Settings Panel */}
           <div className="lg:col-span-1">
-            <div className="bg-white border border-gray-300 p-6">
+            <div className="bg-white border border-gray-200 p-5">
               <h2 className="text-base font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-200">
                 Program Settings
               </h2>
@@ -196,7 +187,7 @@ export default function LoyaltyPage() {
 
           {/* Customer List */}
           <div className="lg:col-span-2">
-            <div className="bg-white border border-gray-300 p-6">
+            <div className="bg-white border border-gray-200 p-5">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-base font-semibold text-gray-900">Customer Balances</h2>
                 <input

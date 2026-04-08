@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Navbar from '@/components/Navbar';
+import AdminNavBar from '@/components/AdminNavBar';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
@@ -46,9 +46,9 @@ export default function SampleDataPage() {
 
   if (pageLoading || !dict) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 rounded-full" style={{ borderColor: primaryColor }} />
+          <div className="inline-block animate-spin h-8 w-8 border-b-2" style={{ borderColor: primaryColor }} />
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
@@ -68,21 +68,12 @@ export default function SampleDataPage() {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+    <div className="bg-gray-50">
+      <AdminNavBar />
+      <div className="px-6 py-5">
 
         {/* Header */}
-        <div className="mb-6 sm:mb-8">
-          <Link
-            href={`/${tenant}/${lang}/admin`}
-            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium mb-4 transition-colors"
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            {dict?.admin?.backToAdmin || 'Back to Admin'}
-          </Link>
+        <div className="mb-5">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Install Sample Data</h1>
           <p className="text-gray-600">
             Quickly populate your store with realistic sample products, categories, customers, and discount codes tailored to your business type.
@@ -118,7 +109,7 @@ export default function SampleDataPage() {
               ] as { label: string; value: number; icon: string }[]).map(stat => (
                 <div key={stat.label} className="text-center p-4 bg-gray-50 border border-gray-200">
                   <div className="text-2xl mb-1">{stat.icon}</div>
-                  <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
+                  <div className="text-xl font-bold text-gray-900">{stat.value}</div>
                   <div className="text-sm text-gray-500">{stat.label} added</div>
                 </div>
               ))}
@@ -130,13 +121,13 @@ export default function SampleDataPage() {
           {/* Business type banner */}
           {previewLoading ? (
             <div className="bg-white border border-gray-200 p-6 animate-pulse">
-              <div className="h-5 bg-gray-200 rounded w-1/3 mb-3" />
-              <div className="h-4 bg-gray-200 rounded w-2/3" />
+              <div className="h-5 bg-gray-200 w-1/3 mb-3" />
+              <div className="h-4 bg-gray-200 w-2/3" />
             </div>
           ) : preview && (
             <div className={`border p-5 ${colors.bg} ${colors.border}`}>
               <div className="flex items-center gap-3 mb-1">
-                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide ${colors.badge}`}>
+                <span className={`text-xs font-semibold px-2 py-0.5 uppercase tracking-wide ${colors.badge}`}>
                   {bizType}
                 </span>
                 <h2 className={`font-semibold ${colors.text}`}>{bizLabel}</h2>
@@ -156,7 +147,7 @@ export default function SampleDataPage() {
 
             {previewLoading ? (
               <div className="p-6 space-y-3 animate-pulse">
-                {[1,2,3,4].map(i => <div key={i} className="h-12 bg-gray-100 rounded" />)}
+                {[1,2,3,4].map(i => <div key={i} className="h-12 bg-gray-100" />)}
               </div>
             ) : preview ? (
               <div className="divide-y divide-gray-100">
@@ -190,10 +181,10 @@ export default function SampleDataPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-medium text-gray-900">{row.label}</span>
-                          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5">
                             {toAdd} total in set
                           </span>
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          <span className={`text-xs px-2 py-0.5 font-medium ${
                             willAdd > 0
                               ? 'bg-green-100 text-green-700'
                               : 'bg-gray-100 text-gray-500'
@@ -241,7 +232,7 @@ export default function SampleDataPage() {
                       <tr key={i} className="hover:bg-gray-50">
                         <td className="px-5 py-3 text-sm text-gray-900">{p.name}</td>
                         <td className="px-5 py-3">
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          <span className={`text-xs px-2 py-0.5 font-medium ${
                             p.type === 'service' ? 'bg-purple-100 text-purple-700' :
                             p.type === 'bundle'  ? 'bg-amber-100  text-amber-700'  :
                                                     'bg-blue-100   text-blue-700'
@@ -288,7 +279,7 @@ export default function SampleDataPage() {
                 {Array.from(selectedItems).map(item => (
                   <span
                     key={item}
-                    className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 text-sm font-medium rounded-full"
+                    className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 text-sm font-medium"
                   >
                     {item.charAt(0).toUpperCase() + item.slice(1)}
                     <button

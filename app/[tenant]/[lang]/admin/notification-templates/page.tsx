@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Navbar from '@/components/Navbar';
+import AdminNavBar from '@/components/AdminNavBar';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
@@ -24,7 +24,7 @@ export default function NotificationTemplatesPage() {
 
   if (!dict || loading || !settings) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
@@ -34,20 +34,11 @@ export default function NotificationTemplatesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+    <div className="bg-gray-50">
+      <AdminNavBar />
+      <div className="px-6 py-5">
         <div className="mb-6">
-          <Link
-            href={`/${tenant}/${lang}/admin`}
-            className="text-blue-600 hover:text-blue-700 font-medium mb-4 inline-flex items-center"
-          >
-            <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            {dict?.common?.back || 'Back'} to Admin
-          </Link>
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
+          <h1 className="text-xl font-bold text-gray-900 mb-1">
             {dict?.admin?.notificationTemplates || 'Notification Templates'}
           </h1>
           <p className="text-gray-600">
@@ -55,7 +46,7 @@ export default function NotificationTemplatesPage() {
           </p>
         </div>
 
-        <div className="bg-white border border-gray-300 p-6">
+        <div className="bg-white border border-gray-200 p-5">
           <NotificationTemplatesManager
             settings={settings}
             tenant={tenant}

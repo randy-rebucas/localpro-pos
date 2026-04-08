@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import toast from 'react-hot-toast';
-import Navbar from '@/components/Navbar';
+import AdminNavBar from '@/components/AdminNavBar';
 import BookingCalendar from '@/components/BookingCalendar';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
@@ -106,7 +106,7 @@ export default function BookingsPage() {
 
   if (loading && bookings.length === 0) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
           <p className="mt-4 text-gray-600">{dict?.admin?.loadingBookings || 'Loading bookings...'}</p>
@@ -116,9 +116,9 @@ export default function BookingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+    <div className="bg-gray-50">
+      <AdminNavBar />
+      <div className="px-6 py-5">
         <div className="mb-6 flex items-center justify-between">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">

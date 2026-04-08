@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import Navbar from '@/components/Navbar';
+import AdminNavBar from '@/components/AdminNavBar';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -308,7 +308,7 @@ export default function BundlesPage() {
 
   if (!dict || loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
@@ -318,22 +318,13 @@ export default function BundlesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        <div className="mb-6 sm:mb-8">
-          <Link
-            href={`/${tenant}/${lang}/admin`}
-            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium mb-4 transition-colors"
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            {dict?.admin?.backToAdmin || 'Back to Admin'}
-          </Link>
+    <div className="bg-gray-50">
+      <AdminNavBar />
+      <div className="px-6 py-5">
+        <div className="mb-5">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
+              <h1 className="text-xl font-bold text-gray-900 mb-1">
                 {dict.admin?.bundles || 'Product Bundles'}
               </h1>
               <p className="text-gray-600">{dict.admin?.bundlesDescription || 'Manage product bundles and packages'}</p>
@@ -364,7 +355,7 @@ export default function BundlesPage() {
         )}
 
         {/* Bundle Analytics Section */}
-        <div className="bg-white border border-gray-300 p-6 mb-6">
+        <div className="bg-white border border-gray-200 p-5 mb-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-bold text-gray-900">{dict.admin?.bundleAnalytics || 'Bundle Analytics'}</h2>
             <button
@@ -494,7 +485,7 @@ export default function BundlesPage() {
           )}
         </div>
 
-        <div className="bg-white border border-gray-300 p-6">
+        <div className="bg-white border border-gray-200 p-5">
           <div className="flex justify-between items-center mb-4 flex-wrap gap-4">
             <div className="flex-1 max-w-md">
               <input
@@ -1079,7 +1070,7 @@ function BundleModal({
     <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white border border-gray-300 max-w-3xl w-full max-h-[90vh] overflow-y-auto overflow-x-hidden">
         <div className="p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">
+          <h2 className="text-xl font-bold text-gray-900 mb-4">
             {bundle ? (dict.admin?.editBundle || 'Edit Bundle') : (dict.admin?.addBundle || 'Add Bundle')}
           </h2>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -1182,7 +1173,7 @@ function BundleModal({
                     {showProductSuggestions && (
                       <div 
                         ref={suggestionsRef}
-                        className="absolute z-[100] w-full mt-1 bg-white border border-gray-300 shadow-xl rounded-md max-h-60 overflow-y-auto"
+                        className="absolute z-[100] w-full mt-1 bg-white border border-gray-300 shadow-xl max-h-60 overflow-y-auto"
                         style={{ top: '100%' }}
                       >
                         {productsLoading ? (

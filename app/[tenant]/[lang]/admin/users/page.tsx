@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Navbar from '@/components/Navbar';
+import AdminNavBar from '@/components/AdminNavBar';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -82,7 +82,7 @@ export default function UsersPage() {
 
   if (!dict || loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
@@ -92,23 +92,14 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="bg-gray-50">
       {ConfirmDialog}
-      <Navbar />
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        <div className="mb-6 sm:mb-8">
-          <Link
-            href={`/${tenant}/${lang}/admin`}
-            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium mb-4 transition-colors"
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            {dict?.admin?.backToAdmin || 'Back to Admin'}
-          </Link>
+      <AdminNavBar />
+      <div className="px-6 py-5">
+        <div className="mb-5">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
+              <h1 className="text-xl font-bold text-gray-900 mb-1">
                 {dict.admin?.users || 'Users'}
               </h1>
               <p className="text-gray-600">{dict.admin?.usersSubtitle || 'Manage system users and their permissions'}</p>
@@ -116,7 +107,7 @@ export default function UsersPage() {
           </div>
         </div>
 
-        <div className="bg-white border border-gray-300 p-6">
+        <div className="bg-white border border-gray-200 p-5">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold text-gray-900">{dict.admin?.users || 'Users'}</h2>
             <button
@@ -268,7 +259,7 @@ function UserModal({
     <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white border border-gray-300 max-w-md w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">
+          <h2 className="text-xl font-bold text-gray-900 mb-4">
             {user ? (dict.admin?.editUser || 'Edit User') : (dict.admin?.addUser || 'Add User')}
           </h2>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -390,7 +381,7 @@ function QRModal({
   if (loading) {
     return (
       <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div className="bg-white border border-gray-300 p-6">
+        <div className="bg-white border border-gray-200 p-5">
           <div className="text-center">
             <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
             <p className="mt-4 text-gray-600">{dict?.admin?.loadingQRCode || 'Loading QR code...'}</p>
@@ -405,7 +396,7 @@ function QRModal({
       {Dialog}
       <div className="bg-white border border-gray-300 max-w-md w-full">
         <div className="p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">
+          <h2 className="text-xl font-bold text-gray-900 mb-4">
             QR Code for {user.name}
           </h2>
           {error && (

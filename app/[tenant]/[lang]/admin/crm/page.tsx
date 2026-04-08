@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import Navbar from '@/components/Navbar';
+import AdminNavBar from '@/components/AdminNavBar';
 import PageTitle from '@/components/PageTitle';
 import Currency from '@/components/Currency';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
@@ -146,9 +146,9 @@ export default function CRMPage() {
   const segmentOrder: Segment[] = ['all', 'vip', 'new', 'regular', 'at_risk', 'lapsed'];
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+    <div className="bg-gray-50">
+      <AdminNavBar />
+      <div className="px-6 py-5">
         <PageTitle />
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">CRM</h1>
@@ -205,10 +205,10 @@ export default function CRMPage() {
               <div className="divide-y divide-gray-100">
                 {[1,2,3,4].map((i) => (
                   <div key={i} className="px-4 py-3 flex items-center gap-3 animate-pulse">
-                    <div className="w-8 h-8 bg-gray-200 rounded-full flex-shrink-0" />
+                    <div className="w-8 h-8 bg-gray-200 flex-shrink-0" />
                     <div className="flex-1 space-y-1.5">
-                      <div className="h-3 bg-gray-200 w-1/3 rounded" />
-                      <div className="h-2.5 bg-gray-200 w-1/2 rounded" />
+                      <div className="h-3 bg-gray-200 w-1/3" />
+                      <div className="h-2.5 bg-gray-200 w-1/2" />
                     </div>
                   </div>
                 ))}
@@ -226,7 +226,7 @@ export default function CRMPage() {
                       onClick={() => setSelectedCustomer(selectedCustomer?._id === c._id ? null : c)}
                       className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors ${selectedCustomer?._id === c._id ? 'bg-gray-50' : ''}`}
                     >
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-white text-xs font-bold"
+                      <div className="w-8 h-8 flex items-center justify-center flex-shrink-0 text-white text-xs font-bold"
                         style={{ backgroundColor: primaryColor }}>
                         {c.firstName[0]}{c.lastName[0]}
                       </div>
@@ -261,7 +261,7 @@ export default function CRMPage() {
                 </div>
                 <div className="p-4 space-y-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0"
+                    <div className="w-12 h-12 flex items-center justify-center text-white font-bold text-lg flex-shrink-0"
                       style={{ backgroundColor: primaryColor }}>
                       {selectedCustomer.firstName[0]}{selectedCustomer.lastName[0]}
                     </div>
@@ -312,7 +312,7 @@ export default function CRMPage() {
               </div>
               {loadingCampaigns ? (
                 <div className="px-4 py-6 text-center">
-                  <div className="w-5 h-5 border-2 border-gray-200 border-t-gray-500 rounded-full animate-spin mx-auto" />
+                  <div className="w-5 h-5 border-2 border-gray-200 border-t-gray-500 animate-spin mx-auto" />
                 </div>
               ) : campaigns.length === 0 ? (
                 <div className="px-4 py-6 text-center text-sm text-gray-400">No campaigns yet</div>

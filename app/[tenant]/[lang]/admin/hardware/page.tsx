@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Navbar from '@/components/Navbar';
+import AdminNavBar from '@/components/AdminNavBar';
 import HardwareStatusChecker from '@/components/HardwareStatus';
 import HardwareSettings from '@/components/HardwareSettings';
 import { useParams } from 'next/navigation';
@@ -47,7 +47,7 @@ export default function HardwareAdminPage() {
 
   if (!dict || loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
@@ -58,9 +58,9 @@ export default function HardwareAdminPage() {
 
   if (!settings) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <Navbar />
-        <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      <div className="bg-gray-50">
+        <AdminNavBar />
+        <div className="px-6 py-5">
           <div className="bg-red-50 border-2 border-red-300 p-5 sm:p-6">
             <h2 className="text-xl font-bold text-red-800 mb-2">Failed to Load Settings</h2>
             <p className="text-red-700 mb-4">
@@ -79,20 +79,11 @@ export default function HardwareAdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        <div className="mb-6 sm:mb-8">
-          <Link
-            href={`/${tenant}/${lang}/admin`}
-            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium mb-4 transition-colors"
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            {dict?.admin?.backToAdmin || 'Back to Admin'}
-          </Link>
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
+    <div className="bg-gray-50">
+      <AdminNavBar />
+      <div className="px-6 py-5">
+        <div className="mb-5">
+          <h1 className="text-xl font-bold text-gray-900 mb-1">
             {dict?.admin?.hardwareSettings || 'Hardware Settings'}
           </h1>
           <p className="text-gray-600">
@@ -114,7 +105,7 @@ export default function HardwareAdminPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
-            <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8">
+            <div className="bg-white border border-gray-200 p-5">
               <HardwareSettings 
                 hideSaveButton={true}
                 config={settings.hardwareConfig}

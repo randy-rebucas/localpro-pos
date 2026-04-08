@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Navbar from '@/components/Navbar';
+import AdminNavBar from '@/components/AdminNavBar';
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '../dictionaries-client';
 import Link from 'next/link';
@@ -29,7 +29,7 @@ export default function AdminPage() {
 
   if (!dict || loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div
             className="inline-block animate-spin h-8 w-8 border-b-2"
@@ -573,8 +573,8 @@ export default function AdminPage() {
 
   return (
     <div>
-      <Navbar />
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      <AdminNavBar />
+      <div className="px-6 py-5">
         {/* Header */}
         <div className="mb-8 sm:mb-10">
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-gray-900 mb-3">

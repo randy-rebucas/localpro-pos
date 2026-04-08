@@ -83,7 +83,10 @@
       "Bash(sed -n '155,170p' app/api/bookings/route.ts)",
       "Bash(sed -n '278,295p' app/api/bookings/route.ts)",
       "Bash(grep -v \"node_modules\\\\|super-admin\\\\|automations\\\\|//\")",
-      "Bash(grep -E \"models/\\(.*\\\\.ts|index\\\\.ts\\)$\")"
+      "Bash(grep -E \"models/\\(.*\\\\.ts|index\\\\.ts\\)$\")",
+      "Bash(grep -l \"Navbar\" c:/Users/corew/localpro-pos/app/\\\\[tenant\\\\]/\\\\[lang\\\\]/admin/*/page.tsx)",
+      "Bash(grep -rL \"Navbar\" c:/Users/corew/localpro-pos/app/\\\\[tenant\\\\]/\\\\[lang\\\\]/admin/*/page.tsx)",
+      "Bash(python -)"
     ]
   },
   "hooks": {

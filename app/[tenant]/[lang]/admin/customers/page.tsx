@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Navbar from '@/components/Navbar';
+import AdminNavBar from '@/components/AdminNavBar';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
@@ -116,7 +116,7 @@ export default function CustomersPage() {
 
   if (!dict || loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
@@ -126,23 +126,14 @@ export default function CustomersPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="bg-gray-50">
       {ConfirmDialog}
-      <Navbar />
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        <div className="mb-6 sm:mb-8">
-          <Link
-            href={`/${tenant}/${lang}/admin`}
-            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium mb-4 transition-colors"
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            {dict?.admin?.backToAdmin || 'Back to Admin'}
-          </Link>
+      <AdminNavBar />
+      <div className="px-6 py-5">
+        <div className="mb-5">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
+              <h1 className="text-xl font-bold text-gray-900 mb-1">
                 {dict?.admin?.customers || 'Customers'}
               </h1>
               <p className="text-gray-600">{dict?.admin?.customersSubtitle || 'Manage your customer database'}</p>
@@ -150,7 +141,7 @@ export default function CustomersPage() {
           </div>
         </div>
 
-        <div className="bg-white border border-gray-300 p-6">
+        <div className="bg-white border border-gray-200 p-5">
           {/* Search & Filters */}
           <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center mb-6">
             <div className="flex flex-col sm:flex-row gap-3 flex-1">

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useCallback } from 'react';
-import Navbar from '@/components/Navbar';
+import AdminNavBar from '@/components/AdminNavBar';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
@@ -154,7 +154,7 @@ export default function AttendancePage() {
 
   if (!dict) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
           <p className="mt-4 text-gray-600">Loading...</p>
@@ -164,22 +164,13 @@ export default function AttendancePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        <div className="mb-6 sm:mb-8">
-          <Link
-            href={`/${tenant}/${lang}/admin`}
-            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium mb-4 transition-colors"
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            {dict?.admin?.backToAdmin || 'Back to Admin'}
-          </Link>
+    <div className="bg-gray-50">
+      <AdminNavBar />
+      <div className="px-6 py-5">
+        <div className="mb-5">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
+              <h1 className="text-xl font-bold text-gray-900 mb-1">
                 {dict.admin?.attendance || 'Attendance Management'}
               </h1>
               <p className="text-gray-600">{dict.admin?.attendanceDescription || 'View and manage employee attendance records'}</p>
@@ -240,7 +231,7 @@ export default function AttendancePage() {
         </div>
 
         {/* Filters */}
-        <div className="bg-white border border-gray-300 p-6 mb-6">
+        <div className="bg-white border border-gray-200 p-5 mb-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -317,17 +308,17 @@ export default function AttendancePage() {
 
         {/* Statistics */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="bg-white border border-gray-300 p-6">
+          <div className="bg-white border border-gray-200 p-5">
             <div className="text-sm text-gray-600 mb-1">{dict.admin?.totalRecords || 'Total Records'}</div>
-            <div className="text-2xl font-bold text-gray-900">{attendances.length}</div>
+            <div className="text-xl font-bold text-gray-900">{attendances.length}</div>
           </div>
-          <div className="bg-white border border-gray-300 p-6">
+          <div className="bg-white border border-gray-200 p-5">
             <div className="text-sm text-gray-600 mb-1">{dict.admin?.totalHours || 'Total Hours'}</div>
-            <div className="text-2xl font-bold text-gray-900">{formatHours(calculateTotalHours(attendances))}</div>
+            <div className="text-xl font-bold text-gray-900">{formatHours(calculateTotalHours(attendances))}</div>
           </div>
-          <div className="bg-white border border-gray-300 p-6">
+          <div className="bg-white border border-gray-200 p-5">
             <div className="text-sm text-gray-600 mb-1">{dict.admin?.averageHours || 'Average Hours/Record'}</div>
-            <div className="text-2xl font-bold text-gray-900">
+            <div className="text-xl font-bold text-gray-900">
               {attendances.length > 0 ? formatHours(calculateAverageHours(attendances)) : '-'}
             </div>
           </div>
@@ -335,7 +326,7 @@ export default function AttendancePage() {
 
         {/* Attendance Trends Charts */}
         {attendances.length > 0 && (
-          <div className="bg-white border border-gray-300 p-6 mb-6">
+          <div className="bg-white border border-gray-200 p-5 mb-6">
             <h2 className="text-xl font-bold text-gray-900 mb-4">
               {dict.admin?.attendanceTrends || 'Attendance Trends'}
             </h2>
@@ -344,7 +335,7 @@ export default function AttendancePage() {
         )}
 
         {/* Attendance Table */}
-        <div className="bg-white border border-gray-300 p-6">
+        <div className="bg-white border border-gray-200 p-5">
           {loading ? (
             <div className="text-center py-8">
               <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
