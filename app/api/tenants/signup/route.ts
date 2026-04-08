@@ -5,7 +5,7 @@ import User from '@/models/User';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { validateEmail, validatePassword, validateTenant } from '@/lib/validation';
 import { getValidationTranslator } from '@/lib/validation-translations';
-import { applyBusinessTypeDefaults } from '@/lib/business-types';
+import { applyBusinessTypeDefaults, isValidBusinessType } from '@/lib/business-types';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 
@@ -55,6 +55,13 @@ export async function POST(request: NextRequest) {
     if (tenantErrors.length > 0) {
       return NextResponse.json(
         { success: false, error: tenantErrors[0].message },
+        { status: 400 }
+      );
+    }
+
+    if (businessType !== undefined && !isValidBusinessType(businessType)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid business type. Must be one of: retail, restaurant, laundry, service, general' },
         { status: 400 }
       );
     }

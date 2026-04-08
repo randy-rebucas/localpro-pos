@@ -82,7 +82,8 @@
       "Bash(grep -v \"node_modules\\\\|//\")",
       "Bash(sed -n '155,170p' app/api/bookings/route.ts)",
       "Bash(sed -n '278,295p' app/api/bookings/route.ts)",
-      "Bash(grep -v \"node_modules\\\\|super-admin\\\\|automations\\\\|//\")"
+      "Bash(grep -v \"node_modules\\\\|super-admin\\\\|automations\\\\|//\")",
+      "Bash(grep -E \"models/\\(.*\\\\.ts|index\\\\.ts\\)$\")"
     ]
   },
   "hooks": {

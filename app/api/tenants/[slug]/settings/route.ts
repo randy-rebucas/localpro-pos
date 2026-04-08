@@ -5,7 +5,7 @@ import { requireRole, getCurrentUser } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
-import { applyBusinessTypeDefaults } from '@/lib/business-types';
+import { applyBusinessTypeDefaults, isValidBusinessType } from '@/lib/business-types';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 
@@ -72,6 +72,13 @@ export async function PUT(
     const currentBusinessType = existingTenant?.settings?.businessType;
     const newBusinessType = settings.businessType;
 
+    if (newBusinessType !== undefined && !isValidBusinessType(newBusinessType)) {
+      return NextResponse.json(
+        { success: false, error: `Invalid business type. Must be one of: retail, restaurant, laundry, service, general` },
+        { status: 400 }
+      );
+    }
+
     // Apply business type defaults if business type is being set or changed
     let updatedSettings = mergedSettings;
     if (newBusinessType && newBusinessType !== currentBusinessType) {
@@ -125,12 +132,15 @@ export async function PUT(
       );
     }
 
+    const businessTypeChanged = newBusinessType && newBusinessType !== currentBusinessType;
     await createAuditLog(request, {
       tenantId: tenant._id,
-      action: AuditActions.UPDATE,
+      action: businessTypeChanged ? AuditActions.BUSINESS_TYPE_CHANGE : AuditActions.UPDATE,
       entityType: 'tenant',
       entityId: tenant._id.toString(),
-      changes: { settings: updatedSettings },
+      changes: businessTypeChanged
+        ? { businessType: { old: currentBusinessType, new: newBusinessType } }
+        : { settings: updatedSettings },
     });
 
     return NextResponse.json({ success: true, data: tenant.settings });

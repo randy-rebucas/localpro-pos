@@ -138,5 +138,6 @@ export const AuditActions = {
   FILE_UPLOAD: 'file.upload',
   FILE_DELETE: 'file.delete',
   USER_ROLE_CHANGE: 'user.role_change',
+  BUSINESS_TYPE_CHANGE: 'tenant.business_type_change',
 } as const;
 

@@ -7,6 +7,12 @@
 
 export type BusinessType = 'retail' | 'restaurant' | 'laundry' | 'service' | 'general';
 
+export const VALID_BUSINESS_TYPES: BusinessType[] = ['retail', 'restaurant', 'laundry', 'service', 'general'];
+
+export function isValidBusinessType(value: unknown): value is BusinessType {
+  return typeof value === 'string' && (VALID_BUSINESS_TYPES as string[]).includes(value);
+}
+
 export interface BusinessTypeConfig {
   type: BusinessType;
   name: string;
