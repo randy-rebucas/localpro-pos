@@ -52,6 +52,23 @@ export default function AdminPage() {
 
   const adminSections: { title: string; description: string; cards: AdminCard[] }[] = [
     {
+      title: dict.admin?.sectionDashboard || 'Overview',
+      description: dict.admin?.sectionDashboardDesc || 'Monitor key metrics and store performance',
+      cards: [
+        {
+          title: dict.admin?.dashboard || 'Dashboard',
+          description: dict.admin?.dashboardDescription || 'Real-time KPIs, sales trends, and top products',
+          href: `/${tenant}/${lang}/admin/dashboard`,
+          icon: (
+            <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+            </svg>
+          ),
+          color: 'blue',
+        },
+      ],
+    },
+    {
       title: dict.admin?.sectionStoreOps || 'Store Operations',
       description: dict.admin?.sectionStoreOpsDesc || 'Manage products, sales, and daily business operations',
       cards: [
@@ -171,17 +188,6 @@ export default function AdminPage() {
           color: 'red',
         },
         {
-          title: 'Tables',
-          description: 'Manage dining tables, seating capacity, and floor layout',
-          href: `/${tenant}/${lang}/admin/tables`,
-          icon: (
-            <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18M10 4v16M14 4v16" />
-            </svg>
-          ),
-          color: 'orange',
-        },
-        {
           title: dict.admin?.bookings || 'Bookings',
           description: dict.admin?.bookingsDescription || 'Manage appointments, scheduling, and bookings',
           href: `/${tenant}/${lang}/admin/bookings`,
@@ -250,6 +256,45 @@ export default function AdminPage() {
             </svg>
           ),
           color: 'slate',
+        },
+      ],
+    },
+    {
+      title: dict.admin?.sectionWorkforce || 'Workforce',
+      description: dict.admin?.sectionWorkforceDesc || 'Shifts, commissions, and staff performance',
+      cards: [
+        {
+          title: dict.admin?.schedule || 'Schedule',
+          description: dict.admin?.scheduleDescription || 'Manage employee shifts and work schedules',
+          href: `/${tenant}/${lang}/admin/workforce/schedule`,
+          icon: (
+            <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          ),
+          color: 'violet',
+        },
+        {
+          title: dict.admin?.commissions || 'Commissions',
+          description: dict.admin?.commissionsDescription || 'Configure and track staff commission rules and payouts',
+          href: `/${tenant}/${lang}/admin/workforce/commissions`,
+          icon: (
+            <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          ),
+          color: 'emerald',
+        },
+        {
+          title: dict.admin?.staffPerformance || 'Staff Performance',
+          description: dict.admin?.staffPerformanceDescription || 'View staff sales, attendance, and performance reports',
+          href: `/${tenant}/${lang}/admin/reports/staff`,
+          icon: (
+            <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          ),
+          color: 'indigo',
         },
       ],
     },
@@ -400,17 +445,6 @@ export default function AdminPage() {
             </svg>
           ),
           color: 'teal',
-        },
-        {
-          title: dict.admin?.exchangeRates || 'Exchange Rates',
-          description: dict.admin?.exchangeRatesDescription || 'Set and update currency exchange rates manually or via API',
-          href: `/${tenant}/${lang}/admin/multi-currency`,
-          icon: (
-            <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-            </svg>
-          ),
-          color: 'cyan',
         },
         {
           title: dict.admin?.businessHours || 'Business Hours',
