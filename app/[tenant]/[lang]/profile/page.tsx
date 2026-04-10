@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import QRCodeDisplay from '@/components/QRCodeDisplay';
+import { useAppLock } from '@/contexts/AppLockContext';
 
 export default function ProfilePage() {
   const params = useParams();
@@ -32,6 +33,11 @@ export default function ProfilePage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showPasswordSection, setShowPasswordSection] = useState(false);
   const [profileInfo, setProfileInfo] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const { hasPinSet, refreshPinStatus } = useAppLock();
+  const [showPinSection, setShowPinSection] = useState(false);
+  const [pinData, setPinData] = useState({ pin: '', confirmPin: '', currentPassword: '' });
+  const [pinMessage, setPinMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [pinSaving, setPinSaving] = useState(false);
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -155,6 +161,71 @@ export default function ProfilePage() {
     } catch (error) {
       console.error('Error regenerating QR code:', error);
       setMessage({ type: 'error', text: dict?.common?.failedToRegenerateQR || 'Failed to regenerate QR code. Please check your connection.' });
+    }
+  };
+
+  const handleSetPin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPinMessage(null);
+    if (!/^\d{4,6}$/.test(pinData.pin)) {
+      setPinMessage({ type: 'error', text: 'PIN must be 4 to 6 digits.' });
+      return;
+    }
+    if (pinData.pin !== pinData.confirmPin) {
+      setPinMessage({ type: 'error', text: 'PINs do not match.' });
+      return;
+    }
+    if (!pinData.currentPassword) {
+      setPinMessage({ type: 'error', text: 'Current password is required to set a PIN.' });
+      return;
+    }
+    setPinSaving(true);
+    try {
+      const res = await fetch('/api/auth/pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ pin: pinData.pin, currentPassword: pinData.currentPassword }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPinMessage({ type: 'success', text: 'PIN set successfully.' });
+        setPinData({ pin: '', confirmPin: '', currentPassword: '' });
+        setShowPinSection(false);
+        await refreshPinStatus();
+      } else {
+        setPinMessage({ type: 'error', text: data.error || 'Failed to set PIN.' });
+      }
+    } catch {
+      setPinMessage({ type: 'error', text: 'Failed to set PIN. Please check your connection.' });
+    } finally {
+      setPinSaving(false);
+    }
+  };
+
+  const handleRemovePin = async () => {
+    const password = prompt('Enter your current password to remove the PIN:');
+    if (!password) return;
+    setPinSaving(true);
+    setPinMessage(null);
+    try {
+      const res = await fetch('/api/auth/pin', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ currentPassword: password }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPinMessage({ type: 'success', text: 'PIN removed. Your password will be used to unlock the app.' });
+        await refreshPinStatus();
+      } else {
+        setPinMessage({ type: 'error', text: data.error || 'Failed to remove PIN.' });
+      }
+    } catch {
+      setPinMessage({ type: 'error', text: 'Failed to remove PIN.' });
+    } finally {
+      setPinSaving(false);
     }
   };
 
@@ -420,6 +491,100 @@ export default function ProfilePage() {
                           <span>{dict?.profile?.updatePassword || 'Update Password'}</span>
                         </>
                       )}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </section>
+
+            {/* App Lock PIN Section */}
+            <section className="pt-8 border-t border-gray-200">
+              <div className="flex items-center justify-between mb-5">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">App Lock PIN</h2>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {hasPinSet
+                      ? 'A PIN is set. The app will ask for it after being idle.'
+                      : 'No PIN set — your password is used to unlock the app when idle.'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => { setShowPinSection(v => !v); setPinMessage(null); setPinData({ pin: '', confirmPin: '', currentPassword: '' }); }}
+                  style={{ color: primaryColor, backgroundColor: `${primaryColor}10`, borderColor: `${primaryColor}80` }}
+                  className="px-4 py-2 text-sm font-medium transition-colors border"
+                >
+                  {showPinSection ? 'Cancel' : hasPinSet ? 'Change PIN' : 'Set PIN'}
+                </button>
+              </div>
+
+              {pinMessage && (
+                <div className={`mb-4 p-3 border text-sm ${pinMessage.type === 'success' ? 'bg-green-50 border-green-300 text-green-800' : 'bg-red-50 border-red-300 text-red-800'}`}>
+                  {pinMessage.text}
+                </div>
+              )}
+
+              {showPinSection && (
+                <form onSubmit={handleSetPin} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">New PIN (4–6 digits)</label>
+                      <input
+                        type="password"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={6}
+                        value={pinData.pin}
+                        onChange={e => setPinData(d => ({ ...d, pin: e.target.value.replace(/\D/g, '').slice(0, 6) }))}
+                        className="w-full px-4 py-3 border-2 border-gray-300 bg-white font-mono tracking-widest text-center"
+                        placeholder="••••"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Confirm PIN</label>
+                      <input
+                        type="password"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={6}
+                        value={pinData.confirmPin}
+                        onChange={e => setPinData(d => ({ ...d, confirmPin: e.target.value.replace(/\D/g, '').slice(0, 6) }))}
+                        className="w-full px-4 py-3 border-2 border-gray-300 bg-white font-mono tracking-widest text-center"
+                        placeholder="••••"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
+                      <input
+                        type="password"
+                        value={pinData.currentPassword}
+                        onChange={e => setPinData(d => ({ ...d, currentPassword: e.target.value }))}
+                        className="w-full px-4 py-3 border-2 border-gray-300 bg-white"
+                        placeholder="Required to confirm"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-3 pt-2">
+                    {hasPinSet && (
+                      <button
+                        type="button"
+                        onClick={handleRemovePin}
+                        disabled={pinSaving}
+                        className="px-4 py-2 text-sm font-medium text-red-600 border border-red-300 bg-red-50 hover:bg-red-100 transition-colors disabled:opacity-50"
+                      >
+                        Remove PIN
+                      </button>
+                    )}
+                    <button
+                      type="submit"
+                      disabled={pinSaving}
+                      style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
+                      className="px-6 py-3 text-white font-semibold border flex items-center gap-2 disabled:opacity-50"
+                    >
+                      {pinSaving && <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
+                      {hasPinSet ? 'Update PIN' : 'Set PIN'}
                     </button>
                   </div>
                 </form>

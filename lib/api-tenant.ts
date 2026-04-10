@@ -107,22 +107,28 @@ async function getTenantIdFromRequestParams(request: NextRequest): Promise<strin
   }
   
   // Try from referer header (for API calls from tenant pages)
+  // SECURITY: Only trust Referer if its origin matches the request host to prevent
+  // cross-origin tenant spoofing by attacker-controlled Referer values.
   const referer = request.headers.get('referer');
+  const requestHost = request.headers.get('host') || '';
   if (referer) {
     try {
       const refererUrl = new URL(referer);
-      const refererPathParts = refererUrl.pathname.split('/').filter(Boolean);
-      if (refererPathParts.length > 0) {
-        const refererTenantSlug = refererPathParts[0];
-        // Skip common paths that aren't tenant slugs
-        if (refererTenantSlug !== 'api' && 
-            refererTenantSlug !== 'admin' && 
-            refererTenantSlug !== 'login' &&
-            refererTenantSlug !== 'signup' &&
-            !refererTenantSlug.startsWith('_')) {
-          const tenantId = await getTenantId(refererTenantSlug);
-          if (tenantId) {
-            return tenantId;
+      // Validate the Referer origin belongs to the same host as this request
+      if (refererUrl.host === requestHost) {
+        const refererPathParts = refererUrl.pathname.split('/').filter(Boolean);
+        if (refererPathParts.length > 0) {
+          const refererTenantSlug = refererPathParts[0];
+          // Skip common paths that aren't tenant slugs
+          if (refererTenantSlug !== 'api' &&
+              refererTenantSlug !== 'admin' &&
+              refererTenantSlug !== 'login' &&
+              refererTenantSlug !== 'signup' &&
+              !refererTenantSlug.startsWith('_')) {
+            const tenantId = await getTenantId(refererTenantSlug);
+            if (tenantId) {
+              return tenantId;
+            }
           }
         }
       }
@@ -130,7 +136,7 @@ async function getTenantIdFromRequestParams(request: NextRequest): Promise<strin
       // Invalid referer URL, continue
     }
   }
-  
+
   // Try query parameter (less secure, but needed for some unauthenticated endpoints)
   const tenantSlug = request.nextUrl.searchParams.get('tenant');
   if (tenantSlug) {
@@ -167,28 +173,32 @@ export async function getTenantSlugFromRequest(request: NextRequest): Promise<st
   }
   
   // Try from referer header (for API calls from tenant pages)
+  // SECURITY: Only trust Referer if its origin matches the request host.
   const referer = request.headers.get('referer');
+  const slugRequestHost = request.headers.get('host') || '';
   if (referer) {
     try {
       const refererUrl = new URL(referer);
-      const refererPathParts = refererUrl.pathname.split('/').filter(Boolean);
-      if (refererPathParts.length > 0) {
-        const refererTenantSlug = refererPathParts[0];
-        // Skip common paths that aren't tenant slugs
-        if (refererTenantSlug !== 'api' && 
-            refererTenantSlug !== 'admin' && 
-            refererTenantSlug !== 'login' &&
-            refererTenantSlug !== 'signup' &&
-            !refererTenantSlug.startsWith('_')) {
-          const tenant = await getTenantBySlug(refererTenantSlug);
-          if (tenant) return tenant.slug;
+      if (refererUrl.host === slugRequestHost) {
+        const refererPathParts = refererUrl.pathname.split('/').filter(Boolean);
+        if (refererPathParts.length > 0) {
+          const refererTenantSlug = refererPathParts[0];
+          // Skip common paths that aren't tenant slugs
+          if (refererTenantSlug !== 'api' &&
+              refererTenantSlug !== 'admin' &&
+              refererTenantSlug !== 'login' &&
+              refererTenantSlug !== 'signup' &&
+              !refererTenantSlug.startsWith('_')) {
+            const tenant = await getTenantBySlug(refererTenantSlug);
+            if (tenant) return tenant.slug;
+          }
         }
       }
     } catch (e) {
       // Invalid referer URL, continue
     }
   }
-  
+
   // Try from host header (subdomain/domain)
   const host = request.headers.get('host') || '';
   const tenantFromHost = await getTenantFromHost(host);

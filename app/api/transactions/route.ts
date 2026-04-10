@@ -271,7 +271,7 @@ export async function POST(request: NextRequest) {
 
     const [productsArray, bundlesArray] = await Promise.all([
       productIds.length > 0
-        ? Product.find({ _id: { $in: productIds }, tenantId }).lean()
+        ? Product.find({ _id: { $in: productIds }, tenantId, isActive: true }).lean()
         : Promise.resolve([]),
       bundleIds.length > 0
         ? ProductBundle.find({ _id: { $in: bundleIds }, tenantId, isActive: true }).lean()
@@ -525,6 +525,23 @@ export async function POST(request: NextRequest) {
 
     // Handle multiple payments (split payments)
     if (isMultiplePayments) {
+      // Validate each individual payment
+      const validPaymentMethods = ['cash', 'card', 'digital', 'check', 'other'];
+      for (const p of payments) {
+        if (typeof p.amount !== 'number' || p.amount <= 0) {
+          return NextResponse.json(
+            { success: false, error: t('validation.paymentAmountMustBePositive', 'Each payment amount must be greater than 0') },
+            { status: 400 }
+          );
+        }
+        if (!validPaymentMethods.includes(p.method)) {
+          return NextResponse.json(
+            { success: false, error: t('validation.invalidPaymentMethod', `Invalid payment method: ${p.method}`) },
+            { status: 400 }
+          );
+        }
+      }
+
       // Validate that all payments sum to total
       const paymentsTotal = payments.reduce((sum: number, p: PaymentInput) => sum + (p.amount || 0), 0);
       const tolerance = 0.01; // Allow small rounding differences
@@ -663,7 +680,12 @@ export async function POST(request: NextRequest) {
 
       // ─── Loyalty: earn and/or redeem points ───
       if (loyaltyEnabled && loyaltyCustomer && loyaltyConfig) {
-        const currentBalance = loyaltyCustomer.loyaltyPointsBalance ?? 0;
+        // Re-read balance inside session to prevent double-spend race condition
+        const freshCustomer = await Customer.findOne({ _id: loyaltyCustomer._id, tenantId }).session(session);
+        const currentBalance = freshCustomer?.loyaltyPointsBalance ?? 0;
+        if (loyaltyPointsToRedeem > 0 && loyaltyPointsToRedeem > currentBalance) {
+          throw new Error(`Insufficient loyalty points. Balance: ${currentBalance}`);
+        }
         let newBalance = currentBalance;
 
         // Redeem first
@@ -777,25 +799,21 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // Reset table status to 'open' inside the session so it's atomic with the transaction
+      if (tableId && orderType === 'dine-in') {
+        await Table.findOneAndUpdate(
+          { _id: tableId, tenantId },
+          { status: 'open', currentOrderId: undefined },
+          { session }
+        );
+      }
+
       await session.commitTransaction();
     } catch (sessionError) {
       await session.abortTransaction();
       throw sessionError;
     } finally {
       session.endSession();
-    }
-
-    // Reset table status to 'open' after dine-in payment completes
-    if (tableId && orderType === 'dine-in') {
-      try {
-        await Table.findOneAndUpdate(
-          { _id: tableId, tenantId },
-          { status: 'open', currentOrderId: undefined }
-        );
-      } catch (tableErr) {
-        logger.error('Failed to reset table status:', tableErr);
-        // Non-critical — don't fail the response
-      }
     }
 
     // Create audit log

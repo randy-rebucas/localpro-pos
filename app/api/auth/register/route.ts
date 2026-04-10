@@ -8,6 +8,7 @@ import { logger } from '@/lib/logger';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { generateToken } from '@/lib/auth';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import { RL } from '@/lib/auth-config';
 
 /**
  * Public endpoint for client (end user) registration
@@ -20,7 +21,7 @@ export async function POST(request: NextRequest) {
   try {
     // Rate limiting: 5 registrations per hour per IP
     const ip = getClientIp(request);
-    const rl = checkRateLimit(`register:${ip}`, 5, 60 * 60 * 1000);
+    const rl = checkRateLimit(`register:${ip}`, RL.register.max, RL.register.windowMs);
     if (!rl.allowed) {
       return NextResponse.json(
         { success: false, error: 'Too many registration attempts. Please try again later.' },

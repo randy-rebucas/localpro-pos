@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import { logger } from '@/lib/logger';
 
 interface User {
   _id: string;
@@ -10,11 +11,19 @@ interface User {
   role: 'owner' | 'admin' | 'manager' | 'cashier' | 'viewer' | 'super_admin';
 }
 
+interface LoginResult {
+  success: boolean;
+  error?: string;
+  mfaRequired?: boolean;
+  userId?: string;
+}
+
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string, tenantSlug: string) => Promise<{ success: boolean; error?: string }>;
-  loginQR: (qrToken: string, tenantSlug: string) => Promise<{ success: boolean; error?: string }>;
+  login: (email: string, password: string, tenantSlug: string) => Promise<LoginResult>;
+  loginQR: (qrToken: string, tenantSlug: string) => Promise<LoginResult>;
+  loginMFA: (userId: string, code: string, isBackupCode: boolean) => Promise<LoginResult>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
   hasRole: (roles: string[]) => boolean;
@@ -48,14 +57,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
       }
     } catch (error) {
-      console.error('Auth check failed:', error);
+      logger.error('Auth check failed:', error);
       setUser(null);
     } finally {
       setLoading(false);
     }
   };
 
-  const login = async (email: string, password: string, tenantSlug: string) => {
+  const login = async (email: string, password: string, tenantSlug: string): Promise<LoginResult> => {
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
@@ -68,11 +77,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (data.success && data.data?.user) {
         setUser(data.data.user);
         return { success: true };
-      } else {
-        return { success: false, error: data.error || 'Login failed' };
       }
+      if (data.success && data.data?.mfaRequired) {
+        return { success: false, mfaRequired: true, userId: data.data.userId };
+      }
+      return { success: false, error: data.error || 'Login failed' };
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       return { success: false, error: error.message || 'Login failed' };
+    }
+  };
+
+  const loginMFA = async (userId: string, code: string, isBackupCode: boolean): Promise<LoginResult> => {
+    try {
+      const res = await fetch('/api/auth/mfa/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ userId, code, isBackupCode }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.data?.user) {
+        setUser(data.data.user);
+        return { success: true };
+      }
+      return { success: false, error: data.error || 'MFA verification failed' };
+    } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+      return { success: false, error: error.message || 'MFA verification failed' };
     }
   };
 
@@ -83,14 +114,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         credentials: 'include',
       });
     } catch (error) {
-      console.error('Logout error:', error);
+      logger.error('Logout error:', error);
     } finally {
       setUser(null);
       router.push('/login');
     }
   };
 
-  const loginQR = async (qrToken: string, tenantSlug: string) => {
+  const loginQR = async (qrToken: string, tenantSlug: string): Promise<LoginResult> => {
     try {
       const res = await fetch('/api/auth/login-qr', {
         method: 'POST',
@@ -103,9 +134,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (data.success && data.data?.user) {
         setUser(data.data.user);
         return { success: true };
-      } else {
-        return { success: false, error: data.error || 'Login failed' };
       }
+      if (data.success && data.data?.mfaRequired) {
+        return { success: false, mfaRequired: true, userId: data.data.userId };
+      }
+      return { success: false, error: data.error || 'Login failed' };
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       return { success: false, error: error.message || 'Login failed' };
     }
@@ -132,6 +165,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         login,
         loginQR,
+        loginMFA,
         logout,
         isAuthenticated: !!user,
         hasRole,

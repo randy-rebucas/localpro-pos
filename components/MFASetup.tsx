@@ -3,6 +3,23 @@
 import { useState } from 'react';
 import Image from 'next/image';
 
+const MFA_ERROR_MAP: Record<string, string> = {
+  'already enabled': 'MFA is already enabled on this account.',
+  'not configured': 'MFA is not configured for this account.',
+  'Invalid': 'That code is incorrect. Please try again.',
+  'Too many': 'Too many attempts. Please wait and try again.',
+  'expired': 'That code has expired. Please try again.',
+  'Unauthorized': 'Your session has expired. Please log in again.',
+};
+
+function safeMfaError(raw: string | undefined, fallback: string): string {
+  if (!raw) return fallback;
+  for (const [key, msg] of Object.entries(MFA_ERROR_MAP)) {
+    if (raw.includes(key)) return msg;
+  }
+  return fallback;
+}
+
 type Step = 'status' | 'qr' | 'verify' | 'backup' | 'done';
 
 interface MFAStatus {
@@ -45,7 +62,7 @@ export default function MFASetup() {
       const res = await fetch('/api/auth/mfa/setup', { method: 'POST' });
       const data = await res.json();
       if (!data.success) {
-        setError(data.error);
+        setError(safeMfaError(data.error, 'Failed to start MFA setup. Please try again.'));
         return;
       }
       setQrCode(data.data.qrCode);
@@ -74,7 +91,7 @@ export default function MFASetup() {
       });
       const data = await res.json();
       if (!data.success) {
-        setError(data.error);
+        setError(safeMfaError(data.error, 'Verification failed. Please check your code and try again.'));
         return;
       }
       setStep('backup');
@@ -100,7 +117,7 @@ export default function MFASetup() {
       });
       const data = await res.json();
       if (!data.success) {
-        setError(data.error);
+        setError(safeMfaError(data.error, 'Failed to disable MFA. Please check your code and try again.'));
         return;
       }
       setStatus({ isEnabled: false });

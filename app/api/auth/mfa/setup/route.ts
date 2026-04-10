@@ -6,6 +6,7 @@ import { generateTOTPSecret, totpKeyUri, generateQRCode } from '@/lib/totp';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { handleApiError } from '@/lib/error-handler';
+import { MFA_BACKUP_CODES_COUNT } from '@/lib/auth-config';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 
 /**
@@ -43,7 +44,7 @@ export async function POST(request: NextRequest) {
     }
 
     const secret = generateTOTPSecret();
-    const rawBackupCodes = Array.from({ length: 8 }, () =>
+    const rawBackupCodes = Array.from({ length: MFA_BACKUP_CODES_COUNT }, () =>
       crypto.randomBytes(6).toString('hex').toUpperCase()
     );
     const hashedBackupCodes = await Promise.all(rawBackupCodes.map(c => bcrypt.hash(c, 10)));

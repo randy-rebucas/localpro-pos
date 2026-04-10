@@ -5,10 +5,22 @@ import { generateToken } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import { AUTH_COOKIE_MAX_AGE, RL } from '@/lib/auth-config';
 
 export async function POST(request: NextRequest) {
   let t: (key: string, fallback: string) => string;
   try {
+    // Rate limiting: 5 QR login attempts per 15 minutes per IP
+    const ip = getClientIp(request);
+    const rl = checkRateLimit(`login-qr:${ip}`, RL.loginQr.max, RL.loginQr.windowMs);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { success: false, error: 'Too many login attempts. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.resetAfterMs / 1000)) } }
+      );
+    }
+
     await connectDB();
     const body = await request.json();
     const { qrToken, tenantSlug } = body;
@@ -53,6 +65,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // If user has MFA enabled, do not issue a token — require MFA step
+    const MFAConfig = (await import('@/models/MFAConfig')).default;
+    const mfaConfig = await MFAConfig.findOne({ userId: user._id, isEnabled: true }).lean();
+    if (mfaConfig) {
+      return NextResponse.json({
+        success: true,
+        data: {
+          mfaRequired: true,
+          userId: user._id.toString(),
+        },
+      });
+    }
+
     // Update last login
     await User.findByIdAndUpdate(user._id, { lastLogin: new Date() });
 
@@ -73,7 +98,7 @@ export async function POST(request: NextRequest) {
       metadata: { success: true, method: 'qr' },
     });
 
-    // Set cookie
+    // Set cookie — token is NOT returned in body (httpOnly cookie is sufficient)
     const response = NextResponse.json({
       success: true,
       data: {
@@ -83,7 +108,6 @@ export async function POST(request: NextRequest) {
           name: user.name,
           role: user.role,
         },
-        token,
       },
     });
 
@@ -91,7 +115,7 @@ export async function POST(request: NextRequest) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 7, // 7 days
+      maxAge: AUTH_COOKIE_MAX_AGE,
     });
 
     return response;

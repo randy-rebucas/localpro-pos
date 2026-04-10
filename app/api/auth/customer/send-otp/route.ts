@@ -8,6 +8,8 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
+import { OTP_EXPIRY_MINUTES, RL } from '@/lib/auth-config';
 
 /**
  * POST - Send OTP to customer phone number
@@ -17,7 +19,7 @@ export async function POST(request: NextRequest) {
   try {
     // Rate limiting: 5 OTP requests per 10 minutes per IP (Twilio cost protection)
     const ip = getClientIp(request);
-    const rl = checkRateLimit(`send-otp:${ip}`, 5, 10 * 60 * 1000);
+    const rl = checkRateLimit(`send-otp:${ip}`, RL.sendOtp.max, RL.sendOtp.windowMs);
     if (!rl.allowed) {
       return NextResponse.json(
         { success: false, error: 'Too many OTP requests. Please try again later.', retryAfter: Math.ceil(rl.resetAfterMs / 1000) },
@@ -83,7 +85,8 @@ export async function POST(request: NextRequest) {
 
     // Generate cryptographically secure 6-digit OTP
     const otp = (100000 + (crypto.randomInt(900000))).toString();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes expiry
+    const otpHash = await bcrypt.hash(otp, 10);
+    const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
     // Invalidate any existing OTPs for this phone
     await CustomerOTP.updateMany(
@@ -91,18 +94,18 @@ export async function POST(request: NextRequest) {
       { verified: true } // Mark as used
     );
 
-    // Create new OTP
+    // Create new OTP — store hash, never plaintext
     await CustomerOTP.create({
       tenantId: tenant._id,
       phone: normalizedPhone,
-      otp,
+      otp: otpHash,
       expiresAt,
       verified: false,
       attempts: 0,
     });
 
     // Send OTP via SMS using Twilio
-    const smsMessage = `Your verification code is ${otp}. This code expires in 10 minutes.`;
+    const smsMessage = `Your verification code is ${otp}. This code expires in ${OTP_EXPIRY_MINUTES} minutes.`;
     
     const smsSent = await sendSMS({
       to: normalizedPhone,

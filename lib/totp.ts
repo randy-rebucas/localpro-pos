@@ -4,10 +4,11 @@
  */
 import crypto from 'crypto';
 import QRCode from 'qrcode';
+import { MFA_TOTP_WINDOW } from '@/lib/auth-config';
 
-const STEP = 30; // 30-second time step
-const DIGITS = 6;
-const WINDOW = 1; // Allow ±1 time step for clock drift
+const STEP = 30; // 30-second time step (RFC 6238 standard — do not change)
+const DIGITS = 6; // 6-digit codes (RFC 6238 standard — do not change)
+const WINDOW = MFA_TOTP_WINDOW; // Clock-drift tolerance; set MFA_TOTP_WINDOW in env
 
 /**
  * Generate a random base32-encoded secret for TOTP

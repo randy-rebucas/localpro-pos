@@ -7,6 +7,8 @@ import { getTenantIdFromRequest } from '@/lib/api-tenant'; // eslint-disable-lin
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import bcrypt from 'bcryptjs';
+import { CUSTOMER_COOKIE_MAX_AGE, OTP_MAX_ATTEMPTS, RL } from '@/lib/auth-config';
 
 /**
  * POST - Verify OTP and login customer
@@ -16,7 +18,7 @@ export async function POST(request: NextRequest) {
   try {
     // Rate limiting: 10 verify attempts per 10 minutes per IP
     const ip = getClientIp(request);
-    const rl = checkRateLimit(`verify-otp:${ip}`, 10, 10 * 60 * 1000);
+    const rl = checkRateLimit(`verify-otp:${ip}`, RL.verifyOtp.max, RL.verifyOtp.windowMs);
     if (!rl.allowed) {
       return NextResponse.json(
         { success: false, error: 'Too many verification attempts. Please try again later.' },
@@ -54,33 +56,39 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find valid OTP
+    // Find the latest active OTP record for this phone (otp field is now a bcrypt hash)
     const otpRecord = await CustomerOTP.findOne({
       tenantId: tenant._id,
       phone: normalizedPhone,
-      otp,
       verified: false,
       expiresAt: { $gt: new Date() },
-    });
+    }).sort({ createdAt: -1 });
 
     if (!otpRecord) {
-      // Increment attempts for rate limiting
-      await CustomerOTP.updateOne(
-        { tenantId: tenant._id, phone: normalizedPhone, verified: false },
-        { $inc: { attempts: 1 } }
-      );
-
       return NextResponse.json(
         { success: false, error: t('validation.invalidOtp', 'Invalid or expired OTP') },
         { status: 401 }
       );
     }
 
-    // Check max attempts
-    if (otpRecord.attempts >= 5) {
+    // Check max attempts before comparing (prevents brute-force via repeated calls)
+    if (otpRecord.attempts >= OTP_MAX_ATTEMPTS) {
       return NextResponse.json(
         { success: false, error: t('validation.maxOtpAttempts', 'Maximum verification attempts exceeded') },
         { status: 429 }
+      );
+    }
+
+    // Timing-safe comparison against stored hash
+    const isOtpValid = await bcrypt.compare(otp, otpRecord.otp);
+    if (!isOtpValid) {
+      await CustomerOTP.updateOne(
+        { _id: otpRecord._id },
+        { $inc: { attempts: 1 } }
+      );
+      return NextResponse.json(
+        { success: false, error: t('validation.invalidOtp', 'Invalid or expired OTP') },
+        { status: 401 }
       );
     }
 
@@ -146,7 +154,7 @@ export async function POST(request: NextRequest) {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
-      maxAge: 60 * 60 * 24 * 30, // 30 days
+      maxAge: CUSTOMER_COOKIE_MAX_AGE,
     });
 
     return response;

@@ -7,6 +7,7 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { verifyTOTP } from '@/lib/totp';
 import bcrypt from 'bcryptjs';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import { AUTH_COOKIE_MAX_AGE, RL } from '@/lib/auth-config';
 import { handleApiError } from '@/lib/error-handler';
 
 /**
@@ -16,7 +17,7 @@ import { handleApiError } from '@/lib/error-handler';
 export async function POST(request: NextRequest) {
   try {
     const ip = getClientIp(request);
-    const rl = checkRateLimit(`mfa-login:${ip}`, 10, 15 * 60 * 1000);
+    const rl = checkRateLimit(`mfa-login:${ip}`, RL.mfaLogin.max, RL.mfaLogin.windowMs);
     if (!rl.allowed) {
       return NextResponse.json(
         { success: false, error: 'Too many attempts. Please try again later.' },
@@ -46,20 +47,25 @@ export async function POST(request: NextRequest) {
 
     if (isBackupCode) {
       // Check all codes without short-circuiting to prevent timing oracle attacks
-      let matchedIndex = -1;
+      let matchedHash: string | null = null;
       const normalizedCode = code.toUpperCase();
       for (let i = 0; i < config.backupCodes.length; i++) {
         const matches = await bcrypt.compare(normalizedCode, config.backupCodes[i]);
-        if (matches && matchedIndex === -1) {
-          matchedIndex = i;
+        if (matches && matchedHash === null) {
+          matchedHash = config.backupCodes[i];
         }
       }
-      if (matchedIndex !== -1) {
-        isValid = true;
-        // Atomic removal via $pull to prevent race condition
-        await MFAConfig.findByIdAndUpdate(config._id, {
-          $pull: { backupCodes: config.backupCodes[matchedIndex] },
-        });
+      if (matchedHash !== null) {
+        // Atomic test-and-remove: only succeeds if the hash is still present.
+        // Prevents two concurrent requests from both consuming the same code.
+        const updated = await MFAConfig.findOneAndUpdate(
+          { _id: config._id, backupCodes: matchedHash },
+          { $pull: { backupCodes: matchedHash } },
+          { new: false }
+        );
+        if (updated) {
+          isValid = true;
+        }
       }
     } else {
       const result = verifyTOTP(code, config.totpSecret);
@@ -118,7 +124,7 @@ export async function POST(request: NextRequest) {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
-      maxAge: 60 * 60 * 24 * 7,
+      maxAge: AUTH_COOKIE_MAX_AGE,
     });
 
     return response;

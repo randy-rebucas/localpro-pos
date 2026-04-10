@@ -12,6 +12,7 @@ export interface IUser extends Document {
   isActive: boolean;
   lastLogin?: Date;
   qrToken?: string; // Unique token for QR code login
+  pin?: string; // Hashed PIN for fast POS login (select: false)
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -50,6 +51,10 @@ const UserSchema: Schema = new Schema(
       unique: true,
       sparse: true, // Allow null values but enforce uniqueness when present
       index: true,
+    },
+    pin: {
+      type: String,
+      select: false, // Never returned by default — must be explicitly selected
     },
     tenantId: {
       type: Schema.Types.ObjectId,

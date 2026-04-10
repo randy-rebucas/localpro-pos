@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { AppLockProvider } from "@/contexts/AppLockContext";
+import AppLockScreen from "@/components/AppLockScreen";
 import ToastProvider from "@/components/ToastProvider";
 import ServiceWorkerRegistration from "@/components/ServiceWorkerRegistration";
 
@@ -64,9 +66,12 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <AuthProvider>
-          <ServiceWorkerRegistration />
-          <ToastProvider />
-          {children}
+          <AppLockProvider>
+            <AppLockScreen />
+            <ServiceWorkerRegistration />
+            <ToastProvider />
+            {children}
+          </AppLockProvider>
         </AuthProvider>
       </body>
     </html>

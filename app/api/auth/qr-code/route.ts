@@ -5,6 +5,8 @@ import User from '@/models/User';
 import { requireAuth } from '@/lib/auth';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { RL } from '@/lib/auth-config';
 
 /**
  * GET - Get current user's QR code token (generates one if it doesn't exist)
@@ -59,6 +61,15 @@ export async function POST(request: NextRequest) {
     const user = await requireAuth(request);
     await connectDB();
     t = await getValidationTranslatorFromRequest(request); // eslint-disable-line @typescript-eslint/no-unused-vars
+
+    // Rate limiting: 5 regenerations per hour per user
+    const rl = checkRateLimit(`qr-regen:${user.userId}`, RL.qrRegen.max, RL.qrRegen.windowMs);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { success: false, error: 'Too many QR code regeneration requests. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.resetAfterMs / 1000)) } }
+      );
+    }
 
     // Generate new QR token (or create if doesn't exist)
     const newQrToken = crypto.randomBytes(32).toString('hex');

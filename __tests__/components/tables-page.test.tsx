@@ -16,6 +16,7 @@ vi.mock('next/navigation', () => ({
     tenant: 'test-tenant',
     lang: 'en',
   }),
+  usePathname: () => '/test-tenant/en/admin/tables',
 }));
 
 vi.mock('@/contexts/TenantSettingsContext', () => ({

@@ -4,6 +4,7 @@ import User from '@/models/User';
 import { validateEmail, validatePassword } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import { RL } from '@/lib/auth-config';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getCurrentUser } from '@/lib/auth';
 import bcrypt from 'bcryptjs';
@@ -25,7 +26,7 @@ export async function POST(request: NextRequest) {
   try {
     // Rate limiting: 5 reset attempts per 15 minutes per IP
     const ip = getClientIp(request);
-    const rl = checkRateLimit(`reset-password:${ip}`, 5, 15 * 60 * 1000);
+    const rl = checkRateLimit(`reset-password:${ip}`, RL.resetPasswordIp.max, RL.resetPasswordIp.windowMs);
     if (!rl.allowed) {
       return NextResponse.json(
         { success: false, error: 'Too many password reset attempts. Please try again later.' },
@@ -126,6 +127,16 @@ async function handleTokenReset(
     );
   }
 
+  // Additional rate limit per email: 3 attempts per hour (IP limit is on the outer handler)
+  const normalizedEmail = email.toLowerCase().trim();
+  const emailRl = checkRateLimit(`reset-pw-email:${normalizedEmail}`, RL.resetPasswordEmail.max, RL.resetPasswordEmail.windowMs);
+  if (!emailRl.allowed) {
+    return NextResponse.json(
+      { success: false, error: t('validation.resetRateLimitEmail', 'Too many reset attempts for this email. Please try again later.') },
+      { status: 429, headers: { 'Retry-After': String(Math.ceil(emailRl.resetAfterMs / 1000)) } }
+    );
+  }
+
   if (!validateEmail(email)) {
     return NextResponse.json(
       { success: false, error: t('validation.invalidEmailFormat', 'Invalid email format') },
@@ -156,7 +167,7 @@ async function handleTokenReset(
   }
 
   const user = await User.findOne({
-    email: email.toLowerCase(),
+    email: normalizedEmail,
     tenantId: tenant._id,
   }).select('+password +resetToken +resetTokenExpiry');
 

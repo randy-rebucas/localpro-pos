@@ -94,6 +94,16 @@ export function useDiscount(fetchWithTimeout: (url: string, options?: RequestIni
               onError('Minimum purchase not met');
               return;
             }
+            // Reject offline if usage limit is known to be exhausted
+            if (
+              cachedDiscount.usageLimit &&
+              cachedDiscount.usageLimit > 0 &&
+              cachedDiscount.usageCount != null &&
+              cachedDiscount.usageCount >= cachedDiscount.usageLimit
+            ) {
+              onError('Discount code has reached its usage limit');
+              return;
+            }
 
             let discountAmount = 0;
             if (cachedDiscount.type === 'percentage') {

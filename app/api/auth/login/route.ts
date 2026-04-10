@@ -7,6 +7,7 @@ import { validateEmail } from '@/lib/validation';
 import bcrypt from 'bcryptjs';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import { AUTH_COOKIE_MAX_AGE, RL } from '@/lib/auth-config';
 import { logger } from '@/lib/logger';
 import MFAConfig from '@/models/MFAConfig';
 
@@ -15,7 +16,7 @@ export async function POST(request: NextRequest) {
   try {
     // Rate limiting: 10 attempts per 15 minutes per IP
     const ip = getClientIp(request);
-    const rl = checkRateLimit(`login:${ip}`, 10, 15 * 60 * 1000);
+    const rl = checkRateLimit(`login:${ip}`, RL.login.max, RL.login.windowMs);
     if (!rl.allowed) {
       return NextResponse.json(
         { success: false, error: 'Too many login attempts. Please try again later.' },
@@ -159,7 +160,7 @@ export async function POST(request: NextRequest) {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
-      maxAge: 60 * 60 * 24 * 7, // 7 days
+      maxAge: AUTH_COOKIE_MAX_AGE,
     });
 
     return response;

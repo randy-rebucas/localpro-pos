@@ -87,7 +87,10 @@
       "Bash(grep -l \"Navbar\" c:/Users/corew/localpro-pos/app/\\\\[tenant\\\\]/\\\\[lang\\\\]/admin/*/page.tsx)",
       "Bash(grep -rL \"Navbar\" c:/Users/corew/localpro-pos/app/\\\\[tenant\\\\]/\\\\[lang\\\\]/admin/*/page.tsx)",
       "Bash(python -)",
-      "Bash(grep -n \"^\\\\s*<\\\\/div>$\" \"c:/Users/corew/localpro-pos/app/[tenant]/[lang]/page.tsx\")"
+      "Bash(grep -n \"^\\\\s*<\\\\/div>$\" \"c:/Users/corew/localpro-pos/app/[tenant]/[lang]/page.tsx\")",
+      "Bash(grep -r \"export.*function\\\\|export.*const\" /c/Users/corew/localpro-pos/lib/*.ts --include=\"*.ts\")",
+      "Bash(pnpm test:*)",
+      "Bash(pnpm build:*)"
     ]
   },
   "hooks": {
