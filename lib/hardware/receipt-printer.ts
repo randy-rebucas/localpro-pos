@@ -152,6 +152,11 @@ class ReceiptPrinterService {
       }
       return false;
     } catch (error) {
+      // NotFoundError means the user dismissed the device picker — not a real error
+      if (error instanceof Error && error.name === 'NotFoundError') {
+        logger.info('USB device picker dismissed by user.');
+        return false;
+      }
       logger.error('Failed to connect to printer:', error);
       return false;
     }
