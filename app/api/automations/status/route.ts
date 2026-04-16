@@ -1,6 +1,7 @@
 /**
  * API Route for Automation Status
- * Returns the status of all automations
+ * Returns the status of all automations, optionally scoped to a single tenant.
+ * Protected by cron auth — not accessible by end users.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -11,14 +12,21 @@ import Attendance from '@/models/Attendance';
 import CashDrawerSession from '@/models/CashDrawerSession';
 import Transaction from '@/models/Transaction';
 import { logger } from '@/lib/logger';
+import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
 
     const searchParams = request.nextUrl.searchParams;
-        const authError = verifyCronAuth(request, searchParams.get('secret'));
+    const authError = verifyCronAuth(request, searchParams.get('secret'));
     if (authError) return authError;
+
+    // Optional tenantId scoping: when provided, stats are restricted to that tenant.
+    // Without it this endpoint aggregates across all tenants (cron system-health use only).
+    const tenantFilter = searchParams.get('tenantId')
+      ? { tenantId: searchParams.get('tenantId') }
+      : {};
 
     const now = new Date();
     const stats = {
@@ -30,6 +38,7 @@ export async function GET(request: NextRequest) {
 
     // Get discount stats
     stats.discounts.active = await Discount.countDocuments({
+      ...tenantFilter,
       isActive: true,
       validFrom: { $lte: now },
       validUntil: { $gte: now },
@@ -37,17 +46,20 @@ export async function GET(request: NextRequest) {
 
     const expiringSoon = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
     stats.discounts.expiringSoon = await Discount.countDocuments({
+      ...tenantFilter,
       isActive: true,
       validUntil: { $gte: now, $lte: expiringSoon },
     });
 
     stats.discounts.needsActivation = await Discount.countDocuments({
+      ...tenantFilter,
       validFrom: { $lte: now },
       validUntil: { $gte: now },
       isActive: false,
     });
 
     stats.discounts.needsDeactivation = await Discount.countDocuments({
+      ...tenantFilter,
       $or: [
         { validUntil: { $lt: now } },
       ],
@@ -56,24 +68,28 @@ export async function GET(request: NextRequest) {
 
     // Get attendance stats
     stats.attendance.openSessions = await Attendance.countDocuments({
+      ...tenantFilter,
       clockOut: null,
     });
 
     // Count forgotten sessions (open for more than 12 hours)
     const forgottenThreshold = new Date(now.getTime() - 12 * 60 * 60 * 1000);
     stats.attendance.forgottenSessions = await Attendance.countDocuments({
+      ...tenantFilter,
       clockOut: null,
       clockIn: { $lt: forgottenThreshold },
     });
 
     // Get cash drawer stats
     stats.cashDrawer.openSessions = await CashDrawerSession.countDocuments({
+      ...tenantFilter,
       status: 'open',
     });
 
     // Get transaction stats (transactions with email in notes from last 24h)
     const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     const recentTransactions = await Transaction.find({
+      ...tenantFilter,
       createdAt: { $gte: last24h },
       status: 'completed',
       notes: { $regex: /email/i },
@@ -89,14 +105,8 @@ export async function GET(request: NextRequest) {
       data: stats,
       timestamp: now.toISOString(),
     });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  } catch (error) {
     logger.error('Automation status error:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error.message,
-      },
-      { status: 500 }
-    );
+    return handleApiError(error, 'Failed to fetch automation status');
   }
 }

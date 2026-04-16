@@ -16,6 +16,8 @@ export async function GET(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
+    // All authenticated roles can read loyalty config (e.g. cashiers need it to apply redemptions).
+    // Mutations are restricted to owner|admin in the PUT handler below.
 
     const tenantId = await getTenantIdFromRequest(request);
     if (!tenantId) {

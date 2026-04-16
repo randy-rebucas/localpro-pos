@@ -6,6 +6,7 @@ import { requireAuth } from '@/lib/auth';
 import Tenant from '@/models/Tenant';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
+import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(request: NextRequest) {
   try {
@@ -35,9 +36,9 @@ export async function GET(request: NextRequest) {
       threshold: finalThreshold,
       count: lowStockProducts.length,
     });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  } catch (error) {
     logger.error('Error fetching low stock products:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return handleApiError(error, 'Failed to fetch low stock products');
   }
 }
 

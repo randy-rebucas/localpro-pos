@@ -3,19 +3,25 @@ import connectDB from '@/lib/mongodb';
 import Invoice from '@/models/Invoice';
 import Transaction from '@/models/Transaction';
 import Customer from '@/models/Customer';
-import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
+import { requireTenantAccess } from '@/lib/api-tenant';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { generateInvoiceNumber } from '@/lib/receipt';
 
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
-    const tenantId = await getTenantIdFromRequest(request);
-    
-    if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found or access denied' }, { status: 403 });
+    let tenantId: string;
+    try {
+      const tenantAccess = await requireTenantAccess(request);
+      tenantId = tenantAccess.tenantId;
+    } catch (authError: unknown) {
+      const msg = (authError as Error).message ?? '';
+      return NextResponse.json(
+        { success: false, error: msg },
+        { status: msg.includes('Unauthorized') ? 401 : 403 }
+      );
     }
-    
+
     const searchParams = request.nextUrl.searchParams;
     const rawLimit = parseInt(searchParams.get('limit') || '50');
     const limit = Math.min(Math.max(1, rawLimit), 200);

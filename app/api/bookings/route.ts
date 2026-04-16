@@ -4,6 +4,7 @@ import Booking from '@/models/Booking';
 import User from '@/models/User';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireRole, getCurrentUser } from '@/lib/auth';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { sendBookingConfirmation } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
@@ -117,6 +118,12 @@ export async function POST(request: NextRequest) {
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
         { status: 404 }
       );
+    }
+
+    const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
+    const { allowed } = checkRateLimit(`write:bookings:${tenantId}:${ip}`, 30, 60_000);
+    if (!allowed) {
+      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
     // Check if booking scheduling feature is enabled in subscription

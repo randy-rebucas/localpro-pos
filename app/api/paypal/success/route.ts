@@ -2,13 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { capturePayment } from '@/lib/paypal';
 import { logger } from '@/lib/logger';
 
+// Only allow alphanumeric slugs and hyphens to prevent open-redirect via crafted paths.
+const SAFE_SLUG = /^[a-zA-Z0-9-]{1,64}$/;
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const token = searchParams.get('token'); // PayPal order ID
-  const tenant = searchParams.get('tenant') || '';
-  const lang = searchParams.get('lang') || 'en';
+  const rawTenant = searchParams.get('tenant') || '';
+  const rawLang = searchParams.get('lang') || 'en';
   const planId = searchParams.get('planId') || '';
   const billingCycle = searchParams.get('billingCycle') || 'monthly';
+
+  // Validate path segments before building redirect URLs (prevent open redirect).
+  const tenant = SAFE_SLUG.test(rawTenant) ? rawTenant : '';
+  const lang = SAFE_SLUG.test(rawLang) ? rawLang : 'en';
 
   // Resolve basePath outside try so it's available in catch
   const basePath = tenant ? `/${tenant}/${lang}` : '';
