@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { useSubscription } from '@/contexts/SubscriptionContext';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -177,6 +178,9 @@ export default function Navbar() {
           
           {/* Right Side Actions */}
           <div className="flex items-center space-x-4">
+            {/* Language Switcher */}
+            <LanguageSwitcher lang={lang} tenant={tenant} />
+
             {/* User Section with Dropdown */}
             {isAuthenticated && user ? (
               <div className="relative" data-user-menu>

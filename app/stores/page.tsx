@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { normalizeImageUrl } from '@/lib/image-utils';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
 
 interface Tenant {
   slug: string;
@@ -34,7 +35,7 @@ const BUSINESS_TYPE_META: Record<string, { icon: string; label: string; gradient
 
 const DEFAULT_META = { icon: '🏬', label: 'Store', gradient: 'from-blue-500 to-indigo-600' };
 
-function StoreCard({ tenant }: { tenant: Tenant }) {
+function StoreCard({ tenant, preferredLang }: { tenant: Tenant; preferredLang: string }) {
   const displayName = tenant.settings?.companyName || tenant.name;
   const businessType = tenant.settings?.businessType || 'General';
   const meta = BUSINESS_TYPE_META[businessType] ?? DEFAULT_META;
@@ -54,7 +55,7 @@ function StoreCard({ tenant }: { tenant: Tenant }) {
 
   return (
     <Link
-      href={`/${tenant.slug}/en`}
+      href={`/${tenant.slug}/${preferredLang}`}
       className="group relative flex flex-col bg-white border border-gray-200 overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200 hover:border-blue-500"
     >
       {/* Top accent bar */}
@@ -154,7 +155,30 @@ export default function StoresPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('All');
+  const [preferredLang, setPreferredLang] = useState('en');
   const searchRef = useRef<HTMLInputElement>(null);
+
+  // Read stored language preference so StoreCard links respect it
+  useEffect(() => {
+    const stored = localStorage.getItem('preferred_lang');
+    if (stored === 'en' || stored === 'es') setPreferredLang(stored);
+    // Re-sync whenever LanguageSwitcher updates localStorage
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'preferred_lang' && (e.newValue === 'en' || e.newValue === 'es')) {
+        setPreferredLang(e.newValue);
+      }
+    };
+    const onCustom = (e: Event) => {
+      const lang = (e as CustomEvent<string>).detail;
+      if (lang === 'en' || lang === 'es') setPreferredLang(lang);
+    };
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('preferred_lang_change', onCustom);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('preferred_lang_change', onCustom);
+    };
+  }, []);
 
   useEffect(() => {
     async function fetchTenants() {
@@ -205,9 +229,12 @@ export default function StoresPage() {
             <span className="text-xl">🏬</span>
             <span>1pos</span>
           </Link>
-          <Link href="/signup" className="inline-flex items-center bg-blue-600 text-white px-4 py-1.5 text-sm font-semibold hover:bg-blue-700 transition-colors">
-            Create Store
-          </Link>
+          <div className="flex items-center gap-3">
+            <LanguageSwitcher />
+            <Link href="/signup" className="inline-flex items-center bg-blue-600 text-white px-4 py-1.5 text-sm font-semibold hover:bg-blue-700 transition-colors">
+              Create Store
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -304,7 +331,7 @@ export default function StoresPage() {
         ) : filtered.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filtered.map((tenant) => (
-              <StoreCard key={tenant.slug} tenant={tenant} />
+              <StoreCard key={tenant.slug} tenant={tenant} preferredLang={preferredLang} />
             ))}
           </div>
         ) : (

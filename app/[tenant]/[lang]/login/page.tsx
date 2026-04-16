@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
 
 const QRCodeScanner = dynamic(() => import('@/components/QRCodeScanner'), {
   ssr: false,
@@ -91,6 +92,11 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center px-4 py-12">
+      {/* Language switcher — top-right corner */}
+      <div className="fixed top-4 right-4 z-50">
+        <LanguageSwitcher lang={lang} tenant={tenant} />
+      </div>
+
       <div className="max-w-md w-full bg-white border border-gray-300 p-6 sm:p-8 animate-fade-in">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 border border-blue-700 mb-4">
