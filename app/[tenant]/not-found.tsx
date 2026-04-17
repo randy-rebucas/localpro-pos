@@ -2,14 +2,28 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
 
+type Locale = 'en' | 'es';
+
+function resolveLang(paramLang: unknown): Locale {
+  if (paramLang === 'en' || paramLang === 'es') return paramLang;
+  if (typeof window !== 'undefined') {
+    const stored = localStorage.getItem('preferred_lang');
+    if (stored === 'en' || stored === 'es') return stored;
+  }
+  return 'en';
+}
+
 export default function TenantNotFound() {
+  const params = useParams();
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
 
   useEffect(() => {
-    getDictionaryClient('en').then(setDict);
-  }, []);
+    const lang = resolveLang(params?.lang);
+    getDictionaryClient(lang).then(setDict);
+  }, [params?.lang]);
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
@@ -29,26 +43,27 @@ export default function TenantNotFound() {
             />
           </svg>
         </div>
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">{dict?.common?.storeNotFound || 'Store Not Found'}</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">
+          {dict?.admin?.storeNotFound || 'Store Not Found'}
+        </h1>
         <p className="text-gray-600 mb-6">
-          {dict?.common?.storeNotFoundMessage || "The store you're looking for doesn't exist or has been deactivated."}
+          {dict?.admin?.storeNotFoundMessage || "The store you're looking for doesn't exist or has been deactivated."}
         </p>
         <div className="space-y-3">
           <Link
             href="/default/en"
             className="block w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 font-medium transition-colors"
           >
-            {dict?.common?.goToDefaultStore || 'Go to Default Store'}
+            {dict?.admin?.goToDefaultStore || 'Go to Default Store'}
           </Link>
           <Link
             href="/"
             className="block w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-200 font-medium transition-colors"
           >
-            {dict?.common?.goToHome || 'Go to Home'}
+            {dict?.admin?.goToHome || 'Go to Home'}
           </Link>
         </div>
       </div>
     </div>
   );
 }
-

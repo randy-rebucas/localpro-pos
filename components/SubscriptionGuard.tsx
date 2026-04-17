@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
+import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
 
 interface SubscriptionGuardProps {
   children: ReactNode;
@@ -18,6 +19,12 @@ export function SubscriptionGuard({ children }: SubscriptionGuardProps) {
   const tenant = params.tenant as string;
   const lang = params.lang as string;
   const [isCreatingTrial, setIsCreatingTrial] = useState(false);
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+
+  useEffect(() => {
+    const l = (lang as 'en' | 'es') || 'en';
+    getDictionaryClient(l).then(setDict);
+  }, [lang]);
 
   useEffect(() => {
     const handleSubscriptionCheck = async () => {
@@ -104,7 +111,7 @@ export function SubscriptionGuard({ children }: SubscriptionGuardProps) {
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
           <p className="text-gray-600">
-            {isCreatingTrial ? 'Setting up your trial...' : 'Checking subscription...'}
+            {isCreatingTrial ? (dict?.admin?.settingUpTrial || 'Setting up your trial...') : (dict?.admin?.checkingSubscription || 'Checking subscription...')}
           </p>
         </div>
       </div>
@@ -117,7 +124,7 @@ export function SubscriptionGuard({ children }: SubscriptionGuardProps) {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-          <p className="text-gray-600">Preparing your account...</p>
+          <p className="text-gray-600">{dict?.admin?.preparingAccount || 'Preparing your account...'}</p>
         </div>
       </div>
     );

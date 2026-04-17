@@ -1028,7 +1028,7 @@ export default function Dashboard() {
               className="w-full py-3 text-white font-semibold rounded-lg transition-colors mb-3"
               style={{ backgroundColor: primaryColor }}
             >
-              Open Cash Drawer
+              {dictValue('pos.openCashDrawer', 'Open Cash Drawer')}
             </button>
             <button
               onClick={async () => {
@@ -1037,7 +1037,7 @@ export default function Dashboard() {
               }}
               className="w-full py-2.5 text-gray-600 font-medium rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors text-sm"
             >
-              Logout
+              {dictValue('common.logout', 'Logout')}
             </button>
           </div>
         </div>
@@ -1048,30 +1048,30 @@ export default function Dashboard() {
         <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center">
           <div className="bg-white rounded-lg shadow-2xl p-6 max-w-md w-full mx-4">
             <h3 className="text-lg font-bold text-gray-900 mb-4">
-              {showCashDrawerModal === 'open' ? 'Open Cash Drawer' : 'Close Cash Drawer'}
+              {showCashDrawerModal === 'open' ? dictValue('pos.openCashDrawer', 'Open Cash Drawer') : dictValue('pos.closeCashDrawer', 'Close Cash Drawer')}
             </h3>
 
             {closingSummary ? (
               <div className="space-y-3 mb-6">
-                <h4 className="font-semibold text-gray-800">Shift Summary</h4>
+                <h4 className="font-semibold text-gray-800">{dictValue('pos.shiftSummary', 'Shift Summary')}</h4>
                 <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Expected Amount:</span>
+                    <span className="text-gray-600">{dictValue('admin.expectedAmount', 'Expected Amount')}:</span>
                     <span className="font-medium"><Currency amount={closingSummary.expectedAmount || 0} /></span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Actual Closing:</span>
+                    <span className="text-gray-600">{dictValue('pos.actualClosing', 'Actual Closing')}:</span>
                     <span className="font-medium"><Currency amount={closingSummary.closingAmount || 0} /></span>
                   </div>
                   <div className="border-t pt-2 flex justify-between font-semibold">
-                    <span>Difference:</span>
+                    <span>{dictValue('pos.difference', 'Difference')}:</span>
                     <span className={
                       (closingSummary.shortage || 0) > 0 ? 'text-red-600' :
                         (closingSummary.overage || 0) > 0 ? 'text-green-600' : 'text-gray-900'
                     }>
-                      {(closingSummary.shortage || 0) > 0 && <>Short: <Currency amount={closingSummary.shortage || 0} /></>}
-                      {(closingSummary.overage || 0) > 0 && <>Over: <Currency amount={closingSummary.overage || 0} /></>}
-                      {!(closingSummary.shortage || 0) && !(closingSummary.overage || 0) && 'Balanced'}
+                      {(closingSummary.shortage || 0) > 0 && <>{dictValue('pos.short', 'Short')}: <Currency amount={closingSummary.shortage || 0} /></>}
+                      {(closingSummary.overage || 0) > 0 && <>{dictValue('pos.over', 'Over')}: <Currency amount={closingSummary.overage || 0} /></>}
+                      {!(closingSummary.shortage || 0) && !(closingSummary.overage || 0) && dictValue('pos.balanced', 'Balanced')}
                     </span>
                   </div>
                 </div>
@@ -1206,7 +1206,7 @@ export default function Dashboard() {
                     <button
                       onClick={() => window.open(customerDisplayUrl, 'customer_display', 'width=1024,height=768')}
                       className="px-4 py-3 bg-purple-600 text-white hover:bg-purple-700 transition-colors border border-purple-700"
-                      title="Open Customer Display"
+                      title={dictValue('pos.titleOpenCustomerDisplay', 'Open Customer Display')}
                     >
                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -1252,7 +1252,7 @@ export default function Dashboard() {
                                   if (product) handleBranchLookup(product);
                                 }}
                                 className="ml-1 text-gray-400 hover:text-blue-600 transition-colors"
-                                title="Check stock at other locations"
+                                title={dictValue('pos.titleCheckStock', 'Check stock at other locations')}
                               >
                                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -1655,7 +1655,7 @@ export default function Dashboard() {
                       {processing ? (
                         <>
                           <div className="animate-spin h-6 w-6 border-b-2 border-white"></div>
-                          <span>Processing...</span>
+                          <span>{dictValue('pos.processing', 'Processing...')}</span>
                         </>
                       ) : (
                         <>
@@ -1745,25 +1745,25 @@ export default function Dashboard() {
                                     credentials: 'include',
                                     body: JSON.stringify({ status: 'check-requested' }),
                                   });
-                                  showToast.success('Check requested for ' + tableNumber);
+                                  showToast.success(`${dictValue('pos.checkRequested', 'Check requested for')} ${tableNumber}`);
                                 } catch {
-                                  showToast.error('Failed to update table status');
+                                  showToast.error(dictValue('pos.failedToUpdateTableStatus', 'Failed to update table status'));
                                 }
                               }}
                               className={`flex flex-col items-center justify-center gap-1 bg-yellow-50 border-2 border-yellow-400 text-yellow-800 hover:bg-yellow-100 transition-all text-xs font-medium min-h-[64px] ${roamingMode ? 'w-full px-2 py-1.5 text-[11px]' : 'px-3 py-2'}`}
-                              title="Mark check requested"
+                              title={dictValue('pos.titleMarkCheckRequested', 'Mark check requested')}
                             >
                               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                               </svg>
-                              Check
+                              {dictValue('pos.checkBtn', 'Check')}
                             </button>
                           )}
                         </div>
                       ) : businessType === 'restaurant' ? (
                         /* Takeout/delivery: show order type label */
                         <div className={`flex flex-col justify-center gap-1 bg-orange-50 border-2 border-orange-200 text-gray-700 font-medium text-xs min-h-[64px] ${roamingMode ? 'w-full px-2 py-1.5 text-[11px]' : 'px-4 py-2 min-w-[100px]'}`}>
-                          <span className="text-[10px] font-semibold text-orange-600 uppercase tracking-wide">Order #</span>
+                          <span className="text-[10px] font-semibold text-orange-600 uppercase tracking-wide">{dictValue('pos.orderNumber', 'Order #')}</span>
                           <input
                             type="text"
                             value={tableNumber}
@@ -1778,12 +1778,12 @@ export default function Dashboard() {
                           type="button"
                           onClick={() => { if (cart.length > 0) { setSplitStep('guests'); setGuestPayments([]); setShowSplitCheckModal(true); } else showToast.error(dictValue('pos.cartEmptyAlert', 'Cart is empty')); }}
                           className={`flex items-center gap-2 min-h-[64px] bg-white border-2 border-gray-200 hover:border-gray-400 hover:bg-gray-50 transition-all text-gray-700 font-medium text-xs ${roamingMode ? 'w-full px-3 py-2' : 'flex-shrink-0 px-5 py-3'}`}
-                          title="Split bill equally between guests"
+                          title={dictValue('pos.titleSplitBill', 'Split bill equally between guests')}
                         >
                           <svg className="w-5 h-5 text-gray-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
                           </svg>
-                          <span>Split Check</span>
+                          <span>{dictValue('pos.splitCheck', 'Split Check')}</span>
                         </button>
                       )}
 
@@ -1793,19 +1793,19 @@ export default function Dashboard() {
                           type="button"
                           onClick={() => { if (cart.length > 0) { setSplitStep('guests'); setGuestPayments([]); setShowSplitCheckModal(true); } else showToast.error(dictValue('pos.cartEmptyAlert', 'Cart is empty')); }}
                           className={`flex items-center gap-1.5 min-h-[64px] bg-white border-2 border-gray-200 hover:border-gray-400 hover:bg-gray-50 transition-all text-gray-700 font-medium text-xs ${roamingMode ? 'w-full px-3 py-2' : 'flex-shrink-0 px-4 py-2'}`}
-                          title="Split bill equally between guests"
+                          title={dictValue('pos.titleSplitBill', 'Split bill equally between guests')}
                         >
                           <svg className="w-4 h-4 text-gray-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
                           </svg>
-                          <span>Split</span>
+                          <span>{dictValue('pos.split', 'Split')}</span>
                         </button>
                       )}
 
                       {/* Service/laundry: Schedule appointment */}
                       {(businessType === 'service' || businessType === 'laundry') && (
                         <div className={`flex flex-col justify-center gap-1 bg-blue-50 border-2 border-blue-200 text-gray-700 font-medium text-xs min-h-[64px] ${roamingMode ? 'w-full px-2 py-1.5 text-[11px]' : 'px-4 py-2 min-w-[140px]'}`}>
-                          <span className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide">Schedule for</span>
+                          <span className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide">{dictValue('pos.scheduleFor', 'Schedule for')}</span>
                           <input
                             type="datetime-local"
                             value={scheduledFor}
@@ -1819,34 +1819,34 @@ export default function Dashboard() {
                         type="button"
                         onClick={() => cart.length > 0 ? setShowSaveCartModal(true) : showToast.error(dictValue('pos.cartEmptyAlert', 'Cart is empty'))}
                         className={`flex items-center gap-2 min-h-[64px] bg-white border-2 border-gray-200 hover:border-gray-400 hover:bg-gray-50 transition-all text-gray-700 font-medium text-xs ${roamingMode ? 'w-full px-3 py-2' : 'flex-shrink-0 px-5 py-3'}`}
-                        title="Hold current order"
+                        title={dictValue('pos.titleHoldOrder', 'Hold current order')}
                       >
                         <svg className="w-5 h-5 text-gray-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        <span>Hold Order</span>
+                        <span>{dictValue('pos.holdOrder', 'Hold Order')}</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => setShowRefundModal(true)}
                         className={`flex items-center gap-2 min-h-[64px] bg-white border-2 border-gray-200 hover:border-red-200 hover:bg-red-50 transition-all text-gray-700 font-medium text-xs ${roamingMode ? 'w-full px-3 py-2' : 'flex-shrink-0 px-5 py-3'}`}
-                        title="Process a refund"
+                        title={dictValue('pos.titleProcessRefund', 'Process a refund')}
                       >
                         <svg className="w-5 h-5 text-red-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
                         </svg>
-                        <span>Refund</span>
+                        <span>{dictValue('pos.refund', 'Refund')}</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => { setShowSavedCartsModal(true); loadSavedCarts(); }}
                         className={`flex items-center gap-2 min-h-[64px] bg-white border-2 border-gray-200 hover:border-gray-400 hover:bg-gray-50 transition-all text-gray-700 font-medium text-xs ${roamingMode ? 'w-full px-3 py-2' : 'flex-shrink-0 px-5 py-3'}`}
-                        title="Load a saved order"
+                        title={dictValue('pos.titleSavedOrders', 'Load a saved order')}
                       >
                         <svg className="w-5 h-5 text-gray-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                         </svg>
-                        <span>Saved Orders</span>
+                        <span>{dictValue('pos.savedOrders', 'Saved Orders')}</span>
                       </button>
                     </div>
                   )}
@@ -1902,7 +1902,7 @@ export default function Dashboard() {
                   style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
                   onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = `${primaryColor}dd`; }}
                   onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = primaryColor; }}
-                  title="Scan QR Code"
+                  title={dictValue('pos.scanQRCode', 'Scan QR Code')}
                 >
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
@@ -2382,7 +2382,7 @@ export default function Dashboard() {
                       <svg className="w-5 h-5 flex-shrink-0 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
                       </svg>
-                      <span>Hold phone or wearable near the reader. Supports Apple Pay, Google Pay &amp; NFC cards.</span>
+                      <span>{dictValue('pos.nfcInstruction', 'Hold phone or wearable near the reader. Supports Apple Pay, Google Pay & NFC cards.')}</span>
                     </div>
                   )}
 
@@ -2390,7 +2390,7 @@ export default function Dashboard() {
                   {paymentMethod === 'wallet' && (
                     <div className="space-y-3">
                       <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-2">Select wallet</label>
+                        <label className="block text-xs font-medium text-gray-600 mb-2">{dictValue('pos.selectWallet', 'Select wallet')}</label>
                         <div className="grid grid-cols-3 gap-2">
                           {(['GCash', 'Maya', 'PayPal', 'ShopeePay', 'Grab', 'Other'] as const).map((w) => (
                             <button
@@ -2409,12 +2409,12 @@ export default function Dashboard() {
                         </div>
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1.5">Reference no. <span className="text-gray-400">(optional)</span></label>
+                        <label className="block text-xs font-medium text-gray-600 mb-1.5">{dictValue('pos.referenceNoOptional', 'Reference no.')} <span className="text-gray-400">({dictValue('pos.referenceNoHint', 'optional')})</span></label>
                         <input
                           type="text"
                           value={paymentReference}
                           onChange={(e) => setPaymentReference(e.target.value)}
-                          placeholder="e.g. GCash transaction ID"
+                          placeholder={dictValue('pos.gcashPlaceholder', 'e.g. GCash transaction ID')}
                           className="w-full px-3 py-2.5 text-sm border-2 border-gray-300 transition-all"
                           onFocus={(e) => { e.currentTarget.style.borderColor = primaryColor; }}
                           onBlur={(e) => { e.currentTarget.style.borderColor = '#d1d5db'; }}
@@ -2430,15 +2430,15 @@ export default function Dashboard() {
                         <svg className="w-5 h-5 flex-shrink-0 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 4h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
                         </svg>
-                        <span>Show the QR code to the customer to scan (QR Ph / InstaPay).</span>
+                        <span>{dictValue('pos.qrPaymentInstruction', 'Show the QR code to the customer to scan (QR Ph / InstaPay).')}</span>
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1.5">Reference no. <span className="text-gray-400">(optional)</span></label>
+                        <label className="block text-xs font-medium text-gray-600 mb-1.5">{dictValue('pos.referenceNoOptional', 'Reference no.')} <span className="text-gray-400">({dictValue('pos.referenceNoHint', 'optional')})</span></label>
                         <input
                           type="text"
                           value={paymentReference}
                           onChange={(e) => setPaymentReference(e.target.value)}
-                          placeholder="e.g. InstaPay reference"
+                          placeholder={dictValue('pos.instaPayPlaceholder', 'e.g. InstaPay reference')}
                           className="w-full px-3 py-2.5 text-sm border-2 border-gray-300 transition-all"
                           onFocus={(e) => { e.currentTarget.style.borderColor = primaryColor; }}
                           onBlur={(e) => { e.currentTarget.style.borderColor = '#d1d5db'; }}
@@ -3176,15 +3176,15 @@ export default function Dashboard() {
                 </div>
                 <div className="bg-gray-50 border border-gray-200 px-4 py-3 mb-5 space-y-1.5">
                   <div className="flex justify-between text-sm text-gray-600">
-                    <span>Total</span>
+                    <span>{dictValue('common.total', 'Total')}</span>
                     <span className="font-semibold"><Currency amount={getTotal()} /></span>
                   </div>
                   <div className="flex justify-between text-sm text-gray-600">
-                    <span>Guests</span>
+                    <span>{dictValue('pos.guests', 'Guests')}</span>
                     <span className="font-semibold">{splitGuests}</span>
                   </div>
                   <div className="flex justify-between text-base font-bold text-gray-900 border-t border-gray-200 pt-1.5">
-                    <span>Per guest</span>
+                    <span>{dictValue('pos.perGuest', 'Per guest')}</span>
                     <span style={{ color: primaryColor }}>
                       <Currency amount={getTotal() / splitGuests} />
                     </span>
@@ -3208,12 +3208,12 @@ export default function Dashboard() {
                   className="w-full py-4 min-h-[52px] text-white font-bold text-base transition-colors border"
                   style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
                 >
-                  Continue to Payment →
+                  {dictValue('pos.continueToPayment', 'Continue to Payment')} →
                 </button>
               </div>
             ) : (
               <div className="px-6 py-5">
-                <p className="text-sm text-gray-600 mb-4">Collect payment from each guest.</p>
+                <p className="text-sm text-gray-600 mb-4">{dictValue('pos.collectPaymentInstruction', 'Collect payment from each guest.')}</p>
                 <div className="space-y-2 mb-5 max-h-72 overflow-y-auto">
                   {guestPayments.map((gp, idx) => {
                     const entry = gp as SplitPaymentEntry & { collected: boolean };
@@ -3222,12 +3222,12 @@ export default function Dashboard() {
                         key={idx}
                         className={`flex items-center gap-2 p-3 border ${entry.collected ? 'border-green-300 bg-green-50' : 'border-gray-200 bg-white'}`}
                       >
-                        <span className="text-xs font-bold text-gray-500 w-14 shrink-0">Guest {idx + 1}</span>
+                        <span className="text-xs font-bold text-gray-500 w-14 shrink-0">{dictValue('pos.guestLabel', 'Guest')} {idx + 1}</span>
                         <span className="text-sm font-semibold text-gray-800 w-20 shrink-0">
                           <Currency amount={entry.amount} />
                         </span>
                         {entry.collected ? (
-                          <span className="flex-1 text-xs text-green-600 font-semibold text-center">✓ Collected ({entry.method})</span>
+                          <span className="flex-1 text-xs text-green-600 font-semibold text-center">✓ {dictValue('pos.collectedWith', 'Collected')} ({entry.method})</span>
                         ) : (
                           <>
                             <select
@@ -3239,10 +3239,10 @@ export default function Dashboard() {
                               }
                               className="flex-1 text-xs border border-gray-300 px-2 py-1.5 bg-white"
                             >
-                              <option value="cash">Cash</option>
-                              <option value="card">Card</option>
-                              <option value="wallet">Wallet</option>
-                              <option value="qr_code">QR Code</option>
+                              <option value="cash">{dictValue('pos.cash', 'Cash')}</option>
+                              <option value="card">{dictValue('pos.card', 'Card')}</option>
+                              <option value="wallet">{dictValue('pos.wallet', 'Wallet')}</option>
+                              <option value="qr_code">{dictValue('pos.qrCodeOption', 'QR Code')}</option>
                             </select>
                             <button
                               type="button"
@@ -3254,7 +3254,7 @@ export default function Dashboard() {
                               className="shrink-0 px-3 py-1.5 text-xs font-bold text-white"
                               style={{ backgroundColor: primaryColor }}
                             >
-                              Collect
+                              {dictValue('pos.collect', 'Collect')}
                             </button>
                           </>
                         )}
@@ -3284,7 +3284,7 @@ export default function Dashboard() {
                       splitEntries
                     );
                     if (result?.success) {
-                      showToast.success(`Split payment complete — ${splitGuests} guests`);
+                      showToast.success(`${dictValue('pos.splitPaymentComplete', 'Split payment complete')} — ${splitGuests} ${dictValue('pos.guests', 'guests')}`);
                       const soldItems = [...cart];
                       setProducts((prev) =>
                         prev.map((p) => {
@@ -3308,14 +3308,14 @@ export default function Dashboard() {
                   className="w-full py-4 min-h-[52px] text-white font-bold text-base transition-colors border disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
                 >
-                  {processing ? 'Processing…' : `Complete Order (${(guestPayments as Array<SplitPaymentEntry & { collected: boolean }>).filter((g) => g.collected).length}/${splitGuests} collected)`}
+                  {processing ? dictValue('pos.processing', 'Processing...') : `${dictValue('pos.completeOrder', 'Complete Order')} (${(guestPayments as Array<SplitPaymentEntry & { collected: boolean }>).filter((g) => g.collected).length}/${splitGuests} ${dictValue('pos.collectedWith', 'collected')})`}
                 </button>
                 <button
                   type="button"
                   onClick={() => setSplitStep('guests')}
                   className="w-full mt-2 py-2 text-sm text-gray-500 hover:text-gray-700"
                 >
-                  ← Back to guest count
+                  ← {dictValue('pos.backToGuestCount', 'Back to guest count')}
                 </button>
               </div>
             )}

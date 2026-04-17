@@ -144,10 +144,10 @@ export default function BackupResetPage() {
             {dict?.admin?.backToAdmin || 'Back to Admin'}
           </Link>
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
-            Collection Backup & Reset
+            {dict?.backupReset?.title || 'Collection Backup & Reset'}
           </h1>
           <p className="text-gray-600">
-            Backup your data before resetting. Warning: Reset action will permanently delete all data in the selected collections for this tenant. This cannot be undone.
+            {dict?.backupReset?.subtitle || 'Backup your data before resetting. Warning: Reset action will permanently delete all data in the selected collections for this tenant. This cannot be undone.'}
           </p>
         </div>
 
@@ -155,9 +155,9 @@ export default function BackupResetPage() {
           {/* Backup Section */}
           <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8">
             <div className="mb-6 p-5 bg-blue-50 border-2 border-blue-300">
-              <h3 className="text-lg font-semibold text-blue-900 mb-3">Backup Collections</h3>
+              <h3 className="text-lg font-semibold text-blue-900 mb-3">{dict?.backupReset?.backupTitle || 'Backup Collections'}</h3>
               <p className="text-sm text-blue-800 mb-4">
-                Export selected collections as a JSON backup file. You can restore this backup later.
+                {dict?.backupReset?.backupDesc || 'Export selected collections as a JSON backup file. You can restore this backup later.'}
               </p>
 
               <div className="flex items-center gap-4">
@@ -169,14 +169,14 @@ export default function BackupResetPage() {
                   {backing ? (
                     <>
                       <div className="animate-spin h-5 w-5 border-b-2 border-white"></div>
-                      <span>Creating Backup...</span>
+                      <span>{dict?.backupReset?.creatingBackup || 'Creating Backup...'}</span>
                     </>
                   ) : (
                     <>
                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                       </svg>
-                      <span>Download Backup</span>
+                      <span>{dict?.backupReset?.downloadBackup || 'Download Backup'}</span>
                     </>
                   )}
                 </button>
@@ -187,15 +187,15 @@ export default function BackupResetPage() {
           {/* Restore Section */}
           <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8">
             <div className="mb-6 p-5 bg-green-50 border-2 border-green-300">
-              <h3 className="text-lg font-semibold text-green-900 mb-3">Restore Collections</h3>
+              <h3 className="text-lg font-semibold text-green-900 mb-3">{dict?.backupReset?.restoreTitle || 'Restore Collections'}</h3>
               <p className="text-sm text-green-800 mb-4">
-                Upload a backup JSON file to restore collections. You can choose to clear existing data before restoring.
+                {dict?.backupReset?.restoreDesc || 'Upload a backup JSON file to restore collections. You can choose to clear existing data before restoring.'}
               </p>
 
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-green-900 mb-2">
-                    Select Backup File
+                    {dict?.backupReset?.selectBackupFile || 'Select Backup File'}
                   </label>
                   <input
                     type="file"
@@ -213,14 +213,14 @@ export default function BackupResetPage() {
                 {restoreFile && (
                   <div className="p-3 bg-white border border-green-300">
                     <p className="text-sm text-green-800">
-                      <span className="font-medium">Selected:</span> {restoreFile.name} ({formatFileSize(restoreFile.size)} KB)
+                      <span className="font-medium">{dict?.backupReset?.selectedFile || 'Selected:'}</span> {restoreFile.name} ({formatFileSize(restoreFile.size)} KB)
                     </p>
                   </div>
                 )}
 
                 {restoreResults && (
                   <div className="p-4 bg-white border-2 border-green-300">
-                    <h4 className="font-semibold text-green-900 mb-2">Restore Results:</h4>
+                    <h4 className="font-semibold text-green-900 mb-2">{dict?.backupReset?.restoreResults || 'Restore Results:'}</h4>
                     <ul className="space-y-1">
                       {Object.entries(restoreResults).map(([collection, result]) => (
                         <li key={collection} className="text-sm text-green-800">
@@ -239,7 +239,7 @@ export default function BackupResetPage() {
                       className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 cursor-pointer"
                     />
                     <span className="ml-2 text-sm font-medium text-green-900">
-                      Clear existing data before restoring
+                      {dict?.backupReset?.clearExisting || 'Clear existing data before restoring'}
                     </span>
                   </label>
                 </div>
@@ -252,14 +252,14 @@ export default function BackupResetPage() {
                   {restoring ? (
                     <>
                       <div className="animate-spin h-5 w-5 border-b-2 border-white"></div>
-                      <span>Restoring...</span>
+                      <span>{dict?.backupReset?.restoring || 'Restoring...'}</span>
                     </>
                   ) : (
                     <>
                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                       </svg>
-                      <span>Restore Backup</span>
+                      <span>{dict?.backupReset?.restoreBackup || 'Restore Backup'}</span>
                     </>
                   )}
                 </button>
@@ -270,14 +270,14 @@ export default function BackupResetPage() {
           {/* Reset Section */}
           <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8">
             <div className="p-5 bg-red-50 border-2 border-red-300">
-              <h3 className="text-lg font-semibold text-red-900 mb-3">Reset Collections</h3>
+              <h3 className="text-lg font-semibold text-red-900 mb-3">{dict?.backupReset?.resetTitle || 'Reset Collections'}</h3>
               <p className="text-sm text-red-800 mb-4">
-                Warning: This action will permanently delete all data in the selected collections for this tenant. This cannot be undone.
+                {dict?.backupReset?.resetWarning || 'Warning: This action will permanently delete all data in the selected collections for this tenant. This cannot be undone.'}
               </p>
 
               {resetResults && (
                 <div className="mb-6 p-4 bg-blue-50 border-2 border-blue-300">
-                  <h3 className="font-semibold text-blue-900 mb-2">Reset Results:</h3>
+                  <h3 className="font-semibold text-blue-900 mb-2">{dict?.backupReset?.resetResults || 'Reset Results:'}</h3>
                   <ul className="space-y-1">
                     {Object.entries(resetResults).map(([collection, result]) => (
                       <li key={collection} className="text-sm text-blue-800">
@@ -291,20 +291,20 @@ export default function BackupResetPage() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-3">
-                    Select Collections to Reset:
+                    {dict?.backupReset?.selectCollectionsToReset || 'Select Collections to Reset:'}
                   </label>
                   <div className="flex gap-2 mb-4">
                     <button
                       onClick={handleSelectAll}
                       className="px-4 py-2 text-sm bg-blue-100 text-blue-700 hover:bg-blue-200 font-medium transition-colors"
                     >
-                      Select All
+                      {dict?.backupReset?.selectAll || 'Select All'}
                     </button>
                     <button
                       onClick={() => setSelectedCollections([])}
                       className="px-4 py-2 text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium transition-colors"
                     >
-                      Clear All
+                      {dict?.backupReset?.clearAll || 'Clear All'}
                     </button>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -342,14 +342,14 @@ export default function BackupResetPage() {
                     {resetting ? (
                       <>
                         <div className="animate-spin h-5 w-5 border-b-2 border-white"></div>
-                        <span>Resetting...</span>
+                        <span>{dict?.backupReset?.resetting || 'Resetting...'}</span>
                       </>
                     ) : (
                       <>
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
-                        <span>Reset Selected Collections</span>
+                        <span>{dict?.backupReset?.resetSelected || 'Reset Selected Collections'}</span>
                       </>
                     )}
                   </button>

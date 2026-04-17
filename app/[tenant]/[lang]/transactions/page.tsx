@@ -1071,7 +1071,7 @@ export default function TransactionsPage() {
                           />
                           <input
                             type="number"
-                            placeholder="Qty"
+                            placeholder={dict?.customerDisplay?.qty || 'Qty'}
                             value={item.quantity}
                             min="1"
                             step="1"
@@ -1082,7 +1082,7 @@ export default function TransactionsPage() {
                             <button
                               onClick={() => setManualItems((prev) => prev.filter((_, i) => i !== idx))}
                               className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors"
-                              title="Remove item"
+                              title={dict?.pos?.removeItem || 'Remove item'}
                             >
                               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                             </button>

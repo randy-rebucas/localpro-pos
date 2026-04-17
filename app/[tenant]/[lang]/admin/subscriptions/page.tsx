@@ -46,7 +46,7 @@ export default function SubscriptionsPage() {
             className="inline-block animate-spin h-8 w-8 rounded-full"
             style={{ borderTop: `2px solid ${primaryColor}`, borderRight: `2px solid ${primaryColor}`, borderBottom: '2px solid transparent', borderLeft: `2px solid ${primaryColor}` }}
           />
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
     );
@@ -85,7 +85,7 @@ export default function SubscriptionsPage() {
             style={activeTab === 'subscription' ? { borderBottomColor: primaryColor, color: primaryColor } : {}}
           >
             <CreditCard className="h-4 w-4" />
-            Subscription
+            {dict?.admin?.subscriptions || 'Subscription'}
           </button>
           <button
             onClick={() => setActiveTab('billing')}
@@ -97,7 +97,7 @@ export default function SubscriptionsPage() {
             style={activeTab === 'billing' ? { borderBottomColor: primaryColor, color: primaryColor } : {}}
           >
             <Receipt className="h-4 w-4" />
-            Billing History
+            {dict?.admin?.billingHistory || 'Billing History'}
           </button>
         </div>
 
@@ -181,42 +181,42 @@ export default function SubscriptionsPage() {
                     {/* BIR Compliance Features */}
                     {subscription.planId?.birCompliance && (
                       <div className="bg-blue-50 border border-blue-200 p-4">
-                        <h3 className="text-sm font-semibold text-blue-900 mb-3">BIR Compliance Included</h3>
+                        <h3 className="text-sm font-semibold text-blue-900 mb-3">{dict?.admin?.birComplianceIncluded || 'BIR Compliance Included'}</h3>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                           {subscription.planId.birCompliance.auditTrailSystem && (
                             <div className="flex items-center gap-1.5">
                               <CheckCircle className="h-3.5 w-3.5 text-blue-600 flex-shrink-0" />
-                              <span className="text-xs text-blue-800">Audit Trail System</span>
+                              <span className="text-xs text-blue-800">{dict?.admin?.birAuditTrail || 'Audit Trail System'}</span>
                             </div>
                           )}
                           {subscription.planId.birCompliance.ptuAssistance && (
                             <div className="flex items-center gap-1.5">
                               <CheckCircle className="h-3.5 w-3.5 text-blue-600 flex-shrink-0" />
-                              <span className="text-xs text-blue-800">PTU Assistance</span>
+                              <span className="text-xs text-blue-800">{dict?.admin?.birPtuAssistance || 'PTU Assistance'}</span>
                             </div>
                           )}
                           {subscription.planId.birCompliance.receiptFormatting && (
                             <div className="flex items-center gap-1.5">
                               <CheckCircle className="h-3.5 w-3.5 text-blue-600 flex-shrink-0" />
-                              <span className="text-xs text-blue-800">BIR Receipt Formatting</span>
+                              <span className="text-xs text-blue-800">{dict?.admin?.birReceiptFormatting || 'BIR Receipt Formatting'}</span>
                             </div>
                           )}
                           {subscription.planId.birCompliance.birDocumentation && (
                             <div className="flex items-center gap-1.5">
                               <CheckCircle className="h-3.5 w-3.5 text-blue-600 flex-shrink-0" />
-                              <span className="text-xs text-blue-800">BIR Documentation</span>
+                              <span className="text-xs text-blue-800">{dict?.admin?.birDocumentation || 'BIR Documentation'}</span>
                             </div>
                           )}
                           {subscription.planId.birCompliance.casReporting && (
                             <div className="flex items-center gap-1.5">
                               <CheckCircle className="h-3.5 w-3.5 text-blue-600 flex-shrink-0" />
-                              <span className="text-xs text-blue-800">CAS-Ready Reporting</span>
+                              <span className="text-xs text-blue-800">{dict?.admin?.birCasReporting || 'CAS-Ready Reporting'}</span>
                             </div>
                           )}
                           {subscription.planId.birCompliance.monthlySupport && (
                             <div className="flex items-center gap-1.5">
                               <CheckCircle className="h-3.5 w-3.5 text-blue-600 flex-shrink-0" />
-                              <span className="text-xs text-blue-800">Monthly Compliance Support</span>
+                              <span className="text-xs text-blue-800">{dict?.admin?.birMonthlySupport || 'Monthly Compliance Support'}</span>
                             </div>
                           )}
                         </div>
@@ -306,7 +306,7 @@ export default function SubscriptionsPage() {
                           transaction.status === 'failed' ? 'bg-red-100 text-red-800' :
                           'bg-gray-100 text-gray-800'
                         }`}>
-                          {transaction.status.charAt(0).toUpperCase() + transaction.status.slice(1)}
+                          {transaction.status === 'paid' ? (dict?.admin?.statusPaid || 'Paid') : transaction.status === 'pending' ? (dict?.admin?.statusPending || 'Pending') : transaction.status === 'failed' ? (dict?.admin?.statusFailed || 'Failed') : transaction.status.charAt(0).toUpperCase() + transaction.status.slice(1)}
                         </span>
                       </div>
                     ))}

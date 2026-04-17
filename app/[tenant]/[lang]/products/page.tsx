@@ -470,8 +470,8 @@ export default function ProductsPage() {
                       <button
                         onClick={() => setBarcodeProduct(product)}
                         className="flex-1 py-2.5 bg-gray-700 text-white hover:bg-gray-800 active:bg-gray-900 transition-all duration-200 border border-gray-800 flex items-center justify-center touch-manipulation min-h-[44px]"
-                        title="View Barcode"
-                        aria-label="View Barcode"
+                        title={dict?.products?.viewBarcode || 'View Barcode'}
+                        aria-label={dict?.products?.viewBarcode || 'View Barcode'}
                       >
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h1v12H4V6zm2 0h1v12H6V6zm3 0h2v12H9V6zm3 0h1v12h-1V6zm2 0h2v12h-2V6zm3 0h1v12h-1V6z" />

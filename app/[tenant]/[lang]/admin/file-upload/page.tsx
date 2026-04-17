@@ -113,14 +113,14 @@ export default function FileUploadPage() {
     ];
 
     if (!allowedTypes.includes(file.type)) {
-      toast.error('File type not allowed. Please upload an image, PDF, or spreadsheet.');
+      toast.error((dict as any)?.fileUpload?.fileTypeNotAllowed || 'File type not allowed. Please upload an image, PDF, or spreadsheet.'); // eslint-disable-line @typescript-eslint/no-explicit-any
       return;
     }
 
     // Validate file size (max 10MB)
     const maxSize = 10 * 1024 * 1024;
     if (file.size > maxSize) {
-      toast.error('File size exceeds 10MB limit.');
+      toast.error((dict as any)?.fileUpload?.fileSizeExceeded || 'File size exceeds 10MB limit.'); // eslint-disable-line @typescript-eslint/no-explicit-any
       return;
     }
 
@@ -159,7 +159,7 @@ export default function FileUploadPage() {
       };
 
       setUploadedFiles([newFile, ...uploadedFiles]);
-      toast.success(`${file.name} uploaded successfully`);
+      toast.success(((dict as any)?.fileUpload?.uploadedSuccessfully || '{name} uploaded successfully').replace('{name}', file.name)); // eslint-disable-line @typescript-eslint/no-explicit-any
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Upload failed';
       toast.error(errorMsg);
@@ -183,12 +183,12 @@ export default function FileUploadPage() {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    toast.success('URL copied to clipboard');
+    toast.success((dict as any)?.fileUpload?.urlCopied || 'URL copied to clipboard'); // eslint-disable-line @typescript-eslint/no-explicit-any
   };
 
   const deleteFile = async (fileId: string | undefined) => {
     if (!fileId) {
-      toast.error('File ID not found');
+      toast.error((dict as any)?.fileUpload?.fileIdNotFound || 'File ID not found'); // eslint-disable-line @typescript-eslint/no-explicit-any
       return;
     }
 
@@ -209,7 +209,7 @@ export default function FileUploadPage() {
 
       // Remove file from state
       setUploadedFiles(uploadedFiles.filter(f => f.id !== fileId));
-      toast.success('File deleted successfully');
+      toast.success((dict as any)?.fileUpload?.fileDeleted || 'File deleted successfully'); // eslint-disable-line @typescript-eslint/no-explicit-any
       setDeletingFileId(null);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Delete failed';
@@ -246,10 +246,10 @@ export default function FileUploadPage() {
             {(dict as Record<string, any>)?.admin?.backToAdmin || 'Back to Admin'}
           </Link>
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
-            File Upload
+            {(dict as any)?.fileUpload?.title || 'File Upload'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
           </h1>
           <p className="text-gray-600">
-            Upload images, documents, and media files to your account. Max file size: 10MB.
+            {(dict as any)?.fileUpload?.subtitle || 'Upload images, documents, and media files to your account. Max file size: 10MB.'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
           </p>
         </div>
 
@@ -258,7 +258,7 @@ export default function FileUploadPage() {
           <div className="lg:col-span-1 order-2 lg:order-1">
             {/* Upload Section */}
             <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8 mb-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-6">Upload File</h2>
+              <h2 className="text-xl font-bold text-gray-900 mb-6">{(dict as any)?.fileUpload?.uploadFile || 'Upload File'}</h2> {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
               
               {/* Drag & Drop Area */}
               <div
@@ -298,13 +298,13 @@ export default function FileUploadPage() {
                   />
                 </svg>
                 <p className="text-lg font-semibold text-gray-900 mb-1">
-                  Drag and drop your file here
+                  {(dict as any)?.fileUpload?.dragAndDrop || 'Drag and drop your file here'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
                 </p>
                 <p className="text-gray-600 text-sm">
-                  or click to select from your computer
+                  {(dict as any)?.fileUpload?.orClickToSelect || 'or click to select from your computer'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
                 </p>
                 <p className="text-gray-500 text-xs mt-2">
-                  Supported: Images (PNG, JPG, GIF, WebP), PDF, CSV, Excel
+                  {(dict as any)?.fileUpload?.supportedFormats || 'Supported: Images (PNG, JPG, GIF, WebP), PDF, CSV, Excel'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
                 </p>
               </label>
             </div>
@@ -312,7 +312,7 @@ export default function FileUploadPage() {
             {/* File Input */}
             <div className="mt-6">
               <label className="block text-sm font-medium text-gray-700 mb-3">
-                Or select a file
+                {(dict as any)?.fileUpload?.orSelectFile || 'Or select a file'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
               </label>
               <input
                 type="file"
@@ -328,7 +328,7 @@ export default function FileUploadPage() {
               <div className="mt-6 p-4 bg-blue-50 border border-blue-300">
                 <div className="flex items-center gap-3">
                   <div className="animate-spin h-5 w-5 border-b-2 border-blue-600"></div>
-                  <p className="text-blue-900">Uploading file...</p>
+                  <p className="text-blue-900">{(dict as any)?.fileUpload?.uploadingFile || 'Uploading file...'}</p> {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
                 </div>
               </div>
             )}
@@ -336,30 +336,30 @@ export default function FileUploadPage() {
 
             {/* File Type Info */}
             <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8 mt-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Allowed File Types</h2>
+              <h2 className="text-xl font-bold text-gray-900 mb-4">{(dict as any)?.fileUpload?.allowedFileTypes || 'Allowed File Types'}</h2> {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
               <div className="grid grid-cols-1 gap-4">
                 <div className="p-4 border border-gray-300">
-                  <h3 className="font-semibold text-gray-900 mb-2">Images</h3>
+                  <h3 className="font-semibold text-gray-900 mb-2">{(dict as any)?.fileUpload?.images || 'Images'}</h3> {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
                   <p className="text-sm text-gray-600">
-                    PNG, JPG, GIF, WebP - Perfect for logos, product photos, and branding
+                    {(dict as any)?.fileUpload?.imagesDesc || 'PNG, JPG, GIF, WebP - Perfect for logos, product photos, and branding'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
                   </p>
                 </div>
                 <div className="p-4 border border-gray-300">
-                  <h3 className="font-semibold text-gray-900 mb-2">Documents</h3>
+                  <h3 className="font-semibold text-gray-900 mb-2">{(dict as any)?.fileUpload?.documents || 'Documents'}</h3> {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
                   <p className="text-sm text-gray-600">
-                    PDF - For invoices, receipts, and reports
+                    {(dict as any)?.fileUpload?.documentsDesc || 'PDF - For invoices, receipts, and reports'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
                   </p>
                 </div>
                 <div className="p-4 border border-gray-300">
-                  <h3 className="font-semibold text-gray-900 mb-2">Spreadsheets</h3>
+                  <h3 className="font-semibold text-gray-900 mb-2">{(dict as any)?.fileUpload?.spreadsheets || 'Spreadsheets'}</h3> {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
                   <p className="text-sm text-gray-600">
-                    CSV, XLS, XLSX - For data imports and exports
+                    {(dict as any)?.fileUpload?.spreadsheetsDesc || 'CSV, XLS, XLSX - For data imports and exports'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
                   </p>
                 </div>
                 <div className="p-4 border border-gray-300">
-                  <h3 className="font-semibold text-gray-900 mb-2">Size Limit</h3>
+                  <h3 className="font-semibold text-gray-900 mb-2">{(dict as any)?.fileUpload?.sizeLimit || 'Size Limit'}</h3> {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
                   <p className="text-sm text-gray-600">
-                    Maximum 10MB per file
+                    {(dict as any)?.fileUpload?.sizeLimitDesc || 'Maximum 10MB per file'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
                   </p>
                 </div>
               </div>
@@ -370,7 +370,7 @@ export default function FileUploadPage() {
           <div className="lg:col-span-2 order-1 lg:order-2">
             {uploadedFiles.length > 0 && (
               <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8">
-                <h2 className="text-xl font-bold text-gray-900 mb-6">Uploaded Files</h2>
+                <h2 className="text-xl font-bold text-gray-900 mb-6">{(dict as any)?.fileUpload?.uploadedFiles || 'Uploaded Files'}</h2> {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
                 <div className="space-y-3">
                   {uploadedFiles.map((file, idx) => (
                   <div
@@ -411,7 +411,7 @@ export default function FileUploadPage() {
                           <span>{formatDate(file.uploadedAt)}</span>
                         </div>
                         <div className="mt-3 p-3 bg-gray-50 border border-gray-200">
-                          <p className="text-xs font-semibold text-gray-700 mb-2">Public URL:</p>
+                          <p className="text-xs font-semibold text-gray-700 mb-2">{(dict as any)?.fileUpload?.publicUrl || 'Public URL:'}</p> {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
                           <div className="flex items-center gap-2 flex-wrap">
                             <code className="flex-1 text-xs bg-white px-2 py-1 border border-gray-300 text-gray-700 break-all">
                               {file.url}
@@ -421,7 +421,7 @@ export default function FileUploadPage() {
                               className="px-2 py-1 bg-gray-200 text-gray-700 hover:bg-gray-300 text-xs font-medium transition-colors whitespace-nowrap"
                               title="Copy URL"
                             >
-                              Copy
+                              {(dict as any)?.fileUpload?.copy || 'Copy'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
                             </button>
                           </div>
                         </div>
@@ -434,14 +434,14 @@ export default function FileUploadPage() {
                           }}
                           className="px-3 py-1 bg-blue-100 text-blue-700 hover:bg-blue-200 text-sm font-medium transition-colors"
                         >
-                          View
+                          {(dict as any)?.fileUpload?.view || 'View'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
                         </button>
                         <button
                           onClick={() => setDeletingFileId(file.id || '')}
                           className="ml-2 px-3 py-1 bg-red-100 text-red-700 hover:bg-red-200 text-sm font-medium transition-colors"
-                          title="Delete file"
+                          title={(dict as any)?.fileUpload?.delete || 'Delete file'} // eslint-disable-line @typescript-eslint/no-explicit-any
                         >
-                          Delete
+                          {(dict as any)?.fileUpload?.delete || 'Delete'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
                         </button>
                       </div>
                     </div>
@@ -466,8 +466,8 @@ export default function FileUploadPage() {
                     d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                   />
                 </svg>
-                <p className="text-gray-500">No files uploaded yet</p>
-                <p className="text-gray-400 text-sm mt-1">Upload your first file to get started</p>
+                <p className="text-gray-500">{(dict as any)?.fileUpload?.noFilesYet || 'No files uploaded yet'}</p> {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
+                <p className="text-gray-400 text-sm mt-1">{(dict as any)?.fileUpload?.uploadFirstFile || 'Upload your first file to get started'}</p> {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
               </div>
             )}
           </div>
@@ -479,22 +479,22 @@ export default function FileUploadPage() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white border border-gray-300 rounded-lg max-w-sm w-full">
             <div className="p-6">
-              <h3 className="text-lg font-bold text-gray-900 mb-2">Delete File?</h3>
+              <h3 className="text-lg font-bold text-gray-900 mb-2">{(dict as any)?.fileUpload?.deleteFileTitle || 'Delete File?'}</h3> {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
               <p className="text-gray-600 mb-6">
-                This action cannot be undone. The file will be permanently deleted from both storage and your account.
+                {(dict as any)?.fileUpload?.deleteFileConfirm || 'This action cannot be undone. The file will be permanently deleted from both storage and your account.'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
               </p>
               <div className="flex gap-3 justify-end">
                 <button
                   onClick={() => setDeletingFileId(null)}
                   className="px-4 py-2 bg-gray-200 text-gray-900 hover:bg-gray-300 font-medium transition-colors rounded"
                 >
-                  Cancel
+                  {(dict as any)?.common?.cancel || 'Cancel'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
                 </button>
                 <button
                   onClick={() => deleteFile(deletingFileId)}
                   className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 font-medium transition-colors rounded"
                 >
-                  Delete
+                  {(dict as any)?.fileUpload?.delete || 'Delete'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
                 </button>
               </div>
             </div>
@@ -540,7 +540,7 @@ export default function FileUploadPage() {
                     className="px-3 py-2 bg-gray-200 text-gray-700 hover:bg-gray-300 text-sm font-medium transition-colors whitespace-nowrap"
                     title="Copy URL"
                   >
-                    Copy
+                    {(dict as any)?.fileUpload?.copy || 'Copy'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
                   </button>
                 </div>
               </div>
@@ -572,7 +572,7 @@ export default function FileUploadPage() {
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                     </svg>
-                    Download PDF
+                    {(dict as any)?.fileUpload?.downloadPdf || 'Download PDF'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
                   </a>
                 </div>
               ) : (
@@ -583,7 +583,7 @@ export default function FileUploadPage() {
                   </svg>
                   <div>
                     <p className="font-semibold text-gray-900 mb-2">{viewingFile.name}</p>
-                    <p className="text-gray-600 text-sm mb-4">Preview not available for this file type</p>
+                    <p className="text-gray-600 text-sm mb-4">{(dict as any)?.fileUpload?.previewNotAvailable || 'Preview not available for this file type'}</p> {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
                   </div>
                   <a
                     href={viewingFile.url}
@@ -594,7 +594,7 @@ export default function FileUploadPage() {
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                     </svg>
-                    Download File
+                    {(dict as any)?.fileUpload?.downloadFile || 'Download File'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
                   </a>
                 </div>
               )}

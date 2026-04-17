@@ -59,6 +59,7 @@ export default function HolidaysAdminPage() {
           <HolidaysManager
             settings={settings}
             tenant={tenant}
+            dict={dict}
             onUpdate={(updates) => {
               updateSettings(updates);
             }}

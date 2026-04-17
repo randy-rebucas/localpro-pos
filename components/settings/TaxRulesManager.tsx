@@ -26,9 +26,10 @@ interface TaxRulesManagerProps {
   tenant: string;
   primaryColor?: string;
   onUpdate: (updates: Partial<ITenantSettings>) => void;
+  dict?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
-export default function TaxRulesManager({ settings, tenant, primaryColor = '#2563eb', onUpdate }: TaxRulesManagerProps) { // eslint-disable-line @typescript-eslint/no-unused-vars
+export default function TaxRulesManager({ settings, tenant, primaryColor = '#2563eb', onUpdate, dict }: TaxRulesManagerProps) { // eslint-disable-line @typescript-eslint/no-unused-vars
   const [rules, setRules] = useState<TaxRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<TaxRule | null>(null);
@@ -49,7 +50,7 @@ export default function TaxRulesManager({ settings, tenant, primaryColor = '#256
         setRules(data.data || []);
       }
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      setMessage({ type: 'error', text: error.message || 'Failed to load tax rules' });
+      setMessage({ type: 'error', text: error.message || dict?.taxRules?.failedToLoad || 'Failed to load tax rules' });
     } finally {
       setLoading(false);
     }
@@ -71,20 +72,20 @@ export default function TaxRulesManager({ settings, tenant, primaryColor = '#256
 
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: `Tax rule ${editing ? 'updated' : 'created'} successfully` });
+        setMessage({ type: 'success', text: editing ? (dict?.taxRules?.ruleUpdated || 'Tax rule updated successfully') : (dict?.taxRules?.ruleCreated || 'Tax rule created successfully') });
         setShowForm(false);
         setEditing(null);
         fetchRules();
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to save tax rule' });
+        setMessage({ type: 'error', text: data.error || dict?.taxRules?.failedToSave || 'Failed to save tax rule' });
       }
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      setMessage({ type: 'error', text: error.message || 'Failed to save tax rule' });
+      setMessage({ type: 'error', text: error.message || dict?.taxRules?.failedToSave || 'Failed to save tax rule' });
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this tax rule?')) return;
+    if (!confirm(dict?.taxRules?.deleteConfirm || 'Are you sure you want to delete this tax rule?')) return;
 
     try {
       const res = await fetch(`/api/tenants/${tenant}/tax-rules?id=${id}`, {
@@ -94,24 +95,24 @@ export default function TaxRulesManager({ settings, tenant, primaryColor = '#256
 
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: 'Tax rule deleted successfully' });
+        setMessage({ type: 'success', text: dict?.taxRules?.ruleDeleted || 'Tax rule deleted successfully' });
         fetchRules();
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to delete tax rule' });
+        setMessage({ type: 'error', text: data.error || dict?.taxRules?.failedToDelete || 'Failed to delete tax rule' });
       }
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      setMessage({ type: 'error', text: error.message || 'Failed to delete tax rule' });
+      setMessage({ type: 'error', text: error.message || dict?.taxRules?.failedToDelete || 'Failed to delete tax rule' });
     }
   };
 
   if (loading) {
-    return <div className="text-center py-8">Loading tax rules...</div>;
+    return <div className="text-center py-8">{dict?.taxRules?.loading || 'Loading tax rules...'}</div>;
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-gray-900">Tax Rules</h3>
+        <h3 className="text-lg font-semibold text-gray-900">{dict?.taxRules?.title || 'Tax Rules'}</h3>
         <button
           onClick={() => {
             setEditing(null);
@@ -120,7 +121,7 @@ export default function TaxRulesManager({ settings, tenant, primaryColor = '#256
           className="px-4 py-2 text-white text-sm font-medium transition-opacity hover:opacity-80"
           style={{ backgroundColor: primaryColor }}
         >
-          Add Tax Rule
+          {dict?.taxRules?.addTaxRule || 'Add Tax Rule'}
         </button>
       </div>
 
@@ -143,13 +144,14 @@ export default function TaxRulesManager({ settings, tenant, primaryColor = '#256
             setShowForm(false);
             setEditing(null);
           }}
+          dict={dict}
         />
       )}
 
       <div className="space-y-3">
         {rules.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
-            No tax rules yet. Add your first tax rule to get started.
+            {dict?.taxRules?.noRules || 'No tax rules yet. Add your first tax rule to get started.'}
           </div>
         ) : (
           rules
@@ -167,18 +169,18 @@ export default function TaxRulesManager({ settings, tenant, primaryColor = '#256
                     <div className="text-sm text-gray-600 mt-1">
                       <span className="font-medium">{rule.rate}%</span> - {rule.label}
                       {rule.appliesTo !== 'all' && (
-                        <span className="ml-2">• Applies to: {rule.appliesTo}</span>
+                        <span className="ml-2">• {dict?.taxRules?.appliesTo || 'Applies to'}: {rule.appliesTo}</span>
                       )}
                       {rule.region && (
                         <span className="ml-2">
-                          • Region: {rule.region.country || 'Any'}
+                          • {dict?.taxRules?.region || 'Region'}: {rule.region.country || (dict?.taxRules?.any || 'Any')}
                           {rule.region.state && `, ${rule.region.state}`}
                         </span>
                       )}
-                      <span className="ml-2">• Priority: {rule.priority}</span>
+                      <span className="ml-2">• {dict?.taxRules?.priority || 'Priority'}: {rule.priority}</span>
                     </div>
                     {!rule.isActive && (
-                      <span className="text-xs text-gray-500 mt-1 block">Inactive</span>
+                      <span className="text-xs text-gray-500 mt-1 block">{dict?.taxRules?.inactive || 'Inactive'}</span>
                     )}
                   </div>
                   <div className="flex items-center space-x-2">
@@ -189,13 +191,13 @@ export default function TaxRulesManager({ settings, tenant, primaryColor = '#256
                       }}
                       className="px-3 py-1 text-xs text-gray-600 hover:text-gray-800 font-medium"
                     >
-                      Edit
+                      {dict?.common?.edit || 'Edit'}
                     </button>
                     <button
                       onClick={() => handleDelete(rule.id)}
                       className="px-3 py-1 text-xs text-red-600 hover:text-red-700 font-medium"
                     >
-                      Delete
+                      {dict?.common?.delete || 'Delete'}
                     </button>
                   </div>
                 </div>
@@ -212,11 +214,13 @@ function TaxRuleForm({
   primaryColor = '#2563eb',
   onSave,
   onCancel,
+  dict,
 }: {
   rule: TaxRule | null;
   primaryColor?: string;
   onSave: (rule: Partial<TaxRule>) => void;
   onCancel: () => void;
+  dict?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }) {
   const [name, setName] = useState(rule?.name || '');
   const [rate, setRate] = useState(rule?.rate?.toString() || '0');
@@ -231,11 +235,11 @@ function TaxRuleForm({
 
   return (
     <div className="border-2 border-gray-300 rounded p-6 bg-white">
-      <h4 className="text-lg font-semibold mb-4">{rule ? 'Edit Tax Rule' : 'Add Tax Rule'}</h4>
+      <h4 className="text-lg font-semibold mb-4">{rule ? (dict?.taxRules?.editTaxRule || 'Edit Tax Rule') : (dict?.taxRules?.addTaxRule || 'Add Tax Rule')}</h4>
 
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Rule Name *</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">{dict?.taxRules?.ruleName || 'Rule Name'} *</label>
           <input
             type="text"
             value={name}
@@ -251,14 +255,14 @@ function TaxRuleForm({
               e.currentTarget.style.borderColor = '#d1d5db';
               e.currentTarget.style.boxShadow = 'none';
             }}
-            placeholder="e.g., California Sales Tax"
+            placeholder={dict?.taxRules?.ruleNamePlaceholder || 'e.g., California Sales Tax'}
             required
           />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Tax Rate (%) *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">{dict?.taxRules?.taxRate || 'Tax Rate (%)'} *</label>
             <input
               type="number"
               min="0"
@@ -279,7 +283,7 @@ function TaxRuleForm({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Tax Label *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">{dict?.taxRules?.taxLabel || 'Tax Label'} *</label>
             <input
               type="text"
               value={label}
@@ -293,14 +297,14 @@ function TaxRuleForm({
                 e.currentTarget.style.borderColor = '#d1d5db';
                 e.currentTarget.style.boxShadow = 'none';
               }}
-              placeholder="e.g., VAT, GST, Sales Tax"
+              placeholder={dict?.taxRules?.taxLabelPlaceholder || 'e.g., VAT, GST, Sales Tax'}
               required
             />
           </div>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Applies To</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">{dict?.taxRules?.appliesToLabel || 'Applies To'}</label>
           <select
             value={appliesTo}
             onChange={(e) => setAppliesTo(e.target.value as any)} // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -314,15 +318,15 @@ function TaxRuleForm({
               e.currentTarget.style.boxShadow = 'none';
             }}
           >
-            <option value="all">All Products & Services</option>
-            <option value="products">Products Only</option>
-            <option value="services">Services Only</option>
-            <option value="categories">Specific Categories</option>
+            <option value="all">{dict?.taxRules?.allProductsServices || 'All Products & Services'}</option>
+            <option value="products">{dict?.taxRules?.productsOnly || 'Products Only'}</option>
+            <option value="services">{dict?.taxRules?.servicesOnly || 'Services Only'}</option>
+            <option value="categories">{dict?.taxRules?.specificCategories || 'Specific Categories'}</option>
           </select>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Region (Optional)</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">{dict?.taxRules?.regionOptional || 'Region (Optional)'}</label>
           <div className="grid grid-cols-3 gap-3">
             <input
               type="text"
@@ -337,7 +341,7 @@ function TaxRuleForm({
                 e.currentTarget.style.borderColor = '#d1d5db';
                 e.currentTarget.style.boxShadow = 'none';
               }}
-              placeholder="Country"
+              placeholder={dict?.taxRules?.countryPlaceholder || 'Country'}
             />
             <input
               type="text"
@@ -352,7 +356,7 @@ function TaxRuleForm({
                 e.currentTarget.style.borderColor = '#d1d5db';
                 e.currentTarget.style.boxShadow = 'none';
               }}
-              placeholder="State/Province"
+              placeholder={dict?.taxRules?.statePlaceholder || 'State/Province'}
             />
             <input
               type="text"
@@ -367,7 +371,7 @@ function TaxRuleForm({
                 e.currentTarget.style.borderColor = '#d1d5db';
                 e.currentTarget.style.boxShadow = 'none';
               }}
-              placeholder="City"
+              placeholder={dict?.taxRules?.cityPlaceholder || 'City'}
             />
           </div>
           <input
@@ -383,13 +387,13 @@ function TaxRuleForm({
               e.currentTarget.style.borderColor = '#d1d5db';
               e.currentTarget.style.boxShadow = 'none';
             }}
-            placeholder="Zip Codes (comma-separated)"
+            placeholder={dict?.taxRules?.zipCodesPlaceholder || 'Zip Codes (comma-separated)'}
           />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Priority</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">{dict?.taxRules?.priorityLabel || 'Priority'}</label>
             <input
               type="number"
               value={priority}
@@ -405,7 +409,7 @@ function TaxRuleForm({
               }}
               placeholder="0"
             />
-            <p className="text-xs text-gray-500 mt-1">Higher priority rules are applied first</p>
+            <p className="text-xs text-gray-500 mt-1">{dict?.taxRules?.priorityHint || 'Higher priority rules are applied first'}</p>
           </div>
           <div className="flex items-center pt-8">
             <input
@@ -417,7 +421,7 @@ function TaxRuleForm({
               style={{ accentColor: primaryColor }}
             />
             <label htmlFor="isActive" className="ml-2 text-sm text-gray-700">
-              Active
+              {dict?.taxRules?.active || 'Active'}
             </label>
           </div>
         </div>
@@ -443,13 +447,13 @@ function TaxRuleForm({
             className="px-4 py-2 text-white font-medium transition-opacity hover:opacity-80"
             style={{ backgroundColor: primaryColor }}
           >
-            Save Rule
+            {dict?.taxRules?.saveRule || 'Save Rule'}
           </button>
           <button
             onClick={onCancel}
             className="px-4 py-2 bg-gray-200 text-gray-700 font-medium hover:bg-gray-300"
           >
-            Cancel
+            {dict?.common?.cancel || 'Cancel'}
           </button>
         </div>
       </div>

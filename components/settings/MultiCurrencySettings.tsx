@@ -7,11 +7,12 @@ interface MultiCurrencySettingsProps {
   settings: ITenantSettings;
   tenant: string;
   onUpdate: (updates: Partial<ITenantSettings>) => void;
+  dict?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
 const COMMON_CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'CHF', 'CNY', 'INR', 'MXN', 'BRL', 'ZAR'];
 
-export default function MultiCurrencySettings({ settings, tenant, onUpdate }: MultiCurrencySettingsProps) {
+export default function MultiCurrencySettings({ settings, tenant, onUpdate, dict }: MultiCurrencySettingsProps) {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const multiCurrency = settings.multiCurrency || { enabled: false, displayCurrencies: [], exchangeRates: {}, exchangeRateSource: 'manual' };
@@ -28,7 +29,7 @@ export default function MultiCurrencySettings({ settings, tenant, onUpdate }: Mu
       });
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: 'Exchange rates updated successfully' });
+        setMessage({ type: 'success', text: dict?.admin?.exchangeRatesUpdated || 'Exchange rates updated successfully' });
         onUpdate({
           multiCurrency: {
             ...multiCurrency,
@@ -37,10 +38,10 @@ export default function MultiCurrencySettings({ settings, tenant, onUpdate }: Mu
           },
         });
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to fetch exchange rates' });
+        setMessage({ type: 'error', text: data.error || dict?.admin?.failedToFetchRates || 'Failed to fetch exchange rates' });
       }
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      setMessage({ type: 'error', text: error.message || 'Failed to fetch exchange rates' });
+      setMessage({ type: 'error', text: error.message || dict?.admin?.failedToFetchRates || 'Failed to fetch exchange rates' });
     } finally {
       setLoading(false);
     }
@@ -63,16 +64,16 @@ export default function MultiCurrencySettings({ settings, tenant, onUpdate }: Mu
             }}
             className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
           />
-          <span className="text-sm font-medium text-gray-700">Enable Multi-Currency Display</span>
+          <span className="text-sm font-medium text-gray-700">{dict?.admin?.enableMultiCurrencyDisplay || 'Enable Multi-Currency Display'}</span>
         </label>
-        <p className="mt-1 text-xs text-gray-500">Display prices in multiple currencies</p>
+        <p className="mt-1 text-xs text-gray-500">{dict?.admin?.displayPricesInMultipleCurrencies || 'Display prices in multiple currencies'}</p>
       </div>
 
       {multiCurrency.enabled && (
         <>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Display Currencies
+              {dict?.admin?.displayCurrencies || 'Display Currencies'}
             </label>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
               {COMMON_CURRENCIES.map((currency) => (
@@ -102,7 +103,7 @@ export default function MultiCurrencySettings({ settings, tenant, onUpdate }: Mu
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Exchange Rate Source
+              {dict?.admin?.exchangeRateSource || 'Exchange Rate Source'}
             </label>
             <select
               value={multiCurrency.exchangeRateSource || 'manual'}
@@ -116,15 +117,15 @@ export default function MultiCurrencySettings({ settings, tenant, onUpdate }: Mu
               }}
               className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
-              <option value="manual">Manual Entry</option>
-              <option value="api">Automatic (API)</option>
+              <option value="manual">{dict?.admin?.manualEntry || 'Manual Entry'}</option>
+              <option value="api">{dict?.admin?.automaticAPI || 'Automatic (API)'}</option>
             </select>
           </div>
 
           {multiCurrency.exchangeRateSource === 'api' && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Exchange Rate API Key (Optional)
+                {dict?.admin?.exchangeRateApiKey || 'Exchange Rate API Key (Optional)'}
               </label>
               <input
                 type="text"
@@ -138,10 +139,10 @@ export default function MultiCurrencySettings({ settings, tenant, onUpdate }: Mu
                   });
                 }}
                 className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="API key for exchange rate service"
+                placeholder={dict?.admin?.apiKeyPlaceholder || 'API key for exchange rate service'}
               />
               <p className="mt-1 text-xs text-gray-500">
-                Leave empty to use free tier (exchangerate-api.com)
+                {dict?.admin?.apiKeyHint || 'Leave empty to use free tier (exchangerate-api.com)'}
               </p>
             </div>
           )}
@@ -150,7 +151,7 @@ export default function MultiCurrencySettings({ settings, tenant, onUpdate }: Mu
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="block text-sm font-medium text-gray-700">
-                  Exchange Rates
+                  {dict?.admin?.exchangeRates || 'Exchange Rates'}
                 </label>
                 <button
                   type="button"
@@ -158,12 +159,12 @@ export default function MultiCurrencySettings({ settings, tenant, onUpdate }: Mu
                   disabled={loading}
                   className="px-4 py-2 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:bg-gray-400"
                 >
-                  {loading ? 'Fetching...' : 'Fetch Latest Rates'}
+                  {loading ? (dict?.admin?.fetching || 'Fetching...') : (dict?.admin?.fetchLatestRates || 'Fetch Latest Rates')}
                 </button>
               </div>
               {multiCurrency.lastUpdated && (
                 <p className="text-xs text-gray-500 mb-2">
-                  Last updated: {new Date(multiCurrency.lastUpdated).toLocaleString()}
+                  {dict?.admin?.lastUpdated || 'Last updated'}: {new Date(multiCurrency.lastUpdated).toLocaleString()}
                 </p>
               )}
               <div className="space-y-2">
@@ -189,7 +190,7 @@ export default function MultiCurrencySettings({ settings, tenant, onUpdate }: Mu
                           });
                         }}
                         className="w-24 px-2 py-1 border border-gray-300 rounded text-sm"
-                        placeholder="Rate"
+                        placeholder={dict?.admin?.ratePlaceholder || 'Rate'}
                       />
                     </div>
                   );

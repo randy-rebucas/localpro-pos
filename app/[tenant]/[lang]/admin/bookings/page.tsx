@@ -145,14 +145,13 @@ export default function BookingsPage() {
               </svg>
               <div>
                 <h3 className="text-lg font-semibold text-yellow-900 mb-2">
-                  Booking & Scheduling Not Available
+                  {dict?.admin?.bookingNotAvailableTitle || 'Booking & Scheduling Not Available'}
                 </h3>
                 <p className="text-yellow-800">
-                  Booking and scheduling is not enabled for {businessTypeConfig?.name || 'your business type'}. 
-                  This feature is typically used for service businesses, salons, and laundry services.
+                  {(dict?.admin?.bookingNotAvailableDesc || 'Booking and scheduling is not enabled for {businessType}.').replace('{businessType}', businessTypeConfig?.name || 'your business type')}
                 </p>
                 <p className="text-sm text-yellow-700 mt-2">
-                  If you need booking features, please enable it in Settings → Business or update your business type.
+                  {dict?.admin?.bookingNotAvailableHint || 'If you need booking features, please enable it in Settings → Business or update your business type.'}
                 </p>
               </div>
             </div>
@@ -171,7 +170,7 @@ export default function BookingsPage() {
             <option value="confirmed">{dict?.admin?.confirmed || 'Confirmed'}</option>
             <option value="completed">{dict?.admin?.completed || 'Completed'}</option>
             <option value="cancelled">{dict?.admin?.cancelled || 'Cancelled'}</option>
-            <option value="no-show">No Show</option>
+            <option value="no-show">{dict?.admin?.noShow || 'No Show'}</option>
           </select>
           <select
             value={filterStaff}
@@ -323,35 +322,35 @@ export default function BookingsPage() {
             </div>
             <div className="px-6 py-4 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">Customer Name</label>
+                <label className="block text-sm font-medium text-gray-700">{dict?.admin?.customerName || 'Customer Name'}</label>
                 <p className="mt-1 text-sm text-gray-900">{selectedBooking.customerName}</p>
               </div>
               {selectedBooking.customerEmail && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Email</label>
+                  <label className="block text-sm font-medium text-gray-700">{dict?.admin?.email || 'Email'}</label>
                   <p className="mt-1 text-sm text-gray-900">{selectedBooking.customerEmail}</p>
                 </div>
               )}
               {selectedBooking.customerPhone && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Phone</label>
+                  <label className="block text-sm font-medium text-gray-700">{dict?.admin?.phone || 'Phone'}</label>
                   <p className="mt-1 text-sm text-gray-900">{selectedBooking.customerPhone}</p>
                 </div>
               )}
               <div>
-                <label className="block text-sm font-medium text-gray-700">Service</label>
+                <label className="block text-sm font-medium text-gray-700">{dict?.admin?.service || 'Service'}</label>
                 <p className="mt-1 text-sm text-gray-900">{selectedBooking.serviceName}</p>
                 {selectedBooking.serviceDescription && (
                   <p className="mt-1 text-sm text-gray-500">{selectedBooking.serviceDescription}</p>
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Date & Time</label>
+                <label className="block text-sm font-medium text-gray-700">{dict?.admin?.dateTime || 'Date & Time'}</label>
                 <p className="mt-1 text-sm text-gray-900">{formatBookingDateTime(selectedBooking.startTime)}</p>
-                <p className="mt-1 text-sm text-gray-500">Duration: {selectedBooking.duration} minutes</p>
+                <p className="mt-1 text-sm text-gray-500">{dict?.admin?.duration || 'Duration'}: {selectedBooking.duration} {dict?.admin?.durationMinutes || 'minutes'}</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Staff</label>
+                <label className="block text-sm font-medium text-gray-700">{dict?.admin?.staff || 'Staff'}</label>
                 <select
                   value={selectedBooking.staffId?._id || ''}
                   onChange={(e) => {
@@ -368,7 +367,7 @@ export default function BookingsPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Status</label>
+                <label className="block text-sm font-medium text-gray-700">{dict?.admin?.status || 'Status'}</label>
                 <select
                   value={selectedBooking.status}
                   onChange={(e) => {
@@ -376,16 +375,16 @@ export default function BookingsPage() {
                   }}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                 >
-                  <option value="pending">Pending</option>
-                  <option value="confirmed">Confirmed</option>
-                  <option value="completed">Completed</option>
-                  <option value="cancelled">Cancelled</option>
-                  <option value="no-show">No Show</option>
+                  <option value="pending">{dict?.admin?.pending || 'Pending'}</option>
+                  <option value="confirmed">{dict?.admin?.confirmed || 'Confirmed'}</option>
+                  <option value="completed">{dict?.admin?.completed || 'Completed'}</option>
+                  <option value="cancelled">{dict?.admin?.cancelled || 'Cancelled'}</option>
+                  <option value="no-show">{dict?.admin?.noShow || 'No Show'}</option>
                 </select>
               </div>
               {selectedBooking.notes && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Notes</label>
+                  <label className="block text-sm font-medium text-gray-700">{dict?.admin?.notes || 'Notes'}</label>
                   <p className="mt-1 text-sm text-gray-900">{selectedBooking.notes}</p>
                 </div>
               )}
@@ -394,13 +393,13 @@ export default function BookingsPage() {
                   onClick={() => handleSendReminder(selectedBooking._id)}
                   className="flex-1 px-4 py-2 bg-green-600 text-white hover:bg-green-700 transition-colors border border-green-700"
                 >
-                  Send Reminder
+                  {dict?.admin?.sendReminder || 'Send Reminder'}
                 </button>
                 <button
                   onClick={() => handleDeleteBooking(selectedBooking._id)}
                   className="flex-1 px-4 py-2 bg-red-600 text-white hover:bg-red-700 transition-colors border border-red-700"
                 >
-                  Delete
+                  {dict?.common?.delete || 'Delete'}
                 </button>
               </div>
             </div>
@@ -413,7 +412,7 @@ export default function BookingsPage() {
         <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white border border-gray-300 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Create New Booking</h3>
+              <h3 className="text-lg font-semibold text-gray-900">{dict?.admin?.createNewBooking || 'Create New Booking'}</h3>
               <button
                 onClick={() => {
                   setShowCreateModal(false);
@@ -428,7 +427,7 @@ export default function BookingsPage() {
             </div>
             <form onSubmit={handleCreateBooking} className="px-6 py-4 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">Customer Name *</label>
+                <label className="block text-sm font-medium text-gray-700">{dict?.admin?.customerName || 'Customer Name'} *</label>
                 <input
                   type="text"
                   required
@@ -438,7 +437,7 @@ export default function BookingsPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Email</label>
+                <label className="block text-sm font-medium text-gray-700">{dict?.admin?.email || 'Email'}</label>
                 <input
                   type="email"
                   value={formData.customerEmail}
@@ -447,7 +446,7 @@ export default function BookingsPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Phone</label>
+                <label className="block text-sm font-medium text-gray-700">{dict?.admin?.phone || 'Phone'}</label>
                 <input
                   type="tel"
                   value={formData.customerPhone}
@@ -456,7 +455,7 @@ export default function BookingsPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Service Name *</label>
+                <label className="block text-sm font-medium text-gray-700">{dict?.admin?.serviceName || 'Service Name'} *</label>
                 <input
                   type="text"
                   required
@@ -466,7 +465,7 @@ export default function BookingsPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Service Description</label>
+                <label className="block text-sm font-medium text-gray-700">{dict?.admin?.serviceDescription || 'Service Description'}</label>
                 <textarea
                   value={formData.serviceDescription}
                   onChange={(e) => setFormData({ ...formData, serviceDescription: e.target.value })}
@@ -476,7 +475,7 @@ export default function BookingsPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Start Time *</label>
+                  <label className="block text-sm font-medium text-gray-700">{dict?.admin?.startTime || 'Start Time'} *</label>
                   <input
                     type="datetime-local"
                     required
@@ -486,7 +485,7 @@ export default function BookingsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Duration (minutes) *</label>
+                  <label className="block text-sm font-medium text-gray-700">{dict?.admin?.durationLabel || 'Duration (minutes)'} *</label>
                   <input
                     type="number"
                     required
@@ -498,7 +497,7 @@ export default function BookingsPage() {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Staff Member</label>
+                <label className="block text-sm font-medium text-gray-700">{dict?.admin?.staffMember || 'Staff Member'}</label>
                 <select
                   value={formData.staffId}
                   onChange={(e) => setFormData({ ...formData, staffId: e.target.value })}
@@ -513,18 +512,18 @@ export default function BookingsPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Status</label>
+                <label className="block text-sm font-medium text-gray-700">{dict?.admin?.status || 'Status'}</label>
                 <select
                   value={formData.status}
                   onChange={(e) => setFormData({ ...formData, status: e.target.value as Booking['status'] })}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                 >
-                  <option value="pending">Pending</option>
-                  <option value="confirmed">Confirmed</option>
+                  <option value="pending">{dict?.admin?.pending || 'Pending'}</option>
+                  <option value="confirmed">{dict?.admin?.confirmed || 'Confirmed'}</option>
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Notes</label>
+                <label className="block text-sm font-medium text-gray-700">{dict?.admin?.notes || 'Notes'}</label>
                 <textarea
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
@@ -541,13 +540,13 @@ export default function BookingsPage() {
                   }}
                   className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors bg-white"
                 >
-                  Cancel
+                  {dict?.common?.cancel || 'Cancel'}
                 </button>
                 <button
                   type="submit"
                   className="flex-1 px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 transition-colors border border-blue-700"
                 >
-                  Create Booking
+                  {dict?.admin?.createBooking || 'Create Booking'}
                 </button>
               </div>
             </form>

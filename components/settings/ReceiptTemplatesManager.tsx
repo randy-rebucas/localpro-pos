@@ -16,9 +16,10 @@ interface ReceiptTemplatesManagerProps {
   settings: ITenantSettings;
   tenant: string;
   onUpdate: (updates: Partial<ITenantSettings>) => void;
+  dict?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
-export default function ReceiptTemplatesManager({ settings, tenant, onUpdate }: ReceiptTemplatesManagerProps) { // eslint-disable-line @typescript-eslint/no-unused-vars
+export default function ReceiptTemplatesManager({ settings, tenant, onUpdate, dict }: ReceiptTemplatesManagerProps) { // eslint-disable-line @typescript-eslint/no-unused-vars
   const [templates, setTemplates] = useState<ReceiptTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<ReceiptTemplate | null>(null);
@@ -39,7 +40,7 @@ export default function ReceiptTemplatesManager({ settings, tenant, onUpdate }: 
         setTemplates(data.data.templates || []);
       }
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      setMessage({ type: 'error', text: error.message || 'Failed to load templates' });
+      setMessage({ type: 'error', text: error.message || dict?.receiptTemplates?.failedToLoad || 'Failed to load templates' });
     } finally {
       setLoading(false);
     }
@@ -63,20 +64,20 @@ export default function ReceiptTemplatesManager({ settings, tenant, onUpdate }: 
 
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: `Template ${editing ? 'updated' : 'created'} successfully` });
+        setMessage({ type: 'success', text: editing ? (dict?.receiptTemplates?.templateUpdated || 'Template updated successfully') : (dict?.receiptTemplates?.templateCreated || 'Template created successfully') });
         setShowEditor(false);
         setEditing(null);
         fetchTemplates();
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to save template' });
+        setMessage({ type: 'error', text: data.error || dict?.receiptTemplates?.failedToSave || 'Failed to save template' });
       }
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      setMessage({ type: 'error', text: error.message || 'Failed to save template' });
+      setMessage({ type: 'error', text: error.message || dict?.receiptTemplates?.failedToSave || 'Failed to save template' });
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this template?')) return;
+    if (!confirm(dict?.receiptTemplates?.deleteConfirm || 'Are you sure you want to delete this template?')) return;
 
     try {
       const res = await fetch(`/api/tenants/${tenant}/receipt-templates?id=${id}`, {
@@ -86,13 +87,13 @@ export default function ReceiptTemplatesManager({ settings, tenant, onUpdate }: 
 
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: 'Template deleted successfully' });
+        setMessage({ type: 'success', text: dict?.receiptTemplates?.templateDeleted || 'Template deleted successfully' });
         fetchTemplates();
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to delete template' });
+        setMessage({ type: 'error', text: data.error || dict?.receiptTemplates?.failedToDelete || 'Failed to delete template' });
       }
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      setMessage({ type: 'error', text: error.message || 'Failed to delete template' });
+      setMessage({ type: 'error', text: error.message || dict?.receiptTemplates?.failedToDelete || 'Failed to delete template' });
     }
   };
 
@@ -107,22 +108,22 @@ export default function ReceiptTemplatesManager({ settings, tenant, onUpdate }: 
 
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: 'Default template updated' });
+        setMessage({ type: 'success', text: dict?.receiptTemplates?.defaultUpdated || 'Default template updated' });
         fetchTemplates();
       }
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      setMessage({ type: 'error', text: error.message || 'Failed to set default template' });
+      setMessage({ type: 'error', text: error.message || dict?.receiptTemplates?.failedToSetDefault || 'Failed to set default template' });
     }
   };
 
   if (loading) {
-    return <div className="text-center py-8">Loading templates...</div>;
+    return <div className="text-center py-8">{dict?.receiptTemplates?.loading || 'Loading templates...'}</div>;
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-gray-900">Receipt Templates</h3>
+        <h3 className="text-lg font-semibold text-gray-900">{dict?.receiptTemplates?.title || 'Receipt Templates'}</h3>
         <button
           onClick={() => {
             setEditing(null);
@@ -130,7 +131,7 @@ export default function ReceiptTemplatesManager({ settings, tenant, onUpdate }: 
           }}
           className="px-4 py-2 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
         >
-          Create New Template
+          {dict?.receiptTemplates?.createNew || 'Create New Template'}
         </button>
       </div>
 
@@ -152,13 +153,14 @@ export default function ReceiptTemplatesManager({ settings, tenant, onUpdate }: 
             setShowEditor(false);
             setEditing(null);
           }}
+          dict={dict}
         />
       )}
 
       <div className="space-y-3">
         {templates.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
-            No templates yet. Create your first template to get started.
+            {dict?.receiptTemplates?.noTemplates || 'No templates yet. Create your first template to get started.'}
           </div>
         ) : (
           templates.map((template) => (
@@ -171,7 +173,7 @@ export default function ReceiptTemplatesManager({ settings, tenant, onUpdate }: 
                   <div>
                     <h4 className="font-medium text-gray-900">{template.name}</h4>
                     {template.isDefault && (
-                      <span className="text-xs text-blue-600 font-medium">Default</span>
+                      <span className="text-xs text-blue-600 font-medium">{dict?.receiptTemplates?.default || 'Default'}</span>
                     )}
                   </div>
                 </div>
@@ -181,7 +183,7 @@ export default function ReceiptTemplatesManager({ settings, tenant, onUpdate }: 
                       onClick={() => handleSetDefault(template.id)}
                       className="px-3 py-1 text-xs text-blue-600 hover:text-blue-700 font-medium"
                     >
-                      Set Default
+                      {dict?.receiptTemplates?.setDefault || 'Set Default'}
                     </button>
                   )}
                   <button
@@ -191,13 +193,13 @@ export default function ReceiptTemplatesManager({ settings, tenant, onUpdate }: 
                     }}
                     className="px-3 py-1 text-xs text-gray-600 hover:text-gray-800 font-medium"
                   >
-                    Edit
+                    {dict?.common?.edit || 'Edit'}
                   </button>
                   <button
                     onClick={() => handleDelete(template.id)}
                     className="px-3 py-1 text-xs text-red-600 hover:text-red-700 font-medium"
                   >
-                    Delete
+                    {dict?.common?.delete || 'Delete'}
                   </button>
                 </div>
               </div>
@@ -213,10 +215,12 @@ function TemplateEditor({
   template,
   onSave,
   onCancel,
+  dict,
 }: {
   template: ReceiptTemplate | null;
   onSave: (template: { name: string; html: string; isDefault?: boolean }) => void;
   onCancel: () => void;
+  dict?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }) {
   const [name, setName] = useState(template?.name || '');
   const [html, setHtml] = useState(template?.html || '');
@@ -368,18 +372,18 @@ function TemplateEditor({
   return (
     <div className="border-2 border-gray-300 rounded p-6 bg-white">
       <h4 className="text-lg font-semibold mb-4">
-        {template ? 'Edit Template' : 'Create New Template'}
+        {template ? (dict?.receiptTemplates?.editTemplate || 'Edit Template') : (dict?.receiptTemplates?.createNew || 'Create New Template')}
       </h4>
 
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Template Name</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">{dict?.receiptTemplates?.templateName || 'Template Name'}</label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
             className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="My Custom Receipt"
+            placeholder={dict?.receiptTemplates?.templateNamePlaceholder || 'My Custom Receipt'}
           />
         </div>
 
@@ -392,19 +396,19 @@ function TemplateEditor({
             className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
           />
           <label htmlFor="isDefault" className="text-sm text-gray-700">
-            Set as default template
+            {dict?.receiptTemplates?.setAsDefault || 'Set as default template'}
           </label>
         </div>
 
         <div>
           <div className="flex items-center justify-between mb-2">
-            <label className="block text-sm font-medium text-gray-700">Template HTML</label>
+            <label className="block text-sm font-medium text-gray-700">{dict?.receiptTemplates?.templateHtml || 'Template HTML'}</label>
             <button
               type="button"
               onClick={() => setPreview(!preview)}
               className="px-3 py-1 text-xs text-blue-600 hover:text-blue-700 font-medium"
             >
-              {preview ? 'Edit' : 'Preview'}
+              {preview ? (dict?.common?.edit || 'Edit') : (dict?.receiptTemplates?.preview || 'Preview')}
             </button>
           </div>
           {preview ? (
@@ -417,18 +421,18 @@ function TemplateEditor({
               onChange={(e) => setHtml(e.target.value)}
               rows={20}
               className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
-              placeholder="Enter HTML template..."
+              placeholder={dict?.receiptTemplates?.htmlPlaceholder || 'Enter HTML template...'}
             />
           )}
         </div>
 
         <div className="bg-blue-50 border border-blue-200 rounded p-3">
-          <p className="text-xs font-medium text-blue-900 mb-2">Available Variables:</p>
+          <p className="text-xs font-medium text-blue-900 mb-2">{dict?.receiptTemplates?.availableVariables || 'Available Variables:'}</p>
           <div className="text-xs text-blue-800 space-y-1">
             <div><code className="bg-blue-100 px-1 rounded">{'{{storeName}}'}</code>, <code className="bg-blue-100 px-1 rounded">{'{{logo}}'}</code>, <code className="bg-blue-100 px-1 rounded">{'{{address}}'}</code>, <code className="bg-blue-100 px-1 rounded">{'{{phone}}'}</code>, <code className="bg-blue-100 px-1 rounded">{'{{email}}'}</code></div>
             <div><code className="bg-blue-100 px-1 rounded">{'{{receiptNumber}}'}</code>, <code className="bg-blue-100 px-1 rounded">{'{{date}}'}</code>, <code className="bg-blue-100 px-1 rounded">{'{{time}}'}</code></div>
-            <div><code className="bg-blue-100 px-1 rounded">{'{{#each items}}'}</code> - Loop through items</div>
-            <div><code className="bg-blue-100 px-1 rounded">{'{{#if condition}}'}</code> - Conditional blocks</div>
+            <div><code className="bg-blue-100 px-1 rounded">{'{{#each items}}'}</code> - {dict?.receiptTemplates?.loopThroughItems || 'Loop through items'}</div>
+            <div><code className="bg-blue-100 px-1 rounded">{'{{#if condition}}'}</code> - {dict?.receiptTemplates?.conditionalBlocks || 'Conditional blocks'}</div>
             <div><code className="bg-blue-100 px-1 rounded">{'{{subtotal}}'}</code>, <code className="bg-blue-100 px-1 rounded">{'{{tax}}'}</code>, <code className="bg-blue-100 px-1 rounded">{'{{total}}'}</code></div>
           </div>
         </div>
@@ -438,13 +442,13 @@ function TemplateEditor({
             onClick={() => onSave({ name, html, isDefault })}
             className="px-4 py-2 bg-blue-600 text-white font-medium hover:bg-blue-700"
           >
-            Save Template
+            {dict?.receiptTemplates?.saveTemplate || 'Save Template'}
           </button>
           <button
             onClick={onCancel}
             className="px-4 py-2 bg-gray-200 text-gray-700 font-medium hover:bg-gray-300"
           >
-            Cancel
+            {dict?.common?.cancel || 'Cancel'}
           </button>
         </div>
       </div>

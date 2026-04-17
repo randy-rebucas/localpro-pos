@@ -433,10 +433,10 @@ function ExpenseModal({
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                   required
                 >
-                  <option value="cash">Cash</option>
-                  <option value="card">Card</option>
-                  <option value="digital">Digital</option>
-                  <option value="other">Other</option>
+                  <option value="cash">{dict?.admin?.cash || 'Cash'}</option>
+                  <option value="card">{dict?.admin?.card || 'Card'}</option>
+                  <option value="digital">{dict?.admin?.digital || 'Digital'}</option>
+                  <option value="other">{dict?.admin?.other || 'Other'}</option>
                 </select>
               </div>
             </div>

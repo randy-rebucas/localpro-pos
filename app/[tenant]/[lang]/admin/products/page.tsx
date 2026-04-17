@@ -140,7 +140,7 @@ export default function ProductsPage() {
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                 </svg>
-                Upload Images
+                {dict.products?.uploadImages || 'Upload Images'}
               </Link>
               <button
                 onClick={() => {
@@ -157,7 +157,7 @@ export default function ProductsPage() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Image</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.products?.imageHeader || 'Image'}</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.name || 'Name'}</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.category || 'Category'}</th>
@@ -208,7 +208,7 @@ export default function ProductsPage() {
                     <td className="px-4 py-4 whitespace-nowrap">
                       <span className="px-2 py-1 text-xs font-semibold border border-blue-300 bg-blue-100 text-blue-800">
                         {product.productType}
-                        {product.hasVariations && ' (variations)'}
+                        {product.hasVariations && ` ${dict.products?.variations || '(variations)'}`}
                       </span>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
@@ -217,7 +217,7 @@ export default function ProductsPage() {
                           onClick={() => setBarcodeProduct(product)}
                           className="text-gray-600 hover:text-gray-900"
                         >
-                          Barcode
+                          {dict.products?.barcode || 'Barcode'}
                         </button>
                         <button
                           onClick={() => {
@@ -421,14 +421,14 @@ function ProductModal({
           {businessTypeConfig && (
             <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded">
               <p className="text-sm text-blue-900">
-                <strong>Business Type:</strong> {businessTypeConfig.name}
+                <strong>{dict.products?.businessType || 'Business Type'}:</strong> {businessTypeConfig.name}
               </p>
               <p className="text-xs text-blue-700 mt-1">
                 {businessTypeConfig.description}
               </p>
               {businessTypeConfig.requiredFields.length > 0 && (
                 <p className="text-xs text-blue-700 mt-1">
-                  <strong>Required fields:</strong> {businessTypeConfig.requiredFields.join(', ')}
+                  <strong>{dict.products?.requiredFields || 'Required fields'}:</strong> {businessTypeConfig.requiredFields.join(', ')}
                 </p>
               )}
             </div>
@@ -462,7 +462,7 @@ function ProductModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Barcode
+                {dict.products?.barcode || 'Barcode'}
               </label>
               <div className="flex gap-2">
                 <input
@@ -470,16 +470,16 @@ function ProductModal({
                   value={formData.barcode}
                   onChange={(e) => updateFormData({ barcode: e.target.value })}
                   className="flex-1 px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white font-mono"
-                  placeholder="Scan or enter barcode"
+                  placeholder={dict.products?.scanOrEnterBarcode || 'Scan or enter barcode'}
                 />
                 <button
                   type="button"
                   onClick={() => updateFormData({ barcode: generateEAN13Helper() })}
                   className="px-3 py-2 border border-gray-300 bg-gray-50 hover:bg-gray-100 text-gray-700 text-sm font-medium flex items-center gap-1.5 transition-colors whitespace-nowrap"
-                  title="Generate EAN-13 barcode"
+                  title={dict.products?.generateEan13Title || 'Generate EAN-13 barcode'}
                 >
                   <RefreshCw className="h-3.5 w-3.5" />
-                  Generate
+                  {dict.products?.generate || 'Generate'}
                 </button>
               </div>
             </div>
@@ -496,7 +496,7 @@ function ProductModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Product Image
+                {dict.products?.productImage || 'Product Image'}
               </label>
               <div className="flex gap-3 items-start">
                 {formData.image && (
@@ -513,7 +513,7 @@ function ProductModal({
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                       </svg>
-                      Upload
+                      {dict.products?.upload || 'Upload'}
                       <input
                         type="file"
                         accept="image/jpeg,image/png,image/webp,image/gif"
@@ -522,7 +522,7 @@ function ProductModal({
                           const file = e.target.files?.[0];
                           if (!file) return;
                           if (file.size > 10 * 1024 * 1024) {
-                            alert('File too large. Maximum size: 10MB');
+                            alert(dict.products?.fileTooLarge || 'File too large. Maximum size: 10MB');
                             return;
                           }
                           try {
@@ -537,10 +537,10 @@ function ProductModal({
                             if (data.success) {
                               updateFormData({ image: data.data.url });
                             } else {
-                              alert(data.error || 'Failed to upload image');
+                              alert(data.error || dict.products?.failedToUploadImage || 'Failed to upload image');
                             }
                           } catch {
-                            alert('Upload failed');
+                            alert(dict.products?.uploadFailed || 'Upload failed');
                           }
                         }}
                       />
@@ -550,14 +550,14 @@ function ProductModal({
                       onClick={openImagePicker}
                       className="px-3 py-2 border border-gray-300 bg-gray-50 hover:bg-gray-100 text-sm text-gray-700 transition-colors"
                     >
-                      Browse
+                      {dict.products?.browse || 'Browse'}
                     </button>
                   </div>
                   <input
                     type="url"
                     value={formData.image.startsWith('data:') ? '' : formData.image}
                     onChange={(e) => updateFormData({ image: e.target.value })}
-                    placeholder="Or paste image URL (https://...)"
+                    placeholder={dict.products?.pasteImageUrl || 'Or paste image URL (https://...)'}
                     className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white text-sm"
                   />
                   {formData.image && (
@@ -566,7 +566,7 @@ function ProductModal({
                       onClick={() => updateFormData({ image: '' })}
                       className="text-xs text-red-600 hover:text-red-800"
                     >
-                      Remove image
+                      {dict.products?.removeImage || 'Remove image'}
                     </button>
                   )}
                 </div>
@@ -698,7 +698,9 @@ function ProductModal({
                 </select>
                 {businessTypeConfig && businessTypeConfig.productTypes.length === 1 && (
                   <p className="mt-1 text-xs text-gray-500">
-                    Only {businessTypeConfig.productTypes[0]} products are allowed for {businessTypeConfig.name}
+                    {(dict.products?.onlyProductType || 'Only {type} products are allowed for {businessType}')
+                      .replace('{type}', businessTypeConfig.productTypes[0])
+                      .replace('{businessType}', businessTypeConfig.name)}
                   </p>
                 )}
               </div>
@@ -722,10 +724,10 @@ function ProductModal({
             {/* Restaurant-specific fields */}
             {settings?.businessType?.toLowerCase() === 'restaurant' && (
               <div className="space-y-4 pt-4 border-t border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900">Restaurant Information</h3>
-                
+                <h3 className="text-lg font-semibold text-gray-900">{dict.products?.restaurantInfo || 'Restaurant Information'}</h3>
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Allergens (comma-separated)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{dict.products?.allergens || 'Allergens (comma-separated)'}</label>
                   <input
                     type="text"
                     value={Array.isArray(formData.allergens) ? formData.allergens.join(', ') : formData.allergens || ''}
@@ -740,7 +742,7 @@ function ProductModal({
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Calories</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict.products?.calories || 'Calories'}</label>
                     <input
                       type="number"
                       min="0"
@@ -753,7 +755,7 @@ function ProductModal({
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Protein (g)</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict.products?.protein || 'Protein (g)'}</label>
                     <input
                       type="number"
                       min="0"
@@ -771,7 +773,7 @@ function ProductModal({
                 {/* Modifier Groups */}
                 <div className="pt-2">
                   <div className="flex items-center justify-between mb-2">
-                    <label className="text-sm font-semibold text-gray-700">Modifier Groups</label>
+                    <label className="text-sm font-semibold text-gray-700">{dict.products?.modifierGroups || 'Modifier Groups'}</label>
                     <button
                       type="button"
                       onClick={() => updateFormData({
@@ -782,7 +784,7 @@ function ProductModal({
                       })}
                       className="text-xs px-2 py-1 bg-orange-50 border border-orange-300 text-orange-700 hover:bg-orange-100 font-semibold"
                     >
-                      + Add Group
+                      {dict.products?.addGroup || '+ Add Group'}
                     </button>
                   </div>
                   <div className="space-y-3">
@@ -811,7 +813,7 @@ function ProductModal({
                               }}
                               className="rounded"
                             />
-                            Required
+                            {dict.products?.required || 'Required'}
                           </label>
                           <button
                             type="button"
@@ -888,7 +890,7 @@ function ProductModal({
                             }}
                             className="text-xs text-orange-600 hover:text-orange-800 font-medium"
                           >
-                            + Add option
+                            {dict.products?.addOption || '+ Add option'}
                           </button>
                         </div>
                       </div>
@@ -901,20 +903,20 @@ function ProductModal({
             {/* Laundry-specific fields */}
             {settings?.businessType?.toLowerCase() === 'laundry' && (
               <div className="space-y-4 pt-4 border-t border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900">Laundry Service Information</h3>
-                
+                <h3 className="text-lg font-semibold text-gray-900">{dict.products?.laundryInfo || 'Laundry Service Information'}</h3>
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Service Type</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{dict.products?.serviceType || 'Service Type'}</label>
                   <select
                     value={formData.serviceType}
                     onChange={(e) => updateFormData({ serviceType: e.target.value as any })} // eslint-disable-line @typescript-eslint/no-explicit-any
                     className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
                   >
-                    <option value="wash">Wash</option>
-                    <option value="dry-clean">Dry Clean</option>
-                    <option value="press">Press</option>
-                    <option value="repair">Repair</option>
-                    <option value="other">Other</option>
+                    <option value="wash">{dict.products?.serviceTypeWash || 'Wash'}</option>
+                    <option value="dry-clean">{dict.products?.serviceTypeDryClean || 'Dry Clean'}</option>
+                    <option value="press">{dict.products?.serviceTypePress || 'Press'}</option>
+                    <option value="repair">{dict.products?.serviceTypeRepair || 'Repair'}</option>
+                    <option value="other">{dict.products?.serviceTypeOther || 'Other'}</option>
                   </select>
                 </div>
 
@@ -927,7 +929,7 @@ function ProductModal({
                         onChange={(e) => updateFormData({ weightBased: e.target.checked })}
                         className="mr-2"
                       />
-                      <span className="text-sm font-medium text-gray-700">Weight-based pricing</span>
+                      <span className="text-sm font-medium text-gray-700">{dict.products?.weightBased || 'Weight-based pricing'}</span>
                     </label>
                   </div>
                   <div>
@@ -938,13 +940,13 @@ function ProductModal({
                         onChange={(e) => updateFormData({ pickupDelivery: e.target.checked })}
                         className="mr-2"
                       />
-                      <span className="text-sm font-medium text-gray-700">Pickup & Delivery</span>
+                      <span className="text-sm font-medium text-gray-700">{dict.products?.pickupDelivery || 'Pickup & Delivery'}</span>
                     </label>
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Estimated Duration (minutes)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{dict.products?.estimatedDuration || 'Estimated Duration (minutes)'}</label>
                   <input
                     type="number"
                     min="0"
@@ -959,11 +961,11 @@ function ProductModal({
             {/* Service-specific fields */}
             {settings?.businessType?.toLowerCase() === 'service' && (
               <div className="space-y-4 pt-4 border-t border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900">Service Information</h3>
-                
+                <h3 className="text-lg font-semibold text-gray-900">{dict.products?.serviceInfo || 'Service Information'}</h3>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Service Duration (minutes)</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict.products?.serviceDuration || 'Service Duration (minutes)'}</label>
                     <input
                       type="number"
                       min="0"
@@ -973,7 +975,7 @@ function ProductModal({
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Staff Required</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict.products?.staffRequired || 'Staff Required'}</label>
                     <input
                       type="number"
                       min="1"
@@ -985,7 +987,7 @@ function ProductModal({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Equipment Required (comma-separated)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{dict.products?.equipmentRequired || 'Equipment Required (comma-separated)'}</label>
                   <input
                     type="text"
                     value={Array.isArray(formData.equipmentRequired) ? formData.equipmentRequired.join(', ') : formData.equipmentRequired || ''}
@@ -1031,20 +1033,20 @@ function ProductModal({
           <div className="bg-white border border-gray-200 shadow-xl w-full max-w-2xl flex flex-col max-h-[80vh]">
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-              <h3 className="text-base font-semibold text-gray-900">Select Image</h3>
+              <h3 className="text-base font-semibold text-gray-900">{dict.products?.selectImage || 'Select Image'}</h3>
               <button type="button" onClick={() => setShowImagePicker(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
             </div>
             {/* Toolbar */}
             <div className="flex items-center gap-3 px-5 py-3 border-b border-gray-100">
               <input
                 type="text"
-                placeholder="Search images..."
+                placeholder={dict.products?.searchImages || 'Search images...'}
                 value={pickerSearch}
                 onChange={e => setPickerSearch(e.target.value)}
                 className="flex-1 px-3 py-2 border border-gray-300 text-sm bg-white"
               />
               <label className={`px-4 py-2 text-sm font-medium text-white cursor-pointer bg-blue-600 hover:bg-blue-700 ${pickerUploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                {pickerUploading ? 'Uploading...' : 'Upload New'}
+                {pickerUploading ? (dict.products?.uploading || 'Uploading...') : (dict.products?.uploadNew || 'Upload New')}
                 <input
                   ref={pickerFileInputRef}
                   type="file"
@@ -1063,7 +1065,7 @@ function ProductModal({
                 </div>
               ) : pickerFiles.filter(f => f.name.toLowerCase().includes(pickerSearch.toLowerCase())).length === 0 ? (
                 <div className="text-center py-12 text-gray-400 text-sm">
-                  {pickerSearch ? 'No images match your search.' : 'No images uploaded yet. Upload one above.'}
+                  {pickerSearch ? (dict.products?.noImagesMatch || 'No images match your search.') : (dict.products?.noImagesUploaded || 'No images uploaded yet. Upload one above.')}
                 </div>
               ) : (
                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
@@ -1099,7 +1101,7 @@ function ProductModal({
             {/* Footer */}
             <div className="flex justify-end px-5 py-3 border-t border-gray-200">
               <button type="button" onClick={() => setShowImagePicker(false)} className="px-4 py-2 border border-gray-300 text-gray-700 text-sm hover:bg-gray-50 bg-white">
-                Cancel
+                {dict.common?.cancel || 'Cancel'}
               </button>
             </div>
           </div>

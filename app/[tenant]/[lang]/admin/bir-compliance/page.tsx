@@ -15,7 +15,7 @@ import {
   getPtuExpiryWarning,
 } from '@/lib/bir-compliance-helpers';
 
-function LockOverlay({ plan }: { plan?: string }) {
+function LockOverlay({ plan, dict }: { plan?: string; dict: any }) { // eslint-disable-line @typescript-eslint/no-explicit-any
   const { tenant, lang } = useParams() as { tenant: string; lang: string };
   const label = plan || 'Pro';
   return (
@@ -24,12 +24,14 @@ function LockOverlay({ plan }: { plan?: string }) {
         <svg className="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
         </svg>
-        <p className="text-sm text-gray-500 mb-2">Requires {label} plan or higher</p>
+        <p className="text-sm text-gray-500 mb-2">
+          {(dict?.bir?.requiresPlan || 'Requires {plan} plan or higher').replace('{plan}', label)}
+        </p>
         <Link
           href={`/${tenant}/${lang}/admin/subscriptions`}
           className="text-blue-600 hover:text-blue-700 text-sm font-medium"
         >
-          Upgrade Plan
+          {dict?.bir?.upgradePlan || 'Upgrade Plan'}
         </Link>
       </div>
     </div>
@@ -86,7 +88,7 @@ export default function BirCompliancePage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
     );
@@ -108,10 +110,10 @@ export default function BirCompliancePage() {
             {dict?.admin?.backToAdmin || 'Back to Admin'}
           </Link>
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
-            BIR Compliance
+            {dict?.bir?.title || 'BIR Compliance'}
           </h1>
           <p className="text-gray-600">
-            Manage your Bureau of Internal Revenue compliance settings, PTU, CAS reporting, and audit trail.
+            {dict?.bir?.subtitle || 'Manage your Bureau of Internal Revenue compliance settings, PTU, CAS reporting, and audit trail.'}
           </p>
         </div>
 
@@ -126,12 +128,12 @@ export default function BirCompliancePage() {
                 </svg>
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">Audit Trail</h2>
-                <span className="inline-block text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded mt-1">All Plans</span>
+                <h2 className="text-lg font-semibold text-gray-900">{dict?.bir?.auditTrail || 'Audit Trail'}</h2>
+                <span className="inline-block text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded mt-1">{dict?.bir?.allPlans || 'All Plans'}</span>
               </div>
             </div>
             <p className="text-sm text-gray-600 mb-4">
-              Complete record of all transactions, user actions, and system events. Required for BIR compliance and available on all subscription plans.
+              {dict?.bir?.auditTrailDesc || 'Complete record of all transactions, user actions, and system events. Required for BIR compliance and available on all subscription plans.'}
             </p>
             <Link
               href={`/${tenant}/${lang}/admin/audit-logs`}
@@ -140,13 +142,13 @@ export default function BirCompliancePage() {
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
-              View Audit Logs
+              {dict?.bir?.viewAuditLogs || 'View Audit Logs'}
             </Link>
           </div>
 
           {/* 2. Receipt Formatting */}
           <div className="relative bg-white border border-gray-300 p-6 overflow-hidden">
-            {!birFeatures?.receiptFormatting && <LockOverlay plan="Pro" />}
+            {!birFeatures?.receiptFormatting && <LockOverlay plan="Pro" dict={dict} />}
             <div className="flex items-start gap-3 mb-4">
               <div className="flex-shrink-0 w-10 h-10 bg-blue-100 flex items-center justify-center rounded">
                 <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -154,12 +156,12 @@ export default function BirCompliancePage() {
                 </svg>
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">Receipt Formatting</h2>
+                <h2 className="text-lg font-semibold text-gray-900">{dict?.bir?.receiptFormatting || 'Receipt Formatting'}</h2>
                 <span className="inline-block text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded mt-1">Pro+</span>
               </div>
             </div>
             <p className="text-sm text-gray-600 mb-4">
-              Customize BIR-compliant receipt templates with official receipt numbering, TIN display, VAT breakdown, and required fields.
+              {dict?.bir?.receiptFormattingDesc || 'Customize BIR-compliant receipt templates with official receipt numbering, TIN display, VAT breakdown, and required fields.'}
             </p>
             <Link
               href={`/${tenant}/${lang}/admin/hardware`}
@@ -169,13 +171,13 @@ export default function BirCompliancePage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
-              Configure Receipt Templates
+              {dict?.bir?.configureReceiptTemplates || 'Configure Receipt Templates'}
             </Link>
           </div>
 
           {/* 3. PTU Assistance */}
           <div className="relative bg-white border border-gray-300 p-6 overflow-hidden">
-            {!birFeatures?.ptuAssistance && <LockOverlay plan="Pro" />}
+            {!birFeatures?.ptuAssistance && <LockOverlay plan="Pro" dict={dict} />}
             <div className="flex items-start gap-3 mb-4">
               <div className="flex-shrink-0 w-10 h-10 bg-yellow-100 flex items-center justify-center rounded">
                 <svg className="w-5 h-5 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -183,12 +185,12 @@ export default function BirCompliancePage() {
                 </svg>
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">PTU Assistance</h2>
+                <h2 className="text-lg font-semibold text-gray-900">{dict?.bir?.ptuAssistance || 'PTU Assistance'}</h2>
                 <span className="inline-block text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded mt-1">Pro+</span>
               </div>
             </div>
             <p className="text-sm text-gray-600 mb-4">
-              Store and track your BIR Permit to Use (PTU) details and Tax Identification Number (TIN) for your POS system.
+              {dict?.bir?.ptuAssistanceDesc || 'Store and track your BIR Permit to Use (PTU) details and Tax Identification Number (TIN) for your POS system.'}
             </p>
 
             {ptuExpiringSoon(birSettings.birPtuExpiryDate) && birFeatures?.ptuAssistance && (
@@ -200,7 +202,7 @@ export default function BirCompliancePage() {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  BIR TIN <span className="text-gray-400 font-normal">(NNN-NNN-NNN-NNN)</span>
+                  {dict?.bir?.birTin || 'BIR TIN'} <span className="text-gray-400 font-normal">(NNN-NNN-NNN-NNN)</span>
                 </label>
                 <input
                   type="text"
@@ -211,7 +213,7 @@ export default function BirCompliancePage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">PTU Number</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{dict?.bir?.ptuNumber || 'PTU Number'}</label>
                 <input
                   type="text"
                   value={birSettings.birPtuNumber}
@@ -222,7 +224,7 @@ export default function BirCompliancePage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">PTU Issued Date</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{dict?.bir?.ptuIssuedDate || 'PTU Issued Date'}</label>
                   <input
                     type="date"
                     value={birSettings.birPtuIssuedDate}
@@ -231,7 +233,7 @@ export default function BirCompliancePage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">PTU Expiry Date</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{dict?.bir?.ptuExpiryDate || 'PTU Expiry Date'}</label>
                   <input
                     type="date"
                     value={birSettings.birPtuExpiryDate}
@@ -245,14 +247,14 @@ export default function BirCompliancePage() {
                 disabled={saving || !birFeatures?.ptuAssistance}
                 className="w-full bg-blue-600 text-white px-4 py-2 text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {saving ? 'Saving...' : 'Save PTU Settings'}
+                {saving ? (dict?.admin?.saving || 'Saving...') : (dict?.bir?.savePtuSettings || 'Save PTU Settings')}
               </button>
             </div>
           </div>
 
           {/* 4. CAS Reporting */}
           <div className="relative bg-white border border-gray-300 p-6 overflow-hidden">
-            {!birFeatures?.casReporting && <LockOverlay plan="Business" />}
+            {!birFeatures?.casReporting && <LockOverlay plan="Business" dict={dict} />}
             <div className="flex items-start gap-3 mb-4">
               <div className="flex-shrink-0 w-10 h-10 bg-purple-100 flex items-center justify-center rounded">
                 <svg className="w-5 h-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -260,17 +262,17 @@ export default function BirCompliancePage() {
                 </svg>
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">CAS Reporting</h2>
+                <h2 className="text-lg font-semibold text-gray-900">{dict?.bir?.casReporting || 'CAS Reporting'}</h2>
                 <span className="inline-block text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded mt-1">Business+</span>
               </div>
             </div>
             <p className="text-sm text-gray-600 mb-4">
-              Export your sales data in BIR Computerized Accounting System (CAS) format. Download a CSV with VAT breakdown for BIR submission.
+              {dict?.bir?.casReportingDesc || 'Export your sales data in BIR Computerized Accounting System (CAS) format. Download a CSV with VAT breakdown for BIR submission.'}
             </p>
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{dict?.bir?.startDate || 'Start Date'}</label>
                   <input
                     type="date"
                     value={casDateRange.start}
@@ -279,7 +281,7 @@ export default function BirCompliancePage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{dict?.bir?.endDate || 'End Date'}</label>
                   <input
                     type="date"
                     value={casDateRange.end}
@@ -296,14 +298,14 @@ export default function BirCompliancePage() {
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
-                {downloadingCas ? 'Generating...' : 'Download CAS Report (CSV)'}
+                {downloadingCas ? (dict?.bir?.generating || 'Generating...') : (dict?.bir?.downloadCasReport || 'Download CAS Report (CSV)')}
               </button>
             </div>
           </div>
 
           {/* 5. Monthly Support */}
           <div className="relative bg-white border border-gray-300 p-6 overflow-hidden lg:col-span-2">
-            {!birFeatures?.monthlySupport && <LockOverlay plan="Business" />}
+            {!birFeatures?.monthlySupport && <LockOverlay plan="Business" dict={dict} />}
             <div className="flex items-start gap-3 mb-4">
               <div className="flex-shrink-0 w-10 h-10 bg-green-100 flex items-center justify-center rounded">
                 <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -311,29 +313,29 @@ export default function BirCompliancePage() {
                 </svg>
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">Monthly BIR Compliance Support</h2>
+                <h2 className="text-lg font-semibold text-gray-900">{dict?.bir?.monthlySupport || 'Monthly BIR Compliance Support'}</h2>
                 <span className="inline-block text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded mt-1">Business+</span>
               </div>
             </div>
             <p className="text-sm text-gray-600 mb-4">
-              Get dedicated monthly support for BIR compliance — including assistance with VAT filings, PTU renewals, CAS submissions, and documentation review.
+              {dict?.bir?.monthlySupportDesc || 'Get dedicated monthly support for BIR compliance — including assistance with VAT filings, PTU renewals, CAS submissions, and documentation review.'}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="border border-gray-200 p-4 rounded">
-                <div className="text-sm font-medium text-gray-900 mb-1">VAT Filing Assistance</div>
-                <p className="text-xs text-gray-500">Monthly 2550M and quarterly 2550Q filing guidance</p>
+                <div className="text-sm font-medium text-gray-900 mb-1">{dict?.bir?.vatFilingAssistance || 'VAT Filing Assistance'}</div>
+                <p className="text-xs text-gray-500">{dict?.bir?.vatFilingAssistanceDesc || 'Monthly 2550M and quarterly 2550Q filing guidance'}</p>
               </div>
               <div className="border border-gray-200 p-4 rounded">
-                <div className="text-sm font-medium text-gray-900 mb-1">PTU Renewal</div>
-                <p className="text-xs text-gray-500">Annual Permit to Use renewal reminders and support</p>
+                <div className="text-sm font-medium text-gray-900 mb-1">{dict?.bir?.ptuRenewal || 'PTU Renewal'}</div>
+                <p className="text-xs text-gray-500">{dict?.bir?.ptuRenewalDesc || 'Annual Permit to Use renewal reminders and support'}</p>
               </div>
               <div className="border border-gray-200 p-4 rounded">
-                <div className="text-sm font-medium text-gray-900 mb-1">CAS Submission</div>
-                <p className="text-xs text-gray-500">Help with BIR CAS accreditation and periodic submissions</p>
+                <div className="text-sm font-medium text-gray-900 mb-1">{dict?.bir?.casSubmission || 'CAS Submission'}</div>
+                <p className="text-xs text-gray-500">{dict?.bir?.casSubmissionDesc || 'Help with BIR CAS accreditation and periodic submissions'}</p>
               </div>
             </div>
             <div className="mt-4 p-3 bg-green-50 border border-green-200 text-green-800 text-sm">
-              Your plan includes monthly compliance support. Contact your account manager or open a support ticket to get started.
+              {dict?.bir?.monthlySupportContact || 'Your plan includes monthly compliance support. Contact your account manager or open a support ticket to get started.'}
             </div>
           </div>
 

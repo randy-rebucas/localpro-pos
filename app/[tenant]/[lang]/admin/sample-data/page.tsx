@@ -83,9 +83,9 @@ export default function SampleDataPage() {
             </svg>
             {dict?.admin?.backToAdmin || 'Back to Admin'}
           </Link>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Install Sample Data</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">{dict?.sampleData?.title || 'Install Sample Data'}</h1>
           <p className="text-gray-600">
-            Quickly populate your store with realistic sample products, categories, customers, and discount codes tailored to your business type.
+            {dict?.sampleData?.subtitle || 'Quickly populate your store with realistic sample products, categories, customers, and discount codes tailored to your business type.'}
           </p>
         </div>
 
@@ -108,18 +108,18 @@ export default function SampleDataPage() {
         {/* Install results */}
         {installResults && (
           <div className="mb-6 bg-white border border-gray-200 p-5">
-            <h3 className="font-semibold text-gray-900 mb-4">Installation Results</h3>
+            <h3 className="font-semibold text-gray-900 mb-4">{dict?.sampleData?.installationResults || 'Installation Results'}</h3>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {([
-                { label: 'Categories', value: installResults.categories, icon: '🏷️' },
-                { label: 'Products',   value: installResults.products,   icon: '📦' },
-                { label: 'Customers',  value: installResults.customers,  icon: '👤' },
-                { label: 'Discounts',  value: installResults.discounts,  icon: '🎫' },
+                { label: dict?.admin?.categories || 'Categories', value: installResults.categories, icon: '🏷️' },
+                { label: dict?.admin?.products || 'Products',   value: installResults.products,   icon: '📦' },
+                { label: dict?.admin?.customers || 'Customers',  value: installResults.customers,  icon: '👤' },
+                { label: dict?.admin?.discounts || 'Discounts',  value: installResults.discounts,  icon: '🎫' },
               ] as { label: string; value: number; icon: string }[]).map(stat => (
                 <div key={stat.label} className="text-center p-4 bg-gray-50 border border-gray-200">
                   <div className="text-2xl mb-1">{stat.icon}</div>
                   <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
-                  <div className="text-sm text-gray-500">{stat.label} added</div>
+                  <div className="text-sm text-gray-500">{stat.label} {dict?.sampleData?.added || 'added'}</div>
                 </div>
               ))}
             </div>
@@ -142,7 +142,7 @@ export default function SampleDataPage() {
                 <h2 className={`font-semibold ${colors.text}`}>{bizLabel}</h2>
               </div>
               <p className="text-sm text-gray-600">
-                Sample data has been curated specifically for this business type. All records will be added to your store and ready to use immediately.
+                {dict?.sampleData?.businessTypeBannerDesc || 'Sample data has been curated specifically for this business type. All records will be added to your store and ready to use immediately.'}
               </p>
             </div>
           )}
@@ -150,8 +150,8 @@ export default function SampleDataPage() {
           {/* Preview table */}
           <div className="bg-white border border-gray-300">
             <div className="px-5 py-4 border-b border-gray-200">
-              <h2 className="font-semibold text-gray-900">What will be installed</h2>
-              <p className="text-sm text-gray-500 mt-0.5">Only new records will be added — existing data is never overwritten.</p>
+              <h2 className="font-semibold text-gray-900">{dict?.sampleData?.whatWillBeInstalled || 'What will be installed'}</h2>
+              <p className="text-sm text-gray-500 mt-0.5">{dict?.sampleData?.onlyNewRecords || 'Only new records will be added — existing data is never overwritten.'}</p>
             </div>
 
             {previewLoading ? (
@@ -161,10 +161,10 @@ export default function SampleDataPage() {
             ) : preview ? (
               <div className="divide-y divide-gray-100">
                 {([
-                  { key: 'categories', label: 'Categories', icon: '🏷️', items: preview.sample.categories.join(', ') },
-                  { key: 'products',   label: 'Products',   icon: '📦', items: `${preview.preview.products} products across ${preview.preview.categories} categories` },
-                  { key: 'customers',  label: 'Customers',  icon: '👤', items: `${preview.preview.customers} sample customers with contact details and tags` },
-                  { key: 'discounts',  label: 'Discounts',  icon: '🎫', items: preview.sample.discounts.map(d => `${d.code} (${d.type === 'percentage' ? d.value + '%' : '₱' + d.value} off)`).join(', ') },
+                  { key: 'categories', label: dict?.admin?.categories || 'Categories', icon: '🏷️', items: preview.sample.categories.join(', ') },
+                  { key: 'products',   label: dict?.admin?.products || 'Products',   icon: '📦', items: `${preview.preview.products} products across ${preview.preview.categories} categories` },
+                  { key: 'customers',  label: dict?.admin?.customers || 'Customers',  icon: '👤', items: `${preview.preview.customers} sample customers with contact details and tags` },
+                  { key: 'discounts',  label: dict?.admin?.discounts || 'Discounts',  icon: '🎫', items: preview.sample.discounts.map(d => `${d.code} (${d.type === 'percentage' ? d.value + '%' : '₱' + d.value} off)`).join(', ') },
                 ] as { key: keyof typeof preview.preview; label: string; icon: string; items: string }[]).map(row => {
                   const toAdd    = preview.preview[row.key];
                   const existing = preview.existing[row.key];
@@ -191,14 +191,14 @@ export default function SampleDataPage() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-medium text-gray-900">{row.label}</span>
                           <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
-                            {toAdd} total in set
+                            {toAdd} {dict?.sampleData?.totalInSet || 'total in set'}
                           </span>
                           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                             willAdd > 0
                               ? 'bg-green-100 text-green-700'
                               : 'bg-gray-100 text-gray-500'
                           }`}>
-                            {willAdd > 0 ? `+${willAdd} new` : `already installed`}
+                            {willAdd > 0 ? (dict?.sampleData?.newBadge || '+{count} new').replace('{count}', String(willAdd)) : (dict?.sampleData?.alreadyInstalled || 'already installed')}
                           </span>
                         </div>
                         <p className="text-sm text-gray-500 mt-1 truncate">{row.items}</p>
@@ -208,7 +208,7 @@ export default function SampleDataPage() {
                 })}
               </div>
             ) : (
-              <div className="p-6 text-center text-gray-500">Could not load preview.</div>
+              <div className="p-6 text-center text-gray-500">{dict?.sampleData?.couldNotLoadPreview || 'Could not load preview.'}</div>
             )}
           </div>
 
@@ -216,10 +216,10 @@ export default function SampleDataPage() {
           {preview && preview.sample.products.length > 0 && (
             <div className="bg-white border border-gray-300">
               <div className="px-5 py-4 border-b border-gray-200">
-                <h2 className="font-semibold text-gray-900 mb-3">Sample Products Preview</h2>
+                <h2 className="font-semibold text-gray-900 mb-3">{dict?.sampleData?.sampleProductsPreview || 'Sample Products Preview'}</h2>
                 <input
                   type="text"
-                  placeholder="Search products..."
+                  placeholder={dict?.common?.search || 'Search products...'}
                   value={productSearch}
                   onChange={(e) => setProductSearch(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
@@ -229,9 +229,9 @@ export default function SampleDataPage() {
                 <table className="min-w-full divide-y divide-gray-100">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Name</th>
-                      <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Type</th>
-                      <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Price</th>
+                      <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">{dict?.admin?.name || 'Name'}</th>
+                      <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">{dict?.common?.type || 'Type'}</th>
+                      <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">{dict?.admin?.price || 'Price'}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -258,7 +258,7 @@ export default function SampleDataPage() {
                 </table>
                 {preview.sample.products.filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase())).length === 0 && (
                   <div className="px-5 py-6 text-center text-gray-500">
-                    No products match your search
+                    {dict?.sampleData?.noProductsMatch || 'No products match your search'}
                   </div>
                 )}
               </div>
@@ -272,9 +272,9 @@ export default function SampleDataPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
               </svg>
               <div>
-                <p className="text-sm font-medium text-yellow-800">This store already has data</p>
+                <p className="text-sm font-medium text-yellow-800">{dict?.sampleData?.storeHasData || 'This store already has data'}</p>
                 <p className="text-sm text-yellow-700 mt-0.5">
-                  Existing records will not be modified. Only new sample records (those not already present) will be added.
+                  {dict?.sampleData?.storeHasDataDesc || 'Existing records will not be modified. Only new sample records (those not already present) will be added.'}
                 </p>
               </div>
             </div>
@@ -283,7 +283,7 @@ export default function SampleDataPage() {
           {/* Selected Items Summary */}
           {selectedItems.size > 0 && (
             <div className="bg-blue-50 border border-blue-200 p-4">
-              <p className="text-sm font-medium text-blue-900 mb-2">Selected for installation:</p>
+              <p className="text-sm font-medium text-blue-900 mb-2">{dict?.sampleData?.selectedForInstallation || 'Selected for installation:'}</p>
               <div className="flex flex-wrap gap-2">
                 {Array.from(selectedItems).map(item => (
                   <span
@@ -311,18 +311,18 @@ export default function SampleDataPage() {
           <div className="bg-white border border-gray-300 p-5 sm:p-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <h3 className="font-semibold text-gray-900">Ready to install</h3>
+                <h3 className="font-semibold text-gray-900">{dict?.sampleData?.readyToInstall || 'Ready to install'}</h3>
                 <p className="text-sm text-gray-500 mt-0.5">
                   {preview && selectedItems.size > 0
                     ? (() => {
                         const items: string[] = [];
-                        if (selectedItems.has('categories')) items.push(`${preview.preview.categories} categories`);
-                        if (selectedItems.has('products')) items.push(`${preview.preview.products} products`);
-                        if (selectedItems.has('customers')) items.push(`${preview.preview.customers} customers`);
-                        if (selectedItems.has('discounts')) items.push(`${preview.preview.discounts} discounts`);
-                        return `Will add: ${items.join(', ')}`;
+                        if (selectedItems.has('categories')) items.push(`${preview.preview.categories} ${dict?.admin?.categories || 'categories'}`);
+                        if (selectedItems.has('products')) items.push(`${preview.preview.products} ${dict?.admin?.products || 'products'}`);
+                        if (selectedItems.has('customers')) items.push(`${preview.preview.customers} ${dict?.admin?.customers || 'customers'}`);
+                        if (selectedItems.has('discounts')) items.push(`${preview.preview.discounts} ${dict?.admin?.discounts || 'discounts'}`);
+                        return (dict?.sampleData?.willAdd || 'Will add: {items}').replace('{items}', items.join(', '));
                       })()
-                    : 'Select at least one item type to install'
+                    : (dict?.sampleData?.selectAtLeastOne || 'Select at least one item type to install')
                   }
                 </p>
               </div>
@@ -342,14 +342,14 @@ export default function SampleDataPage() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                     </svg>
-                    Installing…
+                    {dict?.sampleData?.installing || 'Installing\u2026'}
                   </>
                 ) : (
                   <>
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                     </svg>
-                    Install Sample Data
+                    {dict?.sampleData?.installSampleData || 'Install Sample Data'}
                   </>
                 )}
               </button>
@@ -358,7 +358,7 @@ export default function SampleDataPage() {
 
           {/* Info note */}
           <p className="text-xs text-gray-400 text-center">
-            Sample data is intended for testing and demo purposes. You can delete individual records from their respective management screens at any time.
+            {dict?.sampleData?.infoNote || 'Sample data is intended for testing and demo purposes. You can delete individual records from their respective management screens at any time.'}
           </p>
         </div>
       </div>

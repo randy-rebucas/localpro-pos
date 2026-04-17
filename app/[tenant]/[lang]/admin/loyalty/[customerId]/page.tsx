@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Navbar from '@/components/Navbar';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -12,12 +12,18 @@ import {
   getAdjustPointsSuccessMessage,
   getAdjustPointsErrorMessage,
 } from '@/lib/loyalty-customer-helpers';
+import { getDictionaryClient } from '../../../dictionaries-client';
 
 export default function LoyaltyCustomerPage() {
   const params = useParams();
   const tenant = params.tenant as string;
-  const lang = params.lang as string;
+  const lang = params.lang as 'en' | 'es';
   const customerId = params.customerId as string;
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+
+  useEffect(() => {
+    getDictionaryClient(lang).then(setDict);
+  }, [lang]);
 
   const { data, page, loading, setPage, refetch } = useLoyaltyCustomerData(customerId);
   const { form, saving: adjusting, updateForm, submitAdjustment } = useLoyaltyAdjustment(customerId);
@@ -43,12 +49,12 @@ export default function LoyaltyCustomerPage() {
             href={`/${tenant}/${lang}/admin/loyalty`}
             className="text-sm text-blue-600 hover:underline"
           >
-            ← Back to Loyalty Program
+            {dict?.loyalty?.backToLoyaltyProgram || '← Back to Loyalty Program'}
           </Link>
         </div>
 
         {loading && !data ? (
-          <div className="text-center py-20 text-gray-400">Loading...</div>
+          <div className="text-center py-20 text-gray-400">{dict?.common?.loading || 'Loading...'}</div>
         ) : data ? (
           <>
             {/* Header */}
@@ -56,31 +62,31 @@ export default function LoyaltyCustomerPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <h1 className="text-xl font-bold text-gray-900">{data.customerName}</h1>
-                  <p className="text-sm text-gray-500 mt-0.5">Loyalty Points Account</p>
+                  <p className="text-sm text-gray-500 mt-0.5">{dict?.loyalty?.loyaltyPointsAccount || 'Loyalty Points Account'}</p>
                 </div>
                 <div className="text-right">
                   <div className="text-3xl font-bold text-blue-600">
                     {data.loyaltyPointsBalance.toLocaleString()}
                   </div>
-                  <div className="text-xs text-gray-400">points balance</div>
+                  <div className="text-xs text-gray-400">{dict?.loyalty?.pointsBalance || 'points balance'}</div>
                 </div>
               </div>
             </div>
 
             {/* Manual Adjustment */}
             <div className="bg-white rounded-lg shadow p-6 mb-6">
-              <h2 className="text-base font-semibold text-gray-800 mb-3">Manual Adjustment</h2>
+              <h2 className="text-base font-semibold text-gray-800 mb-3">{dict?.loyalty?.manualAdjustment || 'Manual Adjustment'}</h2>
               <form onSubmit={handleAdjust} className="flex flex-col sm:flex-row gap-3">
                 <input
                   type="number"
-                  placeholder="Points (+ to add, - to deduct)"
+                  placeholder={dict?.loyalty?.pointsPlaceholder || 'Points (+ to add, - to deduct)'}
                   value={form.points}
                   onChange={(e) => updateForm({ points: e.target.value })}
                   className="border border-gray-300 rounded px-3 py-2 text-sm w-full sm:w-48 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <input
                   type="text"
-                  placeholder="Reason / description"
+                  placeholder={dict?.loyalty?.reasonPlaceholder || 'Reason / description'}
                   value={form.description}
                   onChange={(e) => updateForm({ description: e.target.value })}
                   className="border border-gray-300 rounded px-3 py-2 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -90,16 +96,16 @@ export default function LoyaltyCustomerPage() {
                   disabled={adjusting}
                   className="bg-blue-600 text-white px-5 py-2 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-60 whitespace-nowrap"
                 >
-                  {adjusting ? 'Saving...' : 'Apply'}
+                  {adjusting ? (dict?.admin?.saving || 'Saving...') : (dict?.loyalty?.apply || 'Apply')}
                 </button>
               </form>
             </div>
 
             {/* History */}
             <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-base font-semibold text-gray-800 mb-4">Points History</h2>
+              <h2 className="text-base font-semibold text-gray-800 mb-4">{dict?.loyalty?.pointsHistory || 'Points History'}</h2>
               {data.history.length === 0 ? (
-                <div className="text-center py-8 text-gray-400 text-sm">No history yet.</div>
+                <div className="text-center py-8 text-gray-400 text-sm">{dict?.loyalty?.noHistory || 'No history yet.'}</div>
               ) : (
                 <div className="space-y-3">
                   {data.history.map(entry => (
@@ -111,7 +117,7 @@ export default function LoyaltyCustomerPage() {
                         <div>
                           <p className="text-sm text-gray-800">{entry.description}</p>
                           <p className="text-xs text-gray-400">
-                            {new Date(entry.createdAt).toLocaleString()} · Balance: {entry.balanceBefore} → {entry.balanceAfter}
+                            {new Date(entry.createdAt).toLocaleString()} · {dict?.loyalty?.balanceLabel || 'Balance:'} {entry.balanceBefore} → {entry.balanceAfter}
                           </p>
                         </div>
                       </div>
@@ -131,7 +137,7 @@ export default function LoyaltyCustomerPage() {
                     disabled={page === 1}
                     className="px-3 py-1 border rounded text-sm disabled:opacity-40"
                   >
-                    Prev
+                    {dict?.loyalty?.prev || 'Prev'}
                   </button>
                   <span className="px-3 py-1 text-sm text-gray-600">
                     {page} / {data.pagination.totalPages}
@@ -141,7 +147,7 @@ export default function LoyaltyCustomerPage() {
                     disabled={page === data.pagination.totalPages}
                     className="px-3 py-1 border rounded text-sm disabled:opacity-40"
                   >
-                    Next
+                    {dict?.common?.next || 'Next'}
                   </button>
                 </div>
               )}

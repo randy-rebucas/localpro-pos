@@ -179,7 +179,7 @@ export default function TransactionsPage() {
                           borderColor: primaryColor,
                         }}
                       >
-                        {transaction.paymentMethod}
+                        {transaction.paymentMethod === 'cash' ? (dict.admin?.cash || 'Cash') : transaction.paymentMethod === 'card' ? (dict.admin?.card || 'Card') : transaction.paymentMethod === 'digital' ? (dict.admin?.digital || 'Digital') : transaction.paymentMethod}
                       </span>
                       {transaction.paymentMethod === 'cash' && transaction.change !== undefined && (
                         <div className="text-xs text-gray-500 mt-1">{dict.transactions?.change || dict.admin?.change || 'Change'}: <Currency amount={transaction.change} /></div>
@@ -305,7 +305,7 @@ function TransactionDetailModal({
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-500">{dict.transactions?.payment || 'Payment Method'}</label>
-                <div className="text-lg capitalize">{transaction.paymentMethod}</div>
+                <div className="text-lg">{transaction.paymentMethod === 'cash' ? (dict.admin?.cash || 'Cash') : transaction.paymentMethod === 'card' ? (dict.admin?.card || 'Card') : transaction.paymentMethod === 'digital' ? (dict.admin?.digital || 'Digital') : transaction.paymentMethod}</div>
               </div>
             </div>
             <div>
@@ -315,7 +315,7 @@ function TransactionDetailModal({
                   <div key={idx} className="p-3 flex justify-between">
                     <div>
                       <div className="font-medium">{item.name}</div>
-                      <div className="text-sm text-gray-500">Qty: {item.quantity} × <Currency amount={item.price} /></div>
+                      <div className="text-sm text-gray-500">{dict.transactions?.qty || 'Qty'}: {item.quantity} × <Currency amount={item.price} /></div>
                     </div>
                     <div className="font-medium"><Currency amount={item.subtotal} /></div>
                   </div>
@@ -329,30 +329,30 @@ function TransactionDetailModal({
               </div>
               {transaction.discountAmount && (
                 <div className="flex justify-between text-red-600">
-                  <span>Discount ({transaction.discountCode}):</span>
+                  <span>{dict.transactions?.discountLabel || dict.admin?.discount || 'Discount'} ({transaction.discountCode}):</span>
                   <span>-<Currency amount={transaction.discountAmount} /></span>
                 </div>
               )}
               <div className="flex justify-between text-lg font-bold border-t pt-2">
-                <span>Total:</span>
+                <span>{dict.common?.total || 'Total'}:</span>
                 <span><Currency amount={transaction.total} /></span>
               </div>
               {transaction.paymentMethod === 'cash' && transaction.cashReceived && (
                 <div className="flex justify-between text-sm text-gray-500">
-                  <span>Cash Received:</span>
+                  <span>{dict.transactions?.cashReceived || 'Cash Received'}:</span>
                   <span><Currency amount={transaction.cashReceived} /></span>
                 </div>
               )}
               {transaction.paymentMethod === 'cash' && transaction.change !== undefined && (
                 <div className="flex justify-between text-sm text-gray-500">
-                  <span>Change:</span>
+                  <span>{dict.transactions?.change || 'Change'}:</span>
                   <span><Currency amount={transaction.change} /></span>
                 </div>
               )}
             </div>
             {transaction.notes && (
               <div>
-                <label className="text-sm font-medium text-gray-500 mb-1 block">Notes</label>
+                <label className="text-sm font-medium text-gray-500 mb-1 block">{dict.common?.notes || 'Notes'}</label>
                 <div className="p-3 bg-gray-50 border border-gray-300">{transaction.notes}</div>
               </div>
             )}

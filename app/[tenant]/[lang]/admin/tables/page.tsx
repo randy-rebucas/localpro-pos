@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import Navbar from '@/components/Navbar';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { getDictionaryClient } from '../../dictionaries-client';
 
 interface TableRow {
   _id: string;
@@ -23,6 +24,8 @@ const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
 export default function TablesPage() {
   const params = useParams();
   const tenant = params.tenant as string;
+  const lang = params.lang as 'en' | 'es';
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [tables, setTables] = useState<TableRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [showInactive, setShowInactive] = useState(false);
@@ -33,6 +36,10 @@ export default function TablesPage() {
   const { settings } = useTenantSettings();
   const primaryColor = settings?.primaryColor || '#3b82f6';
 
+  useEffect(() => {
+    getDictionaryClient(lang).then(setDict);
+  }, [lang]);
+
   const fetchTables = useCallback(async () => {
     try {
       setLoading(true);
@@ -42,9 +49,9 @@ export default function TablesPage() {
       );
       const data = await res.json();
       if (data.success) setTables(data.data || []);
-      else toast.error(data.error || 'Failed to load tables');
+      else toast.error(data.error || dict?.tables?.failedToLoadTables || 'Failed to load tables');
     } catch {
-      toast.error('Error loading tables');
+      toast.error(dict?.tables?.errorLoadingTables || 'Error loading tables');
     } finally {
       setLoading(false);
     }
@@ -68,10 +75,10 @@ export default function TablesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim()) { toast.error('Table name is required'); return; }
+    if (!formData.name.trim()) { toast.error(dict?.tables?.tableNameRequired || 'Table name is required'); return; }
     if (formData.capacity) {
       const cap = parseInt(formData.capacity);
-      if (isNaN(cap) || cap < 1 || cap > 100) { toast.error('Capacity must be 1–100'); return; }
+      if (isNaN(cap) || cap < 1 || cap > 100) { toast.error(dict?.tables?.capacityError || 'Capacity must be 1–100'); return; }
     }
 
     const method = selectedTable ? 'PATCH' : 'POST';
@@ -91,29 +98,29 @@ export default function TablesPage() {
       });
       const data = await res.json();
       if (data.success) {
-        toast.success(selectedTable ? 'Table updated' : 'Table created');
+        toast.success(selectedTable ? (dict?.tables?.tableUpdated || 'Table updated') : (dict?.tables?.tableCreated || 'Table created'));
         setShowModal(false);
         fetchTables();
       } else {
-        toast.error(data.error || 'Failed to save table');
+        toast.error(data.error || dict?.tables?.failedToSaveTable || 'Failed to save table');
       }
     } catch {
-      toast.error('Error saving table');
+      toast.error(dict?.tables?.errorSavingTable || 'Error saving table');
     }
   };
 
   const handleDeactivate = async (table: TableRow) => {
-    if (!confirm(`Deactivate table "${table.name}"?`)) return;
+    if (!confirm((dict?.tables?.deactivateConfirm || 'Deactivate table "{name}"?').replace('{name}', table.name))) return;
     try {
       const res = await fetch(`/api/tables/${table._id}?tenant=${tenant}`, {
         method: 'DELETE',
         credentials: 'include',
       });
       const data = await res.json();
-      if (data.success) { toast.success('Table deactivated'); fetchTables(); }
-      else toast.error(data.error || 'Failed to deactivate');
+      if (data.success) { toast.success(dict?.tables?.tableDeactivated || 'Table deactivated'); fetchTables(); }
+      else toast.error(data.error || dict?.tables?.failedToDeactivate || 'Failed to deactivate');
     } catch {
-      toast.error('Error deactivating table');
+      toast.error(dict?.tables?.errorDeactivatingTable || 'Error deactivating table');
     }
   };
 
@@ -126,10 +133,10 @@ export default function TablesPage() {
         body: JSON.stringify({ isActive: true }),
       });
       const data = await res.json();
-      if (data.success) { toast.success('Table reactivated'); fetchTables(); }
-      else toast.error(data.error || 'Failed to reactivate');
+      if (data.success) { toast.success(dict?.tables?.tableReactivated || 'Table reactivated'); fetchTables(); }
+      else toast.error(data.error || dict?.tables?.failedToReactivate || 'Failed to reactivate');
     } catch {
-      toast.error('Error reactivating table');
+      toast.error(dict?.tables?.errorReactivatingTable || 'Error reactivating table');
     }
   };
 
@@ -142,15 +149,21 @@ export default function TablesPage() {
         body: JSON.stringify({ status: 'open' }),
       });
       const data = await res.json();
-      if (data.success) { toast.success('Table reset to open'); fetchTables(); }
-      else toast.error(data.error || 'Failed to reset status');
+      if (data.success) { toast.success(dict?.tables?.tableReset || 'Table reset to open'); fetchTables(); }
+      else toast.error(data.error || dict?.tables?.failedToResetStatus || 'Failed to reset status');
     } catch {
-      toast.error('Error resetting table status');
+      toast.error(dict?.tables?.errorResettingStatus || 'Error resetting table status');
     }
   };
 
   const activeTables = tables.filter((t) => t.isActive);
   const displayed = showInactive ? tables : activeTables;
+
+  const statusLabels: Record<string, string> = {
+    open: dict?.tables?.statusOpen || 'Open',
+    occupied: dict?.tables?.statusOccupied || 'Occupied',
+    'check-requested': dict?.tables?.statusCheckRequested || 'Check Requested',
+  };
 
   return (
     <div>
@@ -159,7 +172,7 @@ export default function TablesPage() {
         {/* Header */}
         <div className="mb-8 flex flex-wrap gap-3 justify-between items-center">
           <div>
-            <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-1">Tables</h1>
+            <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-1">{dict?.tables?.title || 'Tables'}</h1>
             <p className="text-gray-600">
               {activeTables.length} active table{activeTables.length !== 1 ? 's' : ''}
             </p>
@@ -172,7 +185,7 @@ export default function TablesPage() {
                 onChange={(e) => setShowInactive(e.target.checked)}
                 className="rounded"
               />
-              Show inactive
+              {dict?.tables?.showInactive || 'Show inactive'}
             </label>
             <button
               type="button"
@@ -180,7 +193,7 @@ export default function TablesPage() {
               style={{ backgroundColor: primaryColor }}
               className="px-4 py-2 text-sm font-semibold text-white hover:opacity-90 transition"
             >
-              + Add Table
+              + {dict?.tables?.addTable || 'Add Table'}
             </button>
           </div>
         </div>
@@ -211,17 +224,17 @@ export default function TablesPage() {
                     <h3 className="text-lg font-bold text-gray-900">{table.name}</h3>
                     {table.isActive ? (
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusCfg.cls}`}>
-                        {statusCfg.label}
+                        {statusLabels[table.status] || statusCfg.label}
                       </span>
                     ) : (
                       <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
-                        Inactive
+                        {dict?.admin?.inactive || 'Inactive'}
                       </span>
                     )}
                   </div>
 
                   {table.capacity && (
-                    <p className="text-sm text-gray-500 mb-3">{table.capacity} seats</p>
+                    <p className="text-sm text-gray-500 mb-3">{table.capacity} {dict?.tables?.seats || 'seats'}</p>
                   )}
 
                   <div className="flex flex-wrap gap-2 mt-3">
@@ -233,7 +246,7 @@ export default function TablesPage() {
                             onClick={() => handleResetStatus(table)}
                             className="text-xs px-2 py-1 border border-gray-200 text-gray-500 hover:text-gray-700 hover:border-gray-300 transition"
                           >
-                            Reset to Open
+                            {dict?.tables?.resetToOpen || 'Reset to Open'}
                           </button>
                         )}
                         <button
@@ -242,14 +255,14 @@ export default function TablesPage() {
                           className="text-xs px-3 py-1 border hover:bg-gray-50 transition"
                           style={{ borderColor: primaryColor, color: primaryColor }}
                         >
-                          Edit
+                          {dict?.common?.edit || 'Edit'}
                         </button>
                         <button
                           type="button"
                           onClick={() => handleDeactivate(table)}
                           className="text-xs px-3 py-1 border border-red-200 text-red-500 hover:bg-red-50 transition"
                         >
-                          Deactivate
+                          {dict?.admin?.deactivate || 'Deactivate'}
                         </button>
                       </>
                     ) : (
@@ -258,7 +271,7 @@ export default function TablesPage() {
                         onClick={() => handleReactivate(table)}
                         className="text-xs px-3 py-1 border border-green-300 text-green-600 hover:bg-green-50 transition"
                       >
-                        Reactivate
+                        {dict?.tables?.reactivate || 'Reactivate'}
                       </button>
                     )}
                   </div>
@@ -274,14 +287,14 @@ export default function TablesPage() {
             <svg className="w-12 h-12 mx-auto text-gray-300 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M3 14h18M10 4v16M14 4v16" />
             </svg>
-            <p className="text-gray-500 mb-4">No tables configured yet</p>
+            <p className="text-gray-500 mb-4">{dict?.tables?.noTablesYet || 'No tables configured yet'}</p>
             <button
               type="button"
               onClick={openAdd}
               style={{ backgroundColor: primaryColor }}
               className="px-4 py-2 text-sm font-semibold text-white hover:opacity-90 transition"
             >
-              + Add Table
+              + {dict?.tables?.addTable || 'Add Table'}
             </button>
           </div>
         )}
@@ -290,9 +303,9 @@ export default function TablesPage() {
         {!loading && activeTables.length > 0 && (
           <div className="flex flex-wrap gap-3 mt-4 text-xs text-gray-500">
             {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
-              <span key={key} className={`px-2 py-0.5 rounded-full font-medium ${cfg.cls}`}>{cfg.label}</span>
+              <span key={key} className={`px-2 py-0.5 rounded-full font-medium ${cfg.cls}`}>{statusLabels[key] || cfg.label}</span>
             ))}
-            <span className="ml-auto">&ldquo;Reset to Open&rdquo; clears stuck occupied status</span>
+            <span className="ml-auto">{dict?.tables?.resetToOpenHint || '"Reset to Open" clears stuck occupied status'}</span>
           </div>
         )}
       </div>
@@ -308,7 +321,7 @@ export default function TablesPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-              <h2 className="font-bold text-gray-900">{selectedTable ? 'Edit Table' : 'Add Table'}</h2>
+              <h2 className="font-bold text-gray-900">{selectedTable ? (dict?.tables?.editTable || 'Edit Table') : (dict?.tables?.addTable || 'Add Table')}</h2>
               <button type="button" onClick={() => setShowModal(false)} className="p-1 text-gray-400 hover:text-gray-600">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -318,7 +331,7 @@ export default function TablesPage() {
 
             <form onSubmit={handleSubmit} className="px-5 py-5 space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Table Name *</label>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">{dict?.tables?.tableName || 'Table Name'} *</label>
                 <input
                   type="text"
                   value={formData.name}
@@ -331,7 +344,7 @@ export default function TablesPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Seating Capacity</label>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">{dict?.tables?.seatingCapacity || 'Seating Capacity'}</label>
                 <input
                   type="number"
                   value={formData.capacity}
@@ -348,14 +361,14 @@ export default function TablesPage() {
                   onClick={() => setShowModal(false)}
                   className="flex-1 px-4 py-2 border border-gray-300 text-sm hover:bg-gray-50 transition"
                 >
-                  Cancel
+                  {dict?.common?.cancel || 'Cancel'}
                 </button>
                 <button
                   type="submit"
                   style={{ backgroundColor: primaryColor }}
                   className="flex-1 px-4 py-2 text-sm font-semibold text-white hover:opacity-90 transition"
                 >
-                  {selectedTable ? 'Save Changes' : 'Add Table'}
+                  {selectedTable ? (dict?.tables?.saveChanges || 'Save Changes') : (dict?.tables?.addTable || 'Add Table')}
                 </button>
               </div>
             </form>

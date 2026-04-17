@@ -124,6 +124,17 @@ export default function HardwareStatusChecker({
     }
   };
 
+  const getDeviceStatusLabel = (deviceStatus: string) => {
+    switch (deviceStatus) {
+      case 'connected': return dict?.components?.hardwareStatus?.statusConnected || 'Connected';
+      case 'available': return dict?.components?.hardwareStatus?.statusAvailable || 'Available';
+      case 'disconnected': return dict?.components?.hardwareStatus?.statusDisconnected || 'Disconnected';
+      case 'error': return dict?.components?.hardwareStatus?.statusError || 'Error';
+      case 'not-configured': return dict?.components?.hardwareStatus?.statusNotConfigured || 'Not Configured';
+      default: return deviceStatus.replace('-', ' ');
+    }
+  };
+
   const getOverallStatusColor = () => {
     if (!status) return 'bg-gray-100';
     switch (status.overallStatus) {
@@ -189,7 +200,7 @@ export default function HardwareStatusChecker({
     return (
       <div className="bg-white border border-gray-300 p-4">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-bold text-gray-900">Status</h3>
+          <h3 className="text-lg font-bold text-gray-900">{dict?.common?.status || 'Status'}</h3>
           <button
             onClick={checkStatus}
             disabled={loading}
@@ -232,7 +243,7 @@ export default function HardwareStatusChecker({
                       ? 'bg-red-100 text-red-800'
                       : 'bg-gray-100 text-gray-800'
                   }`}>
-                    {device.status.replace('-', ' ')}
+                    {getDeviceStatusLabel(device.status)}
                   </span>
                 </div>
               </div>
@@ -297,7 +308,7 @@ export default function HardwareStatusChecker({
                         ? 'bg-red-100 text-red-800'
                         : 'bg-gray-100 text-gray-800'
                     }`}>
-                      {device.status.replace('-', ' ')}
+                      {getDeviceStatusLabel(device.status)}
                     </span>
                   </div>
                   {device.message && (

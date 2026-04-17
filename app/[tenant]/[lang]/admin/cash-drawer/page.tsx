@@ -247,48 +247,48 @@ function CashDrawerDetailModal({
             </div>
             <div className="border-t pt-4 space-y-2">
               <div className="flex justify-between">
-                <span className="text-gray-600">Opening Amount:</span>
+                <span className="text-gray-600">{dict?.admin?.openingAmount || 'Opening Amount'}:</span>
                 <span className="font-medium"><Currency amount={session.openingAmount} /></span>
               </div>
               {session.expectedAmount !== undefined && (
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Expected Amount:</span>
+                  <span className="text-gray-600">{dict?.admin?.expectedAmount || 'Expected Amount'}:</span>
                   <span className="font-medium"><Currency amount={session.expectedAmount} /></span>
                 </div>
               )}
               {session.totalDiscounts !== undefined && session.totalDiscounts > 0 && (
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Total Discounts:</span>
+                  <span className="text-gray-600">{dict?.admin?.totalDiscounts || 'Total Discounts'}:</span>
                   <span className="font-semibold text-green-600">-<Currency amount={session.totalDiscounts} /></span>
                 </div>
               )}
               {session.totalVAT !== undefined && session.totalVAT > 0 && (
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Total VAT:</span>
+                  <span className="text-gray-600">{dict?.admin?.totalVat || 'Total VAT'}:</span>
                   <span className="font-medium"><Currency amount={session.totalVAT} /></span>
                 </div>
               )}
               {session.closingAmount !== undefined && (
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Closing Amount:</span>
+                  <span className="text-gray-600">{dict?.admin?.closingAmount || 'Closing Amount'}:</span>
                   <span className="font-medium"><Currency amount={session.closingAmount} /></span>
                 </div>
               )}
               {session.shortage !== undefined && session.shortage > 0 && (
                 <div className="flex justify-between text-red-600">
-                  <span>Shortage:</span>
+                  <span>{dict?.admin?.shortage || 'Shortage'}:</span>
                   <span className="font-medium"><Currency amount={session.shortage} /></span>
                 </div>
               )}
               {session.overage !== undefined && session.overage > 0 && (
                 <div className="flex justify-between text-green-600">
-                  <span>Overage:</span>
+                  <span>{dict?.admin?.overage || 'Overage'}:</span>
                   <span className="font-medium"><Currency amount={session.overage} /></span>
                 </div>
               )}
               {session.closingAmount !== undefined && session.expectedAmount !== undefined && (
                 <div className="flex justify-between text-lg font-bold border-t pt-2">
-                  <span>Difference:</span>
+                  <span>{dict?.admin?.difference || 'Difference'}:</span>
                   <span className={getDifferenceColor(calculateDifference(session))}>
                     {calculateDifference(session)! >= 0 ? '+' : ''}
                     <Currency amount={Math.abs(calculateDifference(session)!)} />
@@ -298,7 +298,7 @@ function CashDrawerDetailModal({
             </div>
             {session.notes && (
               <div>
-                <label className="text-sm font-medium text-gray-500 mb-1 block">Notes</label>
+                <label className="text-sm font-medium text-gray-500 mb-1 block">{dict?.common?.notes || 'Notes'}</label>
                 <div className="p-3 bg-gray-50 border border-gray-300">{session.notes}</div>
               </div>
             )}

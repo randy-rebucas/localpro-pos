@@ -8,6 +8,7 @@ import { getDictionaryClient } from '../../dictionaries-client';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getBusinessTypeConfig } from '@/lib/business-types';
 import { getBusinessType } from '@/lib/business-type-helpers';
+import { getFeatureFlagLabel } from '@/lib/feature-flags-helpers';
 
 interface BusinessTypeConfig {
   type: string;
@@ -17,20 +18,6 @@ interface BusinessTypeConfig {
   productTypes: string[];
 }
 
-const FEATURE_LABELS: Record<string, string> = {
-  enableInventory: 'Inventory Management',
-  enableCategories: 'Product Categories',
-  enableDiscounts: 'Discounts & Promotions',
-  enableLoyaltyProgram: 'Loyalty Program',
-  enableCustomerManagement: 'Customer Management',
-  enableBookingScheduling: 'Booking & Scheduling',
-  enableAttendance: 'Attendance Tracking',
-  enableExpenses: 'Expense Management',
-  enableMultiCurrency: 'Multi-Currency Support',
-  enableBundling: 'Product Bundles',
-  enableHardwareIntegration: 'Hardware Integration',
-  enableBIR: 'BIR Compliance',
-};
 
 export default function BusinessTypesPage() {
   const params = useParams();
@@ -130,7 +117,7 @@ export default function BusinessTypesPage() {
                             {enabled ? '✓' : '✗'}
                           </span>
                           <span className={`text-sm ${enabled ? 'text-blue-900' : 'text-blue-600'}`}>
-                            {FEATURE_LABELS[key] || key}
+                            {getFeatureFlagLabel(key, dict)}
                           </span>
                         </div>
                       ))}
@@ -199,7 +186,7 @@ export default function BusinessTypesPage() {
                             {enabled ? '✓' : '✗'}
                           </span>
                           <span className={enabled ? 'text-gray-900' : 'text-gray-500'}>
-                            {FEATURE_LABELS[key] || key}
+                            {getFeatureFlagLabel(key, dict)}
                           </span>
                         </div>
                       ))}

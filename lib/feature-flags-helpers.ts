@@ -38,6 +38,12 @@ export const getFeatureFlagLabel = (flagKey: string, dict: any): string => {
       dict?.admin?.enableBookingScheduling || 'Enable Booking & Scheduling',
     enableTableManagement:
       dict?.admin?.enableTableManagement || 'Enable Table Management',
+    enableAttendance: dict?.admin?.enableAttendance || 'Attendance Tracking',
+    enableExpenses: dict?.admin?.enableExpenses || 'Expense Management',
+    enableMultiCurrency: dict?.admin?.enableMultiCurrency || 'Multi-Currency Support',
+    enableBundling: dict?.admin?.enableBundling || 'Product Bundles',
+    enableHardwareIntegration: dict?.admin?.enableHardwareIntegration || 'Hardware Integration',
+    enableBIR: dict?.admin?.enableBIR || 'BIR Compliance',
   };
   return labelMap[flagKey] || flagKey;
 };

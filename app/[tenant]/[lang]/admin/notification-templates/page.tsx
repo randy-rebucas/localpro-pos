@@ -45,7 +45,7 @@ export default function NotificationTemplatesPage() {
             <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
-            {dict?.common?.back || 'Back'} to Admin
+            {dict?.admin?.backToAdmin || 'Back to Admin'}
           </Link>
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
             {dict?.admin?.notificationTemplates || 'Notification Templates'}
@@ -59,6 +59,7 @@ export default function NotificationTemplatesPage() {
           <NotificationTemplatesManager
             settings={settings}
             tenant={tenant}
+            dict={dict}
             onUpdate={(updates) => {
               updateSettings(updates);
             }}

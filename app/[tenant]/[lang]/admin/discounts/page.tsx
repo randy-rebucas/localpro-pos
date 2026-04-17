@@ -117,14 +117,13 @@ export default function DiscountsPage() {
               </svg>
               <div>
                 <h3 className="text-lg font-semibold text-yellow-900 mb-2">
-                  Discounts Not Available
+                  {dict.admin?.discountsNotAvailable || 'Discounts Not Available'}
                 </h3>
                 <p className="text-yellow-800">
-                  Discounts are not enabled for {businessTypeConfig?.name || 'your business type'}. 
-                  This feature is typically used for retail and restaurant businesses.
+                  {(dict.admin?.discountsNotAvailableDesc || 'Discounts are not enabled for {businessType}.').replace('{businessType}', businessTypeConfig?.name || 'your business type')}
                 </p>
                 <p className="text-sm text-yellow-700 mt-2">
-                  If you need discounts, please enable it in Settings → Business or update your business type.
+                  {dict.admin?.discountsNotAvailableHint || 'If you need discounts, please enable it in Settings or update your business type.'}
                 </p>
               </div>
             </div>
@@ -181,7 +180,7 @@ export default function DiscountsPage() {
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                         {discount.type === 'percentage' ? `${discount.value}%` : <Currency amount={discount.value} />}
                         {discount.maxDiscountAmount && discount.type === 'percentage' && (
-                          <div className="text-xs text-gray-500">Max: <Currency amount={discount.maxDiscountAmount} /></div>
+                          <div className="text-xs text-gray-500">{dict.admin?.maxLabel || 'Max'}: <Currency amount={discount.maxDiscountAmount} /></div>
                         )}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -495,7 +494,7 @@ function DiscountModal({
                 disabled={submitting}
                 className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
               >
-                {submitting ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
+                {submitting ? (dict.common?.saving || 'Saving...') : (dict.common?.save || 'Save')}
               </button>
             </div>
           </form>

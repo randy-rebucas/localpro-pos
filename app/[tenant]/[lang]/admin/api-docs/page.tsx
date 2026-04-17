@@ -101,26 +101,26 @@ export default function ApiDocsPage() {
             {dict?.admin?.backToAdmin || 'Back to Admin'}
           </Link>
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
-            API Documentation
+            {dict?.apiDocs?.title || 'API Documentation'}
           </h1>
           <p className="text-gray-600">
-            Comprehensive API endpoints and integration guides for 1POS. All API endpoints require authentication via JWT token in the Authorization header or auth-token cookie.
+            {dict?.apiDocs?.subtitle || 'Comprehensive API endpoints and integration guides for 1POS. All API endpoints require authentication via JWT token in the Authorization header or auth-token cookie.'}
           </p>
         </div>
 
         <div className="space-y-8">
           {/* Authentication Section */}
           <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Authentication</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">{dict?.apiDocs?.authSection || 'Authentication'}</h2>
             <div className="space-y-4">
               <div>
-                <h3 className="text-sm font-semibold text-gray-700 mb-2">Authorization Header</h3>
+                <h3 className="text-sm font-semibold text-gray-700 mb-2">{dict?.apiDocs?.authHeader || 'Authorization Header'}</h3>
                 <div className="bg-gray-100 p-4 rounded border border-gray-300 font-mono text-sm overflow-x-auto">
                   <code>Authorization: Bearer {'<JWT_TOKEN>'}</code>
                 </div>
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-gray-700 mb-2">Cookie</h3>
+                <h3 className="text-sm font-semibold text-gray-700 mb-2">{dict?.apiDocs?.authCookie || 'Cookie'}</h3>
                 <div className="bg-gray-100 p-4 rounded border border-gray-300 font-mono text-sm">
                   <code>auth-token: {'<JWT_TOKEN>'}</code>
                 </div>
@@ -130,7 +130,7 @@ export default function ApiDocsPage() {
 
           {/* API Endpoints Section */}
           <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8">
-            <h2 className="text-xl font-bold text-gray-900 mb-6">API Endpoints</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-6">{dict?.apiDocs?.endpointsSection || 'API Endpoints'}</h2>
             <div className="space-y-8">
               {apiEndpoints.map((category, idx) => (
                 <div key={idx}>
@@ -168,9 +168,9 @@ export default function ApiDocsPage() {
 
           {/* Response Format Section */}
           <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Response Format</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">{dict?.apiDocs?.responseFormatSection || 'Response Format'}</h2>
             <p className="text-gray-600 mb-4">
-              All API responses follow a standard JSON format with success status and data or error information.
+              {dict?.apiDocs?.responseFormatDesc || 'All API responses follow a standard JSON format with success status and data or error information.'}
             </p>
             <div className="bg-gray-100 p-4 rounded border border-gray-300 font-mono text-sm overflow-x-auto">
               <pre>{`{
@@ -188,18 +188,18 @@ export default function ApiDocsPage() {
 
           {/* Base URL Section */}
           <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Base URL</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">{dict?.apiDocs?.baseUrlSection || 'Base URL'}</h2>
             <div className="bg-gray-100 p-4 rounded border border-gray-300 font-mono text-sm">
               <code>https://your-instance.localpro.app/api</code>
             </div>
             <p className="text-gray-600 mt-4">
-              Replace <code className="bg-gray-100 px-2 py-1 rounded">your-instance</code> with your actual tenant slug.
+              {(dict?.apiDocs?.baseUrlDesc || 'Replace {placeholder} with your actual tenant slug.').replace('{placeholder}', 'your-instance')}
             </p>
           </div>
 
           {/* Additional Resources */}
           <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Additional Resources</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">{dict?.apiDocs?.additionalResources || 'Additional Resources'}</h2>
             <ul className="space-y-3">
               <li>
                 <a
@@ -208,7 +208,7 @@ export default function ApiDocsPage() {
                   rel="noopener noreferrer"
                   className="text-blue-600 hover:text-blue-700 font-medium flex items-center gap-2"
                 >
-                  <span>OpenAPI Schema</span>
+                  <span>{dict?.apiDocs?.openApiSchema || 'OpenAPI Schema'}</span>
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                   </svg>
@@ -221,7 +221,7 @@ export default function ApiDocsPage() {
                   rel="noopener noreferrer"
                   className="text-blue-600 hover:text-blue-700 font-medium flex items-center gap-2"
                 >
-                  <span>Project Documentation</span>
+                  <span>{dict?.apiDocs?.projectDocs || 'Project Documentation'}</span>
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                   </svg>

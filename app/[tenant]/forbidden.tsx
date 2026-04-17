@@ -5,6 +5,17 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
 
+type Locale = 'en' | 'es';
+
+function resolveLang(paramLang: unknown): Locale {
+  if (paramLang === 'en' || paramLang === 'es') return paramLang;
+  if (typeof window !== 'undefined') {
+    const stored = localStorage.getItem('preferred_lang');
+    if (stored === 'en' || stored === 'es') return stored;
+  }
+  return 'en';
+}
+
 interface UserInfo {
   userId: string | null;
   tenantSlug: string | null;
@@ -36,17 +47,18 @@ export default function ForbiddenPage() {
   const params = useParams();
   const router = useRouter();
   const currentTenant = params?.tenant as string;
+  const lang = resolveLang(params?.lang);
 
   useEffect(() => {
     async function loadData() {
       try {
         const [dictData, profileData] = await Promise.all([
-          getDictionaryClient('en'),
+          getDictionaryClient(lang),
           fetch('/api/auth/profile', { credentials: 'include' }).then(res => res.json()),
         ]);
-        
+
         setDict(dictData);
-        
+
         if (profileData.success && profileData.user) {
           setUserInfo({
             userId: profileData.user._id || null,
@@ -56,17 +68,13 @@ export default function ForbiddenPage() {
             email: profileData.user.email || null,
             name: profileData.user.name || null,
           });
-          
-          // Get attempted tenant ID from API
-          // NOTE: We don't use handleApiResponse here to prevent redirect loops
-          // The /api/tenants/[slug] route doesn't check tenant access, so it should work
+
           if (currentTenant) {
             try {
               const tenantRes = await fetch(`/api/tenants/${currentTenant}`, { credentials: 'include' });
               // Don't redirect on 403 here - we're already on the forbidden page
               if (tenantRes.ok) {
                 const tenantData = await tenantRes.json();
-                
                 if (tenantData.success && tenantData.data) {
                   setSecurityViolation({
                     userId: profileData.user._id || null,
@@ -76,7 +84,6 @@ export default function ForbiddenPage() {
                   });
                 }
               } else {
-                // If we can't fetch tenant info, that's okay - we'll just show what we have
                 console.warn('Could not fetch tenant info for forbidden page');
               }
             } catch (error) {
@@ -90,15 +97,15 @@ export default function ForbiddenPage() {
         setLoading(false);
       }
     }
-    
+
     loadData();
-  }, [currentTenant]);
+  }, [currentTenant, lang]);
 
   const goToOwnStore = () => {
     if (userInfo.tenantSlug) {
-      router.push(`/${userInfo.tenantSlug}/en`);
+      router.push(`/${userInfo.tenantSlug}/${lang}`);
     } else {
-      router.push('/default/en');
+      router.push(`/default/${lang}`);
     }
   };
 
@@ -107,11 +114,13 @@ export default function ForbiddenPage() {
       <div className="min-h-screen flex items-center justify-center px-4">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
+          <p className="text-gray-600">{dict?.components?.protectedRoute?.loading || 'Loading...'}</p>
         </div>
       </div>
     );
   }
+
+  const f = dict?.components?.forbidden;
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-12">
@@ -133,21 +142,20 @@ export default function ForbiddenPage() {
             </svg>
           </div>
         </div>
-        
+
         <h1 className="text-3xl font-bold text-gray-900 mb-3">
-          {dict?.forbidden?.title || dict?.common?.accessDenied || 'Access Denied'}
+          {f?.title || dict?.components?.protectedRoute?.accessDenied || 'Access Denied'}
         </h1>
-        
+
         <p className="text-gray-600 mb-6 text-lg">
-          {dict?.forbidden?.message || 
-            "You don't have permission to access this store."}
+          {f?.message || "You don't have permission to access this store."}
         </p>
 
         {/* User Info */}
         {userInfo.name && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 text-left">
             <p className="text-sm text-blue-800 font-medium mb-2">
-              {dict?.forbidden?.yourAccount || 'Your Account'}:
+              {f?.yourAccount || 'Your Account'}:
             </p>
             <p className="text-sm text-blue-700">{userInfo.name}</p>
             {userInfo.email && (
@@ -161,7 +169,7 @@ export default function ForbiddenPage() {
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
               <p className="text-gray-500 mb-1">
-                {dict?.forbidden?.yourStore || 'Your Store'}:
+                {f?.yourStore || 'Your Store'}:
               </p>
               <p className="font-semibold text-gray-900">
                 {userInfo.tenantSlug || 'Unknown'}
@@ -169,7 +177,7 @@ export default function ForbiddenPage() {
             </div>
             <div>
               <p className="text-gray-500 mb-1">
-                {dict?.forbidden?.attemptedAccess || 'Attempted Access'}:
+                {f?.attemptedAccess || 'Attempted Access'}:
               </p>
               <p className="font-semibold text-red-600">
                 {currentTenant || 'Unknown'}
@@ -182,31 +190,34 @@ export default function ForbiddenPage() {
         {securityViolation && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
             <p className="text-sm text-red-800 font-semibold mb-2">
-              {dict?.forbidden?.securityViolation || 'Security Violation Detected'}:
+              {f?.securityViolation || 'Security Violation Detected'}:
             </p>
             <div className="text-xs text-red-700 space-y-1 font-mono bg-red-100 p-3 rounded border border-red-300">
               <p className="mb-2">
-                <span className="font-semibold">Security:</span> User {securityViolation.userId || 'Unknown'} from tenant {securityViolation.userTenantId || 'Unknown'} attempted to access tenant {securityViolation.attemptedTenantId || 'Unknown'}
+                {(f?.violationDetails || 'Security: User {userId} from tenant {userTenantId} attempted to access tenant {attemptedTenantId}')
+                  .replace('{userId}', securityViolation.userId || 'Unknown')
+                  .replace('{userTenantId}', securityViolation.userTenantId || 'Unknown')
+                  .replace('{attemptedTenantId}', securityViolation.attemptedTenantId || 'Unknown')}
               </p>
               <div className="pt-2 border-t border-red-300 space-y-1">
                 <p>
-                  <span className="font-semibold">User ID:</span> {securityViolation.userId || 'Unknown'}
+                  <span className="font-semibold">{f?.userId || 'User ID'}:</span> {securityViolation.userId || 'Unknown'}
                 </p>
                 <p>
-                  <span className="font-semibold">Your Tenant ID:</span> {securityViolation.userTenantId || 'Unknown'}
+                  <span className="font-semibold">{f?.yourTenantId || 'Your Tenant ID'}:</span> {securityViolation.userTenantId || 'Unknown'}
                 </p>
                 <p>
-                  <span className="font-semibold">Attempted Tenant ID:</span> {securityViolation.attemptedTenantId || 'Unknown'}
+                  <span className="font-semibold">{f?.attemptedTenantId || 'Attempted Tenant ID'}:</span> {securityViolation.attemptedTenantId || 'Unknown'}
                 </p>
                 {securityViolation.attemptedTenantSlug && (
                   <p>
-                    <span className="font-semibold">Attempted Tenant Slug:</span> {securityViolation.attemptedTenantSlug}
+                    <span className="font-semibold">{f?.attemptedTenantSlug || 'Attempted Tenant Slug'}:</span> {securityViolation.attemptedTenantSlug}
                   </p>
                 )}
               </div>
             </div>
             <p className="text-xs text-red-600 mt-2">
-              This security violation has been logged for audit purposes.
+              {f?.violationLogged || 'This security violation has been logged for audit purposes.'}
             </p>
           </div>
         )}
@@ -214,7 +225,7 @@ export default function ForbiddenPage() {
         {/* Security Notice */}
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
           <p className="text-sm text-yellow-800">
-            <strong>{dict?.forbidden?.securityNotice || 'Security Notice: This access attempt has been logged for security purposes.'}</strong>
+            <strong>{f?.securityNotice || 'Security Notice: This access attempt has been logged for security purposes.'}</strong>
           </p>
         </div>
 
@@ -225,28 +236,28 @@ export default function ForbiddenPage() {
               onClick={goToOwnStore}
               className="block w-full bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 font-medium transition-colors shadow-md hover:shadow-lg"
             >
-              {dict?.forbidden?.goToMyStore || `Go to My Store (${userInfo.tenantSlug})`}
+              {f?.goToMyStore || `Go to My Store (${userInfo.tenantSlug})`}
             </button>
           )}
-          
+
           <Link
-            href="/default/en"
+            href={`/default/${lang}`}
             className="block w-full bg-gray-100 text-gray-700 px-6 py-3 rounded-md hover:bg-gray-200 font-medium transition-colors"
           >
-            {dict?.forbidden?.goToDefaultStore || 'Go to Default Store'}
+            {f?.goToDefaultStore || 'Go to Default Store'}
           </Link>
-          
+
           <button
             onClick={() => router.back()}
             className="block w-full text-gray-500 px-4 py-2 rounded-md hover:text-gray-700 font-medium transition-colors text-sm"
           >
-            {dict?.forbidden?.goBack || 'Go Back'}
+            {f?.goBack || 'Go Back'}
           </button>
         </div>
 
         {/* Help Text */}
         <p className="mt-6 text-xs text-gray-500">
-          {dict?.forbidden?.contactAdmin || 'If you believe this is an error, please contact your administrator.'}
+          {f?.contactAdmin || 'If you believe this is an error, please contact your administrator.'}
         </p>
       </div>
     </div>

@@ -237,7 +237,7 @@ function CategoryModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict?.admin?.description || 'Description'} (optional)
+                {dict?.admin?.description || 'Description'} ({dict?.common?.optional || 'optional'})
               </label>
               <textarea
                 value={formData.description}
@@ -264,7 +264,7 @@ function CategoryModal({
                 disabled={submitting}
                 className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
               >
-                {submitting ? (dict?.common?.loading || 'Saving...') : (dict?.common?.save || 'Save')}
+                {submitting ? (dict?.common?.saving || 'Saving...') : (dict?.common?.save || 'Save')}
               </button>
             </div>
           </form>

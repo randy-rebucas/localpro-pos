@@ -62,15 +62,15 @@ export default function HardwareAdminPage() {
         <Navbar />
         <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
           <div className="bg-red-50 border-2 border-red-300 p-5 sm:p-6">
-            <h2 className="text-xl font-bold text-red-800 mb-2">Failed to Load Settings</h2>
+            <h2 className="text-xl font-bold text-red-800 mb-2">{dict?.common?.failedToLoadSettingsTitle || 'Failed to Load Settings'}</h2>
             <p className="text-red-700 mb-4">
-              {message?.text || 'Unable to load tenant settings. Please check your connection and try again.'}
+              {message?.text || dict?.common?.unableToLoadSettings || 'Unable to load tenant settings. Please check your connection and try again.'}
             </p>
             <button
               onClick={() => fetchSettings()}
               className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 font-medium transition-colors border border-red-700"
             >
-              Retry
+              {dict?.common?.retry || 'Retry'}
             </button>
           </div>
         </div>

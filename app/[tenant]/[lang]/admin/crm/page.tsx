@@ -8,6 +8,7 @@ import Currency from '@/components/Currency';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { showToast } from '@/lib/toast';
+import { getDictionaryClient } from '../../dictionaries-client';
 
 type Segment = 'all' | 'new' | 'regular' | 'vip' | 'at_risk' | 'lapsed';
 type Channel = 'email' | 'sms';
@@ -55,9 +56,14 @@ const SEGMENT_META: Record<string, { label: string; color: string; bg: string; b
 export default function CRMPage() {
   const params = useParams();
   const tenant = params.tenant as string;
-  const lang = params.lang as string;
+  const lang = params.lang as 'en' | 'es';
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const { settings } = useTenantSettings();
   const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#3b82f6';
+
+  useEffect(() => {
+    getDictionaryClient(lang).then(setDict);
+  }, [lang]);
 
   const [counts, setCounts] = useState<SegmentCounts | null>(null);
   const [customers, setCustomers] = useState<CRMCustomer[]>([]);
@@ -103,7 +109,7 @@ export default function CRMPage() {
 
   const handleCreateCampaign = async () => {
     if (!form.name.trim() || !form.body.trim()) {
-      showToast.error('Name and body are required');
+      showToast.error(dict?.crm?.nameBodyRequired || 'Name and body are required');
       return;
     }
     setSaving(true);
@@ -116,14 +122,14 @@ export default function CRMPage() {
       });
       const data = await res.json();
       if (data.success) {
-        showToast.success('Campaign saved as draft');
+        showToast.success(dict?.crm?.campaignSavedAsDraft || 'Campaign saved as draft');
         setCampaigns((prev) => [data.data, ...prev]);
         setShowCompose(false);
         setForm({ name: '', channel: 'email', segment: 'all', subject: '', body: '' });
       } else {
-        showToast.error(data.error || 'Failed to save campaign');
+        showToast.error(data.error || dict?.crm?.failedToSaveCampaign || 'Failed to save campaign');
       }
-    } catch { showToast.error('Failed to save campaign'); } finally { setSaving(false); }
+    } catch { showToast.error(dict?.crm?.failedToSaveCampaign || 'Failed to save campaign'); } finally { setSaving(false); }
   };
 
   const handleSend = async (campaign: Campaign) => {
@@ -135,15 +141,25 @@ export default function CRMPage() {
       });
       const data = await res.json();
       if (data.success) {
-        showToast.success(`Sent to ${data.data.sentCount} customers`);
+        showToast.success((dict?.crm?.sentToCustomers || 'Sent to {count} customers').replace('{count}', data.data.sentCount));
         setCampaigns((prev) => prev.map((c) => c._id === campaign._id ? { ...c, status: 'sent', sentCount: data.data.sentCount, sentAt: new Date().toISOString() } : c));
       } else {
-        showToast.error(data.error || 'Send failed');
+        showToast.error(data.error || dict?.crm?.sendFailed || 'Send failed');
       }
-    } catch { showToast.error('Send failed'); } finally { setSending(null); }
+    } catch { showToast.error(dict?.crm?.sendFailed || 'Send failed'); } finally { setSending(null); }
   };
 
   const segmentOrder: Segment[] = ['all', 'vip', 'new', 'regular', 'at_risk', 'lapsed'];
+
+  // Translated segment metadata (computed from dict so labels update on language change)
+  const segmentMeta: Record<string, { label: string; color: string; bg: string; border: string; description: string }> = {
+    vip:      { ...SEGMENT_META.vip,      label: dict?.crm?.segmentVip || SEGMENT_META.vip.label,           description: dict?.crm?.segmentVipDesc || SEGMENT_META.vip.description },
+    new:      { ...SEGMENT_META.new,      label: dict?.crm?.segmentNew || SEGMENT_META.new.label,           description: dict?.crm?.segmentNewDesc || SEGMENT_META.new.description },
+    regular:  { ...SEGMENT_META.regular,  label: dict?.crm?.segmentRegular || SEGMENT_META.regular.label,   description: dict?.crm?.segmentRegularDesc || SEGMENT_META.regular.description },
+    at_risk:  { ...SEGMENT_META.at_risk,  label: dict?.crm?.segmentAtRisk || SEGMENT_META.at_risk.label,    description: dict?.crm?.segmentAtRiskDesc || SEGMENT_META.at_risk.description },
+    lapsed:   { ...SEGMENT_META.lapsed,   label: dict?.crm?.segmentLapsed || SEGMENT_META.lapsed.label,     description: dict?.crm?.segmentLapsedDesc || SEGMENT_META.lapsed.description },
+    prospect: { ...SEGMENT_META.prospect, label: dict?.crm?.segmentProspect || SEGMENT_META.prospect.label, description: dict?.crm?.segmentProspectDesc || SEGMENT_META.prospect.description },
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -151,7 +167,7 @@ export default function CRMPage() {
       <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         <PageTitle />
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">CRM</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">{dict?.crm?.title || 'CRM'}</h1>
           <button
             type="button"
             onClick={() => setShowCompose(true)}
@@ -161,7 +177,7 @@ export default function CRMPage() {
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
             </svg>
-            New Campaign
+            {dict?.crm?.newCampaign || 'New Campaign'}
           </button>
         </div>
 
@@ -169,8 +185,8 @@ export default function CRMPage() {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
           {segmentOrder.map((seg) => {
             const meta = seg === 'all'
-              ? { label: 'All Customers', color: 'text-gray-700', bg: 'bg-white', border: 'border-gray-300', description: 'Every active customer' }
-              : SEGMENT_META[seg];
+              ? { label: dict?.crm?.allCustomers || 'All Customers', color: 'text-gray-700', bg: 'bg-white', border: 'border-gray-300', description: dict?.crm?.allCustomersDesc || 'Every active customer' }
+              : segmentMeta[seg];
             const count = counts ? (seg === 'all' ? counts.all : counts[seg as keyof SegmentCounts] ?? 0) : null;
             return (
               <button
@@ -196,10 +212,10 @@ export default function CRMPage() {
             <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
                 {segmentOrder.includes(selectedSegment) && selectedSegment !== 'all'
-                  ? `${SEGMENT_META[selectedSegment]?.label} Customers`
-                  : 'All Customers'}
+                  ? `${segmentMeta[selectedSegment]?.label} ${dict?.crm?.customers || 'Customers'}`
+                  : (dict?.crm?.allCustomers || 'All Customers')}
               </h2>
-              <span className="text-xs text-gray-400">{customers.length} shown</span>
+              <span className="text-xs text-gray-400">{customers.length} {dict?.crm?.shown || 'shown'}</span>
             </div>
             {loadingCustomers ? (
               <div className="divide-y divide-gray-100">
@@ -214,11 +230,11 @@ export default function CRMPage() {
                 ))}
               </div>
             ) : customers.length === 0 ? (
-              <div className="px-4 py-12 text-center text-gray-400 text-sm">No customers in this segment</div>
+              <div className="px-4 py-12 text-center text-gray-400 text-sm">{dict?.crm?.noCustomersInSegment || 'No customers in this segment'}</div>
             ) : (
               <div className="divide-y divide-gray-100 max-h-[520px] overflow-y-auto">
                 {customers.map((c) => {
-                  const segMeta = SEGMENT_META[c.computedSegment];
+                  const segMeta = segmentMeta[c.computedSegment];
                   return (
                     <button
                       key={c._id}
@@ -232,7 +248,7 @@ export default function CRMPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-900 truncate">{c.firstName} {c.lastName}</p>
-                        <p className="text-xs text-gray-500 truncate">{c.email || c.phone || 'No contact'}</p>
+                        <p className="text-xs text-gray-500 truncate">{c.email || c.phone || (dict?.crm?.noContact || 'No contact')}</p>
                       </div>
                       <div className="flex-shrink-0 text-right space-y-1">
                         <p className="text-xs font-semibold text-gray-700"><Currency amount={c.totalSpent ?? 0} /></p>
@@ -252,7 +268,7 @@ export default function CRMPage() {
             {selectedCustomer ? (
               <div className="bg-white border border-gray-300">
                 <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-                  <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Customer Profile</h2>
+                  <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">{dict?.crm?.customerProfile || 'Customer Profile'}</h2>
                   <button onClick={() => setSelectedCustomer(null)} className="text-gray-400 hover:text-gray-600">
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -272,10 +288,10 @@ export default function CRMPage() {
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     {[
-                      { label: 'Orders', value: String(selectedCustomer.orderCount) },
-                      { label: 'Total Spent', value: <Currency amount={selectedCustomer.totalSpent ?? 0} /> },
-                      { label: 'Points', value: String(selectedCustomer.loyaltyPointsBalance ?? 0) },
-                      { label: 'Segment', value: SEGMENT_META[selectedCustomer.computedSegment]?.label ?? selectedCustomer.computedSegment },
+                      { label: dict?.crm?.orders || 'Orders', value: String(selectedCustomer.orderCount) },
+                      { label: dict?.crm?.totalSpent || 'Total Spent', value: <Currency amount={selectedCustomer.totalSpent ?? 0} /> },
+                      { label: dict?.loyalty?.points || 'Points', value: String(selectedCustomer.loyaltyPointsBalance ?? 0) },
+                      { label: dict?.crm?.segment || 'Segment', value: segmentMeta[selectedCustomer.computedSegment]?.label ?? selectedCustomer.computedSegment },
                     ].map(({ label, value }) => (
                       <div key={label} className="bg-gray-50 border border-gray-200 p-2.5">
                         <p className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</p>
@@ -285,7 +301,7 @@ export default function CRMPage() {
                   </div>
                   {selectedCustomer.lastPurchaseDate && (
                     <p className="text-xs text-gray-500">
-                      Last purchase: {new Date(selectedCustomer.lastPurchaseDate).toLocaleDateString()}
+                      {dict?.crm?.lastPurchase || 'Last purchase:'} {new Date(selectedCustomer.lastPurchaseDate).toLocaleDateString()}
                     </p>
                   )}
                   {selectedCustomer.tags && selectedCustomer.tags.length > 0 && (
@@ -299,7 +315,7 @@ export default function CRMPage() {
                     href={`/${tenant}/${lang}/admin/customers`}
                     className="block w-full text-center text-xs py-2 border border-gray-300 text-gray-600 hover:bg-gray-50 transition-colors mt-1"
                   >
-                    View full profile →
+                    {dict?.crm?.viewFullProfile || 'View full profile →'}
                   </a>
                 </div>
               </div>
@@ -308,14 +324,14 @@ export default function CRMPage() {
             {/* Campaigns list */}
             <div className="bg-white border border-gray-300">
               <div className="px-4 py-3 border-b border-gray-200">
-                <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Recent Campaigns</h2>
+                <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">{dict?.crm?.recentCampaigns || 'Recent Campaigns'}</h2>
               </div>
               {loadingCampaigns ? (
                 <div className="px-4 py-6 text-center">
                   <div className="w-5 h-5 border-2 border-gray-200 border-t-gray-500 rounded-full animate-spin mx-auto" />
                 </div>
               ) : campaigns.length === 0 ? (
-                <div className="px-4 py-6 text-center text-sm text-gray-400">No campaigns yet</div>
+                <div className="px-4 py-6 text-center text-sm text-gray-400">{dict?.crm?.noCampaignsYet || 'No campaigns yet'}</div>
               ) : (
                 <ul className="divide-y divide-gray-100 max-h-64 overflow-y-auto">
                   {campaigns.map((c) => (
@@ -324,7 +340,7 @@ export default function CRMPage() {
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-gray-900 truncate">{c.name}</p>
                           <p className="text-xs text-gray-500">
-                            {c.channel.toUpperCase()} · {SEGMENT_META[c.segment]?.label ?? c.segment}
+                            {c.channel.toUpperCase()} · {segmentMeta[c.segment]?.label ?? c.segment}
                             {c.sentCount != null && c.sentCount > 0 && ` · ${c.sentCount} sent`}
                           </p>
                         </div>
@@ -369,7 +385,7 @@ export default function CRMPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-bold text-gray-900">New Campaign</h2>
+              <h2 className="text-lg font-bold text-gray-900">{dict?.crm?.newCampaign || 'New Campaign'}</h2>
               <button onClick={() => setShowCompose(false)} className="text-gray-400 hover:text-gray-600">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -379,18 +395,18 @@ export default function CRMPage() {
             <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
               {/* Name */}
               <div>
-                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Campaign Name</label>
+                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">{dict?.crm?.campaignName || 'Campaign Name'}</label>
                 <input
                   type="text"
                   value={form.name}
                   onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                   className="w-full px-3 py-2.5 border border-gray-300 text-sm focus:outline-none focus:border-gray-500"
-                  placeholder="e.g. VIP Exclusive Offer"
+                  placeholder={dict?.crm?.campaignNamePlaceholder || 'e.g. VIP Exclusive Offer'}
                 />
               </div>
               {/* Channel */}
               <div>
-                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Channel</label>
+                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">{dict?.crm?.channel || 'Channel'}</label>
                 <div className="grid grid-cols-2 gap-2">
                   {(['email', 'sms'] as Channel[]).map((ch) => (
                     <button
@@ -400,53 +416,53 @@ export default function CRMPage() {
                       className={`py-2.5 border-2 text-sm font-medium transition-colors ${form.channel === ch ? 'text-white' : 'bg-white text-gray-600 border-gray-300'}`}
                       style={form.channel === ch ? { backgroundColor: primaryColor, borderColor: primaryColor } : {}}
                     >
-                      {ch === 'email' ? 'Email' : 'SMS'}
+                      {ch === 'email' ? (dict?.crm?.channelEmail || 'Email') : (dict?.crm?.channelSms || 'SMS')}
                     </button>
                   ))}
                 </div>
               </div>
               {/* Segment */}
               <div>
-                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Target Segment</label>
+                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">{dict?.crm?.targetSegment || 'Target Segment'}</label>
                 <select
                   value={form.segment}
                   onChange={(e) => setForm((f) => ({ ...f, segment: e.target.value as Segment }))}
                   className="w-full px-3 py-2.5 border border-gray-300 text-sm focus:outline-none focus:border-gray-500"
                 >
-                  <option value="all">All Customers ({counts?.all ?? 0})</option>
-                  <option value="vip">VIP ({counts?.vip ?? 0})</option>
-                  <option value="new">New ({counts?.new ?? 0})</option>
-                  <option value="regular">Regular ({counts?.regular ?? 0})</option>
-                  <option value="at_risk">At Risk ({counts?.at_risk ?? 0})</option>
-                  <option value="lapsed">Lapsed ({counts?.lapsed ?? 0})</option>
+                  <option value="all">{dict?.crm?.allCustomers || 'All Customers'} ({counts?.all ?? 0})</option>
+                  <option value="vip">{dict?.crm?.segmentVip || 'VIP'} ({counts?.vip ?? 0})</option>
+                  <option value="new">{dict?.crm?.segmentNew || 'New'} ({counts?.new ?? 0})</option>
+                  <option value="regular">{dict?.crm?.segmentRegular || 'Regular'} ({counts?.regular ?? 0})</option>
+                  <option value="at_risk">{dict?.crm?.segmentAtRisk || 'At Risk'} ({counts?.at_risk ?? 0})</option>
+                  <option value="lapsed">{dict?.crm?.segmentLapsed || 'Lapsed'} ({counts?.lapsed ?? 0})</option>
                 </select>
               </div>
               {/* Subject (email only) */}
               {form.channel === 'email' && (
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Subject</label>
+                  <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">{dict?.crm?.subject || 'Subject'}</label>
                   <input
                     type="text"
                     value={form.subject}
                     onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))}
                     className="w-full px-3 py-2.5 border border-gray-300 text-sm focus:outline-none focus:border-gray-500"
-                    placeholder="We miss you! Here's 10% off..."
+                    placeholder={dict?.crm?.subjectPlaceholder || "We miss you! Here's 10% off..."}
                   />
                 </div>
               )}
               {/* Body */}
               <div>
                 <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">
-                  Message {form.channel === 'sms' && <span className="text-gray-400 normal-case font-normal">(160 char limit for single SMS)</span>}
+                  {dict?.crm?.message || 'Message'} {form.channel === 'sms' && <span className="text-gray-400 normal-case font-normal">{dict?.crm?.smsCharLimit || '(160 char limit for single SMS)'}</span>}
                 </label>
                 <textarea
                   value={form.body}
                   onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))}
                   rows={6}
                   className="w-full px-3 py-2.5 border border-gray-300 text-sm focus:outline-none focus:border-gray-500 resize-none"
-                  placeholder="Hi {firstName}, we have something special for you..."
+                  placeholder={dict?.crm?.messagePlaceholder || 'Hi {firstName}, we have something special for you...'}
                 />
-                <p className="text-[11px] text-gray-400 mt-1">Use {'{firstName}'} as a personalization token</p>
+                <p className="text-[11px] text-gray-400 mt-1">{dict?.crm?.personalizationHint || "Use {firstName} as a personalization token"}</p>
               </div>
             </div>
             <div className="px-5 py-4 border-t border-gray-200 flex gap-3">
@@ -455,7 +471,7 @@ export default function CRMPage() {
                 onClick={() => setShowCompose(false)}
                 className="flex-1 py-2.5 border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
               >
-                Cancel
+                {dict?.common?.cancel || 'Cancel'}
               </button>
               <button
                 type="button"
@@ -464,7 +480,7 @@ export default function CRMPage() {
                 className="flex-1 py-2.5 text-white text-sm font-medium border transition-colors disabled:opacity-50"
                 style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
               >
-                {saving ? 'Saving…' : 'Save Draft'}
+                {saving ? (dict?.admin?.saving || 'Saving…') : (dict?.crm?.saveDraft || 'Save Draft')}
               </button>
             </div>
           </div>

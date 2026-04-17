@@ -82,6 +82,7 @@ export default function TaxRulesAdminPage() {
             settings={settings}
             tenant={tenant}
             primaryColor={primaryColor}
+            dict={dict}
             onUpdate={(updates) => {
               setSettings({ ...settings, ...updates });
             }}

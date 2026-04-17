@@ -63,6 +63,7 @@ export default function BusinessHoursAdminPage() {
           <BusinessHoursManager
             settings={settings}
             tenant={tenant}
+            dict={dict}
             onUpdate={(updates) => {
               updateSettings(
                 updates,

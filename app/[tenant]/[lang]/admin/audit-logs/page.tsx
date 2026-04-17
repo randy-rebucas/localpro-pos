@@ -127,7 +127,7 @@ export default function AuditLogsPage() {
                   onChange={(e) => handleFilterChangeWrapper('action', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 text-sm bg-white"
                 >
-                  <option value="">All Actions</option>
+                  <option value="">{dict.admin?.allActions || 'All Actions'}</option>
                   {getActionOptions().map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
@@ -156,7 +156,7 @@ export default function AuditLogsPage() {
                   onChange={(e) => handleFilterChangeWrapper('userId', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 text-sm bg-white"
                 >
-                  <option value="">All Users</option>
+                  <option value="">{dict.admin?.allUsers || 'All Users'}</option>
                   {users.map((u) => (
                     <option key={u._id} value={u._id}>
                       {u.name}
@@ -216,7 +216,7 @@ export default function AuditLogsPage() {
                           {dict.admin?.entityId || 'Entity ID'}
                         </th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          IP Address
+                          {dict.admin?.ipAddress || 'IP Address'}
                         </th>
                       </tr>
                     </thead>

@@ -22,9 +22,10 @@ interface HolidaysManagerProps {
   settings: ITenantSettings;
   tenant: string;
   onUpdate: (updates: Partial<ITenantSettings>) => void;
+  dict?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
-export default function HolidaysManager({ settings, tenant, onUpdate }: HolidaysManagerProps) { // eslint-disable-line @typescript-eslint/no-unused-vars
+export default function HolidaysManager({ settings, tenant, onUpdate, dict }: HolidaysManagerProps) { // eslint-disable-line @typescript-eslint/no-unused-vars
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Holiday | null>(null);
@@ -45,7 +46,7 @@ export default function HolidaysManager({ settings, tenant, onUpdate }: Holidays
         setHolidays(data.data || []);
       }
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      setMessage({ type: 'error', text: error.message || 'Failed to load holidays' });
+      setMessage({ type: 'error', text: error.message || dict?.holidays?.failedToLoad || 'Failed to load holidays' });
     } finally {
       setLoading(false);
     }
@@ -71,21 +72,21 @@ export default function HolidaysManager({ settings, tenant, onUpdate }: Holidays
       console.log('Holiday save response:', data); // Debug log
 
       if (data.success) {
-        setMessage({ type: 'success', text: `Holiday ${editing ? 'updated' : 'created'} successfully` });
+        setMessage({ type: 'success', text: editing ? (dict?.holidays?.holidayUpdated || 'Holiday updated successfully') : (dict?.holidays?.holidayCreated || 'Holiday created successfully') });
         setShowForm(false);
         setEditing(null);
         fetchHolidays();
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to save holiday' });
+        setMessage({ type: 'error', text: data.error || dict?.holidays?.failedToSave || 'Failed to save holiday' });
       }
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       console.error('Error saving holiday:', error);
-      setMessage({ type: 'error', text: error.message || 'Failed to save holiday' });
+      setMessage({ type: 'error', text: error.message || dict?.holidays?.failedToSave || 'Failed to save holiday' });
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this holiday?')) return;
+    if (!confirm(dict?.holidays?.deleteConfirm || 'Are you sure you want to delete this holiday?')) return;
 
     try {
       const res = await fetch(`/api/tenants/${tenant}/holidays?id=${id}`, {
@@ -95,24 +96,24 @@ export default function HolidaysManager({ settings, tenant, onUpdate }: Holidays
 
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: 'Holiday deleted successfully' });
+        setMessage({ type: 'success', text: dict?.holidays?.holidayDeleted || 'Holiday deleted successfully' });
         fetchHolidays();
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to delete holiday' });
+        setMessage({ type: 'error', text: data.error || dict?.holidays?.failedToDelete || 'Failed to delete holiday' });
       }
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      setMessage({ type: 'error', text: error.message || 'Failed to delete holiday' });
+      setMessage({ type: 'error', text: error.message || dict?.holidays?.failedToDelete || 'Failed to delete holiday' });
     }
   };
 
   if (loading) {
-    return <div className="text-center py-8">Loading holidays...</div>;
+    return <div className="text-center py-8">{dict?.holidays?.loading || 'Loading holidays...'}</div>;
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-gray-900">Holiday Calendar</h3>
+        <h3 className="text-lg font-semibold text-gray-900">{dict?.holidays?.holidayCalendar || 'Holiday Calendar'}</h3>
         <button
           onClick={() => {
             setEditing(null);
@@ -120,7 +121,7 @@ export default function HolidaysManager({ settings, tenant, onUpdate }: Holidays
           }}
           className="px-4 py-2 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
         >
-          Add Holiday
+          {dict?.holidays?.addHoliday || 'Add Holiday'}
         </button>
       </div>
 
@@ -142,13 +143,14 @@ export default function HolidaysManager({ settings, tenant, onUpdate }: Holidays
             setShowForm(false);
             setEditing(null);
           }}
+          dict={dict}
         />
       )}
 
       <div className="space-y-3">
         {holidays.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
-            No holidays configured. Add holidays to mark days when your business is closed.
+            {dict?.holidays?.noHolidays || 'No holidays configured. Add holidays to mark days when your business is closed.'}
           </div>
         ) : (
           holidays.map((holiday) => (
@@ -161,16 +163,16 @@ export default function HolidaysManager({ settings, tenant, onUpdate }: Holidays
                   <h4 className="font-medium text-gray-900">{holiday.name}</h4>
                   <div className="text-sm text-gray-600 mt-1">
                     {holiday.type === 'single' ? (
-                      <span>Date: {holiday.date}</span>
+                      <span>{dict?.holidays?.date || 'Date'}: {holiday.date}</span>
                     ) : (
                       <span>
-                        Recurring: {holiday.recurring?.pattern}
-                        {holiday.recurring?.month && ` (Month ${holiday.recurring.month})`}
-                        {holiday.recurring?.dayOfMonth && ` (Day ${holiday.recurring.dayOfMonth})`}
+                        {dict?.holidays?.recurring || 'Recurring'}: {holiday.recurring?.pattern}
+                        {holiday.recurring?.month && ` ${(dict?.holidays?.monthTemplate || '(Month {month})').replace('{month}', String(holiday.recurring.month))}`}
+                        {holiday.recurring?.dayOfMonth && ` ${(dict?.holidays?.dayTemplate || '(Day {day})').replace('{day}', String(holiday.recurring.dayOfMonth))}`}
                       </span>
                     )}
                     {holiday.isBusinessClosed && (
-                      <span className="ml-2 text-red-600 font-medium">• Business Closed</span>
+                      <span className="ml-2 text-red-600 font-medium">• {dict?.holidays?.businessClosed || 'Business Closed'}</span>
                     )}
                   </div>
                 </div>
@@ -182,13 +184,13 @@ export default function HolidaysManager({ settings, tenant, onUpdate }: Holidays
                     }}
                     className="px-3 py-1 text-xs text-gray-600 hover:text-gray-800 font-medium"
                   >
-                    Edit
+                    {dict?.common?.edit || 'Edit'}
                   </button>
                   <button
                     onClick={() => handleDelete(holiday.id)}
                     className="px-3 py-1 text-xs text-red-600 hover:text-red-700 font-medium"
                   >
-                    Delete
+                    {dict?.common?.delete || 'Delete'}
                   </button>
                 </div>
               </div>
@@ -204,10 +206,12 @@ function HolidayForm({
   holiday,
   onSave,
   onCancel,
+  dict,
 }: {
   holiday: Holiday | null;
   onSave: (holiday: Partial<Holiday>) => void;
   onCancel: () => void;
+  dict?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }) {
   const [name, setName] = useState(holiday?.name || '');
   const [type, setType] = useState<'single' | 'recurring'>(holiday?.type || 'single');
@@ -222,36 +226,36 @@ function HolidayForm({
 
   return (
     <div className="border-2 border-gray-300 rounded p-6 bg-white">
-      <h4 className="text-lg font-semibold mb-4">{holiday ? 'Edit Holiday' : 'Add Holiday'}</h4>
+      <h4 className="text-lg font-semibold mb-4">{holiday ? (dict?.holidays?.editHoliday || 'Edit Holiday') : (dict?.holidays?.addHoliday || 'Add Holiday')}</h4>
 
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Holiday Name *</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">{dict?.holidays?.holidayName || 'Holiday Name'} *</label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
             className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="e.g., New Year's Day"
+            placeholder={dict?.holidays?.holidayNamePlaceholder || "e.g., New Year's Day"}
             required
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Type *</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">{dict?.holidays?.type || 'Type'} *</label>
           <select
             value={type}
             onChange={(e) => setType(e.target.value as 'single' | 'recurring')}
             className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           >
-            <option value="single">Single Date</option>
-            <option value="recurring">Recurring</option>
+            <option value="single">{dict?.holidays?.singleDate || 'Single Date'}</option>
+            <option value="recurring">{dict?.holidays?.recurring || 'Recurring'}</option>
           </select>
         </div>
 
         {type === 'single' ? (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Date *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">{dict?.holidays?.date || 'Date'} *</label>
             <input
               type="date"
               value={date}
@@ -263,21 +267,21 @@ function HolidayForm({
         ) : (
           <div className="space-y-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Recurring Pattern *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">{dict?.holidays?.recurringPattern || 'Recurring Pattern'} *</label>
               <select
                 value={recurringPattern}
                 onChange={(e) => setRecurringPattern(e.target.value as any)} // eslint-disable-line @typescript-eslint/no-explicit-any
                 className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
-                <option value="yearly">Yearly</option>
-                <option value="monthly">Monthly</option>
-                <option value="weekly">Weekly</option>
+                <option value="yearly">{dict?.holidays?.yearly || 'Yearly'}</option>
+                <option value="monthly">{dict?.holidays?.monthly || 'Monthly'}</option>
+                <option value="weekly">{dict?.holidays?.weekly || 'Weekly'}</option>
               </select>
             </div>
             {recurringPattern === 'yearly' && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Month (1-12)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">{dict?.holidays?.monthRange || 'Month (1-12)'}</label>
                   <input
                     type="number"
                     min="1"
@@ -288,7 +292,7 @@ function HolidayForm({
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Day of Month (1-31)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">{dict?.holidays?.dayOfMonth || 'Day of Month (1-31)'}</label>
                   <input
                     type="number"
                     min="1"
@@ -302,25 +306,25 @@ function HolidayForm({
             )}
             {recurringPattern === 'weekly' && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Day of Week</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">{dict?.holidays?.dayOfWeek || 'Day of Week'}</label>
                 <select
                   value={dayOfWeek}
                   onChange={(e) => setDayOfWeek(e.target.value)}
                   className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
-                  <option value="0">Sunday</option>
-                  <option value="1">Monday</option>
-                  <option value="2">Tuesday</option>
-                  <option value="3">Wednesday</option>
-                  <option value="4">Thursday</option>
-                  <option value="5">Friday</option>
-                  <option value="6">Saturday</option>
+                  <option value="0">{dict?.businessHours?.sunday || 'Sunday'}</option>
+                  <option value="1">{dict?.businessHours?.monday || 'Monday'}</option>
+                  <option value="2">{dict?.businessHours?.tuesday || 'Tuesday'}</option>
+                  <option value="3">{dict?.businessHours?.wednesday || 'Wednesday'}</option>
+                  <option value="4">{dict?.businessHours?.thursday || 'Thursday'}</option>
+                  <option value="5">{dict?.businessHours?.friday || 'Friday'}</option>
+                  <option value="6">{dict?.businessHours?.saturday || 'Saturday'}</option>
                 </select>
               </div>
             )}
             {recurringPattern === 'monthly' && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Day of Month (1-31)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">{dict?.holidays?.dayOfMonth || 'Day of Month (1-31)'}</label>
                 <input
                   type="number"
                   min="1"
@@ -343,7 +347,7 @@ function HolidayForm({
             className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
           />
           <label htmlFor="isBusinessClosed" className="text-sm text-gray-700">
-            Business is closed on this holiday
+            {dict?.holidays?.businessClosedLabel || 'Business is closed on this holiday'}
           </label>
         </div>
 
@@ -368,13 +372,13 @@ function HolidayForm({
             }
             className="px-4 py-2 bg-blue-600 text-white font-medium hover:bg-blue-700"
           >
-            Save Holiday
+            {dict?.holidays?.saveHoliday || 'Save Holiday'}
           </button>
           <button
             onClick={onCancel}
             className="px-4 py-2 bg-gray-200 text-gray-700 font-medium hover:bg-gray-300"
           >
-            Cancel
+            {dict?.common?.cancel || 'Cancel'}
           </button>
         </div>
       </div>

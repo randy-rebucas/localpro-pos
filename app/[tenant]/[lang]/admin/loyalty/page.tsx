@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -8,11 +8,17 @@ import { showToast } from '@/lib/toast';
 import { useLoyaltyConfig } from '@/hooks/useLoyaltyConfig';
 import { useLoyaltyCustomers } from '@/hooks/useLoyaltyCustomers';
 import { getSaveSuccessMessage, getSaveErrorMessage } from '@/lib/loyalty-helpers';
+import { getDictionaryClient } from '../../dictionaries-client';
 
 export default function LoyaltyPage() {
   const params = useParams();
   const tenant = params.tenant as string;
-  const lang = params.lang as string;
+  const lang = params.lang as 'en' | 'es';
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+
+  useEffect(() => {
+    getDictionaryClient(lang).then(setDict);
+  }, [lang]);
 
   const { config, configForm, loading: configLoading, saving: savingConfig, dirty: configDirty, fetchConfig, updateConfigForm, saveConfig } = useLoyaltyConfig();
   const { customers, search, page, totalPages, totalCustomers, loading, enrolledCount, totalPoints, setSearch, setPage, fetchCustomers } = useLoyaltyCustomers();
@@ -43,7 +49,7 @@ export default function LoyaltyPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600" />
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
     );
@@ -63,12 +69,12 @@ export default function LoyaltyPage() {
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
-            Back to Admin
+            {dict?.admin?.backToAdmin || 'Back to Admin'}
           </Link>
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">Loyalty Program</h1>
-              <p className="text-gray-600">Configure points settings and manage customer rewards.</p>
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">{dict?.loyalty?.title || 'Loyalty Program'}</h1>
+              <p className="text-gray-600">{dict?.loyalty?.subtitle || 'Configure points settings and manage customer rewards.'}</p>
             </div>
             <span
               className={`px-3 py-1 text-xs font-semibold border ${
@@ -77,7 +83,7 @@ export default function LoyaltyPage() {
                   : 'bg-gray-100 text-gray-500 border-gray-300'
               }`}
             >
-              {config?.isEnabled ? 'Active' : 'Paused'}
+              {config?.isEnabled ? (dict?.admin?.active || 'Active') : (dict?.loyalty?.paused || 'Paused')}
             </span>
           </div>
         </div>
@@ -85,10 +91,10 @@ export default function LoyaltyPage() {
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
           {[
-            { label: 'Total Customers', value: totalCustomers.toLocaleString() },
-            { label: 'With Points', value: enrolledCount.toLocaleString() },
-            { label: 'Points Outstanding', value: totalPoints.toLocaleString() },
-            { label: 'Est. Liability', value: `₱${pesoValue.toFixed(2)}` },
+            { label: dict?.loyalty?.totalCustomers || 'Total Customers', value: totalCustomers.toLocaleString() },
+            { label: dict?.loyalty?.withPoints || 'With Points', value: enrolledCount.toLocaleString() },
+            { label: dict?.loyalty?.pointsOutstanding || 'Points Outstanding', value: totalPoints.toLocaleString() },
+            { label: dict?.loyalty?.estLiability || 'Est. Liability', value: `₱${pesoValue.toFixed(2)}` },
           ].map(stat => (
             <div key={stat.label} className="bg-white border border-gray-300 p-4">
               <p className="text-xs text-gray-500 uppercase font-medium mb-1">{stat.label}</p>
@@ -103,12 +109,12 @@ export default function LoyaltyPage() {
           <div className="lg:col-span-1">
             <div className="bg-white border border-gray-300 p-6">
               <h2 className="text-base font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-200">
-                Program Settings
+                {dict?.loyalty?.programSettings || 'Program Settings'}
               </h2>
               <form onSubmit={handleConfigSave} className="space-y-4">
                 <div>
                   <label className="block text-xs font-medium text-gray-500 uppercase mb-1">
-                    Points per ₱1 spent
+                    {dict?.loyalty?.pointsPerPeso || 'Points per ₱1 spent'}
                   </label>
                   <input
                     type="number"
@@ -119,13 +125,13 @@ export default function LoyaltyPage() {
                     className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-blue-500"
                   />
                   <p className="text-xs text-gray-400 mt-1">
-                    e.g. 1 = earn 1 pt per ₱1
+                    {dict?.loyalty?.pointsPerPesoHint || 'e.g. 1 = earn 1 pt per ₱1'}
                   </p>
                 </div>
 
                 <div>
                   <label className="block text-xs font-medium text-gray-500 uppercase mb-1">
-                    ₱ value per point
+                    {dict?.loyalty?.pesoPerPoint || '₱ value per point'}
                   </label>
                   <input
                     type="number"
@@ -136,13 +142,13 @@ export default function LoyaltyPage() {
                     className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-blue-500"
                   />
                   <p className="text-xs text-gray-400 mt-1">
-                    e.g. 0.10 = 100 pts = ₱10
+                    {dict?.loyalty?.pesoPerPointHint || 'e.g. 0.10 = 100 pts = ₱10'}
                   </p>
                 </div>
 
                 <div>
                   <label className="block text-xs font-medium text-gray-500 uppercase mb-1">
-                    Minimum pts to redeem
+                    {dict?.loyalty?.minRedemption || 'Minimum pts to redeem'}
                   </label>
                   <input
                     type="number"
@@ -171,7 +177,7 @@ export default function LoyaltyPage() {
                     />
                   </button>
                   <span className="text-sm text-gray-700">
-                    {configForm.isEnabled ? 'Program enabled' : 'Program paused'}
+                    {configForm.isEnabled ? (dict?.loyalty?.programEnabled || 'Program enabled') : (dict?.loyalty?.programPaused || 'Program paused')}
                   </span>
                 </div>
 
@@ -180,7 +186,7 @@ export default function LoyaltyPage() {
                   disabled={savingConfig || !configDirty}
                   className="w-full px-4 py-2 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 border border-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {savingConfig ? 'Saving...' : configDirty ? 'Save Changes' : 'Saved'}
+                  {savingConfig ? (dict?.admin?.saving || 'Saving...') : configDirty ? (dict?.loyalty?.saveChanges || 'Save Changes') : (dict?.loyalty?.saved || 'Saved')}
                 </button>
               </form>
 
@@ -198,10 +204,10 @@ export default function LoyaltyPage() {
           <div className="lg:col-span-2">
             <div className="bg-white border border-gray-300 p-6">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-base font-semibold text-gray-900">Customer Balances</h2>
+                <h2 className="text-base font-semibold text-gray-900">{dict?.loyalty?.customerBalances || 'Customer Balances'}</h2>
                 <input
                   type="text"
-                  placeholder="Search customers..."
+                  placeholder={dict?.loyalty?.searchCustomers || 'Search customers...'}
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                   className="px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-blue-500 w-52"
@@ -217,9 +223,9 @@ export default function LoyaltyPage() {
                   <svg className="w-10 h-10 mx-auto mb-3 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
                   </svg>
-                  <p className="text-sm">No customers found.</p>
+                  <p className="text-sm">{dict?.loyalty?.noCustomersFound || 'No customers found.'}</p>
                   <p className="text-xs text-gray-400 mt-1">
-                    Customers appear here once they are added to the system.
+                    {dict?.loyalty?.noCustomersFoundDesc || 'Customers appear here once they are added to the system.'}
                   </p>
                 </div>
               ) : (
@@ -227,10 +233,10 @@ export default function LoyaltyPage() {
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customer</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contact</th>
-                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Points</th>
-                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Est. Value</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict?.admin?.customer || 'Customer'}</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict?.loyalty?.contact || 'Contact'}</th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{dict?.loyalty?.points || 'Points'}</th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{dict?.loyalty?.estValue || 'Est. Value'}</th>
                         <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase"></th>
                       </tr>
                     </thead>
@@ -243,7 +249,7 @@ export default function LoyaltyPage() {
                             <td className="px-4 py-3 whitespace-nowrap">
                               <p className="text-sm font-medium text-gray-900">{c.firstName} {c.lastName}</p>
                               {!c.isActive && (
-                                <span className="text-xs text-gray-400">Inactive</span>
+                                <span className="text-xs text-gray-400">{dict?.admin?.inactive || 'Inactive'}</span>
                               )}
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
@@ -266,7 +272,7 @@ export default function LoyaltyPage() {
                                 href={`/${tenant}/${lang}/admin/loyalty/${c._id}`}
                                 className="text-blue-600 hover:text-blue-800 text-sm font-medium"
                               >
-                                Manage
+                                {dict?.loyalty?.manage || 'Manage'}
                               </Link>
                             </td>
                           </tr>
@@ -283,7 +289,7 @@ export default function LoyaltyPage() {
                     disabled={page === 1}
                     className="px-3 py-1 border border-gray-300 text-sm disabled:opacity-40"
                   >
-                    Previous
+                    {dict?.common?.previous || 'Previous'}
                   </button>
                   <span className="px-3 py-1 text-sm text-gray-600">{page} / {totalPages}</span>
                   <button
@@ -291,7 +297,7 @@ export default function LoyaltyPage() {
                     disabled={page === totalPages}
                     className="px-3 py-1 border border-gray-300 text-sm disabled:opacity-40"
                   >
-                    Next
+                    {dict?.common?.next || 'Next'}
                   </button>
                 </div>
             </div>

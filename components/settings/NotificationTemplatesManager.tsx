@@ -7,6 +7,7 @@ interface NotificationTemplatesManagerProps {
   settings: ITenantSettings;
   tenant: string;
   onUpdate: (updates: Partial<ITenantSettings>) => void;
+  dict?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
 type TemplateType = 'email' | 'sms';
@@ -19,12 +20,15 @@ interface Template { // eslint-disable-line @typescript-eslint/no-unused-vars
   body: string;
 }
 
-const CATEGORY_LABELS: Record<TemplateCategory, string> = {
-  bookingConfirmation: 'Booking Confirmation',
-  bookingReminder: 'Booking Reminder',
-  bookingCancellation: 'Booking Cancellation',
-  lowStockAlert: 'Low Stock Alert',
-  attendanceAlert: 'Attendance Alert',
+const getCategoryLabel = (category: TemplateCategory, dict: any): string => { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const labels: Record<TemplateCategory, string> = {
+    bookingConfirmation: dict?.notificationTemplates?.bookingConfirmation || 'Booking Confirmation',
+    bookingReminder: dict?.notificationTemplates?.bookingReminder || 'Booking Reminder',
+    bookingCancellation: dict?.notificationTemplates?.bookingCancellation || 'Booking Cancellation',
+    lowStockAlert: dict?.notificationTemplates?.lowStockAlert || 'Low Stock Alert',
+    attendanceAlert: dict?.notificationTemplates?.attendanceAlert || 'Attendance Alert',
+  };
+  return labels[category];
 };
 
 const CATEGORY_VARIABLES: Record<TemplateCategory, string[]> = {
@@ -35,7 +39,7 @@ const CATEGORY_VARIABLES: Record<TemplateCategory, string[]> = {
   attendanceAlert: ['{{employeeName}}', '{{clockInTime}}', '{{expectedTime}}', '{{hours}}'],
 };
 
-export default function NotificationTemplatesManager({ settings, tenant, onUpdate }: NotificationTemplatesManagerProps) { // eslint-disable-line @typescript-eslint/no-unused-vars
+export default function NotificationTemplatesManager({ settings, tenant, onUpdate, dict }: NotificationTemplatesManagerProps) { // eslint-disable-line @typescript-eslint/no-unused-vars
   const [templates, setTemplates] = useState<Record<string, any>>({}); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<{ type: TemplateType; category: TemplateCategory } | null>(null);
@@ -56,7 +60,7 @@ export default function NotificationTemplatesManager({ settings, tenant, onUpdat
         setTemplates(data.data || {});
       }
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      setMessage({ type: 'error', text: error.message || 'Failed to load templates' });
+      setMessage({ type: 'error', text: error.message || dict?.notificationTemplates?.failedToLoad || 'Failed to load templates' });
     } finally {
       setLoading(false);
     }
@@ -102,25 +106,25 @@ export default function NotificationTemplatesManager({ settings, tenant, onUpdat
 
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: 'Template saved successfully' });
+        setMessage({ type: 'success', text: dict?.notificationTemplates?.templateSaved || 'Template saved successfully' });
         setEditing(null);
         fetchTemplates();
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to save template' });
+        setMessage({ type: 'error', text: data.error || dict?.notificationTemplates?.failedToSave || 'Failed to save template' });
       }
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      setMessage({ type: 'error', text: error.message || 'Failed to save template' });
+      setMessage({ type: 'error', text: error.message || dict?.notificationTemplates?.failedToSave || 'Failed to save template' });
     }
   };
 
   if (loading) {
-    return <div className="text-center py-8">Loading templates...</div>;
+    return <div className="text-center py-8">{dict?.notificationTemplates?.loading || 'Loading templates...'}</div>;
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-gray-900">Notification Templates</h3>
+        <h3 className="text-lg font-semibold text-gray-900">{dict?.notificationTemplates?.title || 'Notification Templates'}</h3>
         <div className="flex gap-2">
           <button
             onClick={() => setActiveType('email')}
@@ -130,7 +134,7 @@ export default function NotificationTemplatesManager({ settings, tenant, onUpdat
                 : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
             }`}
           >
-            Email
+            {dict?.admin?.email || 'Email'}
           </button>
           <button
             onClick={() => setActiveType('sms')}
@@ -140,7 +144,7 @@ export default function NotificationTemplatesManager({ settings, tenant, onUpdat
                 : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
             }`}
           >
-            SMS
+            {dict?.admin?.sms || 'SMS'}
           </button>
         </div>
       </div>
@@ -156,21 +160,21 @@ export default function NotificationTemplatesManager({ settings, tenant, onUpdat
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {(Object.keys(CATEGORY_LABELS) as TemplateCategory[]).map((category) => (
+        {(Object.keys(CATEGORY_VARIABLES) as TemplateCategory[]).map((category) => (
           <div
             key={category}
             className="p-4 border-2 border-gray-300 rounded hover:bg-gray-50"
           >
             <div className="flex items-center justify-between mb-2">
-              <h4 className="font-medium text-gray-900">{CATEGORY_LABELS[category]}</h4>
+              <h4 className="font-medium text-gray-900">{getCategoryLabel(category, dict)}</h4>
               <button
                 onClick={() => setEditing({ type: activeType, category })}
                 className="px-3 py-1 text-xs text-blue-600 hover:text-blue-700 font-medium"
               >
-                {editing?.type === activeType && editing?.category === category ? 'Cancel' : 'Edit'}
+                {editing?.type === activeType && editing?.category === category ? (dict?.common?.cancel || 'Cancel') : (dict?.common?.edit || 'Edit')}
               </button>
             </div>
-            
+
             {editing?.type === activeType && editing?.category === category ? (
               <TemplateEditor
                 type={activeType}
@@ -181,11 +185,12 @@ export default function NotificationTemplatesManager({ settings, tenant, onUpdat
                   handleSave(activeType, category, subject, body);
                 }}
                 onCancel={() => setEditing(null)}
+                dict={dict}
               />
             ) : (
               <div className="text-sm text-gray-600">
                 {getTemplate(activeType, category) || (
-                  <span className="italic text-gray-400">No template set</span>
+                  <span className="italic text-gray-400">{dict?.notificationTemplates?.noTemplateSet || 'No template set'}</span>
                 )}
               </div>
             )}
@@ -203,6 +208,7 @@ function TemplateEditor({
   initialBody,
   onSave,
   onCancel,
+  dict,
 }: {
   type: TemplateType;
   category: TemplateCategory;
@@ -210,6 +216,7 @@ function TemplateEditor({
   initialBody: string;
   onSave: (subject: string, body: string) => void;
   onCancel: () => void;
+  dict?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }) {
   const [subject, setSubject] = useState(initialSubject);
   const [body, setBody] = useState(initialBody);
@@ -218,29 +225,29 @@ function TemplateEditor({
     <div className="space-y-3 mt-3">
       {type === 'email' && (
         <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">Subject</label>
+          <label className="block text-xs font-medium text-gray-700 mb-1">{dict?.notificationTemplates?.subject || 'Subject'}</label>
           <input
             type="text"
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
             className="w-full px-3 py-2 text-sm border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="Email subject"
+            placeholder={dict?.notificationTemplates?.emailSubjectPlaceholder || 'Email subject'}
           />
         </div>
       )}
       <div>
         <label className="block text-xs font-medium text-gray-700 mb-1">
-          {type === 'email' ? 'Body' : 'Message'}
+          {type === 'email' ? (dict?.notificationTemplates?.body || 'Body') : (dict?.notificationTemplates?.message || 'Message')}
         </label>
         <textarea
           value={body}
           onChange={(e) => setBody(e.target.value)}
           rows={4}
           className="w-full px-3 py-2 text-sm border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          placeholder={`${type === 'email' ? 'Email' : 'SMS'} message body`}
+          placeholder={type === 'email' ? (dict?.notificationTemplates?.emailBodyPlaceholder || 'Email message body') : (dict?.notificationTemplates?.smsBodyPlaceholder || 'SMS message body')}
         />
         <div className="mt-2 text-xs text-gray-500">
-          <div className="font-medium mb-1">Available variables:</div>
+          <div className="font-medium mb-1">{dict?.notificationTemplates?.availableVariables || 'Available variables'}:</div>
           <div className="flex flex-wrap gap-1">
             {CATEGORY_VARIABLES[category].map((variable) => (
               <code key={variable} className="px-1 py-0.5 bg-gray-100 rounded text-xs">
@@ -255,13 +262,13 @@ function TemplateEditor({
           onClick={() => onSave(subject, body)}
           className="px-3 py-1.5 text-xs bg-blue-600 text-white hover:bg-blue-700 font-medium"
         >
-          Save
+          {dict?.common?.save || 'Save'}
         </button>
         <button
           onClick={onCancel}
           className="px-3 py-1.5 text-xs bg-gray-200 text-gray-700 hover:bg-gray-300 font-medium"
         >
-          Cancel
+          {dict?.common?.cancel || 'Cancel'}
         </button>
       </div>
     </div>

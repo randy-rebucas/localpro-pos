@@ -468,7 +468,7 @@ export default function SettingsPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Currency Code
+                        {dict?.settings?.currencyCode || 'Currency Code'}
                       </label>
                       <input
                         type="text"
@@ -493,7 +493,7 @@ export default function SettingsPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Currency Symbol
+                        {dict?.settings?.currencySymbol || 'Currency Symbol'}
                       </label>
                       <div className="relative">
                         <input
@@ -517,20 +517,20 @@ export default function SettingsPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Currency Position
+                        {dict?.settings?.currencyPosition || 'Currency Position'}
                       </label>
                       <select
                         value={settings.currencyPosition || 'before'}
                         onChange={(e) => updateSetting('currencyPosition', e.target.value)}
                         className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                       >
-                        <option value="before">Before amount ($100)</option>
-                        <option value="after">After amount (100$)</option>
+                        <option value="before">{dict?.settings?.currencyPositionBefore || 'Before amount ($100)'}</option>
+                        <option value="after">{dict?.settings?.currencyPositionAfter || 'After amount (100$)'}</option>
                       </select>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Timezone
+                        {dict?.settings?.timezone || 'Timezone'}
                       </label>
                       <input
                         type="text"
@@ -559,7 +559,7 @@ export default function SettingsPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Date Format
+                        {dict?.settings?.dateFormat || 'Date Format'}
                       </label>
                       <select
                         value={settings.dateFormat || 'MM/DD/YYYY'}
@@ -573,20 +573,20 @@ export default function SettingsPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Time Format
+                        {dict?.settings?.timeFormat || 'Time Format'}
                       </label>
                       <select
                         value={settings.timeFormat || '12h'}
                         onChange={(e) => updateSetting('timeFormat', e.target.value)}
                         className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                       >
-                        <option value="12h">12-hour (AM/PM)</option>
-                        <option value="24h">24-hour</option>
+                        <option value="12h">{dict?.settings?.timeFormat12h || '12-hour (AM/PM)'}</option>
+                        <option value="24h">{dict?.settings?.timeFormat24h || '24-hour'}</option>
                       </select>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Language
+                        {dict?.settings?.language || 'Language'}
                       </label>
                       <select
                         value={settings.language || 'en'}
@@ -630,40 +630,40 @@ export default function SettingsPage() {
                         <option value="es">Español</option>
                       </select>
                       <p className="mt-2 text-xs text-gray-500">
-                        Changing language will save settings and reload the page
+                        {dict?.settings?.languageChangeHint || 'Changing language will save settings and reload the page'}
                       </p>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Decimal Separator
+                        {dict?.settings?.decimalSeparator || 'Decimal Separator'}
                       </label>
                       <select
                         value={settings.numberFormat?.decimalSeparator || '.'}
                         onChange={(e) => updateSetting('numberFormat.decimalSeparator', e.target.value)}
                         className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                       >
-                        <option value=".">Period (.)</option>
-                        <option value=",">Comma (,)</option>
+                        <option value=".">{dict?.settings?.separatorPeriod || 'Period (.)'}</option>
+                        <option value=",">{dict?.settings?.separatorComma || 'Comma (,)'}</option>
                       </select>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Thousands Separator
+                        {dict?.settings?.thousandsSeparator || 'Thousands Separator'}
                       </label>
                       <select
                         value={settings.numberFormat?.thousandsSeparator || ','}
                         onChange={(e) => updateSetting('numberFormat.thousandsSeparator', e.target.value)}
                         className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                       >
-                        <option value=",">Comma (,)</option>
-                        <option value=".">Period (.)</option>
-                        <option value=" ">Space ( )</option>
-                        <option value="">None</option>
+                        <option value=",">{dict?.settings?.separatorComma || 'Comma (,)'}</option>
+                        <option value=".">{dict?.settings?.separatorPeriod || 'Period (.)'}</option>
+                        <option value=" ">{dict?.settings?.separatorSpace || 'Space ( )'}</option>
+                        <option value="">{dict?.settings?.separatorNone || 'None'}</option>
                       </select>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Decimal Places
+                        {dict?.settings?.decimalPlaces || 'Decimal Places'}
                       </label>
                       <input
                         type="number"
@@ -690,14 +690,14 @@ export default function SettingsPage() {
                         className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
                       />
                       <label htmlFor="taxEnabled" className="ml-2 text-sm font-medium text-gray-700">
-                        Enable Tax
+                        {dict?.settings?.enableTax || 'Enable Tax'}
                       </label>
                     </div>
                     {settings.taxEnabled && (
                       <>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Tax Rate (%)
+                            {dict?.settings?.taxRate || 'Tax Rate (%)'}
                           </label>
                           <input
                             type="number"
@@ -711,7 +711,7 @@ export default function SettingsPage() {
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Tax Label
+                            {dict?.settings?.taxLabel || 'Tax Label'}
                           </label>
                           <input
                             type="text"
@@ -736,7 +736,7 @@ export default function SettingsPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Company Name
+                      {dict?.settings?.companyName || 'Company Name'}
                     </label>
                     <input
                       type="text"
@@ -747,7 +747,7 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Logo URL
+                      {dict?.settings?.logoUrl || 'Logo URL'}
                     </label>
                     <input
                       type="url"
@@ -759,7 +759,7 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Favicon URL
+                      {dict?.settings?.faviconUrl || 'Favicon URL'}
                     </label>
                     <input
                       type="url"
@@ -771,7 +771,7 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Primary Color
+                      {dict?.settings?.primaryColor || 'Primary Color'}
                     </label>
                     <div className="flex gap-2">
                       <input
@@ -791,7 +791,7 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Secondary Color
+                      {dict?.settings?.secondaryColor || 'Secondary Color'}
                     </label>
                     <div className="flex gap-2">
                       <input
@@ -811,7 +811,7 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Accent Color
+                      {dict?.settings?.accentColor || 'Accent Color'}
                     </label>
                     <div className="flex gap-2">
                       <input
@@ -831,7 +831,7 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Background Color
+                      {dict?.settings?.backgroundColor || 'Background Color'}
                     </label>
                     <div className="flex gap-2">
                       <input
@@ -851,7 +851,7 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Text Color
+                      {dict?.settings?.textColor || 'Text Color'}
                     </label>
                     <div className="flex gap-2">
                       <input
@@ -877,7 +877,7 @@ export default function SettingsPage() {
                   <div className="p-4 bg-blue-50 border border-blue-200 rounded">
                     <h3 className="text-lg font-semibold text-gray-900 mb-2">{dict?.settings?.advancedBranding || 'Advanced Branding'}</h3>
                     <p className="text-sm text-blue-800 mb-3">
-                      Advanced branding features (custom fonts, themes, CSS) have been moved to Admin → Advanced Branding for better access control.
+                      {dict?.settings?.advancedBrandingNote || 'Advanced branding features (custom fonts, themes, CSS) have been moved to Admin → Advanced Branding for better access control.'}
                     </p>
                     <Link
                       href={`/${tenant}/${lang}/admin/advanced-branding`}
@@ -896,7 +896,7 @@ export default function SettingsPage() {
                 <h2 className="text-xl font-bold text-gray-900 mb-5">{dict?.settings?.contactInformation || 'Contact Information'}</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict?.settings?.email || 'Email'}</label>
                     <input
                       type="email"
                       value={settings.email || ''}
@@ -905,7 +905,7 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict?.settings?.phone || 'Phone'}</label>
                     <input
                       type="tel"
                       value={settings.phone || ''}
@@ -914,7 +914,7 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Street Address</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict?.settings?.streetAddress || 'Street Address'}</label>
                     <input
                       type="text"
                       value={settings.address?.street || ''}
@@ -923,7 +923,7 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict?.settings?.city || 'City'}</label>
                     <input
                       type="text"
                       value={settings.address?.city || ''}
@@ -932,7 +932,7 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">State/Province</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict?.settings?.stateProvince || 'State/Province'}</label>
                     <input
                       type="text"
                       value={settings.address?.state || ''}
@@ -941,7 +941,7 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">ZIP/Postal Code</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict?.settings?.zipPostalCode || 'ZIP/Postal Code'}</label>
                     <input
                       type="text"
                       value={settings.address?.zipCode || ''}
@@ -950,7 +950,7 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict?.settings?.country || 'Country'}</label>
                     <input
                       type="text"
                       value={settings.address?.country || ''}
@@ -959,7 +959,7 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Website</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict?.settings?.website || 'Website'}</label>
                     <input
                       type="url"
                       value={settings.website || ''}
@@ -979,7 +979,7 @@ export default function SettingsPage() {
                 <div className="space-y-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Receipt Header
+                      {dict?.settings?.receiptHeader || 'Receipt Header'}
                     </label>
                     <textarea
                       value={settings.receiptHeader || ''}
@@ -991,7 +991,7 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Receipt Footer
+                      {dict?.settings?.receiptFooter || 'Receipt Footer'}
                     </label>
                     <textarea
                       value={settings.receiptFooter || ''}
@@ -1002,7 +1002,7 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Display Options</h3>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">{dict?.settings?.displayOptions || 'Display Options'}</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
                         <input
@@ -1013,7 +1013,7 @@ export default function SettingsPage() {
                           className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
                         />
                         <label htmlFor="receiptShowLogo" className="ml-3 text-sm font-medium text-gray-700">
-                          Show Logo on Receipts
+                          {dict?.settings?.showLogoOnReceipts || 'Show Logo on Receipts'}
                         </label>
                       </div>
                       <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
@@ -1025,7 +1025,7 @@ export default function SettingsPage() {
                           className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
                         />
                         <label htmlFor="receiptShowAddress" className="ml-3 text-sm font-medium text-gray-700">
-                          Show Address on Receipts
+                          {dict?.settings?.showAddressOnReceipts || 'Show Address on Receipts'}
                         </label>
                       </div>
                       <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
@@ -1037,7 +1037,7 @@ export default function SettingsPage() {
                           className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
                         />
                         <label htmlFor="receiptShowPhone" className="ml-3 text-sm font-medium text-gray-700">
-                          Show Phone on Receipts
+                          {dict?.settings?.showPhoneOnReceipts || 'Show Phone on Receipts'}
                         </label>
                       </div>
                       <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
@@ -1049,7 +1049,7 @@ export default function SettingsPage() {
                           className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
                         />
                         <label htmlFor="receiptShowEmail" className="ml-3 text-sm font-medium text-gray-700">
-                          Show Email on Receipts
+                          {dict?.settings?.showEmailOnReceipts || 'Show Email on Receipts'}
                         </label>
                       </div>
                     </div>
@@ -1058,14 +1058,14 @@ export default function SettingsPage() {
 
                 {/* BIR Compliance Section */}
                 <div className="mt-8 pt-8 border-t-2 border-gray-200">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-1">BIR Compliance</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1">{dict?.settings?.birCompliance || 'BIR Compliance'}</h3>
                   <p className="text-sm text-gray-500 mb-4">
-                    Required fields for Bureau of Internal Revenue (BIR) official receipts in the Philippines.
+                    {dict?.settings?.birComplianceDesc || 'Required fields for Bureau of Internal Revenue (BIR) official receipts in the Philippines.'}
                   </p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        BIR TIN <span className="text-gray-400 font-normal">(NNN-NNN-NNN-NNN)</span>
+                        {dict?.settings?.birTin || 'BIR TIN'} <span className="text-gray-400 font-normal">(NNN-NNN-NNN-NNN)</span>
                       </label>
                       <input
                         type="text"
@@ -1077,7 +1077,7 @@ export default function SettingsPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Business Style <span className="text-gray-400 font-normal">(trade name)</span>
+                        {dict?.settings?.birBusinessStyle || 'Business Style'} <span className="text-gray-400 font-normal">(trade name)</span>
                       </label>
                       <input
                         type="text"
@@ -1089,7 +1089,7 @@ export default function SettingsPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        PTU No. <span className="text-gray-400 font-normal">(Permit to Use)</span>
+                        {dict?.settings?.birPtuNumber || 'PTU No.'} <span className="text-gray-400 font-normal">(Permit to Use)</span>
                       </label>
                       <input
                         type="text"
@@ -1101,7 +1101,7 @@ export default function SettingsPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        PTU Date Issued
+                        {dict?.settings?.birPtuIssuedDate || 'PTU Date Issued'}
                       </label>
                       <input
                         type="date"
@@ -1112,7 +1112,7 @@ export default function SettingsPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        MIN <span className="text-gray-400 font-normal">(Machine Identification No.)</span>
+                        {dict?.settings?.birMinNumber || 'MIN'} <span className="text-gray-400 font-normal">(Machine Identification No.)</span>
                       </label>
                       <input
                         type="text"
@@ -1124,7 +1124,7 @@ export default function SettingsPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Accredited System Provider
+                        {dict?.settings?.birSystemProvider || 'Accredited System Provider'}
                       </label>
                       <input
                         type="text"
@@ -1136,7 +1136,7 @@ export default function SettingsPage() {
                     </div>
                   </div>
                   <p className="text-xs text-gray-400 mt-3">
-                    Set Tax Label to &quot;VAT&quot; in General → Tax Settings to print a VAT receipt. Non-VAT receipts will show &quot;THIS DOCUMENT IS NOT VALID FOR CLAIM OF INPUT TAX&quot;.
+                    {dict?.settings?.birVatNote || 'Set Tax Label to "VAT" in General → Tax Settings to print a VAT receipt. Non-VAT receipts will show "THIS DOCUMENT IS NOT VALID FOR CLAIM OF INPUT TAX".'}
                   </p>
                 </div>
 
@@ -1148,6 +1148,7 @@ export default function SettingsPage() {
                     onUpdate={(updates) => {
                       setSettings({ ...settings, ...updates });
                     }}
+                    dict={dict}
                   />
                 </div>
               </section>
@@ -1165,7 +1166,7 @@ export default function SettingsPage() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                       </svg>
                       <div>
-                        <strong>Note:</strong> {businessTypeWarning}
+                        <strong>{dict?.common?.note || 'Note'}:</strong> {businessTypeWarning}
                       </div>
                     </div>
                   </div>
@@ -1175,12 +1176,12 @@ export default function SettingsPage() {
                   {/* Business Type Selection */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Business Type <span className="text-red-500">*</span>
+                      {dict?.settings?.businessType || 'Business Type'} <span className="text-red-500">*</span>
                     </label>
                     {loadingBusinessTypes ? (
                       <div className="w-full px-4 py-3 border-2 border-gray-300 bg-gray-50 flex items-center gap-2">
                         <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent animate-spin"></div>
-                        <span className="text-sm text-gray-600">Loading business types...</span>
+                        <span className="text-sm text-gray-600">{dict?.settings?.loadingBusinessTypes || 'Loading business types...'}</span>
                       </div>
                     ) : (
                       <>
@@ -1204,7 +1205,7 @@ export default function SettingsPage() {
                               {businessTypes.find((t) => t.type === settings.businessType)?.description || ''}
                             </p>
                             <div className="mt-3 pt-3 border-t border-blue-300">
-                              <p className="text-xs font-medium text-blue-900 mb-2">Default Features:</p>
+                              <p className="text-xs font-medium text-blue-900 mb-2">{dict?.settings?.defaultFeatures || 'Default Features:'}</p>
                               <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                                 {businessTypes.find((t) => t.type === settings.businessType)?.defaultFeatures && Object.entries(
                                   businessTypes.find((t) => t.type === settings.businessType)?.defaultFeatures || {}
@@ -1239,7 +1240,7 @@ export default function SettingsPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Tax ID / EIN
+                        {dict?.settings?.taxIdEin || 'Tax ID / EIN'}
                       </label>
                       <input
                         type="text"
@@ -1266,9 +1267,9 @@ export default function SettingsPage() {
                   {/* Feature Flags Section */}
                   {settings.businessType && (
                     <div className="mt-6 pt-6 border-t-2 border-gray-200">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Feature Configuration</h3>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">{dict?.settings?.featureConfiguration || 'Feature Configuration'}</h3>
                       <p className="text-sm text-gray-600 mb-4">
-                        These features are automatically configured based on your business type. You can override them if needed.
+                        {dict?.settings?.featureConfigurationDesc || 'These features are automatically configured based on your business type. You can override them if needed.'}
                       </p>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
@@ -1280,8 +1281,8 @@ export default function SettingsPage() {
                             className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
                           />
                           <label htmlFor="enableInventory" className="ml-3 flex-1">
-                            <div className="text-sm font-medium text-gray-900">Inventory Management</div>
-                            <div className="text-xs text-gray-500 mt-1">Track product stock levels</div>
+                            <div className="text-sm font-medium text-gray-900">{dict?.settings?.inventoryManagement || 'Inventory Management'}</div>
+                            <div className="text-xs text-gray-500 mt-1">{dict?.settings?.inventoryManagementDesc || 'Track product stock levels'}</div>
                           </label>
                         </div>
                         <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
@@ -1293,8 +1294,8 @@ export default function SettingsPage() {
                             className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
                           />
                           <label htmlFor="enableCategories" className="ml-3 flex-1">
-                            <div className="text-sm font-medium text-gray-900">Categories</div>
-                            <div className="text-xs text-gray-500 mt-1">Organize products by categories</div>
+                            <div className="text-sm font-medium text-gray-900">{dict?.settings?.categoriesFeature || 'Categories'}</div>
+                            <div className="text-xs text-gray-500 mt-1">{dict?.settings?.categoriesFeatureDesc || 'Organize products by categories'}</div>
                           </label>
                         </div>
                         <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
@@ -1306,8 +1307,8 @@ export default function SettingsPage() {
                             className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
                           />
                           <label htmlFor="enableDiscounts" className="ml-3 flex-1">
-                            <div className="text-sm font-medium text-gray-900">Discounts & Promotions</div>
-                            <div className="text-xs text-gray-500 mt-1">Create discount codes and promotions</div>
+                            <div className="text-sm font-medium text-gray-900">{dict?.settings?.discountsPromotions || 'Discounts & Promotions'}</div>
+                            <div className="text-xs text-gray-500 mt-1">{dict?.settings?.discountsPromotionsDesc || 'Create discount codes and promotions'}</div>
                           </label>
                         </div>
                         <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
@@ -1319,8 +1320,8 @@ export default function SettingsPage() {
                             className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
                           />
                           <label htmlFor="enableLoyaltyProgram" className="ml-3 flex-1">
-                            <div className="text-sm font-medium text-gray-900">Loyalty Program</div>
-                            <div className="text-xs text-gray-500 mt-1">Customer loyalty and rewards</div>
+                            <div className="text-sm font-medium text-gray-900">{dict?.settings?.loyaltyProgram || 'Loyalty Program'}</div>
+                            <div className="text-xs text-gray-500 mt-1">{dict?.settings?.loyaltyProgramDesc || 'Customer loyalty and rewards'}</div>
                           </label>
                         </div>
                         <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
@@ -1332,8 +1333,8 @@ export default function SettingsPage() {
                             className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
                           />
                           <label htmlFor="enableCustomerManagement" className="ml-3 flex-1">
-                            <div className="text-sm font-medium text-gray-900">Customer Management</div>
-                            <div className="text-xs text-gray-500 mt-1">Manage customer profiles and history</div>
+                            <div className="text-sm font-medium text-gray-900">{dict?.settings?.customerManagementFeature || 'Customer Management'}</div>
+                            <div className="text-xs text-gray-500 mt-1">{dict?.settings?.customerManagementFeatureDesc || 'Manage customer profiles and history'}</div>
                           </label>
                         </div>
                         <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
@@ -1345,8 +1346,8 @@ export default function SettingsPage() {
                             className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
                           />
                           <label htmlFor="enableBookingScheduling" className="ml-3 flex-1">
-                            <div className="text-sm font-medium text-gray-900">Booking & Scheduling</div>
-                            <div className="text-xs text-gray-500 mt-1">Appointment and service scheduling</div>
+                            <div className="text-sm font-medium text-gray-900">{dict?.settings?.bookingScheduling || 'Booking & Scheduling'}</div>
+                            <div className="text-xs text-gray-500 mt-1">{dict?.settings?.bookingSchedulingDesc || 'Appointment and service scheduling'}</div>
                           </label>
                         </div>
                       </div>
@@ -1366,13 +1367,13 @@ export default function SettingsPage() {
                 <div className="space-y-6">
                   <div className="p-4 bg-blue-50 border border-blue-200 rounded">
                     <p className="text-sm text-blue-800 mb-2">
-                      <strong>Note:</strong> Notification template customization has been moved to Admin → Notification Templates for better access control.
+                      <strong>Note:</strong> {dict?.settings?.notificationTemplateNote || 'Notification template customization has been moved to Admin → Notification Templates for better access control.'}
                     </p>
                     <Link
                       href={`/${tenant}/${lang}/admin/notification-templates`}
                       className="text-sm text-blue-600 hover:text-blue-700 font-medium underline"
                     >
-                      Customize Templates →
+                      {dict?.settings?.customizeTemplates || 'Customize Templates →'}
                     </Link>
                   </div>
                   <div>
@@ -1380,7 +1381,7 @@ export default function SettingsPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Low Stock Threshold
+                          {dict?.settings?.lowStockThreshold || 'Low Stock Threshold'}
                         </label>
                         <input
                           type="number"
@@ -1390,7 +1391,7 @@ export default function SettingsPage() {
                           className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                         />
                         <p className="mt-2 text-xs text-gray-500">
-                          Alert when stock falls below this quantity
+                          {dict?.settings?.lowStockThresholdHint || 'Alert when stock falls below this quantity'}
                         </p>
                       </div>
                       <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
@@ -1406,7 +1407,7 @@ export default function SettingsPage() {
                             {dict?.settings?.enableLowStockAlerts || 'Enable Low Stock Alerts'}
                           </div>
                           <div className="text-xs text-gray-500 mt-1">
-                            Get notified when products fall below threshold
+                            {dict?.settings?.lowStockAlertDesc || 'Get notified when products fall below threshold'}
                           </div>
                         </label>
                       </div>
@@ -1425,10 +1426,10 @@ export default function SettingsPage() {
                         />
                         <label htmlFor="emailNotifications" className="ml-3 flex-1">
                           <div className="text-sm font-medium text-gray-900">
-                            Enable Email Notifications
+                            {dict?.settings?.enableEmailNotifications || 'Enable Email Notifications'}
                           </div>
                           <div className="text-xs text-gray-500 mt-1">
-                            Receive notifications via email
+                            {dict?.settings?.emailNotificationsDesc || 'Receive notifications via email'}
                           </div>
                         </label>
                       </div>
@@ -1442,10 +1443,10 @@ export default function SettingsPage() {
                         />
                         <label htmlFor="smsNotifications" className="ml-3 flex-1">
                           <div className="text-sm font-medium text-gray-900">
-                            Enable SMS Notifications
+                            {dict?.settings?.enableSmsNotifications || 'Enable SMS Notifications'}
                           </div>
                           <div className="text-xs text-gray-500 mt-1">
-                            Receive notifications via SMS
+                            {dict?.settings?.smsNotificationsDesc || 'Receive notifications via SMS'}
                           </div>
                         </label>
                       </div>
@@ -1454,8 +1455,8 @@ export default function SettingsPage() {
 
                   {/* Attendance Notifications */}
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-1">Attendance Notifications</h3>
-                    <p className="text-sm text-gray-500 mb-3">Alert managers when staff miss clock-in or forget to clock out.</p>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1">{dict?.settings?.attendanceNotificationsSection || 'Attendance Notifications'}</h3>
+                    <p className="text-sm text-gray-500 mb-3">{dict?.settings?.attendanceNotificationsSectionDesc || 'Alert managers when staff miss clock-in or forget to clock out.'}</p>
                     <div className="space-y-4">
                       <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
                         <input
@@ -1466,8 +1467,8 @@ export default function SettingsPage() {
                           className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
                         />
                         <label htmlFor="attendanceNotificationsEnabled" className="ml-3 flex-1">
-                          <div className="text-sm font-medium text-gray-900">Enable Attendance Alerts</div>
-                          <div className="text-xs text-gray-500 mt-1">Notify managers of missed clock-ins and forgotten clock-outs</div>
+                          <div className="text-sm font-medium text-gray-900">{dict?.settings?.enableAttendanceAlerts || 'Enable Attendance Alerts'}</div>
+                          <div className="text-xs text-gray-500 mt-1">{dict?.settings?.enableAttendanceAlertsDesc || 'Notify managers of missed clock-ins and forgotten clock-outs'}</div>
                         </label>
                       </div>
 
@@ -1475,7 +1476,7 @@ export default function SettingsPage() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
-                              Expected Clock-In Time
+                              {dict?.settings?.expectedClockInTime || 'Expected Clock-In Time'}
                             </label>
                             <input
                               type="time"
@@ -1483,11 +1484,11 @@ export default function SettingsPage() {
                               onChange={(e) => updateSetting('attendanceNotifications.expectedStartTime', e.target.value)}
                               className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                             />
-                            <p className="text-xs text-gray-500 mt-1">Alert if staff haven&apos;t clocked in by this time</p>
+                            <p className="text-xs text-gray-500 mt-1">{dict?.settings?.expectedClockInTimeHint || "Alert if staff haven't clocked in by this time"}</p>
                           </div>
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
-                              Max Hours Without Clock-Out
+                              {dict?.settings?.maxHoursWithoutClockOut || 'Max Hours Without Clock-Out'}
                             </label>
                             <input
                               type="number"
@@ -1497,7 +1498,7 @@ export default function SettingsPage() {
                               onChange={(e) => updateSetting('attendanceNotifications.maxHoursWithoutClockOut', Number(e.target.value))}
                               className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                             />
-                            <p className="text-xs text-gray-500 mt-1">Alert after this many hours without clocking out (1–24)</p>
+                            <p className="text-xs text-gray-500 mt-1">{dict?.settings?.maxHoursWithoutClockOutHint || 'Alert after this many hours without clocking out (1–24)'}</p>
                           </div>
                         </div>
                       )}
@@ -1525,6 +1526,7 @@ export default function SettingsPage() {
                   onUpdate={(updates) => {
                     setSettings({ ...settings, ...updates });
                   }}
+                  dict={dict}
                 />
               </section>
             )}

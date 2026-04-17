@@ -5,6 +5,7 @@ import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { normalizeImageUrl } from '@/lib/image-utils';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
+import { getDictionaryClient } from '@/app/[lang]/dictionaries-client';
 
 interface Tenant {
   slug: string;
@@ -35,7 +36,7 @@ const BUSINESS_TYPE_META: Record<string, { icon: string; label: string; gradient
 
 const DEFAULT_META = { icon: '🏬', label: 'Store', gradient: 'from-blue-500 to-indigo-600' };
 
-function StoreCard({ tenant, preferredLang }: { tenant: Tenant; preferredLang: string }) {
+function StoreCard({ tenant, preferredLang, dict }: { tenant: Tenant; preferredLang: string; dict: any }) { // eslint-disable-line @typescript-eslint/no-explicit-any
   const displayName = tenant.settings?.companyName || tenant.name;
   const businessType = tenant.settings?.businessType || 'General';
   const meta = BUSINESS_TYPE_META[businessType] ?? DEFAULT_META;
@@ -124,7 +125,7 @@ function StoreCard({ tenant, preferredLang }: { tenant: Tenant; preferredLang: s
 
         <div className="mt-auto pt-3 border-t border-gray-100">
           <div className="flex items-center justify-between text-sm font-semibold text-blue-600 group-hover:text-blue-700">
-            <span>Enter Store</span>
+            <span>{dict?.stores?.enterStore || 'Enter Store'}</span>
             <svg className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
@@ -155,13 +156,18 @@ export default function StoresPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('All');
-  const [preferredLang, setPreferredLang] = useState('en');
+  const [preferredLang, setPreferredLang] = useState<'en' | 'es'>('en');
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const searchRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    getDictionaryClient(preferredLang).then(setDict);
+  }, [preferredLang]);
 
   // Read stored language preference so StoreCard links respect it
   useEffect(() => {
     const stored = localStorage.getItem('preferred_lang');
-    if (stored === 'en' || stored === 'es') setPreferredLang(stored);
+    if (stored === 'en' || stored === 'es') setPreferredLang(stored as 'en' | 'es');
     // Re-sync whenever LanguageSwitcher updates localStorage
     const onStorage = (e: StorageEvent) => {
       if (e.key === 'preferred_lang' && (e.newValue === 'en' || e.newValue === 'es')) {
@@ -232,7 +238,7 @@ export default function StoresPage() {
           <div className="flex items-center gap-3">
             <LanguageSwitcher />
             <Link href="/signup" className="inline-flex items-center bg-blue-600 text-white px-4 py-1.5 text-sm font-semibold hover:bg-blue-700 transition-colors">
-              Create Store
+              {dict?.stores?.createStore || 'Create Store'}
             </Link>
           </div>
         </div>
@@ -246,21 +252,21 @@ export default function StoresPage() {
         </div>
         <div className="relative max-w-7xl mx-auto text-center z-10">
           <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-md border border-white/30 px-4 py-1.5 text-sm font-semibold mb-4">
-            🏪 Store Directory
+            🏪 {dict?.stores?.storeDirectory || 'Store Directory'}
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold mb-3">Select Your Store</h1>
+          <h1 className="text-4xl md:text-5xl font-bold mb-3">{dict?.stores?.selectYourStore || 'Select Your Store'}</h1>
           <p className="text-blue-100 text-lg max-w-xl mx-auto">
-            Choose from our network of stores to sign in and manage your business
+            {dict?.stores?.storeDirectoryDesc || 'Choose from our network of stores to sign in and manage your business'}
           </p>
           <div className="flex justify-center gap-10 mt-8">
             <div className="text-center">
               <div className="text-3xl font-bold tabular-nums">{loading ? '—' : tenants.length}</div>
-              <div className="text-blue-200 text-sm mt-0.5">Active Stores</div>
+              <div className="text-blue-200 text-sm mt-0.5">{dict?.stores?.activeStores || 'Active Stores'}</div>
             </div>
             <div className="w-px bg-white/20" />
             <div className="text-center">
               <div className="text-3xl font-bold tabular-nums">{availableTypes.length > 1 ? availableTypes.length - 1 : '—'}</div>
-              <div className="text-blue-200 text-sm mt-0.5">Business Types</div>
+              <div className="text-blue-200 text-sm mt-0.5">{dict?.stores?.businessTypes || 'Business Types'}</div>
             </div>
           </div>
         </div>
@@ -276,7 +282,7 @@ export default function StoresPage() {
             <input
               ref={searchRef}
               type="text"
-              placeholder="Search by store name, slug, or city"
+              placeholder={dict?.stores?.searchPlaceholder || 'Search by store name, slug, or city'}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-9 pr-8 py-2.5 border border-gray-300 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none transition-colors bg-white"
@@ -303,7 +309,7 @@ export default function StoresPage() {
                       : 'bg-white border-gray-300 text-gray-600 hover:border-blue-400 hover:text-blue-600'
                   }`}
                 >
-                  {type === 'All' ? 'All Types' : `${BUSINESS_TYPE_META[type]?.icon ?? ''} ${type}`}
+                  {type === 'All' ? (dict?.stores?.allTypes || 'All Types') : `${BUSINESS_TYPE_META[type]?.icon ?? ''} ${type}`}
                 </button>
               ))}
             </div>
@@ -316,8 +322,10 @@ export default function StoresPage() {
         {!loading && (
           <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">
             {filtered.length === tenants.length
-              ? `${tenants.length} store${tenants.length !== 1 ? 's' : ''} available`
-              : `${filtered.length} of ${tenants.length} stores`}
+              ? (tenants.length !== 1
+                  ? (dict?.stores?.storesAvailablePlural || '{count} stores available').replace('{count}', String(tenants.length))
+                  : (dict?.stores?.storesAvailable || '{count} store available').replace('{count}', String(tenants.length)))
+              : (dict?.stores?.storesFiltered || '{filtered} of {total} stores').replace('{filtered}', String(filtered.length)).replace('{total}', String(tenants.length))}
           </p>
         )}
       </div>
@@ -331,17 +339,17 @@ export default function StoresPage() {
         ) : filtered.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filtered.map((tenant) => (
-              <StoreCard key={tenant.slug} tenant={tenant} preferredLang={preferredLang} />
+              <StoreCard key={tenant.slug} tenant={tenant} preferredLang={preferredLang} dict={dict} />
             ))}
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-24 text-center">
             <div className="text-5xl mb-4">🔍</div>
-            <h3 className="text-lg font-bold text-gray-900 mb-2">No stores found</h3>
+            <h3 className="text-lg font-bold text-gray-900 mb-2">{dict?.stores?.noStoresFound || 'No stores found'}</h3>
             <p className="text-gray-500 text-sm mb-6 max-w-sm">
               {tenants.length === 0
-                ? 'No stores are available yet. Be the first to create one!'
-                : 'Try adjusting your search or filter.'}
+                ? (dict?.stores?.noStoresYet || 'No stores are available yet. Be the first to create one!')
+                : (dict?.stores?.tryAdjusting || 'Try adjusting your search or filter.')}
             </p>
             <div className="flex gap-2">
               {(search || typeFilter !== 'All') && (
@@ -349,11 +357,11 @@ export default function StoresPage() {
                   onClick={() => { setSearch(''); setTypeFilter('All'); }}
                   className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-semibold hover:border-blue-400 transition-colors"
                 >
-                  Clear filters
+                  {dict?.stores?.clearFilters || 'Clear filters'}
                 </button>
               )}
               <Link href="/signup" className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors">
-                Create a Store
+                {dict?.stores?.createAStore || 'Create a Store'}
               </Link>
             </div>
           </div>
@@ -364,13 +372,13 @@ export default function StoresPage() {
       {!loading && tenants.length > 0 && (
         <div className="border-t border-gray-200 bg-white py-10 px-4">
           <div className="max-w-xl mx-auto text-center">
-            <h3 className="text-base font-bold text-gray-900 mb-1">Don&apos;t see your store?</h3>
-            <p className="text-gray-500 text-sm mb-5">Get started and create your own store in minutes.</p>
+            <h3 className="text-base font-bold text-gray-900 mb-1">{dict?.stores?.dontSeeYourStore || "Don't see your store?"}</h3>
+            <p className="text-gray-500 text-sm mb-5">{dict?.stores?.getStartedDesc || 'Get started and create your own store in minutes.'}</p>
             <Link
               href="/signup"
               className="inline-flex items-center gap-2 bg-blue-600 text-white px-7 py-2.5 text-sm font-bold hover:bg-blue-700 transition-colors"
             >
-              <span>Create Your Store</span>
+              <span>{dict?.stores?.createYourStore || 'Create Your Store'}</span>
               <span>→</span>
             </Link>
           </div>

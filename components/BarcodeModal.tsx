@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useParams } from 'next/navigation';
+import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
 import JsBarcode from 'jsbarcode';
 
 interface BarcodeModalProps {
@@ -20,9 +22,18 @@ const FORMATS: { label: string; value: BarcodeFormat }[] = [
 ];
 
 export default function BarcodeModal({ value, productName, onClose }: BarcodeModalProps) {
+  const params = useParams();
+  const lang = (params?.lang as 'en' | 'es') || 'en';
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const svgRef = useRef<SVGSVGElement>(null);
   const [format, setFormat] = useState<BarcodeFormat>('CODE128');
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getDictionaryClient(lang).then(setDict);
+  }, [lang]);
+
+  const d = dict?.components?.barcodeModal;
 
   useEffect(() => {
     if (!svgRef.current) return;
@@ -39,7 +50,7 @@ export default function BarcodeModal({ value, productName, onClose }: BarcodeMod
         lineColor: '#000000',
       });
     } catch {
-      renderError = `Cannot render ${format} for this value. Try CODE128.`;
+      renderError = (d?.renderError || 'Cannot render {format} for this value. Try CODE128.').replace('{format}', format);
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setError(renderError);
@@ -118,7 +129,7 @@ export default function BarcodeModal({ value, productName, onClose }: BarcodeMod
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
           <div>
-            <h3 className="text-base font-semibold text-gray-900">Barcode</h3>
+            <h3 className="text-base font-semibold text-gray-900">{d?.title || 'Barcode'}</h3>
             <p className="text-xs text-gray-500 mt-0.5 truncate max-w-[200px]">{productName}</p>
           </div>
           <button
@@ -132,7 +143,7 @@ export default function BarcodeModal({ value, productName, onClose }: BarcodeMod
 
         {/* Format selector */}
         <div className="px-5 pt-4">
-          <label className="block text-xs font-medium text-gray-600 mb-1">Format</label>
+          <label className="block text-xs font-medium text-gray-600 mb-1">{d?.format || 'Format'}</label>
           <select
             value={format}
             onChange={e => setFormat(e.target.value as BarcodeFormat)}
@@ -164,7 +175,7 @@ export default function BarcodeModal({ value, productName, onClose }: BarcodeMod
             disabled={!!error}
             className="flex-1 px-3 py-2 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-40"
           >
-            Download PNG
+            {d?.downloadPng || 'Download PNG'}
           </button>
           <button
             type="button"
@@ -172,7 +183,7 @@ export default function BarcodeModal({ value, productName, onClose }: BarcodeMod
             disabled={!!error}
             className="flex-1 px-3 py-2 border border-gray-300 text-gray-700 text-sm hover:bg-gray-50 disabled:opacity-40"
           >
-            Download SVG
+            {d?.downloadSvg || 'Download SVG'}
           </button>
           <button
             type="button"
@@ -180,7 +191,7 @@ export default function BarcodeModal({ value, productName, onClose }: BarcodeMod
             disabled={!!error}
             className="w-full px-3 py-2 border border-gray-300 text-gray-700 text-sm hover:bg-gray-50 disabled:opacity-40"
           >
-            Print
+            {d?.print || 'Print'}
           </button>
         </div>
       </div>

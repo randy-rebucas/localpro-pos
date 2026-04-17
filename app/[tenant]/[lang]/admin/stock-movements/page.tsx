@@ -86,14 +86,13 @@ export default function StockMovementsPage() {
               </svg>
               <div>
                 <h3 className="text-lg font-semibold text-yellow-900 mb-2">
-                  Stock Movements Not Available
+                  {dict.admin?.stockMovementsNotAvailable || 'Stock Movements Not Available'}
                 </h3>
                 <p className="text-yellow-800">
-                  Stock movements tracking is not available for {businessTypeConfig?.name || 'your business type'}. 
-                  This feature requires inventory management to be enabled.
+                  {(dict.admin?.stockMovementsNotAvailableDesc || 'Stock movements tracking is not available for {businessType}.').replace('{businessType}', businessTypeConfig?.name || 'your business type')}
                 </p>
                 <p className="text-sm text-yellow-700 mt-2">
-                  If you need stock tracking, please enable inventory management in Settings.
+                  {dict.admin?.stockMovementsNotAvailableHint || 'If you need stock tracking, please enable inventory management in Settings.'}
                 </p>
               </div>
             </div>
@@ -146,7 +145,7 @@ export default function StockMovementsPage() {
                       <td className="px-4 py-4">
                         <div className="text-sm font-medium text-gray-900">{productName}</div>
                         {productSku && (
-                          <div className="text-xs text-gray-500">SKU: {productSku}</div>
+                          <div className="text-xs text-gray-500">{dict.admin?.sku || 'SKU'}: {productSku}</div>
                         )}
                         {movement.variation && (
                           <div className="text-xs text-gray-500">

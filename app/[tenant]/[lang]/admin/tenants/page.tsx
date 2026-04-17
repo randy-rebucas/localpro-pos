@@ -166,7 +166,7 @@ export default function TenantsPage() {
                           {tenantItem.settings.businessType}
                         </span>
                       ) : (
-                        <span className="text-gray-400 italic">Not set</span>
+                        <span className="text-gray-400 italic">{dict.admin?.notSet || 'Not set'}</span>
                       )}
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{tenantItem.settings.currency}</td>
@@ -434,7 +434,7 @@ function TenantModal({
               {loadingBusinessTypes ? (
                 <div className="w-full px-3 py-2 border border-gray-300 bg-gray-50 flex items-center gap-2">
                   <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent animate-spin"></div>
-                  <span className="text-xs text-gray-600">Loading business types...</span>
+                  <span className="text-xs text-gray-600">{dict.settings?.loadingBusinessTypes || 'Loading business types...'}</span>
                 </div>
               ) : (
                 <>
@@ -444,7 +444,7 @@ function TenantModal({
                       const newType = e.target.value;
                       if (newType !== tenant?.settings.businessType) {
                         setBusinessTypeWarning(
-                          `Changing business type to "${newType}" will automatically configure features. This may enable or disable certain features based on the business type.`
+                          (dict.admin?.businessTypeWarning || 'Changing business type to "{type}" will automatically configure features. This may enable or disable certain features based on the business type.').replace('{type}', newType)
                         );
                       } else {
                         setBusinessTypeWarning(null);

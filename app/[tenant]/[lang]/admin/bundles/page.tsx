@@ -24,10 +24,7 @@ const BundlePerformanceCharts = dynamic(() => import('@/components/BundlePerform
   ssr: false,
   loading: () => (
     <div className="w-full h-64 flex items-center justify-center">
-      <div className="text-center">
-        <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
-        <p className="mt-4 text-gray-600">{'Loading chart...'}</p>
-      </div>
+      <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
     </div>
   ),
 });
@@ -255,26 +252,26 @@ export default function BundlesPage() {
   const handleExport = async (format: 'csv' | 'excel' | 'pdf' = 'csv') => {
     if (!dict) return;
 
-    const headers = [
-      'Name',
-      'SKU',
-      'Category',
-      'Price',
-      'Items Count',
-      'Status',
-      'Description',
-      'Created At',
-    ];
-    
+    const hName = dict.admin?.name || 'Name';
+    const hSku = dict.admin?.sku || 'SKU';
+    const hCategory = dict.admin?.category || 'Category';
+    const hPrice = dict.admin?.price || 'Price';
+    const hItemsCount = dict.admin?.itemsCount || 'Items Count';
+    const hStatus = dict.admin?.status || 'Status';
+    const hDescription = dict.admin?.description || 'Description';
+    const hCreatedAt = dict.admin?.createdAt || 'Created At';
+
+    const headers = [hName, hSku, hCategory, hPrice, hItemsCount, hStatus, hDescription, hCreatedAt];
+
     const exportData = bundles.map(bundle => ({
-      Name: bundle.name,
-      SKU: bundle.sku || '',
-      Category: typeof bundle.categoryId === 'object' && bundle.categoryId?.name ? bundle.categoryId.name : '',
-      Price: bundle.price,
-      'Items Count': bundle.items.length,
-      Status: bundle.isActive ? 'Active' : 'Inactive',
-      Description: bundle.description || '',
-      'Created At': new Date(bundle.createdAt).toLocaleString(),
+      [hName]: bundle.name,
+      [hSku]: bundle.sku || '',
+      [hCategory]: typeof bundle.categoryId === 'object' && bundle.categoryId?.name ? bundle.categoryId.name : '',
+      [hPrice]: bundle.price,
+      [hItemsCount]: bundle.items.length,
+      [hStatus]: bundle.isActive ? (dict.admin?.active || 'Active') : (dict.admin?.inactive || 'Inactive'),
+      [hDescription]: bundle.description || '',
+      [hCreatedAt]: new Date(bundle.createdAt).toLocaleString(),
     }));
 
     const baseFilename = `bundles_export_${new Date().toISOString().split('T')[0]}`;
@@ -349,14 +346,13 @@ export default function BundlesPage() {
               </svg>
               <div>
                 <h3 className="text-lg font-semibold text-yellow-900 mb-2">
-                  Bundles Not Available
+                  {dict.admin?.bundlesNotAvailable || 'Bundles Not Available'}
                 </h3>
                 <p className="text-yellow-800">
-                  Product bundles are not available for {businessTypeConfig?.name || 'your business type'}. 
-                  This feature is typically used for retail and restaurant businesses.
+                  {(dict.admin?.bundlesNotAvailableDesc || 'Product bundles are not available for {businessType}. This feature is typically used for retail and restaurant businesses.').replace('{businessType}', businessTypeConfig?.name || 'your business type')}
                 </p>
                 <p className="text-sm text-yellow-700 mt-2">
-                  If you need bundles, please update your business type in Settings.
+                  {dict.admin?.bundlesNotAvailableHint || 'If you need bundles, please update your business type in Settings.'}
                 </p>
               </div>
             </div>
@@ -699,7 +695,7 @@ export default function BundlesPage() {
                     />
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.name || 'Name'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.sku || 'SKU'}</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.category || 'Category'}</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.price || 'Price'}</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.items || 'Items'}</th>
@@ -732,7 +728,7 @@ export default function BundlesPage() {
                       <Currency amount={bundle.price} />
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {bundle.items.length} {dict.admin?.item || 'item'}{bundle.items.length !== 1 ? 's' : ''}
+                      {bundle.items.length} {bundle.items.length !== 1 ? (dict.admin?.items || 'items') : (dict.admin?.item || 'item')}
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap">
                       <span className={`px-2 py-1 text-xs font-semibold border ${
@@ -1097,7 +1093,7 @@ function BundleModal({
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">SKU</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{dict.admin?.sku || 'SKU'}</label>
                 <input
                   type="text"
                   value={formData.sku}
@@ -1227,17 +1223,17 @@ function BundleModal({
                                 <div className="font-medium flex items-center justify-between">
                                   <span>{highlightMatch(product.name, productSearch)}</span>
                                   {isAlreadyAdded && (
-                                    <span className="text-xs text-gray-400 ml-2">(Already added)</span>
+                                    <span className="text-xs text-gray-400 ml-2">({dict?.admin?.alreadyAdded || 'Already added'})</span>
                                   )}
                                 </div>
                                 <div className="text-sm text-gray-500 flex items-center gap-2 mt-1">
                                   <Currency amount={product.price} />
                                   {product.sku && (
-                                    <span className="text-xs">SKU: {highlightMatch(product.sku, productSearch)}</span>
+                                    <span className="text-xs">{dict?.admin?.sku || 'SKU'}: {highlightMatch(product.sku, productSearch)}</span>
                                   )}
                                   {product.stock !== undefined && (
                                     <span className={`ml-2 ${product.stock === 0 ? 'text-red-500' : ''}`}>
-                                      • Stock: {product.stock}
+                                      • {dict?.admin?.stock || 'Stock'}: {product.stock}
                                     </span>
                                   )}
                                 </div>

@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { useParams } from 'next/navigation';
+import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
 
 interface Customer {
   _id: string;
@@ -28,6 +30,9 @@ interface CustomerSidePanelProps {
 }
 
 export default function CustomerSidePanel({ tenant, selectedCustomer, onSelectCustomer }: CustomerSidePanelProps) {
+  const params = useParams();
+  const lang = (params?.lang as 'en' | 'es') || 'en';
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [search, setSearch] = useState('');
   const [results, setResults] = useState<Customer[]>([]);
   const [searching, setSearching] = useState(false);
@@ -36,6 +41,12 @@ export default function CustomerSidePanel({ tenant, selectedCustomer, onSelectCu
   const [loadingTxns, setLoadingTxns] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    getDictionaryClient(lang).then(setDict);
+  }, [lang]);
+
+  const d = dict?.components?.customerSidePanel;
 
   const searchCustomers = useCallback(async (q: string) => {
     if (!q.trim()) { setResults([]); setShowDropdown(false); return; }
@@ -106,14 +117,14 @@ export default function CustomerSidePanel({ tenant, selectedCustomer, onSelectCu
             <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
             </svg>
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Customer</span>
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{d?.customer || 'Customer'}</span>
           </div>
           <div className="relative">
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by name, email, or phone…"
+              placeholder={d?.searchPlaceholder || 'Search by name, email, or phone…'}
               className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-blue-400 bg-white"
             />
             {searching && (
@@ -144,7 +155,7 @@ export default function CustomerSidePanel({ tenant, selectedCustomer, onSelectCu
 
           {showDropdown && results.length === 0 && !searching && search.trim() && (
             <div className="absolute z-30 left-0 right-0 top-full mt-0.5 bg-white border border-gray-300 shadow-lg px-3 py-2 text-sm text-gray-500">
-              No customers found
+              {d?.noCustomersFound || 'No customers found'}
             </div>
           )}
         </div>
@@ -166,7 +177,7 @@ export default function CustomerSidePanel({ tenant, selectedCustomer, onSelectCu
               type="button"
               onClick={handleClear}
               className="p-1 text-gray-400 hover:text-gray-600 flex-shrink-0"
-              title="Remove customer"
+              title={d?.removeCustomer || 'Remove customer'}
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -181,17 +192,17 @@ export default function CustomerSidePanel({ tenant, selectedCustomer, onSelectCu
                 <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
               </svg>
               <span className="font-semibold">{selectedCustomer.loyaltyPointsBalance.toLocaleString()}</span>
-              <span>points</span>
+              <span>{d?.points || 'points'}</span>
             </div>
           )}
 
           {/* Recent transactions */}
           <div className="mt-2">
-            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Recent purchases</p>
+            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">{d?.recentPurchases || 'Recent purchases'}</p>
             {loadingTxns ? (
-              <div className="text-xs text-gray-400 py-1">Loading…</div>
+              <div className="text-xs text-gray-400 py-1">{d?.loading || 'Loading…'}</div>
             ) : recentTxns.length === 0 ? (
-              <div className="text-xs text-gray-400 py-1">No purchases yet</div>
+              <div className="text-xs text-gray-400 py-1">{d?.noPurchasesYet || 'No purchases yet'}</div>
             ) : (
               <div className="space-y-1">
                 {recentTxns.map((t) => (

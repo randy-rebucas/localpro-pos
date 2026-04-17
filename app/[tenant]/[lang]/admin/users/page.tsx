@@ -298,7 +298,7 @@ function UserModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {dict.admin?.password || 'Password'} {user && '(leave blank to keep current)'}
+                {dict.admin?.password || 'Password'} {user && `(${dict.admin?.leaveBlankPassword || 'leave blank to keep current'})`}
               </label>
               <input
                 type="password"
@@ -342,7 +342,7 @@ function UserModal({
                 disabled={saving}
                 className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
               >
-                {saving ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
+                {saving ? (dict.common?.saving || 'Saving...') : (dict.common?.save || 'Save')}
               </button>
             </div>
           </form>
@@ -381,7 +381,7 @@ function QRModal({
     await regenerateQRCode(
       () => {
         onRegenerate();
-        toast.success('QR code regenerated successfully');
+        toast.success(dict?.admin?.qrCodeRegenerated || 'QR code regenerated successfully');
       },
       (error) => toast.error(error)
     );
@@ -406,7 +406,7 @@ function QRModal({
       <div className="bg-white border border-gray-300 max-w-md w-full">
         <div className="p-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
-            QR Code for {user.name}
+            {dict?.admin?.qrCodeFor || 'QR Code for'} {user.name}
           </h2>
           {error && (
             <div className="bg-red-50 text-red-800 border border-red-300 p-3 mb-4">
@@ -424,7 +424,7 @@ function QRModal({
                   disabled={regenerating}
                   className="px-4 py-2 border border-orange-300 text-orange-700 hover:bg-orange-50 disabled:opacity-50 bg-white"
                 >
-                  {regenerating ? 'Regenerating...' : 'Regenerate QR Code'}
+                  {regenerating ? (dict?.admin?.regenerating || 'Regenerating...') : (dict?.admin?.regenerateQRCode || 'Regenerate QR Code')}
                 </button>
                 <button
                   onClick={onClose}

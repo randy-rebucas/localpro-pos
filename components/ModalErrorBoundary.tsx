@@ -4,6 +4,7 @@ interface Props {
   children: ReactNode;
   fallback?: ReactNode;
   onError?: (error: Error, errorInfo: React.ErrorInfo) => void;
+  dict?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
 interface State {
@@ -37,13 +38,13 @@ export class ModalErrorBoundary extends React.Component<Props, State> {
       return (
         this.props.fallback || (
           <div className="text-center p-6">
-            <h2 className="text-lg font-bold text-red-600 mb-2">Something went wrong</h2>
+            <h2 className="text-lg font-bold text-red-600 mb-2">{this.props.dict?.admin?.somethingWentWrong || 'Something went wrong'}</h2>
             <p className="text-gray-600 mb-4">{this.state.error?.message}</p>
             <button
               onClick={() => this.setState({ hasError: false, error: null })}
               className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
             >
-              Try again
+              {this.props.dict?.admin?.tryAgain || 'Try again'}
             </button>
           </div>
         )
