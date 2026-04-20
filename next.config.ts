@@ -1,17 +1,5 @@
 import type { NextConfig } from "next";
 
-const getAllowedOrigin = (): string => {
-  if (process.env.NODE_ENV !== 'production') {
-    return 'http://localhost:3000';
-  }
-  const origin = process.env.ALLOWED_ORIGINS;
-  if (!origin) {
-    console.warn('WARNING: ALLOWED_ORIGINS is not set. CORS will be restricted to no origin.');
-    return '';
-  }
-  return origin;
-};
-
 const nextConfig: NextConfig = {
   // Production optimizations
   compress: true,
@@ -63,8 +51,6 @@ const nextConfig: NextConfig = {
   },
 
   async headers() {
-    const allowedOrigin = getAllowedOrigin();
-
     return [
       {
         // Security headers for all routes
@@ -120,16 +106,7 @@ const nextConfig: NextConfig = {
           { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
         ],
       },
-      {
-        // CORS for API routes — explicit origin, never wildcard
-        source: '/api/:path*',
-        headers: [
-          { key: 'Access-Control-Allow-Credentials', value: 'true' },
-          { key: 'Access-Control-Allow-Origin', value: allowedOrigin },
-          { key: 'Access-Control-Allow-Methods', value: 'GET,OPTIONS,PATCH,DELETE,POST,PUT' },
-          { key: 'Access-Control-Allow-Headers', value: 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization' },
-        ],
-      },
+      // CORS for `/api/*` is set in root `proxy.ts` (per-request origin from ALLOWED_ORIGINS list).
     ];
   },
 };
