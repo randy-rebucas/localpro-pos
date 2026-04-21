@@ -8,6 +8,7 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { sendBookingConfirmation, sendBookingCancellation, sendBookingReminder } from '@/lib/notifications'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { getTenantSettingsById } from '@/lib/tenant';
+import { requireBookingSchedulingAccess } from '@/lib/booking-scheduling-access';
 import { logger } from '@/lib/logger';
 
 /**
@@ -85,6 +86,13 @@ export async function PUT(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
         { status: 404 }
       );
+    }
+
+    try {
+      await requireBookingSchedulingAccess(tenantId.toString());
+    } catch (featureError: unknown) {
+      const msg = featureError instanceof Error ? featureError.message : 'Forbidden';
+      return NextResponse.json({ success: false, error: msg }, { status: 403 });
     }
 
     const { id } = await params;

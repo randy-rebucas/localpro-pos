@@ -151,6 +151,7 @@ export function getDefaultTenantSettings(): ITenantSettings {
     enableDiscounts: false,
     enableLoyaltyProgram: false,
     enableCustomerManagement: false,
+    enableOnAccountSales: false,
     enableBookingScheduling: false,
     multiCurrency: {
       enabled: false,

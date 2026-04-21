@@ -1,99 +1,85 @@
 # 8. Customers
 
-**Available to:** Manager, Admin, Owner
+**Available to:** Manager, Admin, Owner (requires **Customer Management** in Settings and an eligible subscription, when enforced)
 
-## Customer List
+## Opening Customer Management
 
 1. Navigate to **Admin > Customers**
-2. The list shows: name, email, phone, total purchases, last visit, tags
+2. Use **Upload Files** if your organization imports customer-related files through the admin file-upload workflow (optional).
 
-### Searching & Filtering
+## Customer list
 
-- **Search** by name, email, or phone number
-- **Filter** by tags (e.g., VIP, Senior, PWD)
-- **Sort** by name, total spent, last visit date
+The table shows:
 
-## Adding a Customer
+| Column | Description |
+|--------|-------------|
+| **Name** | First and last name |
+| **Email** | Contact email (optional) |
+| **Phone** | Contact phone (optional) |
+| **Total spent** | Running total from linked sales |
+| **Balance due** | Amount owed on account (see *On-account sales* below) |
+| **Tags** | Up to three tags shown; `+N` if there are more |
+| **Status** | Active or inactive — click the badge to toggle |
+| **Actions** | Edit, **Record payment** (when applicable), or **Delete** (deactivate) |
 
-1. Click **Add Customer**
-2. Fill in the details:
+### Search and filters
+
+- **Search** — Filters the list by first name, last name, email, or phone (debounced as you type).
+- **Status filter** — **All**, **Active**, or **Inactive** inactive customers are hidden from default flows but kept for history.
+
+There is no separate “sort by column” control in this screen; results are ordered by **newest created first** (paginated, 20 per page).
+
+## Add or edit a customer
+
+1. Click **Add Customer** or **Edit** on a row.
+2. In the modal, complete the fields:
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| **Name** | Yes | Full name |
-| **Email** | No | For receipts and notifications |
-| **Phone** | No | For SMS notifications |
-| **Address** | No | Billing/shipping address |
-| **Tags** | No | Labels for categorization (VIP, SC, PWD) |
-| **Notes** | No | Internal notes about the customer |
+| **First name** | Yes | Given name |
+| **Last name** | Yes | Family name |
+| **Email** | No | Used for receipts and notifications when provided |
+| **Phone** | No | Contact number |
+| **Tags** | No | Comma-separated labels (e.g. `VIP, Regular`) |
+| **Notes** | No | Internal notes only |
 
-3. Click **Save**
+3. Click **Save**.
 
-## Customer Profile
+> **Note:** Physical addresses are supported in the data model and API; the current admin modal focuses on name, contact, tags, and notes. Multi-address editing may be available through other tools or future UI.
 
-Click any customer to view their profile:
+## Deactivating a customer
 
-- **Contact Information** — Name, email, phone, address
-- **Purchase History** — All transactions linked to this customer
-- **Total Spent** — Lifetime purchase total
-- **Visit Count** — Number of transactions
-- **Average Order Value** — Mean transaction amount
-- **Tags** — Applied labels
-- **Bookings** — Appointment history (if applicable)
-- **Notes** — Internal notes
+1. Click **Delete** on an active customer row.
+2. Confirm when prompted.
 
-## Linking Customers to Sales
+The customer is **soft-deleted** (`isActive` set to false): they no longer appear as active in normal lists, but historical transactions and audit data remain intact.
 
-During a POS transaction:
-1. Click **Select Customer** in the cart
-2. Search for the customer
-3. Select them
-4. The sale is recorded against their profile
+## On-account balance and payments
 
-Benefits of linking customers:
-- Track purchase history per customer
-- Calculate customer lifetime value
-- Send targeted notifications
-- Apply customer-specific discounts
+When **On-account sales** is enabled in **Settings** (see [Settings & Configuration](./12-settings.md)):
 
-## Customer Tags
+- **POS** can attach a customer and use **On account** as a payment method so the sale increases **balance due**.
+- The customer list shows **Balance due** per customer.
+- For customers with a positive balance, use **Record payment** to post a **cash, card, digital, check, or other** payment against the balance (optional notes).
 
-Tags help categorize customers:
+**Credit limit** can be maintained via the customer API for tenants that use it; it caps how far on-account debt can go when enforced at checkout.
 
-| Tag | Purpose |
-|-----|---------|
-| **VIP** | High-value customers |
-| **Senior** | Senior citizen (for SC discount) |
-| **PWD** | Person with disability (for PWD discount) |
-| **Wholesale** | Bulk buyers |
-| **Custom tags** | Any label you create |
+## Linking customers at the POS
 
-### Adding Tags
+On the main POS screen:
 
-1. Open the customer profile
-2. Click **Add Tag**
-3. Select from existing tags or create a new one
-4. Click **Save**
+1. Open the **customer** panel (e.g. **Select Customer** in the cart area).
+2. Search by name, email, or phone.
+3. Choose a customer to attach them to the sale.
 
-## Editing a Customer
+When a customer is selected, you may see **loyalty points** and **balance due** (if applicable) in the panel so cashiers can confirm the right account before payment.
 
-1. Open the customer profile
-2. Click **Edit**
-3. Modify details
-4. Click **Save**
+## Tags
 
-## Deactivating a Customer
+Tags are free-form strings (e.g. **VIP**, **PWD**, **Wholesale**). Enter them as comma-separated values when creating or editing a customer. They help filtering and reporting mentally; advanced segment tools may live under **Admin > CRM** when that module is enabled.
 
-1. Open the customer profile
-2. Click **Deactivate**
-3. The customer is hidden from search but data is preserved
+## Related guides
 
-> **Note:** Customer records are never hard-deleted. This ensures transaction history and audit trail integrity.
-
-## Customer Notifications
-
-If email or SMS is configured, customers receive:
-- **Transaction Receipts** — Emailed after each purchase
-- **Booking Confirmations** — When appointments are created
-- **Booking Reminders** — 24 hours before appointments
-- **Welcome Message** — When first added to the system (if automation enabled)
+- [Point of Sale](./03-point-of-sale.md) — Attaching customers and on-account checkout  
+- [Settings & Configuration](./12-settings.md) — Customer Management and On-account toggles  
+- [Subscriptions & Billing](./14-subscriptions.md) — Plan features that gate customer tools  

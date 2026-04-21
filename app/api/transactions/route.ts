@@ -37,7 +37,7 @@ interface TransactionItemInput {
 }
 
 interface PaymentInput {
-  method: 'cash' | 'card' | 'digital' | 'check' | 'other';
+  method: 'cash' | 'card' | 'digital' | 'check' | 'other' | 'on_account';
   amount: number;
   cashReceived?: number;
   change?: number;
@@ -47,6 +47,7 @@ interface PaymentInput {
   cardType?: string;
   cardBrand?: string;
   checkNumber?: string;
+  /** Split-check guest reference or notes */
   notes?: string;
 }
 
@@ -58,6 +59,18 @@ interface TransactionInput {
   discountCode?: string;
   branchId?: string;
   payments?: PaymentInput[];
+}
+
+/** Persisted Payment.method — maps POS transaction methods to Payment enum. */
+function toPaymentRecordMethod(
+  m: string
+): 'cash' | 'card' | 'digital' | 'check' | 'other' | 'on_account' {
+  if (m === 'on_account') return 'on_account';
+  if (m === 'cash') return 'cash';
+  if (m === 'card') return 'card';
+  if (m === 'check') return 'check';
+  if (['digital', 'tap_to_pay', 'wallet', 'qr_code', 'bnpl'].includes(m)) return 'digital';
+  return 'other';
 }
 
 interface TransactionItemRecord {
@@ -241,9 +254,39 @@ export async function POST(request: NextRequest) {
     // Get tenant settings to check feature flags
     const tenantSettings = await getTenantSettingsById(tenantId);
 
+    const usesOnAccount =
+      paymentMethod === 'on_account' ||
+      (Array.isArray(payments) && payments.some((p: PaymentInput) => p.method === 'on_account')) ||
+      (Array.isArray(splitPayments) && splitPayments.some((p: { method?: string }) => p.method === 'on_account'));
+
+    if (usesOnAccount) {
+      if (tenantSettings?.enableOnAccountSales !== true) {
+        return NextResponse.json(
+          { success: false, error: t('validation.onAccountNotEnabled', 'On-account sales are not enabled for this store') },
+          { status: 403 }
+        );
+      }
+      if (!customerId || !String(customerId).trim()) {
+        return NextResponse.json(
+          { success: false, error: t('validation.customerRequiredOnAccount', 'Customer is required for on-account payment') },
+          { status: 400 }
+        );
+      }
+    }
+
     // Support for multiple payment methods (split payments)
-    // If payments array is provided, use that; otherwise fall back to single paymentMethod
-    const isMultiplePayments = Array.isArray(payments) && payments.length > 0;
+    // Prefer `payments`; map restaurant `splitPayments` from body when present.
+    const paymentsFromSplit: PaymentInput[] | undefined =
+      Array.isArray(splitPayments) && splitPayments.length > 0
+        ? splitPayments.map((sp: { method: string; amount: number; reference?: string }) => ({
+            method: sp.method as PaymentInput['method'],
+            amount: sp.amount,
+            notes: sp.reference,
+          }))
+        : undefined;
+    const effectivePayments: PaymentInput[] | undefined =
+      Array.isArray(payments) && payments.length > 0 ? payments : paymentsFromSplit;
+    const isMultiplePayments = Array.isArray(effectivePayments) && effectivePayments.length > 0;
     let finalPaymentMethod = paymentMethod;
     let finalCashReceived = cashReceived;
     let finalChange = 0;
@@ -523,9 +566,9 @@ export async function POST(request: NextRequest) {
     const total = Math.max(0, subtotalAfterDiscount + taxAmount - loyaltyDiscountAmount);
 
     // Handle multiple payments (split payments)
-    if (isMultiplePayments) {
+    if (isMultiplePayments && effectivePayments) {
       // Validate that all payments sum to total
-      const paymentsTotal = payments.reduce((sum: number, p: PaymentInput) => sum + (p.amount || 0), 0);
+      const paymentsTotal = effectivePayments.reduce((sum: number, p: PaymentInput) => sum + (p.amount || 0), 0);
       const tolerance = 0.01; // Allow small rounding differences
 
       if (Math.abs(paymentsTotal - total) > tolerance) {
@@ -536,13 +579,13 @@ export async function POST(request: NextRequest) {
       }
 
       // Determine primary payment method (use the first payment or the one with largest amount)
-      const primaryPayment = payments.reduce((prev: PaymentInput, current: PaymentInput) =>
+      const primaryPayment = effectivePayments.reduce((prev: PaymentInput, current: PaymentInput) =>
         (current.amount > (prev.amount || 0)) ? current : prev
       );
       finalPaymentMethod = primaryPayment.method || 'cash';
 
       // Calculate cash totals if any cash payment exists
-      const cashPayments = payments.filter((p: PaymentInput) => p.method === 'cash');
+      const cashPayments = effectivePayments.filter((p: PaymentInput) => p.method === 'cash');
       if (cashPayments.length > 0) {
         finalCashReceived = cashPayments.reduce((sum: number, p: PaymentInput) => sum + (p.cashReceived || p.amount || 0), 0);
         finalChange = cashPayments.reduce((sum: number, p: PaymentInput) => sum + (p.change || 0), 0);
@@ -556,6 +599,61 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ success: false, error: t('validation.insufficientCashReceived', 'Insufficient cash received') }, { status: 400 });
         }
         finalChange = Math.max(0, finalChange);
+      }
+    }
+
+    const ALLOWED_SPLIT_METHODS = new Set([
+      'cash', 'card', 'digital', 'check', 'other', 'on_account',
+      'tap_to_pay', 'wallet', 'qr_code', 'bnpl',
+    ]);
+    if (isMultiplePayments && effectivePayments) {
+      for (const p of effectivePayments) {
+        if (!p.method || !ALLOWED_SPLIT_METHODS.has(p.method)) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: t('validation.invalidSplitPaymentMethod', 'Invalid payment method in split: {method}').replace(
+                '{method}',
+                String(p.method)
+              ),
+            },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
+    let onAccountAmountToBill = 0;
+    if (isMultiplePayments && effectivePayments) {
+      onAccountAmountToBill = effectivePayments.reduce(
+        (s, p: PaymentInput) => s + (p.method === 'on_account' ? (p.amount || 0) : 0),
+        0
+      );
+    } else if (finalPaymentMethod === 'on_account') {
+      onAccountAmountToBill = total;
+    }
+
+    if (onAccountAmountToBill > 0.009) {
+      const creditCustomer = await Customer.findOne({ _id: customerId, tenantId, isActive: true })
+        .select('accountBalance creditLimit')
+        .lean();
+      if (!creditCustomer) {
+        return NextResponse.json(
+          { success: false, error: t('validation.customerNotFound', 'Customer not found or inactive') },
+          { status: 404 }
+        );
+      }
+      const currentBal = creditCustomer.accountBalance ?? 0;
+      const projected = currentBal + onAccountAmountToBill;
+      if (
+        typeof creditCustomer.creditLimit === 'number' &&
+        creditCustomer.creditLimit >= 0 &&
+        projected - creditCustomer.creditLimit > 0.01
+      ) {
+        return NextResponse.json(
+          { success: false, error: t('validation.creditLimitExceeded', "Sale would exceed this customer's credit limit") },
+          { status: 400 }
+        );
       }
     }
 
@@ -718,8 +816,8 @@ export async function POST(request: NextRequest) {
 
       // Create Payment record(s)
       if (body.createPaymentRecord !== false) {
-        if (isMultiplePayments) {
-          for (const payment of payments) {
+        if (isMultiplePayments && effectivePayments) {
+          for (const payment of effectivePayments) {
             const paymentDetails: Record<string, unknown> = {};
             if (payment.method === 'cash') {
               paymentDetails.cashReceived = payment.cashReceived || payment.amount;
@@ -732,6 +830,8 @@ export async function POST(request: NextRequest) {
               paymentDetails.cardBrand = payment.cardBrand;
             } else if (payment.method === 'check') {
               paymentDetails.checkNumber = payment.checkNumber;
+            } else if (payment.method === 'on_account') {
+              paymentDetails.notes = 'On-account (customer balance)';
             }
             if (payment.notes) {
               paymentDetails.notes = payment.notes;
@@ -740,7 +840,7 @@ export async function POST(request: NextRequest) {
             const [paymentRecord] = await Payment.create([{
               tenantId,
               transactionId: transaction._id,
-              method: payment.method as 'cash' | 'card' | 'digital' | 'check' | 'other',
+              method: toPaymentRecordMethod(payment.method),
               amount: payment.amount,
               status: 'completed',
               details: Object.keys(paymentDetails).length > 0 ? paymentDetails : undefined,
@@ -760,12 +860,14 @@ export async function POST(request: NextRequest) {
             paymentDetails.cardLast4 = body.cardLast4;
             paymentDetails.cardType = body.cardType;
             paymentDetails.cardBrand = body.cardBrand;
+          } else if (finalPaymentMethod === 'on_account') {
+            paymentDetails.notes = 'On-account (customer balance)';
           }
 
           const [paymentRecord] = await Payment.create([{
             tenantId,
             transactionId: transaction._id,
-            method: finalPaymentMethod as 'cash' | 'card' | 'digital' | 'check' | 'other',
+            method: toPaymentRecordMethod(finalPaymentMethod),
             amount: total,
             status: 'completed',
             details: Object.keys(paymentDetails).length > 0 ? paymentDetails : undefined,
@@ -774,6 +876,14 @@ export async function POST(request: NextRequest) {
           }], { session });
           paymentRecords.push(paymentRecord);
         }
+      }
+
+      if (onAccountAmountToBill > 0.009 && customerId) {
+        await Customer.updateOne(
+          { _id: customerId, tenantId },
+          { $inc: { accountBalance: onAccountAmountToBill } },
+          { session }
+        );
       }
 
       await session.commitTransaction();

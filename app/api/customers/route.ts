@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { FilterQuery } from 'mongoose';
 import connectDB from '@/lib/mongodb';
-import Customer from '@/models/Customer';
+import Customer, { type ICustomer } from '@/models/Customer';
 import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search');
     const isActive = searchParams.get('isActive');
 
-    const query: any = { tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const query: FilterQuery<ICustomer> = { tenantId };
     if (searchParams.has('isActive')) {
       query.isActive = isActive === 'true';
     }

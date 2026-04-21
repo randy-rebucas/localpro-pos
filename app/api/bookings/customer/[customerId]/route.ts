@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb';
 import Booking from '@/models/Booking';
 import { requireCustomerAuth } from '@/lib/auth-customer';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { requireBookingSchedulingAccess } from '@/lib/booking-scheduling-access';
 import { logger } from '@/lib/logger';
 
 /**
@@ -30,6 +31,13 @@ export async function GET(
         { success: false, error: t('validation.unauthorized', 'Unauthorized') },
         { status: 403 }
       );
+    }
+
+    try {
+      await requireBookingSchedulingAccess(customer.tenantId);
+    } catch (featureError: unknown) {
+      const msg = featureError instanceof Error ? featureError.message : 'Forbidden';
+      return NextResponse.json({ success: false, error: msg }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);

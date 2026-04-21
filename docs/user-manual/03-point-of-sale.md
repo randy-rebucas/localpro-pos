@@ -62,10 +62,16 @@ The POS screen is the primary interface for processing sales transactions.
 
 ### Step 4: Select Customer (Optional)
 
-1. Click **Select Customer** at the top of the cart
-2. Search by name, email, or phone
-3. Select the customer from results
-4. The transaction is linked to their profile for tracking
+1. Open the **customer** area at the top of the cart (e.g. **Select Customer**).
+2. Search by name, email, or phone.
+3. Pick a customer from the dropdown results.
+
+Once attached:
+
+- The sale is linked to that customer for **history** and **loyalty** (when the loyalty program is enabled).
+- The panel may show **loyalty points** and **balance due** so staff can verify the account before taking payment.
+
+To clear the selection, use the control to **remove** the customer from the cart.
 
 ### Step 5: Process Payment
 
@@ -78,9 +84,12 @@ The POS screen is the primary interface for processing sales transactions.
 | **Card** | Process via connected card terminal |
 | **Digital** | GCash, Maya, or other digital wallets |
 | **Split** | Combine multiple payment methods |
+| **On account** | Available only when **On-account sales** is enabled in Settings **and** a customer is attached; records the sale against the customer’s **balance due** for later settlement (see [Customers](./08-customers.md)) |
 
 3. Confirm the payment amount
 4. Click **Complete Sale**
+
+> **Note:** On-account requires an attached customer. Owners/Admins enable the feature under **Settings** — see [Settings & Configuration](./12-settings.md).
 
 ### Step 6: Receipt
 

@@ -38,6 +38,7 @@ import { getDefaultTenantSettings } from '@/lib/currency';
 import { formatDateTime } from '@/lib/formatting';
 import { useDeviceType } from '@/hooks/useDeviceType';
 import CustomerSidePanel from '@/components/CustomerSidePanel';
+import type { CustomerSummary } from '@/types/customer';
 import FloorMap from '@/components/FloorMap';
 import { CartVariant, CartItemModifier } from '@/hooks/useCart';
 import { RestaurantMeta, SplitPaymentEntry } from '@/hooks/usePayment';
@@ -94,6 +95,7 @@ export default function Dashboard() {
   const { logout, user: authUser } = useAuth();
   const isCashier = authUser?.role === 'cashier';
   const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#3b82f6';
+  const enableOnAccountSales = settings?.enableOnAccountSales === true;
   const rawBt = (settings?.businessType || 'general').toLowerCase();
   const businessType = (['retail', 'restaurant', 'laundry', 'service'] as const).includes(rawBt as 'retail' | 'restaurant' | 'laundry' | 'service') ? rawBt as 'retail' | 'restaurant' | 'laundry' | 'service' : 'general' as const;
   const device = useDeviceType();
@@ -135,7 +137,7 @@ export default function Dashboard() {
   const [showVariantModal, setShowVariantModal] = useState(false);
 
   // Retail: customer side panel
-  const [selectedCustomer, setSelectedCustomer] = useState<{ _id: string; firstName: string; lastName: string; email?: string; phone?: string; totalSpent?: number; lastPurchaseDate?: string; loyaltyPointsBalance?: number } | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<CustomerSummary | null>(null);
 
   // Retail: cross-branch inventory lookup
   const [branchLookupProduct, setBranchLookupProduct] = useState<Product | null>(null);
@@ -2283,19 +2285,25 @@ export default function Dashboard() {
                   {/* Row 2: Wallet · QR Code · BNPL */}
                   <div className="grid grid-cols-3 gap-2">
                     {([
-                      { id: 'cash', label: 'Cash', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
-                      { id: 'card', label: 'Card', icon: 'M3 10h18M7 15h1m4 0h1m-7 4h12a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
+                      { id: 'cash', label: dict.pos.cash || 'Cash', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+                      { id: 'card', label: dict.pos.card || 'Card', icon: 'M3 10h18M7 15h1m4 0h1m-7 4h12a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
                       { id: 'tap_to_pay', label: 'Tap to Pay', icon: 'M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0' },
-                      { id: 'wallet', label: 'Wallet', icon: 'M3 10h18M3 6h18M3 14h18M3 18h18' },
-                      { id: 'qr_code', label: 'QR Code', icon: 'M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 4h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z' },
-                      { id: 'bnpl', label: 'Pay Later', icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
+                      { id: 'wallet', label: dict.pos.wallet || 'Wallet', icon: 'M3 10h18M3 6h18M3 14h18M3 18h18' },
+                      { id: 'qr_code', label: dict.pos.qrCodeOption || 'QR Code', icon: 'M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 4h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z' },
+                      { id: 'bnpl', label: dictValue('pos.bnpl', 'Pay Later'), icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
+                      ...(enableOnAccountSales
+                        ? [{ id: 'on_account' as const, label: dictValue('pos.onAccount', 'On account'), icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' }]
+                        : []),
                     ] as const).map(({ id, label, icon }) => {
                       const isSelected = paymentMethod === id;
+                      const onAcctDisabled = id === 'on_account' && !selectedCustomer;
                       return (
                         <button
                           key={id}
                           type="button"
+                          disabled={onAcctDisabled}
                           onClick={() => {
+                            if (onAcctDisabled) return;
                             setPaymentMethod(id);
                             setCashReceived('');
                             setPaymentProvider('');
@@ -2304,7 +2312,7 @@ export default function Dashboard() {
                           className={`p-3 border-2 transition-all duration-150 flex flex-col items-center justify-center gap-1.5 ${isSelected
                             ? 'border-2'
                             : 'bg-gray-50 border-gray-200 hover:border-gray-300 hover:bg-gray-100'
-                            }`}
+                            } ${onAcctDisabled ? 'opacity-40 cursor-not-allowed' : ''}`}
                           style={isSelected ? { backgroundColor: `${primaryColor}12`, borderColor: primaryColor } : undefined}
                         >
                           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
@@ -2507,6 +2515,12 @@ export default function Dashboard() {
                       </div>
                     </div>
                   )}
+
+                  {paymentMethod === 'on_account' && (
+                    <div className="mt-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                      {dictValue('pos.onAccountHint', 'Adds this sale to the selected customer balance. Collect payment later from Customers.')}
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="flex flex-col sm:flex-row justify-end gap-3 mt-6">
@@ -2581,7 +2595,8 @@ export default function Dashboard() {
                   disabled={
                     processing ||
                     (paymentMethod === 'cash' && (!cashReceived || parseFloat(cashReceived) < getTotal())) ||
-                    ((paymentMethod === 'wallet' || paymentMethod === 'bnpl') && !paymentProvider)
+                    ((paymentMethod === 'wallet' || paymentMethod === 'bnpl') && !paymentProvider) ||
+                    (paymentMethod === 'on_account' && !selectedCustomer)
                   }
                   className="w-full sm:w-auto px-4 py-2.5 text-white font-medium transition-colors border disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{
@@ -3243,14 +3258,22 @@ export default function Dashboard() {
                               <option value="card">{dictValue('pos.card', 'Card')}</option>
                               <option value="wallet">{dictValue('pos.wallet', 'Wallet')}</option>
                               <option value="qr_code">{dictValue('pos.qrCodeOption', 'QR Code')}</option>
+                              {enableOnAccountSales && (
+                                <option value="on_account">{dictValue('pos.onAccount', 'On account')}</option>
+                              )}
                             </select>
                             <button
                               type="button"
-                              onClick={() =>
+                              onClick={() => {
+                                const m = (guestPayments[idx] as SplitPaymentEntry & { collected: boolean }).method;
+                                if (m === 'on_account' && !selectedCustomer) {
+                                  showToast.error(dictValue('pos.onAccountRequiresCustomer', 'Select a customer first'));
+                                  return;
+                                }
                                 setGuestPayments((prev) =>
                                   prev.map((p, i) => i === idx ? { ...p, collected: true } as typeof p : p)
-                                )
-                              }
+                                );
+                              }}
                               className="shrink-0 px-3 py-1.5 text-xs font-bold text-white"
                               style={{ backgroundColor: primaryColor }}
                             >

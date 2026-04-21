@@ -7,6 +7,7 @@ import Navbar from '@/components/Navbar';
 import BookingCalendar from '@/components/BookingCalendar';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { useSubscription } from '@/contexts/SubscriptionContext';
 import { supportsFeature } from '@/lib/business-type-helpers';
 import { getBusinessTypeConfig } from '@/lib/business-types';
 import { getBusinessType } from '@/lib/business-type-helpers';
@@ -34,7 +35,11 @@ export default function BookingsPage() {
   const [filterStaff, setFilterStaff] = useState<string>('all');
 
   const { settings } = useTenantSettings();
-  const bookingEnabled = supportsFeature(settings ?? undefined, 'booking');
+  const { subscriptionStatus } = useSubscription();
+  const planAllowsBooking =
+    !subscriptionStatus || subscriptionStatus.features.enableBookingScheduling === true;
+  const tenantAllowsBooking = supportsFeature(settings ?? undefined, 'booking');
+  const bookingEnabled = planAllowsBooking && tenantAllowsBooking;
   const businessTypeConfig = settings ? getBusinessTypeConfig(getBusinessType(settings)) : null;
 
   const { bookings, loading, fetchBookings, deleteBooking, sendReminder } = useBookingsList(tenant, {
@@ -127,8 +132,10 @@ export default function BookingsPage() {
             <p className="text-gray-600">{dict?.admin?.bookingsSubtitle || 'Manage appointments and bookings'}</p>
           </div>
           <button
-            onClick={() => setShowCreateModal(true)}
-            className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 transition-colors flex items-center gap-2 border border-blue-700"
+            type="button"
+            disabled={!bookingEnabled}
+            onClick={() => bookingEnabled && setShowCreateModal(true)}
+            className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 transition-colors flex items-center gap-2 border border-blue-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
           >
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -151,8 +158,15 @@ export default function BookingsPage() {
                   {(dict?.admin?.bookingNotAvailableDesc || 'Booking and scheduling is not enabled for {businessType}.').replace('{businessType}', businessTypeConfig?.name || 'your business type')}
                 </p>
                 <p className="text-sm text-yellow-700 mt-2">
-                  {dict?.admin?.bookingNotAvailableHint || 'If you need booking features, please enable it in Settings → Business or update your business type.'}
+                  {dict?.admin?.bookingNotAvailableHint ||
+                    'Enable Booking & Scheduling under Settings → Business, ensure your subscription plan includes it, or choose a business type that supports bookings.'}
                 </p>
+                {!planAllowsBooking && (
+                  <p className="text-sm text-yellow-800 mt-2 font-medium">
+                    {dict?.admin?.bookingSubscriptionRequired ||
+                      'Your current plan does not include booking and scheduling. Upgrade your subscription to use this feature.'}
+                  </p>
+                )}
               </div>
             </div>
           </div>

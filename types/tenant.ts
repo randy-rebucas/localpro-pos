@@ -85,6 +85,8 @@ export interface ITenantSettings {
   enableCustomerManagement?: boolean;
   enableBookingScheduling?: boolean;
   enableTableManagement?: boolean;
+  /** When true, POS may sell on account (customer balance / pay later). */
+  enableOnAccountSales?: boolean;
 
   // Hardware Configuration
   hardwareConfig?: {

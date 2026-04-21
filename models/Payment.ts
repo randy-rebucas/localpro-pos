@@ -19,7 +19,7 @@ export interface IPaymentDetails {
 export interface IPayment extends Document {
   tenantId: mongoose.Types.ObjectId;
   transactionId: mongoose.Types.ObjectId; // Reference to Order/Ticket
-  method: 'cash' | 'card' | 'digital' | 'check' | 'other';
+  method: 'cash' | 'card' | 'digital' | 'check' | 'other' | 'on_account';
   amount: number;
   status: 'pending' | 'completed' | 'failed' | 'refunded';
   details?: IPaymentDetails;
@@ -59,7 +59,7 @@ const PaymentSchema: Schema = new Schema(
     },
     method: {
       type: String,
-      enum: ['cash', 'card', 'digital', 'check', 'other'],
+      enum: ['cash', 'card', 'digital', 'check', 'other', 'on_account'],
       required: [true, 'Payment method is required'],
     },
     amount: {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { Customer } from './useCustomersList';
+import type { Customer } from '@/types/customer';
 
 export interface CustomerFormData {
   firstName: string;
@@ -55,10 +55,10 @@ export function useCustomersForm(): UseCustomersFormReturn {
     setFormDataState({
       firstName: customer.firstName,
       lastName: customer.lastName,
-      email: customer.email,
-      phone: customer.phone,
+      email: customer.email ?? '',
+      phone: customer.phone ?? '',
       tags: (customer.tags || []).join(', '),
-      notes: '',
+      notes: customer.notes ?? '',
     });
     setError('');
   }, []);

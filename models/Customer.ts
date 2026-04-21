@@ -1,13 +1,8 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
+import type { CustomerAddress } from '@/types/customer';
 
-export interface ICustomerAddress {
-  street?: string;
-  city?: string;
-  state?: string;
-  zipCode?: string;
-  country?: string;
-  isDefault?: boolean;
-}
+/** Mongoose subdocument — same shape as `CustomerAddress` in `@/types/customer`. */
+export type ICustomerAddress = CustomerAddress;
 
 export interface ICustomer extends Document {
   tenantId: mongoose.Types.ObjectId;
@@ -15,13 +10,17 @@ export interface ICustomer extends Document {
   lastName: string;
   email?: string;
   phone?: string;
-  addresses?: ICustomerAddress[];
+  addresses?: CustomerAddress[];
   dateOfBirth?: Date;
   notes?: string;
   tags?: string[]; // For categorization (e.g., "VIP", "Regular", "Wholesale")
   totalSpent?: number; // Total amount spent (calculated)
   lastPurchaseDate?: Date;
   loyaltyPointsBalance?: number;
+  /** Amount the customer owes the tenant (on-account / pay later). */
+  accountBalance?: number;
+  /** Max allowed accountBalance after a sale; omit for no limit. */
+  creditLimit?: number;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -92,6 +91,15 @@ const CustomerSchema: Schema = new Schema(
     loyaltyPointsBalance: {
       type: Number,
       default: 0,
+      min: 0,
+    },
+    accountBalance: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    creditLimit: {
+      type: Number,
       min: 0,
     },
     isActive: {

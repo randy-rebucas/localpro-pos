@@ -97,10 +97,14 @@ language: "en"
 | `enableCategories` | Boolean | `true` | Enable product categories |
 | `enableDiscounts` | Boolean | `false` | Enable discount/promo codes |
 | `enableLoyaltyProgram` | Boolean | `false` | Enable loyalty points |
-| `enableCustomerManagement` | Boolean | `false` | Enable customer database |
+| `enableCustomerManagement` | Boolean | `false` | Enable customer database, **Admin > Customers**, and POS customer attach/search (when plan allows) |
 | `enableBookingScheduling` | Boolean | `false` | Enable bookings/appointments |
+| `enableTableManagement` | Boolean | `false` | Enable floor/table map and related restaurant flows where implemented |
+| `enableOnAccountSales` | Boolean | `false` | Allow **On account** payment on the POS when a customer is attached; tracks **balance due** and balance payment recording |
 
-> **Note:** Feature flags are also governed by the subscription plan. A feature must be both enabled in settings AND included in the plan.
+> **Note:** Feature flags are also governed by the subscription plan. A feature must be both enabled in settings AND included in the plan. **On-account sales** depends on **Customer Management** being meaningful in your workflow (customer must be selected for on-account checkout).
+
+See also [Feature Flags](./10-feature-flags.md) for operational detail and [User Manual: Customers](../user-manual/08-customers.md) for end-user procedures.
 
 ## Hardware Configuration
 
@@ -109,7 +113,7 @@ language: "en"
 | Printer type | `hardwareConfig.printer.type` | `browser` / `usb` / `serial` / `network` | Receipt printer connection |
 | Printer IP | `hardwareConfig.printer.ipAddress` | String | Network printer IP address |
 | Printer port | `hardwareConfig.printer.portNumber` | Number | Network printer port |
-| Scanner type | `hardwareConfig.barcodeScanner.type` | `keyboard` | Barcode scanner input mode |
+| Scanner type | `hardwareConfig.barcodeScanner.type` | `keyboard` / `camera` / `usb` | Barcode scanner input mode |
 | Scanner enabled | `hardwareConfig.barcodeScanner.enabled` | Boolean | Enable barcode scanning |
 | QR enabled | `hardwareConfig.qrReader.enabled` | Boolean | Enable QR code reading |
 | QR camera | `hardwareConfig.qrReader.cameraId` | String | Specific camera for QR reading |

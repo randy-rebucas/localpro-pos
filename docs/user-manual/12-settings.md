@@ -133,6 +133,17 @@ Holidays mark dates as unavailable for bookings.
    - Loyalty program
 3. Available features depend on your subscription plan
 
+### Customer Management & On-account sales (Settings)
+
+On the main **Settings** page (not only Feature Flags), you can enable:
+
+| Toggle | Effect |
+|--------|--------|
+| **Customer Management** | Exposes **Admin > Customers** and POS customer search/attach flows when your plan allows it |
+| **On-account sales** | Allows **On account** as a payment method on the POS when a customer is selected, and shows **balance due** / **record payment** workflows for settling those balances |
+
+Use these together if you sell “charge to account” or pay-later to trusted customers. Always reconcile balances using **Record payment** on the customer admin screen when money is collected.
+
 ## Backup & Data
 
 1. Navigate to **Admin > Backup & Reset**

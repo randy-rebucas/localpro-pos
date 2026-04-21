@@ -174,6 +174,10 @@ export async function sendSalesReport(
           <td>Digital</td>
           <td style="text-align: right;">${report.salesByPaymentMethod.digital?.toFixed(2) || '0.00'}</td>
         </tr>
+        <tr>
+          <td>On account</td>
+          <td style="text-align: right;">${report.salesByPaymentMethod.on_account?.toFixed(2) || '0.00'}</td>
+        </tr>
       </tbody>
     </table>
     ` : ''}

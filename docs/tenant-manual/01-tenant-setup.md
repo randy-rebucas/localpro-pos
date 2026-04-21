@@ -123,6 +123,10 @@ After creating your tenant, complete these steps:
 - [ ] Verify receipt has correct business info and tax breakdown
 - [ ] Void the test transaction
 
+## Built-in manuals
+
+After go-live, Owners and Admins can open **User Manual** from the top navigation bar and switch to **Tenant Manual** for the same Markdown guides rendered in-app (no separate PDF required). That view stays in sync with these `docs/tenant-manual` files when the deployment is updated.
+
 ## Trial Period
 
 New tenants start with a trial subscription:

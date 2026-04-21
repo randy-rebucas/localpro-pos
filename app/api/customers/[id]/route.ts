@@ -92,7 +92,20 @@ export async function PATCH(
     if (body.notes !== undefined) customer.notes = body.notes?.trim();
     if (body.tags !== undefined) customer.tags = body.tags;
     if (body.isActive !== undefined) customer.isActive = body.isActive;
-    
+    if (body.creditLimit !== undefined) {
+      const cl = body.creditLimit;
+      if (cl === null || cl === '') {
+        customer.set('creditLimit', undefined);
+      } else if (typeof cl === 'number' && cl >= 0) {
+        customer.creditLimit = cl;
+      } else {
+        return NextResponse.json(
+          { success: false, error: t('validation.creditLimitInvalid', 'Credit limit must be a non-negative number or empty to clear') },
+          { status: 400 }
+        );
+      }
+    }
+
     await customer.save();
     
     await createAuditLog(request, {

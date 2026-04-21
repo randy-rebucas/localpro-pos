@@ -18,8 +18,10 @@ import {
   getSaveSuccessMessage,
   getSaveErrorMessage,
   getToggleStatusMessage,
+  getToggleStatusErrorMessage,
   formatCurrency,
 } from '@/lib/customers-helpers';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 
 export default function CustomersPage() {
   const params = useParams();
@@ -28,6 +30,15 @@ export default function CustomersPage() {
   const [dict, setDict] = useState<Record<string, any>>(null!); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [showModal, setShowModal] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [balancePayOpen, setBalancePayOpen] = useState(false);
+  const [balancePayCustomer, setBalancePayCustomer] = useState<Customer | null>(null);
+  const [bpAmount, setBpAmount] = useState('');
+  const [bpMethod, setBpMethod] = useState<'cash' | 'card' | 'digital' | 'check' | 'other'>('cash');
+  const [bpNotes, setBpNotes] = useState('');
+  const [bpSubmitting, setBpSubmitting] = useState(false);
+
+  const { settings } = useTenantSettings();
+  const enableOnAccountSales = settings?.enableOnAccountSales === true;
 
   const {
     customers,
@@ -40,6 +51,7 @@ export default function CustomersPage() {
     setSearch,
     setFilterActive,
     fetchCustomers,
+    initialLoadComplete,
     createCustomer,
     updateCustomer,
     deleteCustomer,
@@ -110,11 +122,52 @@ export default function CustomersPage() {
       showToast.success(getToggleStatusMessage(!customer.isActive, dict));
       await fetchCustomers();
     } else {
-      showToast.error(getDeleteErrorMessage(dict));
+      showToast.error(getToggleStatusErrorMessage(dict));
     }
   };
 
-  if (!dict || loading) {
+  const openBalancePayment = (customer: Customer) => {
+    setBalancePayCustomer(customer);
+    setBpAmount((Number(customer.accountBalance) || 0).toFixed(2));
+    setBpMethod('cash');
+    setBpNotes('');
+    setBalancePayOpen(true);
+  };
+
+  const submitBalancePayment = async () => {
+    if (!balancePayCustomer) return;
+    const amt = parseFloat(bpAmount);
+    if (!amt || amt <= 0 || Number.isNaN(amt)) {
+      showToast.error(dict?.admin?.amount ? `${dict.admin.amount}: invalid` : 'Enter a valid amount');
+      return;
+    }
+    setBpSubmitting(true);
+    try {
+      const res = await fetch(`/api/customers/${balancePayCustomer._id}/balance-payments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ amount: amt, method: bpMethod, notes: bpNotes.trim() || undefined }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast.success(dict?.admin?.balancePaymentRecorded || 'Payment recorded');
+        setBalancePayOpen(false);
+        setBalancePayCustomer(null);
+        await fetchCustomers();
+      } else {
+        showToast.error(data.error || dict?.admin?.balancePaymentFailed || 'Could not record payment');
+      }
+    } catch {
+      showToast.error(dict?.admin?.balancePaymentFailed || 'Could not record payment');
+    } finally {
+      setBpSubmitting(false);
+    }
+  };
+
+  const showBlockingLoader = !dict || (!initialLoadComplete && loading);
+
+  if (showBlockingLoader) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -150,7 +203,16 @@ export default function CustomersPage() {
           </div>
         </div>
 
-        <div className="bg-white border border-gray-300 p-6">
+        <div className="bg-white border border-gray-300 p-6 relative">
+          {loading && initialLoadComplete && (
+            <div
+              className="absolute inset-0 bg-white/70 flex items-center justify-center z-10"
+              aria-busy="true"
+              aria-live="polite"
+            >
+              <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600" />
+            </div>
+          )}
           {/* Search & Filters */}
           <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center mb-6">
             <div className="flex flex-col sm:flex-row gap-3 flex-1">
@@ -205,6 +267,7 @@ export default function CustomersPage() {
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict?.admin?.email || 'Email'}</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict?.admin?.phone || 'Phone'}</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict?.common?.totalSpent || 'Total Spent'}</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict?.admin?.balanceDueShort || 'Balance due'}</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict?.admin?.tags || 'Tags'}</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict?.admin?.status || 'Status'}</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict?.common?.actions || 'Actions'}</th>
@@ -225,10 +288,13 @@ export default function CustomersPage() {
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                         {formatCurrency(customer.totalSpent || 0, lang)}
                       </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {formatCurrency(Number(customer.accountBalance) || 0, lang)}
+                      </td>
                       <td className="px-4 py-4 whitespace-nowrap">
                         <div className="flex gap-1 flex-wrap">
-                          {(customer.tags || []).slice(0, 3).map((tag) => (
-                            <span key={tag} className="px-2 py-0.5 text-xs font-medium border border-gray-300 bg-gray-100 text-gray-700">
+                          {(customer.tags || []).slice(0, 3).map((tag, idx) => (
+                            <span key={`${customer._id}-tag-${idx}-${tag}`} className="px-2 py-0.5 text-xs font-medium border border-gray-300 bg-gray-100 text-gray-700">
                               {tag}
                             </span>
                           ))}
@@ -246,13 +312,22 @@ export default function CustomersPage() {
                         </button>
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm">
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2">
                           <button
                             onClick={() => openEdit(customer)}
                             className="text-blue-600 hover:text-blue-800 font-medium"
                           >
                             {dict?.common?.edit || 'Edit'}
                           </button>
+                          {enableOnAccountSales && customer.isActive && (Number(customer.accountBalance) || 0) > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => openBalancePayment(customer)}
+                              className="text-emerald-700 hover:text-emerald-900 font-medium"
+                            >
+                              {dict?.admin?.recordBalancePayment || 'Record payment'}
+                            </button>
+                          )}
                           {customer.isActive && (
                             <button
                               onClick={() => handleDelete(customer)}
@@ -294,6 +369,88 @@ export default function CustomersPage() {
           )}
         </div>
       </div>
+
+      {/* Record balance payment */}
+      {balancePayOpen && balancePayCustomer && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white w-full max-w-md border border-gray-300 shadow-lg">
+            <div className="flex items-center justify-between p-5 border-b border-gray-200">
+              <h3 className="text-lg font-bold text-gray-900">
+                {dict?.admin?.recordBalancePaymentTitle || 'Record account payment'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => { setBalancePayOpen(false); setBalancePayCustomer(null); }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <p className="text-sm text-gray-700">
+                <span className="font-semibold">{balancePayCustomer.firstName} {balancePayCustomer.lastName}</span>
+                <span className="text-gray-500"> — {dict?.admin?.balanceDueShort || 'Balance due'}: </span>
+                <span className="font-semibold">{formatCurrency(Number(balancePayCustomer.accountBalance) || 0, lang)}</span>
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{dict?.admin?.amount || 'Amount'}</label>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={bpAmount}
+                  onChange={(e) => setBpAmount(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{dict?.admin?.paymentMethod || 'Payment method'}</label>
+                <select
+                  value={bpMethod}
+                  onChange={(e) => setBpMethod(e.target.value as typeof bpMethod)}
+                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-blue-500 bg-white"
+                >
+                  <option value="cash">{dict?.pos?.cash || 'Cash'}</option>
+                  <option value="card">{dict?.pos?.card || 'Card'}</option>
+                  <option value="digital">{dict?.pos?.digital || 'Digital'}</option>
+                  <option value="check">{dict?.pos?.check || 'Check'}</option>
+                  <option value="other">{dict?.pos?.other || 'Other'}</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {dict?.common?.notes || 'Notes'} <span className="text-gray-400 font-normal">({dict?.admin?.balancePaymentNotesHint || 'optional'})</span>
+                </label>
+                <textarea
+                  value={bpNotes}
+                  onChange={(e) => setBpNotes(e.target.value)}
+                  rows={2}
+                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-blue-500 resize-none"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 p-5 border-t border-gray-200">
+              <button
+                type="button"
+                onClick={() => { setBalancePayOpen(false); setBalancePayCustomer(null); }}
+                className="px-4 py-2 border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                {dict?.common?.cancel || 'Cancel'}
+              </button>
+              <button
+                type="button"
+                onClick={submitBalancePayment}
+                disabled={bpSubmitting}
+                className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 border border-emerald-700 disabled:opacity-50"
+              >
+                {bpSubmitting ? (dict?.common?.saving || 'Saving...') : (dict?.admin?.recordBalancePayment || 'Record payment')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Create/Edit Modal */}
       {showModal && (

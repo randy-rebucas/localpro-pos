@@ -472,7 +472,11 @@ export default function UserManualPage() {
                               const match = href.match(/^\.\.\/([^/]+)\/(.+\.md)$/);
                               if (match) {
                                 const [, targetFolder, targetFile] = match;
-                                if (targetFolder === 'user-manual' || targetFolder === 'tenant-manual') {
+                                if (
+                                  targetFolder === 'user-manual' ||
+                                  targetFolder === 'tenant-manual' ||
+                                  targetFolder === 'bir-documentation'
+                                ) {
                                   return (
                                     <button
                                       onClick={() => {

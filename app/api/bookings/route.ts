@@ -9,7 +9,7 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { sendBookingConfirmation } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
-import { checkFeatureAccess } from '@/lib/subscription';
+import { requireBookingSchedulingAccess } from '@/lib/booking-scheduling-access';
 import { logger } from '@/lib/logger';
 
 /**
@@ -126,14 +126,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
-    // Check if booking scheduling feature is enabled in subscription
     try {
-      await checkFeatureAccess(tenantId.toString(), 'enableBookingScheduling');
-    } catch (featureError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      return NextResponse.json(
-        { success: false, error: featureError.message },
-        { status: 403 }
-      );
+      await requireBookingSchedulingAccess(tenantId.toString());
+    } catch (featureError: unknown) {
+      const msg = featureError instanceof Error ? featureError.message : 'Forbidden';
+      return NextResponse.json({ success: false, error: msg }, { status: 403 });
     }
 
     const body = await request.json();

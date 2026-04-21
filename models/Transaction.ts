@@ -33,7 +33,7 @@ export interface ITransaction extends Document {
   taxExemptAmount?: number; // Amount exempt from VAT (BIR)
   taxAmount?: number; // Calculated tax amount
   total: number; // Total after discount and tax
-  paymentMethod: 'cash' | 'card' | 'digital' | 'tap_to_pay' | 'wallet' | 'qr_code' | 'bnpl';
+  paymentMethod: 'cash' | 'card' | 'digital' | 'tap_to_pay' | 'wallet' | 'qr_code' | 'bnpl' | 'on_account';
   paymentProvider?: string; // e.g. 'gcash', 'maya', 'applepay', 'billease', 'qrph'
   paymentReference?: string; // Reference/transaction ID from the payment provider
   bnplInstallments?: number; // Number of installments for BNPL
@@ -153,7 +153,7 @@ const TransactionSchema: Schema = new Schema(
     },
     paymentMethod: {
       type: String,
-      enum: ['cash', 'card', 'digital', 'tap_to_pay', 'wallet', 'qr_code', 'bnpl'],
+      enum: ['cash', 'card', 'digital', 'tap_to_pay', 'wallet', 'qr_code', 'bnpl', 'on_account'],
       required: true,
     },
     paymentProvider: {

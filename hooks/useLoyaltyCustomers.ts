@@ -1,17 +1,13 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
+import type { Customer } from '@/types/customer';
 
-export interface LoyaltyCustomer {
-  _id: string;
-  firstName: string;
-  lastName: string;
-  email?: string;
-  phone?: string;
-  loyaltyPointsBalance: number;
-  totalSpent?: number;
-  isActive: boolean;
-}
+/** List row from loyalty admin — subset of `Customer` from the model. */
+export type LoyaltyCustomer = Pick<
+  Customer,
+  '_id' | 'firstName' | 'lastName' | 'email' | 'phone' | 'loyaltyPointsBalance' | 'totalSpent' | 'isActive'
+>;
 
 export interface PaginationInfo {
   pages: number;

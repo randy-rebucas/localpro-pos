@@ -181,6 +181,14 @@ describe('validateTransaction', () => {
     });
     expect(errors.some(e => e.field === 'cashReceived')).toBe(true);
   });
+
+  it('accepts on_account without cashReceived', () => {
+    const errors = validateTransaction({
+      items: [{ productId: 'abc', quantity: 1 }],
+      paymentMethod: 'on_account',
+    });
+    expect(errors).toHaveLength(0);
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -51,9 +51,13 @@ If this is your first time logging in:
 
 After login, you will see:
 
-- **Top Navigation Bar** — Shows your store name, current user, language selector, and logout
-- **Sidebar / Menu** — Lists all modules available to your role
+- **Top Navigation Bar** — Shows your store name, **User Manual** (opens in-app guides), language selector, account menu, and logout
+- **Sidebar / Menu** — Lists all modules available to your role (open the menu icon on smaller screens)
 - **Main Content Area** — Displays the active page
+
+### User Manual
+
+The **User Manual** link in the top bar opens step-by-step guides (this manual) without leaving 1POS. Use the tabs at the top to switch between **User Manual**, **Tenant Manual**, and **BIR Docs** (BIR Docs appear only when your subscription plan includes BIR documentation).
 
 ### Key Menu Items by Role
 

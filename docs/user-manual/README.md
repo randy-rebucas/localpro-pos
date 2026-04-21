@@ -1,7 +1,7 @@
 # 1POS User Manual
 
-**Version:** 1.0
-**Last Updated:** March 2026
+**Version:** 1.1  
+**Last Updated:** April 2026
 **Application:** 1POS — Cloud-Based Point of Sale System
 
 ---

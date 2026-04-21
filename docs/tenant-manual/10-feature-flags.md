@@ -12,8 +12,10 @@ Feature flags control which modules are available in your tenant. They work in c
 | `enableCategories` | ON | Product category management |
 | `enableDiscounts` | OFF | Discount/promo codes module |
 | `enableLoyaltyProgram` | OFF | Customer loyalty points |
-| `enableCustomerManagement` | OFF | Customer database and profiles |
+| `enableCustomerManagement` | OFF | Customer database, **Admin > Customers**, POS customer search/attach, purchase history linkage |
 | `enableBookingScheduling` | OFF | Appointment booking and calendar |
+| `enableTableManagement` | OFF | Floor/table management for restaurant-style operations (where enabled in UI) |
+| `enableOnAccountSales` | OFF | **On account** payment method on POS (requires customer on the sale), **balance due** column, **Record payment** in customer admin |
 
 ## How Flags Work
 
@@ -114,16 +116,27 @@ When OFF:
 ### Customer Management (`enableCustomerManagement`)
 
 When ON:
-- Customer database
-- Customer profiles with purchase history
-- Link customers to transactions
-- Customer search in POS
-- Customer lifetime value tracking
+- Customer database (**Admin > Customers**)
+- Create/edit customers (name, contact, tags, notes); list with search, status filter, pagination
+- Link customers to transactions from the POS customer panel
+- Loyalty and analytics that depend on a customer record (when loyalty is also enabled)
 
 When OFF:
-- Transactions are anonymous
-- Customer menu hidden
-- No customer linking at POS
+- Customer admin and POS customer attach flows are unavailable (subject to plan checks)
+- Transactions proceed without an attached customer
+
+**Pairing with On-account:** `enableOnAccountSales` only makes sense when staff can attach customers (`enableCustomerManagement` ON and plan includes customers). On-account charges post to the customer’s **balance due**; payments are recorded from the customer list. See [Tenant Settings Reference](./02-tenant-settings.md) and [User Manual: Customers](../user-manual/08-customers.md).
+
+### On-account sales (`enableOnAccountSales`)
+
+When ON (and customer is on the sale):
+- **On account** appears as a payment method on the POS
+- Customer **balance due** increases until settled
+
+When OFF:
+- No on-account payment method; balances are not increased via checkout
+
+Requires subscription/plan rules that allow the feature, in addition to this tenant toggle.
 
 ### Booking & Scheduling (`enableBookingScheduling`)
 
@@ -138,6 +151,16 @@ When OFF:
 - Bookings menu hidden
 - No appointment features
 - Booking automations disabled
+
+### Table management (`enableTableManagement`)
+
+When ON:
+- Floor map / table selection flows used by restaurant POS (where deployed for the tenant)
+
+When OFF:
+- Table-centric UI paths are hidden or simplified
+
+Exact UI depends on business type and plan; treat this flag as the master switch for table features.
 
 ## Plan-Based Feature Availability
 

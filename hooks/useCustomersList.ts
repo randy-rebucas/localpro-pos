@@ -1,20 +1,10 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import type { Customer } from '@/types/customer';
 import { CustomerFormData } from './useCustomersForm';
 
-export interface Customer {
-  _id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  tags: string[];
-  totalSpent: number;
-  lastPurchaseDate?: string;
-  isActive: boolean;
-  createdAt: string;
-}
+export type { Customer } from '@/types/customer';
 
 interface UseCustomersListReturn {
   customers: Customer[];
@@ -27,25 +17,44 @@ interface UseCustomersListReturn {
   filterActive: string;
   setFilterActive: (filter: string) => void;
   fetchCustomers: () => Promise<void>;
+  /** True after the first list fetch has finished (success or error). */
+  initialLoadComplete: boolean;
   createCustomer: (form: CustomerFormData) => Promise<boolean>;
   updateCustomer: (id: string, form: CustomerFormData) => Promise<boolean>;
   deleteCustomer: (id: string) => Promise<boolean>;
   toggleCustomerStatus: (id: string, isActive: boolean) => Promise<boolean>;
 }
 
+function normalizeTagsFromForm(form: CustomerFormData): string[] {
+  const raw =
+    form.tags && typeof form.tags === 'string'
+      ? form.tags.split(',').map((t: string) => t.trim())
+      : Array.isArray(form.tags)
+        ? form.tags
+        : [];
+  return raw.filter(Boolean);
+}
+
 export function useCustomersList(): UseCustomersListReturn {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filterActive, setFilterActive] = useState('all');
+
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(search), 350);
+    return () => clearTimeout(id);
+  }, [search]);
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ page: String(page), limit: '20' });
-      if (search) params.set('search', search);
+      if (debouncedSearch) params.set('search', debouncedSearch);
       if (filterActive !== 'all') params.set('isActive', filterActive);
 
       const controller = new AbortController();
@@ -61,7 +70,8 @@ export function useCustomersList(): UseCustomersListReturn {
       const data = await res.json();
       if (data.success) {
         setCustomers(data.data || []);
-        setTotalPages(data.totalPages || 1);
+        const pages = data.pagination?.pages;
+        setTotalPages(typeof pages === 'number' && pages >= 1 ? pages : 1);
       }
     } catch (error) {
       if (error instanceof Error && error.name !== 'AbortError') {
@@ -69,15 +79,14 @@ export function useCustomersList(): UseCustomersListReturn {
       }
     } finally {
       setLoading(false);
+      setInitialLoadComplete(true);
     }
-  }, [page, search, filterActive]);
+  }, [page, debouncedSearch, filterActive]);
 
   const createCustomer = useCallback(
     async (form: CustomerFormData) => {
       try {
-        const tags = form.tags && typeof form.tags === 'string'
-          ? form.tags.split(',').map((t: string) => t.trim())
-          : Array.isArray(form.tags) ? form.tags : [];
+        const tags = normalizeTagsFromForm(form);
         const payload = { ...form, tags };
 
         const res = await fetch('/api/customers', {
@@ -102,13 +111,11 @@ export function useCustomersList(): UseCustomersListReturn {
   const updateCustomer = useCallback(
     async (id: string, form: CustomerFormData) => {
       try {
-        const tags = form.tags && typeof form.tags === 'string'
-          ? form.tags.split(',').map((t: string) => t.trim())
-          : Array.isArray(form.tags) ? form.tags : [];
+        const tags = normalizeTagsFromForm(form);
         const payload = { ...form, tags };
 
         const res = await fetch(`/api/customers/${id}`, {
-          method: 'PUT',
+          method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
           body: JSON.stringify(payload),
@@ -176,6 +183,7 @@ export function useCustomersList(): UseCustomersListReturn {
     filterActive,
     setFilterActive,
     fetchCustomers,
+    initialLoadComplete,
     createCustomer,
     updateCustomer,
     deleteCustomer,

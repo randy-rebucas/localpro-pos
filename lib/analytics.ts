@@ -20,6 +20,7 @@ export interface SalesReport {
     cash: number;
     card: number;
     digital: number;
+    on_account: number;
   };
   salesByDay?: Array<{
     date: string;
@@ -126,10 +127,16 @@ export async function getSalesReport(
   const totalTransactions = transactions.length;
   const averageTransaction = totalTransactions > 0 ? totalSales / totalTransactions : 0;
 
+  const digitalLike = ['digital', 'tap_to_pay', 'wallet', 'qr_code', 'bnpl'] as const;
   const salesByPaymentMethod = {
-    cash: transactions.filter(t => t.paymentMethod === 'cash').reduce((sum, t) => sum + t.total, 0),
-    card: transactions.filter(t => t.paymentMethod === 'card').reduce((sum, t) => sum + t.total, 0),
-    digital: transactions.filter(t => t.paymentMethod === 'digital').reduce((sum, t) => sum + t.total, 0),
+    cash: transactions.filter((t) => t.paymentMethod === 'cash').reduce((sum, t) => sum + t.total, 0),
+    card: transactions.filter((t) => t.paymentMethod === 'card').reduce((sum, t) => sum + t.total, 0),
+    digital: transactions
+      .filter((t) => digitalLike.includes(t.paymentMethod as (typeof digitalLike)[number]))
+      .reduce((sum, t) => sum + t.total, 0),
+    on_account: transactions
+      .filter((t) => t.paymentMethod === 'on_account')
+      .reduce((sum, t) => sum + t.total, 0),
   };
 
   // Sales by day for detailed reports

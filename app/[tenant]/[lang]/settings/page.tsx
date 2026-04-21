@@ -143,6 +143,7 @@ export default function SettingsPage() {
           enableDiscounts: false,
           enableLoyaltyProgram: false,
           enableCustomerManagement: false,
+          enableOnAccountSales: false,
           enableBookingScheduling: false,
           hardwareConfig: {},
           ...data.data,
@@ -1335,6 +1336,19 @@ export default function SettingsPage() {
                           <label htmlFor="enableCustomerManagement" className="ml-3 flex-1">
                             <div className="text-sm font-medium text-gray-900">{dict?.settings?.customerManagementFeature || 'Customer Management'}</div>
                             <div className="text-xs text-gray-500 mt-1">{dict?.settings?.customerManagementFeatureDesc || 'Manage customer profiles and history'}</div>
+                          </label>
+                        </div>
+                        <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
+                          <input
+                            type="checkbox"
+                            id="enableOnAccountSales"
+                            checked={settings.enableOnAccountSales || false}
+                            onChange={(e) => updateSetting('enableOnAccountSales', e.target.checked)}
+                            className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
+                          />
+                          <label htmlFor="enableOnAccountSales" className="ml-3 flex-1">
+                            <div className="text-sm font-medium text-gray-900">{dict?.settings?.onAccountSales || 'Charge to customer account (pay later)'}</div>
+                            <div className="text-xs text-gray-500 mt-1">{dict?.settings?.onAccountSalesDesc || 'Allow POS to put sales on a customer’s balance when they cannot pay immediately'}</div>
                           </label>
                         </div>
                         <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">

@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb';
 import Transaction from '@/models/Transaction';
 import Payment from '@/models/Payment';
 import Product from '@/models/Product';
+import Customer from '@/models/Customer';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireRole, getCurrentUser } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -173,6 +174,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     } catch (paymentError) {
       logger.error('Failed to create payment refund record:', paymentError);
       paymentRefundWarning = 'Refund recorded but payment record could not be updated. Please update the payment manually.';
+    }
+
+    if (transaction.customerId && refundAmount > 0) {
+      const onAccountPaymentCount = await Payment.countDocuments({
+        tenantId,
+        transactionId: transaction._id,
+        method: 'on_account',
+        status: 'completed',
+      });
+      const hadOnAccount =
+        transaction.paymentMethod === 'on_account' || onAccountPaymentCount > 0;
+      if (hadOnAccount) {
+        const cust = await Customer.findOne({ _id: transaction.customerId, tenantId }).select('accountBalance');
+        if (cust) {
+          const nextBal = Math.max(0, (cust.accountBalance ?? 0) - refundAmount);
+          await Customer.updateOne({ _id: cust._id }, { $set: { accountBalance: nextBal } });
+        }
+      }
     }
 
     await createAuditLog(request, {

@@ -23,11 +23,11 @@ export default function Navbar() {
   const { settings } = useTenantSettings();
 
   // Subscription context may not be available outside admin areas
-  let subscriptionStatus = null;
+  let subscriptionStatus: ReturnType<typeof useSubscription>['subscriptionStatus'] = null;
   try {
     const subscriptionContext = useSubscription();
     subscriptionStatus = subscriptionContext.subscriptionStatus;
-  } catch (error) {
+  } catch {
     // SubscriptionProvider not available, subscriptionStatus remains null
   }
 
@@ -89,11 +89,17 @@ export default function Navbar() {
   // Filter navigation items based on feature flags
   const navItems = [
     ...baseNavItems,
-    ...conditionalNavItems.filter(item => {
+    ...conditionalNavItems.filter((item) => {
       if (!item.featureFlag) return true;
       if (!settings) return true; // Show by default if settings not loaded yet
+      if (
+        subscriptionStatus &&
+        !subscriptionStatus.features[item.featureFlag as keyof typeof subscriptionStatus.features]
+      ) {
+        return false;
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return (settings as any)[item.featureFlag] !== false; // Show if enabled or undefined (default enabled)
+      return (settings as any)[item.featureFlag] !== false;
     }),
   ];
 

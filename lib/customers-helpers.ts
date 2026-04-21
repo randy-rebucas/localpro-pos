@@ -39,6 +39,10 @@ export function getToggleStatusMessage(isActive: boolean, dict: Dict): string {
     : (dict?.admin?.customerDeactivated || 'Customer deactivated');
 }
 
+export function getToggleStatusErrorMessage(dict: Dict): string {
+  return dict?.admin?.toggleCustomerStatusError || 'Could not update customer status';
+}
+
 export function formatCurrency(amount: number, lang: string): string {
   return new Intl.NumberFormat(lang === 'es' ? 'es' : 'en', {
     style: 'currency',

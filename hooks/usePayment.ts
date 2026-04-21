@@ -9,7 +9,8 @@ export type PaymentMethodType =
   | 'wallet'
   | 'qr_code'
   | 'bnpl'
-  | 'digital'; // kept for backwards compatibility
+  | 'digital' // kept for backwards compatibility
+  | 'on_account';
 
 export interface SplitPaymentEntry {
   guestIndex: number;
@@ -99,10 +100,16 @@ export function usePayment(): UsePaymentReturn {
         return false;
       }
 
-      const validMethods: PaymentMethodType[] = ['cash', 'card', 'tap_to_pay', 'wallet', 'qr_code', 'bnpl', 'digital'];
+      const validMethods: PaymentMethodType[] = [
+        'cash', 'card', 'tap_to_pay', 'wallet', 'qr_code', 'bnpl', 'digital', 'on_account',
+      ];
       if (!validMethods.includes(method)) {
         onError(`Invalid payment method: ${method}`);
         return false;
+      }
+
+      if (method === 'on_account') {
+        // customerId checked in processPayment (needs tenant context)
       }
 
       if (method === 'cash') {
@@ -160,6 +167,14 @@ export function usePayment(): UsePaymentReturn {
         return null;
       }
 
+      const hasOnAccount =
+        paymentMethod === 'on_account' ||
+        (splitPayments?.some((s) => s.method === 'on_account') ?? false);
+      if (hasOnAccount && !customerId?.trim()) {
+        onValidationError('Select a customer for on-account payment');
+        return null;
+      }
+
       setProcessing(true);
       try {
         // Determine the "primary" payment method: for splits, use most common method
@@ -188,12 +203,21 @@ export function usePayment(): UsePaymentReturn {
           splitPayments: splitPayments,
         };
 
+        const bodyPayload: Record<string, unknown> = { ...payload, customerId: customerId || undefined };
+        if (splitPayments?.length) {
+          bodyPayload.payments = splitPayments.map((s) => ({
+            method: s.method,
+            amount: s.amount,
+            notes: s.reference,
+          }));
+        }
+
         const res = await fetchWithTimeout(
           `/api/transactions?tenant=${tenant}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
+            body: JSON.stringify(bodyPayload),
           },
           30000
         );

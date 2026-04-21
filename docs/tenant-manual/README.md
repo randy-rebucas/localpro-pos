@@ -1,12 +1,14 @@
 # 1POS Tenant Administration Manual
 
-**Version:** 1.0
-**Last Updated:** March 2026
+**Version:** 1.1  
+**Last Updated:** April 2026  
 **Audience:** Tenant Owners and Platform Administrators
 
 ---
 
 This manual covers everything related to setting up, configuring, and managing a tenant (store) on the 1POS platform. It is separate from the [User Manual](../user-manual/README.md), which covers day-to-day operations.
+
+Staff can open this same content in the app from the top navigation bar: **User Manual** tab **Tenant Manual** (alongside User Manual and BIR Docs when available).
 
 ## Table of Contents
 

@@ -3,17 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
-
-interface Customer {
-  _id: string;
-  firstName: string;
-  lastName: string;
-  email?: string;
-  phone?: string;
-  totalSpent?: number;
-  lastPurchaseDate?: string;
-  loyaltyPointsBalance?: number;
-}
+import type { CustomerSummary } from '@/types/customer';
 
 interface RecentTransaction {
   _id: string;
@@ -25,8 +15,8 @@ interface RecentTransaction {
 
 interface CustomerSidePanelProps {
   tenant: string;
-  selectedCustomer: Customer | null;
-  onSelectCustomer: (customer: Customer | null) => void;
+  selectedCustomer: CustomerSummary | null;
+  onSelectCustomer: (customer: CustomerSummary | null) => void;
 }
 
 export default function CustomerSidePanel({ tenant, selectedCustomer, onSelectCustomer }: CustomerSidePanelProps) {
@@ -34,7 +24,7 @@ export default function CustomerSidePanel({ tenant, selectedCustomer, onSelectCu
   const lang = (params?.lang as 'en' | 'es') || 'en';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [search, setSearch] = useState('');
-  const [results, setResults] = useState<Customer[]>([]);
+  const [results, setResults] = useState<CustomerSummary[]>([]);
   const [searching, setSearching] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [recentTxns, setRecentTxns] = useState<RecentTransaction[]>([]);
@@ -78,7 +68,7 @@ export default function CustomerSidePanel({ tenant, selectedCustomer, onSelectCu
     }
   }, [tenant]);
 
-  const handleSelect = (customer: Customer) => {
+  const handleSelect = (customer: CustomerSummary) => {
     onSelectCustomer(customer);
     setSearch('');
     setShowDropdown(false);
@@ -193,6 +183,23 @@ export default function CustomerSidePanel({ tenant, selectedCustomer, onSelectCu
               </svg>
               <span className="font-semibold">{selectedCustomer.loyaltyPointsBalance.toLocaleString()}</span>
               <span>{d?.points || 'points'}</span>
+            </div>
+          )}
+
+          {(Number(selectedCustomer.accountBalance) > 0 || selectedCustomer.creditLimit != null) && (
+            <div className="mt-2 space-y-1 text-xs border border-gray-200 bg-white px-2 py-1.5">
+              {Number(selectedCustomer.accountBalance) > 0 && (
+                <div className="flex justify-between gap-2 text-gray-800">
+                  <span className="text-gray-500">{d?.balanceDue || 'Balance due'}</span>
+                  <span className="font-semibold">${Number(selectedCustomer.accountBalance).toFixed(2)}</span>
+                </div>
+              )}
+              {selectedCustomer.creditLimit != null && !Number.isNaN(Number(selectedCustomer.creditLimit)) && (
+                <div className="flex justify-between gap-2 text-gray-600">
+                  <span className="text-gray-500">{d?.creditLimit || 'Credit limit'}</span>
+                  <span className="font-medium">${Number(selectedCustomer.creditLimit).toFixed(2)}</span>
+                </div>
+              )}
             </div>
           )}
 

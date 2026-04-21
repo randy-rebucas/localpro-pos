@@ -22,6 +22,7 @@ interface SalesReport {
     cash: number;
     card: number;
     digital: number;
+    on_account: number;
   };
   salesByDay?: Array<{
     date: string;
@@ -548,7 +549,8 @@ function SalesReportView({ report, dict, primaryColor, colors }: { report: Sales
     { name: dict.pos?.cash || 'Cash', value: report.salesByPaymentMethod.cash },
     { name: dict.pos?.card || 'Card', value: report.salesByPaymentMethod.card },
     { name: dict.pos?.digital || 'Digital', value: report.salesByPaymentMethod.digital },
-  ];
+    { name: dict.pos?.onAccount || 'On account', value: report.salesByPaymentMethod.on_account ?? 0 },
+  ].filter((row) => row.value > 0);
 
   return (
     <div className="space-y-6">

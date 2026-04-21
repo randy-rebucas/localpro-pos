@@ -222,6 +222,10 @@ const TenantSchema: Schema = new Schema(
         type: Boolean,
         default: false,
       },
+      enableOnAccountSales: {
+        type: Boolean,
+        default: false,
+      },
       enableBookingScheduling: {
         type: Boolean,
         default: false,
