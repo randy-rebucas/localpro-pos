@@ -937,7 +937,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen flex flex-col">
       <OfflineIndicator />
       <BarcodeScanner onScan={handleBarcodeScan} enabled={true} />
       {showQRScanner && (
@@ -947,7 +947,6 @@ export default function Dashboard() {
           enabled={true}
         />
       )}
-      <Navbar />
       <div className="fixed bottom-4 right-4 z-40">
         <HardwareStatusChecker compact={true} autoRefresh={true} />
       </div>
@@ -1142,14 +1141,16 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="mx-auto px-4 sm:px-5 lg:px-6 py-6 sm:py-8">
-        {/* Mobile: Cart first (sticky at top), then products below */}
-        {/* Desktop: Products left, Cart right */}
-        <div className={`flex flex-col gap-4 sm:gap-6 ${roamingMode ? '' : 'lg:grid lg:grid-cols-3'}`}>
-          {/* Cart Section - hidden in roaming mode (replaced by FAB + bottom sheet) */}
-          <div className={`lg:col-span-1 order-1 lg:order-2 ${roamingMode ? 'hidden' : ''}`}>
-            <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:sticky lg:top-20 flex flex-col h-full max-h-[calc(100vh-6rem)]">
-              <div className="flex justify-between items-center mb-4 pb-4 border-b border-gray-200">
+      {/* Mobile: cart first, then products + nav. Desktop: products column (nav + scroll) | full-height cart */}
+      <div
+        className={`flex flex-col flex-1 min-h-0 gap-4 sm:gap-6 lg:gap-0 ${roamingMode ? '' : 'lg:flex-row'}`}
+      >
+        {/* Cart Section - hidden in roaming mode (replaced by FAB + bottom sheet) */}
+        <div
+          className={`order-1 min-h-0 lg:order-2 lg:flex lg:flex-col lg:shrink-0 lg:w-[min(100%,420px)] xl:w-[440px] lg:border-l lg:border-gray-300 ${roamingMode ? 'hidden' : ''}`}
+        >
+            <div className="bg-white border border-gray-300 p-5 sm:p-6 flex flex-col min-h-0 flex-1 max-h-[min(70vh,520px)] sm:max-h-[min(80vh,640px)] lg:max-h-none lg:h-full lg:min-h-0">
+              <div className="flex shrink-0 justify-between items-center mb-4 pb-4 border-b border-gray-200">
                 <h2 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2">
                   <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} style={{ color: primaryColor }}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -1237,8 +1238,8 @@ export default function Dashboard() {
                   </div>
                 </div>
               ) : (
-                <>
-                  <div className="flex-1 overflow-y-auto pr-2 -mr-2 space-y-3 mb-4">
+                <div className="flex min-h-0 flex-1 flex-col">
+                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-2 -mr-2 space-y-3">
                     {cart.map((item) => (
                       <div key={item.cartItemId} className="bg-gray-50 p-4 border border-gray-300 hover:border-gray-400 transition-colors">
                         <div className="flex justify-between items-start mb-3">
@@ -1307,57 +1308,56 @@ export default function Dashboard() {
                         </div>
                       </div>
                     ))}
+                    {/* Upsell Suggestions (scrolls with line items) */}
+                    {upsellSuggestions.length > 0 && (
+                      <div className="border-t border-gray-200 pt-3 pb-1 mt-3">
+                        <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2 flex items-center gap-1">
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                          Often bought together
+                        </p>
+                        <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+                          {upsellSuggestions.map((s) => (
+                            <button
+                              key={s.productId}
+                              type="button"
+                              onClick={() => {
+                                const product = products.find((p) => p._id === s.productId);
+                                if (product) addToCart(product);
+                              }}
+                              className="flex-shrink-0 w-20 text-left border border-gray-200 hover:border-gray-400 bg-white p-1.5 transition-colors group"
+                              title={`Add ${s.name}`}
+                            >
+                              <div className="w-full h-12 bg-gray-100 overflow-hidden mb-1">
+                                {s.image ? (
+                                  <img // eslint-disable-line
+                                    src={s.image}
+                                    alt={s.name}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center">
+                                    <svg className="w-5 h-5 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                    </svg>
+                                  </div>
+                                )}
+                              </div>
+                              <p className="text-[10px] font-medium text-gray-700 line-clamp-2 leading-tight mb-0.5 group-hover:text-gray-900">{s.name}</p>
+                              <p className="text-[10px] font-bold" style={{ color: primaryColor }}>
+                                <Currency amount={s.price} />
+                              </p>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Upsell Suggestions */}
-                  {upsellSuggestions.length > 0 && (
-                    <div className="border-t border-gray-200 pt-3 pb-1">
-                      <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2 flex items-center gap-1">
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
-                        Often bought together
-                      </p>
-                      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-                        {upsellSuggestions.map((s) => (
-                          <button
-                            key={s.productId}
-                            type="button"
-                            onClick={() => {
-                              const product = products.find((p) => p._id === s.productId);
-                              if (product) addToCart(product);
-                            }}
-                            className="flex-shrink-0 w-20 text-left border border-gray-200 hover:border-gray-400 bg-white p-1.5 transition-colors group"
-                            title={`Add ${s.name}`}
-                          >
-                            <div className="w-full h-12 bg-gray-100 overflow-hidden mb-1">
-                              {s.image ? (
-                                <img // eslint-disable-line
-                                  src={s.image}
-                                  alt={s.name}
-                                  className="w-full h-full object-cover"
-                                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center">
-                                  <svg className="w-5 h-5 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                                  </svg>
-                                </div>
-                              )}
-                            </div>
-                            <p className="text-[10px] font-medium text-gray-700 line-clamp-2 leading-tight mb-0.5 group-hover:text-gray-900">{s.name}</p>
-                            <p className="text-[10px] font-bold" style={{ color: primaryColor }}>
-                              <Currency amount={s.price} />
-                            </p>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
                   {/* Discount Section */}
-                  <div className="border-t border-gray-200 pt-4 mt-auto">
+                  <div className="shrink-0 border-t border-gray-200 pt-4">
                     {!appliedDiscount ? (
                       <div className="mb-4">
                         {/* SC / PWD Quick Buttons */}
@@ -1617,7 +1617,7 @@ export default function Dashboard() {
                     )}
                   </div>
 
-                  <div className="border-t border-gray-300 pt-4 mt-4 bg-gray-50 -mx-5 sm:-mx-6 px-5 sm:px-6 pb-5 sm:pb-6">
+                  <div className="shrink-0 border-t border-gray-300 pt-4 mt-4 bg-gray-50 -mx-5 sm:-mx-6 px-5 sm:px-6 pb-5 sm:pb-6">
                     <div className="space-y-2 mb-4">
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-gray-600">{dict.pos.subtotal}:</span>
@@ -1669,13 +1669,15 @@ export default function Dashboard() {
                       )}
                     </button>
                   </div>
-                </>
+                </div>
               )}
             </div>
           </div>
 
-          {/* Products Section */}
-          <div className={`order-2 lg:order-1 ${roamingMode ? 'w-full' : 'lg:col-span-2'}`}>
+        {/* Products column: nav width matches this column only */}
+        <div className={`order-2 flex flex-col min-h-0 flex-1 min-w-0 lg:order-1 ${roamingMode ? 'w-full' : ''}`}>
+          <Navbar />
+          <div className="flex-1 overflow-y-auto min-h-0 mx-auto w-full px-4 sm:px-5 lg:px-6 py-4 sm:py-6">
             <div className="mb-6 sm:mb-8">
               <div className="flex items-center justify-between mb-4 sm:mb-6 gap-4">
                 {/* Restaurant: order-type selector + table number */}
@@ -1924,7 +1926,7 @@ export default function Dashboard() {
 
 
             {loading ? (
-              <div className={`grid gap-3 ${roamingMode ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'}`}>
+              <div className={`grid gap-3 ${roamingMode ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4'}`}>
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16].map((i) => (
                   <div key={i} className="relative overflow-hidden border border-gray-300 bg-gray-200 animate-pulse h-64">
                     <div className="absolute inset-0 flex flex-col justify-between p-4">
@@ -1946,7 +1948,7 @@ export default function Dashboard() {
                 <p className="text-gray-500 text-lg">{dict.common.noResults}</p>
               </div>
             ) : (
-              <div className={`grid gap-3 ${roamingMode ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'}`}>
+              <div className={`grid gap-3 ${roamingMode ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4'}`}>
                 {[...products]
                   .sort((a, b) => {
                     // Pinned products first
