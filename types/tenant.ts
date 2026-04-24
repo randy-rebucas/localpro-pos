@@ -88,6 +88,19 @@ export interface ITenantSettings {
   /** When true, POS may sell on account (customer balance / pay later). */
   enableOnAccountSales?: boolean;
 
+  /**
+   * Tenant-controlled integration layer (non-secret).
+   * Enables which external storefronts may be connected for this tenant.
+   */
+  integrations?: {
+    ecommerce?: {
+      /** When true, staff may connect and use Shopify for this tenant. */
+      shopifyEnabled?: boolean;
+      /** When true, staff may connect and use WooCommerce for this tenant. */
+      wooCommerceEnabled?: boolean;
+    };
+  };
+
   // Hardware Configuration
   hardwareConfig?: {
     printer?: {

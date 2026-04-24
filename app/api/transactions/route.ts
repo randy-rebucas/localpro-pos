@@ -894,6 +894,19 @@ export async function POST(request: NextRequest) {
       session.endSession();
     }
 
+    {
+      const productIdsForChannel = items
+        .map((item) => item.productId)
+        .filter((id): id is string => Boolean(id));
+      if (productIdsForChannel.length) {
+        const { pushChannelInventoryForProducts } = await import('@/lib/ecommerce/inventory-push');
+        void pushChannelInventoryForProducts(tenantId.toString(), productIdsForChannel, {
+          branchId: typeof branchId === 'string' ? branchId : undefined,
+          stockReason: 'Transaction sale',
+        });
+      }
+    }
+
     // Reset table status to 'open' after dine-in payment completes
     if (tableId && orderType === 'dine-in') {
       try {

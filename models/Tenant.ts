@@ -234,6 +234,13 @@ const TenantSchema: Schema = new Schema(
         type: Boolean,
         default: false,
       },
+
+      integrations: {
+        ecommerce: {
+          shopifyEnabled: { type: Boolean, default: false },
+          wooCommerceEnabled: { type: Boolean, default: false },
+        },
+      },
       
       // Hardware Configuration
       hardwareConfig: {

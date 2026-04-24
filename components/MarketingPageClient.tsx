@@ -200,6 +200,7 @@ export default function MarketingPageClient() {
               {[
                 { href: '#features', label: d?.navFeatures || 'Features', isLink: false },
                 { href: '#solutions', label: d?.navSolutions || 'Solutions', isLink: false },
+                { href: '#ecommerce', label: d?.navEcommerce || 'Ecommerce', isLink: false },
                 { href: '#testimonials', label: d?.navCustomers || 'Customers', isLink: false },
                 { href: '/stores', label: d?.navBrowseStores || 'Browse Stores', isLink: true },
               ].map((item) =>
@@ -505,6 +506,97 @@ export default function MarketingPageClient() {
           </div>
         </section>
 
+        {/* Ecommerce integrations — Shopify & WooCommerce */}
+        <section
+          id="ecommerce"
+          aria-labelledby="ecommerce-heading"
+          className="py-24 px-4 bg-gradient-to-b from-indigo-50/90 via-white to-slate-50 relative overflow-hidden"
+        >
+          <div
+            className="absolute inset-0 opacity-[0.04] pointer-events-none"
+            aria-hidden="true"
+            style={{ backgroundImage: 'radial-gradient(circle, #4338ca 1px, transparent 1px)', backgroundSize: '22px 22px' }}
+          />
+          <div className="relative max-w-7xl mx-auto">
+            <div className="text-center mb-14">
+              <div className="inline-block bg-indigo-100 text-indigo-800 px-4 py-2 rounded-full text-sm font-semibold mb-4 tracking-wide">
+                {d?.ecommerceBadge || 'OMNI-CHANNEL'}
+              </div>
+              <h2 id="ecommerce-heading" className="text-5xl md:text-6xl font-bold mb-5 text-gray-900 tracking-tight">
+                {d?.ecommerceHeading || 'Connect your online store'}
+              </h2>
+              <p className="text-lg text-gray-600 max-w-3xl mx-auto leading-relaxed">
+                {d?.ecommerceDesc ||
+                  'Bridge your POS with Shopify or WooCommerce: sync catalog and inventory, import paid web orders, and push stock updates — with encrypted credentials and tenant-controlled toggles.'}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-12">
+              <div className="rounded-2xl border-2 border-emerald-200/80 bg-white p-8 shadow-sm ring-1 ring-emerald-100/80 hover:shadow-md transition-shadow duration-200">
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="text-3xl" aria-hidden="true">
+                    🛍️
+                  </span>
+                  <h3 className="text-xl font-bold text-gray-900">{d?.ecommerceShopifyTitle || 'Shopify'}</h3>
+                </div>
+                <p className="text-gray-600 leading-relaxed text-sm md:text-base">
+                  {d?.ecommerceShopifyBody ||
+                    'Secure OAuth, expiring offline tokens, catalog sync, inventory levels at your default location, paid order import, and webhooks — so your storefront and counter stay aligned.'}
+                </p>
+              </div>
+              <div className="rounded-2xl border-2 border-violet-200/80 bg-white p-8 shadow-sm ring-1 ring-violet-100/80 hover:shadow-md transition-shadow duration-200">
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="text-3xl" aria-hidden="true">
+                    🛒
+                  </span>
+                  <h3 className="text-xl font-bold text-gray-900">{d?.ecommerceWooTitle || 'WooCommerce'}</h3>
+                </div>
+                <p className="text-gray-600 leading-relaxed text-sm md:text-base">
+                  {d?.ecommerceWooBody ||
+                    'Connect your WordPress store with REST keys: pull products, map SKUs to POS items, push available quantity after sales, and process order webhooks with HMAC verification.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              {[
+                {
+                  icon: '↔️',
+                  title: d?.ecommerceCard1Title || 'Two-way inventory',
+                  body:
+                    d?.ecommerceCard1Body ||
+                    'When you sell in-store or online, stock updates flow to the other channel so you avoid overselling.',
+                },
+                {
+                  icon: '📦',
+                  title: d?.ecommerceCard2Title || 'Catalog sync',
+                  body:
+                    d?.ecommerceCard2Body ||
+                    'Link channel variants to POS products by SKU, pull product data, and keep listings aligned with one click.',
+                },
+                {
+                  icon: '🧾',
+                  title: d?.ecommerceCard3Title || 'Order import',
+                  body:
+                    d?.ecommerceCard3Body ||
+                    'Paid Shopify orders and qualifying WooCommerce orders can create POS transactions with idempotent handling.',
+                },
+              ].map((card) => (
+                <div
+                  key={card.title}
+                  className="rounded-xl bg-gray-900 text-white px-6 py-7 border border-gray-800 shadow-lg hover:border-indigo-500/40 transition-colors duration-200"
+                >
+                  <div className="text-2xl mb-3" aria-hidden="true">
+                    {card.icon}
+                  </div>
+                  <h4 className="text-base font-bold mb-2 text-white">{card.title}</h4>
+                  <p className="text-sm text-gray-300 leading-relaxed">{card.body}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
         {/* Benefits */}
         <section aria-labelledby="benefits-heading" className="py-24 px-4 bg-gradient-to-b from-gray-50 to-white">
           <div className="max-w-7xl mx-auto">
@@ -660,6 +752,7 @@ export default function MarketingPageClient() {
               <ul className="space-y-2.5 text-sm">
                 <li><a href="#features" className="hover:text-white transition-colors">{d?.footerFeatures || 'Features'}</a></li>
                 <li><a href="#solutions" className="hover:text-white transition-colors">{d?.footerSolutions || 'Solutions'}</a></li>
+                <li><a href="#ecommerce" className="hover:text-white transition-colors">{d?.footerEcommerce || 'Ecommerce integrations'}</a></li>
                 <li><a href="#" className="hover:text-white transition-colors">{d?.footerPricing || 'Pricing'}</a></li>
                 <li><Link href="/stores" className="hover:text-white transition-colors">{d?.footerBrowseStores || 'Browse Stores'}</Link></li>
               </ul>

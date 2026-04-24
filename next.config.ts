@@ -1,10 +1,19 @@
 import type { NextConfig } from "next";
 
+/**
+ * In development, Next HMR opens `wss://…` while the page may be `https://…`; CSP `connect-src 'self'`
+ * is scheme-sensitive, so WebSockets to the same host can still be blocked. Tunnels (ngrok) need explicit hosts.
+ */
+const CSP_DEV_CONNECT_EXTRAS =
+  process.env.NODE_ENV === "production"
+    ? ""
+    : " ws: wss: https://*.ngrok-free.app wss://*.ngrok-free.app https://*.ngrok.io wss://*.ngrok.io https://*.ngrok.app wss://*.ngrok.app";
+
 const nextConfig: NextConfig = {
   // Production optimizations
   compress: true,
   poweredByHeader: false,
-
+  allowedDevOrigins: ['035c-49-147-112-244.ngrok-free.app'],
   // Optimize large packages for tree-shaking
   experimental: {
     optimizePackageImports: [
@@ -37,6 +46,15 @@ const nextConfig: NextConfig = {
         protocol: 'https',
         hostname: '*.cloudinary.com',
       },
+      // Shopify product images (catalog sync / storefront CDN)
+      {
+        protocol: 'https',
+        hostname: 'cdn.shopify.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.shopifycdn.com',
+      },
       // Allow OpenAI DALL-E images
       {
         protocol: 'https',
@@ -68,7 +86,7 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline' https://vercel.live https://*.vercel.live https://*.live",
               "img-src 'self' data: blob: https:",
               "font-src 'self' data: https://vercel.live https://*.vercel.live https://*.live",
-              "connect-src 'self' https://api-m.paypal.com https://api-m.sandbox.paypal.com https://vercel.live https://*.vercel.live https://*.live wss://vercel.live wss://*.vercel.live wss://*.live https://res.cloudinary.com https://api.cloudinary.com https://*.cloudinary.com",
+              `connect-src 'self' https://api-m.paypal.com https://api-m.sandbox.paypal.com https://vercel.live https://*.vercel.live https://*.live wss://vercel.live wss://*.vercel.live wss://*.live https://res.cloudinary.com https://api.cloudinary.com https://*.cloudinary.com${CSP_DEV_CONNECT_EXTRAS}`,
               "frame-src https://vercel.live https://*.vercel.live https://*.live",
               "worker-src 'self'",
               "object-src 'none'",
@@ -93,7 +111,7 @@ const nextConfig: NextConfig = {
               "default-src 'self'",
               "script-src 'self'",
               process.env.NODE_ENV !== 'production'
-                ? "connect-src 'self' https://vercel.live https://*.vercel.live wss://vercel.live wss://*.vercel.live https://res.cloudinary.com https://api.cloudinary.com https://*.cloudinary.com"
+                ? `connect-src 'self' https://vercel.live https://*.vercel.live wss://vercel.live wss://*.vercel.live https://res.cloudinary.com https://api.cloudinary.com https://*.cloudinary.com${CSP_DEV_CONNECT_EXTRAS}`
                 : "connect-src 'self' https://res.cloudinary.com https://api.cloudinary.com https://*.cloudinary.com",
             ].join('; '),
           },

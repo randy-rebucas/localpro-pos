@@ -128,6 +128,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       }
     }
 
+    {
+      const ids = refundItems.map((x) => x.productId);
+      const { pushChannelInventoryForProducts } = await import('@/lib/ecommerce/inventory-push');
+      void pushChannelInventoryForProducts(tenantId, ids, {
+        stockReason: reason || 'Transaction refund',
+      });
+    }
+
     // Mark original transaction as refunded if full refund
     const isFullRefund = refundItems.length === transaction.items.length &&
       refundItems.every((item: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any

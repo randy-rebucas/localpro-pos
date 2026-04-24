@@ -55,6 +55,13 @@ export interface ITransaction extends Document {
   // Split billing
   splitCount?: number;
   splitPayments?: ISplitPayment[];
+  /** Origin channel for imported online orders */
+  salesChannel?: 'pos' | 'shopify' | 'woocommerce';
+  /** External order id from Shopify/WooCommerce */
+  externalOrderId?: string;
+  /** `${provider}:${externalOrderId}` for idempotent unique index */
+  channelSyncKey?: string;
+  channelImportedAt?: Date;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -236,6 +243,21 @@ const TransactionSchema: Schema = new Schema(
       type: [SplitPaymentSchema],
       default: undefined,
     },
+    salesChannel: {
+      type: String,
+      enum: ['pos', 'shopify', 'woocommerce'],
+    },
+    externalOrderId: {
+      type: String,
+      trim: true,
+    },
+    channelSyncKey: {
+      type: String,
+      trim: true,
+    },
+    channelImportedAt: {
+      type: Date,
+    },
     isActive: {
       type: Boolean,
       default: true,
@@ -252,6 +274,7 @@ TransactionSchema.index({ tenantId: 1, branchId: 1, createdAt: -1 });
 TransactionSchema.index({ tenantId: 1, receiptNumber: 1 }, { unique: true, sparse: true });
 TransactionSchema.index({ tenantId: 1, status: 1 });
 TransactionSchema.index({ tenantId: 1, isActive: 1, createdAt: -1 });
+TransactionSchema.index({ tenantId: 1, channelSyncKey: 1 }, { unique: true, sparse: true });
 
 const Transaction: Model<ITransaction> = mongoose.models.Transaction || mongoose.model<ITransaction>('Transaction', TransactionSchema);
 

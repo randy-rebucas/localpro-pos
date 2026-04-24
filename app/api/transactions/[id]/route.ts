@@ -96,6 +96,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
       // If refunding, restore stock (only if product tracks inventory)
       if (body.status === 'refunded' && oldStatus === 'completed') {
+        const restoredIds: string[] = [];
         for (const item of transaction.items) {
           const product = await Product.findOne({ _id: item.product.toString(), tenantId });
           if (product && product.trackInventory !== false) {
@@ -109,7 +110,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                 reason: 'Transaction refund',
               }
             );
+            restoredIds.push(item.product.toString());
           }
+        }
+        if (restoredIds.length) {
+          const { pushChannelInventoryForProducts } = await import('@/lib/ecommerce/inventory-push');
+          void pushChannelInventoryForProducts(tenantId, restoredIds, { stockReason: 'Transaction refund' });
         }
       }
 

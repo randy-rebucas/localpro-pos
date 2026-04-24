@@ -11,6 +11,7 @@ import MultiCurrencyDisplaySettings from '@/components/settings/MultiCurrencyDis
 import ReceiptTemplatesManager from '@/components/settings/ReceiptTemplatesManager';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getDefaultTenantSettings } from '@/lib/currency';
+import EcommerceIntegrationsSettings from '@/components/settings/EcommerceIntegrationsSettings';
 
 export default function SettingsPage() {
   const params = useParams();
@@ -26,7 +27,9 @@ export default function SettingsPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [detecting, setDetecting] = useState(false);
   const [detectedInfo, setDetectedInfo] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'general' | 'branding' | 'contact' | 'receipt' | 'business' | 'notifications' | 'multiCurrency'>('general');
+  const [activeTab, setActiveTab] = useState<
+    'general' | 'branding' | 'contact' | 'receipt' | 'business' | 'notifications' | 'multiCurrency' | 'ecommerce'
+  >('general');
   const [businessTypes, setBusinessTypes] = useState<any[]>([]); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [loadingBusinessTypes, setLoadingBusinessTypes] = useState(true);
   const [businessTypeWarning, setBusinessTypeWarning] = useState<string | null>(null);
@@ -40,6 +43,14 @@ export default function SettingsPage() {
     loadBusinessTypes();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenant]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const tab = new URLSearchParams(window.location.search).get('tab');
+    if (tab === 'ecommerce') {
+      setActiveTab('ecommerce');
+    }
+  }, []);
 
   const loadBusinessTypes = async () => {
     try {
@@ -423,6 +434,17 @@ export default function SettingsPage() {
                 className="px-6 py-4 text-sm font-medium whitespace-nowrap transition-colors hover:text-gray-700 hover:border-gray-300"
               >
                 {dict?.settings?.tabs?.multiCurrency || 'Multi-Currency'}
+              </button>
+              <button
+                onClick={() => setActiveTab('ecommerce')}
+                style={{
+                  borderBottomWidth: '2px',
+                  borderBottomColor: activeTab === 'ecommerce' ? primaryColor : 'transparent',
+                  color: activeTab === 'ecommerce' ? primaryColor : '#6b7280',
+                }}
+                className="px-6 py-4 text-sm font-medium whitespace-nowrap transition-colors hover:text-gray-700 hover:border-gray-300"
+              >
+                {dict?.settings?.tabs?.ecommerce || 'E-commerce'}
               </button>
             </nav>
           </div>
@@ -1523,6 +1545,8 @@ export default function SettingsPage() {
               </section>
             )}
 
+
+            {activeTab === 'ecommerce' && <EcommerceIntegrationsSettings tenant={tenant} lang={lang} />}
 
             {/* Multi-Currency Tab */}
             {activeTab === 'multiCurrency' && (

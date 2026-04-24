@@ -153,6 +153,12 @@ export function getDefaultTenantSettings(): ITenantSettings {
     enableCustomerManagement: false,
     enableOnAccountSales: false,
     enableBookingScheduling: false,
+    integrations: {
+      ecommerce: {
+        shopifyEnabled: false,
+        wooCommerceEnabled: false,
+      },
+    },
     multiCurrency: {
       enabled: false,
       displayCurrencies: [],

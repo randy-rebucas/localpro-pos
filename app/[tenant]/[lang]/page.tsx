@@ -937,7 +937,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="flex h-dvh min-h-0 flex-col">
       <OfflineIndicator />
       <BarcodeScanner onScan={handleBarcodeScan} enabled={true} />
       {showQRScanner && (
@@ -1143,13 +1143,13 @@ export default function Dashboard() {
 
       {/* Mobile: cart first, then products + nav. Desktop: products column (nav + scroll) | full-height cart */}
       <div
-        className={`flex flex-col flex-1 min-h-0 gap-4 sm:gap-6 lg:gap-0 ${roamingMode ? '' : 'lg:flex-row'}`}
+        className={`flex flex-col flex-1 min-h-0 overflow-hidden gap-4 sm:gap-6 lg:gap-0 ${roamingMode ? '' : 'lg:flex-row'}`}
       >
         {/* Cart Section - hidden in roaming mode (replaced by FAB + bottom sheet) */}
         <div
-          className={`order-1 min-h-0 lg:order-2 lg:flex lg:flex-col lg:shrink-0 lg:w-[min(100%,420px)] xl:w-[440px] lg:border-l lg:border-gray-300 ${roamingMode ? 'hidden' : ''}`}
+          className={`order-1 flex flex-col min-h-0 flex-1 max-h-[min(70vh,520px)] sm:max-h-[min(80vh,640px)] lg:max-h-none lg:h-full lg:min-h-0 lg:flex-none lg:order-2 lg:shrink-0 lg:w-[min(100%,420px)] xl:w-[440px] lg:border-l lg:border-gray-300 ${roamingMode ? 'hidden' : ''}`}
         >
-            <div className="bg-white border border-gray-300 p-5 sm:p-6 flex flex-col min-h-0 flex-1 max-h-[min(70vh,520px)] sm:max-h-[min(80vh,640px)] lg:max-h-none lg:h-full lg:min-h-0">
+            <div className="bg-white border border-gray-300 p-5 sm:p-6 flex h-full min-h-0 flex-col flex-1 overflow-hidden lg:min-h-0">
               <div className="flex shrink-0 justify-between items-center mb-4 pb-4 border-b border-gray-200">
                 <h2 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2">
                   <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} style={{ color: primaryColor }}>
@@ -1221,15 +1221,17 @@ export default function Dashboard() {
 
               {/* Customer panel (retail) */}
               {businessType === 'retail' && (
-                <CustomerSidePanel
-                  tenant={tenant}
-                  selectedCustomer={selectedCustomer}
-                  onSelectCustomer={setSelectedCustomer}
-                />
+                <div className="shrink-0 mb-3 min-w-0">
+                  <CustomerSidePanel
+                    tenant={tenant}
+                    selectedCustomer={selectedCustomer}
+                    onSelectCustomer={setSelectedCustomer}
+                  />
+                </div>
               )}
 
               {cart.length === 0 ? (
-                <div className="flex-1 flex items-center justify-center py-12 text-gray-500">
+                <div className="flex min-h-0 flex-1 flex-col items-center justify-center py-12 text-gray-500">
                   <div className="text-center">
                     <svg className="mx-auto h-16 w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -1238,8 +1240,8 @@ export default function Dashboard() {
                   </div>
                 </div>
               ) : (
-                <div className="flex min-h-0 flex-1 flex-col">
-                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-2 -mr-2 space-y-3">
+                <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-2 -mr-2 space-y-3 [scrollbar-gutter:stable]">
                     {cart.map((item) => (
                       <div key={item.cartItemId} className="bg-gray-50 p-4 border border-gray-300 hover:border-gray-400 transition-colors">
                         <div className="flex justify-between items-start mb-3">
@@ -1357,7 +1359,7 @@ export default function Dashboard() {
                   </div>
 
                   {/* Discount Section */}
-                  <div className="shrink-0 border-t border-gray-200 pt-4">
+                  <div className="shrink-0 border-t border-gray-200 pt-4 bg-white">
                     {!appliedDiscount ? (
                       <div className="mb-4">
                         {/* SC / PWD Quick Buttons */}
@@ -2117,12 +2119,12 @@ export default function Dashboard() {
           onClick={() => setShowRoamingCart(false)}
         >
           <div
-            className="w-full bg-white border-t-2 border-gray-200 flex flex-col animate-slide-in-bottom max-h-[85vh]"
+            className="w-full bg-white border-t-2 border-gray-200 flex min-h-0 flex-col animate-slide-in-bottom max-h-[85vh] overflow-hidden"
             style={{ borderTopColor: primaryColor }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Sheet handle + header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+            <div className="flex shrink-0 items-center justify-between px-5 py-4 border-b border-gray-200">
               <div className="flex items-center gap-3">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} style={{ color: primaryColor }}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -2158,7 +2160,7 @@ export default function Dashboard() {
             </div>
 
             {/* Cart items */}
-            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 space-y-3 [scrollbar-gutter:stable]">
               {cart.length === 0 ? (
                 <div className="text-center py-12 text-gray-400">
                   <svg className="mx-auto h-12 w-12 text-gray-300 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -2204,7 +2206,7 @@ export default function Dashboard() {
 
             {/* Footer with totals + checkout */}
             {cart.length > 0 && (
-              <div className="border-t border-gray-200 px-5 py-4 bg-gray-50 space-y-2">
+              <div className="shrink-0 border-t border-gray-200 px-5 py-4 bg-gray-50 space-y-2">
                 <div className="flex justify-between text-sm text-gray-600">
                   <span>{dict.pos.subtotal}:</span>
                   <Currency amount={getSubtotal()} />
