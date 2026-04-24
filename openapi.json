@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "1POS API",
-    "description": "Enterprise-grade Point of Sale system API for Philippine businesses. Complete BIR-compliant POS with multi-tenant support, real-time inventory, booking & scheduling, and 30+ automated workflows.",
+    "description": "Enterprise-grade Point of Sale system API for Philippine businesses. Complete BIR-compliant POS with multi-tenant support, real-time inventory, booking & scheduling, and seven core automated workflows.",
     "version": "1.0.0",
     "contact": {
       "name": "1POS Support",

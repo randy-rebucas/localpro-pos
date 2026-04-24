@@ -7,6 +7,7 @@ import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { logger } from '@/lib/logger';
+import { TENANT_IS_ACTIVE_FILTER } from '@/lib/tenant-active-query';
 
 export async function GET(request: NextRequest) {
   try {
@@ -23,14 +24,23 @@ export async function GET(request: NextRequest) {
     }
 
     if (isAdmin) {
-      const tenants = await Tenant.find({ isActive: true }).select('slug name settings isActive createdAt').lean();
+      const tenants = await Tenant.find(TENANT_IS_ACTIVE_FILTER).select('slug name settings isActive createdAt').lean();
       return NextResponse.json({ success: true, data: tenants });
     }
 
-    // Public store selector: return only the minimum fields needed to display a store picker.
-    // Intentionally omits address, business type, colors to reduce information exposure.
-    const tenants = await Tenant.find({ isActive: true })
-      .select('slug name settings.companyName settings.logo settings.currency settings.language')
+    // Public store directory (web + mobile): enough to pick a tenant by category and name.
+    // Omits full street address and theme colors; includes businessType for filtering and city/country for display.
+    const businessTypeFilter = request.nextUrl.searchParams.get('businessType')?.trim();
+    const query: Record<string, unknown> = { ...TENANT_IS_ACTIVE_FILTER };
+    if (businessTypeFilter) {
+      const escaped = businessTypeFilter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      query['settings.businessType'] = new RegExp(`^${escaped}$`, 'i');
+    }
+
+    const tenants = await Tenant.find(query)
+      .select(
+        'slug name settings.companyName settings.logo settings.currency settings.language settings.businessType settings.address.city settings.address.country'
+      )
       .lean();
     return NextResponse.json({ success: true, data: tenants });
   } catch (error: unknown) {

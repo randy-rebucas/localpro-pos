@@ -25,7 +25,7 @@ const features = [
   { id: 'attendance', category: 'customers' as Category, title: 'Attendance', icon: '⏰', description: 'Time tracking with clock in/out, breaks, and location tracking', details: ['Clock in/out functionality', 'Break tracking (start/end)', 'Automatic hours calculation', 'Attendance history and records', 'GPS location capture (optional)', 'Auto clock-out for forgotten sessions'] },
   // ── Analytics ──────────────────────────────────────────────────────
   { id: 'reports', category: 'analytics' as Category, title: 'Reports & Analytics', icon: '📈', description: 'Comprehensive reporting with sales, product, financial, and attendance analytics', details: ['Sales reports (Daily, Weekly, Monthly, Custom)', 'Product performance and analytics', 'Financial reports (Profit & Loss)', 'VAT/Tax reports', 'Cash drawer session reports', 'Bundle performance reports', 'Export capabilities (CSV, Excel, PDF)'] },
-  { id: 'automations', category: 'analytics' as Category, title: 'Automations', icon: '🤖', description: '30+ automated workflows to reduce manual work', details: ['Automated booking reminders', 'Low stock alerts', 'Transaction receipt auto-email', 'Scheduled reports', 'Auto clock-out for attendance', 'Cash drawer auto-close', 'Customer welcome emails', 'And 23+ more automations'] },
+  { id: 'automations', category: 'analytics' as Category, title: 'Automations', icon: '🤖', description: 'Seven core automated workflows today — expandable per tenant', details: ['Automated booking reminders', 'Low stock alerts', 'Transaction receipt auto-email', 'Scheduled reports', 'Auto clock-out for attendance', 'Cash drawer auto-close', 'Customer welcome emails'] },
   // ── Platform ───────────────────────────────────────────────────────
   { id: 'multi-tenant', category: 'platform' as Category, title: 'Multi-Tenant', icon: '🏢', description: 'Complete data isolation with tenant-specific branding and configuration', details: ['Complete data isolation per tenant', 'Path-based and subdomain routing', 'Tenant-specific branding (logo, colors, favicon)', 'Custom currency and localization per tenant', 'Business type configuration', 'Tenant-specific settings and features'] },
   { id: 'business-types', category: 'platform' as Category, title: 'Business Types', icon: '🎯', description: 'Industry-specific configurations for Retail, Restaurant, Laundry, Service, and more', details: ['Retail: Product-focused with inventory management', 'Restaurant: Menu items with modifiers and allergens', 'Laundry: Service-based with weight-based pricing', 'Service: Time-based services with staff assignment', 'General: Flexible configuration for any business', 'Automatic feature configuration based on type'] },
@@ -34,6 +34,9 @@ const features = [
   { id: 'offline', category: 'platform' as Category, title: 'Offline Support', icon: '📱', description: 'Work offline with automatic sync when connection is restored', details: ['Automatic offline mode detection', 'Local storage for offline transactions', 'Offline product browsing', 'Offline cart management', 'Automatic sync when online', 'Conflict resolution'] },
   { id: 'i18n', category: 'platform' as Category, title: 'Internationalization', icon: '🌐', description: 'Multi-language support with localized formatting', details: ['English and Spanish support', 'Extensible for additional languages', 'Localized date/time formatting', 'Localized number formatting', 'Localized currency formatting', 'Timezone support'] },
 ];
+
+/** Shipped capability cards — keep marketing hero stats in sync with this list. */
+export const FEATURE_MODULE_COUNT = features.length;
 
 const TABS: { key: Category; label: string; count: number }[] = [
   { key: 'all', label: 'All', count: features.length },

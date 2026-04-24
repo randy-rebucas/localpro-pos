@@ -2,8 +2,15 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import FeaturesGrid from '@/components/FeaturesGrid';
+import FeaturesGrid, { FEATURE_MODULE_COUNT } from '@/components/FeaturesGrid';
 import { getDictionaryClient } from '@/app/[lang]/dictionaries-client';
+import {
+  BUSINESS_TYPE_COUNT,
+  CORE_AUTOMATION_WORKFLOWS,
+  SUPPORTED_UI_LANGUAGES,
+  UPTIME_SLA_TARGET_PERCENT,
+} from '@/lib/marketing-constants';
+import { formatActiveTenants, formatCompletedTransactions } from '@/lib/marketing-format';
 
 /* ── Sub-components (pure JSX — no hooks — server-safe) ──────────── */
 function DashboardMockup() {
@@ -126,9 +133,12 @@ function InitialAvatar({ name, index }: { name: string; index: number }) {
 }
 
 /* ── Main client component ───────────────────────────────────────── */
+type PlatformStats = { activeTenants: number; completedTransactions: number };
+
 export default function MarketingPageClient() {
   const [preferredLang, setPreferredLang] = useState<'en' | 'es'>('en');
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const [platformStats, setPlatformStats] = useState<PlatformStats | 'loading' | 'failed'>('loading');
 
   useEffect(() => {
     const stored = localStorage.getItem('preferred_lang');
@@ -152,6 +162,29 @@ export default function MarketingPageClient() {
     getDictionaryClient(preferredLang).then(setDict);
   }, [preferredLang]);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/public/platform-stats');
+        const json = await res.json();
+        if (cancelled || !json?.success || !json?.data) {
+          if (!cancelled) setPlatformStats('failed');
+          return;
+        }
+        setPlatformStats({
+          activeTenants: Number(json.data.activeTenants) || 0,
+          completedTransactions: Number(json.data.completedTransactions) || 0,
+        });
+      } catch {
+        if (!cancelled) setPlatformStats('failed');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const d = dict?.home;
 
   const businessTypes = [
@@ -169,7 +202,7 @@ export default function MarketingPageClient() {
   ];
 
   const benefits = [
-    { title: d?.saveTimeTitle || 'Save Time', desc: d?.saveTimeDesc || '30+ automations reduce manual work by up to 80%', icon: '⏱️' },
+    { title: d?.saveTimeTitle || 'Save Time', desc: d?.saveTimeDesc || 'Seven core automations cut repetitive tasks (booking reminders, low stock, receipts, reports, and more)', icon: '⏱️' },
     { title: d?.increaseRevenueTitle || 'Increase Revenue', desc: d?.increaseRevenueDesc || 'Advanced analytics help identify growth opportunities', icon: '📈' },
     { title: d?.reduceErrorsTitle || 'Reduce Errors', desc: d?.reduceErrorsDesc || 'Real-time validation prevents costly mistakes', icon: '🛡️' },
     { title: d?.scaleEasilyTitle || 'Scale Easily', desc: d?.scaleEasilyDesc || 'Multi-tenant architecture grows with your business', icon: '🚀' },
@@ -280,9 +313,10 @@ export default function MarketingPageClient() {
               {d?.heroDesc || (
                 <>
                   The complete point of sale system with{' '}
-                  <strong className="text-white font-semibold">100+ features</strong>,
+                  <strong className="text-white font-semibold">{FEATURE_MODULE_COUNT} capability modules</strong>,
                   real-time inventory, multi-tenant architecture, and{' '}
-                  <strong className="text-white font-semibold">30+ automated workflows</strong>.
+                  <strong className="text-white font-semibold">{CORE_AUTOMATION_WORKFLOWS} core automated workflows</strong>{' '}
+                  (booking reminders, low stock, receipts, and more).
                 </>
               )}
             </p>
@@ -290,10 +324,10 @@ export default function MarketingPageClient() {
             {/* Inline stats — divider-separated */}
             <div className="flex flex-wrap items-center justify-center gap-0 mb-10">
               {[
-                { value: '100+', label: d?.heroStatFeatures || 'Features' },
-                { value: '30+', label: d?.heroStatAutomations || 'Automations' },
-                { value: '5', label: d?.heroStatBusinessTypes || 'Business Types' },
-                { value: '2+', label: d?.heroStatLanguages || 'Languages' },
+                { value: String(FEATURE_MODULE_COUNT), label: d?.heroStatFeatures || 'Features' },
+                { value: String(CORE_AUTOMATION_WORKFLOWS), label: d?.heroStatAutomations || 'Automations' },
+                { value: String(BUSINESS_TYPE_COUNT), label: d?.heroStatBusinessTypes || 'Business Types' },
+                { value: String(SUPPORTED_UI_LANGUAGES), label: d?.heroStatLanguages || 'Languages' },
               ].map((s, i) => (
                 <div key={s.label} className="flex items-center">
                   <div className="px-6 py-2 text-center">
@@ -366,9 +400,38 @@ export default function MarketingPageClient() {
 
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-gray-100 overflow-hidden shadow-sm">
               {[
-                { value: '500+', label: d?.spActiveStores || 'Active stores', icon: '🏪', desc: d?.spActiveStoresDesc || 'and growing every day' },
-                { value: '2M+', label: d?.spTransactions || 'Transactions', icon: '💳', desc: d?.spTransactionsDesc || 'processed without downtime' },
-                { value: '99.9%', label: d?.spUptimeSla || 'Uptime SLA', icon: '⚡', desc: d?.spUptimeSlaDesc || 'guaranteed reliability' },
+                {
+                  value:
+                    platformStats === 'loading'
+                      ? '…'
+                      : platformStats === 'failed'
+                        ? '—'
+                        : formatActiveTenants(platformStats.activeTenants),
+                  label: d?.spActiveStores || 'Active stores',
+                  icon: '🏪',
+                  desc:
+                    platformStats !== 'loading' && platformStats !== 'failed' && platformStats.activeTenants === 0
+                      ? d?.spActiveStoresDescZero ||
+                        'No tenants in your connected database yet — create one from Sign up to appear here and on Browse Stores.'
+                      : d?.spActiveStoresDesc || 'Active stores in your connected database (same rule as Browse Stores)',
+                },
+                {
+                  value:
+                    platformStats === 'loading'
+                      ? '…'
+                      : platformStats === 'failed'
+                        ? '—'
+                        : formatCompletedTransactions(platformStats.completedTransactions),
+                  label: d?.spTransactions || 'Transactions',
+                  icon: '💳',
+                  desc: d?.spTransactionsDesc || 'completed sales recorded in-app (all tenants)',
+                },
+                {
+                  value: UPTIME_SLA_TARGET_PERCENT,
+                  label: d?.spUptimeSla || 'Uptime SLA',
+                  icon: '⚡',
+                  desc: d?.spUptimeSlaDesc || 'target monthly availability (managed production)',
+                },
                 { value: '24/7', label: d?.spSupport || 'Support', icon: '🛎️', desc: d?.spSupportDesc || 'whenever you need us' },
               ].map((item) => (
                 <div key={item.label} className="bg-white px-8 py-8 flex flex-col items-center text-center group hover:bg-brand-soft/50 transition-colors duration-200">
@@ -469,7 +532,7 @@ export default function MarketingPageClient() {
               {[
                 { emoji: '🏢', title: d?.multiTenantTitle || 'Multi-Tenant', desc: d?.multiTenantDesc || 'Complete data isolation with tenant-specific branding, settings, and configurations. Perfect for SaaS deployments and enterprise solutions.', bg: 'from-brand-soft to-teal-100', border: 'border-teal-200 hover:border-brand' },
                 { emoji: '⚡', title: d?.realTimeSyncTitle || 'Real-Time Sync', desc: d?.realTimeSyncDesc || 'Real-time inventory updates, stock validation, and Server-Sent Events for instant synchronization across all devices and locations.', bg: 'from-emerald-50 to-emerald-100', border: 'border-emerald-200 hover:border-emerald-400' },
-                { emoji: '🤖', title: d?.automatedTitle || 'Automated', desc: d?.automatedDesc || '30+ automated workflows including booking reminders, low stock alerts, scheduled reports, and intelligent business automation.', bg: 'from-purple-50 to-purple-100', border: 'border-purple-200 hover:border-purple-400' },
+                { emoji: '🤖', title: d?.automatedTitle || 'Automated', desc: d?.automatedDesc || 'Seven core workflows today — booking reminders, low stock alerts, receipt email, scheduled reports, auto clock-out, cash drawer close, and customer welcome messages.', bg: 'from-purple-50 to-purple-100', border: 'border-purple-200 hover:border-purple-400' },
               ].map((item) => (
                 <div key={item.title} className={`group relative text-center p-10 bg-gradient-to-br ${item.bg} border-2 ${item.border} transition-all duration-300 hover:shadow-2xl hover:-translate-y-2`}>
                   <div className="text-6xl mb-6 transform group-hover:scale-110 group-hover:rotate-6 transition-transform duration-300" aria-hidden="true">{item.emoji}</div>
@@ -654,7 +717,7 @@ export default function MarketingPageClient() {
                     <div className="text-center mt-2 text-gray-400">Thank you for shopping!</div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    {[{ v: '100+', l: 'Features', c: 'text-brand-muted' }, { v: '80%', l: 'Less manual work', c: 'text-emerald-400' }, { v: '30+', l: 'Automations', c: 'text-purple-400' }, { v: '99.9%', l: 'Uptime', c: 'text-yellow-400' }].map((s) => (
+                    {[{ v: String(FEATURE_MODULE_COUNT), l: 'Modules', c: 'text-brand-muted' }, { v: '~70%', l: 'Less busywork', c: 'text-emerald-400' }, { v: String(CORE_AUTOMATION_WORKFLOWS), l: 'Automations', c: 'text-purple-400' }, { v: UPTIME_SLA_TARGET_PERCENT, l: 'Uptime', c: 'text-yellow-400' }].map((s) => (
                       <div key={s.l} className="bg-gray-700/60 p-4 text-center">
                         <div className={`text-2xl font-bold ${s.c}`}>{s.v}</div>
                         <div className="text-gray-400 text-xs mt-0.5">{s.l}</div>
@@ -725,7 +788,7 @@ export default function MarketingPageClient() {
               {d?.ctaHeading || 'Ready to Transform Your Business?'}
             </h2>
             <p className="text-xl mb-10 text-white/80 max-w-2xl mx-auto leading-relaxed">
-              {d?.ctaDesc || 'Join thousands of businesses using 1pos to streamline operations, increase revenue, and scale effortlessly.'}
+              {d?.ctaDesc || 'Join businesses using 1pos to streamline operations, tighten inventory control, and scale with multi-branch-ready tooling.'}
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
               <Link href="/signup" className="bg-white text-brand px-10 py-4 font-bold text-lg hover:bg-brand-soft transition-all duration-300 hover:scale-105 hover:shadow-2xl">
@@ -759,7 +822,7 @@ export default function MarketingPageClient() {
                 />
               </Link>
               <p className="text-gray-500 text-sm leading-relaxed">
-                {d?.footerDesc || 'BIR-ready enterprise POS system with 100+ features for modern Philippine businesses.'}
+                {d?.footerDesc || `BIR-ready enterprise POS with ${FEATURE_MODULE_COUNT} capability modules for modern Philippine businesses.`}
               </p>
             </div>
             <nav aria-label="Product links">
@@ -791,7 +854,9 @@ export default function MarketingPageClient() {
           </div>
           <div className="border-t border-gray-800 pt-8 flex flex-col sm:flex-row justify-between items-center gap-3">
             <p className="text-gray-500 text-sm">{d?.footerCopyright || '© 2026 1pos. All rights reserved.'}</p>
-            <p className="text-gray-600 text-sm">{d?.footerTagline || 'BIR-ready POS · 100+ features · Built for the Philippines'}</p>
+            <p className="text-gray-600 text-sm">
+              {d?.footerTagline || `BIR-ready POS · ${FEATURE_MODULE_COUNT} modules · ${SUPPORTED_UI_LANGUAGES} languages · Built for the Philippines`}
+            </p>
           </div>
         </div>
       </footer>

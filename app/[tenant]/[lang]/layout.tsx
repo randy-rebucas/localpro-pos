@@ -18,7 +18,7 @@ const geistMono = Geist_Mono({ // eslint-disable-line @typescript-eslint/no-unus
 
 export const metadata: Metadata = {
   title: "1pos - Point of Sale",
-  description: "1pos: Enterprise-grade POS system with 100+ features for modern businesses",
+  description: '1pos: Enterprise-grade POS with 23 capability modules and seven core automations for modern businesses',
 };
 
 export const viewport: Viewport = {

@@ -4,8 +4,9 @@ import MarketingPageClient from '@/components/MarketingPageClient';
 /* ── Page-level metadata (overrides root layout defaults) ─────────── */
 export const metadata: Metadata = {
   title: 'Enterprise POS System for Philippine Businesses',
+  // Hero copy: keep module count aligned with `FEATURE_MODULE_COUNT` in components/FeaturesGrid.tsx
   description:
-    'Transform your business with 1pos — the complete BIR-ready point of sale system with 100+ features, real-time inventory, multi-branch support, and 30+ automated workflows. Start your free 14-day trial today.',
+    'Transform your business with 1pos — BIR-ready POS with 23 capability modules, real-time inventory, multi-branch support, and seven core automated workflows. Start your free 14-day trial today.',
   keywords: [
     'POS system Philippines',
     'point of sale',
@@ -19,7 +20,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: '1pos — Enterprise POS System for Philippine Businesses',
     description:
-      'Complete BIR-ready POS with 100+ features, real-time inventory, and 30+ automations. Free 14-day trial.',
+      'Complete BIR-ready POS with 23 capability modules, real-time inventory, and seven core automations. Free 14-day trial.',
     type: 'website',
     url: '/',
     siteName: '1pos',
@@ -28,7 +29,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: '1pos — Enterprise POS System',
-    description: 'Complete BIR-ready POS with 100+ features. Free 14-day trial.',
+    description: 'Complete BIR-ready POS with 23 capability modules. Free 14-day trial.',
     images: ['/icon-192x192.png'],
   },
   alternates: { canonical: '/' },
@@ -46,7 +47,7 @@ const jsonLd = {
       applicationCategory: 'BusinessApplication',
       operatingSystem: 'Web Browser',
       description:
-        'Enterprise-grade BIR-ready point of sale system for Philippine businesses. Includes inventory management, multi-branch support, customer management, and 30+ automated workflows.',
+        'Enterprise-grade BIR-ready point of sale system for Philippine businesses. Includes inventory management, multi-branch support, customer management, and seven core automated workflows.',
       offers: {
         '@type': 'Offer',
         price: '0',
