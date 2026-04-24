@@ -33,7 +33,7 @@ export default function InventoryPage() {
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const { settings } = useTenantSettings();
-  const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#3b82f6';
+  const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#35979c';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [selectedBranch, setSelectedBranch] = useState<string>('');
   const [branches, setBranches] = useState<Branch[]>([]);

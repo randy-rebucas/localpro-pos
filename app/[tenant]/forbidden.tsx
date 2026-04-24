@@ -113,7 +113,7 @@ export default function ForbiddenPage() {
     return (
       <div className="min-h-screen flex items-center justify-center px-4">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand mx-auto mb-4"></div>
           <p className="text-gray-600">{dict?.components?.protectedRoute?.loading || 'Loading...'}</p>
         </div>
       </div>
@@ -153,13 +153,13 @@ export default function ForbiddenPage() {
 
         {/* User Info */}
         {userInfo.name && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 text-left">
-            <p className="text-sm text-blue-800 font-medium mb-2">
+          <div className="bg-brand-soft border border-teal-200 rounded-lg p-4 mb-6 text-left">
+            <p className="text-sm text-brand-navy font-medium mb-2">
               {f?.yourAccount || 'Your Account'}:
             </p>
-            <p className="text-sm text-blue-700">{userInfo.name}</p>
+            <p className="text-sm text-brand-hover">{userInfo.name}</p>
             {userInfo.email && (
-              <p className="text-xs text-blue-600 mt-1">{userInfo.email}</p>
+              <p className="text-xs text-brand mt-1">{userInfo.email}</p>
             )}
           </div>
         )}
@@ -234,7 +234,7 @@ export default function ForbiddenPage() {
           {userInfo.tenantSlug && (
             <button
               onClick={goToOwnStore}
-              className="block w-full bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 font-medium transition-colors shadow-md hover:shadow-lg"
+              className="block w-full bg-brand text-white px-6 py-3 rounded-md hover:bg-brand-hover font-medium transition-colors shadow-md hover:shadow-lg"
             >
               {f?.goToMyStore || `Go to My Store (${userInfo.tenantSlug})`}
             </button>

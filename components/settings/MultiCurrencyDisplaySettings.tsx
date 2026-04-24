@@ -19,13 +19,13 @@ export default function MultiCurrencyDisplaySettings({ settings, tenant, lang, o
 
   return (
     <div className="space-y-6">
-      <div className="p-4 bg-blue-50 border border-blue-200 rounded">
-        <p className="text-sm text-blue-800 mb-2">
+      <div className="p-4 bg-brand-soft border border-teal-200 rounded">
+        <p className="text-sm text-brand-navy mb-2">
           <strong>Note:</strong> {dict?.admin?.multiCurrencyNote || 'Exchange rate management has been moved to Admin → Multi-Currency for better access control.'}
         </p>
         <Link
           href={`/${tenant}/${lang}/admin/multi-currency`}
-          className="text-sm text-blue-600 hover:text-blue-700 font-medium underline"
+          className="text-sm text-brand hover:text-brand-hover font-medium underline"
         >
           {dict?.admin?.manageExchangeRates || 'Manage Exchange Rates →'}
         </Link>
@@ -44,7 +44,7 @@ export default function MultiCurrencyDisplaySettings({ settings, tenant, lang, o
                 },
               });
             }}
-            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+            className="w-4 h-4 text-brand border-gray-300 rounded focus:ring-brand"
           />
           <span className="text-sm font-medium text-gray-700">{dict?.admin?.enableMultiCurrencyDisplay || 'Enable Multi-Currency Display'}</span>
         </label>
@@ -74,7 +74,7 @@ export default function MultiCurrencyDisplaySettings({ settings, tenant, lang, o
                       },
                     });
                   }}
-                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  className="w-4 h-4 text-brand border-gray-300 rounded focus:ring-brand"
                 />
                 <span className="text-sm text-gray-700">{currency}</span>
               </label>

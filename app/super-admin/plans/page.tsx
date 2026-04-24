@@ -211,7 +211,7 @@ export default function PlansPage() {
           </div>
           <button
             onClick={openCreate}
-            className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors"
+            className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover transition-colors"
           >
             + New Plan
           </button>
@@ -226,7 +226,7 @@ export default function PlansPage() {
         <div className="bg-white border border-gray-200">
           {loading ? (
             <div className="p-12 text-center">
-              <div className="inline-block animate-spin h-6 w-6 border-2 border-blue-600 border-t-transparent rounded-full" />
+              <div className="inline-block animate-spin h-6 w-6 border-2 border-brand border-t-transparent rounded-full" />
               <p className="mt-3 text-gray-500 text-sm">Loading plans...</p>
             </div>
           ) : plans.length === 0 ? (
@@ -251,7 +251,7 @@ export default function PlansPage() {
                         {plan.description && <p className="text-xs text-gray-400 mt-0.5">{plan.description}</p>}
                       </td>
                       <td className="px-4 py-4">
-                        <span className="px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200 capitalize">
+                        <span className="px-2 py-0.5 text-xs font-medium bg-brand-soft text-brand-navy border border-teal-200 capitalize">
                           {plan.tier}
                         </span>
                       </td>
@@ -267,7 +267,7 @@ export default function PlansPage() {
                       </td>
                       <td className="px-4 py-4 text-sm">
                         <div className="flex gap-3">
-                          <button onClick={() => openEdit(plan)} className="text-blue-600 hover:text-blue-800 font-medium">
+                          <button onClick={() => openEdit(plan)} className="text-brand hover:text-brand-navy font-medium">
                             Edit
                           </button>
                           <button onClick={() => handleDelete(plan)} className="text-red-600 hover:text-red-800 font-medium">
@@ -301,7 +301,7 @@ export default function PlansPage() {
                       type="text" required
                       value={formData.name}
                       onChange={e => setFormData(f => ({ ...f, name: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                      className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white"
                       placeholder="Pro"
                     />
                   </div>
@@ -311,7 +311,7 @@ export default function PlansPage() {
                       value={formData.tier}
                       onChange={e => setFormData(f => ({ ...f, tier: e.target.value }))}
                       disabled={!!editingPlan}
-                      className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-gray-50"
+                      className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white disabled:bg-gray-50"
                     >
                       {TIER_ORDER.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
@@ -324,7 +324,7 @@ export default function PlansPage() {
                     type="text"
                     value={formData.description}
                     onChange={e => setFormData(f => ({ ...f, description: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                    className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white"
                     placeholder="Short description"
                   />
                 </div>
@@ -339,7 +339,7 @@ export default function PlansPage() {
                         type="number" min="0"
                         value={formData.price.monthly}
                         onChange={e => setFormData(f => ({ ...f, price: { ...f.price, monthly: Number(e.target.value) } }))}
-                        className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                        className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white"
                       />
                     </div>
                     <div>
@@ -348,7 +348,7 @@ export default function PlansPage() {
                         type="number" min="0"
                         value={formData.price.setupFee}
                         onChange={e => setFormData(f => ({ ...f, price: { ...f.price, setupFee: Number(e.target.value) } }))}
-                        className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                        className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white"
                       />
                     </div>
                     <div>
@@ -357,7 +357,7 @@ export default function PlansPage() {
                         type="text" maxLength={3}
                         value={formData.price.currency}
                         onChange={e => setFormData(f => ({ ...f, price: { ...f.price, currency: e.target.value.toUpperCase() } }))}
-                        className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                        className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white"
                       />
                     </div>
                   </div>
@@ -374,7 +374,7 @@ export default function PlansPage() {
                           type="number" min="-1"
                           value={formData.features[key] as number}
                           onChange={e => setFeature(key, parseInt(e.target.value))}
-                          className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                          className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white"
                         />
                       </div>
                     ))}
@@ -391,7 +391,7 @@ export default function PlansPage() {
                           type="checkbox"
                           checked={formData.features[key] as boolean}
                           onChange={e => setFeature(key, e.target.checked)}
-                          className="rounded border-gray-300 text-blue-600"
+                          className="rounded border-gray-300 text-brand"
                         />
                         {label}
                       </label>
@@ -409,7 +409,7 @@ export default function PlansPage() {
                           type="checkbox"
                           checked={formData.birCompliance[key]}
                           onChange={e => setBir(key, e.target.checked)}
-                          className="rounded border-gray-300 text-blue-600"
+                          className="rounded border-gray-300 text-brand"
                         />
                         {label}
                       </label>
@@ -423,7 +423,7 @@ export default function PlansPage() {
                     type="checkbox"
                     checked={formData.isActive}
                     onChange={e => setFormData(f => ({ ...f, isActive: e.target.checked }))}
-                    className="rounded border-gray-300 text-blue-600"
+                    className="rounded border-gray-300 text-brand"
                   />
                   Plan is active (visible to tenants)
                 </label>
@@ -434,7 +434,7 @@ export default function PlansPage() {
                   <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 border border-gray-300 text-gray-700 text-sm hover:bg-gray-50 bg-white">
                     Cancel
                   </button>
-                  <button type="submit" disabled={saving} className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50">
+                  <button type="submit" disabled={saving} className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover disabled:opacity-50">
                     {saving ? 'Saving...' : editingPlan ? 'Save Changes' : 'Create Plan'}
                   </button>
                 </div>

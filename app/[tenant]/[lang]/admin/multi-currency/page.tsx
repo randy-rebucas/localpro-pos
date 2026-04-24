@@ -61,7 +61,7 @@ export default function MultiCurrencyPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
@@ -83,7 +83,7 @@ export default function MultiCurrencyPage() {
         <div className="mb-6">
           <Link
             href={`/${tenant}/${lang}/admin`}
-            className="text-blue-600 hover:text-blue-700 font-medium mb-4 inline-flex items-center"
+            className="text-brand hover:text-brand-hover font-medium mb-4 inline-flex items-center"
           >
             <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -125,7 +125,7 @@ export default function MultiCurrencyPage() {
                   onChange={(e) => {
                     updateSetting('multiCurrency.exchangeRateSource', e.target.value);
                   }}
-                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                 >
                   <option value="manual">{dict?.admin?.manualEntry || 'Manual Entry'}</option>
                   <option value="api">{dict?.admin?.automaticAPI || 'Automatic (API)'}</option>
@@ -143,7 +143,7 @@ export default function MultiCurrencyPage() {
                     onChange={(e) => {
                       updateSetting('multiCurrency.exchangeRateApiKey', e.target.value);
                     }}
-                    className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                    className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                     placeholder={dict?.admin?.apiKeyPlaceholder || 'API key for exchange rate service'}
                   />
                   <p className="mt-2 text-xs text-gray-500">
@@ -164,7 +164,7 @@ export default function MultiCurrencyPage() {
                   type="button"
                   onClick={handleFetchRates}
                   disabled={fetchingRates || multiCurrency.exchangeRateSource !== 'api'}
-                  className="px-4 py-2 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  className="px-4 py-2 bg-brand text-white text-sm font-medium hover:bg-brand-hover disabled:bg-gray-400 disabled:cursor-not-allowed"
                 >
                   {fetchingRates 
                     ? (dict?.admin?.fetching || 'Fetching...') 
@@ -202,7 +202,7 @@ export default function MultiCurrencyPage() {
                           const newRates = { ...existing, [currency]: isNaN(parsed) ? 0 : parsed };
                           updateSetting('multiCurrency.exchangeRates', newRates);
                         }}
-                        className="w-32 px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-32 px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-brand focus:border-brand"
                         placeholder={dict?.admin?.ratePlaceholder || 'Rate'}
                       />
                     </div>
@@ -224,7 +224,7 @@ export default function MultiCurrencyPage() {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="px-6 py-3 bg-blue-600 text-white hover:bg-blue-700 font-semibold transition-all duration-200 border border-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-6 py-3 bg-brand text-white hover:bg-brand-hover font-semibold transition-all duration-200 border border-brand-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {saving ? (
                 <>

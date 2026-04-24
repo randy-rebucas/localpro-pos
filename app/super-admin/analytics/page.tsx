@@ -24,7 +24,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 const TIER_COLORS: Record<string, string> = {
   starter: 'bg-gray-400',
-  pro: 'bg-blue-500',
+  pro: 'bg-brand-soft0',
   business: 'bg-purple-500',
   enterprise: 'bg-indigo-600',
 };
@@ -148,7 +148,7 @@ export default function AnalyticsPage() {
                         label={p.name}
                         value={p.count}
                         max={maxPlanCount}
-                        color={TIER_COLORS[p.tier] || 'bg-blue-500'}
+                        color={TIER_COLORS[p.tier] || 'bg-brand-soft0'}
                       />
                     ))}
                   </div>
@@ -190,7 +190,7 @@ export default function AnalyticsPage() {
                         label={g.month}
                         value={g.count}
                         max={maxGrowth}
-                        color="bg-blue-500"
+                        color="bg-brand-soft0"
                       />
                     ))}
                   </div>

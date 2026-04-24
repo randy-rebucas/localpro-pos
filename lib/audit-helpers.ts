@@ -42,7 +42,7 @@ export function getActionBadgeClass(action: string): string {
     case 'create':
       return `${baseClass} border-green-300 bg-green-100 text-green-800`;
     case 'update':
-      return `${baseClass} border-blue-300 bg-blue-100 text-blue-800`;
+      return `${baseClass} border-teal-300 bg-brand-soft text-brand-navy`;
     case 'delete':
       return `${baseClass} border-red-300 bg-red-100 text-red-800`;
     case 'view':
@@ -52,7 +52,7 @@ export function getActionBadgeClass(action: string): string {
     case 'logout':
       return `${baseClass} border-purple-300 bg-purple-100 text-purple-800`;
     default:
-      return `${baseClass} border-blue-300 bg-blue-100 text-blue-800`;
+      return `${baseClass} border-teal-300 bg-brand-soft text-brand-navy`;
   }
 }
 

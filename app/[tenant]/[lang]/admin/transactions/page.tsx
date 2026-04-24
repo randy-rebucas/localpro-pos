@@ -45,7 +45,7 @@ export default function TransactionsPage() {
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const { settings: tenantSettings } = useTenantSettings();
-  const primaryColor = (tenantSettings || getDefaultTenantSettings()).primaryColor || '#2563eb';
+  const primaryColor = (tenantSettings || getDefaultTenantSettings()).primaryColor || '#35979c';
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -252,7 +252,7 @@ export default function TransactionsPage() {
 
 function TransactionDetailModal({
   transaction,
-  primaryColor: _primaryColor = '#2563eb',
+  primaryColor: _primaryColor = '#35979c',
   onClose,
   dict,
 }: {

@@ -83,7 +83,7 @@ export default function ProductsPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
@@ -98,7 +98,7 @@ export default function ProductsPage() {
         <div className="mb-6 sm:mb-8">
           <Link
             href={`/${tenant}/${lang}/admin`}
-            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium mb-4 transition-colors"
+            className="inline-flex items-center text-brand hover:text-brand-hover font-medium mb-4 transition-colors"
           >
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -129,7 +129,7 @@ export default function ProductsPage() {
                 placeholder={dict.common?.search || 'Search products...'}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
               />
             </div>
             <div className="flex gap-2">
@@ -147,7 +147,7 @@ export default function ProductsPage() {
                   setEditingProduct(null);
                   setShowProductModal(true);
                 }}
-                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
+                className="px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium border border-brand-hover"
               >
                 {dict.common?.add || 'Add'} {dict.admin?.product || 'Product'}
               </button>
@@ -206,7 +206,7 @@ export default function ProductsPage() {
                       </span>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap">
-                      <span className="px-2 py-1 text-xs font-semibold border border-blue-300 bg-blue-100 text-blue-800">
+                      <span className="px-2 py-1 text-xs font-semibold border border-teal-300 bg-brand-soft text-brand-navy">
                         {product.productType}
                         {product.hasVariations && ` ${dict.products?.variations || '(variations)'}`}
                       </span>
@@ -224,7 +224,7 @@ export default function ProductsPage() {
                             setEditingProduct(product);
                             setShowProductModal(true);
                           }}
-                          className="text-blue-600 hover:text-blue-900"
+                          className="text-brand hover:text-brand-navy-deep"
                         >
                           {dict.common?.edit || 'Edit'}
                         </button>
@@ -419,15 +419,15 @@ function ProductModal({
             {product ? (dict.admin?.editProduct || 'Edit Product') : (dict.admin?.addProduct || 'Add Product')}
           </h2>
           {businessTypeConfig && (
-            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded">
-              <p className="text-sm text-blue-900">
+            <div className="mb-4 p-3 bg-brand-soft border border-teal-200 rounded">
+              <p className="text-sm text-brand-navy-deep">
                 <strong>{dict.products?.businessType || 'Business Type'}:</strong> {businessTypeConfig.name}
               </p>
-              <p className="text-xs text-blue-700 mt-1">
+              <p className="text-xs text-brand-hover mt-1">
                 {businessTypeConfig.description}
               </p>
               {businessTypeConfig.requiredFields.length > 0 && (
-                <p className="text-xs text-blue-700 mt-1">
+                <p className="text-xs text-brand-hover mt-1">
                   <strong>{dict.products?.requiredFields || 'Required fields'}:</strong> {businessTypeConfig.requiredFields.join(', ')}
                 </p>
               )}
@@ -444,7 +444,7 @@ function ProductModal({
                   required
                   value={formData.name}
                   onChange={(e) => updateFormData({ name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                 />
               </div>
               <div>
@@ -456,7 +456,7 @@ function ProductModal({
                   required={businessTypeConfig?.requiredFields?.includes('sku')}
                   value={formData.sku}
                   onChange={(e) => updateFormData({ sku: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                 />
               </div>
             </div>
@@ -469,7 +469,7 @@ function ProductModal({
                   type="text"
                   value={formData.barcode}
                   onChange={(e) => updateFormData({ barcode: e.target.value })}
-                  className="flex-1 px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white font-mono"
+                  className="flex-1 px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white font-mono"
                   placeholder={dict.products?.scanOrEnterBarcode || 'Scan or enter barcode'}
                 />
                 <button
@@ -491,7 +491,7 @@ function ProductModal({
                 value={formData.description}
                 onChange={(e) => updateFormData({ description: e.target.value })}
                 rows={3}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
               />
             </div>
             <div>
@@ -558,7 +558,7 @@ function ProductModal({
                     value={formData.image.startsWith('data:') ? '' : formData.image}
                     onChange={(e) => updateFormData({ image: e.target.value })}
                     placeholder={dict.products?.pasteImageUrl || 'Or paste image URL (https://...)'}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white text-sm"
                   />
                   {formData.image && (
                     <button
@@ -584,7 +584,7 @@ function ProductModal({
                   required
                   value={formData.price}
                   onChange={(e) => updateFormData({ price: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                 />
               </div>
               {businessTypeConfig?.defaultFeatures?.enableInventory !== false && (
@@ -597,7 +597,7 @@ function ProductModal({
                     min="0"
                     value={formData.stock}
                     onChange={(e) => updateFormData({ stock: parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                     disabled={!formData.trackInventory}
                   />
                 </div>
@@ -612,7 +612,7 @@ function ProductModal({
                     min="0"
                     value={formData.lowStockThreshold}
                     onChange={(e) => updateFormData({ lowStockThreshold: parseInt(e.target.value) || 10 })}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                   />
                 </div>
               )}
@@ -642,7 +642,7 @@ function ProductModal({
                     }}
                     onFocus={() => setShowCategorySuggestions(true)}
                     placeholder={dict.admin?.searchCategory || 'Type to search categories...'}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                   />
                   {showCategorySuggestions && filteredCategories.length > 0 && (
                     <div
@@ -654,8 +654,8 @@ function ProductModal({
                           key={cat._id}
                           type="button"
                           onClick={() => handleCategorySelect(cat)}
-                          className={`w-full text-left px-4 py-2 hover:bg-blue-50 focus:bg-blue-50 focus:outline-none transition-colors ${
-                            formData.categoryId === cat._id ? 'bg-blue-100' : ''
+                          className={`w-full text-left px-4 py-2 hover:bg-brand-soft focus:bg-brand-soft focus:outline-none transition-colors ${
+                            formData.categoryId === cat._id ? 'bg-brand-soft' : ''
                           }`}
                         >
                           {cat.name}
@@ -680,7 +680,7 @@ function ProductModal({
                 <select
                   value={formData.productType}
                   onChange={(e) => updateFormData({ productType: e.target.value as any })} // eslint-disable-line @typescript-eslint/no-explicit-any
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                 >
                   {businessTypeConfig?.productTypes?.map((type: string) => (
                     <option key={type} value={type}>
@@ -735,7 +735,7 @@ function ProductModal({
                       const allergens = e.target.value.split(',').map(a => a.trim()).filter(a => a);
                       updateFormData({ allergens });
                     }}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                     placeholder="e.g., gluten, dairy, nuts"
                   />
                 </div>
@@ -751,7 +751,7 @@ function ProductModal({
                         ...formData,
                         nutritionInfo: { ...formData.nutritionInfo, calories: parseInt(e.target.value) || undefined }
                       })}
-                      className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                      className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                     />
                   </div>
                   <div>
@@ -765,7 +765,7 @@ function ProductModal({
                         ...formData,
                         nutritionInfo: { ...formData.nutritionInfo, protein: parseFloat(e.target.value) || undefined }
                       })}
-                      className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                      className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                     />
                   </div>
                 </div>
@@ -910,7 +910,7 @@ function ProductModal({
                   <select
                     value={formData.serviceType}
                     onChange={(e) => updateFormData({ serviceType: e.target.value as any })} // eslint-disable-line @typescript-eslint/no-explicit-any
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                   >
                     <option value="wash">{dict.products?.serviceTypeWash || 'Wash'}</option>
                     <option value="dry-clean">{dict.products?.serviceTypeDryClean || 'Dry Clean'}</option>
@@ -952,7 +952,7 @@ function ProductModal({
                     min="0"
                     value={formData.estimatedDuration || ''}
                     onChange={(e) => updateFormData({ estimatedDuration: parseInt(e.target.value) || undefined })}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                   />
                 </div>
               </div>
@@ -971,7 +971,7 @@ function ProductModal({
                       min="0"
                       value={formData.serviceDuration || ''}
                       onChange={(e) => updateFormData({ serviceDuration: parseInt(e.target.value) || undefined })}
-                      className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                      className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                     />
                   </div>
                   <div>
@@ -981,7 +981,7 @@ function ProductModal({
                       min="1"
                       value={formData.staffRequired || 1}
                       onChange={(e) => updateFormData({ staffRequired: parseInt(e.target.value) || 1 })}
-                      className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                      className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                     />
                   </div>
                 </div>
@@ -995,7 +995,7 @@ function ProductModal({
                       const equipment = e.target.value.split(',').map(e => e.trim()).filter(e => e);
                       updateFormData({ equipmentRequired: equipment });
                     }}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                     placeholder="e.g., scissors, clippers, styling chair"
                   />
                 </div>
@@ -1017,7 +1017,7 @@ function ProductModal({
               <button
                 type="submit"
                 disabled={saving}
-                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
+                className="px-4 py-2 bg-brand text-white hover:bg-brand-hover disabled:opacity-50 border border-brand-hover"
               >
                 {saving ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
               </button>
@@ -1045,7 +1045,7 @@ function ProductModal({
                 onChange={e => setPickerSearch(e.target.value)}
                 className="flex-1 px-3 py-2 border border-gray-300 text-sm bg-white"
               />
-              <label className={`px-4 py-2 text-sm font-medium text-white cursor-pointer bg-blue-600 hover:bg-blue-700 ${pickerUploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+              <label className={`px-4 py-2 text-sm font-medium text-white cursor-pointer bg-brand hover:bg-brand-hover ${pickerUploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
                 {pickerUploading ? (dict.products?.uploading || 'Uploading...') : (dict.products?.uploadNew || 'Upload New')}
                 <input
                   ref={pickerFileInputRef}
@@ -1080,7 +1080,7 @@ function ProductModal({
                           setShowImagePicker(false);
                         }}
                         className={`relative group aspect-square border-2 overflow-hidden bg-gray-50 ${
-                          formData.image === file.url ? 'border-blue-500' : 'border-gray-200 hover:border-gray-400'
+                          formData.image === file.url ? 'border-brand' : 'border-gray-200 hover:border-gray-400'
                         }`}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}

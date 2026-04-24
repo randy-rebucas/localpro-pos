@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { BRAND_PRIMARY_HEX } from '@/lib/brand-defaults';
 import { ITenantSettings } from '@/types/tenant';
 
 interface TaxRule {
@@ -29,7 +30,7 @@ interface TaxRulesManagerProps {
   dict?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
-export default function TaxRulesManager({ settings, tenant, primaryColor = '#2563eb', onUpdate, dict }: TaxRulesManagerProps) { // eslint-disable-line @typescript-eslint/no-unused-vars
+export default function TaxRulesManager({ settings, tenant, primaryColor = BRAND_PRIMARY_HEX, onUpdate, dict }: TaxRulesManagerProps) { // eslint-disable-line @typescript-eslint/no-unused-vars
   const [rules, setRules] = useState<TaxRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<TaxRule | null>(null);
@@ -211,7 +212,7 @@ export default function TaxRulesManager({ settings, tenant, primaryColor = '#256
 
 function TaxRuleForm({
   rule,
-  primaryColor = '#2563eb',
+  primaryColor = BRAND_PRIMARY_HEX,
   onSave,
   onCancel,
   dict,

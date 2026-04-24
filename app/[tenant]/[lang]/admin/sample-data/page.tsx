@@ -27,7 +27,7 @@ export default function SampleDataPage() {
 
   const { settings } = useTenantSettings();
   const tenantSettings = settings || getDefaultTenantSettings();
-  const primaryColor = tenantSettings.primaryColor || '#2563eb';
+  const primaryColor = tenantSettings.primaryColor || '#35979c';
 
   useEffect(() => {
     getDictionaryClient(lang).then((d) => {
@@ -76,7 +76,7 @@ export default function SampleDataPage() {
         <div className="mb-6 sm:mb-8">
           <Link
             href={`/${tenant}/${lang}/admin`}
-            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium mb-4 transition-colors"
+            className="inline-flex items-center text-brand hover:text-brand-hover font-medium mb-4 transition-colors"
           >
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -184,7 +184,7 @@ export default function SampleDataPage() {
                           }
                           setSelectedItems(newSelected);
                         }}
-                        className="w-4 h-4 mt-1 cursor-pointer accent-blue-600"
+                        className="w-4 h-4 mt-1 cursor-pointer accent-brand"
                       />
                       <span className="text-xl">{row.icon}</span>
                       <div className="flex-1 min-w-0">
@@ -222,7 +222,7 @@ export default function SampleDataPage() {
                   placeholder={dict?.common?.search || 'Search products...'}
                   value={productSearch}
                   onChange={(e) => setProductSearch(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all"
                 />
               </div>
               <div className="overflow-x-auto">
@@ -244,7 +244,7 @@ export default function SampleDataPage() {
                           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                             p.type === 'service' ? 'bg-purple-100 text-purple-700' :
                             p.type === 'bundle'  ? 'bg-amber-100  text-amber-700'  :
-                                                    'bg-blue-100   text-blue-700'
+                                                    'bg-brand-soft   text-brand-hover'
                           }`}>
                             {p.type}
                           </span>
@@ -282,13 +282,13 @@ export default function SampleDataPage() {
 
           {/* Selected Items Summary */}
           {selectedItems.size > 0 && (
-            <div className="bg-blue-50 border border-blue-200 p-4">
-              <p className="text-sm font-medium text-blue-900 mb-2">{dict?.sampleData?.selectedForInstallation || 'Selected for installation:'}</p>
+            <div className="bg-brand-soft border border-teal-200 p-4">
+              <p className="text-sm font-medium text-brand-navy-deep mb-2">{dict?.sampleData?.selectedForInstallation || 'Selected for installation:'}</p>
               <div className="flex flex-wrap gap-2">
                 {Array.from(selectedItems).map(item => (
                   <span
                     key={item}
-                    className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 text-sm font-medium rounded-full"
+                    className="inline-flex items-center gap-1 px-3 py-1 bg-brand-soft text-brand-hover text-sm font-medium rounded-full"
                   >
                     {item.charAt(0).toUpperCase() + item.slice(1)}
                     <button
@@ -297,7 +297,7 @@ export default function SampleDataPage() {
                         newSelected.delete(item);
                         setSelectedItems(newSelected);
                       }}
-                      className="ml-1 text-blue-600 hover:text-blue-800"
+                      className="ml-1 text-brand hover:text-brand-navy"
                     >
                       ✕
                     </button>

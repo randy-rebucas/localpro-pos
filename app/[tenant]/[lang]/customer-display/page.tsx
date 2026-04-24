@@ -237,7 +237,7 @@ export default function CustomerDisplay() {
     return (
       <div className="w-screen h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 to-gray-800" role="status" aria-label="Loading session">
         <div className="text-center">
-          <div className="animate-spin h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4" aria-hidden="true"></div>
+          <div className="animate-spin h-12 w-12 border-4 border-brand border-t-transparent rounded-full mx-auto mb-4" aria-hidden="true"></div>
           <p className="text-white">{t('customerDisplay.loadingSession', 'Loading session...')}</p>
         </div>
       </div>
@@ -299,7 +299,7 @@ export default function CustomerDisplay() {
                     <p className="text-gray-400 text-lg">{t('customerDisplay.qty', 'Qty')}: {item.quantity}</p>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <p className="text-3xl font-bold text-blue-400">
+                    <p className="text-3xl font-bold text-brand-muted">
                       <Currency amount={item.price * item.quantity} />
                     </p>
                     <p className="text-gray-400 text-sm">
@@ -344,7 +344,7 @@ export default function CustomerDisplay() {
             <div className="border-t border-gray-600 pt-4">
               <div className="flex justify-between items-center">
                 <p className="text-gray-300 text-2xl font-semibold">{t('common.total', 'Total')}</p>
-                <p className="text-4xl font-bold text-blue-400">
+                <p className="text-4xl font-bold text-brand-muted">
                   <Currency amount={sessionData.total} />
                 </p>
               </div>
@@ -356,10 +356,10 @@ export default function CustomerDisplay() {
         <div className="w-96 flex flex-col gap-6 min-h-0">
           {/* Payment Screen */}
           {showPaymentScreen && (
-            <div className="bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl p-8 border border-blue-500 flex flex-col justify-between flex-1 min-h-0 overflow-y-auto">
+            <div className="bg-gradient-to-br from-brand to-brand-navy-deep p-8 border border-brand flex flex-col justify-between flex-1 min-h-0 overflow-y-auto">
               <div className="flex-shrink-0">
                 <h2 className="text-4xl font-bold text-white mb-2">{t('customerDisplay.readyToPay', 'Ready to Pay?')}</h2>
-                <p className="text-blue-200 text-lg">{t('common.total', 'Total')}: <Currency amount={sessionData.total} className="text-4xl" /></p>
+                <p className="text-white/75 text-lg">{t('common.total', 'Total')}: <Currency amount={sessionData.total} className="text-4xl" /></p>
               </div>
 
               <div className="space-y-4 my-8 flex-1 flex flex-col justify-center">
@@ -397,7 +397,7 @@ export default function CustomerDisplay() {
                     });
                   }}
                   aria-label="Pay with card"
-                  className="w-full py-6 bg-white text-blue-700 font-bold text-2xl rounded-xl hover:bg-blue-50 transition-colors flex items-center justify-center gap-3"
+                  className="w-full py-6 bg-white text-brand-hover font-bold text-2xl rounded-xl hover:bg-brand-soft transition-colors flex items-center justify-center gap-3"
                 >
                   <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true" role="img">
                     <path d="M3 4h18v2H3V4zm0 6h18v2H3v-2zm0 6h18v2H3v-2zm0 6h18v2H3v-2z"/>
@@ -418,7 +418,7 @@ export default function CustomerDisplay() {
                     });
                   }}
                   aria-label="Pay with digital wallet or NFC"
-                  className="w-full py-6 bg-white text-indigo-700 font-bold text-2xl rounded-xl hover:bg-indigo-50 transition-colors flex items-center justify-center gap-3"
+                  className="w-full py-6 bg-white text-brand-navy font-bold text-2xl hover:bg-brand-soft transition-colors flex items-center justify-center gap-3"
                 >
                   <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true" role="img">
                     <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/>
@@ -427,7 +427,7 @@ export default function CustomerDisplay() {
                 </button>
               </div>
 
-              <p className="text-center text-blue-200 text-lg flex-shrink-0">{t('customerDisplay.staffWillComplete', 'Staff will complete payment')}</p>
+              <p className="text-center text-white/75 text-lg flex-shrink-0">{t('customerDisplay.staffWillComplete', 'Staff will complete payment')}</p>
             </div>
           )}
 

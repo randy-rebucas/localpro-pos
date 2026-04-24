@@ -47,7 +47,7 @@ interface AttendanceTrendsChartsProps {
 export default memo(function AttendanceTrendsCharts({ attendances, dict }: AttendanceTrendsChartsProps) {
   const { settings } = useTenantSettings();
   const tenantSettings = settings || getDefaultTenantSettings();
-  const primaryColor = tenantSettings.primaryColor || '#3b82f6';
+  const primaryColor = tenantSettings.primaryColor || '#35979c';
 
   // Process data for daily hours chart
   const dailyHoursMap = new Map<string, number>();

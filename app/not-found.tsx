@@ -65,7 +65,7 @@ export default function RootNotFound() {
 
         {loading ? (
           <div className="text-center py-8">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
             <p className="mt-4 text-gray-600">{dict?.common?.loadingStores || 'Loading stores...'}</p>
           </div>
         ) : (
@@ -107,7 +107,7 @@ export default function RootNotFound() {
                 <p className="text-gray-600 mb-4">{dict?.common?.noStoresAvailable || 'No stores available. Please contact your administrator.'}</p>
                 <Link
                   href="/default/en"
-                  className="inline-block bg-blue-600 text-white px-6 py-2 hover:bg-blue-700 font-medium transition-colors"
+                  className="inline-block bg-brand text-white px-6 py-2 hover:bg-brand-hover font-medium transition-colors"
                 >
                   {dict?.common?.goToDefaultStore || 'Go to Default Store'}
                 </Link>
@@ -120,7 +120,7 @@ export default function RootNotFound() {
           <div className="mt-6 pt-6 space-y-3">
             <Link
               href="/default/en"
-              className="block w-full bg-blue-600 text-white px-4 py-3 hover:bg-blue-700 font-medium transition-colors text-center"
+              className="block w-full bg-brand text-white px-4 py-3 hover:bg-brand-hover font-medium transition-colors text-center"
             >
               {dict?.common?.goToDefaultStore || 'Go to Default Store'}
             </Link>
@@ -137,7 +137,7 @@ export default function RootNotFound() {
           <div className="mt-6 pt-6">
             <Link
               href="/signup"
-              className="block w-full bg-blue-600 text-white px-4 py-3 hover:bg-blue-700 font-medium transition-colors text-center"
+              className="block w-full bg-brand text-white px-4 py-3 hover:bg-brand-hover font-medium transition-colors text-center"
             >
               {dict?.common?.createYourFirstStore || 'Create Your First Store'}
             </Link>

@@ -571,7 +571,16 @@
       "branding": "Marca",
       "contact": "Contacto",
       "hardware": "Hardware",
-      "reset": "Restablecer Datos"
+      "reset": "Restablecer Datos",
+      "notifications": "Notificaciones",
+      "notificationTemplates": "Plantillas de notificación",
+      "multiCurrency": "Multi-moneda",
+      "ecommerce": "E-commerce"
+    },
+    "ecommerce": {
+      "productionNoticeTitle": "Se requieren integraciones personalizadas",
+      "productionNoticeBody": "En producción, esta función requiere un plan de suscripción que incluya integraciones personalizadas (custom integrations).",
+      "viewPlansCta": "Ver suscripción y planes"
     },
     "save": "Guardar Configuración",
     "saving": "Guardando...",

@@ -31,7 +31,7 @@ const STATUS_BADGE: Record<string, string> = {
 
 const TIER_BADGE: Record<string, string> = {
   starter: 'bg-gray-100 text-gray-700 border-gray-200',
-  pro: 'bg-blue-100 text-blue-800 border-blue-200',
+  pro: 'bg-brand-soft text-brand-navy border-teal-200',
   business: 'bg-purple-100 text-purple-800 border-purple-200',
   enterprise: 'bg-indigo-100 text-indigo-800 border-indigo-200',
 };
@@ -167,12 +167,12 @@ export default function SubscriptionsPage() {
             placeholder="Filter by tenant slug..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 bg-white w-full sm:w-56"
+            className="px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white w-full sm:w-56"
           />
           <select
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+            className="px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white"
           >
             <option value="">All statuses</option>
             <option value="active">Active</option>
@@ -186,7 +186,7 @@ export default function SubscriptionsPage() {
         <div className="bg-white border border-gray-200">
           {loading ? (
             <div className="p-12 text-center">
-              <div className="inline-block animate-spin h-6 w-6 border-2 border-blue-600 border-t-transparent rounded-full" />
+              <div className="inline-block animate-spin h-6 w-6 border-2 border-brand border-t-transparent rounded-full" />
               <p className="mt-3 text-gray-500 text-sm">Loading subscriptions...</p>
             </div>
           ) : error ? (
@@ -194,7 +194,7 @@ export default function SubscriptionsPage() {
               <p className="text-red-600 text-sm font-medium">{error}</p>
               <button
                 onClick={fetchAll}
-                className="mt-4 px-4 py-2 bg-blue-600 text-white text-sm hover:bg-blue-700"
+                className="mt-4 px-4 py-2 bg-brand text-white text-sm hover:bg-brand-hover"
               >
                 Retry
               </button>
@@ -236,7 +236,7 @@ export default function SubscriptionsPage() {
                       <td className="px-4 py-4 text-sm text-gray-500">{sub.status === 'trial' ? formatDate(sub.trialEndDate) : formatDate(sub.nextBillingDate)}</td>
                       <td className="px-4 py-4">
                         <div className="flex flex-wrap gap-2">
-                          <button onClick={() => openAction(sub, 'assign-plan')} className="text-xs text-blue-600 hover:text-blue-800 font-medium">
+                          <button onClick={() => openAction(sub, 'assign-plan')} className="text-xs text-brand hover:text-brand-navy font-medium">
                             Assign Plan
                           </button>
                           <button onClick={() => openAction(sub, 'extend-trial')} className="text-xs text-yellow-600 hover:text-yellow-800 font-medium">
@@ -286,7 +286,7 @@ export default function SubscriptionsPage() {
                   <select
                     value={actionPlanId}
                     onChange={e => setActionPlanId(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                    className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white"
                   >
                     <option value="">— choose a plan —</option>
                     {plans.map(p => (
@@ -300,7 +300,7 @@ export default function SubscriptionsPage() {
                     type="date"
                     value={actionBillingDate}
                     onChange={e => setActionBillingDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                    className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white"
                   />
                   {actionBillingDate && (
                     <p className="mt-1 text-xs text-gray-500">
@@ -320,7 +320,7 @@ export default function SubscriptionsPage() {
                   max="365"
                   value={actionDays}
                   onChange={e => setActionDays(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white"
                 />
               </div>
             )}
@@ -341,7 +341,7 @@ export default function SubscriptionsPage() {
               <button
                 onClick={executeAction}
                 disabled={actionSaving || (actionModal.action === 'assign-plan' && !actionPlanId)}
-                className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50"
+                className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover disabled:opacity-50"
               >
                 {actionSaving ? 'Saving...' : 'Confirm'}
               </button>

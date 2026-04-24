@@ -62,7 +62,7 @@ export default function MultiCurrencySettings({ settings, tenant, onUpdate, dict
                 },
               });
             }}
-            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+            className="w-4 h-4 text-brand border-gray-300 rounded focus:ring-brand"
           />
           <span className="text-sm font-medium text-gray-700">{dict?.admin?.enableMultiCurrencyDisplay || 'Enable Multi-Currency Display'}</span>
         </label>
@@ -93,7 +93,7 @@ export default function MultiCurrencySettings({ settings, tenant, onUpdate, dict
                         },
                       });
                     }}
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    className="w-4 h-4 text-brand border-gray-300 rounded focus:ring-brand"
                   />
                   <span className="text-sm text-gray-700">{currency}</span>
                 </label>
@@ -115,7 +115,7 @@ export default function MultiCurrencySettings({ settings, tenant, onUpdate, dict
                   },
                 });
               }}
-              className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand"
             >
               <option value="manual">{dict?.admin?.manualEntry || 'Manual Entry'}</option>
               <option value="api">{dict?.admin?.automaticAPI || 'Automatic (API)'}</option>
@@ -138,7 +138,7 @@ export default function MultiCurrencySettings({ settings, tenant, onUpdate, dict
                     },
                   });
                 }}
-                className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand"
                 placeholder={dict?.admin?.apiKeyPlaceholder || 'API key for exchange rate service'}
               />
               <p className="mt-1 text-xs text-gray-500">
@@ -157,7 +157,7 @@ export default function MultiCurrencySettings({ settings, tenant, onUpdate, dict
                   type="button"
                   onClick={fetchExchangeRates}
                   disabled={loading}
-                  className="px-4 py-2 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:bg-gray-400"
+                  className="px-4 py-2 bg-brand text-white text-sm font-medium hover:bg-brand-hover disabled:bg-gray-400"
                 >
                   {loading ? (dict?.admin?.fetching || 'Fetching...') : (dict?.admin?.fetchLatestRates || 'Fetch Latest Rates')}
                 </button>

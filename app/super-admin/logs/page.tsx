@@ -103,21 +103,21 @@ export default function LogsPage() {
               placeholder="Tenant slug"
               value={tenantSlug}
               onChange={e => setTenantSlug(e.target.value)}
-              className="px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 bg-white w-36"
+              className="px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white w-36"
             />
             <input
               type="text"
               placeholder="Action (e.g. create)"
               value={action}
               onChange={e => setAction(e.target.value)}
-              className="px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 bg-white w-44"
+              className="px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white w-44"
             />
             <input
               type="text"
               placeholder="Entity type"
               value={entityType}
               onChange={e => setEntityType(e.target.value)}
-              className="px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 bg-white w-36"
+              className="px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white w-36"
             />
             <div className="flex items-center gap-1.5">
               <label className="text-xs text-gray-500 whitespace-nowrap">From</label>
@@ -125,7 +125,7 @@ export default function LogsPage() {
                 type="date"
                 value={startDate}
                 onChange={e => setStartDate(e.target.value)}
-                className="px-2 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                className="px-2 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white"
               />
             </div>
             <div className="flex items-center gap-1.5">
@@ -134,17 +134,17 @@ export default function LogsPage() {
                 type="date"
                 value={endDate}
                 onChange={e => setEndDate(e.target.value)}
-                className="px-2 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                className="px-2 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white"
               />
             </div>
             <select
               value={limit}
               onChange={e => { setLimit(Number(e.target.value)); setPage(1); }}
-              className="px-2 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+              className="px-2 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white"
             >
               {PAGE_SIZES.map(s => <option key={s} value={s}>{s} / page</option>)}
             </select>
-            <button type="submit" className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700">
+            <button type="submit" className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover">
               Search
             </button>
             <button
@@ -160,7 +160,7 @@ export default function LogsPage() {
         <div className="bg-white border border-gray-200">
           {loading ? (
             <div className="p-12 text-center">
-              <div className="inline-block animate-spin h-6 w-6 border-2 border-blue-600 border-t-transparent rounded-full" />
+              <div className="inline-block animate-spin h-6 w-6 border-2 border-brand border-t-transparent rounded-full" />
               <p className="mt-3 text-gray-500 text-sm">Loading logs...</p>
             </div>
           ) : error ? (
@@ -168,7 +168,7 @@ export default function LogsPage() {
               <p className="text-red-600 text-sm font-medium">{error}</p>
               <button
                 onClick={fetchLogs}
-                className="mt-4 px-4 py-2 bg-blue-600 text-white text-sm hover:bg-blue-700"
+                className="mt-4 px-4 py-2 bg-brand text-white text-sm hover:bg-brand-hover"
               >
                 Retry
               </button>
@@ -219,7 +219,7 @@ export default function LogsPage() {
                             {log.changes && Object.keys(log.changes).length > 0 && (
                               <button
                                 onClick={() => setExpandedId(expandedId === log._id ? null : log._id)}
-                                className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                                className="text-xs text-brand hover:text-brand-navy font-medium"
                               >
                                 {expandedId === log._id ? 'Hide' : 'Changes'}
                               </button>

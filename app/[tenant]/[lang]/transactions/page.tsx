@@ -96,7 +96,7 @@ export default function TransactionsPage() {
   const [displayMode, setDisplayMode] = useState<'grid' | 'list'>('list');
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const { settings: tenantSettings } = useTenantSettings();
-  const primaryColor = (tenantSettings || getDefaultTenantSettings()).primaryColor || '#2563eb';
+  const primaryColor = (tenantSettings || getDefaultTenantSettings()).primaryColor || '#35979c';
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -493,7 +493,7 @@ export default function TransactionsPage() {
               if (item.type === 'transaction') {
                 const transaction = item.data as Transaction;
                 return (
-                  <div key={transaction._id} className="group relative bg-white border border-gray-300 rounded-lg p-4 sm:p-5 hover:shadow-lg hover:border-blue-300 transition-all duration-200 flex flex-col">
+                  <div key={transaction._id} className="group relative bg-white border border-gray-300 rounded-lg p-4 sm:p-5 hover:shadow-lg hover:border-teal-300 transition-all duration-200 flex flex-col">
                     <div className="flex-1 mb-4">
                       <div className="flex items-start justify-between mb-2">
                         <div className="flex-1">
@@ -742,7 +742,7 @@ export default function TransactionsPage() {
                         selectedTransaction.status === 'completed'
                           ? 'bg-green-100 text-green-800 border-green-300'
                           : selectedTransaction.status === 'refunded'
-                          ? 'bg-blue-100 text-blue-800 border-blue-300'
+                          ? 'bg-brand-soft text-brand-navy border-teal-300'
                           : 'bg-red-100 text-red-800 border-red-300'
                       }`}>
                         {selectedTransaction.status}
@@ -1044,7 +1044,7 @@ export default function TransactionsPage() {
                       <label className="text-sm font-medium text-gray-700">{dict.transactions?.items || 'Items'}</label>
                       <button
                         onClick={() => setManualItems((prev) => [...prev, emptyItem()])}
-                        className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
+                        className="text-xs text-brand hover:text-brand-navy font-medium flex items-center gap-1"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
                         {dict.transactions?.addItem || 'Add item'}
@@ -1215,7 +1215,7 @@ export default function TransactionsPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500">{dict.common.total}:</span>
-                    <span className="font-bold text-blue-600"><Currency amount={adjustTransaction.total} /></span>
+                    <span className="font-bold text-brand"><Currency amount={adjustTransaction.total} /></span>
                   </div>
                 </div>
                 {!adjustSuccess ? (

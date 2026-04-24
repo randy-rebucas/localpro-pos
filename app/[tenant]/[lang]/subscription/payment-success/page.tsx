@@ -19,7 +19,7 @@ export default function PaymentSuccessPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const { settings } = useTenantSettings();
   const tenantSettings = settings || getDefaultTenantSettings();
-  const primaryColor = tenantSettings.primaryColor || '#2563eb';
+  const primaryColor = tenantSettings.primaryColor || '#35979c';
 
   // Accept both 'orderId' and 'token' as PayPal order ID
   const orderId = searchParams.get('orderId') || searchParams.get('token');

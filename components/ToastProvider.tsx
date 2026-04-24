@@ -37,7 +37,7 @@ export default function ToastProvider() {
         },
         loading: {
           iconTheme: {
-            primary: '#3b82f6',
+            primary: '#35979c',
             secondary: '#fff',
           },
         },

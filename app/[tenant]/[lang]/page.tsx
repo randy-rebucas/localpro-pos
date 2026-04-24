@@ -94,7 +94,7 @@ export default function Dashboard() {
   const { settings } = useTenantSettings();
   const { logout, user: authUser } = useAuth();
   const isCashier = authUser?.role === 'cashier';
-  const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#3b82f6';
+  const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#35979c';
   const enableOnAccountSales = settings?.enableOnAccountSales === true;
   const rawBt = (settings?.businessType || 'general').toLowerCase();
   const businessType = (['retail', 'restaurant', 'laundry', 'service'] as const).includes(rawBt as 'retail' | 'restaurant' | 'laundry' | 'service') ? rawBt as 'retail' | 'restaurant' | 'laundry' | 'service' : 'general' as const;
@@ -1013,8 +1013,8 @@ export default function Dashboard() {
       {isCashier && !cashDrawerSession && !cashDrawerLoading && !loading && (
         <div className="fixed inset-0 z-50 bg-gray-900/60 flex items-center justify-center" style={{ top: '64px' }}>
           <div className="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full mx-4 text-center">
-            <div className="w-16 h-16 mx-auto mb-4 bg-blue-100 rounded-full flex items-center justify-center">
-              <svg className="w-8 h-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <div className="w-16 h-16 mx-auto mb-4 bg-brand-soft rounded-full flex items-center justify-center">
+              <svg className="w-8 h-8 text-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
             </div>
@@ -1100,7 +1100,7 @@ export default function Dashboard() {
                       value={drawerAmount}
                       onChange={(e) => setDrawerAmount(e.target.value)}
                       placeholder="0.00"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-brand focus:border-brand"
                       autoFocus
                     />
                   </div>
@@ -1111,7 +1111,7 @@ export default function Dashboard() {
                       value={drawerNotes}
                       onChange={(e) => setDrawerNotes(e.target.value)}
                       placeholder="e.g. Morning shift"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-brand"
                     />
                   </div>
                 </div>
@@ -1256,7 +1256,7 @@ export default function Dashboard() {
                                   const product = products.find(p => p._id === item.productId);
                                   if (product) handleBranchLookup(product);
                                 }}
-                                className="ml-1 text-gray-400 hover:text-blue-600 transition-colors"
+                                className="ml-1 text-gray-400 hover:text-brand transition-colors"
                                 title={dictValue('pos.titleCheckStock', 'Check stock at other locations')}
                               >
                                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1810,13 +1810,13 @@ export default function Dashboard() {
 
                       {/* Service/laundry: Schedule appointment */}
                       {(businessType === 'service' || businessType === 'laundry') && (
-                        <div className={`flex flex-col justify-center gap-1 bg-blue-50 border-2 border-blue-200 text-gray-700 font-medium text-xs min-h-[64px] ${roamingMode ? 'w-full px-2 py-1.5 text-[11px]' : 'px-4 py-2 min-w-[140px]'}`}>
-                          <span className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide">{dictValue('pos.scheduleFor', 'Schedule for')}</span>
+                        <div className={`flex flex-col justify-center gap-1 bg-brand-soft border-2 border-teal-200 text-gray-700 font-medium text-xs min-h-[64px] ${roamingMode ? 'w-full px-2 py-1.5 text-[11px]' : 'px-4 py-2 min-w-[140px]'}`}>
+                          <span className="text-[10px] font-semibold text-brand uppercase tracking-wide">{dictValue('pos.scheduleFor', 'Schedule for')}</span>
                           <input
                             type="datetime-local"
                             value={scheduledFor}
                             onChange={(e) => setScheduledFor(e.target.value)}
-                            className={`border border-blue-300 bg-white font-medium focus:outline-none focus:border-blue-500 ${roamingMode ? 'px-1 py-0.5 text-[10px]' : 'px-1 py-1 text-xs'}`}
+                            className={`border border-teal-300 bg-white font-medium focus:outline-none focus:border-brand ${roamingMode ? 'px-1 py-0.5 text-[10px]' : 'px-1 py-1 text-xs'}`}
                           />
                         </div>
                       )}
@@ -2072,7 +2072,7 @@ export default function Dashboard() {
                         ) : null}
                         {/* Retail: variants chip */}
                         {product.hasVariations && product.variations?.length ? (
-                          <span className="absolute bottom-10 left-2 z-20 text-[9px] bg-blue-600/90 text-white px-1.5 py-0.5 font-semibold">
+                          <span className="absolute bottom-10 left-2 z-20 text-[9px] bg-brand/90 text-white px-1.5 py-0.5 font-semibold">
                             {product.variations.length} variants
                           </span>
                         ) : null}
@@ -2390,8 +2390,8 @@ export default function Dashboard() {
 
                   {/* Tap to Pay — NFC info */}
                   {paymentMethod === 'tap_to_pay' && (
-                    <div className="flex items-center gap-3 px-4 py-3 bg-blue-50 border border-blue-200 text-sm text-blue-800">
-                      <svg className="w-5 h-5 flex-shrink-0 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <div className="flex items-center gap-3 px-4 py-3 bg-brand-soft border border-teal-200 text-sm text-brand-navy">
+                      <svg className="w-5 h-5 flex-shrink-0 text-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
                       </svg>
                       <span>{dictValue('pos.nfcInstruction', 'Hold phone or wearable near the reader. Supports Apple Pay, Google Pay & NFC cards.')}</span>
@@ -3396,7 +3396,7 @@ export default function Dashboard() {
                     }}
                     className={`flex flex-col items-start p-3 border-2 transition-all text-left ${outOfStock
                       ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
-                      : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50 cursor-pointer'
+                      : 'border-gray-300 hover:border-brand hover:bg-brand-soft cursor-pointer'
                       }`}
                   >
                     <span className="font-semibold text-sm text-gray-900">{label}</span>

@@ -56,7 +56,7 @@ export default function BusinessTypesPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
@@ -70,7 +70,7 @@ export default function BusinessTypesPage() {
         <div className="mb-6 sm:mb-8">
           <Link
             href={`/${tenant}/${lang}/admin`}
-            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium mb-4 transition-colors"
+            className="inline-flex items-center text-brand hover:text-brand-hover font-medium mb-4 transition-colors"
           >
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -87,19 +87,19 @@ export default function BusinessTypesPage() {
 
         {/* Current Business Type Section */}
         {currentBusinessTypeConfig && (
-          <div className="bg-blue-50 border-2 border-blue-300 p-6 mb-6">
+          <div className="bg-brand-soft border-2 border-teal-300 p-6 mb-6">
             <div className="flex items-start justify-between">
               <div>
-                <h2 className="text-lg font-bold text-blue-900 mb-2">
+                <h2 className="text-lg font-bold text-brand-navy-deep mb-2">
                   {dict?.admin?.currentBusinessType || 'Your Business Type'}
                 </h2>
-                <p className="text-blue-800 mb-4">{currentBusinessTypeConfig.name}</p>
-                <p className="text-sm text-blue-700 mb-4">{currentBusinessTypeConfig.description}</p>
+                <p className="text-brand-navy mb-4">{currentBusinessTypeConfig.name}</p>
+                <p className="text-sm text-brand-hover mb-4">{currentBusinessTypeConfig.description}</p>
                 <div className="flex flex-wrap gap-2">
                   {currentBusinessTypeConfig.productTypes.map(pt => (
                     <span
                       key={pt}
-                      className="px-3 py-1 text-xs font-medium bg-blue-100 text-blue-800 border border-blue-300 capitalize"
+                      className="px-3 py-1 text-xs font-medium bg-brand-soft text-brand-navy border border-teal-300 capitalize"
                     >
                       {pt}
                     </span>
@@ -107,7 +107,7 @@ export default function BusinessTypesPage() {
                 </div>
                 {currentBusinessTypeConfig.defaultFeatures && (
                   <div className="mt-4">
-                    <p className="text-sm font-semibold text-blue-900 mb-2">
+                    <p className="text-sm font-semibold text-brand-navy-deep mb-2">
                       {dict?.admin?.enabledFeatures || 'Enabled Features'}
                     </p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -116,7 +116,7 @@ export default function BusinessTypesPage() {
                           <span className={enabled ? 'text-lg' : 'text-lg opacity-40'}>
                             {enabled ? '✓' : '✗'}
                           </span>
-                          <span className={`text-sm ${enabled ? 'text-blue-900' : 'text-blue-600'}`}>
+                          <span className={`text-sm ${enabled ? 'text-brand-navy-deep' : 'text-brand'}`}>
                             {getFeatureFlagLabel(key, dict)}
                           </span>
                         </div>

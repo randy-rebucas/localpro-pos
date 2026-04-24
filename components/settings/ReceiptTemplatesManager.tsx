@@ -129,7 +129,7 @@ export default function ReceiptTemplatesManager({ settings, tenant, onUpdate, di
             setEditing(null);
             setShowEditor(true);
           }}
-          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
+          className="px-4 py-2 bg-brand text-white text-sm font-medium hover:bg-brand-hover"
         >
           {dict?.receiptTemplates?.createNew || 'Create New Template'}
         </button>
@@ -173,7 +173,7 @@ export default function ReceiptTemplatesManager({ settings, tenant, onUpdate, di
                   <div>
                     <h4 className="font-medium text-gray-900">{template.name}</h4>
                     {template.isDefault && (
-                      <span className="text-xs text-blue-600 font-medium">{dict?.receiptTemplates?.default || 'Default'}</span>
+                      <span className="text-xs text-brand font-medium">{dict?.receiptTemplates?.default || 'Default'}</span>
                     )}
                   </div>
                 </div>
@@ -181,7 +181,7 @@ export default function ReceiptTemplatesManager({ settings, tenant, onUpdate, di
                   {!template.isDefault && (
                     <button
                       onClick={() => handleSetDefault(template.id)}
-                      className="px-3 py-1 text-xs text-blue-600 hover:text-blue-700 font-medium"
+                      className="px-3 py-1 text-xs text-brand hover:text-brand-hover font-medium"
                     >
                       {dict?.receiptTemplates?.setDefault || 'Set Default'}
                     </button>
@@ -382,7 +382,7 @@ function TemplateEditor({
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand"
             placeholder={dict?.receiptTemplates?.templateNamePlaceholder || 'My Custom Receipt'}
           />
         </div>
@@ -393,7 +393,7 @@ function TemplateEditor({
             id="isDefault"
             checked={isDefault}
             onChange={(e) => setIsDefault(e.target.checked)}
-            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+            className="w-4 h-4 text-brand border-gray-300 rounded focus:ring-brand"
           />
           <label htmlFor="isDefault" className="text-sm text-gray-700">
             {dict?.receiptTemplates?.setAsDefault || 'Set as default template'}
@@ -406,7 +406,7 @@ function TemplateEditor({
             <button
               type="button"
               onClick={() => setPreview(!preview)}
-              className="px-3 py-1 text-xs text-blue-600 hover:text-blue-700 font-medium"
+              className="px-3 py-1 text-xs text-brand hover:text-brand-hover font-medium"
             >
               {preview ? (dict?.common?.edit || 'Edit') : (dict?.receiptTemplates?.preview || 'Preview')}
             </button>
@@ -420,27 +420,27 @@ function TemplateEditor({
               value={html}
               onChange={(e) => setHtml(e.target.value)}
               rows={20}
-              className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+              className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand font-mono text-sm"
               placeholder={dict?.receiptTemplates?.htmlPlaceholder || 'Enter HTML template...'}
             />
           )}
         </div>
 
-        <div className="bg-blue-50 border border-blue-200 rounded p-3">
-          <p className="text-xs font-medium text-blue-900 mb-2">{dict?.receiptTemplates?.availableVariables || 'Available Variables:'}</p>
-          <div className="text-xs text-blue-800 space-y-1">
-            <div><code className="bg-blue-100 px-1 rounded">{'{{storeName}}'}</code>, <code className="bg-blue-100 px-1 rounded">{'{{logo}}'}</code>, <code className="bg-blue-100 px-1 rounded">{'{{address}}'}</code>, <code className="bg-blue-100 px-1 rounded">{'{{phone}}'}</code>, <code className="bg-blue-100 px-1 rounded">{'{{email}}'}</code></div>
-            <div><code className="bg-blue-100 px-1 rounded">{'{{receiptNumber}}'}</code>, <code className="bg-blue-100 px-1 rounded">{'{{date}}'}</code>, <code className="bg-blue-100 px-1 rounded">{'{{time}}'}</code></div>
-            <div><code className="bg-blue-100 px-1 rounded">{'{{#each items}}'}</code> - {dict?.receiptTemplates?.loopThroughItems || 'Loop through items'}</div>
-            <div><code className="bg-blue-100 px-1 rounded">{'{{#if condition}}'}</code> - {dict?.receiptTemplates?.conditionalBlocks || 'Conditional blocks'}</div>
-            <div><code className="bg-blue-100 px-1 rounded">{'{{subtotal}}'}</code>, <code className="bg-blue-100 px-1 rounded">{'{{tax}}'}</code>, <code className="bg-blue-100 px-1 rounded">{'{{total}}'}</code></div>
+        <div className="bg-brand-soft border border-teal-200 rounded p-3">
+          <p className="text-xs font-medium text-brand-navy-deep mb-2">{dict?.receiptTemplates?.availableVariables || 'Available Variables:'}</p>
+          <div className="text-xs text-brand-navy space-y-1">
+            <div><code className="bg-brand-soft px-1 rounded">{'{{storeName}}'}</code>, <code className="bg-brand-soft px-1 rounded">{'{{logo}}'}</code>, <code className="bg-brand-soft px-1 rounded">{'{{address}}'}</code>, <code className="bg-brand-soft px-1 rounded">{'{{phone}}'}</code>, <code className="bg-brand-soft px-1 rounded">{'{{email}}'}</code></div>
+            <div><code className="bg-brand-soft px-1 rounded">{'{{receiptNumber}}'}</code>, <code className="bg-brand-soft px-1 rounded">{'{{date}}'}</code>, <code className="bg-brand-soft px-1 rounded">{'{{time}}'}</code></div>
+            <div><code className="bg-brand-soft px-1 rounded">{'{{#each items}}'}</code> - {dict?.receiptTemplates?.loopThroughItems || 'Loop through items'}</div>
+            <div><code className="bg-brand-soft px-1 rounded">{'{{#if condition}}'}</code> - {dict?.receiptTemplates?.conditionalBlocks || 'Conditional blocks'}</div>
+            <div><code className="bg-brand-soft px-1 rounded">{'{{subtotal}}'}</code>, <code className="bg-brand-soft px-1 rounded">{'{{tax}}'}</code>, <code className="bg-brand-soft px-1 rounded">{'{{total}}'}</code></div>
           </div>
         </div>
 
         <div className="flex items-center space-x-3">
           <button
             onClick={() => onSave({ name, html, isDefault })}
-            className="px-4 py-2 bg-blue-600 text-white font-medium hover:bg-blue-700"
+            className="px-4 py-2 bg-brand text-white font-medium hover:bg-brand-hover"
           >
             {dict?.receiptTemplates?.saveTemplate || 'Save Template'}
           </button>

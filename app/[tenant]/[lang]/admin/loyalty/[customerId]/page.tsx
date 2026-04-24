@@ -47,7 +47,7 @@ export default function LoyaltyCustomerPage() {
         <div className="mb-4">
           <Link
             href={`/${tenant}/${lang}/admin/loyalty`}
-            className="text-sm text-blue-600 hover:underline"
+            className="text-sm text-brand hover:underline"
           >
             {dict?.loyalty?.backToLoyaltyProgram || '← Back to Loyalty Program'}
           </Link>
@@ -65,7 +65,7 @@ export default function LoyaltyCustomerPage() {
                   <p className="text-sm text-gray-500 mt-0.5">{dict?.loyalty?.loyaltyPointsAccount || 'Loyalty Points Account'}</p>
                 </div>
                 <div className="text-right">
-                  <div className="text-3xl font-bold text-blue-600">
+                  <div className="text-3xl font-bold text-brand">
                     {data.loyaltyPointsBalance.toLocaleString()}
                   </div>
                   <div className="text-xs text-gray-400">{dict?.loyalty?.pointsBalance || 'points balance'}</div>
@@ -82,19 +82,19 @@ export default function LoyaltyCustomerPage() {
                   placeholder={dict?.loyalty?.pointsPlaceholder || 'Points (+ to add, - to deduct)'}
                   value={form.points}
                   onChange={(e) => updateForm({ points: e.target.value })}
-                  className="border border-gray-300 rounded px-3 py-2 text-sm w-full sm:w-48 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="border border-gray-300 rounded px-3 py-2 text-sm w-full sm:w-48 focus:outline-none focus:ring-2 focus:ring-brand"
                 />
                 <input
                   type="text"
                   placeholder={dict?.loyalty?.reasonPlaceholder || 'Reason / description'}
                   value={form.description}
                   onChange={(e) => updateForm({ description: e.target.value })}
-                  className="border border-gray-300 rounded px-3 py-2 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="border border-gray-300 rounded px-3 py-2 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-brand"
                 />
                 <button
                   type="submit"
                   disabled={adjusting}
-                  className="bg-blue-600 text-white px-5 py-2 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-60 whitespace-nowrap"
+                  className="bg-brand text-white px-5 py-2 rounded text-sm font-medium hover:bg-brand-hover disabled:opacity-60 whitespace-nowrap"
                 >
                   {adjusting ? (dict?.admin?.saving || 'Saving...') : (dict?.loyalty?.apply || 'Apply')}
                 </button>

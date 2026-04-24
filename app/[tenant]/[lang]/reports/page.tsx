@@ -9,7 +9,7 @@ import Currency from '@/components/Currency';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 
-const DEFAULT_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+const DEFAULT_COLORS = ['#35979c', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 interface SalesReport {
   period: string;
@@ -122,7 +122,7 @@ export default function ReportsPage() {
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const { settings } = useTenantSettings();
-  const primaryColor = settings?.primaryColor || '#3b82f6';
+  const primaryColor = settings?.primaryColor || '#35979c';
   const COLORS = [primaryColor, ...DEFAULT_COLORS.filter(c => c !== primaryColor)].slice(0, 5);
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [loading, setLoading] = useState(true);

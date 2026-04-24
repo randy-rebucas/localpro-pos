@@ -50,7 +50,7 @@ export default function FeatureFlagsPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
@@ -86,7 +86,7 @@ export default function FeatureFlagsPage() {
         <div className="mb-6 sm:mb-8">
           <Link
             href={`/${tenant}/${lang}/admin`}
-            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium mb-4 transition-colors"
+            className="inline-flex items-center text-brand hover:text-brand-hover font-medium mb-4 transition-colors"
           >
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -114,19 +114,19 @@ export default function FeatureFlagsPage() {
         )}
 
         {businessTypeConfig && (
-          <div className="mb-6 p-4 bg-blue-50 border-2 border-blue-300">
+          <div className="mb-6 p-4 bg-brand-soft border-2 border-teal-300">
             <div className="flex items-start gap-3">
-              <svg className="w-6 h-6 flex-shrink-0 mt-0.5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-6 h-6 flex-shrink-0 mt-0.5 text-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <div>
-                <h3 className="text-lg font-semibold text-blue-900 mb-2">
+                <h3 className="text-lg font-semibold text-brand-navy-deep mb-2">
                   Current Business Type: {businessTypeConfig.name}
                 </h3>
-                <p className="text-blue-800 mb-2">
+                <p className="text-brand-navy mb-2">
                   {businessTypeConfig.description}
                 </p>
-                <p className="text-sm text-blue-700">
+                <p className="text-sm text-brand-hover">
                   Default features for this business type are auto-configured. You can override them below.
                 </p>
               </div>
@@ -148,7 +148,7 @@ export default function FeatureFlagsPage() {
                       id={flagKey}
                       checked={isChecked}
                       onChange={(e) => updateSetting(flagKey, e.target.checked)}
-                      className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
+                      className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
                     />
                     <label htmlFor={flagKey} className="ml-3 flex-1">
                       <div className="text-sm font-medium text-gray-900">
@@ -169,7 +169,7 @@ export default function FeatureFlagsPage() {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="px-6 py-3 bg-blue-600 text-white hover:bg-blue-700 font-semibold transition-all duration-200 border border-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-6 py-3 bg-brand text-white hover:bg-brand-hover font-semibold transition-all duration-200 border border-brand-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {saving ? (
                 <>

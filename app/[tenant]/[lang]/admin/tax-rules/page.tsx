@@ -18,7 +18,7 @@ export default function TaxRulesAdminPage() {
   const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState<ITenantSettings | null>(null);
   const { settings: tenantSettings } = useTenantSettings();
-  const primaryColor = (tenantSettings || getDefaultTenantSettings()).primaryColor || '#2563eb';
+  const primaryColor = (tenantSettings || getDefaultTenantSettings()).primaryColor || '#35979c';
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -45,7 +45,7 @@ export default function TaxRulesAdminPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>

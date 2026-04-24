@@ -46,15 +46,15 @@ export default function BusinessTypesPage() {
           </p>
         </div>
 
-        <div className="bg-blue-50 border border-blue-200 p-4 mb-6 text-sm text-blue-800">
+        <div className="bg-brand-soft border border-teal-200 p-4 mb-6 text-sm text-brand-navy">
           <strong>Note:</strong> Business type definitions are code-configured. To add a new vertical, update{' '}
-          <code className="text-xs bg-blue-100 px-1">lib/business-types.ts</code> and deploy.
+          <code className="text-xs bg-brand-soft px-1">lib/business-types.ts</code> and deploy.
           This page is a reference view of the current configuration.
         </div>
 
         {loading ? (
           <div className="p-12 text-center">
-            <div className="inline-block animate-spin h-6 w-6 border-2 border-blue-600 border-t-transparent rounded-full" />
+            <div className="inline-block animate-spin h-6 w-6 border-2 border-brand border-t-transparent rounded-full" />
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

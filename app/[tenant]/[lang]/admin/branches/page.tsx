@@ -70,7 +70,7 @@ export default function BranchesPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
@@ -84,7 +84,7 @@ export default function BranchesPage() {
         <div className="mb-6 sm:mb-8">
           <Link
             href={`/${tenant}/${lang}/admin`}
-            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium mb-4 transition-colors"
+            className="inline-flex items-center text-brand hover:text-brand-hover font-medium mb-4 transition-colors"
           >
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -109,7 +109,7 @@ export default function BranchesPage() {
                 setEditingBranch(null);
                 setShowBranchModal(true);
               }}
-              className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
+              className="px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium border border-brand-hover"
             >
               {dict.common?.add || 'Add'} {dict.admin?.branch || 'Branch'}
             </button>
@@ -148,7 +148,7 @@ export default function BranchesPage() {
                             setEditingBranch(branch);
                             setShowBranchModal(true);
                           }}
-                          className="text-blue-600 hover:text-blue-900"
+                          className="text-brand hover:text-brand-navy-deep"
                         >
                           {dict.common?.edit || 'Edit'}
                         </button>
@@ -241,7 +241,7 @@ function BranchModal({
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                 />
               </div>
               <div>
@@ -252,7 +252,7 @@ function BranchModal({
                   type="text"
                   value={formData.code}
                   onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                   placeholder={dict?.admin?.branchCodePlaceholder || 'BR001'}
                 />
               </div>
@@ -266,35 +266,35 @@ function BranchModal({
                   type="text"
                   value={formData.address?.street || ''}
                   onChange={(e) => setFormData({ ...formData, address: { ...(formData.address || {}), street: e.target.value } })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                   placeholder={dict?.admin?.streetPlaceholder || 'Street'}
                 />
                 <input
                   type="text"
                   value={formData.address?.city || ''}
                   onChange={(e) => setFormData({ ...formData, address: { ...(formData.address || {}), city: e.target.value } })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                   placeholder={dict?.admin?.cityPlaceholder || 'City'}
                 />
                 <input
                   type="text"
                   value={formData.address?.state || ''}
                   onChange={(e) => setFormData({ ...formData, address: { ...(formData.address || {}), state: e.target.value } })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                   placeholder={dict?.admin?.statePlaceholder || 'State'}
                 />
                 <input
                   type="text"
                   value={formData.address?.zipCode || ''}
                   onChange={(e) => setFormData({ ...formData, address: { ...(formData.address || {}), zipCode: e.target.value } })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                   placeholder={dict?.admin?.zipPlaceholder || 'ZIP Code'}
                 />
                 <input
                   type="text"
                   value={formData.address?.country || ''}
                   onChange={(e) => setFormData({ ...formData, address: { ...(formData.address || {}), country: e.target.value } })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                   placeholder={dict?.admin?.countryPlaceholder || 'Country'}
                 />
               </div>
@@ -308,7 +308,7 @@ function BranchModal({
                   type="tel"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                 />
               </div>
               <div>
@@ -319,7 +319,7 @@ function BranchModal({
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                 />
               </div>
             </div>
@@ -330,7 +330,7 @@ function BranchModal({
               <select
                 value={formData.managerId}
                 onChange={(e) => setFormData({ ...formData, managerId: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
               >
                 <option value="">{dict?.common?.select || 'Select Manager'}</option>
                 {users.map((u) => (
@@ -355,7 +355,7 @@ function BranchModal({
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 border border-blue-700"
+                className="px-4 py-2 bg-brand text-white hover:bg-brand-hover border border-brand-hover"
               >
                 {dict?.common?.save || 'Save'}
               </button>

@@ -4,9 +4,12 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
-  --primary-color: #2563eb;
-  --primary-color-light: rgb(59, 130, 246);
-  --primary-color-dark: rgb(37, 99, 235);
+  /* 1Pos brand — see lib/brand-defaults.ts (BRAND_PRIMARY_HEX) */
+  --primary-color: #35979c;
+  --primary-color-light: #4aabae;
+  --primary-color-dark: #2d868a;
+  --brand-navy: #1e3a4c;
+  --brand-navy-deep: #152a38;
 }
 
 @theme inline {
@@ -14,6 +17,12 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --color-brand: #35979c;
+  --color-brand-hover: #2d868a;
+  --color-brand-muted: #5fb3b7;
+  --color-brand-soft: #e8f5f5;
+  --color-brand-navy: #1e3a4c;
+  --color-brand-navy-deep: #152a38;
 }
 
 body {
@@ -46,7 +55,7 @@ button, a {
 button:focus-visible,
 a:focus-visible,
 input:focus-visible {
-  outline: 2px solid #0066cc;
+  outline: 2px solid #35979c;
   outline-offset: 1px;
 }
 
@@ -215,10 +224,10 @@ html {
 /* Glow effect */
 @keyframes glow {
   0%, 100% {
-    box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+    box-shadow: 0 0 20px rgba(53, 151, 156, 0.5);
   }
   50% {
-    box-shadow: 0 0 40px rgba(59, 130, 246, 0.8);
+    box-shadow: 0 0 40px rgba(53, 151, 156, 0.8);
   }
 }
 

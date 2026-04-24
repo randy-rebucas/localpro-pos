@@ -95,7 +95,7 @@ export function getPlaceholderForCustomBorderRadius(dict: any): string { // esli
 }
 
 export function getPlaceholderForCustomCSS(dict: any): string { // eslint-disable-line @typescript-eslint/no-explicit-any
-  return dict?.admin?.customCSSPlaceholder || ':root { --primary-color: #2563eb; }';
+  return dict?.admin?.customCSSPlaceholder || ':root { --primary-color: #35979c; }';
 }
 
 export function getCustomCSSHint(dict: any): string { // eslint-disable-line @typescript-eslint/no-explicit-any

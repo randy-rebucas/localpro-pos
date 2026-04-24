@@ -171,7 +171,7 @@ export default function CustomersPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
@@ -186,7 +186,7 @@ export default function CustomersPage() {
         <div className="mb-6 sm:mb-8">
           <Link
             href={`/${tenant}/${lang}/admin`}
-            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium mb-4 transition-colors"
+            className="inline-flex items-center text-brand hover:text-brand-hover font-medium mb-4 transition-colors"
           >
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -210,7 +210,7 @@ export default function CustomersPage() {
               aria-busy="true"
               aria-live="polite"
             >
-              <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600" />
+              <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand" />
             </div>
           )}
           {/* Search & Filters */}
@@ -221,12 +221,12 @@ export default function CustomersPage() {
                 placeholder={dict?.common?.search || 'Search...'}
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-                className="px-4 py-2 border border-gray-300 text-sm focus:outline-none focus:border-blue-500 w-full sm:w-64"
+                className="px-4 py-2 border border-gray-300 text-sm focus:outline-none focus:border-brand w-full sm:w-64"
               />
               <select
                 value={filterActive}
                 onChange={(e) => { setFilterActive(e.target.value); setPage(1); }}
-                className="px-4 py-2 border border-gray-300 text-sm focus:outline-none focus:border-blue-500"
+                className="px-4 py-2 border border-gray-300 text-sm focus:outline-none focus:border-brand"
               >
                 <option value="all">{dict?.common?.all || 'All'}</option>
                 <option value="true">{dict?.common?.active || 'Active'}</option>
@@ -235,7 +235,7 @@ export default function CustomersPage() {
             </div>
             <button
               onClick={openCreate}
-              className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700 whitespace-nowrap"
+              className="px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium border border-brand-hover whitespace-nowrap"
             >
               {dict?.common?.add || 'Add'} {dict?.admin?.customer || 'Customer'}
             </button>
@@ -315,7 +315,7 @@ export default function CustomersPage() {
                         <div className="flex flex-wrap gap-2">
                           <button
                             onClick={() => openEdit(customer)}
-                            className="text-blue-600 hover:text-blue-800 font-medium"
+                            className="text-brand hover:text-brand-navy font-medium"
                           >
                             {dict?.common?.edit || 'Edit'}
                           </button>
@@ -402,7 +402,7 @@ export default function CustomersPage() {
                   step="0.01"
                   value={bpAmount}
                   onChange={(e) => setBpAmount(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-brand"
                 />
               </div>
               <div>
@@ -410,7 +410,7 @@ export default function CustomersPage() {
                 <select
                   value={bpMethod}
                   onChange={(e) => setBpMethod(e.target.value as typeof bpMethod)}
-                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-blue-500 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-brand bg-white"
                 >
                   <option value="cash">{dict?.pos?.cash || 'Cash'}</option>
                   <option value="card">{dict?.pos?.card || 'Card'}</option>
@@ -427,7 +427,7 @@ export default function CustomersPage() {
                   value={bpNotes}
                   onChange={(e) => setBpNotes(e.target.value)}
                   rows={2}
-                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-blue-500 resize-none"
+                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-brand resize-none"
                 />
               </div>
             </div>
@@ -476,7 +476,7 @@ export default function CustomersPage() {
                     type="text"
                     value={formData.firstName}
                     onChange={(e) => setFormData({ firstName: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-brand"
                   />
                 </div>
                 <div>
@@ -487,7 +487,7 @@ export default function CustomersPage() {
                     type="text"
                     value={formData.lastName}
                     onChange={(e) => setFormData({ lastName: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-brand"
                   />
                 </div>
               </div>
@@ -499,7 +499,7 @@ export default function CustomersPage() {
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ email: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-brand"
                 />
               </div>
               <div>
@@ -510,7 +510,7 @@ export default function CustomersPage() {
                   type="tel"
                   value={formData.phone}
                   onChange={(e) => setFormData({ phone: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-brand"
                 />
               </div>
               <div>
@@ -522,7 +522,7 @@ export default function CustomersPage() {
                   value={formData.tags}
                   onChange={(e) => setFormData({ tags: e.target.value })}
                   placeholder="VIP, Regular, Wholesale"
-                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-brand"
                 />
               </div>
               <div>
@@ -533,7 +533,7 @@ export default function CustomersPage() {
                   value={formData.notes}
                   onChange={(e) => setFormData({ notes: e.target.value })}
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-blue-500 resize-none"
+                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-brand resize-none"
                 />
               </div>
               {error && <div className="text-sm text-red-600">{error}</div>}
@@ -548,7 +548,7 @@ export default function CustomersPage() {
               <button
                 onClick={handleSave}
                 disabled={submitting}
-                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 border border-blue-700 disabled:opacity-50"
+                className="px-4 py-2 bg-brand text-white text-sm font-medium hover:bg-brand-hover border border-brand-hover disabled:opacity-50"
               >
                 {submitting ? (dict?.common?.saving || 'Saving...') : (dict?.common?.save || 'Save')}
               </button>

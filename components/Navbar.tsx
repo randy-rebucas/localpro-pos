@@ -31,7 +31,7 @@ export default function Navbar() {
     // SubscriptionProvider not available, subscriptionStatus remains null
   }
 
-  const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#3b82f6';
+  const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#35979c';
   const isAdmin = user && (user.role === 'admin' || hasRole(['admin']));
 
   useEffect(() => {

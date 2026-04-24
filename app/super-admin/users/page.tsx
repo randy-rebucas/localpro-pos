@@ -24,7 +24,7 @@ interface Pagination {
 
 const ROLE_BADGE: Record<string, string> = {
   owner: 'bg-purple-100 text-purple-800 border-purple-200',
-  admin: 'bg-blue-100 text-blue-800 border-blue-200',
+  admin: 'bg-brand-soft text-brand-navy border-teal-200',
   manager: 'bg-indigo-100 text-indigo-800 border-indigo-200',
   cashier: 'bg-gray-100 text-gray-700 border-gray-200',
   viewer: 'bg-gray-50 text-gray-500 border-gray-200',
@@ -155,24 +155,24 @@ export default function UsersPage() {
             placeholder="Search name or email..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 bg-white w-52"
+            className="px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white w-52"
           />
           <input
             type="text"
             placeholder="Tenant slug"
             value={tenantSlug}
             onChange={e => setTenantSlug(e.target.value)}
-            className="px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 bg-white w-36"
+            className="px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white w-36"
           />
           <select
             value={roleFilter}
             onChange={e => setRoleFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+            className="px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white"
           >
             <option value="">All roles</option>
             {ROLES.map(r => <option key={r} value={r} className="capitalize">{r}</option>)}
           </select>
-          <button type="submit" className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700">
+          <button type="submit" className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover">
             Search
           </button>
           <button
@@ -187,7 +187,7 @@ export default function UsersPage() {
         <div className="bg-white border border-gray-200">
           {loading ? (
             <div className="p-12 text-center">
-              <div className="inline-block animate-spin h-6 w-6 border-2 border-blue-600 border-t-transparent rounded-full" />
+              <div className="inline-block animate-spin h-6 w-6 border-2 border-brand border-t-transparent rounded-full" />
               <p className="mt-3 text-gray-500 text-sm">Loading users...</p>
             </div>
           ) : error ? (
@@ -195,7 +195,7 @@ export default function UsersPage() {
               <p className="text-red-600 text-sm font-medium">{error}</p>
               <button
                 onClick={fetchUsers}
-                className="mt-4 px-4 py-2 bg-blue-600 text-white text-sm hover:bg-blue-700"
+                className="mt-4 px-4 py-2 bg-brand text-white text-sm hover:bg-brand-hover"
               >
                 Retry
               </button>
@@ -248,7 +248,7 @@ export default function UsersPage() {
                                 Activate
                               </button>
                             )}
-                            <button onClick={() => openAction(user, 'change-role')} className="text-blue-600 hover:text-blue-800 font-medium">
+                            <button onClick={() => openAction(user, 'change-role')} className="text-brand hover:text-brand-navy font-medium">
                               Role
                             </button>
                           </div>
@@ -303,7 +303,7 @@ export default function UsersPage() {
                 <select
                   value={newRole}
                   onChange={e => setNewRole(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white"
                 >
                   {ROLES.map(r => <option key={r} value={r} className="capitalize">{r}</option>)}
                 </select>
@@ -326,7 +326,7 @@ export default function UsersPage() {
               <button
                 onClick={executeAction}
                 disabled={saving}
-                className={`px-4 py-2 text-white text-sm font-semibold disabled:opacity-50 ${actionModal.action === 'deactivate' ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'}`}
+                className={`px-4 py-2 text-white text-sm font-semibold disabled:opacity-50 ${actionModal.action === 'deactivate' ? 'bg-red-600 hover:bg-red-700' : 'bg-brand hover:bg-brand-hover'}`}
               >
                 {saving ? 'Saving...' : 'Confirm'}
               </button>

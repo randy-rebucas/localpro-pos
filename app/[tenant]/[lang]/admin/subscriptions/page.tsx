@@ -30,7 +30,7 @@ export default function SubscriptionsPage() {
   const { Dialog: ConfirmDialog } = useConfirm();
   const { settings } = useTenantSettings();
   const tenantSettings = settings || getDefaultTenantSettings();
-  const primaryColor = tenantSettings.primaryColor || '#2563eb';
+  const primaryColor = tenantSettings.primaryColor || '#35979c';
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -60,7 +60,7 @@ export default function SubscriptionsPage() {
         <div className="mb-6 sm:mb-8">
           <Link
             href={`/${tenant}/${lang}/admin`}
-            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium mb-4 transition-colors"
+            className="inline-flex items-center text-brand hover:text-brand-hover font-medium mb-4 transition-colors"
           >
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -180,43 +180,43 @@ export default function SubscriptionsPage() {
 
                     {/* BIR Compliance Features */}
                     {subscription.planId?.birCompliance && (
-                      <div className="bg-blue-50 border border-blue-200 p-4">
-                        <h3 className="text-sm font-semibold text-blue-900 mb-3">{dict?.admin?.birComplianceIncluded || 'BIR Compliance Included'}</h3>
+                      <div className="bg-brand-soft border border-teal-200 p-4">
+                        <h3 className="text-sm font-semibold text-brand-navy-deep mb-3">{dict?.admin?.birComplianceIncluded || 'BIR Compliance Included'}</h3>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                           {subscription.planId.birCompliance.auditTrailSystem && (
                             <div className="flex items-center gap-1.5">
-                              <CheckCircle className="h-3.5 w-3.5 text-blue-600 flex-shrink-0" />
-                              <span className="text-xs text-blue-800">{dict?.admin?.birAuditTrail || 'Audit Trail System'}</span>
+                              <CheckCircle className="h-3.5 w-3.5 text-brand flex-shrink-0" />
+                              <span className="text-xs text-brand-navy">{dict?.admin?.birAuditTrail || 'Audit Trail System'}</span>
                             </div>
                           )}
                           {subscription.planId.birCompliance.ptuAssistance && (
                             <div className="flex items-center gap-1.5">
-                              <CheckCircle className="h-3.5 w-3.5 text-blue-600 flex-shrink-0" />
-                              <span className="text-xs text-blue-800">{dict?.admin?.birPtuAssistance || 'PTU Assistance'}</span>
+                              <CheckCircle className="h-3.5 w-3.5 text-brand flex-shrink-0" />
+                              <span className="text-xs text-brand-navy">{dict?.admin?.birPtuAssistance || 'PTU Assistance'}</span>
                             </div>
                           )}
                           {subscription.planId.birCompliance.receiptFormatting && (
                             <div className="flex items-center gap-1.5">
-                              <CheckCircle className="h-3.5 w-3.5 text-blue-600 flex-shrink-0" />
-                              <span className="text-xs text-blue-800">{dict?.admin?.birReceiptFormatting || 'BIR Receipt Formatting'}</span>
+                              <CheckCircle className="h-3.5 w-3.5 text-brand flex-shrink-0" />
+                              <span className="text-xs text-brand-navy">{dict?.admin?.birReceiptFormatting || 'BIR Receipt Formatting'}</span>
                             </div>
                           )}
                           {subscription.planId.birCompliance.birDocumentation && (
                             <div className="flex items-center gap-1.5">
-                              <CheckCircle className="h-3.5 w-3.5 text-blue-600 flex-shrink-0" />
-                              <span className="text-xs text-blue-800">{dict?.admin?.birDocumentation || 'BIR Documentation'}</span>
+                              <CheckCircle className="h-3.5 w-3.5 text-brand flex-shrink-0" />
+                              <span className="text-xs text-brand-navy">{dict?.admin?.birDocumentation || 'BIR Documentation'}</span>
                             </div>
                           )}
                           {subscription.planId.birCompliance.casReporting && (
                             <div className="flex items-center gap-1.5">
-                              <CheckCircle className="h-3.5 w-3.5 text-blue-600 flex-shrink-0" />
-                              <span className="text-xs text-blue-800">{dict?.admin?.birCasReporting || 'CAS-Ready Reporting'}</span>
+                              <CheckCircle className="h-3.5 w-3.5 text-brand flex-shrink-0" />
+                              <span className="text-xs text-brand-navy">{dict?.admin?.birCasReporting || 'CAS-Ready Reporting'}</span>
                             </div>
                           )}
                           {subscription.planId.birCompliance.monthlySupport && (
                             <div className="flex items-center gap-1.5">
-                              <CheckCircle className="h-3.5 w-3.5 text-blue-600 flex-shrink-0" />
-                              <span className="text-xs text-blue-800">{dict?.admin?.birMonthlySupport || 'Monthly Compliance Support'}</span>
+                              <CheckCircle className="h-3.5 w-3.5 text-brand flex-shrink-0" />
+                              <span className="text-xs text-brand-navy">{dict?.admin?.birMonthlySupport || 'Monthly Compliance Support'}</span>
                             </div>
                           )}
                         </div>

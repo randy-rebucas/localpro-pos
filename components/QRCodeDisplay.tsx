@@ -19,7 +19,7 @@ export default function QRCodeDisplay({ qrToken, name, onRegenerate }: QRCodeDis
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [copied, setCopied] = useState(false);
   const { settings } = useTenantSettings();
-  const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#3b82f6';
+  const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#35979c';
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);

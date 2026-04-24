@@ -1,9 +1,11 @@
 'use client';
 
+import Link from 'next/link';
 import { useState, useEffect, useCallback } from 'react';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import type { ITenantSettings } from '@/types/tenant';
 import { normalizeShopifyShopDomain } from '@/lib/ecommerce/shopify-shop-domain';
+import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
 
 type StatusRow = {
   provider: string;
@@ -23,7 +25,8 @@ export default function EcommerceIntegrationsSettings({
 }) {
   const { settings, loading: settingsLoading, refreshSettings } = useTenantSettings();
   const [rows, setRows] = useState<StatusRow[]>([]);
-  const [featureUnlocked, setFeatureUnlocked] = useState(true);
+  /** null = status not loaded yet; avoids flashing full UI as “unlocked” before GET returns */
+  const [featureUnlocked, setFeatureUnlocked] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingPrefs, setSavingPrefs] = useState(false);
   const [shopDomain, setShopDomain] = useState('');
@@ -32,6 +35,19 @@ export default function EcommerceIntegrationsSettings({
   const [wooSecret, setWooSecret] = useState('');
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [syncing, setSyncing] = useState<string | null>(null);
+  const [dict, setDict] = useState<Record<string, unknown> | null>(null);
+
+  const ecDict = (dict?.settings as Record<string, unknown> | undefined)?.ecommerce as
+    | {
+        productionNoticeTitle?: string;
+        productionNoticeBody?: string;
+        viewPlansCta?: string;
+      }
+    | undefined;
+
+  useEffect(() => {
+    getDictionaryClient(lang).then(setDict);
+  }, [lang]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -39,12 +55,18 @@ export default function EcommerceIntegrationsSettings({
       const res = await fetch(`/api/integrations/ecommerce/status?tenant=${encodeURIComponent(tenant)}`, {
         credentials: 'include',
       });
-      const data = await res.json();
-      if (data.success) {
-        setRows(data.data || []);
-        setFeatureUnlocked(data.ecommerceFeatureUnlocked !== false);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        setRows([]);
+        setFeatureUnlocked(false);
+        setMsg({ type: 'error', text: data.error || 'Failed to load integration status.' });
+        return;
       }
+      setRows(data.data || []);
+      setFeatureUnlocked(data.ecommerceFeatureUnlocked !== false);
     } catch {
+      setRows([]);
+      setFeatureUnlocked(false);
       setMsg({ type: 'error', text: 'Failed to load integration status.' });
     } finally {
       setLoading(false);
@@ -206,6 +228,12 @@ export default function EcommerceIntegrationsSettings({
   const showShopifyCard = shopifyLayer || Boolean(shopify?.shopDomain);
   const showWooCard = wooLayer || Boolean(woo?.siteUrl);
 
+  const planLocksEcommerce = featureUnlocked === false;
+  const hasConnectedStore = Boolean(shopify?.shopDomain || woo?.siteUrl);
+  /** When the plan blocks new setup and nothing is connected, hide toggles + “enable above” placeholders */
+  const hideDisconnectedSetupUi = planLocksEcommerce && !hasConnectedStore;
+  const gateClosed = featureUnlocked !== true;
+
   return (
     <section className="space-y-10">
       <div>
@@ -216,11 +244,38 @@ export default function EcommerceIntegrationsSettings({
         </p>
       </div>
 
-      {!featureUnlocked && (
-        <div className="p-4 bg-amber-50 border border-amber-200 text-amber-900 text-sm rounded-sm">
-          In production, this feature requires a subscription plan that includes custom integrations.
+      {featureUnlocked === null && (loading || settingsLoading) ? (
+        <p className="text-gray-600 text-sm">Checking plan access…</p>
+      ) : null}
+
+      {planLocksEcommerce ? (
+        <div
+          className="rounded-lg border-l-4 border-amber-500 bg-amber-50 p-5 shadow-sm ring-1 ring-amber-200/80"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <p className="font-semibold text-amber-950 mb-1.5">
+                {ecDict?.productionNoticeTitle || 'Custom integrations required'}
+              </p>
+              <p className="text-sm text-amber-900/95 leading-relaxed">
+                {ecDict?.productionNoticeBody ||
+                  'In production, this feature requires a subscription plan that includes custom integrations.'}
+              </p>
+            </div>
+            <Link
+              href={`/${tenant}/${lang}/subscription`}
+              className="inline-flex flex-shrink-0 items-center justify-center gap-2 rounded-md bg-amber-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-950 transition-colors"
+            >
+              {ecDict?.viewPlansCta || 'View subscription & plans'}
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+              </svg>
+            </Link>
+          </div>
         </div>
-      )}
+      ) : null}
 
       {msg && (
         <div
@@ -234,77 +289,82 @@ export default function EcommerceIntegrationsSettings({
         </div>
       )}
 
-      {(loading || settingsLoading) && !settings ? (
+      {(loading || settingsLoading) && !settings && featureUnlocked !== null ? (
         <p className="text-gray-600 text-sm">Loading…</p>
       ) : null}
 
-      <div className="border border-gray-300 p-5 rounded-sm bg-white">
-        <h3 className="text-lg font-semibold text-gray-900 mb-1">Store integrations</h3>
-        <p className="text-sm text-gray-600 mb-4">
-          Turn on each channel your business uses. OAuth and API connect are only allowed for enabled channels.
-        </p>
-        <div className="space-y-4 max-w-xl">
-          <label className="flex items-start gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              className="mt-1 h-4 w-4 border-gray-400"
-              checked={shopifyLayer}
-              disabled={
-                savingPrefs ||
-                !featureUnlocked ||
-                Boolean(shopify?.shopDomain) ||
-                settingsLoading ||
-                !settings
-              }
-              onChange={(e) =>
-                persistIntegrationPrefs({
-                  shopifyEnabled: e.target.checked,
-                  wooCommerceEnabled: settings?.integrations?.ecommerce?.wooCommerceEnabled === true,
-                })
-              }
-            />
-            <span>
-              <span className="font-medium text-gray-900">Shopify</span>
-              <span className="block text-xs text-gray-500 mt-0.5">
-                Allow connecting a Shopify store for this tenant.
-                {shopify?.shopDomain ? ' Disconnect first to turn this off.' : ''}
+      {!hideDisconnectedSetupUi && (
+        <div className="border border-gray-300 p-5 rounded-sm bg-white">
+          <h3 className="text-lg font-semibold text-gray-900 mb-1">Store integrations</h3>
+          <p className="text-sm text-gray-600 mb-4">
+            Turn on each channel your business uses. OAuth and API connect are only allowed for enabled channels.
+          </p>
+          <div className="space-y-4 max-w-xl">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4 border-gray-400"
+                checked={shopifyLayer}
+                disabled={
+                  savingPrefs ||
+                  gateClosed ||
+                  Boolean(shopify?.shopDomain) ||
+                  settingsLoading ||
+                  !settings
+                }
+                onChange={(e) =>
+                  persistIntegrationPrefs({
+                    shopifyEnabled: e.target.checked,
+                    wooCommerceEnabled: settings?.integrations?.ecommerce?.wooCommerceEnabled === true,
+                  })
+                }
+              />
+              <span>
+                <span className="font-medium text-gray-900">Shopify</span>
+                <span className="block text-xs text-gray-500 mt-0.5">
+                  Allow connecting a Shopify store for this tenant.
+                  {shopify?.shopDomain ? ' Disconnect first to turn this off.' : ''}
+                </span>
               </span>
-            </span>
-          </label>
-          <label className="flex items-start gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              className="mt-1 h-4 w-4 border-gray-400"
-              checked={wooLayer}
-              disabled={
-                savingPrefs ||
-                !featureUnlocked ||
-                Boolean(woo?.siteUrl) ||
-                settingsLoading ||
-                !settings
-              }
-              onChange={(e) =>
-                persistIntegrationPrefs({
-                  shopifyEnabled: settings?.integrations?.ecommerce?.shopifyEnabled === true,
-                  wooCommerceEnabled: e.target.checked,
-                })
-              }
-            />
-            <span>
-              <span className="font-medium text-gray-900">WooCommerce</span>
-              <span className="block text-xs text-gray-500 mt-0.5">
-                Allow connecting a WooCommerce site (REST API keys).
-                {woo?.siteUrl ? ' Disconnect first to turn this off.' : ''}
+            </label>
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4 border-gray-400"
+                checked={wooLayer}
+                disabled={
+                  savingPrefs ||
+                  gateClosed ||
+                  Boolean(woo?.siteUrl) ||
+                  settingsLoading ||
+                  !settings
+                }
+                onChange={(e) =>
+                  persistIntegrationPrefs({
+                    shopifyEnabled: settings?.integrations?.ecommerce?.shopifyEnabled === true,
+                    wooCommerceEnabled: e.target.checked,
+                  })
+                }
+              />
+              <span>
+                <span className="font-medium text-gray-900">WooCommerce</span>
+                <span className="block text-xs text-gray-500 mt-0.5">
+                  Allow connecting a WooCommerce site (REST API keys).
+                  {woo?.siteUrl ? ' Disconnect first to turn this off.' : ''}
+                </span>
               </span>
-            </span>
-          </label>
-          {savingPrefs ? <p className="text-xs text-gray-500">Saving…</p> : null}
+            </label>
+            {savingPrefs ? <p className="text-xs text-gray-500">Saving…</p> : null}
+          </div>
         </div>
-      </div>
+      )}
 
-      {loading ? <p className="text-gray-600 text-sm">Loading channel status…</p> : null}
+      {loading && featureUnlocked !== null ? (
+        <p className="text-gray-600 text-sm">Loading channel status…</p>
+      ) : null}
 
-      {showShopifyCard ? (
+      {!hideDisconnectedSetupUi &&
+        (showShopifyCard ? (
         <div className="border border-gray-200 p-5 rounded-sm bg-gray-50/50">
           <h3 className="text-lg font-semibold text-gray-900 mb-3">Shopify</h3>
           {shopify?.shopDomain ? (
@@ -323,7 +383,7 @@ export default function EcommerceIntegrationsSettings({
               <div className="flex gap-2 flex-wrap pt-1">
                 <button
                   type="button"
-                  disabled={syncing !== null || !featureUnlocked}
+                  disabled={syncing !== null || gateClosed}
                   onClick={() => sync('shopify')}
                   className="px-4 py-2 bg-gray-900 text-white text-sm font-medium disabled:opacity-50 border border-gray-900"
                 >
@@ -349,7 +409,7 @@ export default function EcommerceIntegrationsSettings({
               />
               <button
                 type="button"
-                disabled={!featureUnlocked || !normalizeShopifyShopDomain(shopDomain)}
+                disabled={gateClosed || !normalizeShopifyShopDomain(shopDomain)}
                 onClick={startShopify}
                 className="px-4 py-2 bg-gray-900 text-white text-sm font-medium disabled:opacity-50 border border-gray-900"
               >
@@ -363,13 +423,14 @@ export default function EcommerceIntegrationsSettings({
             </p>
           )}
         </div>
-      ) : (
+        ) : (
         <p className="text-sm text-gray-500 border border-dashed border-gray-300 p-4 rounded-sm">
           Enable <strong>Shopify</strong> above to connect a store.
         </p>
-      )}
+        ))}
 
-      {showWooCard ? (
+      {!hideDisconnectedSetupUi &&
+        (showWooCard ? (
         <div className="border border-gray-200 p-5 rounded-sm bg-gray-50/50">
           <h3 className="text-lg font-semibold text-gray-900 mb-3">WooCommerce</h3>
           {woo?.siteUrl ? (
@@ -384,7 +445,7 @@ export default function EcommerceIntegrationsSettings({
               <div className="flex gap-2 flex-wrap pt-1">
                 <button
                   type="button"
-                  disabled={syncing !== null || !featureUnlocked}
+                  disabled={syncing !== null || gateClosed}
                   onClick={() => sync('woocommerce')}
                   className="px-4 py-2 bg-gray-900 text-white text-sm font-medium disabled:opacity-50 border border-gray-900"
                 >
@@ -425,7 +486,7 @@ export default function EcommerceIntegrationsSettings({
               />
               <button
                 type="button"
-                disabled={!featureUnlocked || !wooUrl.trim() || !wooKey.trim() || !wooSecret.trim()}
+                disabled={gateClosed || !wooUrl.trim() || !wooKey.trim() || !wooSecret.trim()}
                 onClick={connectWoo}
                 className="px-4 py-2 bg-gray-900 text-white text-sm font-medium disabled:opacity-50 border border-gray-900"
               >
@@ -439,11 +500,11 @@ export default function EcommerceIntegrationsSettings({
             </p>
           )}
         </div>
-      ) : (
+        ) : (
         <p className="text-sm text-gray-500 border border-dashed border-gray-300 p-4 rounded-sm">
           Enable <strong>WooCommerce</strong> above to connect a site.
         </p>
-      )}
+        ))}
     </section>
   );
 }

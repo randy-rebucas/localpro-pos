@@ -27,14 +27,14 @@ interface Tenant {
 }
 
 const BUSINESS_TYPE_META: Record<string, { icon: string; label: string; gradient: string }> = {
-  Retail:     { icon: '🏪',     label: 'Retail',      gradient: 'from-blue-500 to-indigo-600' },
-  Restaurant: { icon: '🍕', label: 'Restaurant',  gradient: 'from-orange-500 to-red-500' },
-  Laundry:    { icon: '👔',    label: 'Laundry',     gradient: 'from-cyan-500 to-blue-500' },
-  Service:    { icon: '💼',    label: 'Service',     gradient: 'from-purple-500 to-violet-600' },
-  General:    { icon: '🔧',    label: 'General',     gradient: 'from-gray-500 to-slate-600' },
+  Retail: { icon: '🏪', label: 'Retail', gradient: 'from-brand to-brand-navy' },
+  Restaurant: { icon: '🍕', label: 'Restaurant', gradient: 'from-orange-500 to-red-500' },
+  Laundry: { icon: '👔', label: 'Laundry', gradient: 'from-cyan-500 to-brand-navy' },
+  Service: { icon: '💼', label: 'Service', gradient: 'from-purple-500 to-violet-600' },
+  General: { icon: '🔧', label: 'General', gradient: 'from-gray-500 to-slate-600' },
 };
 
-const DEFAULT_META = { icon: '🏬', label: 'Store', gradient: 'from-blue-500 to-indigo-600' };
+const DEFAULT_META = { icon: '🏬', label: 'Store', gradient: 'from-brand to-brand-navy' };
 
 function StoreCard({ tenant, preferredLang, dict }: { tenant: Tenant; preferredLang: string; dict: any }) { // eslint-disable-line @typescript-eslint/no-explicit-any
   const displayName = tenant.settings?.companyName || tenant.name;
@@ -57,7 +57,7 @@ function StoreCard({ tenant, preferredLang, dict }: { tenant: Tenant; preferredL
   return (
     <Link
       href={`/${tenant.slug}/${preferredLang}`}
-      className="group relative flex flex-col bg-white border border-gray-200 overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200 hover:border-blue-500"
+      className="group relative flex flex-col bg-white border border-gray-200 overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200 hover:border-brand"
     >
       {/* Top accent bar */}
       <div
@@ -124,7 +124,7 @@ function StoreCard({ tenant, preferredLang, dict }: { tenant: Tenant; preferredL
         </div>
 
         <div className="mt-auto pt-3 border-t border-gray-100">
-          <div className="flex items-center justify-between text-sm font-semibold text-blue-600 group-hover:text-blue-700">
+          <div className="flex items-center justify-between text-sm font-semibold text-brand group-hover:text-brand-hover">
             <span>{dict?.stores?.enterStore || 'Enter Store'}</span>
             <svg className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -231,13 +231,20 @@ export default function StoresPage() {
       {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
-          <Link href="/" className="flex items-center gap-2 font-bold text-lg text-gray-900 hover:text-blue-600 transition-colors">
-            <span className="text-xl">🏬</span>
-            <span>1pos</span>
+          <Link href="/" className="flex items-center gap-2 font-bold text-lg text-gray-900 hover:opacity-90 transition-opacity">
+            <img
+              src="/brand/1pos-logo.png"
+              alt="1Pos"
+              width={36}
+              height={36}
+              className="h-9 w-9 object-contain"
+              decoding="async"
+              fetchPriority="high"
+            />
           </Link>
           <div className="flex items-center gap-3">
             <LanguageSwitcher />
-            <Link href="/signup" className="inline-flex items-center bg-blue-600 text-white px-4 py-1.5 text-sm font-semibold hover:bg-blue-700 transition-colors">
+            <Link href="/signup" className="inline-flex items-center bg-brand text-white px-4 py-1.5 text-sm font-semibold hover:bg-brand-hover transition-colors">
               {dict?.stores?.createStore || 'Create Store'}
             </Link>
           </div>
@@ -245,28 +252,28 @@ export default function StoresPage() {
       </header>
 
       {/* Hero */}
-      <section className="relative bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 text-white py-14 px-4 overflow-hidden">
+      <section className="relative bg-gradient-to-br from-brand via-brand-navy to-brand-navy-deep text-white py-14 px-4 overflow-hidden">
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-10 left-10 w-64 h-64 bg-blue-400/20 blur-3xl animate-pulse" style={{ animationDuration: '4s' }} />
-          <div className="absolute bottom-0 right-0 w-80 h-80 bg-purple-400/20 blur-3xl animate-pulse" style={{ animationDelay: '2s', animationDuration: '5s' }} />
+          <div className="absolute top-10 left-10 w-64 h-64 bg-brand-muted/25 blur-3xl animate-pulse" style={{ animationDuration: '4s' }} />
+          <div className="absolute bottom-0 right-0 w-80 h-80 bg-brand-navy/45 blur-3xl animate-pulse" style={{ animationDelay: '2s', animationDuration: '5s' }} />
         </div>
         <div className="relative max-w-7xl mx-auto text-center z-10">
           <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-md border border-white/30 px-4 py-1.5 text-sm font-semibold mb-4">
             🏪 {dict?.stores?.storeDirectory || 'Store Directory'}
           </div>
           <h1 className="text-4xl md:text-5xl font-bold mb-3">{dict?.stores?.selectYourStore || 'Select Your Store'}</h1>
-          <p className="text-blue-100 text-lg max-w-xl mx-auto">
+          <p className="text-white/80 text-lg max-w-xl mx-auto">
             {dict?.stores?.storeDirectoryDesc || 'Choose from our network of stores to sign in and manage your business'}
           </p>
           <div className="flex justify-center gap-10 mt-8">
             <div className="text-center">
               <div className="text-3xl font-bold tabular-nums">{loading ? '—' : tenants.length}</div>
-              <div className="text-blue-200 text-sm mt-0.5">{dict?.stores?.activeStores || 'Active Stores'}</div>
+              <div className="text-white/70 text-sm mt-0.5">{dict?.stores?.activeStores || 'Active Stores'}</div>
             </div>
             <div className="w-px bg-white/20" />
             <div className="text-center">
               <div className="text-3xl font-bold tabular-nums">{availableTypes.length > 1 ? availableTypes.length - 1 : '—'}</div>
-              <div className="text-blue-200 text-sm mt-0.5">{dict?.stores?.businessTypes || 'Business Types'}</div>
+              <div className="text-white/70 text-sm mt-0.5">{dict?.stores?.businessTypes || 'Business Types'}</div>
             </div>
           </div>
         </div>
@@ -285,7 +292,7 @@ export default function StoresPage() {
               placeholder={dict?.stores?.searchPlaceholder || 'Search by store name, slug, or city'}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-8 py-2.5 border border-gray-300 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none transition-colors bg-white"
+              className="w-full pl-9 pr-8 py-2.5 border border-gray-300 text-sm text-gray-900 placeholder-gray-400 focus:border-brand focus:outline-none transition-colors bg-white"
             />
             {search && (
               <button
@@ -305,8 +312,8 @@ export default function StoresPage() {
                   onClick={() => setTypeFilter(type)}
                   className={`px-3 py-2 text-xs font-semibold border transition-all ${
                     typeFilter === type
-                      ? 'bg-blue-600 border-blue-600 text-white'
-                      : 'bg-white border-gray-300 text-gray-600 hover:border-blue-400 hover:text-blue-600'
+                      ? 'bg-brand border-brand text-white'
+                      : 'bg-white border-gray-300 text-gray-600 hover:border-brand hover:text-brand'
                   }`}
                 >
                   {type === 'All' ? (dict?.stores?.allTypes || 'All Types') : `${BUSINESS_TYPE_META[type]?.icon ?? ''} ${type}`}
@@ -355,12 +362,12 @@ export default function StoresPage() {
               {(search || typeFilter !== 'All') && (
                 <button
                   onClick={() => { setSearch(''); setTypeFilter('All'); }}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-semibold hover:border-blue-400 transition-colors"
+                  className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-semibold hover:border-brand transition-colors"
                 >
                   {dict?.stores?.clearFilters || 'Clear filters'}
                 </button>
               )}
-              <Link href="/signup" className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors">
+              <Link href="/signup" className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover transition-colors">
                 {dict?.stores?.createAStore || 'Create a Store'}
               </Link>
             </div>
@@ -376,7 +383,7 @@ export default function StoresPage() {
             <p className="text-gray-500 text-sm mb-5">{dict?.stores?.getStartedDesc || 'Get started and create your own store in minutes.'}</p>
             <Link
               href="/signup"
-              className="inline-flex items-center gap-2 bg-blue-600 text-white px-7 py-2.5 text-sm font-bold hover:bg-blue-700 transition-colors"
+              className="inline-flex items-center gap-2 bg-brand text-white px-7 py-2.5 text-sm font-bold hover:bg-brand-hover transition-colors"
             >
               <span>{dict?.stores?.createYourStore || 'Create Your Store'}</span>
               <span>→</span>

@@ -18,7 +18,7 @@ const AttendanceTrendsCharts = dynamic(() => import('@/components/AttendanceTren
   loading: () => (
     <div className="w-full h-64 flex items-center justify-center">
       <div className="text-center">
-        <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
         <p className="mt-4 text-gray-600">Loading chart...</p>
       </div>
     </div>
@@ -156,7 +156,7 @@ export default function AttendancePage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
@@ -170,7 +170,7 @@ export default function AttendancePage() {
         <div className="mb-6 sm:mb-8">
           <Link
             href={`/${tenant}/${lang}/admin`}
-            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium mb-4 transition-colors"
+            className="inline-flex items-center text-brand hover:text-brand-hover font-medium mb-4 transition-colors"
           >
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -195,8 +195,8 @@ export default function AttendancePage() {
 
         {/* Current Sessions */}
         {currentSessions.length > 0 && (
-          <div className="mb-6 bg-blue-50 border-2 border-blue-300 p-6">
-            <h2 className="text-lg font-bold text-blue-900 mb-4">
+          <div className="mb-6 bg-brand-soft border-2 border-teal-300 p-6">
+            <h2 className="text-lg font-bold text-brand-navy-deep mb-4">
               {dict.admin?.currentlyClockedIn || 'Currently Clocked In'}
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -206,12 +206,12 @@ export default function AttendancePage() {
                 const hours = calculateSessionHours(session.clockIn);
 
                 return (
-                  <div key={session._id} className="bg-white border border-blue-300 p-4">
+                  <div key={session._id} className="bg-white border border-teal-300 p-4">
                     <div className="font-semibold text-gray-900">{userName}</div>
                     <div className="text-sm text-gray-600 mt-1">
                       {dict.admin?.clockedInAt || 'Clocked in'}: {clockInTime.toLocaleString()}
                     </div>
-                    <div className="text-sm font-medium text-blue-600 mt-2">
+                    <div className="text-sm font-medium text-brand mt-2">
                       {dict.admin?.currentHours || 'Current hours'}: {hours.toFixed(2)}h
                     </div>
                   </div>
@@ -250,7 +250,7 @@ export default function AttendancePage() {
                 value={selectedUserId}
                 onChange={(e) => setSelectedUserId(e.target.value)}
                 disabled={usersLoading}
-                className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white disabled:opacity-50"
+                className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white disabled:opacity-50"
               >
                 <option value="">{dict.common?.all || 'All Employees'}</option>
                 {users.map((user) => (
@@ -268,7 +268,7 @@ export default function AttendancePage() {
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
               />
             </div>
             <div>
@@ -279,7 +279,7 @@ export default function AttendancePage() {
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
               />
             </div>
             <div className="flex items-end gap-2">
@@ -347,7 +347,7 @@ export default function AttendancePage() {
         <div className="bg-white border border-gray-300 p-6">
           {loading ? (
             <div className="text-center py-8">
-              <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+              <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
               <p className="mt-4 text-gray-600">{dict.common?.loading || 'Loading...'}</p>
             </div>
           ) : (

@@ -38,7 +38,7 @@ export default function TenantsPage() {
   const [showTenantModal, setShowTenantModal] = useState(false);
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
   const { settings: tenantSettings } = useTenantSettings();
-  const primaryColor = (tenantSettings || getDefaultTenantSettings()).primaryColor || '#2563eb';
+  const primaryColor = (tenantSettings || getDefaultTenantSettings()).primaryColor || '#35979c';
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -220,7 +220,7 @@ export default function TenantsPage() {
 
 function TenantModal({
   tenant,
-  primaryColor = '#2563eb',
+  primaryColor = '#35979c',
   onClose,
   onSave,
   dict,

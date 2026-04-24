@@ -133,13 +133,13 @@ export default function StockRefillModal({ product, onClose, onSuccess, lang = '
               required
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
-              className="w-full px-3 py-2.5 text-base border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+              className="w-full px-3 py-2.5 text-base border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
               placeholder="0"
               autoFocus
             />
             {quantity && parseInt(quantity) > 0 && (
               <div className="mt-2 text-sm text-gray-600">
-                {dict.products.refill?.newStock || 'New Stock'}: <span className="font-semibold text-blue-600">
+                {dict.products.refill?.newStock || 'New Stock'}: <span className="font-semibold text-brand">
                   {product.stock + parseInt(quantity)}
                 </span>
               </div>
@@ -153,7 +153,7 @@ export default function StockRefillModal({ product, onClose, onSuccess, lang = '
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="w-full px-3 py-2.5 text-base border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+              className="w-full px-3 py-2.5 text-base border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
               rows={3}
               placeholder={dict.products.refill?.notesPlaceholder || 'Add any notes about this refill...'}
             />
@@ -177,7 +177,7 @@ export default function StockRefillModal({ product, onClose, onSuccess, lang = '
             <button
               type="submit"
               disabled={loading}
-              className="w-full sm:w-auto px-4 py-2.5 bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed font-medium border border-blue-700"
+              className="w-full sm:w-auto px-4 py-2.5 bg-brand text-white hover:bg-brand-hover active:bg-brand-navy-deep disabled:opacity-50 disabled:cursor-not-allowed font-medium border border-brand-hover"
             >
               {loading ? (dict.common.loading || 'Loading...') : (dict.products.refill?.submit || 'Refill Stock')}
             </button>

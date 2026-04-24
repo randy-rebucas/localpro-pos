@@ -8,6 +8,10 @@ interface WooLineItem {
   quantity: number;
   price: number | string;
   sku?: string;
+  /** Line subtotal before discount (ex tax in many setups) */
+  subtotal?: string;
+  /** Line total after discount */
+  total?: string;
 }
 
 interface WooOrderPayload {
@@ -22,6 +26,18 @@ interface WooOrderPayload {
 
 const PAID_STATUSES = new Set(['processing', 'completed']);
 
+function lineUnitPrice(li: WooLineItem): number {
+  const qty = Math.max(1, Number(li.quantity) || 1);
+  const fromPrice =
+    typeof li.price === 'number' ? li.price : parseFloat(String(li.price ?? '0').replace(',', '')) || 0;
+  if (fromPrice > 0) return fromPrice;
+  const sub = parseFloat(String(li.subtotal ?? '0').replace(',', '')) || 0;
+  if (sub > 0) return sub / qty;
+  const tot = parseFloat(String(li.total ?? '0').replace(',', '')) || 0;
+  if (tot > 0) return tot / qty;
+  return 0;
+}
+
 export function parseWooCommerceOrderWebhook(payload: unknown): NormalizedPaidOrder | null {
   const order = payload as WooOrderPayload;
   if (!order?.id) return null;
@@ -34,7 +50,7 @@ export function parseWooCommerceOrderWebhook(payload: unknown): NormalizedPaidOr
       externalProductId: String(li.product_id),
       name: li.name,
       quantity: li.quantity,
-      unitPrice: typeof li.price === 'number' ? li.price : parseFloat(String(li.price)) || 0,
+      unitPrice: lineUnitPrice(li),
       sku: li.sku || null,
     };
   });

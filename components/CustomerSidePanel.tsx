@@ -115,7 +115,7 @@ export default function CustomerSidePanel({ tenant, selectedCustomer, onSelectCu
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={d?.searchPlaceholder || 'Search by name, email, or phone…'}
-              className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-blue-400 bg-white"
+              className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-brand bg-white"
             />
             {searching && (
               <div className="absolute right-2 top-1/2 -translate-y-1/2">
@@ -153,8 +153,8 @@ export default function CustomerSidePanel({ tenant, selectedCustomer, onSelectCu
         <div>
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
-              <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                <span className="text-blue-700 font-bold text-sm">
+              <div className="w-8 h-8 rounded-full bg-brand-soft flex items-center justify-center flex-shrink-0">
+                <span className="text-brand-hover font-bold text-sm">
                   {selectedCustomer.firstName[0]}{selectedCustomer.lastName[0]}
                 </span>
               </div>

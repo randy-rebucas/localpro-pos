@@ -24,7 +24,7 @@ const BundlePerformanceCharts = dynamic(() => import('@/components/BundlePerform
   ssr: false,
   loading: () => (
     <div className="w-full h-64 flex items-center justify-center">
-      <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
     </div>
   ),
 });
@@ -307,7 +307,7 @@ export default function BundlesPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
@@ -321,7 +321,7 @@ export default function BundlesPage() {
         <div className="mb-6 sm:mb-8">
           <Link
             href={`/${tenant}/${lang}/admin`}
-            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium mb-4 transition-colors"
+            className="inline-flex items-center text-brand hover:text-brand-hover font-medium mb-4 transition-colors"
           >
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -381,7 +381,7 @@ export default function BundlesPage() {
                     type="date"
                     value={analyticsStartDate}
                     onChange={(e) => setAnalyticsStartDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                   />
                 </div>
                 <div>
@@ -392,13 +392,13 @@ export default function BundlesPage() {
                     type="date"
                     value={analyticsEndDate}
                     onChange={(e) => setAnalyticsEndDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                   />
                 </div>
                 <div className="flex items-end">
                   <button
                     onClick={handleLoadAnalytics}
-                    className="w-full px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
+                    className="w-full px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium border border-brand-hover"
                   >
                     {dict.admin?.loadAnalytics || 'Load Analytics'}
                   </button>
@@ -407,16 +407,16 @@ export default function BundlesPage() {
               
               {analyticsLoading ? (
                 <div className="text-center py-8">
-                  <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+                  <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
                   <p className="mt-4 text-gray-600">{dict.common?.loading || 'Loading...'}</p>
                 </div>
               ) : analytics && (
                 <div>
                   {/* Summary Cards */}
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                    <div className="bg-blue-50 border border-blue-200 p-4">
-                      <div className="text-sm text-blue-600 mb-1">{dict.admin?.totalBundles || 'Total Bundles'}</div>
-                      <div className="text-2xl font-bold text-blue-900">{analytics.summary.totalBundles}</div>
+                    <div className="bg-brand-soft border border-teal-200 p-4">
+                      <div className="text-sm text-brand mb-1">{dict.admin?.totalBundles || 'Total Bundles'}</div>
+                      <div className="text-2xl font-bold text-brand-navy-deep">{analytics.summary.totalBundles}</div>
                     </div>
                     <div className="bg-green-50 border border-green-200 p-4">
                       <div className="text-sm text-green-600 mb-1">{dict.admin?.totalSales || 'Total Sales'}</div>
@@ -498,7 +498,7 @@ export default function BundlesPage() {
                 placeholder={dict.common?.search || 'Search bundles...'}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
               />
             </div>
             <div className="flex gap-2">
@@ -508,7 +508,7 @@ export default function BundlesPage() {
                   const value = e.target.value;
                   setFilterActive(value === 'all' ? null : value === 'true');
                 }}
-                className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
               >
                 <option value="all">{dict.common?.all || 'All'}</option>
                 <option value="true">{dict.admin?.active || 'Active'}</option>
@@ -564,7 +564,7 @@ export default function BundlesPage() {
                       setEditingBundle(null);
                       setShowBundleModal(true);
                     }}
-                    className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
+                    className="px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium border border-brand-hover"
                   >
                     {dict.common?.add || 'Add'} {dict.admin?.bundle || 'Bundle'}
                   </button>
@@ -584,7 +584,7 @@ export default function BundlesPage() {
                   <select
                     value={filterCategory}
                     onChange={(e) => setFilterCategory(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                   >
                     <option value="">{dict.common?.all || 'All'}</option>
                     {categories.map((cat) => (
@@ -603,7 +603,7 @@ export default function BundlesPage() {
                     step="0.01"
                     value={filterMinPrice}
                     onChange={(e) => setFilterMinPrice(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                     placeholder="0.00"
                   />
                 </div>
@@ -616,7 +616,7 @@ export default function BundlesPage() {
                     step="0.01"
                     value={filterMaxPrice}
                     onChange={(e) => setFilterMaxPrice(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                     placeholder="999999.99"
                   />
                 </div>
@@ -628,7 +628,7 @@ export default function BundlesPage() {
                     type="date"
                     value={filterStartDate}
                     onChange={(e) => setFilterStartDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                   />
                 </div>
                 <div>
@@ -639,7 +639,7 @@ export default function BundlesPage() {
                     type="date"
                     value={filterEndDate}
                     onChange={(e) => setFilterEndDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                   />
                 </div>
                 <div className="flex items-end">
@@ -656,8 +656,8 @@ export default function BundlesPage() {
 
           {/* Bulk Actions */}
           {selectedBundles.size > 0 && (
-            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 flex items-center justify-between">
-              <span className="text-sm font-medium text-blue-900">
+            <div className="mb-4 p-3 bg-brand-soft border border-teal-200 flex items-center justify-between">
+              <span className="text-sm font-medium text-brand-navy-deep">
                 {selectedBundles.size} {dict.admin?.selected || 'selected'}
               </span>
               <div className="flex gap-2">
@@ -746,7 +746,7 @@ export default function BundlesPage() {
                             setEditingBundle(bundle);
                             setShowBundleModal(true);
                           }}
-                          className="text-blue-600 hover:text-blue-900"
+                          className="text-brand hover:text-brand-navy-deep"
                         >
                           {dict.common?.edit || 'Edit'}
                         </button>
@@ -1089,7 +1089,7 @@ function BundleModal({
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                 />
               </div>
               <div>
@@ -1098,7 +1098,7 @@ function BundleModal({
                   type="text"
                   value={formData.sku}
                   onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                 />
               </div>
             </div>
@@ -1110,7 +1110,7 @@ function BundleModal({
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 rows={3}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -1125,7 +1125,7 @@ function BundleModal({
                   required
                   value={formData.price}
                   onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                 />
               </div>
               <div>
@@ -1135,7 +1135,7 @@ function BundleModal({
                 <select
                   value={formData.categoryId || ''}
                   onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                 >
                   <option value="">{dict.common?.none || 'None'}</option>
                   {categories.map((cat) => (
@@ -1172,7 +1172,7 @@ function BundleModal({
                       }}
                       onKeyDown={handleProductSearchKeyDown}
                       placeholder={dict.admin?.searchProduct || 'Search products...'}
-                      className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                      className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                       autoComplete="off"
                     />
                     {showProductSuggestions && (
@@ -1215,8 +1215,8 @@ function BundleModal({
                                 onMouseEnter={() => setHighlightedIndex(index)}
                                 className={`w-full text-left px-4 py-2 focus:outline-none transition-colors border-b border-gray-100 last:border-b-0 ${
                                   isHighlighted 
-                                    ? 'bg-blue-100 border-blue-300' 
-                                    : 'hover:bg-blue-50'
+                                    ? 'bg-brand-soft border-teal-300' 
+                                    : 'hover:bg-brand-soft'
                                 } ${isAlreadyAdded ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 disabled={isAlreadyAdded}
                               >
@@ -1255,7 +1255,7 @@ function BundleModal({
                       value={itemQuantity}
                       onChange={(e) => setItemQuantity(parseInt(e.target.value) || 1)}
                       placeholder={dict.admin?.quantity || 'Qty'}
-                      className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                      className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                     />
                   </div>
                   <button
@@ -1267,7 +1267,7 @@ function BundleModal({
                       filteredProducts.length !== 1 &&
                       !productSearch.trim()
                     }
-                    className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed border border-blue-700 transition-colors"
+                    className="px-4 py-2 bg-brand text-white hover:bg-brand-hover disabled:opacity-50 disabled:cursor-not-allowed border border-brand-hover transition-colors"
                   >
                     {dict.common?.add || 'Add'}
                   </button>
@@ -1329,7 +1329,7 @@ function BundleModal({
               <button
                 type="submit"
                 disabled={submitting}
-                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
+                className="px-4 py-2 bg-brand text-white hover:bg-brand-hover disabled:opacity-50 border border-brand-hover"
               >
                 {submitting ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
               </button>

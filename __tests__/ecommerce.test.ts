@@ -65,6 +65,46 @@ describe('ecommerce webhooks', () => {
   });
 });
 
+describe('normalizeWooCommerceSiteUrl', () => {
+  it('adds https and strips trailing slash', async () => {
+    const { normalizeWooCommerceSiteUrl } = await import('@/lib/ecommerce/woocommerce-api');
+    expect(normalizeWooCommerceSiteUrl('shop.example.com')).toBe('https://shop.example.com');
+    expect(normalizeWooCommerceSiteUrl('https://shop.example.com/')).toBe('https://shop.example.com');
+    expect(normalizeWooCommerceSiteUrl('https://shop.example.com/wp')).toBe('https://shop.example.com/wp');
+  });
+
+  it('throws on empty', async () => {
+    const { normalizeWooCommerceSiteUrl } = await import('@/lib/ecommerce/woocommerce-api');
+    expect(() => normalizeWooCommerceSiteUrl('  ')).toThrow();
+  });
+});
+
+describe('parseWooCommerceOrderWebhook', () => {
+  it('uses line subtotal when unit price is zero', async () => {
+    const { parseWooCommerceOrderWebhook } = await import('@/lib/ecommerce/parse-woo-order');
+    const order = parseWooCommerceOrderWebhook({
+      id: 99,
+      status: 'processing',
+      currency: 'USD',
+      subtotal: '20',
+      total_tax: '0',
+      total: '20',
+      line_items: [
+        {
+          id: 1,
+          product_id: 10,
+          name: 'Widget',
+          quantity: 2,
+          price: '0',
+          subtotal: '20',
+          total: '20',
+        },
+      ],
+    });
+    expect(order?.lines[0].unitPrice).toBe(10);
+  });
+});
+
 describe('parseShopifyOrderWebhook', () => {
   it('returns null when not paid', () => {
     expect(

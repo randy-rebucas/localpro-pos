@@ -95,7 +95,7 @@ export default function ExpensesPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
@@ -109,7 +109,7 @@ export default function ExpensesPage() {
         <div className="mb-6 sm:mb-8">
           <Link
             href={`/${tenant}/${lang}/admin`}
-            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium mb-4 transition-colors"
+            className="inline-flex items-center text-brand hover:text-brand-hover font-medium mb-4 transition-colors"
           >
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -164,7 +164,7 @@ export default function ExpensesPage() {
                 setEditingExpense(null);
                 setShowExpenseModal(true);
               }}
-              className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
+              className="px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium border border-brand-hover"
             >
               {dict.common?.add || 'Add'} {dict.admin?.expense || 'Expense'}
             </button>
@@ -177,7 +177,7 @@ export default function ExpensesPage() {
               {(filters.startDate || filters.endDate || filters.name) && (
                 <button
                   onClick={() => setFilters({ startDate: '', endDate: '', name: '' })}
-                  className="text-sm text-blue-600 hover:text-blue-800"
+                  className="text-sm text-brand hover:text-brand-navy"
                 >
                   {dict.common?.clearFilters || 'Clear Filters'}
                 </button>
@@ -192,7 +192,7 @@ export default function ExpensesPage() {
                 type="date"
                 value={filters.startDate}
                 onChange={(e) => handleDateFilterChange('startDate', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 text-sm bg-white"
+                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand text-sm bg-white"
               />
             </div>
             <div>
@@ -203,7 +203,7 @@ export default function ExpensesPage() {
                 type="date"
                 value={filters.endDate}
                 onChange={(e) => handleDateFilterChange('endDate', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 text-sm bg-white"
+                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand text-sm bg-white"
               />
             </div>
             <div>
@@ -213,7 +213,7 @@ export default function ExpensesPage() {
               <select
                 value={filters.name}
                 onChange={(e) => setFilters({ ...filters, name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 text-sm bg-white"
+                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand text-sm bg-white"
               >
                 <option value="">{dict.common?.all || 'All Names'}</option>
                 {expenseNames.map((name) => (
@@ -269,7 +269,7 @@ export default function ExpensesPage() {
                               setEditingExpense(expense);
                               setShowExpenseModal(true);
                             }}
-                            className="text-blue-600 hover:text-blue-900"
+                            className="text-brand hover:text-brand-navy-deep"
                           >
                             {dict.common?.edit || 'Edit'}
                           </button>
@@ -372,7 +372,7 @@ function ExpenseModal({
                   value={formData.name}
                   onChange={(e) => setFormData({ name: e.target.value })}
                   placeholder={dict?.admin?.expenseNamePlaceholder || 'Enter expense name (e.g., Office Supplies, Rent, Utilities)'}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                   required
                 />
               </div>
@@ -393,7 +393,7 @@ function ExpenseModal({
                     }
                   }}
                   placeholder="0.00"
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                 />
               </div>
             </div>
@@ -407,7 +407,7 @@ function ExpenseModal({
                   onChange={(e) => setFormData({ description: e.target.value })}
                   rows={2}
                   placeholder={dict?.admin?.expenseDescriptionPlaceholder || 'Enter expense description'}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                 />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -420,7 +420,7 @@ function ExpenseModal({
                   required
                   value={formData.date}
                   onChange={(e) => setFormData({ date: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                 />
               </div>
               <div>
@@ -430,7 +430,7 @@ function ExpenseModal({
                 <select
                   value={formData.paymentMethod}
                   onChange={(e) => setFormData({ paymentMethod: e.target.value as any })} // eslint-disable-line @typescript-eslint/no-explicit-any
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                   required
                 >
                   <option value="cash">{dict?.admin?.cash || 'Cash'}</option>
@@ -449,7 +449,7 @@ function ExpenseModal({
                 value={formData.receipt}
                 onChange={(e) => setFormData({ receipt: e.target.value })}
                 placeholder={dict?.admin?.receiptURLPlaceholder || 'Receipt URL or reference'}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
               />
             </div>
             <div>
@@ -460,7 +460,7 @@ function ExpenseModal({
                 value={formData.notes}
                 onChange={(e) => setFormData({ notes: e.target.value })}
                 rows={3}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
               />
             </div>
             {error && (
@@ -479,7 +479,7 @@ function ExpenseModal({
               <button
                 type="submit"
                 disabled={submitting}
-                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
+                className="px-4 py-2 bg-brand text-white hover:bg-brand-hover disabled:opacity-50 border border-brand-hover"
               >
                 {submitting ? (dict?.common?.loading || 'Saving...') : (dict?.common?.save || 'Save')}
               </button>

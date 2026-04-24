@@ -45,8 +45,8 @@ const TABS: { key: Category; label: string; count: number }[] = [
 ];
 
 const CATEGORY_ACCENT: Record<Category, string> = {
-  all: '#3b82f6',
-  pos: '#3b82f6',
+  all: '#35979c',
+  pos: '#35979c',
   inventory: '#10b981',
   customers: '#8b5cf6',
   analytics: '#f97316',
@@ -71,14 +71,14 @@ export default function FeaturesGrid() {
               role="tab"
               aria-selected={isActive}
               onClick={() => { setActiveTab(tab.key); setActiveSection(null); }}
-              className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-all duration-200 ${
                 isActive
                   ? 'bg-gray-900 text-white shadow-sm'
                   : 'bg-white text-gray-600 border border-gray-200 hover:border-gray-300 hover:text-gray-900'
               }`}
             >
               {tab.label}
-              <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${isActive ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'}`}>
+              <span className={`text-xs px-1.5 py-0.5 font-bold ${isActive ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'}`}>
                 {tab.count}
               </span>
             </button>
@@ -94,7 +94,7 @@ export default function FeaturesGrid() {
           return (
             <article
               key={feature.id}
-              className={`group relative bg-white rounded-2xl border transition-all duration-200 cursor-pointer overflow-hidden ${
+              className={`group relative bg-white border transition-all duration-200 cursor-pointer overflow-hidden ${
                 isOpen
                   ? 'border-gray-300 shadow-md'
                   : 'border-gray-200 hover:border-gray-300 hover:shadow-md hover:-translate-y-0.5'
@@ -119,14 +119,14 @@ export default function FeaturesGrid() {
                   <ul className="mt-4 pt-4 border-t border-gray-100 space-y-2" aria-label={`${feature.title} details`}>
                     {feature.details.map((detail) => (
                       <li key={detail} className="flex items-start gap-2 text-sm text-gray-600">
-                        <span className={`flex-shrink-0 w-4 h-4 ${accent} text-white rounded-full flex items-center justify-center text-xs font-bold mt-0.5`} aria-hidden="true">✓</span>
+                        <span className={`flex-shrink-0 w-4 h-4 ${accent} text-white flex items-center justify-center text-xs font-bold mt-0.5`} aria-hidden="true">✓</span>
                         {detail}
                       </li>
                     ))}
                   </ul>
                 )}
 
-                <div className={`flex items-center gap-1 text-xs font-semibold mt-4 transition-all ${isOpen ? 'text-gray-400' : 'text-blue-600'}`}>
+                <div className={`flex items-center gap-1 text-xs font-semibold mt-4 transition-all ${isOpen ? 'text-gray-400' : 'text-brand'}`}>
                   {isOpen ? (
                     <><span>Collapse</span><span aria-hidden="true">↑</span></>
                   ) : (

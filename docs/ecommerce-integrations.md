@@ -238,7 +238,9 @@ All authenticated routes expect a logged-in staff session and, where applicable,
 ### `POST /api/integrations/woocommerce/connect`
 
 - **Body:** `{ siteUrl, consumerKey, consumerSecret }`
-- Validates with `GET /wc/v3/products?per_page=1`, stores encrypted credentials, registers Woo webhook.
+- **Site URL:** normalized with `normalizeWooCommerceSiteUrl` (adds `https://` when missing, preserves subdirectory installs, strips trailing slash). Invalid URLs return **400**.
+- Validates with `GET /wc/v3/products?per_page=1`, stores encrypted credentials, registers webhooks.
+- **Webhooks:** existing deliveries whose URL contains `/api/webhooks/woocommerce/<thisIntegrationId>` are removed first (avoids duplicates on reconnect), then **`order.updated`** and **`order.created`** are registered with the same signing secret. Delivery base URL uses `getPublicAppUrl(request)` when available (see public URL resolution).
 
 ---
 
@@ -257,7 +259,7 @@ All authenticated routes expect a logged-in staff session and, where applicable,
 - **Path:** Mongo `_id` of the `TenantEcommerceIntegration` document (`provider: woocommerce`).
 - **Header:** `X-WC-Webhook-Signature` — base64(HMAC-SHA256(raw body, webhook secret)).
 - **Secret:** Plain secret generated at connect time, stored encrypted in `webhookSecretEncrypted`.
-- **Registered topic:** `order.updated` (Woo sends payloads when orders change; importer only accepts statuses below).
+- **Registered topics:** `order.updated` and `order.created` (importer only creates POS transactions for **`processing`** and **`completed`**; other statuses are ignored — idempotency prevents double-import when both webhooks fire).
 
 ---
 
@@ -265,7 +267,7 @@ All authenticated routes expect a logged-in staff session and, where applicable,
 
 Implemented in `lib/ecommerce/sync-catalog.ts`.
 
-1. **Fetch** all active catalog entries from the channel (Shopify REST with pagination via `page_info`; Woo REST pages + variation endpoints for variable products).
+1. **Fetch** all active catalog entries from the channel (Shopify REST with pagination via `page_info`; Woo REST pages + **paginated** `/products/{id}/variations` for **all** variable products — even when the product list omits `variations[]` ids). **Grouped** and **external** Woo product types are skipped. Product images are mapped into `imageUrl` when present.
 2. For each variant:
    - **Match** POS product by SKU: exact product `sku`, or `variations[].sku` when `hasVariations` is true.
    - If no match and **`autoCreateProducts`** is true, create a simple POS product (name from channel, price, stock from channel when available).
@@ -310,7 +312,7 @@ Implemented in `lib/ecommerce/import-channel-order.ts`.
 | Channel | Imported when |
 |---------|----------------|
 | **Shopify** | `financial_status === 'paid'`; line items must have `product_id` and `variant_id`. |
-| **WooCommerce** | Order `status` is `processing` or `completed`. |
+| **WooCommerce** | Order `status` is `processing` or `completed`. Line unit price prefers `line_item.price`; if zero, falls back to `subtotal` or `total` divided by quantity (discount-heavy lines). |
 
 ### Steps (atomic Mongo transaction)
 

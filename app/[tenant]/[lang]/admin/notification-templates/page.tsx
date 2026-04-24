@@ -26,7 +26,7 @@ export default function NotificationTemplatesPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
@@ -40,7 +40,7 @@ export default function NotificationTemplatesPage() {
         <div className="mb-6">
           <Link
             href={`/${tenant}/${lang}/admin`}
-            className="text-blue-600 hover:text-blue-700 font-medium mb-4 inline-flex items-center"
+            className="text-brand hover:text-brand-hover font-medium mb-4 inline-flex items-center"
           >
             <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />

@@ -63,7 +63,7 @@ export default function AdvancedBrandingPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
@@ -99,7 +99,7 @@ export default function AdvancedBrandingPage() {
         <div className="mb-6">
           <Link
             href={`/${tenant}/${lang}/admin`}
-            className="text-blue-600 hover:text-blue-700 font-medium mb-4 inline-flex items-center"
+            className="text-brand hover:text-brand-hover font-medium mb-4 inline-flex items-center"
           >
             <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -145,7 +145,7 @@ export default function AdvancedBrandingPage() {
                       fontSource,
                     });
                   }}
-                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                 >
                   {getFontSourceOptions().map((option) => (
                     <option key={option.value} value={option.value}>
@@ -165,7 +165,7 @@ export default function AdvancedBrandingPage() {
                     ...settings.advancedBranding,
                     fontFamily: e.target.value,
                   })}
-                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                   placeholder={getPlaceholderForFontFamily(dict)}
                 />
               </div>
@@ -181,7 +181,7 @@ export default function AdvancedBrandingPage() {
                       ...settings.advancedBranding,
                       googleFontUrl: e.target.value,
                     })}
-                    className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                    className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                     placeholder={getPlaceholderForGoogleFontUrl(dict)}
                   />
                 </div>
@@ -198,7 +198,7 @@ export default function AdvancedBrandingPage() {
                       ...settings.advancedBranding,
                       customFontUrl: e.target.value,
                     })}
-                    className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                    className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                     placeholder={getPlaceholderForCustomFontUrl(dict)}
                   />
                 </div>
@@ -213,7 +213,7 @@ export default function AdvancedBrandingPage() {
                     ...settings.advancedBranding,
                     theme: e.target.value as 'light' | 'dark' | 'auto' | 'custom',
                   })}
-                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                 >
                   {getThemeOptions().map((option) => (
                     <option key={option.value} value={option.value}>
@@ -232,7 +232,7 @@ export default function AdvancedBrandingPage() {
                     ...settings.advancedBranding,
                     borderRadius: e.target.value as 'none' | 'sm' | 'md' | 'lg' | 'xl' | 'custom',
                   })}
-                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                 >
                   {getBorderRadiusOptions().map((option) => (
                     <option key={option.value} value={option.value}>
@@ -253,7 +253,7 @@ export default function AdvancedBrandingPage() {
                       ...settings.advancedBranding,
                       customBorderRadius: e.target.value,
                     })}
-                    className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                    className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                     placeholder={getPlaceholderForCustomBorderRadius(dict)}
                   />
                 </div>
@@ -273,7 +273,7 @@ export default function AdvancedBrandingPage() {
                       },
                     })}
                     rows={10}
-                    className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white font-mono text-sm"
+                    className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white font-mono text-sm"
                     placeholder={getPlaceholderForCustomCSS(dict)}
                   />
                   <p className="mt-2 text-xs text-gray-500">
@@ -288,7 +288,7 @@ export default function AdvancedBrandingPage() {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="px-6 py-3 bg-blue-600 text-white hover:bg-blue-700 font-semibold transition-all duration-200 border border-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-6 py-3 bg-brand text-white hover:bg-brand-hover font-semibold transition-all duration-200 border border-brand-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {saving ? (
                 <>

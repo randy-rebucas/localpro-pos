@@ -130,7 +130,7 @@ export default function NotificationTemplatesManager({ settings, tenant, onUpdat
             onClick={() => setActiveType('email')}
             className={`px-4 py-2 text-sm font-medium ${
               activeType === 'email'
-                ? 'bg-blue-600 text-white'
+                ? 'bg-brand text-white'
                 : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
             }`}
           >
@@ -140,7 +140,7 @@ export default function NotificationTemplatesManager({ settings, tenant, onUpdat
             onClick={() => setActiveType('sms')}
             className={`px-4 py-2 text-sm font-medium ${
               activeType === 'sms'
-                ? 'bg-blue-600 text-white'
+                ? 'bg-brand text-white'
                 : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
             }`}
           >
@@ -169,7 +169,7 @@ export default function NotificationTemplatesManager({ settings, tenant, onUpdat
               <h4 className="font-medium text-gray-900">{getCategoryLabel(category, dict)}</h4>
               <button
                 onClick={() => setEditing({ type: activeType, category })}
-                className="px-3 py-1 text-xs text-blue-600 hover:text-blue-700 font-medium"
+                className="px-3 py-1 text-xs text-brand hover:text-brand-hover font-medium"
               >
                 {editing?.type === activeType && editing?.category === category ? (dict?.common?.cancel || 'Cancel') : (dict?.common?.edit || 'Edit')}
               </button>
@@ -230,7 +230,7 @@ function TemplateEditor({
             type="text"
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
-            className="w-full px-3 py-2 text-sm border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full px-3 py-2 text-sm border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand"
             placeholder={dict?.notificationTemplates?.emailSubjectPlaceholder || 'Email subject'}
           />
         </div>
@@ -243,7 +243,7 @@ function TemplateEditor({
           value={body}
           onChange={(e) => setBody(e.target.value)}
           rows={4}
-          className="w-full px-3 py-2 text-sm border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          className="w-full px-3 py-2 text-sm border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand"
           placeholder={type === 'email' ? (dict?.notificationTemplates?.emailBodyPlaceholder || 'Email message body') : (dict?.notificationTemplates?.smsBodyPlaceholder || 'SMS message body')}
         />
         <div className="mt-2 text-xs text-gray-500">
@@ -260,7 +260,7 @@ function TemplateEditor({
       <div className="flex gap-2">
         <button
           onClick={() => onSave(subject, body)}
-          className="px-3 py-1.5 text-xs bg-blue-600 text-white hover:bg-blue-700 font-medium"
+          className="px-3 py-1.5 text-xs bg-brand text-white hover:bg-brand-hover font-medium"
         >
           {dict?.common?.save || 'Save'}
         </button>

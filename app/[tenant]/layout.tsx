@@ -28,7 +28,7 @@ async function ensureDefaultTenant() {
           currency: 'USD',
           timezone: 'UTC',
           language: 'en',
-          primaryColor: '#2563eb',
+          primaryColor: '#35979c',
         },
         isActive: true,
       });

@@ -96,7 +96,7 @@ const TenantSchema: Schema = new Schema(
       favicon: String,
       primaryColor: {
         type: String,
-        default: '#2563eb', // blue-600
+        default: '#35979c', // 1Pos brand teal (see lib/brand-defaults.ts)
       },
       secondaryColor: String,
       accentColor: String,

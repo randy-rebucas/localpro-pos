@@ -55,7 +55,7 @@ export default function SuperAdminLoginPage() {
   if (checking) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin h-8 w-8 border-2 border-blue-600 border-t-transparent rounded-full" />
+        <div className="animate-spin h-8 w-8 border-2 border-brand border-t-transparent rounded-full" />
       </div>
     );
   }
@@ -65,7 +65,7 @@ export default function SuperAdminLoginPage() {
       <div className="w-full max-w-md">
         <div className="bg-white border border-gray-200 shadow-sm p-8">
           <div className="mb-8 text-center">
-            <div className="inline-flex items-center justify-center w-14 h-14 bg-blue-600 text-white text-2xl font-bold mb-4">
+            <div className="inline-flex items-center justify-center w-14 h-14 bg-brand text-white text-2xl font-bold mb-4">
               SA
             </div>
             <h1 className="text-2xl font-bold text-gray-900">Super Admin</h1>
@@ -80,7 +80,7 @@ export default function SuperAdminLoginPage() {
                 required
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-sm"
+                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white text-sm"
                 placeholder="admin@example.com"
                 autoComplete="email"
               />
@@ -93,7 +93,7 @@ export default function SuperAdminLoginPage() {
                 required
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-sm"
+                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white text-sm"
                 placeholder="••••••••"
                 autoComplete="current-password"
               />
@@ -108,7 +108,7 @@ export default function SuperAdminLoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm"
+              className="w-full py-2.5 bg-brand text-white font-semibold hover:bg-brand-hover disabled:opacity-50 transition-colors text-sm"
             >
               {loading ? 'Signing in...' : 'Sign In'}
             </button>

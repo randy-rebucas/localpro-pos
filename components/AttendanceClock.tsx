@@ -21,7 +21,7 @@ export default function AttendanceClock() {
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const { user, isAuthenticated } = useAuth();
   const { settings } = useTenantSettings();
-  const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#3b82f6';
+  const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#35979c';
   const [session, setSession] = useState<AttendanceSession | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');

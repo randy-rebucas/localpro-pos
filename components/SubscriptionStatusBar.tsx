@@ -21,11 +21,11 @@ export function SubscriptionStatusBar() {
 
   if (loading) {
     return (
-      <div className="bg-blue-50 border-b border-blue-200 px-4 py-3">
+      <div className="bg-brand-soft border-b border-teal-200 px-4 py-3">
         <div className="w-full flex items-center justify-between">
           <div className="animate-pulse flex items-center space-x-3">
-            <div className="w-5 h-5 bg-blue-300 rounded"></div>
-            <div className="h-4 bg-blue-300 rounded w-48"></div>
+            <div className="w-5 h-5 bg-teal-200 rounded"></div>
+            <div className="h-4 bg-teal-200 rounded w-48"></div>
           </div>
         </div>
       </div>
@@ -87,12 +87,12 @@ export function SubscriptionStatusBar() {
         : 0;
 
       return {
-        bgColor: 'bg-blue-50',
-        borderColor: 'border-blue-200',
-        icon: <Clock className="w-5 h-5 text-blue-600" />,
+        bgColor: 'bg-brand-soft',
+        borderColor: 'border-teal-200',
+        icon: <Clock className="w-5 h-5 text-brand" />,
         title: dict?.admin?.trialPeriod || 'Trial Period',
         description: (dict?.admin?.daysRemaining || '{days} days remaining in your trial.').replace('{days}', String(Math.max(0, daysLeft))),
-        badge: <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">{dict?.admin?.trial || 'Trial'}</span>,
+        badge: <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-brand-soft text-brand-navy">{dict?.admin?.trial || 'Trial'}</span>,
         action: dict?.admin?.upgradeNow || 'Upgrade Now',
         actionVariant: 'outline' as const,
       };
@@ -144,7 +144,7 @@ export function SubscriptionStatusBar() {
         <Link href={`/${tenant}/${lang}/admin/subscriptions`}>
           <button className={`px-3 py-1 rounded text-sm font-medium ${
             config.actionVariant === 'default'
-              ? 'bg-blue-600 text-white hover:bg-blue-700'
+              ? 'bg-brand text-white hover:bg-brand-hover'
               : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
           }`}>
             {config.action}

@@ -5,18 +5,13 @@ import { requireTenantAccess } from '@/lib/api-tenant';
 import { requireRole } from '@/lib/auth';
 import TenantEcommerceIntegration from '@/models/TenantEcommerceIntegration';
 import { encryptCredentialsPayload } from '@/lib/ecommerce/crypto';
-import { wooFetchJson } from '@/lib/ecommerce/woocommerce-api';
+import { wooFetchJson, normalizeWooCommerceSiteUrl } from '@/lib/ecommerce/woocommerce-api';
 import { registerWooCommerceWebhooks } from '@/lib/ecommerce/register-woo-webhooks';
+import { getPublicAppUrl } from '@/lib/ecommerce/public-url';
 import { requireEcommerceIntegrationFeature } from '@/lib/ecommerce/require-ecommerce-feature';
 import { requireEcommerceProviderConnectAllowed } from '@/lib/ecommerce/tenant-integration-policy';
 import { checkRateLimit } from '@/lib/rate-limit';
 import mongoose from 'mongoose';
-
-function normalizeSiteUrl(url: string): string {
-  let u = url.trim();
-  if (!/^https?:\/\//i.test(u)) u = `https://${u}`;
-  return u.replace(/\/$/, '');
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -39,7 +34,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'siteUrl, consumerKey, and consumerSecret are required' }, { status: 400 });
     }
 
-    const normalized = normalizeSiteUrl(siteUrl);
+    let normalized: string;
+    try {
+      normalized = normalizeWooCommerceSiteUrl(siteUrl);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Invalid site URL';
+      return NextResponse.json({ success: false, error: msg }, { status: 400 });
+    }
 
     await wooFetchJson<unknown[]>(normalized, consumerKey, consumerSecret, '/products?per_page=1');
 
@@ -64,7 +65,9 @@ export async function POST(request: NextRequest) {
     );
 
     try {
-      await registerWooCommerceWebhooks(integration, signingSecret);
+      await registerWooCommerceWebhooks(integration, signingSecret, {
+        publicAppBaseUrl: getPublicAppUrl(request),
+      });
     } catch {
       await integration.updateOne({ $set: { lastError: 'webhook_registration_failed' } });
     }

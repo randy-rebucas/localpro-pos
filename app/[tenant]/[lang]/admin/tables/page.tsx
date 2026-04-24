@@ -34,7 +34,7 @@ export default function TablesPage() {
   const [formData, setFormData] = useState({ name: '', capacity: '' });
 
   const { settings } = useTenantSettings();
-  const primaryColor = settings?.primaryColor || '#3b82f6';
+  const primaryColor = settings?.primaryColor || '#35979c';
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -336,7 +336,7 @@ export default function TablesPage() {
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                  className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-brand"
                   placeholder="e.g. T1, Table 5, Patio A"
                   maxLength={50}
                   autoFocus
@@ -349,7 +349,7 @@ export default function TablesPage() {
                   type="number"
                   value={formData.capacity}
                   onChange={(e) => setFormData({ ...formData, capacity: e.target.value })}
-                  className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                  className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-brand"
                   placeholder="e.g. 4"
                   min={1}
                   max={100}

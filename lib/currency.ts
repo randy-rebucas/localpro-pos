@@ -1,3 +1,4 @@
+import { BRAND_PRIMARY_HEX } from '@/lib/brand-defaults';
 import { ITenantSettings } from '@/types/tenant';
 
 /**
@@ -129,7 +130,7 @@ export function getDefaultTenantSettings(): ITenantSettings {
       thousandsSeparator: ',',
       decimalPlaces: 2,
     },
-    primaryColor: '#2563eb',
+    primaryColor: BRAND_PRIMARY_HEX,
     receiptShowLogo: true,
     receiptShowAddress: true,
     receiptShowPhone: false,

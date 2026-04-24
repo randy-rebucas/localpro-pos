@@ -16,7 +16,7 @@ export default function ApiDocsPage() {
   const [loading, setLoading] = useState(true);
   const { settings } = useTenantSettings();
   const tenantSettings = settings || getDefaultTenantSettings();
-  const primaryColor = tenantSettings.primaryColor || '#3b82f6';
+  const primaryColor = tenantSettings.primaryColor || '#35979c';
 
   useEffect(() => {
     getDictionaryClient(lang).then((d) => {
@@ -79,7 +79,7 @@ export default function ApiDocsPage() {
   ];
 
   const methodColors: Record<string, string> = {
-    GET: 'bg-blue-100 text-blue-700',
+    GET: 'bg-brand-soft text-brand-hover',
     POST: 'bg-green-100 text-green-700',
     PUT: 'bg-yellow-100 text-yellow-700',
     DELETE: 'bg-red-100 text-red-700',
@@ -93,7 +93,7 @@ export default function ApiDocsPage() {
         <div className="mb-6 sm:mb-8">
           <Link
             href={`/${tenant}/${lang}/admin`}
-            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium mb-4 transition-colors"
+            className="inline-flex items-center text-brand hover:text-brand-hover font-medium mb-4 transition-colors"
           >
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -206,7 +206,7 @@ export default function ApiDocsPage() {
                   href="/openapi.json"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-blue-600 hover:text-blue-700 font-medium flex items-center gap-2"
+                  className="text-brand hover:text-brand-hover font-medium flex items-center gap-2"
                 >
                   <span>{dict?.apiDocs?.openApiSchema || 'OpenAPI Schema'}</span>
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -219,7 +219,7 @@ export default function ApiDocsPage() {
                   href="/README.md"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-blue-600 hover:text-blue-700 font-medium flex items-center gap-2"
+                  className="text-brand hover:text-brand-hover font-medium flex items-center gap-2"
                 >
                   <span>{dict?.apiDocs?.projectDocs || 'Project Documentation'}</span>
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

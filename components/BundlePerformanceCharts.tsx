@@ -23,7 +23,7 @@ interface BundlePerformanceChartsProps {
   dict: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
-const DEFAULT_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
+const DEFAULT_COLORS = ['#35979c', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
 const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ color: string; name: string; value: number; payload: { fullName: string } }>; label?: string }) => {
   if (active && payload && payload.length) {
@@ -44,7 +44,7 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
 export default memo(function BundlePerformanceCharts({ analytics, dict }: BundlePerformanceChartsProps) {
   const { settings } = useTenantSettings();
   const tenantSettings = settings || getDefaultTenantSettings();
-  const primaryColor = tenantSettings.primaryColor || '#3b82f6';
+  const primaryColor = tenantSettings.primaryColor || '#35979c';
   const COLORS = [primaryColor, ...DEFAULT_COLORS.filter(c => c !== primaryColor)].slice(0, 8);
 
   // Prepare data for charts - limit to top 10 for readability

@@ -84,7 +84,7 @@ export default function SettingsPage() {
             <button
               onClick={checkHealth}
               disabled={healthLoading}
-              className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover disabled:opacity-50 transition-colors"
             >
               {healthLoading ? 'Checking...' : 'Check Health'}
             </button>
@@ -166,7 +166,7 @@ export default function SettingsPage() {
                 <button
                   onClick={() => runSeed('all')}
                   disabled={seedLoading !== null}
-                  className="mt-auto px-3 py-1.5 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  className="mt-auto px-3 py-1.5 bg-brand text-white text-sm font-medium hover:bg-brand-hover disabled:opacity-50 transition-colors"
                 >
                   {seedLoading === 'all' ? 'Seeding...' : 'Seed All'}
                 </button>

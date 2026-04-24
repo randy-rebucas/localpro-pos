@@ -113,7 +113,7 @@ export default function BookingsPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
           <p className="mt-4 text-gray-600">{dict?.admin?.loadingBookings || 'Loading bookings...'}</p>
         </div>
       </div>
@@ -135,7 +135,7 @@ export default function BookingsPage() {
             type="button"
             disabled={!bookingEnabled}
             onClick={() => bookingEnabled && setShowCreateModal(true)}
-            className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 transition-colors flex items-center gap-2 border border-blue-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
+            className="px-4 py-2 bg-brand text-white hover:bg-brand-hover transition-colors flex items-center gap-2 border border-brand-hover disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-brand"
           >
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -177,7 +177,7 @@ export default function BookingsPage() {
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+            className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white"
           >
             <option value="all">{dict?.admin?.allStatuses || 'All Statuses'}</option>
             <option value="pending">{dict?.admin?.pending || 'Pending'}</option>
@@ -189,7 +189,7 @@ export default function BookingsPage() {
           <select
             value={filterStaff}
             onChange={(e) => setFilterStaff(e.target.value)}
-            className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+            className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white"
           >
             <option value="all">{dict?.admin?.allStaff || 'All Staff'}</option>
             {staff.map((s) => (
@@ -289,7 +289,7 @@ export default function BookingsPage() {
                             setSelectedBooking(booking);
                             setShowModal(true);
                           }}
-                          className="text-blue-600 hover:text-blue-900"
+                          className="text-brand hover:text-brand-navy-deep"
                         >
                           {dict?.common?.view || 'View'}
                         </button>
@@ -370,7 +370,7 @@ export default function BookingsPage() {
                   onChange={(e) => {
                     handleUpdateBooking(selectedBooking._id, { staffId: e.target.value || undefined });
                   }}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white"
                 >
                   <option value="">{dict?.admin?.unassigned || 'Unassigned'}</option>
                   {staff.map((s) => (
@@ -387,7 +387,7 @@ export default function BookingsPage() {
                   onChange={(e) => {
                     handleUpdateBooking(selectedBooking._id, { status: e.target.value as Booking['status'] });
                   }}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white"
                 >
                   <option value="pending">{dict?.admin?.pending || 'Pending'}</option>
                   <option value="confirmed">{dict?.admin?.confirmed || 'Confirmed'}</option>
@@ -447,7 +447,7 @@ export default function BookingsPage() {
                   required
                   value={formData.customerName}
                   onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white"
                 />
               </div>
               <div>
@@ -456,7 +456,7 @@ export default function BookingsPage() {
                   type="email"
                   value={formData.customerEmail}
                   onChange={(e) => setFormData({ ...formData, customerEmail: e.target.value })}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white"
                 />
               </div>
               <div>
@@ -465,7 +465,7 @@ export default function BookingsPage() {
                   type="tel"
                   value={formData.customerPhone}
                   onChange={(e) => setFormData({ ...formData, customerPhone: e.target.value })}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white"
                 />
               </div>
               <div>
@@ -475,7 +475,7 @@ export default function BookingsPage() {
                   required
                   value={formData.serviceName}
                   onChange={(e) => setFormData({ ...formData, serviceName: e.target.value })}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white"
                 />
               </div>
               <div>
@@ -484,7 +484,7 @@ export default function BookingsPage() {
                   value={formData.serviceDescription}
                   onChange={(e) => setFormData({ ...formData, serviceDescription: e.target.value })}
                   rows={3}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -495,7 +495,7 @@ export default function BookingsPage() {
                     required
                     value={formData.startTime}
                     onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white"
                   />
                 </div>
                 <div>
@@ -506,7 +506,7 @@ export default function BookingsPage() {
                     min="1"
                     value={formData.duration}
                     onChange={(e) => setFormData({ ...formData, duration: parseInt(e.target.value) })}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white"
                   />
                 </div>
               </div>
@@ -515,7 +515,7 @@ export default function BookingsPage() {
                 <select
                   value={formData.staffId}
                   onChange={(e) => setFormData({ ...formData, staffId: e.target.value })}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white"
                 >
                   <option value="">{dict?.admin?.unassigned || 'Unassigned'}</option>
                   {staff.map((s) => (
@@ -530,7 +530,7 @@ export default function BookingsPage() {
                 <select
                   value={formData.status}
                   onChange={(e) => setFormData({ ...formData, status: e.target.value as Booking['status'] })}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white"
                 >
                   <option value="pending">{dict?.admin?.pending || 'Pending'}</option>
                   <option value="confirmed">{dict?.admin?.confirmed || 'Confirmed'}</option>
@@ -542,7 +542,7 @@ export default function BookingsPage() {
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   rows={3}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white"
                 />
               </div>
               <div className="flex gap-2 pt-4 border-t border-gray-200">
@@ -558,7 +558,7 @@ export default function BookingsPage() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 transition-colors border border-blue-700"
+                  className="flex-1 px-4 py-2 bg-brand text-white hover:bg-brand-hover transition-colors border border-brand-hover"
                 >
                   {dict?.admin?.createBooking || 'Create Booking'}
                 </button>

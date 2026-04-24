@@ -84,7 +84,7 @@ export default function UsersPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
@@ -99,7 +99,7 @@ export default function UsersPage() {
         <div className="mb-6 sm:mb-8">
           <Link
             href={`/${tenant}/${lang}/admin`}
-            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium mb-4 transition-colors"
+            className="inline-flex items-center text-brand hover:text-brand-hover font-medium mb-4 transition-colors"
           >
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -124,7 +124,7 @@ export default function UsersPage() {
                 setEditingUser(null);
                 setShowUserModal(true);
               }}
-              className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
+              className="px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium border border-brand-hover"
             >
               {dict.common?.add || 'Add'} {dict.admin?.user || 'User'}
             </button>
@@ -147,7 +147,7 @@ export default function UsersPage() {
                     <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{user.name}</td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{user.email}</td>
                     <td className="px-4 py-4 whitespace-nowrap">
-                      <span className="px-2 py-1 text-xs font-semibold border border-blue-300 bg-blue-100 text-blue-800 capitalize">
+                      <span className="px-2 py-1 text-xs font-semibold border border-teal-300 bg-brand-soft text-brand-navy capitalize">
                         {getRoleLabel(user.role, dict)}
                       </span>
                     </td>
@@ -175,7 +175,7 @@ export default function UsersPage() {
                             setEditingUser(user);
                             setShowUserModal(true);
                           }}
-                          className="text-blue-600 hover:text-blue-900"
+                          className="text-brand hover:text-brand-navy-deep"
                         >
                           {dict.common?.edit || 'Edit'}
                         </button>
@@ -281,7 +281,7 @@ function UserModal({
                 required
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
               />
             </div>
             <div>
@@ -293,7 +293,7 @@ function UserModal({
                 required
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
               />
             </div>
             <div>
@@ -305,7 +305,7 @@ function UserModal({
                 required={!user}
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
               />
             </div>
             <div>
@@ -315,7 +315,7 @@ function UserModal({
               <select
                 value={formData.role}
                 onChange={(e) => setFormData({ ...formData, role: e.target.value as any })} // eslint-disable-line @typescript-eslint/no-explicit-any
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
               >
                 {USER_ROLES.map((role) => (
                   <option key={role.value} value={role.value}>
@@ -340,7 +340,7 @@ function UserModal({
               <button
                 type="submit"
                 disabled={saving}
-                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
+                className="px-4 py-2 bg-brand text-white hover:bg-brand-hover disabled:opacity-50 border border-brand-hover"
               >
                 {saving ? (dict.common?.saving || 'Saving...') : (dict.common?.save || 'Save')}
               </button>
@@ -392,7 +392,7 @@ function QRModal({
       <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
         <div className="bg-white border border-gray-300 p-6">
           <div className="text-center">
-            <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+            <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
             <p className="mt-4 text-gray-600">{dict?.admin?.loadingQRCode || 'Loading QR code...'}</p>
           </div>
         </div>
@@ -428,7 +428,7 @@ function QRModal({
                 </button>
                 <button
                   onClick={onClose}
-                  className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 border border-blue-700"
+                  className="px-4 py-2 bg-brand text-white hover:bg-brand-hover border border-brand-hover"
                 >
                   {dict.common?.close || 'Close'}
                 </button>

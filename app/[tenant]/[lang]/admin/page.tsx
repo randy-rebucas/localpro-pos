@@ -17,7 +17,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const { settings } = useTenantSettings();
   const tenantSettings = settings || getDefaultTenantSettings();
-  const primaryColor = tenantSettings.primaryColor || '#3b82f6';
+  const primaryColor = tenantSettings.primaryColor || '#35979c';
   const { subscriptionStatus } = useSubscription();
 
   useEffect(() => {
@@ -499,7 +499,7 @@ export default function AdminPage() {
     red:     { icon: 'bg-red-50 text-red-600 border-red-200',      text: 'text-red-600' },
     violet:  { icon: 'bg-violet-50 text-violet-600 border-violet-200',  text: 'text-violet-600' },
     pink:    { icon: 'bg-pink-50 text-pink-600 border-pink-200',    text: 'text-pink-600' },
-    blue:    { icon: 'bg-blue-50 text-blue-600 border-blue-200',    text: 'text-blue-600' },
+    blue:    { icon: 'bg-brand-soft text-brand border-teal-200',    text: 'text-brand' },
     green:   { icon: 'bg-green-50 text-green-600 border-green-200',   text: 'text-green-600' },
     orange:  { icon: 'bg-orange-50 text-orange-600 border-orange-200',  text: 'text-orange-600' },
     purple:  { icon: 'bg-purple-50 text-purple-600 border-purple-200',  text: 'text-purple-600' },

@@ -19,7 +19,7 @@ export default function SettingsPage() {
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const { settings: tenantSettings } = useTenantSettings();
-  const primaryColor = (tenantSettings || getDefaultTenantSettings()).primaryColor || '#2563eb';
+  const primaryColor = (tenantSettings || getDefaultTenantSettings()).primaryColor || '#35979c';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -132,7 +132,7 @@ export default function SettingsPage() {
             thousandsSeparator: ',',
             decimalPlaces: 2,
           },
-          primaryColor: '#2563eb',
+          primaryColor: '#35979c',
           receiptShowLogo: true,
           receiptShowAddress: true,
           receiptShowPhone: false,
@@ -363,7 +363,7 @@ export default function SettingsPage() {
                 onClick={() => setActiveTab('general')}
                 className={`px-6 py-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
                   activeTab === 'general'
-                    ? 'border-blue-600 text-blue-600'
+                    ? 'border-brand text-brand'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
@@ -461,11 +461,11 @@ export default function SettingsPage() {
                     <button
                       onClick={autoDetectLocation}
                       disabled={detecting}
-                      className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 border border-blue-300"
+                      className="px-4 py-2 text-sm font-medium text-brand bg-brand-soft hover:bg-brand-soft transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 border border-teal-300"
                     >
                       {detecting ? (
                         <>
-                          <div className="animate-spin h-4 w-4 border-b-2 border-blue-600"></div>
+                          <div className="animate-spin h-4 w-4 border-b-2 border-brand"></div>
                           <span>{dict?.settings?.detecting || 'Detecting...'}</span>
                         </>
                       ) : (
@@ -509,7 +509,7 @@ export default function SettingsPage() {
                             };
                           });
                         }}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                         placeholder={dict?.settings?.currencyPlaceholder || 'USD'}
                         maxLength={3}
                       />
@@ -523,14 +523,14 @@ export default function SettingsPage() {
                           type="text"
                           value={settings.currencySymbol || getCurrencySymbolForCode(settings.currency || 'USD')}
                           onChange={(e) => updateSetting('currencySymbol', e.target.value)}
-                          className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                          className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                           placeholder="$"
                         />
                         {!settings.currencySymbol && (
                           <button
                             type="button"
                             onClick={() => updateSetting('currencySymbol', getCurrencySymbolForCode(settings.currency || 'USD'))}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-blue-600 hover:text-blue-700 font-medium"
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-brand hover:text-brand-hover font-medium"
                             title={dict?.common?.autoFillSymbol || 'Auto-fill symbol'}
                           >
                             Auto
@@ -545,7 +545,7 @@ export default function SettingsPage() {
                       <select
                         value={settings.currencyPosition || 'before'}
                         onChange={(e) => updateSetting('currencyPosition', e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                       >
                         <option value="before">{dict?.settings?.currencyPositionBefore || 'Before amount ($100)'}</option>
                         <option value="after">{dict?.settings?.currencyPositionAfter || 'After amount (100$)'}</option>
@@ -559,7 +559,7 @@ export default function SettingsPage() {
                         type="text"
                         value={settings.timezone || 'UTC'}
                         onChange={(e) => updateSetting('timezone', e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                         placeholder={dict?.settings?.timezonePlaceholder || 'America/New_York'}
                         list="timezone-suggestions"
                       />
@@ -587,7 +587,7 @@ export default function SettingsPage() {
                       <select
                         value={settings.dateFormat || 'MM/DD/YYYY'}
                         onChange={(e) => updateSetting('dateFormat', e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                       >
                         <option value="MM/DD/YYYY">MM/DD/YYYY</option>
                         <option value="DD/MM/YYYY">DD/MM/YYYY</option>
@@ -601,7 +601,7 @@ export default function SettingsPage() {
                       <select
                         value={settings.timeFormat || '12h'}
                         onChange={(e) => updateSetting('timeFormat', e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                       >
                         <option value="12h">{dict?.settings?.timeFormat12h || '12-hour (AM/PM)'}</option>
                         <option value="24h">{dict?.settings?.timeFormat24h || '24-hour'}</option>
@@ -647,7 +647,7 @@ export default function SettingsPage() {
                             setSaving(false);
                           }
                         }}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                       >
                         <option value="en">English</option>
                         <option value="es">Español</option>
@@ -663,7 +663,7 @@ export default function SettingsPage() {
                       <select
                         value={settings.numberFormat?.decimalSeparator || '.'}
                         onChange={(e) => updateSetting('numberFormat.decimalSeparator', e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                       >
                         <option value=".">{dict?.settings?.separatorPeriod || 'Period (.)'}</option>
                         <option value=",">{dict?.settings?.separatorComma || 'Comma (,)'}</option>
@@ -676,7 +676,7 @@ export default function SettingsPage() {
                       <select
                         value={settings.numberFormat?.thousandsSeparator || ','}
                         onChange={(e) => updateSetting('numberFormat.thousandsSeparator', e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                       >
                         <option value=",">{dict?.settings?.separatorComma || 'Comma (,)'}</option>
                         <option value=".">{dict?.settings?.separatorPeriod || 'Period (.)'}</option>
@@ -694,7 +694,7 @@ export default function SettingsPage() {
                         max="4"
                         value={settings.numberFormat?.decimalPlaces || 2}
                         onChange={(e) => updateSetting('numberFormat.decimalPlaces', parseInt(e.target.value) || 2)}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                       />
                     </div>
                   </div>
@@ -710,7 +710,7 @@ export default function SettingsPage() {
                         id="taxEnabled"
                         checked={settings.taxEnabled || false}
                         onChange={(e) => updateSetting('taxEnabled', e.target.checked)}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
+                        className="h-4 w-4 text-brand focus:ring-brand border-gray-300 cursor-pointer"
                       />
                       <label htmlFor="taxEnabled" className="ml-2 text-sm font-medium text-gray-700">
                         {dict?.settings?.enableTax || 'Enable Tax'}
@@ -729,7 +729,7 @@ export default function SettingsPage() {
                             step="0.01"
                             value={settings.taxRate || 0}
                             onChange={(e) => updateSetting('taxRate', parseFloat(e.target.value) || 0)}
-                            className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                            className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                           />
                         </div>
                         <div>
@@ -740,7 +740,7 @@ export default function SettingsPage() {
                             type="text"
                             value={settings.taxLabel || 'Tax'}
                             onChange={(e) => updateSetting('taxLabel', e.target.value)}
-                            className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                            className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                             placeholder={dict?.settings?.taxNamePlaceholder || 'VAT, GST, Sales Tax'}
                           />
                         </div>
@@ -765,7 +765,7 @@ export default function SettingsPage() {
                       type="text"
                       value={settings.companyName || ''}
                       onChange={(e) => updateSetting('companyName', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                     />
                   </div>
                   <div>
@@ -776,7 +776,7 @@ export default function SettingsPage() {
                       type="url"
                       value={settings.logo || ''}
                       onChange={(e) => updateSetting('logo', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                       placeholder="https://example.com/logo.png"
                     />
                   </div>
@@ -788,7 +788,7 @@ export default function SettingsPage() {
                       type="url"
                       value={settings.favicon || ''}
                       onChange={(e) => updateSetting('favicon', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                       placeholder="https://example.com/favicon.ico"
                     />
                   </div>
@@ -799,16 +799,16 @@ export default function SettingsPage() {
                     <div className="flex gap-2">
                       <input
                         type="color"
-                        value={settings.primaryColor || '#2563eb'}
+                        value={settings.primaryColor || '#35979c'}
                         onChange={(e) => updateSetting('primaryColor', e.target.value)}
                         className="h-10 w-20 border-2 border-gray-300 cursor-pointer bg-white"
                       />
                       <input
                         type="text"
-                        value={settings.primaryColor || '#2563eb'}
+                        value={settings.primaryColor || '#35979c'}
                         onChange={(e) => updateSetting('primaryColor', e.target.value)}
-                        className="flex-1 px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
-                        placeholder="#2563eb"
+                        className="flex-1 px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                        placeholder="#35979c"
                       />
                     </div>
                   </div>
@@ -827,7 +827,7 @@ export default function SettingsPage() {
                         type="text"
                         value={settings.secondaryColor || ''}
                         onChange={(e) => updateSetting('secondaryColor', e.target.value)}
-                        className="flex-1 px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                        className="flex-1 px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                         placeholder="#64748b"
                       />
                     </div>
@@ -847,7 +847,7 @@ export default function SettingsPage() {
                         type="text"
                         value={settings.accentColor || ''}
                         onChange={(e) => updateSetting('accentColor', e.target.value)}
-                        className="flex-1 px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                        className="flex-1 px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                         placeholder="#10b981"
                       />
                     </div>
@@ -867,7 +867,7 @@ export default function SettingsPage() {
                         type="text"
                         value={settings.backgroundColor || ''}
                         onChange={(e) => updateSetting('backgroundColor', e.target.value)}
-                        className="flex-1 px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                        className="flex-1 px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                         placeholder="#ffffff"
                       />
                     </div>
@@ -887,7 +887,7 @@ export default function SettingsPage() {
                         type="text"
                         value={settings.textColor || ''}
                         onChange={(e) => updateSetting('textColor', e.target.value)}
-                        className="flex-1 px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                        className="flex-1 px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                         placeholder="#111827"
                       />
                     </div>
@@ -897,14 +897,14 @@ export default function SettingsPage() {
 
                 {/* Advanced Branding Section - Moved to Admin */}
                 <div className="pt-8 mt-8 border-t-2 border-gray-200">
-                  <div className="p-4 bg-blue-50 border border-blue-200 rounded">
+                  <div className="p-4 bg-brand-soft border border-teal-200 rounded">
                     <h3 className="text-lg font-semibold text-gray-900 mb-2">{dict?.settings?.advancedBranding || 'Advanced Branding'}</h3>
-                    <p className="text-sm text-blue-800 mb-3">
+                    <p className="text-sm text-brand-navy mb-3">
                       {dict?.settings?.advancedBrandingNote || 'Advanced branding features (custom fonts, themes, CSS) have been moved to Admin → Advanced Branding for better access control.'}
                     </p>
                     <Link
                       href={`/${tenant}/${lang}/admin/advanced-branding`}
-                      className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+                      className="inline-flex items-center px-4 py-2 bg-brand text-white text-sm font-medium hover:bg-brand-hover transition-colors"
                     >
                       {dict?.admin?.advancedBranding || 'Advanced Branding'} →
                     </Link>
@@ -924,7 +924,7 @@ export default function SettingsPage() {
                       type="email"
                       value={settings.email || ''}
                       onChange={(e) => updateSetting('email', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                     />
                   </div>
                   <div>
@@ -933,7 +933,7 @@ export default function SettingsPage() {
                       type="tel"
                       value={settings.phone || ''}
                       onChange={(e) => updateSetting('phone', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                     />
                   </div>
                   <div className="md:col-span-2">
@@ -942,7 +942,7 @@ export default function SettingsPage() {
                       type="text"
                       value={settings.address?.street || ''}
                       onChange={(e) => updateSetting('address.street', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                     />
                   </div>
                   <div>
@@ -951,7 +951,7 @@ export default function SettingsPage() {
                       type="text"
                       value={settings.address?.city || ''}
                       onChange={(e) => updateSetting('address.city', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                     />
                   </div>
                   <div>
@@ -960,7 +960,7 @@ export default function SettingsPage() {
                       type="text"
                       value={settings.address?.state || ''}
                       onChange={(e) => updateSetting('address.state', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                     />
                   </div>
                   <div>
@@ -969,7 +969,7 @@ export default function SettingsPage() {
                       type="text"
                       value={settings.address?.zipCode || ''}
                       onChange={(e) => updateSetting('address.zipCode', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                     />
                   </div>
                   <div>
@@ -978,7 +978,7 @@ export default function SettingsPage() {
                       type="text"
                       value={settings.address?.country || ''}
                       onChange={(e) => updateSetting('address.country', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                     />
                   </div>
                   <div>
@@ -987,7 +987,7 @@ export default function SettingsPage() {
                       type="url"
                       value={settings.website || ''}
                       onChange={(e) => updateSetting('website', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                       placeholder="https://example.com"
                     />
                   </div>
@@ -1008,7 +1008,7 @@ export default function SettingsPage() {
                       value={settings.receiptHeader || ''}
                       onChange={(e) => updateSetting('receiptHeader', e.target.value)}
                       rows={3}
-                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                       placeholder={dict?.settings?.receiptHeaderPlaceholder || 'Custom header text to appear at the top of receipts'}
                     />
                   </div>
@@ -1020,7 +1020,7 @@ export default function SettingsPage() {
                       value={settings.receiptFooter || ''}
                       onChange={(e) => updateSetting('receiptFooter', e.target.value)}
                       rows={3}
-                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                       placeholder={dict?.settings?.receiptFooterPlaceholder || 'Custom footer text to appear at the bottom of receipts'}
                     />
                   </div>
@@ -1033,7 +1033,7 @@ export default function SettingsPage() {
                           id="receiptShowLogo"
                           checked={settings.receiptShowLogo !== false}
                           onChange={(e) => updateSetting('receiptShowLogo', e.target.checked)}
-                          className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
+                          className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
                         />
                         <label htmlFor="receiptShowLogo" className="ml-3 text-sm font-medium text-gray-700">
                           {dict?.settings?.showLogoOnReceipts || 'Show Logo on Receipts'}
@@ -1045,7 +1045,7 @@ export default function SettingsPage() {
                           id="receiptShowAddress"
                           checked={settings.receiptShowAddress !== false}
                           onChange={(e) => updateSetting('receiptShowAddress', e.target.checked)}
-                          className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
+                          className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
                         />
                         <label htmlFor="receiptShowAddress" className="ml-3 text-sm font-medium text-gray-700">
                           {dict?.settings?.showAddressOnReceipts || 'Show Address on Receipts'}
@@ -1057,7 +1057,7 @@ export default function SettingsPage() {
                           id="receiptShowPhone"
                           checked={settings.receiptShowPhone || false}
                           onChange={(e) => updateSetting('receiptShowPhone', e.target.checked)}
-                          className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
+                          className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
                         />
                         <label htmlFor="receiptShowPhone" className="ml-3 text-sm font-medium text-gray-700">
                           {dict?.settings?.showPhoneOnReceipts || 'Show Phone on Receipts'}
@@ -1069,7 +1069,7 @@ export default function SettingsPage() {
                           id="receiptShowEmail"
                           checked={settings.receiptShowEmail || false}
                           onChange={(e) => updateSetting('receiptShowEmail', e.target.checked)}
-                          className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
+                          className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
                         />
                         <label htmlFor="receiptShowEmail" className="ml-3 text-sm font-medium text-gray-700">
                           {dict?.settings?.showEmailOnReceipts || 'Show Email on Receipts'}
@@ -1094,7 +1094,7 @@ export default function SettingsPage() {
                         type="text"
                         value={settings.birTin || ''}
                         onChange={(e) => updateSetting('birTin', e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                         placeholder="000-000-000-000"
                       />
                     </div>
@@ -1106,7 +1106,7 @@ export default function SettingsPage() {
                         type="text"
                         value={settings.birBusinessStyle || ''}
                         onChange={(e) => updateSetting('birBusinessStyle', e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                         placeholder="Retail / Trading / Services"
                       />
                     </div>
@@ -1118,7 +1118,7 @@ export default function SettingsPage() {
                         type="text"
                         value={settings.birPtuNumber || ''}
                         onChange={(e) => updateSetting('birPtuNumber', e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                         placeholder="POS-0001-2024"
                       />
                     </div>
@@ -1130,7 +1130,7 @@ export default function SettingsPage() {
                         type="date"
                         value={settings.birPtuIssuedDate ? new Date(settings.birPtuIssuedDate).toISOString().slice(0, 10) : ''}
                         onChange={(e) => updateSetting('birPtuIssuedDate', e.target.value ? new Date(e.target.value) : undefined)}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                       />
                     </div>
                     <div>
@@ -1141,7 +1141,7 @@ export default function SettingsPage() {
                         type="text"
                         value={settings.birMinNumber || ''}
                         onChange={(e) => updateSetting('birMinNumber', e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                         placeholder="MIN assigned by BIR"
                       />
                     </div>
@@ -1153,7 +1153,7 @@ export default function SettingsPage() {
                         type="text"
                         value={settings.birSystemProvider || ''}
                         onChange={(e) => updateSetting('birSystemProvider', e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                         placeholder="LocalPro POS"
                       />
                     </div>
@@ -1211,7 +1211,7 @@ export default function SettingsPage() {
                         <select
                           value={settings.businessType || 'general'}
                           onChange={(e) => updateSetting('businessType', e.target.value)}
-                          className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                          className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                         >
                           {businessTypes.map((type) => (
                             <option key={type.type} value={type.type}>
@@ -1220,15 +1220,15 @@ export default function SettingsPage() {
                           ))}
                         </select>
                         {settings.businessType && !loadingBusinessTypes && (
-                          <div className="mt-3 p-4 bg-blue-50 border-2 border-blue-200">
-                            <p className="text-sm text-blue-900 font-medium mb-2">
+                          <div className="mt-3 p-4 bg-brand-soft border-2 border-teal-200">
+                            <p className="text-sm text-brand-navy-deep font-medium mb-2">
                               {businessTypes.find((t) => t.type === settings.businessType)?.name || 'Business Type'}
                             </p>
-                            <p className="text-xs text-blue-700 mb-3">
+                            <p className="text-xs text-brand-hover mb-3">
                               {businessTypes.find((t) => t.type === settings.businessType)?.description || ''}
                             </p>
-                            <div className="mt-3 pt-3 border-t border-blue-300">
-                              <p className="text-xs font-medium text-blue-900 mb-2">{dict?.settings?.defaultFeatures || 'Default Features:'}</p>
+                            <div className="mt-3 pt-3 border-t border-teal-300">
+                              <p className="text-xs font-medium text-brand-navy-deep mb-2">{dict?.settings?.defaultFeatures || 'Default Features:'}</p>
                               <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                                 {businessTypes.find((t) => t.type === settings.businessType)?.defaultFeatures && Object.entries(
                                   businessTypes.find((t) => t.type === settings.businessType)?.defaultFeatures || {}
@@ -1269,7 +1269,7 @@ export default function SettingsPage() {
                         type="text"
                         value={settings.taxId || ''}
                         onChange={(e) => updateSetting('taxId', e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                         placeholder="12-3456789"
                       />
                     </div>
@@ -1281,7 +1281,7 @@ export default function SettingsPage() {
                         type="text"
                         value={settings.registrationNumber || ''}
                         onChange={(e) => updateSetting('registrationNumber', e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                         placeholder={dict?.settings?.registrationNumberPlaceholder || 'Business registration number'}
                       />
                     </div>
@@ -1301,7 +1301,7 @@ export default function SettingsPage() {
                             id="enableInventory"
                             checked={settings.enableInventory !== false}
                             onChange={(e) => updateSetting('enableInventory', e.target.checked)}
-                            className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
+                            className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
                           />
                           <label htmlFor="enableInventory" className="ml-3 flex-1">
                             <div className="text-sm font-medium text-gray-900">{dict?.settings?.inventoryManagement || 'Inventory Management'}</div>
@@ -1314,7 +1314,7 @@ export default function SettingsPage() {
                             id="enableCategories"
                             checked={settings.enableCategories !== false}
                             onChange={(e) => updateSetting('enableCategories', e.target.checked)}
-                            className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
+                            className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
                           />
                           <label htmlFor="enableCategories" className="ml-3 flex-1">
                             <div className="text-sm font-medium text-gray-900">{dict?.settings?.categoriesFeature || 'Categories'}</div>
@@ -1327,7 +1327,7 @@ export default function SettingsPage() {
                             id="enableDiscounts"
                             checked={settings.enableDiscounts || false}
                             onChange={(e) => updateSetting('enableDiscounts', e.target.checked)}
-                            className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
+                            className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
                           />
                           <label htmlFor="enableDiscounts" className="ml-3 flex-1">
                             <div className="text-sm font-medium text-gray-900">{dict?.settings?.discountsPromotions || 'Discounts & Promotions'}</div>
@@ -1340,7 +1340,7 @@ export default function SettingsPage() {
                             id="enableLoyaltyProgram"
                             checked={settings.enableLoyaltyProgram || false}
                             onChange={(e) => updateSetting('enableLoyaltyProgram', e.target.checked)}
-                            className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
+                            className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
                           />
                           <label htmlFor="enableLoyaltyProgram" className="ml-3 flex-1">
                             <div className="text-sm font-medium text-gray-900">{dict?.settings?.loyaltyProgram || 'Loyalty Program'}</div>
@@ -1353,7 +1353,7 @@ export default function SettingsPage() {
                             id="enableCustomerManagement"
                             checked={settings.enableCustomerManagement || false}
                             onChange={(e) => updateSetting('enableCustomerManagement', e.target.checked)}
-                            className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
+                            className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
                           />
                           <label htmlFor="enableCustomerManagement" className="ml-3 flex-1">
                             <div className="text-sm font-medium text-gray-900">{dict?.settings?.customerManagementFeature || 'Customer Management'}</div>
@@ -1366,7 +1366,7 @@ export default function SettingsPage() {
                             id="enableOnAccountSales"
                             checked={settings.enableOnAccountSales || false}
                             onChange={(e) => updateSetting('enableOnAccountSales', e.target.checked)}
-                            className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
+                            className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
                           />
                           <label htmlFor="enableOnAccountSales" className="ml-3 flex-1">
                             <div className="text-sm font-medium text-gray-900">{dict?.settings?.onAccountSales || 'Charge to customer account (pay later)'}</div>
@@ -1379,7 +1379,7 @@ export default function SettingsPage() {
                             id="enableBookingScheduling"
                             checked={settings.enableBookingScheduling || false}
                             onChange={(e) => updateSetting('enableBookingScheduling', e.target.checked)}
-                            className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
+                            className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
                           />
                           <label htmlFor="enableBookingScheduling" className="ml-3 flex-1">
                             <div className="text-sm font-medium text-gray-900">{dict?.settings?.bookingScheduling || 'Booking & Scheduling'}</div>
@@ -1401,13 +1401,13 @@ export default function SettingsPage() {
                   {dict?.settings?.configureNotificationPreferences || 'Configure notification preferences and alert thresholds'}
                 </p>
                 <div className="space-y-6">
-                  <div className="p-4 bg-blue-50 border border-blue-200 rounded">
-                    <p className="text-sm text-blue-800 mb-2">
+                  <div className="p-4 bg-brand-soft border border-teal-200 rounded">
+                    <p className="text-sm text-brand-navy mb-2">
                       <strong>Note:</strong> {dict?.settings?.notificationTemplateNote || 'Notification template customization has been moved to Admin → Notification Templates for better access control.'}
                     </p>
                     <Link
                       href={`/${tenant}/${lang}/admin/notification-templates`}
-                      className="text-sm text-blue-600 hover:text-blue-700 font-medium underline"
+                      className="text-sm text-brand hover:text-brand-hover font-medium underline"
                     >
                       {dict?.settings?.customizeTemplates || 'Customize Templates →'}
                     </Link>
@@ -1424,7 +1424,7 @@ export default function SettingsPage() {
                           min="0"
                           value={settings.lowStockThreshold || 10}
                           onChange={(e) => updateSetting('lowStockThreshold', parseInt(e.target.value) || 10)}
-                          className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                          className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                         />
                         <p className="mt-2 text-xs text-gray-500">
                           {dict?.settings?.lowStockThresholdHint || 'Alert when stock falls below this quantity'}
@@ -1436,7 +1436,7 @@ export default function SettingsPage() {
                           id="lowStockAlert"
                           checked={settings.lowStockAlert !== false}
                           onChange={(e) => updateSetting('lowStockAlert', e.target.checked)}
-                          className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
+                          className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
                         />
                         <label htmlFor="lowStockAlert" className="ml-3 flex-1">
                           <div className="text-sm font-medium text-gray-900">
@@ -1458,7 +1458,7 @@ export default function SettingsPage() {
                           id="emailNotifications"
                           checked={settings.emailNotifications || false}
                           onChange={(e) => updateSetting('emailNotifications', e.target.checked)}
-                          className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
+                          className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
                         />
                         <label htmlFor="emailNotifications" className="ml-3 flex-1">
                           <div className="text-sm font-medium text-gray-900">
@@ -1475,7 +1475,7 @@ export default function SettingsPage() {
                           id="smsNotifications"
                           checked={settings.smsNotifications || false}
                           onChange={(e) => updateSetting('smsNotifications', e.target.checked)}
-                          className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
+                          className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
                         />
                         <label htmlFor="smsNotifications" className="ml-3 flex-1">
                           <div className="text-sm font-medium text-gray-900">
@@ -1500,7 +1500,7 @@ export default function SettingsPage() {
                           id="attendanceNotificationsEnabled"
                           checked={settings.attendanceNotifications?.enabled !== false}
                           onChange={(e) => updateSetting('attendanceNotifications.enabled', e.target.checked)}
-                          className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
+                          className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
                         />
                         <label htmlFor="attendanceNotificationsEnabled" className="ml-3 flex-1">
                           <div className="text-sm font-medium text-gray-900">{dict?.settings?.enableAttendanceAlerts || 'Enable Attendance Alerts'}</div>
@@ -1518,7 +1518,7 @@ export default function SettingsPage() {
                               type="time"
                               value={settings.attendanceNotifications?.expectedStartTime || '09:00'}
                               onChange={(e) => updateSetting('attendanceNotifications.expectedStartTime', e.target.value)}
-                              className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                              className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                             />
                             <p className="text-xs text-gray-500 mt-1">{dict?.settings?.expectedClockInTimeHint || "Alert if staff haven't clocked in by this time"}</p>
                           </div>
@@ -1532,7 +1532,7 @@ export default function SettingsPage() {
                               max={24}
                               value={settings.attendanceNotifications?.maxHoursWithoutClockOut ?? 12}
                               onChange={(e) => updateSetting('attendanceNotifications.maxHoursWithoutClockOut', Number(e.target.value))}
-                              className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                              className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                             />
                             <p className="text-xs text-gray-500 mt-1">{dict?.settings?.maxHoursWithoutClockOutHint || 'Alert after this many hours without clocking out (1–24)'}</p>
                           </div>
@@ -1574,7 +1574,7 @@ export default function SettingsPage() {
                 <button
                   onClick={handleSave}
                   disabled={saving}
-                  className="px-6 py-3 bg-blue-600 text-white hover:bg-blue-700 font-semibold transition-all duration-200 border border-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="px-6 py-3 bg-brand text-white hover:bg-brand-hover font-semibold transition-all duration-200 border border-brand-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   {saving ? (
                     <>

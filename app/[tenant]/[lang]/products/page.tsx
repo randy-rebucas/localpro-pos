@@ -57,7 +57,7 @@ export default function ProductsPage() {
   const [displayMode, setDisplayMode] = useState<'grid' | 'list'>('grid');
   const { confirm, Dialog: ConfirmDialog } = useConfirm();
   const { settings } = useTenantSettings();
-  const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#3b82f6';
+  const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#35979c';
   const inventoryEnabled = supportsFeature(settings ?? undefined, 'inventory');
 
   useEffect(() => {

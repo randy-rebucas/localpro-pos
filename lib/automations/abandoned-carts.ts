@@ -116,7 +116,7 @@ export async function sendAbandonedCartReminders(
     .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
     .cart-items { background-color: #f4f4f4; padding: 15px; border-radius: 5px; margin: 20px 0; }
     .total { font-size: 1.2em; font-weight: bold; margin-top: 15px; }
-    .button { display: inline-block; padding: 12px 24px; background-color: #2563eb; color: white; text-decoration: none; border-radius: 5px; margin-top: 20px; }
+    .button { display: inline-block; padding: 12px 24px; background-color: #35979c; color: white; text-decoration: none; border-radius: 5px; margin-top: 20px; }
     .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #666; }
   </style>
 </head>

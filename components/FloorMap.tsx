@@ -129,7 +129,7 @@ export default function FloorMap({ tenant, selectedTableId, onSelectTable, onClo
                     disabled={!cfg.selectable && !isSelected}
                     onClick={() => cfg.selectable && onSelectTable({ _id: table._id, name: table.name })}
                     className={`relative flex flex-col items-center justify-center p-3 border-2 transition-all min-h-[70px] ${cfg.bg} ${
-                      isSelected ? 'ring-2 ring-blue-500 ring-offset-1' : ''
+                      isSelected ? 'ring-2 ring-brand ring-offset-1' : ''
                     } ${!cfg.selectable ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer active:scale-95'}`}
                     title={table.status === 'occupied' ? (d?.tableOccupied || 'Table occupied') : table.status === 'check-requested' ? (d?.checkRequested || 'Check requested') : (d?.clickToSelect || 'Click to select')}
                   >

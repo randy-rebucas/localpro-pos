@@ -173,7 +173,7 @@ export default function BarcodeModal({ value, productName, onClose }: BarcodeMod
             type="button"
             onClick={downloadPNG}
             disabled={!!error}
-            className="flex-1 px-3 py-2 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-40"
+            className="flex-1 px-3 py-2 bg-brand text-white text-sm font-medium hover:bg-brand-hover disabled:opacity-40"
           >
             {d?.downloadPng || 'Download PNG'}
           </button>

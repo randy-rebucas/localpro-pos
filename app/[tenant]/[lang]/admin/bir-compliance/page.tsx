@@ -29,7 +29,7 @@ function LockOverlay({ plan, dict }: { plan?: string; dict: any }) { // eslint-d
         </p>
         <Link
           href={`/${tenant}/${lang}/admin/subscriptions`}
-          className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+          className="text-brand hover:text-brand-hover text-sm font-medium"
         >
           {dict?.bir?.upgradePlan || 'Upgrade Plan'}
         </Link>
@@ -87,7 +87,7 @@ export default function BirCompliancePage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
@@ -102,7 +102,7 @@ export default function BirCompliancePage() {
         <div className="mb-6 sm:mb-8">
           <Link
             href={`/${tenant}/${lang}/admin`}
-            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium mb-4 transition-colors"
+            className="inline-flex items-center text-brand hover:text-brand-hover font-medium mb-4 transition-colors"
           >
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -137,7 +137,7 @@ export default function BirCompliancePage() {
             </p>
             <Link
               href={`/${tenant}/${lang}/admin/audit-logs`}
-              className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 text-sm font-medium hover:bg-blue-700 transition-colors"
+              className="inline-flex items-center gap-2 bg-brand text-white px-4 py-2 text-sm font-medium hover:bg-brand-hover transition-colors"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -150,14 +150,14 @@ export default function BirCompliancePage() {
           <div className="relative bg-white border border-gray-300 p-6 overflow-hidden">
             {!birFeatures?.receiptFormatting && <LockOverlay plan="Pro" dict={dict} />}
             <div className="flex items-start gap-3 mb-4">
-              <div className="flex-shrink-0 w-10 h-10 bg-blue-100 flex items-center justify-center rounded">
-                <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="flex-shrink-0 w-10 h-10 bg-brand-soft flex items-center justify-center rounded">
+                <svg className="w-5 h-5 text-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">{dict?.bir?.receiptFormatting || 'Receipt Formatting'}</h2>
-                <span className="inline-block text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded mt-1">Pro+</span>
+                <span className="inline-block text-xs bg-brand-soft text-brand-hover px-2 py-0.5 rounded mt-1">Pro+</span>
               </div>
             </div>
             <p className="text-sm text-gray-600 mb-4">
@@ -165,7 +165,7 @@ export default function BirCompliancePage() {
             </p>
             <Link
               href={`/${tenant}/${lang}/admin/hardware`}
-              className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 text-sm font-medium hover:bg-blue-700 transition-colors"
+              className="inline-flex items-center gap-2 bg-brand text-white px-4 py-2 text-sm font-medium hover:bg-brand-hover transition-colors"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -209,7 +209,7 @@ export default function BirCompliancePage() {
                   value={birSettings.birTin}
                   onChange={(e) => setBirSettings({ ...birSettings, birTin: e.target.value })}
                   placeholder="000-000-000-000"
-                  className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand focus:border-brand"
                 />
               </div>
               <div>
@@ -219,7 +219,7 @@ export default function BirCompliancePage() {
                   value={birSettings.birPtuNumber}
                   onChange={(e) => setBirSettings({ ...birSettings, birPtuNumber: e.target.value })}
                   placeholder="e.g. POS-0001-2024"
-                  className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand focus:border-brand"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -229,7 +229,7 @@ export default function BirCompliancePage() {
                     type="date"
                     value={birSettings.birPtuIssuedDate}
                     onChange={(e) => setBirSettings({ ...birSettings, birPtuIssuedDate: e.target.value })}
-                    className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand focus:border-brand"
                   />
                 </div>
                 <div>
@@ -238,14 +238,14 @@ export default function BirCompliancePage() {
                     type="date"
                     value={birSettings.birPtuExpiryDate}
                     onChange={(e) => setBirSettings({ ...birSettings, birPtuExpiryDate: e.target.value })}
-                    className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand focus:border-brand"
                   />
                 </div>
               </div>
               <button
                 onClick={handleSavePtuSettings}
                 disabled={saving || !birFeatures?.ptuAssistance}
-                className="w-full bg-blue-600 text-white px-4 py-2 text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full bg-brand text-white px-4 py-2 text-sm font-medium hover:bg-brand-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {saving ? (dict?.admin?.saving || 'Saving...') : (dict?.bir?.savePtuSettings || 'Save PTU Settings')}
               </button>
@@ -277,7 +277,7 @@ export default function BirCompliancePage() {
                     type="date"
                     value={casDateRange.start}
                     onChange={(e) => setCasDateRange({ ...casDateRange, start: e.target.value })}
-                    className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand focus:border-brand"
                   />
                 </div>
                 <div>
@@ -286,7 +286,7 @@ export default function BirCompliancePage() {
                     type="date"
                     value={casDateRange.end}
                     onChange={(e) => setCasDateRange({ ...casDateRange, end: e.target.value })}
-                    className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand focus:border-brand"
                   />
                 </div>
               </div>

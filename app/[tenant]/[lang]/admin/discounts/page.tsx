@@ -72,7 +72,7 @@ export default function DiscountsPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
@@ -86,7 +86,7 @@ export default function DiscountsPage() {
         <div className="mb-6 sm:mb-8">
           <Link
             href={`/${tenant}/${lang}/admin`}
-            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium mb-4 transition-colors"
+            className="inline-flex items-center text-brand hover:text-brand-hover font-medium mb-4 transition-colors"
           >
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -139,7 +139,7 @@ export default function DiscountsPage() {
                   setEditingDiscount(null);
                   setShowDiscountModal(true);
                 }}
-                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium border border-blue-700"
+                className="px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium border border-brand-hover"
               >
                 {dict.common?.add || 'Add'} {dict.admin?.discount || 'Discount'}
               </button>
@@ -173,7 +173,7 @@ export default function DiscountsPage() {
                         )}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap">
-                        <span className="px-2 py-1 text-xs font-semibold border border-blue-300 bg-blue-100 text-blue-800">
+                        <span className="px-2 py-1 text-xs font-semibold border border-teal-300 bg-brand-soft text-brand-navy">
                           {discount.type}
                         </span>
                       </td>
@@ -202,7 +202,7 @@ export default function DiscountsPage() {
                               setEditingDiscount(discount);
                               setShowDiscountModal(true);
                             }}
-                            className="text-blue-600 hover:text-blue-900"
+                            className="text-brand hover:text-brand-navy-deep"
                           >
                             {dict.common?.edit || 'Edit'}
                           </button>
@@ -308,7 +308,7 @@ function DiscountModal({
                   onChange={(e) => setFormData({ code: e.target.value.toUpperCase() })}
                   readOnly={!!discount}
                   maxLength={50}
-                  className={`w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 ${discount ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`}
+                  className={`w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand ${discount ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`}
                   placeholder={dict?.admin?.discountCodePlaceholder || 'DISCOUNT10'}
                 />
               </div>
@@ -319,7 +319,7 @@ function DiscountModal({
                 <select
                   value={formData.type}
                   onChange={(e) => setFormData({ type: e.target.value as any })} // eslint-disable-line @typescript-eslint/no-explicit-any
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                 >
                   <option value="percentage">{dict.admin?.percentage || 'Percentage'}</option>
                   <option value="fixed">{dict.admin?.fixed || 'Fixed Amount'}</option>
@@ -335,7 +335,7 @@ function DiscountModal({
                 value={formData.name}
                 onChange={(e) => setFormData({ name: e.target.value })}
                 maxLength={100}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -346,7 +346,7 @@ function DiscountModal({
                 <select
                   value={formData.category}
                   onChange={(e) => setFormData({ category: e.target.value as 'general' | 'senior' | 'pwd' | 'employee' | 'promo' })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                 >
                   <option value="general">{dict.admin?.categoryGeneral || 'General'}</option>
                   <option value="senior">{dict.admin?.categorySenior || 'Senior Citizen (RA 9994)'}</option>
@@ -375,7 +375,7 @@ function DiscountModal({
                 value={formData.description}
                 onChange={(e) => setFormData({ description: e.target.value })}
                 rows={2}
-                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -390,7 +390,7 @@ function DiscountModal({
                   required
                   value={formData.value}
                   onChange={(e) => setFormData({ value: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                 />
               </div>
               {formData.type === 'percentage' && (
@@ -404,7 +404,7 @@ function DiscountModal({
                     min="0"
                     value={formData.maxDiscountAmount}
                     onChange={(e) => setFormData({ maxDiscountAmount: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                   />
                 </div>
               )}
@@ -420,7 +420,7 @@ function DiscountModal({
                   min="0"
                   value={formData.minPurchaseAmount}
                   onChange={(e) => setFormData({ minPurchaseAmount: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                 />
               </div>
               <div>
@@ -432,7 +432,7 @@ function DiscountModal({
                   min="0"
                   value={formData.usageLimit}
                   onChange={(e) => setFormData({ usageLimit: parseInt(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                   placeholder={dict.admin?.unlimited || 'Unlimited if 0'}
                 />
               </div>
@@ -447,7 +447,7 @@ function DiscountModal({
                   required
                   value={formData.validFrom}
                   onChange={(e) => setFormData({ validFrom: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                 />
               </div>
               <div>
@@ -459,7 +459,7 @@ function DiscountModal({
                   required
                   value={formData.validUntil}
                   onChange={(e) => setFormData({ validUntil: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                 />
               </div>
             </div>
@@ -492,7 +492,7 @@ function DiscountModal({
               <button
                 type="submit"
                 disabled={submitting}
-                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 border border-blue-700"
+                className="px-4 py-2 bg-brand text-white hover:bg-brand-hover disabled:opacity-50 border border-brand-hover"
               >
                 {submitting ? (dict.common?.saving || 'Saving...') : (dict.common?.save || 'Save')}
               </button>

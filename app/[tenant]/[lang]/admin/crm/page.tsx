@@ -46,7 +46,7 @@ interface Campaign {
 
 const SEGMENT_META: Record<string, { label: string; color: string; bg: string; border: string; description: string }> = {
   vip:      { label: 'VIP',      color: 'text-amber-700',  bg: 'bg-amber-50',  border: 'border-amber-300', description: 'High spend or 500+ points' },
-  new:      { label: 'New',      color: 'text-blue-700',   bg: 'bg-blue-50',   border: 'border-blue-300',  description: 'Joined recently, ≤2 orders' },
+  new:      { label: 'New',      color: 'text-brand-hover',   bg: 'bg-brand-soft',   border: 'border-teal-300',  description: 'Joined recently, ≤2 orders' },
   regular:  { label: 'Regular',  color: 'text-green-700',  bg: 'bg-green-50',  border: 'border-green-300', description: '3+ orders, steady buyer' },
   at_risk:  { label: 'At Risk',  color: 'text-orange-700', bg: 'bg-orange-50', border: 'border-orange-300',description: 'No purchase in 30–90 days' },
   lapsed:   { label: 'Lapsed',   color: 'text-red-700',    bg: 'bg-red-50',    border: 'border-red-300',   description: 'Inactive 90+ days' },
@@ -59,7 +59,7 @@ export default function CRMPage() {
   const lang = params.lang as 'en' | 'es';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const { settings } = useTenantSettings();
-  const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#3b82f6';
+  const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#35979c';
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);

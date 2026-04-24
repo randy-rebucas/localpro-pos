@@ -98,9 +98,9 @@ export default memo(function SalesChart({ data, dict }: SalesChartProps) {
           <Line
             type="monotone"
             dataKey="sales"
-            stroke={tenantSettings.primaryColor || '#2563eb'}
+            stroke={tenantSettings.primaryColor || '#35979c'}
             strokeWidth={2}
-            dot={{ fill: tenantSettings.primaryColor || '#2563eb', r: 4 }}
+            dot={{ fill: tenantSettings.primaryColor || '#35979c', r: 4 }}
             activeDot={{ r: 6 }}
             name={dict.dashboard?.totalSales || 'Total Sales'}
           />

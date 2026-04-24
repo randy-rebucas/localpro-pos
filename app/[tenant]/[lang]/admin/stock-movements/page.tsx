@@ -41,7 +41,7 @@ export default function StockMovementsPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
@@ -55,7 +55,7 @@ export default function StockMovementsPage() {
         <div className="mb-6 sm:mb-8">
           <Link
             href={`/${tenant}/${lang}/admin`}
-            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium mb-4 transition-colors"
+            className="inline-flex items-center text-brand hover:text-brand-hover font-medium mb-4 transition-colors"
           >
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -105,7 +105,7 @@ export default function StockMovementsPage() {
             <select
               value={filters.type}
               onChange={(e) => updateFilters({ type: e.target.value })}
-              className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 bg-white"
+              className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
             >
               <option value="">{dict.admin?.allTypes || 'All Types'}</option>
               <option value="sale">{dict.admin?.sale || 'Sale'}</option>

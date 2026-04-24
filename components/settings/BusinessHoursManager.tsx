@@ -123,7 +123,7 @@ export default function BusinessHoursManager({ settings, tenant, onUpdate, dict 
           type="text"
           value={timezone}
           onChange={(e) => setTimezone(e.target.value)}
-          className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand"
           placeholder="America/New_York"
         />
       </div>
@@ -141,7 +141,7 @@ export default function BusinessHoursManager({ settings, tenant, onUpdate, dict 
                       type="checkbox"
                       checked={daySchedule.enabled || false}
                       onChange={(e) => updateDaySchedule(day, { enabled: e.target.checked })}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      className="w-4 h-4 text-brand border-gray-300 rounded focus:ring-brand"
                     />
                     <span className="text-sm font-medium text-gray-700">{dict?.businessHours?.[day] || day.charAt(0).toUpperCase() + day.slice(1)}</span>
                   </label>
@@ -179,7 +179,7 @@ export default function BusinessHoursManager({ settings, tenant, onUpdate, dict 
           <h3 className="text-lg font-semibold text-gray-900">{dict?.businessHours?.specialHours || 'Special Hours'}</h3>
           <button
             onClick={addSpecialHour}
-            className="px-3 py-1 text-sm bg-blue-600 text-white font-medium hover:bg-blue-700"
+            className="px-3 py-1 text-sm bg-brand text-white font-medium hover:bg-brand-hover"
           >
             {dict?.businessHours?.addSpecialHours || 'Add Special Hours'}
           </button>
@@ -202,7 +202,7 @@ export default function BusinessHoursManager({ settings, tenant, onUpdate, dict 
                     type="checkbox"
                     checked={special.enabled !== false}
                     onChange={(e) => updateSpecialHour(index, { enabled: e.target.checked })}
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    className="w-4 h-4 text-brand border-gray-300 rounded focus:ring-brand"
                   />
                   <label className="ml-2 text-xs text-gray-700">{dict?.businessHours?.open || 'Open'}</label>
                 </div>
@@ -259,7 +259,7 @@ export default function BusinessHoursManager({ settings, tenant, onUpdate, dict 
         <button
           onClick={handleSave}
           disabled={saving}
-          className="px-6 py-2 bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:bg-gray-400"
+          className="px-6 py-2 bg-brand text-white font-medium hover:bg-brand-hover disabled:bg-gray-400"
         >
           {saving ? (dict?.businessHours?.saving || 'Saving...') : (dict?.businessHours?.saveBusinessHours || 'Save Business Hours')}
         </button>

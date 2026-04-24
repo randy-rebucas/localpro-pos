@@ -191,7 +191,7 @@ export default function TenantsPage() {
           </div>
           <button
             onClick={openCreate}
-            className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors whitespace-nowrap"
+            className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover transition-colors whitespace-nowrap"
           >
             + New Tenant
           </button>
@@ -210,12 +210,12 @@ export default function TenantsPage() {
             placeholder="Search by name or slug..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 bg-white w-full sm:w-64"
+            className="px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white w-full sm:w-64"
           />
           <select
             value={activeFilter}
             onChange={e => setActiveFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+            className="px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white"
           >
             <option value="">All statuses</option>
             <option value="true">Active only</option>
@@ -226,7 +226,7 @@ export default function TenantsPage() {
         <div className="bg-white border border-gray-200">
           {loading ? (
             <div className="p-12 text-center">
-              <div className="inline-block animate-spin h-6 w-6 border-2 border-blue-600 border-t-transparent rounded-full" />
+              <div className="inline-block animate-spin h-6 w-6 border-2 border-brand border-t-transparent rounded-full" />
               <p className="mt-3 text-gray-500 text-sm">Loading tenants...</p>
             </div>
           ) : error ? (
@@ -234,7 +234,7 @@ export default function TenantsPage() {
               <p className="text-red-600 text-sm font-medium">{error}</p>
               <button
                 onClick={fetchTenants}
-                className="mt-4 px-4 py-2 bg-blue-600 text-white text-sm hover:bg-blue-700"
+                className="mt-4 px-4 py-2 bg-brand text-white text-sm hover:bg-brand-hover"
               >
                 Retry
               </button>
@@ -263,7 +263,7 @@ export default function TenantsPage() {
                       <td className="px-4 py-4 text-sm text-gray-500 font-mono">{tenant.slug}</td>
                       <td className="px-4 py-4 text-sm text-gray-500">
                         {tenant.settings.businessType ? (
-                          <span className="px-2 py-0.5 text-xs bg-blue-100 text-blue-800 border border-blue-200 capitalize">
+                          <span className="px-2 py-0.5 text-xs bg-brand-soft text-brand-navy border border-teal-200 capitalize">
                             {tenant.settings.businessType}
                           </span>
                         ) : (
@@ -281,7 +281,7 @@ export default function TenantsPage() {
                       </td>
                       <td className="px-4 py-4 text-sm">
                         <div className="flex gap-3">
-                          <button onClick={() => openEdit(tenant)} className="text-blue-600 hover:text-blue-800 font-medium">
+                          <button onClick={() => openEdit(tenant)} className="text-brand hover:text-brand-navy font-medium">
                             Edit
                           </button>
                           <button
@@ -347,7 +347,7 @@ export default function TenantsPage() {
                       required
                       value={formData.slug}
                       onChange={e => setFormData({ ...formData, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') })}
-                      className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                      className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white"
                       placeholder="my-store"
                     />
                     <p className="text-xs text-gray-500 mt-1">Lowercase letters, numbers, and hyphens only</p>
@@ -362,7 +362,7 @@ export default function TenantsPage() {
                     required
                     value={formData.name}
                     onChange={e => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                    className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white"
                     placeholder="My Store"
                   />
                 </div>
@@ -374,7 +374,7 @@ export default function TenantsPage() {
                       value={formData.currency}
                       onChange={e => setFormData({ ...formData, currency: e.target.value.toUpperCase() })}
                       maxLength={3}
-                      className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                      className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white"
                       placeholder="PHP"
                     />
                   </div>
@@ -383,7 +383,7 @@ export default function TenantsPage() {
                     <select
                       value={formData.language}
                       onChange={e => setFormData({ ...formData, language: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                      className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white"
                     >
                       <option value="en">English</option>
                       <option value="es">Español</option>
@@ -395,7 +395,7 @@ export default function TenantsPage() {
                   <select
                     value={formData.businessType}
                     onChange={e => setFormData({ ...formData, businessType: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                    className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white"
                   >
                     <option value="general">General</option>
                     <option value="retail">Retail</option>
@@ -410,7 +410,7 @@ export default function TenantsPage() {
                     type="email"
                     value={formData.email}
                     onChange={e => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                    className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white"
                     placeholder="contact@mystore.com"
                   />
                 </div>
@@ -428,7 +428,7 @@ export default function TenantsPage() {
                   <button
                     type="submit"
                     disabled={saving}
-                    className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50"
+                    className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover disabled:opacity-50"
                   >
                     {saving ? 'Saving...' : editingTenant ? 'Save Changes' : 'Create Tenant'}
                   </button>

@@ -19,7 +19,7 @@ export const BIZ_TYPE_COLORS: Record<string, string> = {
 };
 
 export const COLOR_MAP: Record<string, { bg: string; border: string; text: string; badge: string }> = {
-  blue: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', badge: 'bg-blue-100 text-blue-800' },
+  blue: { bg: 'bg-brand-soft', border: 'border-teal-200', text: 'text-brand-hover', badge: 'bg-brand-soft text-brand-navy' },
   orange: { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-700', badge: 'bg-orange-100 text-orange-800' },
   cyan: { bg: 'bg-cyan-50', border: 'border-cyan-200', text: 'text-cyan-700', badge: 'bg-cyan-100 text-cyan-800' },
   purple: { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-700', badge: 'bg-purple-100 text-purple-800' },

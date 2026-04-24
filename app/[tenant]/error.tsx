@@ -59,7 +59,7 @@ export default function TenantError({
         <div className="space-y-3">
           <button
             onClick={reset}
-            className="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 font-medium transition-colors"
+            className="w-full bg-brand text-white px-4 py-2 rounded-md hover:bg-brand-hover font-medium transition-colors"
           >
             {dict?.admin?.tryAgain || 'Try Again'}
           </button>

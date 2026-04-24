@@ -574,7 +574,13 @@
       "reset": "Reset Data",
       "notifications": "Notifications",
       "notificationTemplates": "Notification Templates",
-      "multiCurrency": "Multi-Currency"
+      "multiCurrency": "Multi-Currency",
+      "ecommerce": "E-commerce"
+    },
+    "ecommerce": {
+      "productionNoticeTitle": "Custom integrations required",
+      "productionNoticeBody": "In production, this feature requires a subscription plan that includes custom integrations.",
+      "viewPlansCta": "View subscription & plans"
     },
     "save": "Save Settings",
     "saving": "Saving...",

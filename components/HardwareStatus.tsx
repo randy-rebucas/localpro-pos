@@ -31,7 +31,7 @@ export default function HardwareStatusChecker({
   const [loading, setLoading] = useState(true);
   const [testing, setTesting] = useState<string | null>(null);
   const { settings } = useTenantSettings();
-  const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#3b82f6';
+  const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#35979c';
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);

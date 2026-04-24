@@ -16,7 +16,7 @@ export default function ProfilePage() {
   const lang = params.lang as 'en' | 'es';
   const { user } = useAuth(); // eslint-disable-line @typescript-eslint/no-unused-vars
   const { settings } = useTenantSettings();
-  const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#3b82f6';
+  const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#35979c';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [profileData, setProfileData] = useState({
     name: '',

@@ -90,7 +90,7 @@ export default function QRCodeScanner({ onScan, onClose, enabled = true }: QRCod
                     });
                 }
               }}
-              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+              className="px-4 py-2 bg-brand text-white text-sm font-medium hover:bg-brand-hover transition-colors"
             >
               {dict?.common?.retry || 'Try Again'}
             </button>
@@ -104,11 +104,11 @@ export default function QRCodeScanner({ onScan, onClose, enabled = true }: QRCod
               playsInline
               muted
             />
-            <div className="absolute inset-0 border-4 border-blue-500 pointer-events-none">
-              <div className="absolute top-2 left-2 w-8 h-8 border-t-4 border-l-4 border-blue-500"></div>
-              <div className="absolute top-2 right-2 w-8 h-8 border-t-4 border-r-4 border-blue-500"></div>
-              <div className="absolute bottom-2 left-2 w-8 h-8 border-b-4 border-l-4 border-blue-500"></div>
-              <div className="absolute bottom-2 right-2 w-8 h-8 border-b-4 border-r-4 border-blue-500"></div>
+            <div className="absolute inset-0 border-4 border-brand pointer-events-none">
+              <div className="absolute top-2 left-2 w-8 h-8 border-t-4 border-l-4 border-brand"></div>
+              <div className="absolute top-2 right-2 w-8 h-8 border-t-4 border-r-4 border-brand"></div>
+              <div className="absolute bottom-2 left-2 w-8 h-8 border-b-4 border-l-4 border-brand"></div>
+              <div className="absolute bottom-2 right-2 w-8 h-8 border-b-4 border-r-4 border-brand"></div>
             </div>
           </div>
         )}

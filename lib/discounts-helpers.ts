@@ -29,7 +29,7 @@ export function getStatusLabel(discount: Discount, dict: Dict): string {
 }
 
 export function getTypeBadgeClass(_type: 'percentage' | 'fixed'): string {
-  return 'px-2 py-1 text-xs font-semibold border border-blue-300 bg-blue-100 text-blue-800';
+  return 'px-2 py-1 text-xs font-semibold border border-teal-300 bg-brand-soft text-brand-navy';
 }
 
 export function getDeleteConfirmMessage(dict: Dict): string {

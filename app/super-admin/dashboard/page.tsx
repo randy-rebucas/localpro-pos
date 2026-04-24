@@ -12,7 +12,7 @@ interface Stats {
 }
 
 const STAT_COLOR: Record<string, string> = {
-  blue: 'text-blue-600',
+  blue: 'text-brand',
   green: 'text-green-600',
   red: 'text-red-600',
   purple: 'text-purple-600',
@@ -81,7 +81,7 @@ export default function SuperAdminDashboard() {
                 <p className="text-sm text-gray-500">{stat.label}</p>
                 <p className={`text-3xl font-bold mt-1 ${STAT_COLOR[stat.color]}`}>{stat.value}</p>
                 {stat.href && (
-                  <Link href={stat.href} className="text-xs text-blue-600 hover:underline mt-2 inline-block">
+                  <Link href={stat.href} className="text-xs text-brand hover:underline mt-2 inline-block">
                     View →
                   </Link>
                 )}
@@ -97,12 +97,12 @@ export default function SuperAdminDashboard() {
             <Link
               key={link.href}
               href={link.href}
-              className="bg-white border border-gray-200 p-5 hover:border-blue-300 hover:shadow-sm transition-all group"
+              className="bg-white border border-gray-200 p-5 hover:border-teal-300 hover:shadow-sm transition-all group"
             >
               <div className="flex items-start gap-3">
                 <span className="text-2xl">{link.icon}</span>
                 <div>
-                  <p className="text-sm font-semibold text-gray-900 group-hover:text-blue-600">{link.label}</p>
+                  <p className="text-sm font-semibold text-gray-900 group-hover:text-brand">{link.label}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{link.desc}</p>
                 </div>
               </div>

@@ -119,7 +119,7 @@ export default function HolidaysManager({ settings, tenant, onUpdate, dict }: Ho
             setEditing(null);
             setShowForm(true);
           }}
-          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
+          className="px-4 py-2 bg-brand text-white text-sm font-medium hover:bg-brand-hover"
         >
           {dict?.holidays?.addHoliday || 'Add Holiday'}
         </button>
@@ -235,7 +235,7 @@ function HolidayForm({
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand"
             placeholder={dict?.holidays?.holidayNamePlaceholder || "e.g., New Year's Day"}
             required
           />
@@ -246,7 +246,7 @@ function HolidayForm({
           <select
             value={type}
             onChange={(e) => setType(e.target.value as 'single' | 'recurring')}
-            className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand"
           >
             <option value="single">{dict?.holidays?.singleDate || 'Single Date'}</option>
             <option value="recurring">{dict?.holidays?.recurring || 'Recurring'}</option>
@@ -260,7 +260,7 @@ function HolidayForm({
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand"
               required
             />
           </div>
@@ -271,7 +271,7 @@ function HolidayForm({
               <select
                 value={recurringPattern}
                 onChange={(e) => setRecurringPattern(e.target.value as any)} // eslint-disable-line @typescript-eslint/no-explicit-any
-                className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand"
               >
                 <option value="yearly">{dict?.holidays?.yearly || 'Yearly'}</option>
                 <option value="monthly">{dict?.holidays?.monthly || 'Monthly'}</option>
@@ -288,7 +288,7 @@ function HolidayForm({
                     max="12"
                     value={month}
                     onChange={(e) => setMonth(e.target.value)}
-                    className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand"
                   />
                 </div>
                 <div>
@@ -299,7 +299,7 @@ function HolidayForm({
                     max="31"
                     value={dayOfMonth}
                     onChange={(e) => setDayOfMonth(e.target.value)}
-                    className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand"
                   />
                 </div>
               </div>
@@ -310,7 +310,7 @@ function HolidayForm({
                 <select
                   value={dayOfWeek}
                   onChange={(e) => setDayOfWeek(e.target.value)}
-                  className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand"
                 >
                   <option value="0">{dict?.businessHours?.sunday || 'Sunday'}</option>
                   <option value="1">{dict?.businessHours?.monday || 'Monday'}</option>
@@ -331,7 +331,7 @@ function HolidayForm({
                   max="31"
                   value={dayOfMonth}
                   onChange={(e) => setDayOfMonth(e.target.value)}
-                  className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand"
                 />
               </div>
             )}
@@ -344,7 +344,7 @@ function HolidayForm({
             id="isBusinessClosed"
             checked={isBusinessClosed}
             onChange={(e) => setIsBusinessClosed(e.target.checked)}
-            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+            className="w-4 h-4 text-brand border-gray-300 rounded focus:ring-brand"
           />
           <label htmlFor="isBusinessClosed" className="text-sm text-gray-700">
             {dict?.holidays?.businessClosedLabel || 'Business is closed on this holiday'}
@@ -370,7 +370,7 @@ function HolidayForm({
                     : undefined,
               })
             }
-            className="px-4 py-2 bg-blue-600 text-white font-medium hover:bg-blue-700"
+            className="px-4 py-2 bg-brand text-white font-medium hover:bg-brand-hover"
           >
             {dict?.holidays?.saveHoliday || 'Save Holiday'}
           </button>

@@ -112,7 +112,7 @@ export default function LanguageSwitcher({ lang, tenant, className }: LanguageSw
                 onClick={() => handleSelect(locale.code)}
                 className={`w-full flex items-center gap-2.5 px-4 py-2 text-sm transition-colors ${
                   locale.code === current
-                    ? 'bg-blue-50 text-blue-700 font-semibold'
+                    ? 'bg-brand-soft text-brand-navy font-semibold'
                     : 'text-gray-700 hover:bg-gray-50'
                 }`}
               >

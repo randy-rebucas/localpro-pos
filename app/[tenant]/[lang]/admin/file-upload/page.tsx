@@ -33,7 +33,7 @@ export default function FileUploadPage() {
   const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
   const { settings } = useTenantSettings();
   const tenantSettings = settings || getDefaultTenantSettings();
-  const primaryColor = tenantSettings.primaryColor || '#3b82f6';
+  const primaryColor = tenantSettings.primaryColor || '#35979c';
 
   useEffect(() => {
     getDictionaryClient(lang).then((d) => {
@@ -238,7 +238,7 @@ export default function FileUploadPage() {
         <div className="mb-6 sm:mb-8">
           <Link
             href={`/${tenant}/${lang}/admin`}
-            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium mb-4 transition-colors"
+            className="inline-flex items-center text-brand hover:text-brand-hover font-medium mb-4 transition-colors"
           >
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -268,7 +268,7 @@ export default function FileUploadPage() {
                 onDrop={handleDrop}
                 className={`w-full border-2 border-dashed rounded p-8 text-center cursor-pointer transition-colors ${
                   dragActive
-                    ? 'border-blue-500 bg-blue-50'
+                    ? 'border-brand bg-brand-soft'
                     : 'border-gray-300 bg-gray-50 hover:border-gray-400'
                 }`}
             >
@@ -318,17 +318,17 @@ export default function FileUploadPage() {
                 type="file"
                 onChange={handleChange}
                 disabled={uploading}
-                className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
+                className="w-full px-4 py-2 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
                 accept="image/*,.pdf,.csv,.xls,.xlsx"
               />
             </div>
 
             {/* Upload Status */}
             {uploading && (
-              <div className="mt-6 p-4 bg-blue-50 border border-blue-300">
+              <div className="mt-6 p-4 bg-brand-soft border border-teal-300">
                 <div className="flex items-center gap-3">
-                  <div className="animate-spin h-5 w-5 border-b-2 border-blue-600"></div>
-                  <p className="text-blue-900">{(dict as any)?.fileUpload?.uploadingFile || 'Uploading file...'}</p> {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
+                  <div className="animate-spin h-5 w-5 border-b-2 border-brand"></div>
+                  <p className="text-brand-navy-deep">{(dict as any)?.fileUpload?.uploadingFile || 'Uploading file...'}</p> {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
                 </div>
               </div>
             )}
@@ -432,7 +432,7 @@ export default function FileUploadPage() {
                             setViewingFile(file);
                             setShowModal(true);
                           }}
-                          className="px-3 py-1 bg-blue-100 text-blue-700 hover:bg-blue-200 text-sm font-medium transition-colors"
+                          className="px-3 py-1 bg-brand-soft text-brand-hover hover:bg-teal-100 text-sm font-medium transition-colors"
                         >
                           {(dict as any)?.fileUpload?.view || 'View'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
                         </button>
@@ -567,7 +567,7 @@ export default function FileUploadPage() {
                     href={viewingFile.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium transition-colors"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium transition-colors"
                   >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -589,7 +589,7 @@ export default function FileUploadPage() {
                     href={viewingFile.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 font-medium transition-colors"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium transition-colors"
                   >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />

@@ -71,7 +71,7 @@ export default function UserManualPage() {
   const params = useParams();
   const lang = (params?.lang as string) || 'en';
   const { settings } = useTenantSettings();
-  const primaryColor = settings?.primaryColor || '#2563eb';
+  const primaryColor = settings?.primaryColor || '#35979c';
   const { subscriptionStatus } = useSubscription();
   const hasBirAccess = BIR_PLANS.includes(subscriptionStatus?.planName ?? '');
 

@@ -62,7 +62,7 @@ export default function SubscriptionPage() {
   const [currentPlanName, setCurrentPlanName] = useState<string | null>(null);
   const { settings } = useTenantSettings();
   const tenantSettings = settings || getDefaultTenantSettings();
-  const primaryColor = tenantSettings.primaryColor || '#3b82f6';
+  const primaryColor = tenantSettings.primaryColor || '#35979c';
 
   // Match the current plan by name
   const currentPlan = plans.find((p) => p.name === currentPlanName);
