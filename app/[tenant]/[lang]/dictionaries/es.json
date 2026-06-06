@@ -206,6 +206,7 @@
     "applyDiscount": "Aplicar Descuento",
     "seniorDiscount": "Senior (20%)",
     "pwdDiscount": "PCD (20%)",
+    "toggleDiscounts": "Descuentos y promo",
     "removeDiscount": "Eliminar",
     "discountApplied": "Descuento Aplicado",
     "invalidDiscountCode": "Código de descuento inválido",

@@ -217,10 +217,15 @@ export default function Dashboard() {
   // Cash drawer UI state
   const [roamingMode, setRoamingMode] = useState(false);
   const [showRoamingCart, setShowRoamingCart] = useState(false);
+  const productGridClass = roamingMode
+    ? 'grid gap-2.5 sm:gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6'
+    : 'grid gap-2.5 sm:gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5';
+  const productCardHeightClass = 'h-52 sm:h-56 md:h-60 xl:h-64';
 
   const [showCashDrawerModal, setShowCashDrawerModal] = useState<'open' | 'close' | null>(null);
   const [drawerAmount, setDrawerAmount] = useState('');
   const [drawerNotes, setDrawerNotes] = useState('');
+  const [showDiscountSection, setShowDiscountSection] = useState(false);
   const [closingSummary, setClosingSummary] = useState<{ expectedAmount?: number; closingAmount?: number; shortage?: number; overage?: number } | null>(null);
 
   // Aliases for backward compatibility with old code
@@ -236,6 +241,12 @@ export default function Dashboard() {
     const taxAmount = getTaxAmount({ taxEnabled: settings?.taxEnabled, taxRate: settings?.taxRate }, afterDiscount);
     return Math.round((afterDiscount + taxAmount) * 100) / 100;
   }, [getSubtotal, getTaxAmount, appliedDiscount, settings]);
+
+  useEffect(() => {
+    if (appliedDiscount) {
+      setShowDiscountSection(true);
+    }
+  }, [appliedDiscount]);
 
   // Safe dictionary accessor to avoid null checks throughout the code
   const dictValue = (path: string, fallback: string = ''): string => {
@@ -974,15 +985,15 @@ export default function Dashboard() {
 
       {/* Cash Drawer Shift Bar */}
       {cashDrawerSession && (
-        <div className="bg-green-50 border-b border-green-200 px-4 py-2 flex items-center justify-between text-sm">
-          <div className="flex items-center gap-2 text-green-800">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <div className="bg-green-50 border-b border-green-200 px-3 sm:px-4 py-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-green-800 min-w-0">
+            <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <span className="font-medium">Shift Active</span>
-            <span className="text-green-600">
-              | Opened: {new Date(cashDrawerSession.openingTime).toLocaleTimeString()}
-              | Opening: <Currency amount={cashDrawerSession.openingAmount} />
+            <span className="text-green-600 text-xs sm:text-sm truncate">
+              <span className="hidden sm:inline">| Opened: {new Date(cashDrawerSession.openingTime).toLocaleTimeString()}</span>
+              <span className="sm:ml-1">| Opening: <Currency amount={cashDrawerSession.openingAmount} /></span>
             </span>
           </div>
           <div className="flex items-center gap-3">
@@ -1141,50 +1152,33 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Mobile: cart first, then products + nav. Desktop: products column (nav + scroll) | full-height cart */}
+      {/* Mobile: stacked cart + products. Tablet/laptop (md+): side-by-side with compact cart */}
       <div
-        className={`flex flex-col flex-1 min-h-0 overflow-hidden gap-4 sm:gap-6 lg:gap-0 ${roamingMode ? '' : 'lg:flex-row'}`}
+        className={`flex flex-col flex-1 min-h-0 overflow-hidden gap-3 sm:gap-4 md:gap-0 ${roamingMode ? '' : 'md:flex-row'}`}
       >
         {/* Cart Section - hidden in roaming mode (replaced by FAB + bottom sheet) */}
         <div
-          className={`order-1 flex flex-col min-h-0 flex-1 max-h-[min(70vh,520px)] sm:max-h-[min(80vh,640px)] lg:max-h-none lg:h-full lg:min-h-0 lg:flex-none lg:order-2 lg:shrink-0 lg:w-[min(100%,420px)] xl:w-[440px] lg:border-l lg:border-gray-300 ${roamingMode ? 'hidden' : ''}`}
+          className={`order-1 flex flex-col min-h-0 flex-1 max-h-[min(50vh,440px)] sm:max-h-[min(55vh,480px)] md:max-h-none md:h-full md:min-h-0 md:flex-none md:order-2 md:shrink-0 md:w-[min(100%,280px)] lg:w-[300px] xl:w-[360px] 2xl:w-[420px] md:border-l md:border-gray-300 ${roamingMode ? 'hidden' : ''}`}
         >
-            <div className="bg-white border border-gray-300 p-5 sm:p-6 flex h-full min-h-0 flex-col flex-1 overflow-hidden lg:min-h-0">
-              <div className="flex shrink-0 justify-between items-center mb-4 pb-4 border-b border-gray-200">
-                <h2 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2">
-                  <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} style={{ color: primaryColor }}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-                  </svg>
-                  {dict.pos.cart}
-                  {cart.length > 0 && (
-                    <span className="ml-2 px-2.5 py-1 text-white text-xs font-bold border" style={{ backgroundColor: primaryColor, borderColor: primaryColor }}>
-                      {cart.length}
-                    </span>
-                  )}
-                  {businessType === 'restaurant' && (
-                    <span className="px-2 py-0.5 text-xs font-semibold bg-orange-100 text-orange-700 border border-orange-300 capitalize">
-                      {orderType === 'dine-in' ? `Table ${tableNumber || '?'}` : orderType}
-                    </span>
-                  )}
-                </h2>
-                <div className="flex items-center gap-2.5">
+            <div className="bg-white border border-gray-300 p-3 sm:p-4 md:p-4 lg:p-5 flex h-full min-h-0 flex-col flex-1 overflow-hidden md:min-h-0">
+              <div className="flex shrink-0 justify-end items-center gap-1.5 sm:gap-2 mb-2 pb-2 md:mb-3 md:pb-3 border-b border-gray-200">
                   {cart.length > 0 && (
                     <>
                       <button
                         onClick={() => setShowSaveCartModal(true)}
-                        className="px-4 py-3 bg-green-600 text-white hover:bg-green-700 transition-colors border border-green-700"
+                        className="px-2.5 py-2 md:px-3 md:py-2.5 min-h-[40px] min-w-[40px] bg-green-600 text-white hover:bg-green-700 transition-colors border border-green-700"
                         title={dict.pos?.saveCart || 'Save Cart'}
                       >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2}>
+                        <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
                         </svg>
                       </button>
                       <button
                         onClick={clearCart}
-                        className="px-4 py-3 bg-red-600 text-white hover:bg-red-700 transition-colors border border-red-700"
+                        className="px-2.5 py-2 md:px-3 md:py-2.5 min-h-[40px] min-w-[40px] bg-red-600 text-white hover:bg-red-700 transition-colors border border-red-700"
                         title={dict.common.clear}
                       >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2}>
+                        <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
                       </button>
@@ -1195,28 +1189,27 @@ export default function Dashboard() {
                       setShowSavedCartsModal(true);
                       loadSavedCarts();
                     }}
-                    className="px-4 py-3 text-white transition-colors border"
+                    className="px-2.5 py-2 md:px-3 md:py-2.5 min-h-[40px] min-w-[40px] text-white transition-colors border"
                     style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
                     onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = `${primaryColor}dd`; }}
                     onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = primaryColor; }}
                     title={dict.pos?.loadCart || 'Load Saved Cart'}
                   >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2}>
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                     </svg>
                   </button>
                   {customerDisplayUrl && (
                     <button
                       onClick={() => window.open(customerDisplayUrl, 'customer_display', 'width=1024,height=768')}
-                      className="px-4 py-3 bg-purple-600 text-white hover:bg-purple-700 transition-colors border border-purple-700"
+                      className="px-2.5 py-2 md:px-3 md:py-2.5 min-h-[40px] min-w-[40px] bg-purple-600 text-white hover:bg-purple-700 transition-colors border border-purple-700"
                       title={dictValue('pos.titleOpenCustomerDisplay', 'Open Customer Display')}
                     >
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2}>
+                      <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                     </button>
                   )}
-                </div>
               </div>
 
               {/* Customer panel (retail) */}
@@ -1241,58 +1234,66 @@ export default function Dashboard() {
                 </div>
               ) : (
                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-2 -mr-2 space-y-3 [scrollbar-gutter:stable]">
+                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 -mr-1 [scrollbar-gutter:stable]">
+                    <div className="divide-y divide-gray-200 border border-gray-200 bg-white">
                     {cart.map((item) => (
-                      <div key={item.cartItemId} className="bg-gray-50 p-4 border border-gray-300 hover:border-gray-400 transition-colors">
-                        <div className="flex justify-between items-start mb-3">
-                          <div className="flex-1 min-w-0 pr-2">
-                            <div className="font-semibold text-gray-900 text-base mb-1">{item.name}</div>
-                            <div className="text-sm text-gray-500 flex items-center gap-2">
-                              <Currency amount={item.price} /> {dict.pos.each}
-                              {/* Cross-branch lookup button */}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const product = products.find(p => p._id === item.productId);
-                                  if (product) handleBranchLookup(product);
-                                }}
-                                className="ml-1 text-gray-400 hover:text-brand transition-colors"
-                                title={dictValue('pos.titleCheckStock', 'Check stock at other locations')}
-                              >
-                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                                </svg>
-                              </button>
+                      <div key={item.cartItemId} className="px-2 py-2 sm:px-2.5 hover:bg-gray-50/80 transition-colors">
+                        <div className="flex items-start gap-1.5 mb-1.5">
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-gray-900 text-sm leading-snug line-clamp-2">{item.name}</div>
+                            <div className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                              <Currency amount={item.price} />
+                              <span className="text-gray-400">×{item.quantity}</span>
+                              {businessType === 'retail' && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const product = products.find(p => p._id === item.productId);
+                                    if (product) handleBranchLookup(product);
+                                  }}
+                                  className="text-gray-400 hover:text-brand transition-colors p-0.5"
+                                  title={dictValue('pos.titleCheckStock', 'Check stock at other locations')}
+                                >
+                                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  </svg>
+                                </button>
+                              )}
                             </div>
                           </div>
+                          <div className="text-sm font-bold text-gray-900 tabular-nums flex-shrink-0 pt-0.5">
+                            <Currency amount={item.price * item.quantity} />
+                          </div>
                           <button
+                            type="button"
                             onClick={() => removeFromCart(item.cartItemId)}
-                            className="p-2.5 text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors flex-shrink-0"
+                            className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors flex-shrink-0 rounded"
                             aria-label={dict?.pos?.removeItem || 'Remove item'}
                           >
-                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                             </svg>
                           </button>
                         </div>
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center border-2 border-gray-300 overflow-hidden bg-white">
+                        <div className="flex items-center justify-between gap-2 pl-0.5">
+                          <span className="text-[10px] uppercase tracking-wide text-gray-400 font-medium">{dict.pos.each}</span>
+                          <div className="flex items-center border border-gray-300 overflow-hidden bg-white rounded-sm">
                             <button
                               type="button"
                               onClick={() => updateQuantity(item.cartItemId, item.quantity - 1, (msg) => showToast.error(msg))}
-                              className="px-4 py-3 min-w-[44px] min-h-[44px] hover:bg-gray-100 active:bg-gray-200 font-bold text-xl transition-colors"
+                              className="px-2 py-1 min-w-[32px] min-h-[32px] hover:bg-gray-100 active:bg-gray-200 font-bold text-base leading-none transition-colors"
                               aria-label={dict?.pos?.decreaseQuantity || 'Decrease quantity'}
                             >
                               −
                             </button>
-                            <span className="px-4 py-3 min-w-[3rem] text-center font-semibold text-base bg-white">
+                            <span className="px-2 py-1 min-w-[2rem] text-center font-semibold text-sm bg-white tabular-nums border-x border-gray-300">
                               {item.quantity}
                             </span>
                             <button
                               type="button"
                               onClick={() => updateQuantity(item.cartItemId, item.quantity + 1, (msg) => showToast.error(msg))}
-                              className="px-4 py-3 min-w-[44px] min-h-[44px] hover:bg-gray-100 active:bg-gray-200 font-bold text-xl disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                              className="px-2 py-1 min-w-[32px] min-h-[32px] hover:bg-gray-100 active:bg-gray-200 font-bold text-base leading-none disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                               disabled={(() => {
                                 const product = products.find(p => p._id === item.productId);
                                 const canSellOutOfStock = product?.allowOutOfStockSales === true;
@@ -1304,12 +1305,10 @@ export default function Dashboard() {
                               +
                             </button>
                           </div>
-                          <div className="font-bold text-gray-900 text-lg">
-                            <Currency amount={item.price * item.quantity} />
-                          </div>
                         </div>
                       </div>
                     ))}
+                    </div>
                     {/* Upsell Suggestions (scrolls with line items) */}
                     {upsellSuggestions.length > 0 && (
                       <div className="border-t border-gray-200 pt-3 pb-1 mt-3">
@@ -1358,12 +1357,44 @@ export default function Dashboard() {
                     )}
                   </div>
 
-                  {/* Discount Section */}
-                  <div className="shrink-0 border-t border-gray-200 pt-4 bg-white">
+                  {/* Discount Section — collapsible */}
+                  <div className="shrink-0 border-t border-gray-200 pt-2 mt-2 bg-white">
+                    <button
+                      type="button"
+                      onClick={() => setShowDiscountSection((v) => !v)}
+                      className="w-full flex items-center justify-between gap-2 px-1 py-2 text-left hover:bg-gray-50 transition-colors rounded"
+                      aria-expanded={showDiscountSection}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <svg className="w-4 h-4 flex-shrink-0 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                        </svg>
+                        <span className="text-sm font-semibold text-gray-800 truncate">
+                          {dict.pos?.toggleDiscounts || 'Discounts & promo'}
+                        </span>
+                        {appliedDiscount && (
+                          <span className="text-xs font-medium text-green-700 bg-green-50 border border-green-200 px-1.5 py-0.5 truncate max-w-[8rem]">
+                            −<Currency amount={appliedDiscount.amount} />
+                          </span>
+                        )}
+                      </div>
+                      <svg
+                        className={`w-4 h-4 flex-shrink-0 text-gray-500 transition-transform ${showDiscountSection ? 'rotate-180' : ''}`}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+
+                    {showDiscountSection && (
+                    <div className="pt-2 pb-1">
                     {!appliedDiscount ? (
-                      <div className="mb-4">
+                      <div className="mb-2">
                         {/* SC / PWD Quick Buttons */}
-                        <div className="flex gap-2 mb-3">
+                        <div className="flex gap-1.5 mb-2">
                           <button
                             type="button"
                             onClick={async () => {
@@ -1422,7 +1453,7 @@ export default function Dashboard() {
                               }
                             }}
                             disabled={applyingDiscount || cart.length === 0}
-                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-semibold border-2 transition-colors disabled:opacity-50"
+                            className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-semibold border transition-colors disabled:opacity-50"
                             style={{
                               borderColor: `${primaryColor}80`,
                               backgroundColor: `${primaryColor}10`,
@@ -1493,7 +1524,7 @@ export default function Dashboard() {
                               }
                             }}
                             disabled={applyingDiscount || cart.length === 0}
-                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-semibold border-2 border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 hover:border-purple-300 transition-colors disabled:opacity-50"
+                            className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-semibold border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 hover:border-purple-300 transition-colors disabled:opacity-50"
                           >
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
@@ -1503,7 +1534,7 @@ export default function Dashboard() {
                         </div>
 
                         {/* Promo Code Input */}
-                        <div className="flex gap-2 items-stretch">
+                        <div className="flex gap-1.5 items-stretch">
                           <input
                             type="text"
                             placeholder={dict.pos.promoCode || 'Enter promo code'}
@@ -1539,7 +1570,7 @@ export default function Dashboard() {
                                 );
                               }
                             }}
-                            className="flex-1 min-w-0 px-4 py-3 text-base border-2 border-gray-300 focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white transition-all placeholder:text-gray-400"
+                            className="flex-1 min-w-0 px-2.5 py-2 text-sm border border-gray-300 focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white transition-all placeholder:text-gray-400"
                           />
                           <button
                             type="button"
@@ -1574,13 +1605,13 @@ export default function Dashboard() {
                               }
                             }}
                             disabled={!promoCode.trim() || applyingDiscount}
-                            className="p-3 bg-green-600 text-white hover:bg-green-700 active:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 border border-green-700 flex items-center justify-center flex-shrink-0"
+                            className="px-2.5 py-2 bg-green-600 text-white hover:bg-green-700 active:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 border border-green-700 flex items-center justify-center flex-shrink-0 min-w-[40px]"
                             title={dict.pos.applyDiscount || 'Apply Discount'}
                           >
                             {applyingDiscount ? (
-                              <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                             ) : (
-                              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                               </svg>
                             )}
@@ -1588,39 +1619,41 @@ export default function Dashboard() {
                         </div>
                       </div>
                     ) : (
-                      <div className="mb-4 p-4 bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300">
-                        <div className="flex justify-between items-start">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <div className="mb-2 p-2.5 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-300">
+                        <div className="flex justify-between items-start gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <svg className="w-4 h-4 text-green-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                               </svg>
-                              <div className="text-sm font-bold text-green-800">{dict.pos.discountApplied}</div>
+                              <div className="text-xs font-bold text-green-800">{dict.pos.discountApplied}</div>
                             </div>
-                            <div className="text-sm text-green-700 font-medium ml-7">
+                            <div className="text-xs text-green-700 font-medium truncate pl-5">
                               {appliedDiscount.code}
                               {appliedDiscount.name && (
-                                <span className="text-green-600"> - {appliedDiscount.name}</span>
+                                <span className="text-green-600"> — {appliedDiscount.name}</span>
                               )}
                             </div>
                           </div>
                           <button
                             type="button"
                             onClick={removeDiscount}
-                            className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors flex-shrink-0"
+                            className="p-1 text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors flex-shrink-0 rounded"
                             title={dict.pos.removeDiscount}
                           >
-                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                             </svg>
                           </button>
                         </div>
                       </div>
                     )}
+                    </div>
+                    )}
                   </div>
 
-                  <div className="shrink-0 border-t border-gray-300 pt-4 mt-4 bg-gray-50 -mx-5 sm:-mx-6 px-5 sm:px-6 pb-5 sm:pb-6">
-                    <div className="space-y-2 mb-4">
+                  <div className="shrink-0 border-t border-gray-300 pt-3 md:pt-4 mt-3 md:mt-4 bg-gray-50 -mx-3 sm:-mx-4 md:-mx-4 px-3 sm:px-4 md:px-4 pb-3 md:pb-4">
+                    <div className="space-y-1.5 md:space-y-2 mb-3 md:mb-4">
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-gray-600">{dict.pos.subtotal}:</span>
                         <span className="font-semibold text-gray-900">
@@ -1644,9 +1677,9 @@ export default function Dashboard() {
                         </div>
                       )}
                     </div>
-                    <div className="flex justify-between items-center mb-4 pt-3 border-t-2 border-gray-300">
-                      <span className="text-lg sm:text-xl font-bold text-gray-900">{dict.common.total}:</span>
-                      <span className="text-2xl sm:text-3xl font-bold" style={{ color: primaryColor }}>
+                    <div className="flex justify-between items-center mb-3 md:mb-4 pt-2 md:pt-3 border-t-2 border-gray-300">
+                      <span className="text-base md:text-lg font-bold text-gray-900">{dict.common.total}:</span>
+                      <span className="text-xl md:text-2xl xl:text-3xl font-bold" style={{ color: primaryColor }}>
                         <Currency amount={getTotal()} showConverted convertedClassName="block text-xs text-gray-500 font-normal text-right leading-tight" />
                       </span>
                     </div>
@@ -1654,7 +1687,7 @@ export default function Dashboard() {
                       type="button"
                       onClick={handleCheckout}
                       disabled={processing}
-                      className="w-full bg-green-600 text-white py-4 font-bold hover:bg-green-700 active:bg-green-800 transition-all duration-200 text-lg border border-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      className="w-full bg-green-600 text-white py-3 md:py-3.5 font-bold hover:bg-green-700 active:bg-green-800 transition-all duration-200 text-base md:text-lg border border-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                       {processing ? (
                         <>
@@ -1677,11 +1710,11 @@ export default function Dashboard() {
           </div>
 
         {/* Products column: nav width matches this column only */}
-        <div className={`order-2 flex flex-col min-h-0 flex-1 min-w-0 lg:order-1 ${roamingMode ? 'w-full' : ''}`}>
+        <div className={`order-2 flex flex-col min-h-0 flex-1 min-w-0 md:order-1 ${roamingMode ? 'w-full' : ''}`}>
           <Navbar />
-          <div className="flex-1 overflow-y-auto min-h-0 mx-auto w-full px-4 sm:px-5 lg:px-6 py-4 sm:py-6">
-            <div className="mb-6 sm:mb-8">
-              <div className="flex items-center justify-between mb-4 sm:mb-6 gap-4">
+          <div className="flex-1 overflow-y-auto min-h-0 mx-auto w-full px-3 sm:px-4 md:px-4 lg:px-5 py-3 sm:py-4 md:py-3 lg:py-4">
+            <div className="mb-4 md:mb-5">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3 md:mb-4">
                 {/* Restaurant: order-type selector + table number */}
                 {businessType === 'restaurant' ? (
                   <div className="flex flex-col gap-2 flex-1 min-w-0">
@@ -1717,12 +1750,12 @@ export default function Dashboard() {
                     )}
                   </div>
                 ) : (
-                  <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">{dict.pos.title}</h1>
+                  <h1 className="text-xl sm:text-2xl md:text-xl lg:text-2xl xl:text-3xl font-bold text-gray-900">{dict.pos.title}</h1>
                 )}
-                <div className="flex items-center gap-2 ">
+                <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap sm:justify-end">
                   {/* Quick Actions Row */}
                   {!isCashier && (
-                    <div className={`${roamingMode ? 'grid grid-cols-2 sm:grid-cols-4 gap-2' : 'flex gap-2 overflow-x-auto pb-1'}`}>
+                    <div className={`${roamingMode ? 'grid grid-cols-2 sm:grid-cols-4 gap-2 w-full sm:w-auto' : 'flex flex-wrap sm:flex-nowrap gap-2 max-w-full'}`}>
 
                       {/* Restaurant: Floor Map table selector + Check Requested */}
                       {businessType === 'restaurant' && orderType === 'dine-in' ? (
@@ -1730,7 +1763,7 @@ export default function Dashboard() {
                           <button
                             type="button"
                             onClick={() => setShowFloorMap(true)}
-                            className={`flex flex-col items-center justify-center gap-1 border-2 transition-all text-xs font-medium min-h-[64px] ${roamingMode ? 'w-full px-2 py-1.5 text-[11px]' : 'px-4 py-2 min-w-[100px]'} ${selectedTableId
+                            className={`flex flex-col items-center justify-center gap-1 border-2 transition-all text-xs font-medium min-h-[52px] md:min-h-[56px] ${roamingMode ? 'w-full px-2 py-1.5 text-[11px]' : 'px-4 py-2 min-w-[100px]'} ${selectedTableId
                               ? 'bg-green-50 border-green-400 text-green-800'
                               : 'bg-orange-50 border-orange-300 text-orange-700 hover:border-orange-400'
                               }`}
@@ -1756,7 +1789,7 @@ export default function Dashboard() {
                                   showToast.error(dictValue('pos.failedToUpdateTableStatus', 'Failed to update table status'));
                                 }
                               }}
-                              className={`flex flex-col items-center justify-center gap-1 bg-yellow-50 border-2 border-yellow-400 text-yellow-800 hover:bg-yellow-100 transition-all text-xs font-medium min-h-[64px] ${roamingMode ? 'w-full px-2 py-1.5 text-[11px]' : 'px-3 py-2'}`}
+                              className={`flex flex-col items-center justify-center gap-1 bg-yellow-50 border-2 border-yellow-400 text-yellow-800 hover:bg-yellow-100 transition-all text-xs font-medium min-h-[52px] md:min-h-[56px] ${roamingMode ? 'w-full px-2 py-1.5 text-[11px]' : 'px-3 py-2'}`}
                               title={dictValue('pos.titleMarkCheckRequested', 'Mark check requested')}
                             >
                               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1768,7 +1801,7 @@ export default function Dashboard() {
                         </div>
                       ) : businessType === 'restaurant' ? (
                         /* Takeout/delivery: show order type label */
-                        <div className={`flex flex-col justify-center gap-1 bg-orange-50 border-2 border-orange-200 text-gray-700 font-medium text-xs min-h-[64px] ${roamingMode ? 'w-full px-2 py-1.5 text-[11px]' : 'px-4 py-2 min-w-[100px]'}`}>
+                        <div className={`flex flex-col justify-center gap-1 bg-orange-50 border-2 border-orange-200 text-gray-700 font-medium text-xs min-h-[52px] md:min-h-[56px] ${roamingMode ? 'w-full px-2 py-1.5 text-[11px]' : 'px-4 py-2 min-w-[100px]'}`}>
                           <span className="text-[10px] font-semibold text-orange-600 uppercase tracking-wide">{dictValue('pos.orderNumber', 'Order #')}</span>
                           <input
                             type="text"
@@ -1783,7 +1816,7 @@ export default function Dashboard() {
                         <button
                           type="button"
                           onClick={() => { if (cart.length > 0) { setSplitStep('guests'); setGuestPayments([]); setShowSplitCheckModal(true); } else showToast.error(dictValue('pos.cartEmptyAlert', 'Cart is empty')); }}
-                          className={`flex items-center gap-2 min-h-[64px] bg-white border-2 border-gray-200 hover:border-gray-400 hover:bg-gray-50 transition-all text-gray-700 font-medium text-xs ${roamingMode ? 'w-full px-3 py-2' : 'flex-shrink-0 px-5 py-3'}`}
+                          className={`flex items-center gap-2 min-h-[52px] md:min-h-[56px] bg-white border-2 border-gray-200 hover:border-gray-400 hover:bg-gray-50 transition-all text-gray-700 font-medium text-xs ${roamingMode ? 'w-full px-3 py-2' : 'flex-shrink-0 px-5 py-3'}`}
                           title={dictValue('pos.titleSplitBill', 'Split bill equally between guests')}
                         >
                           <svg className="w-5 h-5 text-gray-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1798,7 +1831,7 @@ export default function Dashboard() {
                         <button
                           type="button"
                           onClick={() => { if (cart.length > 0) { setSplitStep('guests'); setGuestPayments([]); setShowSplitCheckModal(true); } else showToast.error(dictValue('pos.cartEmptyAlert', 'Cart is empty')); }}
-                          className={`flex items-center gap-1.5 min-h-[64px] bg-white border-2 border-gray-200 hover:border-gray-400 hover:bg-gray-50 transition-all text-gray-700 font-medium text-xs ${roamingMode ? 'w-full px-3 py-2' : 'flex-shrink-0 px-4 py-2'}`}
+                          className={`flex items-center gap-1.5 min-h-[52px] md:min-h-[56px] bg-white border-2 border-gray-200 hover:border-gray-400 hover:bg-gray-50 transition-all text-gray-700 font-medium text-xs ${roamingMode ? 'w-full px-3 py-2' : 'flex-shrink-0 px-4 py-2'}`}
                           title={dictValue('pos.titleSplitBill', 'Split bill equally between guests')}
                         >
                           <svg className="w-4 h-4 text-gray-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1810,7 +1843,7 @@ export default function Dashboard() {
 
                       {/* Service/laundry: Schedule appointment */}
                       {(businessType === 'service' || businessType === 'laundry') && (
-                        <div className={`flex flex-col justify-center gap-1 bg-brand-soft border-2 border-teal-200 text-gray-700 font-medium text-xs min-h-[64px] ${roamingMode ? 'w-full px-2 py-1.5 text-[11px]' : 'px-4 py-2 min-w-[140px]'}`}>
+                        <div className={`flex flex-col justify-center gap-1 bg-brand-soft border-2 border-teal-200 text-gray-700 font-medium text-xs min-h-[52px] md:min-h-[56px] ${roamingMode ? 'w-full px-2 py-1.5 text-[11px]' : 'px-4 py-2 min-w-[140px]'}`}>
                           <span className="text-[10px] font-semibold text-brand uppercase tracking-wide">{dictValue('pos.scheduleFor', 'Schedule for')}</span>
                           <input
                             type="datetime-local"
@@ -1824,7 +1857,7 @@ export default function Dashboard() {
                       <button
                         type="button"
                         onClick={() => cart.length > 0 ? setShowSaveCartModal(true) : showToast.error(dictValue('pos.cartEmptyAlert', 'Cart is empty'))}
-                        className={`flex items-center gap-2 min-h-[64px] bg-white border-2 border-gray-200 hover:border-gray-400 hover:bg-gray-50 transition-all text-gray-700 font-medium text-xs ${roamingMode ? 'w-full px-3 py-2' : 'flex-shrink-0 px-5 py-3'}`}
+                        className={`flex items-center gap-2 min-h-[52px] md:min-h-[56px] bg-white border-2 border-gray-200 hover:border-gray-400 hover:bg-gray-50 transition-all text-gray-700 font-medium text-xs ${roamingMode ? 'w-full px-3 py-2' : 'flex-shrink-0 px-5 py-3'}`}
                         title={dictValue('pos.titleHoldOrder', 'Hold current order')}
                       >
                         <svg className="w-5 h-5 text-gray-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1835,7 +1868,7 @@ export default function Dashboard() {
                       <button
                         type="button"
                         onClick={() => setShowRefundModal(true)}
-                        className={`flex items-center gap-2 min-h-[64px] bg-white border-2 border-gray-200 hover:border-red-200 hover:bg-red-50 transition-all text-gray-700 font-medium text-xs ${roamingMode ? 'w-full px-3 py-2' : 'flex-shrink-0 px-5 py-3'}`}
+                        className={`flex items-center gap-2 min-h-[52px] md:min-h-[56px] bg-white border-2 border-gray-200 hover:border-red-200 hover:bg-red-50 transition-all text-gray-700 font-medium text-xs ${roamingMode ? 'w-full px-3 py-2' : 'flex-shrink-0 px-5 py-3'}`}
                         title={dictValue('pos.titleProcessRefund', 'Process a refund')}
                       >
                         <svg className="w-5 h-5 text-red-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1846,7 +1879,7 @@ export default function Dashboard() {
                       <button
                         type="button"
                         onClick={() => { setShowSavedCartsModal(true); loadSavedCarts(); }}
-                        className={`flex items-center gap-2 min-h-[64px] bg-white border-2 border-gray-200 hover:border-gray-400 hover:bg-gray-50 transition-all text-gray-700 font-medium text-xs ${roamingMode ? 'w-full px-3 py-2' : 'flex-shrink-0 px-5 py-3'}`}
+                        className={`flex items-center gap-2 min-h-[52px] md:min-h-[56px] bg-white border-2 border-gray-200 hover:border-gray-400 hover:bg-gray-50 transition-all text-gray-700 font-medium text-xs ${roamingMode ? 'w-full px-3 py-2' : 'flex-shrink-0 px-5 py-3'}`}
                         title={dictValue('pos.titleSavedOrders', 'Load a saved order')}
                       >
                         <svg className="w-5 h-5 text-gray-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1857,7 +1890,7 @@ export default function Dashboard() {
                     </div>
                   )}
 
-                  <div className="w-px min-h-[64px] bg-gray-200" />
+                  <div className="w-px min-h-[52px] md:min-h-[56px] bg-gray-200" />
 
                   <button
                     type="button"
@@ -1879,8 +1912,8 @@ export default function Dashboard() {
                   </button>
                 </div>
               </div>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
+              <div className="flex gap-2 mt-3 md:mt-4">
+                <div className="relative flex-1 min-w-0">
                   <input
                     ref={searchInputRef}
                     type="text"
@@ -1888,7 +1921,7 @@ export default function Dashboard() {
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     autoFocus
-                    className="w-full px-4 py-3 pl-11 text-base border-2 border-gray-300 bg-white transition-all"
+                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 pl-10 sm:pl-11 text-sm sm:text-base border-2 border-gray-300 bg-white transition-all"
                     onFocus={(e) => {
                       e.currentTarget.style.borderColor = primaryColor;
                       e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
@@ -1904,7 +1937,7 @@ export default function Dashboard() {
                 </div>
                 <button
                   onClick={() => setShowQRScanner(true)}
-                  className="px-4 py-3 text-white transition-colors border"
+                  className="px-2.5 py-2.5 sm:px-3 sm:py-3 min-h-[44px] min-w-[44px] text-white transition-colors border flex-shrink-0"
                   style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
                   onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = `${primaryColor}dd`; }}
                   onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = primaryColor; }}
@@ -1916,7 +1949,7 @@ export default function Dashboard() {
                 </button>
                 <button
                   onClick={() => setShowRefundModal(true)}
-                  className="px-4 py-3 bg-red-600 text-white hover:bg-red-700 transition-colors border border-red-700"
+                  className="px-2.5 py-2.5 sm:px-3 sm:py-3 min-h-[44px] min-w-[44px] bg-red-600 text-white hover:bg-red-700 transition-colors border border-red-700 flex-shrink-0"
                   title={dict.pos.refunds}
                 >
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1928,9 +1961,9 @@ export default function Dashboard() {
 
 
             {loading ? (
-              <div className={`grid gap-3 ${roamingMode ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4'}`}>
+              <div className={productGridClass}>
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16].map((i) => (
-                  <div key={i} className="relative overflow-hidden border border-gray-300 bg-gray-200 animate-pulse h-64">
+                  <div key={i} className={`relative overflow-hidden border border-gray-300 bg-gray-200 animate-pulse ${productCardHeightClass}`}>
                     <div className="absolute inset-0 flex flex-col justify-between p-4">
                       <div />
                       <div className="space-y-2">
@@ -1950,7 +1983,7 @@ export default function Dashboard() {
                 <p className="text-gray-500 text-lg">{dict.common.noResults}</p>
               </div>
             ) : (
-              <div className={`grid gap-3 ${roamingMode ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4'}`}>
+              <div className={productGridClass}>
                 {[...products]
                   .sort((a, b) => {
                     // Pinned products first
@@ -1970,7 +2003,7 @@ export default function Dashboard() {
                             handleAddToCart(product);
                           }
                         }}
-                        className={`relative overflow-hidden border border-gray-300 hover:border-gray-400 transition-all duration-200 group h-64 cursor-pointer hover:shadow-lg ${!canAdd ? 'opacity-60 cursor-not-allowed' : ''
+                        className={`relative overflow-hidden border border-gray-300 hover:border-gray-400 transition-all duration-200 group ${productCardHeightClass} cursor-pointer hover:shadow-lg ${!canAdd ? 'opacity-60 cursor-not-allowed' : ''
                           }`}
                       >
                         {/* Low-stock corner notification badge — hidden for restaurant/service/laundry */}
@@ -2123,20 +2156,8 @@ export default function Dashboard() {
             style={{ borderTopColor: primaryColor }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Sheet handle + header */}
-            <div className="flex shrink-0 items-center justify-between px-5 py-4 border-b border-gray-200">
-              <div className="flex items-center gap-3">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} style={{ color: primaryColor }}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-                <h2 className="text-lg font-bold text-gray-900">{dict.pos.cart}</h2>
-                {cart.length > 0 && (
-                  <span className="px-2.5 py-1 text-white text-xs font-bold" style={{ backgroundColor: primaryColor }}>
-                    {cart.length}
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
+            {/* Sheet handle + actions */}
+            <div className="flex shrink-0 items-center justify-end gap-2 px-5 py-3 border-b border-gray-200">
                 {cart.length > 0 && (
                   <button
                     onClick={clearCart}
@@ -2156,7 +2177,6 @@ export default function Dashboard() {
                     <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
-              </div>
             </div>
 
             {/* Cart items */}
