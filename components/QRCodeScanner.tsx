@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { hardwareService } from '@/lib/hardware';
+import { CameraAccessError } from '@/lib/hardware/qr-reader';
 import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
 
 interface QRCodeScannerProps {
@@ -11,12 +12,14 @@ interface QRCodeScannerProps {
   enabled?: boolean;
 }
 
+type ScannerStatus = 'prompt' | 'starting' | 'scanning' | 'error';
+
 export default function QRCodeScanner({ onScan, onClose, enabled = true }: QRCodeScannerProps) {
   const params = useParams();
   const lang = (params?.lang as 'en' | 'es') || 'en';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [isScanning, setIsScanning] = useState(false); // eslint-disable-line @typescript-eslint/no-unused-vars
+  const [status, setStatus] = useState<ScannerStatus>('prompt');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -24,35 +27,59 @@ export default function QRCodeScanner({ onScan, onClose, enabled = true }: QRCod
   }, [lang]);
 
   useEffect(() => {
-    if (!enabled || !videoRef.current) return;
-
-    const startScan = async () => {
-      try {
-        setIsScanning(true);
-        setError(null);
-        await hardwareService.startQRScanning(videoRef.current!, onScan);
-      } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-        if (err.name === 'NotAllowedError') {
-          setError(dict?.common?.cameraPermissionDenied || 'Camera access denied. Please allow camera permissions in your browser settings and try again.');
-        } else if (err.name === 'NotFoundError') {
-          setError(dict?.common?.cameraNotFound || 'No camera found. Please connect a camera and try again.');
-        } else {
-          setError(err.message || dict?.common?.failedToStartQRScanner || 'Failed to start QR scanner');
-        }
-        setIsScanning(false);
-      }
-    };
-
-    startScan();
+    if (!enabled) return;
 
     return () => {
       hardwareService.stopQRScanning();
-      setIsScanning(false);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, onScan]);
+  }, [enabled]);
+
+  const getErrorMessage = useCallback(
+    (err: unknown) => {
+      if (err instanceof CameraAccessError) {
+        if (err.code === 'denied') {
+          return dict?.common?.cameraPermissionDenied || err.message;
+        }
+        if (err.code === 'not_found') {
+          return dict?.common?.cameraNotFound || err.message;
+        }
+        if (err.code === 'unsupported') {
+          return dict?.common?.cameraNotSupported || err.message;
+        }
+      }
+
+      const name = err && typeof err === 'object' && 'name' in err ? String(err.name) : '';
+      if (name === 'NotAllowedError') {
+        return dict?.common?.cameraPermissionDenied || 'Camera access denied. Please allow camera permissions in your browser settings and try again.';
+      }
+      if (name === 'NotFoundError') {
+        return dict?.common?.cameraNotFound || 'No camera found. Please connect a camera and try again.';
+      }
+
+      const message = err && typeof err === 'object' && 'message' in err ? String(err.message) : '';
+      return message || dict?.common?.failedToStartQRScanner || 'Failed to start QR scanner';
+    },
+    [dict]
+  );
+
+  const startCamera = useCallback(async () => {
+    if (!videoRef.current) return;
+
+    setStatus('starting');
+    setError(null);
+
+    try {
+      await hardwareService.startQRScanning(videoRef.current, onScan);
+      setStatus('scanning');
+    } catch (err) {
+      setError(getErrorMessage(err));
+      setStatus('error');
+    }
+  }, [getErrorMessage, onScan]);
 
   if (!enabled) return null;
+
+  const showOverlay = status === 'prompt' || status === 'starting' || status === 'error';
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
@@ -71,47 +98,62 @@ export default function QRCodeScanner({ onScan, onClose, enabled = true }: QRCod
           )}
         </div>
 
-        {error ? (
-          <div className="text-center py-6">
-            <svg className="w-12 h-12 text-red-400 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l-4 4m0-4l4 4m6-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <p className="text-red-600 text-sm mb-4">{error}</p>
-            <button
-              onClick={() => {
-                setError(null);
-                setIsScanning(false);
-                // Re-trigger the scan effect
-                if (videoRef.current) {
-                  hardwareService.startQRScanning(videoRef.current, onScan)
-                    .then(() => setIsScanning(true))
-                    .catch((err: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-                      setError(err.message || 'Failed to start scanner');
-                    });
-                }
-              }}
-              className="px-4 py-2 bg-brand text-white text-sm font-medium hover:bg-brand-hover transition-colors"
-            >
-              {dict?.common?.retry || 'Try Again'}
-            </button>
-          </div>
-        ) : (
-          <div className="relative">
-            <video
-              ref={videoRef}
-              className="w-full border border-gray-300"
-              autoPlay
-              playsInline
-              muted
-            />
+        <div className="relative bg-gray-900 min-h-[240px]">
+          <video
+            ref={videoRef}
+            className="w-full border border-gray-300"
+            autoPlay
+            playsInline
+            muted
+          />
+
+          {status === 'scanning' && (
             <div className="absolute inset-0 border-4 border-brand pointer-events-none">
               <div className="absolute top-2 left-2 w-8 h-8 border-t-4 border-l-4 border-brand"></div>
               <div className="absolute top-2 right-2 w-8 h-8 border-t-4 border-r-4 border-brand"></div>
               <div className="absolute bottom-2 left-2 w-8 h-8 border-b-4 border-l-4 border-brand"></div>
               <div className="absolute bottom-2 right-2 w-8 h-8 border-b-4 border-r-4 border-brand"></div>
             </div>
-          </div>
-        )}
+          )}
+
+          {showOverlay && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900/80 px-6 text-center">
+              {status === 'starting' ? (
+                <>
+                  <div className="animate-spin h-8 w-8 border-b-2 border-white mb-3" />
+                  <p className="text-white text-sm">
+                    {dict?.common?.startingCamera || 'Starting camera...'}
+                  </p>
+                </>
+              ) : (
+                <>
+                  {status === 'error' && (
+                    <>
+                      <svg className="w-10 h-10 text-red-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l-4 4m0-4l4 4m6-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <p className="text-red-200 text-sm mb-4">{error}</p>
+                    </>
+                  )}
+                  {status === 'prompt' && (
+                    <p className="text-white text-sm mb-4">
+                      {dict?.common?.enableCameraPrompt || 'Click below to allow camera access for QR scanning.'}
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={startCamera}
+                    className="px-4 py-2 bg-brand text-white text-sm font-medium hover:bg-brand-hover transition-colors"
+                  >
+                    {status === 'error'
+                      ? (dict?.common?.retry || 'Try Again')
+                      : (dict?.common?.enableCamera || 'Enable Camera')}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
 
         <p className="text-sm text-gray-600 mt-4 text-center">
           {dict?.common?.positionQRCode || 'Position the QR code within the frame'}
@@ -120,4 +162,3 @@ export default function QRCodeScanner({ onScan, onClose, enabled = true }: QRCod
     </div>
   );
 }
-

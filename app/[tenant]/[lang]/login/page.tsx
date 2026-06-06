@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
+import PasswordInput from '@/components/ui/PasswordInput';
 
 const QRCodeScanner = dynamic(() => import('@/components/QRCodeScanner'), {
   ssr: false,
@@ -165,8 +166,7 @@ export default function LoginPage() {
               <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
                 {dict?.login?.password || 'Password'}
               </label>
-              <input
-                type="password"
+              <PasswordInput
                 id="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}

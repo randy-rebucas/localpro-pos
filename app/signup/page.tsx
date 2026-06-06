@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { detectLocation } from '@/lib/location-detection';
 import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
 import { validatePassword as validatePasswordLib } from '@/lib/validation';
+import PasswordInput from '@/components/ui/PasswordInput';
 
 export default function SignupPage() {
   const router = useRouter();
@@ -319,8 +320,7 @@ export default function SignupPage() {
                 <label htmlFor="adminPassword" className="block text-sm font-medium text-gray-700 mb-1">
                   {dict?.signup?.adminPassword || 'Admin Password'} <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="password"
+                <PasswordInput
                   id="adminPassword"
                   required
                   value={formData.adminPassword}

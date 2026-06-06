@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import PasswordInput from '@/components/ui/PasswordInput';
 
 export default function SuperAdminLoginPage() {
   const router = useRouter();
@@ -88,8 +89,7 @@ export default function SuperAdminLoginPage() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-              <input
-                type="password"
+              <PasswordInput
                 required
                 value={password}
                 onChange={e => setPassword(e.target.value)}
