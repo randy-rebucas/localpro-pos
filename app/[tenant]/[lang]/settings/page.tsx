@@ -9,9 +9,16 @@ import { ITenantSettings } from '@/types/tenant';
 import { detectLocation, getCurrencySymbolForCode } from '@/lib/location-detection';
 import MultiCurrencyDisplaySettings from '@/components/settings/MultiCurrencyDisplaySettings';
 import ReceiptTemplatesManager from '@/components/settings/ReceiptTemplatesManager';
+import SettingsPageSkeleton from '@/components/settings/SettingsPageSkeleton';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import EcommerceIntegrationsSettings from '@/components/settings/EcommerceIntegrationsSettings';
+import PageLoading from '@/components/ui/PageLoading';
+import ErrorState from '@/components/ui/ErrorState';
+import InlineBanner from '@/components/ui/InlineBanner';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import { useSettingsPage } from '@/hooks/useSettingsPage';
+import type { TranslationDict } from '@/types/dictionary';
 
 export default function SettingsPage() {
   const params = useParams();
@@ -20,29 +27,28 @@ export default function SettingsPage() {
   const lang = params.lang as 'en' | 'es';
   const { settings: tenantSettings } = useTenantSettings();
   const primaryColor = (tenantSettings || getDefaultTenantSettings()).primaryColor || '#35979c';
-  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [loading, setLoading] = useState(true);
+  const [dict, setDict] = useState<TranslationDict | null>(null);
+  const {
+    settings,
+    setSettings,
+    status,
+    error: settingsError,
+    refetch,
+    businessTypes,
+    businessTypesStatus,
+  } = useSettingsPage(tenant);
   const [saving, setSaving] = useState(false);
-  const [settings, setSettings] = useState<ITenantSettings | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [detecting, setDetecting] = useState(false);
   const [detectedInfo, setDetectedInfo] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<
     'general' | 'branding' | 'contact' | 'receipt' | 'business' | 'notifications' | 'multiCurrency' | 'ecommerce'
   >('general');
-  const [businessTypes, setBusinessTypes] = useState<any[]>([]); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [loadingBusinessTypes, setLoadingBusinessTypes] = useState(true);
   const [businessTypeWarning, setBusinessTypeWarning] = useState<string | null>(null);
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
   }, [lang]);
-
-  useEffect(() => {
-    fetchSettings();
-    loadBusinessTypes();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tenant]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -51,22 +57,6 @@ export default function SettingsPage() {
       setActiveTab('ecommerce');
     }
   }, []);
-
-  const loadBusinessTypes = async () => {
-    try {
-      setLoadingBusinessTypes(true);
-      const res = await fetch('/api/business-types');
-      const data = await res.json();
-      if (data.success) {
-        setBusinessTypes(data.data);
-      }
-    } catch (err) {
-      console.error('Failed to load business types:', err);
-    } finally {
-      setLoadingBusinessTypes(false);
-    }
-  };
-
 
   const autoDetectLocation = async () => {
     try {
@@ -92,7 +82,10 @@ export default function SettingsPage() {
       setTimeout(() => setDetectedInfo(null), 5000);
     } catch (error) {
       console.error('Error detecting location:', error);
-      setMessage({ type: 'error', text: dict?.settings?.failedToDetect || 'Failed to detect location. Please set manually.' });
+      setMessage({
+        type: 'error',
+        text: dict?.settings?.failedToDetect || 'Failed to detect location. Please set manually.',
+      });
     } finally {
       setDetecting(false);
     }
@@ -100,76 +93,18 @@ export default function SettingsPage() {
 
   // Auto-detect location on first load if settings are default
   useEffect(() => {
-    if (settings && !loading && !detecting) {
-      // Check if settings are using defaults (likely first time setup)
-      const isDefault = settings.timezone === 'UTC' && 
-                       settings.currency === 'USD' && 
-                       settings.dateFormat === 'MM/DD/YYYY';
-      
+    if (settings && status === 'ready' && !detecting) {
+      const isDefault =
+        settings.timezone === 'UTC' &&
+        settings.currency === 'USD' &&
+        settings.dateFormat === 'MM/DD/YYYY';
+
       if (isDefault) {
         autoDetectLocation();
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings, loading]);
-
-  const fetchSettings = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch(`/api/tenants/${tenant}/settings`);
-      const data = await res.json();
-      if (data.success) {
-        // Ensure all required fields exist with defaults
-        const defaultSettings = {
-          currency: 'USD',
-          currencyPosition: 'before',
-          dateFormat: 'MM/DD/YYYY',
-          timeFormat: '12h',
-          timezone: 'UTC',
-          language: 'en',
-          numberFormat: {
-            decimalSeparator: '.',
-            thousandsSeparator: ',',
-            decimalPlaces: 2,
-          },
-          primaryColor: '#35979c',
-          receiptShowLogo: true,
-          receiptShowAddress: true,
-          receiptShowPhone: false,
-          receiptShowEmail: false,
-          taxEnabled: false,
-          taxRate: 0,
-          taxLabel: 'Tax',
-          lowStockThreshold: 10,
-          lowStockAlert: true,
-          emailNotifications: false,
-          smsNotifications: false,
-          attendanceNotifications: {
-            enabled: true,
-            expectedStartTime: '09:00',
-            maxHoursWithoutClockOut: 12,
-          },
-          enableInventory: true,
-          enableCategories: true,
-          enableDiscounts: false,
-          enableLoyaltyProgram: false,
-          enableCustomerManagement: false,
-          enableOnAccountSales: false,
-          enableBookingScheduling: false,
-          hardwareConfig: {},
-          ...data.data,
-        };
-        setSettings(defaultSettings);
-      } else {
-        setMessage({ type: 'error', text: data.error || dict?.settings?.failedToLoad || 'Failed to load settings' });
-      }
-    } catch (error) {
-      console.error('Error fetching settings:', error);
-      setMessage({ type: 'error', text: dict?.common?.failedToLoadSettings || 'Failed to load settings. Please check your connection.' });
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [settings, status]);
 
   const validateSettings = (): string | null => {
     if (!settings) return 'Settings not loaded';
@@ -256,7 +191,12 @@ export default function SettingsPage() {
         setTimeout(() => setMessage(null), 3000);
       } else {
         if (res.status === 401 || res.status === 403) {
-          setMessage({ type: 'error', text: dict?.settings?.unauthorized || 'Unauthorized. Please login with admin or manager account to save settings.' });
+          setMessage({
+            type: 'error',
+            text:
+              dict?.settings?.unauthorized ||
+              'Unauthorized. Please login with admin or manager account to save settings.',
+          });
         } else {
           setMessage({ type: 'error', text: data.error || 'Failed to save settings' });
         }
@@ -288,9 +228,10 @@ export default function SettingsPage() {
     
     // If business type is being changed, show warning
     if (path === 'businessType' && value !== settings.businessType) {
-      setBusinessTypeWarning(
-        `Changing business type to "${value}" will automatically configure features. This may enable or disable certain features based on the business type.`
-      );
+      const template =
+        dict?.settings?.businessTypeChangeWarning ||
+        'Changing business type to "{type}" will automatically configure features. This may enable or disable certain features based on the business type.';
+      setBusinessTypeWarning(template.replace('{type}', String(value)));
     } else if (path !== 'businessType') {
       setBusinessTypeWarning(null);
     }
@@ -298,34 +239,54 @@ export default function SettingsPage() {
     setSettings(newSettings);
   };
 
-  if (!dict || loading) {
+  if (!dict) {
+    return <PageLoading label="Loading..." />;
+  }
+
+  const settingsDict = (dict.settings ?? {}) as Record<string, string | undefined> & {
+    tabs?: Record<string, string | undefined>;
+  };
+
+  const pageHeader = (
+    <div className="mb-6 sm:mb-8">
+      <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
+        {settingsDict.title || 'Store Settings'}
+      </h1>
+      <p className="text-gray-600">
+        {settingsDict.subtitle || 'Configure your store preferences and branding'}
+      </p>
+    </div>
+  );
+
+  if (status === 'loading') {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block animate-spin h-8 w-8 border-b-2" style={{ borderBottomColor: primaryColor }}></div>
-          <p className="mt-4 text-gray-600">{dict?.settings?.loading || 'Loading settings...'}</p>
+      <div className="min-h-screen bg-gray-50">
+        <Navbar />
+        <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+          {pageHeader}
+          <SettingsPageSkeleton />
         </div>
       </div>
     );
   }
 
-  // If settings failed to load, show error but still render form with defaults
-  if (!settings) {
+  if (status === 'error' || !settings) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Navbar />
         <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-          <div className="bg-red-50 border-2 border-red-300 p-5 sm:p-6">
-            <h2 className="text-xl font-bold text-red-800 mb-2">{dict?.settings?.failedToLoad || 'Failed to Load Settings'}</h2>
-            <p className="text-red-700 mb-4">
-              {message?.text || 'Unable to load tenant settings. Please check your connection and try again.'}
-            </p>
-            <button
-              onClick={fetchSettings}
-              className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 font-medium transition-colors border border-red-700"
-            >
-              {dict?.settings?.retry || 'Retry'}
-            </button>
+          {pageHeader}
+          <div className="bg-white border border-gray-300">
+            <ErrorState
+              title={settingsDict.failedToLoad || 'Failed to Load Settings'}
+              description={
+                settingsError ||
+                settingsDict.loadErrorDescription ||
+                'Unable to load tenant settings. Please check your connection and try again.'
+              }
+              onRetry={refetch}
+              retryLabel={settingsDict.retry || dict.common.retry || 'Retry'}
+            />
           </div>
         </div>
       </div>
@@ -336,22 +297,20 @@ export default function SettingsPage() {
     <div className="min-h-screen bg-gray-50">
       <Navbar />
       <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        <div className="mb-6 sm:mb-8">
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
-            {dict?.settings?.title || 'Store Settings'}
-          </h1>
-          <p className="text-gray-600">{dict?.settings?.subtitle || 'Configure your store preferences and branding'}</p>
-        </div>
+        {pageHeader}
 
         {message && (
-          <div
-            className={`mb-6 p-4 border ${
-              message.type === 'success'
-                ? 'bg-green-50 text-green-800 border-green-300'
-                : 'bg-red-50 text-red-800 border-red-300'
-            }`}
-          >
-            {message.text}
+          <div className="mb-6">
+            <InlineBanner
+              variant={message.type === 'error' ? 'error' : 'info'}
+              message={message.text}
+              onDismiss={() => setMessage(null)}
+              className={
+                message.type === 'success'
+                  ? 'bg-green-50 text-green-800 border-green-300'
+                  : undefined
+              }
+            />
           </div>
         )}
 
@@ -367,7 +326,7 @@ export default function SettingsPage() {
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
-                {dict?.settings?.tabs?.general || 'General'}
+                {settingsDict.tabs?.general || 'General'}
               </button>
               <button
                 onClick={() => setActiveTab('branding')}
@@ -378,7 +337,7 @@ export default function SettingsPage() {
                 }}
                 className="px-6 py-4 text-sm font-medium whitespace-nowrap transition-colors hover:text-gray-700 hover:border-gray-300"
               >
-                {dict?.settings?.tabs?.branding || 'Branding'}
+                {settingsDict.tabs?.branding || 'Branding'}
               </button>
               <button
                 onClick={() => setActiveTab('contact')}
@@ -389,7 +348,7 @@ export default function SettingsPage() {
                 }}
                 className="px-6 py-4 text-sm font-medium whitespace-nowrap transition-colors hover:text-gray-700 hover:border-gray-300"
               >
-                {dict?.settings?.tabs?.contact || 'Contact'}
+                {settingsDict.tabs?.contact || 'Contact'}
               </button>
               <button
                 onClick={() => setActiveTab('receipt')}
@@ -400,7 +359,7 @@ export default function SettingsPage() {
                 }}
                 className="px-6 py-4 text-sm font-medium whitespace-nowrap transition-colors hover:text-gray-700 hover:border-gray-300"
               >
-                {dict?.settings?.tabs?.receipt || 'Receipt'}
+                {settingsDict.tabs?.receipt || 'Receipt'}
               </button>
               <button
                 onClick={() => setActiveTab('business')}
@@ -411,7 +370,7 @@ export default function SettingsPage() {
                 }}
                 className="px-6 py-4 text-sm font-medium whitespace-nowrap transition-colors hover:text-gray-700 hover:border-gray-300"
               >
-                {dict?.settings?.tabs?.business || 'Business'}
+                {settingsDict.tabs?.business || 'Business'}
               </button>
               <button
                 onClick={() => setActiveTab('notifications')}
@@ -422,7 +381,7 @@ export default function SettingsPage() {
                 }}
                 className="px-6 py-4 text-sm font-medium whitespace-nowrap transition-colors hover:text-gray-700 hover:border-gray-300"
               >
-                {dict?.settings?.tabs?.notifications || 'Notifications'}
+                {settingsDict.tabs?.notifications || 'Notifications'}
               </button>
               <button
                 onClick={() => setActiveTab('multiCurrency')}
@@ -433,7 +392,7 @@ export default function SettingsPage() {
                 }}
                 className="px-6 py-4 text-sm font-medium whitespace-nowrap transition-colors hover:text-gray-700 hover:border-gray-300"
               >
-                {dict?.settings?.tabs?.multiCurrency || 'Multi-Currency'}
+                {settingsDict.tabs?.multiCurrency || 'Multi-Currency'}
               </button>
               <button
                 onClick={() => setActiveTab('ecommerce')}
@@ -444,7 +403,7 @@ export default function SettingsPage() {
                 }}
                 className="px-6 py-4 text-sm font-medium whitespace-nowrap transition-colors hover:text-gray-700 hover:border-gray-300"
               >
-                {dict?.settings?.tabs?.ecommerce || 'E-commerce'}
+                {settingsDict.tabs?.ecommerce || 'E-commerce'}
               </button>
             </nav>
           </div>
@@ -457,7 +416,7 @@ export default function SettingsPage() {
                 {/* Currency & Localization */}
                 <section>
                   <div className="flex items-center justify-between mb-5">
-                    <h2 className="text-xl font-bold text-gray-900">{dict?.settings?.currencyLocalization || 'Currency & Localization'}</h2>
+                    <h2 className="text-xl font-bold text-gray-900">{settingsDict.currencyLocalization || 'Currency & Localization'}</h2>
                     <button
                       onClick={autoDetectLocation}
                       disabled={detecting}
@@ -466,32 +425,32 @@ export default function SettingsPage() {
                       {detecting ? (
                         <>
                           <div className="animate-spin h-4 w-4 border-b-2 border-brand"></div>
-                          <span>{dict?.settings?.detecting || 'Detecting...'}</span>
+                          <span>{settingsDict.detecting || 'Detecting...'}</span>
                         </>
                       ) : (
                         <>
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
-                          <span>{dict?.settings?.detectLocation || 'Auto-Detect Location'}</span>
+                          <span>{settingsDict.detectLocation || 'Auto-Detect Location'}</span>
                         </>
                       )}
                     </button>
                   </div>
                   {detectedInfo && (
-                    <div className="mb-5 p-3 bg-green-50 border-2 border-green-300 text-sm text-green-800">
-                      <div className="flex items-center gap-2">
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span>{detectedInfo}</span>
-                      </div>
+                    <div className="mb-5">
+                      <InlineBanner
+                        variant="info"
+                        message={detectedInfo}
+                        onDismiss={() => setDetectedInfo(null)}
+                        className="bg-green-50 text-green-800 border-green-300"
+                      />
                     </div>
                   )}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {dict?.settings?.currencyCode || 'Currency Code'}
+                        {settingsDict.currencyCode || 'Currency Code'}
                       </label>
                       <input
                         type="text"
@@ -510,13 +469,13 @@ export default function SettingsPage() {
                           });
                         }}
                         className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
-                        placeholder={dict?.settings?.currencyPlaceholder || 'USD'}
+                        placeholder={settingsDict.currencyPlaceholder || 'USD'}
                         maxLength={3}
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {dict?.settings?.currencySymbol || 'Currency Symbol'}
+                        {settingsDict.currencySymbol || 'Currency Symbol'}
                       </label>
                       <div className="relative">
                         <input
@@ -540,27 +499,27 @@ export default function SettingsPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {dict?.settings?.currencyPosition || 'Currency Position'}
+                        {settingsDict.currencyPosition || 'Currency Position'}
                       </label>
                       <select
                         value={settings.currencyPosition || 'before'}
                         onChange={(e) => updateSetting('currencyPosition', e.target.value)}
                         className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                       >
-                        <option value="before">{dict?.settings?.currencyPositionBefore || 'Before amount ($100)'}</option>
-                        <option value="after">{dict?.settings?.currencyPositionAfter || 'After amount (100$)'}</option>
+                        <option value="before">{settingsDict.currencyPositionBefore || 'Before amount ($100)'}</option>
+                        <option value="after">{settingsDict.currencyPositionAfter || 'After amount (100$)'}</option>
                       </select>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {dict?.settings?.timezone || 'Timezone'}
+                        {settingsDict.timezone || 'Timezone'}
                       </label>
                       <input
                         type="text"
                         value={settings.timezone || 'UTC'}
                         onChange={(e) => updateSetting('timezone', e.target.value)}
                         className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
-                        placeholder={dict?.settings?.timezonePlaceholder || 'America/New_York'}
+                        placeholder={settingsDict.timezonePlaceholder || 'America/New_York'}
                         list="timezone-suggestions"
                       />
                       <datalist id="timezone-suggestions">
@@ -582,7 +541,7 @@ export default function SettingsPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {dict?.settings?.dateFormat || 'Date Format'}
+                        {settingsDict.dateFormat || 'Date Format'}
                       </label>
                       <select
                         value={settings.dateFormat || 'MM/DD/YYYY'}
@@ -596,20 +555,20 @@ export default function SettingsPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {dict?.settings?.timeFormat || 'Time Format'}
+                        {settingsDict.timeFormat || 'Time Format'}
                       </label>
                       <select
                         value={settings.timeFormat || '12h'}
                         onChange={(e) => updateSetting('timeFormat', e.target.value)}
                         className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                       >
-                        <option value="12h">{dict?.settings?.timeFormat12h || '12-hour (AM/PM)'}</option>
-                        <option value="24h">{dict?.settings?.timeFormat24h || '24-hour'}</option>
+                        <option value="12h">{settingsDict.timeFormat12h || '12-hour (AM/PM)'}</option>
+                        <option value="24h">{settingsDict.timeFormat24h || '24-hour'}</option>
                       </select>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {dict?.settings?.language || 'Language'}
+                        {settingsDict.language || 'Language'}
                       </label>
                       <select
                         value={settings.language || 'en'}
@@ -653,40 +612,40 @@ export default function SettingsPage() {
                         <option value="es">Español</option>
                       </select>
                       <p className="mt-2 text-xs text-gray-500">
-                        {dict?.settings?.languageChangeHint || 'Changing language will save settings and reload the page'}
+                        {settingsDict.languageChangeHint || 'Changing language will save settings and reload the page'}
                       </p>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {dict?.settings?.decimalSeparator || 'Decimal Separator'}
+                        {settingsDict.decimalSeparator || 'Decimal Separator'}
                       </label>
                       <select
                         value={settings.numberFormat?.decimalSeparator || '.'}
                         onChange={(e) => updateSetting('numberFormat.decimalSeparator', e.target.value)}
                         className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                       >
-                        <option value=".">{dict?.settings?.separatorPeriod || 'Period (.)'}</option>
-                        <option value=",">{dict?.settings?.separatorComma || 'Comma (,)'}</option>
+                        <option value=".">{settingsDict.separatorPeriod || 'Period (.)'}</option>
+                        <option value=",">{settingsDict.separatorComma || 'Comma (,)'}</option>
                       </select>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {dict?.settings?.thousandsSeparator || 'Thousands Separator'}
+                        {settingsDict.thousandsSeparator || 'Thousands Separator'}
                       </label>
                       <select
                         value={settings.numberFormat?.thousandsSeparator || ','}
                         onChange={(e) => updateSetting('numberFormat.thousandsSeparator', e.target.value)}
                         className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                       >
-                        <option value=",">{dict?.settings?.separatorComma || 'Comma (,)'}</option>
-                        <option value=".">{dict?.settings?.separatorPeriod || 'Period (.)'}</option>
-                        <option value=" ">{dict?.settings?.separatorSpace || 'Space ( )'}</option>
-                        <option value="">{dict?.settings?.separatorNone || 'None'}</option>
+                        <option value=",">{settingsDict.separatorComma || 'Comma (,)'}</option>
+                        <option value=".">{settingsDict.separatorPeriod || 'Period (.)'}</option>
+                        <option value=" ">{settingsDict.separatorSpace || 'Space ( )'}</option>
+                        <option value="">{settingsDict.separatorNone || 'None'}</option>
                       </select>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {dict?.settings?.decimalPlaces || 'Decimal Places'}
+                        {settingsDict.decimalPlaces || 'Decimal Places'}
                       </label>
                       <input
                         type="number"
@@ -702,7 +661,7 @@ export default function SettingsPage() {
 
                 {/* Tax Settings */}
                 <section>
-                  <h2 className="text-xl font-bold text-gray-900 mb-5">{dict?.settings?.taxSettings || 'Tax Settings'}</h2>
+                  <h2 className="text-xl font-bold text-gray-900 mb-5">{settingsDict.taxSettings || 'Tax Settings'}</h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="flex items-center">
                       <input
@@ -713,14 +672,14 @@ export default function SettingsPage() {
                         className="h-4 w-4 text-brand focus:ring-brand border-gray-300 cursor-pointer"
                       />
                       <label htmlFor="taxEnabled" className="ml-2 text-sm font-medium text-gray-700">
-                        {dict?.settings?.enableTax || 'Enable Tax'}
+                        {settingsDict.enableTax || 'Enable Tax'}
                       </label>
                     </div>
                     {settings.taxEnabled && (
                       <>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">
-                            {dict?.settings?.taxRate || 'Tax Rate (%)'}
+                            {settingsDict.taxRate || 'Tax Rate (%)'}
                           </label>
                           <input
                             type="number"
@@ -734,14 +693,14 @@ export default function SettingsPage() {
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">
-                            {dict?.settings?.taxLabel || 'Tax Label'}
+                            {settingsDict.taxLabel || 'Tax Label'}
                           </label>
                           <input
                             type="text"
                             value={settings.taxLabel || 'Tax'}
                             onChange={(e) => updateSetting('taxLabel', e.target.value)}
                             className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
-                            placeholder={dict?.settings?.taxNamePlaceholder || 'VAT, GST, Sales Tax'}
+                            placeholder={settingsDict.taxNamePlaceholder || 'VAT, GST, Sales Tax'}
                           />
                         </div>
                       </>
@@ -755,11 +714,11 @@ export default function SettingsPage() {
             {activeTab === 'branding' && (
               <section className="space-y-8">
                 <div>
-                  <h2 className="text-xl font-bold text-gray-900 mb-5">{dict?.settings?.basicBranding || 'Basic Branding'}</h2>
+                  <h2 className="text-xl font-bold text-gray-900 mb-5">{settingsDict.basicBranding || 'Basic Branding'}</h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {dict?.settings?.companyName || 'Company Name'}
+                      {settingsDict.companyName || 'Company Name'}
                     </label>
                     <input
                       type="text"
@@ -770,7 +729,7 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {dict?.settings?.logoUrl || 'Logo URL'}
+                      {settingsDict.logoUrl || 'Logo URL'}
                     </label>
                     <input
                       type="url"
@@ -782,7 +741,7 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {dict?.settings?.faviconUrl || 'Favicon URL'}
+                      {settingsDict.faviconUrl || 'Favicon URL'}
                     </label>
                     <input
                       type="url"
@@ -794,7 +753,7 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {dict?.settings?.primaryColor || 'Primary Color'}
+                      {settingsDict.primaryColor || 'Primary Color'}
                     </label>
                     <div className="flex gap-2">
                       <input
@@ -814,7 +773,7 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {dict?.settings?.secondaryColor || 'Secondary Color'}
+                      {settingsDict.secondaryColor || 'Secondary Color'}
                     </label>
                     <div className="flex gap-2">
                       <input
@@ -834,7 +793,7 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {dict?.settings?.accentColor || 'Accent Color'}
+                      {settingsDict.accentColor || 'Accent Color'}
                     </label>
                     <div className="flex gap-2">
                       <input
@@ -854,7 +813,7 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {dict?.settings?.backgroundColor || 'Background Color'}
+                      {settingsDict.backgroundColor || 'Background Color'}
                     </label>
                     <div className="flex gap-2">
                       <input
@@ -874,7 +833,7 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {dict?.settings?.textColor || 'Text Color'}
+                      {settingsDict.textColor || 'Text Color'}
                     </label>
                     <div className="flex gap-2">
                       <input
@@ -898,9 +857,9 @@ export default function SettingsPage() {
                 {/* Advanced Branding Section - Moved to Admin */}
                 <div className="pt-8 mt-8 border-t-2 border-gray-200">
                   <div className="p-4 bg-brand-soft border border-teal-200 rounded">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">{dict?.settings?.advancedBranding || 'Advanced Branding'}</h3>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">{settingsDict.advancedBranding || 'Advanced Branding'}</h3>
                     <p className="text-sm text-brand-navy mb-3">
-                      {dict?.settings?.advancedBrandingNote || 'Advanced branding features (custom fonts, themes, CSS) have been moved to Admin → Advanced Branding for better access control.'}
+                      {settingsDict.advancedBrandingNote || 'Advanced branding features (custom fonts, themes, CSS) have been moved to Admin → Advanced Branding for better access control.'}
                     </p>
                     <Link
                       href={`/${tenant}/${lang}/admin/advanced-branding`}
@@ -916,10 +875,10 @@ export default function SettingsPage() {
             {/* Contact Tab */}
             {activeTab === 'contact' && (
               <section>
-                <h2 className="text-xl font-bold text-gray-900 mb-5">{dict?.settings?.contactInformation || 'Contact Information'}</h2>
+                <h2 className="text-xl font-bold text-gray-900 mb-5">{settingsDict.contactInformation || 'Contact Information'}</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict?.settings?.email || 'Email'}</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{settingsDict.email || 'Email'}</label>
                     <input
                       type="email"
                       value={settings.email || ''}
@@ -928,7 +887,7 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict?.settings?.phone || 'Phone'}</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{settingsDict.phone || 'Phone'}</label>
                     <input
                       type="tel"
                       value={settings.phone || ''}
@@ -937,7 +896,7 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict?.settings?.streetAddress || 'Street Address'}</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{settingsDict.streetAddress || 'Street Address'}</label>
                     <input
                       type="text"
                       value={settings.address?.street || ''}
@@ -946,7 +905,7 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict?.settings?.city || 'City'}</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{settingsDict.city || 'City'}</label>
                     <input
                       type="text"
                       value={settings.address?.city || ''}
@@ -955,7 +914,7 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict?.settings?.stateProvince || 'State/Province'}</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{settingsDict.stateProvince || 'State/Province'}</label>
                     <input
                       type="text"
                       value={settings.address?.state || ''}
@@ -964,7 +923,7 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict?.settings?.zipPostalCode || 'ZIP/Postal Code'}</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{settingsDict.zipPostalCode || 'ZIP/Postal Code'}</label>
                     <input
                       type="text"
                       value={settings.address?.zipCode || ''}
@@ -973,7 +932,7 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict?.settings?.country || 'Country'}</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{settingsDict.country || 'Country'}</label>
                     <input
                       type="text"
                       value={settings.address?.country || ''}
@@ -982,7 +941,7 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict?.settings?.website || 'Website'}</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{settingsDict.website || 'Website'}</label>
                     <input
                       type="url"
                       value={settings.website || ''}
@@ -998,34 +957,34 @@ export default function SettingsPage() {
             {/* Receipt Tab */}
             {activeTab === 'receipt' && (
               <section>
-                <h2 className="text-xl font-bold text-gray-900 mb-5">{dict?.settings?.receiptInvoiceSettings || 'Receipt & Invoice Settings'}</h2>
+                <h2 className="text-xl font-bold text-gray-900 mb-5">{settingsDict.receiptInvoiceSettings || 'Receipt & Invoice Settings'}</h2>
                 <div className="space-y-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {dict?.settings?.receiptHeader || 'Receipt Header'}
+                      {settingsDict.receiptHeader || 'Receipt Header'}
                     </label>
                     <textarea
                       value={settings.receiptHeader || ''}
                       onChange={(e) => updateSetting('receiptHeader', e.target.value)}
                       rows={3}
                       className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
-                      placeholder={dict?.settings?.receiptHeaderPlaceholder || 'Custom header text to appear at the top of receipts'}
+                      placeholder={settingsDict.receiptHeaderPlaceholder || 'Custom header text to appear at the top of receipts'}
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {dict?.settings?.receiptFooter || 'Receipt Footer'}
+                      {settingsDict.receiptFooter || 'Receipt Footer'}
                     </label>
                     <textarea
                       value={settings.receiptFooter || ''}
                       onChange={(e) => updateSetting('receiptFooter', e.target.value)}
                       rows={3}
                       className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
-                      placeholder={dict?.settings?.receiptFooterPlaceholder || 'Custom footer text to appear at the bottom of receipts'}
+                      placeholder={settingsDict.receiptFooterPlaceholder || 'Custom footer text to appear at the bottom of receipts'}
                     />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-3">{dict?.settings?.displayOptions || 'Display Options'}</h3>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">{settingsDict.displayOptions || 'Display Options'}</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
                         <input
@@ -1036,7 +995,7 @@ export default function SettingsPage() {
                           className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
                         />
                         <label htmlFor="receiptShowLogo" className="ml-3 text-sm font-medium text-gray-700">
-                          {dict?.settings?.showLogoOnReceipts || 'Show Logo on Receipts'}
+                          {settingsDict.showLogoOnReceipts || 'Show Logo on Receipts'}
                         </label>
                       </div>
                       <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
@@ -1048,7 +1007,7 @@ export default function SettingsPage() {
                           className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
                         />
                         <label htmlFor="receiptShowAddress" className="ml-3 text-sm font-medium text-gray-700">
-                          {dict?.settings?.showAddressOnReceipts || 'Show Address on Receipts'}
+                          {settingsDict.showAddressOnReceipts || 'Show Address on Receipts'}
                         </label>
                       </div>
                       <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
@@ -1060,7 +1019,7 @@ export default function SettingsPage() {
                           className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
                         />
                         <label htmlFor="receiptShowPhone" className="ml-3 text-sm font-medium text-gray-700">
-                          {dict?.settings?.showPhoneOnReceipts || 'Show Phone on Receipts'}
+                          {settingsDict.showPhoneOnReceipts || 'Show Phone on Receipts'}
                         </label>
                       </div>
                       <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
@@ -1072,7 +1031,7 @@ export default function SettingsPage() {
                           className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
                         />
                         <label htmlFor="receiptShowEmail" className="ml-3 text-sm font-medium text-gray-700">
-                          {dict?.settings?.showEmailOnReceipts || 'Show Email on Receipts'}
+                          {settingsDict.showEmailOnReceipts || 'Show Email on Receipts'}
                         </label>
                       </div>
                     </div>
@@ -1081,14 +1040,14 @@ export default function SettingsPage() {
 
                 {/* BIR Compliance Section */}
                 <div className="mt-8 pt-8 border-t-2 border-gray-200">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-1">{dict?.settings?.birCompliance || 'BIR Compliance'}</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1">{settingsDict.birCompliance || 'BIR Compliance'}</h3>
                   <p className="text-sm text-gray-500 mb-4">
-                    {dict?.settings?.birComplianceDesc || 'Required fields for Bureau of Internal Revenue (BIR) official receipts in the Philippines.'}
+                    {settingsDict.birComplianceDesc || 'Required fields for Bureau of Internal Revenue (BIR) official receipts in the Philippines.'}
                   </p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {dict?.settings?.birTin || 'BIR TIN'} <span className="text-gray-400 font-normal">(NNN-NNN-NNN-NNN)</span>
+                        {settingsDict.birTin || 'BIR TIN'} <span className="text-gray-400 font-normal">(NNN-NNN-NNN-NNN)</span>
                       </label>
                       <input
                         type="text"
@@ -1100,7 +1059,7 @@ export default function SettingsPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {dict?.settings?.birBusinessStyle || 'Business Style'} <span className="text-gray-400 font-normal">(trade name)</span>
+                        {settingsDict.birBusinessStyle || 'Business Style'} <span className="text-gray-400 font-normal">(trade name)</span>
                       </label>
                       <input
                         type="text"
@@ -1112,7 +1071,7 @@ export default function SettingsPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {dict?.settings?.birPtuNumber || 'PTU No.'} <span className="text-gray-400 font-normal">(Permit to Use)</span>
+                        {settingsDict.birPtuNumber || 'PTU No.'} <span className="text-gray-400 font-normal">(Permit to Use)</span>
                       </label>
                       <input
                         type="text"
@@ -1124,7 +1083,7 @@ export default function SettingsPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {dict?.settings?.birPtuIssuedDate || 'PTU Date Issued'}
+                        {settingsDict.birPtuIssuedDate || 'PTU Date Issued'}
                       </label>
                       <input
                         type="date"
@@ -1135,7 +1094,7 @@ export default function SettingsPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {dict?.settings?.birMinNumber || 'MIN'} <span className="text-gray-400 font-normal">(Machine Identification No.)</span>
+                        {settingsDict.birMinNumber || 'MIN'} <span className="text-gray-400 font-normal">(Machine Identification No.)</span>
                       </label>
                       <input
                         type="text"
@@ -1147,7 +1106,7 @@ export default function SettingsPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {dict?.settings?.birSystemProvider || 'Accredited System Provider'}
+                        {settingsDict.birSystemProvider || 'Accredited System Provider'}
                       </label>
                       <input
                         type="text"
@@ -1159,7 +1118,7 @@ export default function SettingsPage() {
                     </div>
                   </div>
                   <p className="text-xs text-gray-400 mt-3">
-                    {dict?.settings?.birVatNote || 'Set Tax Label to "VAT" in General → Tax Settings to print a VAT receipt. Non-VAT receipts will show "THIS DOCUMENT IS NOT VALID FOR CLAIM OF INPUT TAX".'}
+                    {settingsDict.birVatNote || 'Set Tax Label to "VAT" in General → Tax Settings to print a VAT receipt. Non-VAT receipts will show "THIS DOCUMENT IS NOT VALID FOR CLAIM OF INPUT TAX".'}
                   </p>
                 </div>
 
@@ -1180,18 +1139,11 @@ export default function SettingsPage() {
             {/* Business Tab */}
             {activeTab === 'business' && (
               <section>
-                <h2 className="text-xl font-bold text-gray-900 mb-5">{dict?.settings?.businessInformation || 'Business Information'}</h2>
+                <h2 className="text-xl font-bold text-gray-900 mb-5">{settingsDict.businessInformation || 'Business Information'}</h2>
                 
                 {businessTypeWarning && (
-                  <div className="mb-6 p-4 bg-yellow-50 border-2 border-yellow-300 text-yellow-800 text-sm">
-                    <div className="flex items-start gap-2">
-                      <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                      </svg>
-                      <div>
-                        <strong>{dict?.common?.note || 'Note'}:</strong> {businessTypeWarning}
-                      </div>
-                    </div>
+                  <div className="mb-6">
+                    <InlineBanner variant="warning" message={businessTypeWarning} />
                   </div>
                 )}
 
@@ -1199,12 +1151,14 @@ export default function SettingsPage() {
                   {/* Business Type Selection */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      {dict?.settings?.businessType || 'Business Type'} <span className="text-red-500">*</span>
+                      {settingsDict.businessType || 'Business Type'} <span className="text-red-500">*</span>
                     </label>
-                    {loadingBusinessTypes ? (
-                      <div className="w-full px-4 py-3 border-2 border-gray-300 bg-gray-50 flex items-center gap-2">
-                        <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent animate-spin"></div>
-                        <span className="text-sm text-gray-600">{dict?.settings?.loadingBusinessTypes || 'Loading business types...'}</span>
+                    {businessTypesStatus === 'loading' ? (
+                      <div className="w-full px-4 py-3 border-2 border-gray-300 bg-gray-50 flex items-center justify-center gap-2">
+                        <LoadingSpinner size="sm" />
+                        <span className="text-sm text-gray-600">
+                          {settingsDict.loadingBusinessTypes || 'Loading business types...'}
+                        </span>
                       </div>
                     ) : (
                       <>
@@ -1219,7 +1173,7 @@ export default function SettingsPage() {
                             </option>
                           ))}
                         </select>
-                        {settings.businessType && !loadingBusinessTypes && (
+                        {settings.businessType && businessTypesStatus === 'ready' && (
                           <div className="mt-3 p-4 bg-brand-soft border-2 border-teal-200">
                             <p className="text-sm text-brand-navy-deep font-medium mb-2">
                               {businessTypes.find((t) => t.type === settings.businessType)?.name || 'Business Type'}
@@ -1228,7 +1182,7 @@ export default function SettingsPage() {
                               {businessTypes.find((t) => t.type === settings.businessType)?.description || ''}
                             </p>
                             <div className="mt-3 pt-3 border-t border-teal-300">
-                              <p className="text-xs font-medium text-brand-navy-deep mb-2">{dict?.settings?.defaultFeatures || 'Default Features:'}</p>
+                              <p className="text-xs font-medium text-brand-navy-deep mb-2">{settingsDict.defaultFeatures || 'Default Features:'}</p>
                               <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                                 {businessTypes.find((t) => t.type === settings.businessType)?.defaultFeatures && Object.entries(
                                   businessTypes.find((t) => t.type === settings.businessType)?.defaultFeatures || {}
@@ -1263,7 +1217,7 @@ export default function SettingsPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {dict?.settings?.taxIdEin || 'Tax ID / EIN'}
+                        {settingsDict.taxIdEin || 'Tax ID / EIN'}
                       </label>
                       <input
                         type="text"
@@ -1282,7 +1236,7 @@ export default function SettingsPage() {
                         value={settings.registrationNumber || ''}
                         onChange={(e) => updateSetting('registrationNumber', e.target.value)}
                         className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
-                        placeholder={dict?.settings?.registrationNumberPlaceholder || 'Business registration number'}
+                        placeholder={settingsDict.registrationNumberPlaceholder || 'Business registration number'}
                       />
                     </div>
                   </div>
@@ -1290,9 +1244,9 @@ export default function SettingsPage() {
                   {/* Feature Flags Section */}
                   {settings.businessType && (
                     <div className="mt-6 pt-6 border-t-2 border-gray-200">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-4">{dict?.settings?.featureConfiguration || 'Feature Configuration'}</h3>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">{settingsDict.featureConfiguration || 'Feature Configuration'}</h3>
                       <p className="text-sm text-gray-600 mb-4">
-                        {dict?.settings?.featureConfigurationDesc || 'These features are automatically configured based on your business type. You can override them if needed.'}
+                        {settingsDict.featureConfigurationDesc || 'These features are automatically configured based on your business type. You can override them if needed.'}
                       </p>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
@@ -1304,8 +1258,8 @@ export default function SettingsPage() {
                             className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
                           />
                           <label htmlFor="enableInventory" className="ml-3 flex-1">
-                            <div className="text-sm font-medium text-gray-900">{dict?.settings?.inventoryManagement || 'Inventory Management'}</div>
-                            <div className="text-xs text-gray-500 mt-1">{dict?.settings?.inventoryManagementDesc || 'Track product stock levels'}</div>
+                            <div className="text-sm font-medium text-gray-900">{settingsDict.inventoryManagement || 'Inventory Management'}</div>
+                            <div className="text-xs text-gray-500 mt-1">{settingsDict.inventoryManagementDesc || 'Track product stock levels'}</div>
                           </label>
                         </div>
                         <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
@@ -1317,8 +1271,8 @@ export default function SettingsPage() {
                             className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
                           />
                           <label htmlFor="enableCategories" className="ml-3 flex-1">
-                            <div className="text-sm font-medium text-gray-900">{dict?.settings?.categoriesFeature || 'Categories'}</div>
-                            <div className="text-xs text-gray-500 mt-1">{dict?.settings?.categoriesFeatureDesc || 'Organize products by categories'}</div>
+                            <div className="text-sm font-medium text-gray-900">{settingsDict.categoriesFeature || 'Categories'}</div>
+                            <div className="text-xs text-gray-500 mt-1">{settingsDict.categoriesFeatureDesc || 'Organize products by categories'}</div>
                           </label>
                         </div>
                         <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
@@ -1330,8 +1284,8 @@ export default function SettingsPage() {
                             className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
                           />
                           <label htmlFor="enableDiscounts" className="ml-3 flex-1">
-                            <div className="text-sm font-medium text-gray-900">{dict?.settings?.discountsPromotions || 'Discounts & Promotions'}</div>
-                            <div className="text-xs text-gray-500 mt-1">{dict?.settings?.discountsPromotionsDesc || 'Create discount codes and promotions'}</div>
+                            <div className="text-sm font-medium text-gray-900">{settingsDict.discountsPromotions || 'Discounts & Promotions'}</div>
+                            <div className="text-xs text-gray-500 mt-1">{settingsDict.discountsPromotionsDesc || 'Create discount codes and promotions'}</div>
                           </label>
                         </div>
                         <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
@@ -1343,8 +1297,8 @@ export default function SettingsPage() {
                             className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
                           />
                           <label htmlFor="enableLoyaltyProgram" className="ml-3 flex-1">
-                            <div className="text-sm font-medium text-gray-900">{dict?.settings?.loyaltyProgram || 'Loyalty Program'}</div>
-                            <div className="text-xs text-gray-500 mt-1">{dict?.settings?.loyaltyProgramDesc || 'Customer loyalty and rewards'}</div>
+                            <div className="text-sm font-medium text-gray-900">{settingsDict.loyaltyProgram || 'Loyalty Program'}</div>
+                            <div className="text-xs text-gray-500 mt-1">{settingsDict.loyaltyProgramDesc || 'Customer loyalty and rewards'}</div>
                           </label>
                         </div>
                         <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
@@ -1356,8 +1310,8 @@ export default function SettingsPage() {
                             className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
                           />
                           <label htmlFor="enableCustomerManagement" className="ml-3 flex-1">
-                            <div className="text-sm font-medium text-gray-900">{dict?.settings?.customerManagementFeature || 'Customer Management'}</div>
-                            <div className="text-xs text-gray-500 mt-1">{dict?.settings?.customerManagementFeatureDesc || 'Manage customer profiles and history'}</div>
+                            <div className="text-sm font-medium text-gray-900">{settingsDict.customerManagementFeature || 'Customer Management'}</div>
+                            <div className="text-xs text-gray-500 mt-1">{settingsDict.customerManagementFeatureDesc || 'Manage customer profiles and history'}</div>
                           </label>
                         </div>
                         <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
@@ -1369,8 +1323,8 @@ export default function SettingsPage() {
                             className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
                           />
                           <label htmlFor="enableOnAccountSales" className="ml-3 flex-1">
-                            <div className="text-sm font-medium text-gray-900">{dict?.settings?.onAccountSales || 'Charge to customer account (pay later)'}</div>
-                            <div className="text-xs text-gray-500 mt-1">{dict?.settings?.onAccountSalesDesc || 'Allow POS to put sales on a customer’s balance when they cannot pay immediately'}</div>
+                            <div className="text-sm font-medium text-gray-900">{settingsDict.onAccountSales || 'Charge to customer account (pay later)'}</div>
+                            <div className="text-xs text-gray-500 mt-1">{settingsDict.onAccountSalesDesc || 'Allow POS to put sales on a customer’s balance when they cannot pay immediately'}</div>
                           </label>
                         </div>
                         <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
@@ -1382,8 +1336,8 @@ export default function SettingsPage() {
                             className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
                           />
                           <label htmlFor="enableBookingScheduling" className="ml-3 flex-1">
-                            <div className="text-sm font-medium text-gray-900">{dict?.settings?.bookingScheduling || 'Booking & Scheduling'}</div>
-                            <div className="text-xs text-gray-500 mt-1">{dict?.settings?.bookingSchedulingDesc || 'Appointment and service scheduling'}</div>
+                            <div className="text-sm font-medium text-gray-900">{settingsDict.bookingScheduling || 'Booking & Scheduling'}</div>
+                            <div className="text-xs text-gray-500 mt-1">{settingsDict.bookingSchedulingDesc || 'Appointment and service scheduling'}</div>
                           </label>
                         </div>
                       </div>
@@ -1396,28 +1350,28 @@ export default function SettingsPage() {
             {/* Notifications Tab */}
             {activeTab === 'notifications' && (
               <section>
-                <h2 className="text-xl font-bold text-gray-900 mb-5">{dict?.settings?.notificationSettings || 'Notification Settings'}</h2>
+                <h2 className="text-xl font-bold text-gray-900 mb-5">{settingsDict.notificationSettings || 'Notification Settings'}</h2>
                 <p className="text-sm text-gray-600 mb-6">
-                  {dict?.settings?.configureNotificationPreferences || 'Configure notification preferences and alert thresholds'}
+                  {settingsDict.configureNotificationPreferences || 'Configure notification preferences and alert thresholds'}
                 </p>
                 <div className="space-y-6">
                   <div className="p-4 bg-brand-soft border border-teal-200 rounded">
                     <p className="text-sm text-brand-navy mb-2">
-                      <strong>Note:</strong> {dict?.settings?.notificationTemplateNote || 'Notification template customization has been moved to Admin → Notification Templates for better access control.'}
+                      <strong>Note:</strong> {settingsDict.notificationTemplateNote || 'Notification template customization has been moved to Admin → Notification Templates for better access control.'}
                     </p>
                     <Link
                       href={`/${tenant}/${lang}/admin/notification-templates`}
                       className="text-sm text-brand hover:text-brand-hover font-medium underline"
                     >
-                      {dict?.settings?.customizeTemplates || 'Customize Templates →'}
+                      {settingsDict.customizeTemplates || 'Customize Templates →'}
                     </Link>
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-3">{dict?.settings?.stockAlerts || 'Stock Alerts'}</h3>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">{settingsDict.stockAlerts || 'Stock Alerts'}</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                          {dict?.settings?.lowStockThreshold || 'Low Stock Threshold'}
+                          {settingsDict.lowStockThreshold || 'Low Stock Threshold'}
                         </label>
                         <input
                           type="number"
@@ -1427,7 +1381,7 @@ export default function SettingsPage() {
                           className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                         />
                         <p className="mt-2 text-xs text-gray-500">
-                          {dict?.settings?.lowStockThresholdHint || 'Alert when stock falls below this quantity'}
+                          {settingsDict.lowStockThresholdHint || 'Alert when stock falls below this quantity'}
                         </p>
                       </div>
                       <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
@@ -1440,17 +1394,17 @@ export default function SettingsPage() {
                         />
                         <label htmlFor="lowStockAlert" className="ml-3 flex-1">
                           <div className="text-sm font-medium text-gray-900">
-                            {dict?.settings?.enableLowStockAlerts || 'Enable Low Stock Alerts'}
+                            {settingsDict.enableLowStockAlerts || 'Enable Low Stock Alerts'}
                           </div>
                           <div className="text-xs text-gray-500 mt-1">
-                            {dict?.settings?.lowStockAlertDesc || 'Get notified when products fall below threshold'}
+                            {settingsDict.lowStockAlertDesc || 'Get notified when products fall below threshold'}
                           </div>
                         </label>
                       </div>
                     </div>
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-3">{dict?.settings?.notificationChannels || 'Notification Channels'}</h3>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">{settingsDict.notificationChannels || 'Notification Channels'}</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
                         <input
@@ -1462,10 +1416,10 @@ export default function SettingsPage() {
                         />
                         <label htmlFor="emailNotifications" className="ml-3 flex-1">
                           <div className="text-sm font-medium text-gray-900">
-                            {dict?.settings?.enableEmailNotifications || 'Enable Email Notifications'}
+                            {settingsDict.enableEmailNotifications || 'Enable Email Notifications'}
                           </div>
                           <div className="text-xs text-gray-500 mt-1">
-                            {dict?.settings?.emailNotificationsDesc || 'Receive notifications via email'}
+                            {settingsDict.emailNotificationsDesc || 'Receive notifications via email'}
                           </div>
                         </label>
                       </div>
@@ -1479,10 +1433,10 @@ export default function SettingsPage() {
                         />
                         <label htmlFor="smsNotifications" className="ml-3 flex-1">
                           <div className="text-sm font-medium text-gray-900">
-                            {dict?.settings?.enableSmsNotifications || 'Enable SMS Notifications'}
+                            {settingsDict.enableSmsNotifications || 'Enable SMS Notifications'}
                           </div>
                           <div className="text-xs text-gray-500 mt-1">
-                            {dict?.settings?.smsNotificationsDesc || 'Receive notifications via SMS'}
+                            {settingsDict.smsNotificationsDesc || 'Receive notifications via SMS'}
                           </div>
                         </label>
                       </div>
@@ -1491,8 +1445,8 @@ export default function SettingsPage() {
 
                   {/* Attendance Notifications */}
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-1">{dict?.settings?.attendanceNotificationsSection || 'Attendance Notifications'}</h3>
-                    <p className="text-sm text-gray-500 mb-3">{dict?.settings?.attendanceNotificationsSectionDesc || 'Alert managers when staff miss clock-in or forget to clock out.'}</p>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1">{settingsDict.attendanceNotificationsSection || 'Attendance Notifications'}</h3>
+                    <p className="text-sm text-gray-500 mb-3">{settingsDict.attendanceNotificationsSectionDesc || 'Alert managers when staff miss clock-in or forget to clock out.'}</p>
                     <div className="space-y-4">
                       <div className="flex items-center p-4 border-2 border-gray-300 hover:bg-gray-50 transition-colors">
                         <input
@@ -1503,8 +1457,8 @@ export default function SettingsPage() {
                           className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
                         />
                         <label htmlFor="attendanceNotificationsEnabled" className="ml-3 flex-1">
-                          <div className="text-sm font-medium text-gray-900">{dict?.settings?.enableAttendanceAlerts || 'Enable Attendance Alerts'}</div>
-                          <div className="text-xs text-gray-500 mt-1">{dict?.settings?.enableAttendanceAlertsDesc || 'Notify managers of missed clock-ins and forgotten clock-outs'}</div>
+                          <div className="text-sm font-medium text-gray-900">{settingsDict.enableAttendanceAlerts || 'Enable Attendance Alerts'}</div>
+                          <div className="text-xs text-gray-500 mt-1">{settingsDict.enableAttendanceAlertsDesc || 'Notify managers of missed clock-ins and forgotten clock-outs'}</div>
                         </label>
                       </div>
 
@@ -1512,7 +1466,7 @@ export default function SettingsPage() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
-                              {dict?.settings?.expectedClockInTime || 'Expected Clock-In Time'}
+                              {settingsDict.expectedClockInTime || 'Expected Clock-In Time'}
                             </label>
                             <input
                               type="time"
@@ -1520,11 +1474,11 @@ export default function SettingsPage() {
                               onChange={(e) => updateSetting('attendanceNotifications.expectedStartTime', e.target.value)}
                               className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                             />
-                            <p className="text-xs text-gray-500 mt-1">{dict?.settings?.expectedClockInTimeHint || "Alert if staff haven't clocked in by this time"}</p>
+                            <p className="text-xs text-gray-500 mt-1">{settingsDict.expectedClockInTimeHint || "Alert if staff haven't clocked in by this time"}</p>
                           </div>
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
-                              {dict?.settings?.maxHoursWithoutClockOut || 'Max Hours Without Clock-Out'}
+                              {settingsDict.maxHoursWithoutClockOut || 'Max Hours Without Clock-Out'}
                             </label>
                             <input
                               type="number"
@@ -1534,7 +1488,7 @@ export default function SettingsPage() {
                               onChange={(e) => updateSetting('attendanceNotifications.maxHoursWithoutClockOut', Number(e.target.value))}
                               className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                             />
-                            <p className="text-xs text-gray-500 mt-1">{dict?.settings?.maxHoursWithoutClockOutHint || 'Alert after this many hours without clocking out (1–24)'}</p>
+                            <p className="text-xs text-gray-500 mt-1">{settingsDict.maxHoursWithoutClockOutHint || 'Alert after this many hours without clocking out (1–24)'}</p>
                           </div>
                         </div>
                       )}
@@ -1552,9 +1506,9 @@ export default function SettingsPage() {
             {activeTab === 'multiCurrency' && (
               <section>
                 <div className="mb-6">
-                  <h2 className="text-xl font-bold text-gray-900 mb-2">{dict?.settings?.multiCurrencySettings || 'Multi-Currency Settings'}</h2>
+                  <h2 className="text-xl font-bold text-gray-900 mb-2">{settingsDict.multiCurrencySettings || 'Multi-Currency Settings'}</h2>
                   <p className="text-sm text-gray-600">
-                    {dict?.settings?.multiCurrencySettingsSubtitle || 'Configure which currencies to display'}
+                    {settingsDict.multiCurrencySettingsSubtitle || 'Configure which currencies to display'}
                   </p>
                 </div>
                 <MultiCurrencyDisplaySettings
@@ -1579,14 +1533,14 @@ export default function SettingsPage() {
                   {saving ? (
                     <>
                       <div className="animate-spin h-5 w-5 border-b-2 border-white"></div>
-                      <span>{dict?.settings?.saving || 'Saving...'}</span>
+                      <span>{settingsDict.saving || 'Saving...'}</span>
                     </>
                   ) : (
                     <>
                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                       </svg>
-                      <span>{dict?.settings?.save || 'Save Settings'}</span>
+                      <span>{settingsDict.save || 'Save Settings'}</span>
                     </>
                   )}
                 </button>

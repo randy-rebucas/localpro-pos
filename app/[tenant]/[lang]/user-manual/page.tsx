@@ -5,16 +5,15 @@ import { useParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import Navbar from '@/components/Navbar';
+import PageLoading from '@/components/ui/PageLoading';
+import ErrorState from '@/components/ui/ErrorState';
+import EmptyState from '@/components/ui/EmptyState';
+import DocumentationContentSkeleton from '@/components/documentation/DocumentationContentSkeleton';
 import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
-
-interface DocIndex {
-  files: string[];
-  readme: string;
-}
-
-type DocFolder = 'user-manual' | 'tenant-manual' | 'bir-documentation';
+import { useDocumentation, type DocFolder } from '@/hooks/useDocumentation';
+import type { TranslationDict } from '@/types/dictionary';
 
 const BIR_PLANS = ['Standard', 'Premium', 'Enterprise'];
 
@@ -75,13 +74,20 @@ export default function UserManualPage() {
   const { subscriptionStatus } = useSubscription();
   const hasBirAccess = BIR_PLANS.includes(subscriptionStatus?.planName ?? '');
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [dict, setDict] = useState<any>(null);
+  const [dict, setDict] = useState<TranslationDict | null>(null);
   const [activeFolder, setActiveFolder] = useState<DocFolder>('user-manual');
-  const [index, setIndex] = useState<DocIndex | null>(null);
-  const [activeFile, setActiveFile] = useState<string | null>(null);
-  const [content, setContent] = useState<string>('');
-  const [loading, setLoading] = useState(true);
+  const {
+    index,
+    indexStatus,
+    indexError,
+    refetchIndex,
+    activeFile,
+    content,
+    contentStatus,
+    contentError,
+    loadFile,
+    showOverview,
+  } = useDocumentation(activeFolder);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -89,43 +95,18 @@ export default function UserManualPage() {
     getDictionaryClient(lang as 'en' | 'es').then(setDict);
   }, [lang]);
 
-  const loadIndex = useCallback(async (folder: DocFolder) => {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/docs?folder=${folder}`);
-      if (!res.ok) throw new Error('Failed to load docs');
-      const data: DocIndex = await res.json();
-      setIndex(data);
-      setContent(data.readme);
-      setActiveFile(null);
-      setSearchQuery('');
-    } catch {
-      setContent('# Error\n\nFailed to load documentation.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const loadFile = useCallback(async (file: string) => {
-    setLoading(true);
-    setSidebarOpen(false);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    try {
-      const res = await fetch(`/api/docs?folder=${activeFolder}&file=${file}`);
-      if (!res.ok) throw new Error('Failed to load file');
-      const data = await res.json();
-      setContent(data.content);
-      setActiveFile(file);
-    } catch {
-      setContent('# Error\n\nFailed to load this page.');
-    } finally {
-      setLoading(false);
-    }
+  useEffect(() => {
+    setSearchQuery('');
   }, [activeFolder]);
 
-  useEffect(() => {
-    loadIndex(activeFolder);
-  }, [activeFolder, loadIndex]);
+  const handleLoadFile = useCallback(
+    (file: string) => {
+      setSidebarOpen(false);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      loadFile(file);
+    },
+    [loadFile]
+  );
 
   const formatFileName = (filename: string): string => {
     return filename
@@ -145,11 +126,20 @@ export default function UserManualPage() {
     return sidebarFiles.filter((f) => formatFileName(f).toLowerCase().includes(q));
   }, [sidebarFiles, searchQuery]);
 
-  const folderLabel = activeFolder === 'user-manual'
-    ? (dict?.nav?.userManual || 'User Manual')
-    : activeFolder === 'bir-documentation'
-    ? 'BIR Documentation'
-    : (dict?.nav?.tenantManual || 'Tenant Manual');
+  if (!dict) {
+    return <PageLoading label="Loading..." />;
+  }
+
+  const docDict = dict.documentation ?? {};
+
+  const folderLabel =
+    activeFolder === 'user-manual'
+      ? dict.nav?.userManual || 'User Manual'
+      : activeFolder === 'bir-documentation'
+      ? docDict.birDocumentation || 'BIR Documentation'
+      : dict.nav?.tenantManual || 'Tenant Manual';
+
+  const isContentLoading = indexStatus === 'loading' || contentStatus === 'loading';
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -181,11 +171,13 @@ export default function UserManualPage() {
               {!activeFile && (
                 <p className="mt-1 text-sm text-gray-500">
                   {activeFolder === 'user-manual'
-                    ? (dict?.common?.userManualDesc || 'Step-by-step guides for daily store operations')
+                    ? docDict.userManualDesc ||
+                      'Step-by-step guides for daily store operations'
                     : activeFolder === 'bir-documentation'
-                    ? 'Bureau of Internal Revenue compliance, receipts, VAT, and audit trail guides'
-                    : (dict?.common?.tenantManualDesc || 'Setup, configuration, and administration guides')
-                  }
+                    ? docDict.birDesc ||
+                      'Bureau of Internal Revenue compliance, receipts, VAT, and audit trail guides'
+                    : docDict.tenantManualDesc ||
+                      'Setup, configuration, and administration guides'}
                 </p>
               )}
             </div>
@@ -206,7 +198,7 @@ export default function UserManualPage() {
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                 </svg>
-                {dict?.nav?.userManual || 'User Manual'}
+                {dict.nav?.userManual || 'User Manual'}
               </button>
               <button
                 onClick={() => setActiveFolder('tenant-manual')}
@@ -222,7 +214,7 @@ export default function UserManualPage() {
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5" />
                 </svg>
-                {dict?.nav?.tenantManual || 'Tenant Manual'}
+                {dict.nav?.tenantManual || 'Tenant Manual'}
               </button>
               {hasBirAccess && (
                 <button
@@ -239,7 +231,7 @@ export default function UserManualPage() {
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" />
                   </svg>
-                  BIR Docs
+                  {docDict.birDocs || 'BIR Docs'}
                 </button>
               )}
             </div>
@@ -279,7 +271,7 @@ export default function UserManualPage() {
               <div className="p-4 border-b border-gray-100 bg-gray-50/50">
                 <div className="flex items-center justify-between mb-3">
                   <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                    {dict?.common?.contents || 'Table of Contents'}
+                    {docDict.tableOfContents || dict.common.contents || 'Table of Contents'}
                   </h2>
                   <button
                     onClick={() => setSidebarOpen(false)}
@@ -300,7 +292,7 @@ export default function UserManualPage() {
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder={dict?.common?.search || 'Search pages...'}
+                    placeholder={docDict.searchPages || dict.common.search || 'Search pages...'}
                     className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:border-transparent placeholder-gray-400"
                     style={{ ['--tw-ring-color' as string]: `${primaryColor}40` } as React.CSSProperties}
                   />
@@ -313,8 +305,7 @@ export default function UserManualPage() {
                 <div className="px-2 pt-2">
                   <button
                     onClick={() => {
-                      setActiveFile(null);
-                      setContent(index?.readme || '');
+                      showOverview();
                       setSidebarOpen(false);
                       setSearchQuery('');
                     }}
@@ -328,7 +319,7 @@ export default function UserManualPage() {
                     <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                     </svg>
-                    {dict?.common?.home || 'Overview'}
+                    {docDict.overview || dict.common.home || 'Overview'}
                   </button>
                 </div>
 
@@ -345,7 +336,7 @@ export default function UserManualPage() {
                     return (
                       <button
                         key={file}
-                        onClick={() => loadFile(file)}
+                        onClick={() => handleLoadFile(file)}
                         className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-all group ${
                           isActive
                             ? 'text-white shadow-sm font-medium'
@@ -376,8 +367,15 @@ export default function UserManualPage() {
                   })}
 
                   {filteredFiles.length === 0 && searchQuery && (
-                    <div className="px-3 py-6 text-center text-sm text-gray-400">
-                      No pages match &quot;{searchQuery}&quot;
+                    <div className="px-3 py-4">
+                      <EmptyState
+                        icon="search"
+                        title={(
+                          docDict.noSearchResults || 'No pages match "{query}"'
+                        ).replace('{query}', searchQuery)}
+                        compact
+                        className="py-4"
+                      />
                     </div>
                   )}
                 </nav>
@@ -386,7 +384,10 @@ export default function UserManualPage() {
               {/* Footer with page count */}
               <div className="px-4 py-3 border-t border-gray-100 bg-gray-50/50">
                 <div className="text-xs text-gray-400">
-                  {sidebarFiles.length} {sidebarFiles.length === 1 ? 'chapter' : 'chapters'}
+                  {sidebarFiles.length}{' '}
+                  {sidebarFiles.length === 1
+                    ? docDict.chapter || 'chapter'
+                    : docDict.chapters || 'chapters'}
                 </div>
               </div>
             </div>
@@ -395,11 +396,24 @@ export default function UserManualPage() {
           {/* Main Content */}
           <main className="flex-1 min-w-0">
             <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
-              {loading ? (
-                <div className="flex flex-col items-center justify-center py-32 gap-3">
-                  <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-200" style={{ borderTopColor: primaryColor }} />
-                  <span className="text-sm text-gray-400">{dict?.common?.loading || 'Loading...'}</span>
-                </div>
+              {indexStatus === 'error' ? (
+                <ErrorState
+                  title={docDict.failedToLoadDocs || 'Failed to load documentation'}
+                  description={indexError || undefined}
+                  onRetry={refetchIndex}
+                  retryLabel={dict.common.retry || 'Retry'}
+                />
+              ) : contentStatus === 'error' ? (
+                <ErrorState
+                  title={docDict.failedToLoadPage || 'Failed to load this page'}
+                  description={contentError || undefined}
+                  onRetry={() =>
+                    activeFile ? loadFile(activeFile) : refetchIndex()
+                  }
+                  retryLabel={dict.common.retry || 'Retry'}
+                />
+              ) : isContentLoading ? (
+                <DocumentationContentSkeleton />
               ) : (
                 <>
                   {/* Chapter header with icon */}
@@ -417,7 +431,7 @@ export default function UserManualPage() {
                         <div>
                           {getChapterNumber(activeFile) && (
                             <div className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-0.5">
-                              Chapter {getChapterNumber(activeFile)}
+                              {docDict.chapterLabel || 'Chapter'} {getChapterNumber(activeFile)}
                             </div>
                           )}
                           <h2 className="text-lg font-bold text-gray-900">{formatFileName(activeFile)}</h2>
@@ -457,7 +471,7 @@ export default function UserManualPage() {
                               const linkedFile = href.replace('./', '');
                               return (
                                 <button
-                                  onClick={() => loadFile(linkedFile)}
+                                  onClick={() => handleLoadFile(linkedFile)}
                                   className="font-medium hover:underline cursor-pointer inline-flex items-center gap-1"
                                   style={{ color: primaryColor }}
                                 >
@@ -481,7 +495,7 @@ export default function UserManualPage() {
                                     <button
                                       onClick={() => {
                                         setActiveFolder(targetFolder as DocFolder);
-                                        setTimeout(() => loadFile(targetFile), 200);
+                                        setTimeout(() => handleLoadFile(targetFile), 200);
                                       }}
                                       className="font-medium hover:underline cursor-pointer"
                                       style={{ color: primaryColor }}
@@ -641,14 +655,14 @@ export default function UserManualPage() {
                           <div className="flex justify-between items-stretch gap-4">
                             {prevFile ? (
                               <button
-                                onClick={() => loadFile(prevFile)}
+                                onClick={() => handleLoadFile(prevFile)}
                                 className="flex-1 flex flex-col items-start p-4 rounded-lg border border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm transition-all text-left group"
                               >
                                 <span className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1 flex items-center gap-1">
                                   <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                                   </svg>
-                                  Previous
+                                  {docDict.previous || 'Previous'}
                                 </span>
                                 <span className="text-sm font-semibold text-gray-700 group-hover:text-gray-900">
                                   {formatFileName(prevFile)}
@@ -657,11 +671,11 @@ export default function UserManualPage() {
                             ) : <div className="flex-1" />}
                             {nextFile ? (
                               <button
-                                onClick={() => loadFile(nextFile)}
+                                onClick={() => handleLoadFile(nextFile)}
                                 className="flex-1 flex flex-col items-end p-4 rounded-lg border border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm transition-all text-right group"
                               >
                                 <span className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1 flex items-center gap-1">
-                                  Next
+                                  {docDict.next || 'Next'}
                                   <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                   </svg>

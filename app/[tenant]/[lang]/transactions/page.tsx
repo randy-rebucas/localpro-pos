@@ -5,48 +5,25 @@ import Navbar from '@/components/Navbar';
 import Currency from '@/components/Currency';
 import FormattedDate from '@/components/FormattedDate';
 import PageTitle from '@/components/PageTitle';
+import PageLoading from '@/components/ui/PageLoading';
+import EmptyState from '@/components/ui/EmptyState';
+import ErrorState from '@/components/ui/ErrorState';
+import TransactionsCatalogSkeleton from '@/components/transactions/TransactionsCatalogSkeleton';
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '../dictionaries-client';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { formatDateTime } from '@/lib/formatting';
 import { hardwareService } from '@/lib/hardware';
+import {
+  useTransactionsCatalog,
+  type CatalogTransaction,
+  type CatalogExpense,
+} from '@/hooks/useTransactionsCatalog';
+import type { TranslationDict } from '@/types/dictionary';
 
-interface TransactionItem {
-  product: string;
-  name: string;
-  price: number;
-  quantity: number;
-  subtotal: number;
-}
-
-interface Transaction {
-  _id: string;
-  receiptNumber?: string;
-  items: TransactionItem[];
-  subtotal?: number;
-  discountCode?: string;
-  discountAmount?: number;
-  total: number;
-  paymentMethod: 'cash' | 'card' | 'digital';
-  cashReceived?: number;
-  change?: number;
-  status: 'completed' | 'cancelled' | 'refunded';
-  createdAt: string;
-}
-
-interface Expense {
-  _id: string;
-  name: string;
-  description: string;
-  amount: number;
-  date: string;
-  paymentMethod: 'cash' | 'card' | 'digital' | 'other';
-  receipt?: string;
-  notes?: string;
-  userId?: string | { name: string; email: string };
-  createdAt: string;
-}
+type Transaction = CatalogTransaction;
+type Expense = CatalogExpense;
 
 type ViewType = 'all' | 'transactions' | 'expenses';
 
@@ -54,11 +31,7 @@ export default function TransactionsPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [adjustTransaction, setAdjustTransaction] = useState<Transaction | null>(null);
@@ -94,9 +67,19 @@ export default function TransactionsPage() {
 
   const [viewType, setViewType] = useState<ViewType>('all');
   const [displayMode, setDisplayMode] = useState<'grid' | 'list'>('list');
-  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const [dict, setDict] = useState<TranslationDict | null>(null);
   const { settings: tenantSettings } = useTenantSettings();
   const primaryColor = (tenantSettings || getDefaultTenantSettings()).primaryColor || '#35979c';
+
+  const {
+    transactions,
+    expenses,
+    totalPages,
+    status,
+    error,
+    refetch,
+    updateTransactionStatus,
+  } = useTransactionsCatalog(tenant, page);
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -128,47 +111,6 @@ export default function TransactionsPage() {
     localStorage.setItem(`transactionsDisplayMode_${tenant}`, displayMode);
   }, [displayMode, tenant]);
 
-  useEffect(() => {
-    fetchTransactions();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, tenant]);
-
-  useEffect(() => {
-    fetchExpenses();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tenant]);
-
-  const fetchTransactions = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch(`/api/transactions?page=${page}&limit=20&tenant=${tenant}`, { credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
-        setTransactions(data.data);
-        setTotalPages(data.pagination.pages);
-      }
-    } catch (error) {
-      console.error('Error fetching transactions:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchExpenses = async () => {
-    try {
-      const res = await fetch(`/api/expenses?tenant=${tenant}`, { credentials: 'include' });
-      const data = await res.json();
-      if (data.success) {
-        setExpenses(data.data);
-      }
-    } catch (error) {
-      console.error('Error fetching expenses:', error);
-    }
-  };
-
-  // formatDate is now handled by FormattedDate component
-  // Keep a simple version for receipt printing (template strings)
-
   const doRefund = async () => {
     if (!adjustTransaction) return;
     setAdjustLoading(true);
@@ -185,12 +127,8 @@ export default function TransactionsPage() {
         setAdjustError(data.error || 'Refund failed');
       } else {
         setAdjustSuccess(true);
-        // Refresh transactions list
-        fetchTransactions();
-        // Update local state so the card reflects refunded status
-        setTransactions((prev) =>
-          prev.map((t) => (t._id === adjustTransaction._id ? { ...t, status: 'refunded' } : t))
-        );
+        refetch();
+        updateTransactionStatus(adjustTransaction._id, 'refunded');
       }
     } catch {
       setAdjustError('Network error. Please try again.');
@@ -246,7 +184,7 @@ export default function TransactionsPage() {
         setManualError(data.error || 'Failed to create transaction');
       } else {
         setManualSuccess(true);
-        fetchTransactions();
+        refetch();
       }
     } catch {
       setManualError('Network error. Please try again.');
@@ -282,7 +220,7 @@ export default function TransactionsPage() {
         setExpenseError(data.error || 'Failed to create expense');
       } else {
         setExpenseSuccess(true);
-        fetchExpenses();
+        refetch();
       }
     } catch {
       setExpenseError('Network error. Please try again.');
@@ -323,24 +261,10 @@ export default function TransactionsPage() {
   };
 
   if (!dict) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div
-            className="inline-block animate-spin h-8 w-8"
-            style={{
-              borderTop: `2px solid ${primaryColor}`,
-              borderRight: `2px solid ${primaryColor}`,
-              borderBottom: '2px solid transparent',
-              borderLeft: `2px solid ${primaryColor}`,
-              borderRadius: '50%',
-            }}
-          />
-          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
-        </div>
-      </div>
-    );
+    return <PageLoading label="Loading..." />;
   }
+
+  const txDict = dict.transactions ?? {};
 
   // Combine and sort transactions and expenses by date
   const allItems = [
@@ -361,14 +285,14 @@ export default function TransactionsPage() {
       <div className="w-full px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
         <div className="flex flex-col gap-4 sm:gap-6 mb-4 sm:mb-6 lg:mb-8">
           <div className="flex items-center justify-between gap-4">
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">{dict.transactions.title}</h1>
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">{txDict.title || 'Transactions'}</h1>
             <div className="flex gap-2">
               <button
                 onClick={() => { setShowExpenseModal(true); setExpenseName(''); setExpenseDescription(''); setExpenseAmount(''); setExpenseDate(new Date().toISOString().slice(0, 10)); setExpensePayment('cash'); setExpenseNotes(''); setExpenseError(''); setExpenseSuccess(false); }}
                 className="flex items-center gap-2 px-4 py-2.5 bg-red-600 text-white hover:bg-red-700 active:bg-red-800 border border-red-700 text-sm font-medium transition-colors touch-manipulation min-h-[44px] sm:min-h-0 whitespace-nowrap"
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                <span className="hidden sm:inline">{dict.transactions?.addExpense || 'Add Expense'}</span>
+                <span className="hidden sm:inline">{txDict?.addExpense || 'Add Expense'}</span>
                 <span className="sm:hidden">Expense</span>
               </button>
               <button
@@ -376,7 +300,7 @@ export default function TransactionsPage() {
                 className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white hover:bg-green-700 active:bg-green-800 border border-green-700 text-sm font-medium transition-colors touch-manipulation min-h-[44px] sm:min-h-0 whitespace-nowrap"
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                <span className="hidden sm:inline">{dict.transactions?.addManual || 'Add Transaction'}</span>
+                <span className="hidden sm:inline">{txDict?.addManual || 'Add Transaction'}</span>
                 <span className="sm:hidden">Sale</span>
               </button>
             </div>
@@ -397,10 +321,10 @@ export default function TransactionsPage() {
                   style={viewType === view ? { backgroundColor: primaryColor } : {}}
                 >
                   {view === 'all' 
-                    ? (dict.transactions?.all || 'All')
+                    ? (txDict?.all || 'All')
                     : view === 'transactions'
-                    ? (dict.transactions?.transactions || 'Transactions')
-                    : (dict.transactions?.expenses || 'Expenses')}
+                    ? (txDict?.transactions || 'Transactions')
+                    : (txDict?.expenses || 'Expenses')}
                 </button>
               ))}
             </div>
@@ -442,51 +366,58 @@ export default function TransactionsPage() {
           </div>
         </div>
 
-        {loading ? (
-          displayMode === 'grid' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} className="bg-white border border-gray-300 rounded-lg p-4 sm:p-5 animate-pulse">
-                  <div className="h-4 bg-gray-200 w-2/3 mb-3"></div>
-                  <div className="h-5 bg-gray-200 w-1/2 mb-4"></div>
-                  <div className="h-4 bg-gray-200 w-full mb-2"></div>
-                  <div className="h-4 bg-gray-200 w-3/4 mb-4"></div>
-                  <div className="border-t border-gray-200 pt-4">
-                    <div className="h-6 bg-gray-200 w-24"></div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="bg-white border border-gray-300 divide-y divide-gray-300">
-              {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-                <div key={i} className="p-4 sm:p-5 lg:p-6 animate-pulse">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <div className="flex-1 space-y-2">
-                      <div className="h-4 sm:h-5 bg-gray-200 w-1/2 sm:w-1/3"></div>
-                      <div className="h-3 sm:h-4 bg-gray-200 w-1/3 sm:w-1/4"></div>
-                    </div>
-                    <div className="flex items-center gap-2 sm:gap-4">
-                      <div className="h-3 sm:h-4 bg-gray-200 w-16 sm:w-20"></div>
-                      <div className="h-3 sm:h-4 bg-gray-200 w-12 sm:w-16"></div>
-                      <div className="h-10 sm:h-9 bg-gray-200 w-20 sm:w-24"></div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )
-        ) : filteredItems.length === 0 ? (
-          <div className="text-center py-12 sm:py-16 bg-white border border-gray-300 px-4">
-            <svg className="mx-auto h-12 w-12 sm:h-16 sm:w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
-            <p className="text-gray-500 text-base sm:text-lg">
-              {viewType === 'expenses' 
-                ? (dict.transactions?.noExpenses || 'No expenses found')
-                : dict.transactions.noTransactions}
-            </p>
+        {status === 'loading' ? (
+          <TransactionsCatalogSkeleton mode={displayMode} />
+        ) : status === 'error' ? (
+          <div className="bg-white border border-gray-300">
+            <ErrorState
+              title={txDict.failedToLoadTransactions || 'Failed to load transactions'}
+              description={error || undefined}
+              onRetry={refetch}
+              retryLabel={dict.common.retry || 'Retry'}
+            />
           </div>
+        ) : filteredItems.length === 0 ? (
+          <EmptyState
+            icon="savedCarts"
+            title={
+              viewType === 'expenses'
+                ? (txDict.noExpenses || 'No expenses found')
+                : viewType === 'transactions'
+                ? (txDict.noTransactions || 'No transactions found')
+                : (txDict.noActivityYet || 'No transactions or expenses yet')
+            }
+            action={
+              viewType === 'expenses'
+                ? {
+                    label: txDict.addExpense || 'Add Expense',
+                    onClick: () => {
+                      setShowExpenseModal(true);
+                      setExpenseName('');
+                      setExpenseDescription('');
+                      setExpenseAmount('');
+                      setExpenseDate(new Date().toISOString().slice(0, 10));
+                      setExpensePayment('cash');
+                      setExpenseNotes('');
+                      setExpenseError('');
+                      setExpenseSuccess(false);
+                    },
+                  }
+                : {
+                    label: txDict.addManual || 'Add Transaction',
+                    onClick: () => {
+                      setShowAddModal(true);
+                      setManualItems([emptyItem()]);
+                      setManualPayment('cash');
+                      setManualCash('');
+                      setManualNotes('');
+                      setManualError('');
+                      setManualSuccess(false);
+                    },
+                  }
+            }
+            className="bg-white border border-gray-300"
+          />
         ) : displayMode === 'grid' ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {filteredItems.map((item) => {
@@ -497,17 +428,17 @@ export default function TransactionsPage() {
                     <div className="flex-1 mb-4">
                       <div className="flex items-start justify-between mb-2">
                         <div className="flex-1">
-                          <div className="text-xs text-gray-500 mb-1">{dict.transactions.date}</div>
+                          <div className="text-xs text-gray-500 mb-1">{txDict.date}</div>
                           <div className="text-sm text-gray-600"><FormattedDate date={transaction.createdAt} includeTime={true} /></div>
                         </div>
                         <span className={`inline-block px-2.5 py-1 text-xs font-medium border ${transaction.status === 'completed' ? 'bg-green-100 text-green-800 border-green-300' : transaction.status === 'refunded' ? 'bg-orange-100 text-orange-800 border-orange-300' : 'bg-red-100 text-red-800 border-red-300'}`}>
-                          {dict.transactions[transaction.status]}
+                          {txDict[transaction.status]}
                         </span>
                       </div>
                       <div className="mb-3">
-                        <div className="text-xs text-gray-500 mb-1">{dict.transactions.items}</div>
+                        <div className="text-xs text-gray-500 mb-1">{txDict.items}</div>
                         <div className="text-sm font-medium text-gray-900">
-                          {transaction.items.length} {transaction.items.length === 1 ? dict.transactions.item : dict.transactions.items}
+                          {transaction.items.length} {transaction.items.length === 1 ? txDict.item : txDict.items}
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-2 mb-3">
@@ -523,8 +454,8 @@ export default function TransactionsPage() {
                         </span>
                         {transaction.cashReceived && (
                           <div className="text-xs text-gray-500">
-                            {dict.transactions.cash}: <Currency amount={transaction.cashReceived} />
-                            {transaction.change && <span className="ml-1">{dict.transactions.change}: <Currency amount={transaction.change} /></span>}
+                            {txDict.cash}: <Currency amount={transaction.cashReceived} />
+                            {transaction.change && <span className="ml-1">{txDict.change}: <Currency amount={transaction.change} /></span>}
                           </div>
                         )}
                       </div>
@@ -537,7 +468,7 @@ export default function TransactionsPage() {
                         </div>
                       </div>
                       <div className="flex gap-2">
-                        <button onClick={() => { setSelectedTransaction(transaction); setSelectedExpense(null); }} className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 hover:bg-gray-200 active:bg-gray-300 transition-all duration-200 border border-gray-300 flex items-center justify-center gap-2 touch-manipulation min-h-[44px] text-sm font-medium" title={dict.transactions.view} aria-label={dict.transactions.view}>
+                        <button onClick={() => { setSelectedTransaction(transaction); setSelectedExpense(null); }} className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 hover:bg-gray-200 active:bg-gray-300 transition-all duration-200 border border-gray-300 flex items-center justify-center gap-2 touch-manipulation min-h-[44px] text-sm font-medium" title={txDict.view} aria-label={txDict.view}>
                           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                         </button>
                         <button onClick={() => printReceipt(transaction)} className="flex-1 px-4 py-2.5 text-white transition-all duration-200 border flex items-center justify-center gap-2 touch-manipulation min-h-[44px] text-sm font-medium hover:opacity-80" style={{ backgroundColor: primaryColor, borderColor: primaryColor }} title={dict.common.print} aria-label={dict.common.print}>
@@ -545,9 +476,9 @@ export default function TransactionsPage() {
                           <span className="hidden sm:inline">{dict.common.print}</span>
                         </button>
                         {transaction.status === 'completed' && (
-                          <button onClick={() => openAdjustModal(transaction)} className="flex-1 px-4 py-2.5 bg-orange-500 text-white hover:bg-orange-600 active:bg-orange-700 transition-all duration-200 border border-orange-600 flex items-center justify-center gap-2 touch-manipulation min-h-[44px] text-sm font-medium" title={dict.transactions?.adjust || 'Adjust / Refund'}>
+                          <button onClick={() => openAdjustModal(transaction)} className="flex-1 px-4 py-2.5 bg-orange-500 text-white hover:bg-orange-600 active:bg-orange-700 transition-all duration-200 border border-orange-600 flex items-center justify-center gap-2 touch-manipulation min-h-[44px] text-sm font-medium" title={txDict?.adjust || 'Adjust / Refund'}>
                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                            <span className="hidden sm:inline">{dict.transactions?.adjust || 'Adjust'}</span>
+                            <span className="hidden sm:inline">{txDict?.adjust || 'Adjust'}</span>
                           </button>
                         )}
                       </div>
@@ -561,13 +492,13 @@ export default function TransactionsPage() {
                     <div className="flex-1 mb-4">
                       <div className="flex items-start justify-between mb-2">
                         <div className="flex-1">
-                          <div className="text-xs text-gray-500 mb-1">{dict.transactions.date}</div>
+                          <div className="text-xs text-gray-500 mb-1">{txDict.date}</div>
                           <div className="text-sm text-gray-600"><FormattedDate date={expense.date || expense.createdAt} includeTime={true} /></div>
                         </div>
-                        <span className="inline-block px-2.5 py-1 text-xs font-medium bg-orange-100 text-orange-800 border border-orange-300">{dict.transactions?.expense || 'Expense'}</span>
+                        <span className="inline-block px-2.5 py-1 text-xs font-medium bg-orange-100 text-orange-800 border border-orange-300">{txDict?.expense || 'Expense'}</span>
                       </div>
                       <div className="mb-3">
-                        <div className="text-xs text-gray-500 mb-1">{dict.transactions?.name || 'Name'}</div>
+                        <div className="text-xs text-gray-500 mb-1">{txDict?.name || 'Name'}</div>
                         <div className="text-base font-semibold text-gray-900">{expense.name}</div>
                         {expense.description && <div className="text-sm text-gray-500 mt-1 line-clamp-2">{expense.description}</div>}
                       </div>
@@ -584,7 +515,7 @@ export default function TransactionsPage() {
                       </div>
                       <button onClick={() => { setSelectedExpense(selectedExpense?._id === expense._id ? null : expense); setSelectedTransaction(null); }} className="w-full px-4 py-2.5 bg-gray-100 text-gray-700 hover:bg-gray-200 active:bg-gray-300 transition-all duration-200 border border-gray-300 flex items-center justify-center gap-2 touch-manipulation min-h-[44px] text-sm font-medium">
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                        <span className="hidden sm:inline">{selectedExpense?._id === expense._id ? dict.transactions.hide : dict.transactions.view}</span>
+                        <span className="hidden sm:inline">{selectedExpense?._id === expense._id ? txDict.hide : txDict.view}</span>
                       </button>
                     </div>
                   </div>
@@ -603,14 +534,14 @@ export default function TransactionsPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start gap-3 mb-2">
                           <div className="flex-1">
-                            <div className="text-xs text-gray-500 mb-1">{dict.transactions.date}</div>
+                            <div className="text-xs text-gray-500 mb-1">{txDict.date}</div>
                             <div className="text-sm text-gray-600"><FormattedDate date={transaction.createdAt} includeTime={true} /></div>
                           </div>
-                          <span className={`inline-block px-2.5 py-1 text-xs font-medium border ${transaction.status === 'completed' ? 'bg-green-100 text-green-800 border-green-300' : transaction.status === 'refunded' ? 'bg-orange-100 text-orange-800 border-orange-300' : 'bg-red-100 text-red-800 border-red-300'}`}>{dict.transactions[transaction.status]}</span>
+                          <span className={`inline-block px-2.5 py-1 text-xs font-medium border ${transaction.status === 'completed' ? 'bg-green-100 text-green-800 border-green-300' : transaction.status === 'refunded' ? 'bg-orange-100 text-orange-800 border-orange-300' : 'bg-red-100 text-red-800 border-red-300'}`}>{txDict[transaction.status]}</span>
                         </div>
                         <div className="mb-2">
-                          <div className="text-xs text-gray-500 mb-1">{dict.transactions.items}</div>
-                          <div className="text-sm font-medium text-gray-900">{transaction.items.length} {transaction.items.length === 1 ? dict.transactions.item : dict.transactions.items}</div>
+                          <div className="text-xs text-gray-500 mb-1">{txDict.items}</div>
+                          <div className="text-sm font-medium text-gray-900">{transaction.items.length} {transaction.items.length === 1 ? txDict.item : txDict.items}</div>
                         </div>
                         <div className="flex flex-wrap gap-2 text-xs sm:text-sm text-gray-600">
                           <span
@@ -625,8 +556,8 @@ export default function TransactionsPage() {
                           </span>
                           {transaction.cashReceived && (
                             <div className="text-xs text-gray-500">
-                              {dict.transactions.cash}: <Currency amount={transaction.cashReceived} />
-                              {transaction.change && <span className="ml-1">{dict.transactions.change}: <Currency amount={transaction.change} /></span>}
+                              {txDict.cash}: <Currency amount={transaction.cashReceived} />
+                              {transaction.change && <span className="ml-1">{txDict.change}: <Currency amount={transaction.change} /></span>}
                             </div>
                           )}
                         </div>
@@ -637,14 +568,14 @@ export default function TransactionsPage() {
                           <div className="font-bold text-lg sm:text-xl" style={{ color: primaryColor }}><Currency amount={transaction.total} /></div>
                         </div>
                         <div className="flex gap-2 actions-touch-visible transition-opacity duration-200">
-                          <button onClick={() => { setSelectedTransaction(transaction); setSelectedExpense(null); }} className="px-3 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 active:bg-gray-300 transition-all duration-200 border border-gray-300 flex items-center justify-center touch-manipulation min-h-[44px] sm:min-h-0" title={dict.transactions.view} aria-label={dict.transactions.view}>
+                          <button onClick={() => { setSelectedTransaction(transaction); setSelectedExpense(null); }} className="px-3 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 active:bg-gray-300 transition-all duration-200 border border-gray-300 flex items-center justify-center touch-manipulation min-h-[44px] sm:min-h-0" title={txDict.view} aria-label={txDict.view}>
                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                           </button>
                           <button onClick={() => printReceipt(transaction)} className="px-3 py-2 text-white transition-all duration-200 border flex items-center justify-center touch-manipulation min-h-[44px] sm:min-h-0 hover:opacity-80" style={{ backgroundColor: primaryColor, borderColor: primaryColor }} title={dict.common.print} aria-label={dict.common.print}>
                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
                           </button>
                           {transaction.status === 'completed' && (
-                            <button onClick={() => openAdjustModal(transaction)} className="px-3 py-2 bg-orange-500 text-white hover:bg-orange-600 active:bg-orange-700 transition-all duration-200 border border-orange-600 flex items-center justify-center touch-manipulation min-h-[44px] sm:min-h-0" title={dict.transactions?.adjust || 'Adjust / Refund'}>
+                            <button onClick={() => openAdjustModal(transaction)} className="px-3 py-2 bg-orange-500 text-white hover:bg-orange-600 active:bg-orange-700 transition-all duration-200 border border-orange-600 flex items-center justify-center touch-manipulation min-h-[44px] sm:min-h-0" title={txDict?.adjust || 'Adjust / Refund'}>
                               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                             </button>
                           )}
@@ -661,13 +592,13 @@ export default function TransactionsPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start gap-3 mb-2">
                           <div className="flex-1">
-                            <div className="text-xs text-gray-500 mb-1">{dict.transactions.date}</div>
+                            <div className="text-xs text-gray-500 mb-1">{txDict.date}</div>
                             <div className="text-sm text-gray-600"><FormattedDate date={expense.date || expense.createdAt} includeTime={true} /></div>
                           </div>
-                          <span className="inline-block px-2.5 py-1 text-xs font-medium bg-orange-100 text-orange-800 border border-orange-300">{dict.transactions?.expense || 'Expense'}</span>
+                          <span className="inline-block px-2.5 py-1 text-xs font-medium bg-orange-100 text-orange-800 border border-orange-300">{txDict?.expense || 'Expense'}</span>
                         </div>
                         <div className="mb-2">
-                          <div className="text-xs text-gray-500 mb-1">{dict.transactions?.name || 'Name'}</div>
+                          <div className="text-xs text-gray-500 mb-1">{txDict?.name || 'Name'}</div>
                           <div className="text-base font-semibold text-gray-900">{expense.name}</div>
                           {expense.description && <div className="text-sm text-gray-500 mt-1 line-clamp-1">{expense.description}</div>}
                         </div>
@@ -680,7 +611,7 @@ export default function TransactionsPage() {
                           <div className="text-xs text-gray-500 mb-1 hidden sm:block">{dict.common.total}</div>
                           <div className="font-bold text-red-600 text-lg sm:text-xl"><Currency amount={expense.amount} /></div>
                         </div>
-                        <button onClick={() => { setSelectedExpense(selectedExpense?._id === expense._id ? null : expense); setSelectedTransaction(null); }} className="px-3 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 active:bg-gray-300 transition-all duration-200 border border-gray-300 flex items-center justify-center touch-manipulation min-h-[44px] sm:min-h-0" title={selectedExpense?._id === expense._id ? dict.transactions.hide : dict.transactions.view}>
+                        <button onClick={() => { setSelectedExpense(selectedExpense?._id === expense._id ? null : expense); setSelectedTransaction(null); }} className="px-3 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 active:bg-gray-300 transition-all duration-200 border border-gray-300 flex items-center justify-center touch-manipulation min-h-[44px] sm:min-h-0" title={selectedExpense?._id === expense._id ? txDict.hide : txDict.view}>
                           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                         </button>
                       </div>
@@ -706,7 +637,7 @@ export default function TransactionsPage() {
               <div className="flex items-center justify-between p-5 sm:p-6 border-b border-gray-200">
                 <div>
                   <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
-                    {selectedTransaction ? dict.transactions.transactionDetails : (dict.transactions?.expenseDetails || 'Expense Details')}
+                    {selectedTransaction ? txDict.transactionDetails : (txDict?.expenseDetails || 'Expense Details')}
                   </h2>
                   <p className="text-sm text-gray-500 mt-0.5">
                     <FormattedDate
@@ -734,7 +665,7 @@ export default function TransactionsPage() {
                     <div className="flex items-center justify-between">
                       {selectedTransaction.receiptNumber && (
                         <div>
-                          <div className="text-xs text-gray-500 mb-0.5">{dict.transactions?.receipt || 'Receipt'}</div>
+                          <div className="text-xs text-gray-500 mb-0.5">{txDict?.receipt || 'Receipt'}</div>
                           <div className="font-mono text-sm font-semibold text-gray-900">{selectedTransaction.receiptNumber}</div>
                         </div>
                       )}
@@ -770,14 +701,14 @@ export default function TransactionsPage() {
                     <div className="border border-gray-200 divide-y divide-gray-100">
                       {selectedTransaction.subtotal !== undefined && selectedTransaction.discountAmount && (
                         <div className="flex justify-between items-center px-4 py-2.5 text-sm text-gray-600">
-                          <span>{dict.transactions?.subtotal || 'Subtotal'}</span>
+                          <span>{txDict?.subtotal || 'Subtotal'}</span>
                           <Currency amount={selectedTransaction.subtotal} />
                         </div>
                       )}
                       {selectedTransaction.discountAmount && (
                         <div className="flex justify-between items-center px-4 py-2.5 text-sm text-gray-600">
                           <span>
-                            {dict.transactions?.discount || 'Discount'}
+                            {txDict?.discount || 'Discount'}
                             {selectedTransaction.discountCode && <span className="ml-1 font-mono text-xs bg-gray-100 px-1.5 py-0.5 border border-gray-200">{selectedTransaction.discountCode}</span>}
                           </span>
                           <span className="text-red-600">- <Currency amount={selectedTransaction.discountAmount} /></span>
@@ -794,7 +725,7 @@ export default function TransactionsPage() {
                     {/* Payment */}
                     <div className="border border-gray-200 divide-y divide-gray-100">
                       <div className="flex justify-between items-center px-4 py-2.5 text-sm">
-                        <span className="text-gray-500">{dict.transactions.payment}</span>
+                        <span className="text-gray-500">{txDict.payment}</span>
                         <span
                           className="inline-block px-2.5 py-1 text-xs font-medium border capitalize"
                           style={{ backgroundColor: `${primaryColor}20`, color: primaryColor, borderColor: primaryColor }}
@@ -804,13 +735,13 @@ export default function TransactionsPage() {
                       </div>
                       {selectedTransaction.cashReceived && (
                         <div className="flex justify-between items-center px-4 py-2.5 text-sm text-gray-600">
-                          <span>{dict.transactions.cash}</span>
+                          <span>{txDict.cash}</span>
                           <Currency amount={selectedTransaction.cashReceived} />
                         </div>
                       )}
                       {selectedTransaction.change !== undefined && selectedTransaction.change > 0 && (
                         <div className="flex justify-between items-center px-4 py-2.5 text-sm text-gray-600">
-                          <span>{dict.transactions.change}</span>
+                          <span>{txDict.change}</span>
                           <Currency amount={selectedTransaction.change} />
                         </div>
                       )}
@@ -821,30 +752,30 @@ export default function TransactionsPage() {
                     {/* Expense badge */}
                     <div className="flex justify-end">
                       <span className="inline-block px-2.5 py-1 text-xs font-semibold bg-orange-100 text-orange-800 border border-orange-300">
-                        {dict.transactions?.expense || 'Expense'}
+                        {txDict?.expense || 'Expense'}
                       </span>
                     </div>
 
                     <div className="border border-gray-200 divide-y divide-gray-100">
                       <div className="flex justify-between items-center px-4 py-2.5 text-sm">
-                        <span className="text-gray-500">{dict.transactions?.name || 'Name'}</span>
+                        <span className="text-gray-500">{txDict?.name || 'Name'}</span>
                         <span className="font-semibold text-gray-900">{selectedExpense.name}</span>
                       </div>
                       {selectedExpense.description && (
                         <div className="flex flex-col gap-1 px-4 py-2.5 text-sm">
-                          <span className="text-gray-500">{dict.transactions?.description || 'Description'}</span>
+                          <span className="text-gray-500">{txDict?.description || 'Description'}</span>
                           <span className="text-gray-900">{selectedExpense.description}</span>
                         </div>
                       )}
                       <div className="flex justify-between items-center px-4 py-2.5 text-sm">
-                        <span className="text-gray-500">{dict.transactions.payment}</span>
+                        <span className="text-gray-500">{txDict.payment}</span>
                         <span className="inline-block px-2.5 py-1 text-xs font-medium bg-red-100 text-red-800 border border-red-300 capitalize">
                           {dict.pos?.[selectedExpense.paymentMethod] || selectedExpense.paymentMethod}
                         </span>
                       </div>
                       {selectedExpense.notes && (
                         <div className="flex flex-col gap-1 px-4 py-2.5 text-sm">
-                          <span className="text-gray-500">{dict.transactions?.notes || 'Notes'}</span>
+                          <span className="text-gray-500">{txDict?.notes || 'Notes'}</span>
                           <span className="text-gray-900">{selectedExpense.notes}</span>
                         </div>
                       )}
@@ -874,7 +805,7 @@ export default function TransactionsPage() {
                       className="flex-1 py-2.5 bg-orange-500 text-white hover:bg-orange-600 active:bg-orange-700 transition-all duration-200 border border-orange-600 flex items-center justify-center gap-2 min-h-[44px] text-sm font-medium"
                     >
                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                      {dict.transactions?.adjust || 'Adjust'}
+                      {txDict?.adjust || 'Adjust'}
                     </button>
                   )}
                 </div>
@@ -890,7 +821,7 @@ export default function TransactionsPage() {
               <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 bg-red-50">
                 <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
                   <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                  {dict.transactions?.addExpense || 'Add Expense'}
+                  {txDict?.addExpense || 'Add Expense'}
                 </h2>
                 <button onClick={() => setShowExpenseModal(false)} className="p-1 hover:bg-gray-200 rounded transition-colors" aria-label="Close">
                   <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -902,7 +833,7 @@ export default function TransactionsPage() {
                   <div className="mx-auto mb-3 flex items-center justify-center w-12 h-12 rounded-full bg-green-100">
                     <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                   </div>
-                  <p className="text-base font-semibold text-gray-900">{dict.transactions?.expenseCreated || 'Expense recorded successfully'}</p>
+                  <p className="text-base font-semibold text-gray-900">{txDict?.expenseCreated || 'Expense recorded successfully'}</p>
                   <button onClick={() => setShowExpenseModal(false)} className="mt-4 px-6 py-2 bg-gray-800 text-white text-sm font-medium hover:bg-gray-900 transition-colors">
                     {dict.common?.close || 'Close'}
                   </button>
@@ -910,23 +841,23 @@ export default function TransactionsPage() {
               ) : (
                 <div className="px-5 py-4 space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict.transactions?.name || 'Name'} <span className="text-red-500">*</span></label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{txDict?.name || 'Name'} <span className="text-red-500">*</span></label>
                     <input
                       type="text"
                       value={expenseName}
                       onChange={(e) => setExpenseName(e.target.value)}
-                      placeholder={dict.transactions?.expenseNamePlaceholder || 'e.g. Office supplies'}
+                      placeholder={txDict?.expenseNamePlaceholder || 'e.g. Office supplies'}
                       className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict.transactions?.description || 'Description'} <span className="text-red-500">*</span></label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{txDict?.description || 'Description'} <span className="text-red-500">*</span></label>
                     <input
                       type="text"
                       value={expenseDescription}
                       onChange={(e) => setExpenseDescription(e.target.value)}
-                      placeholder={dict.transactions?.expenseDescPlaceholder || 'Brief description of the expense'}
+                      placeholder={txDict?.expenseDescPlaceholder || 'Brief description of the expense'}
                       className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
                     />
                   </div>
@@ -945,7 +876,7 @@ export default function TransactionsPage() {
                       />
                     </div>
                     <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">{dict.transactions?.date || 'Date'}</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{txDict?.date || 'Date'}</label>
                       <input
                         type="date"
                         value={expenseDate}
@@ -956,7 +887,7 @@ export default function TransactionsPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict.transactions?.payment || 'Payment Method'}</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{txDict?.payment || 'Payment Method'}</label>
                     <div className="flex gap-0 border border-gray-300 bg-white w-full">
                       {(['cash', 'card', 'digital', 'other'] as const).map((m) => (
                         <button
@@ -972,12 +903,12 @@ export default function TransactionsPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict.transactions?.notes || 'Notes'} ({dict.common?.optional || 'optional'})</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{txDict?.notes || 'Notes'} ({dict.common?.optional || 'optional'})</label>
                     <textarea
                       value={expenseNotes}
                       onChange={(e) => setExpenseNotes(e.target.value)}
                       rows={2}
-                      placeholder={dict.transactions?.expenseNotesPlaceholder || 'Additional details…'}
+                      placeholder={txDict?.expenseNotesPlaceholder || 'Additional details…'}
                       className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
                     />
                   </div>
@@ -1003,7 +934,7 @@ export default function TransactionsPage() {
                       ) : (
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                       )}
-                      {dict.transactions?.saveExpense || 'Save Expense'}
+                      {txDict?.saveExpense || 'Save Expense'}
                     </button>
                   </div>
                 </div>
@@ -1019,7 +950,7 @@ export default function TransactionsPage() {
               <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 bg-green-50">
                 <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
                   <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                  {dict.transactions?.addManual || 'Add Manual Transaction'}
+                  {txDict?.addManual || 'Add Manual Transaction'}
                 </h2>
                 <button onClick={() => setShowAddModal(false)} className="p-1 hover:bg-gray-200 rounded transition-colors" aria-label="Close">
                   <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -1031,7 +962,7 @@ export default function TransactionsPage() {
                   <div className="mx-auto mb-3 flex items-center justify-center w-12 h-12 rounded-full bg-green-100">
                     <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                   </div>
-                  <p className="text-base font-semibold text-gray-900">{dict.transactions?.transactionCreated || 'Transaction created successfully'}</p>
+                  <p className="text-base font-semibold text-gray-900">{txDict?.transactionCreated || 'Transaction created successfully'}</p>
                   <button onClick={() => setShowAddModal(false)} className="mt-4 px-6 py-2 bg-gray-800 text-white text-sm font-medium hover:bg-gray-900 transition-colors">
                     {dict.common?.close || 'Close'}
                   </button>
@@ -1041,13 +972,13 @@ export default function TransactionsPage() {
                   {/* Line items */}
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <label className="text-sm font-medium text-gray-700">{dict.transactions?.items || 'Items'}</label>
+                      <label className="text-sm font-medium text-gray-700">{txDict?.items || 'Items'}</label>
                       <button
                         onClick={() => setManualItems((prev) => [...prev, emptyItem()])}
                         className="text-xs text-brand hover:text-brand-navy font-medium flex items-center gap-1"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                        {dict.transactions?.addItem || 'Add item'}
+                        {txDict?.addItem || 'Add item'}
                       </button>
                     </div>
                     <div className="space-y-2">
@@ -1055,7 +986,7 @@ export default function TransactionsPage() {
                         <div key={idx} className="flex gap-2 items-start">
                           <input
                             type="text"
-                            placeholder={dict.transactions?.itemName || 'Item name'}
+                            placeholder={txDict?.itemName || 'Item name'}
                             value={item.name}
                             onChange={(e) => setManualItems((prev) => prev.map((it, i) => i === idx ? { ...it, name: e.target.value } : it))}
                             className="flex-1 border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 min-w-0"
@@ -1071,7 +1002,7 @@ export default function TransactionsPage() {
                           />
                           <input
                             type="number"
-                            placeholder={dict?.customerDisplay?.qty || 'Qty'}
+                            placeholder="Qty"
                             value={item.quantity}
                             min="1"
                             step="1"
@@ -1107,7 +1038,7 @@ export default function TransactionsPage() {
 
                   {/* Payment method */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict.transactions?.payment || 'Payment Method'}</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{txDict?.payment || 'Payment Method'}</label>
                     <div className="flex gap-0 border border-gray-300 bg-white w-full">
                       {(['cash', 'card', 'digital'] as const).map((m) => (
                         <button
@@ -1125,7 +1056,7 @@ export default function TransactionsPage() {
                   {/* Cash received */}
                   {manualPayment === 'cash' && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">{dict.transactions?.cash || 'Cash Received'} ({dict.common?.optional || 'optional'})</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{txDict?.cash || 'Cash Received'} ({dict.common?.optional || 'optional'})</label>
                       <input
                         type="number"
                         min="0"
@@ -1139,9 +1070,9 @@ export default function TransactionsPage() {
                         const total = manualItems.reduce((s, it) => { const p = parseFloat(it.price); const q = parseInt(it.quantity, 10); return s + (isNaN(p)||isNaN(q)?0:p*q); }, 0);
                         const change = parseFloat(manualCash) - total;
                         return change >= 0 ? (
-                          <p className="text-xs text-gray-500 mt-1">{dict.transactions?.change || 'Change'}: <span className="font-medium text-green-700">{change.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></p>
+                          <p className="text-xs text-gray-500 mt-1">{txDict?.change || 'Change'}: <span className="font-medium text-green-700">{change.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></p>
                         ) : (
-                          <p className="text-xs text-red-500 mt-1">{dict.transactions?.insufficientCash || 'Cash received is less than total'}</p>
+                          <p className="text-xs text-red-500 mt-1">{txDict?.insufficientCash || 'Cash received is less than total'}</p>
                         );
                       })()}
                     </div>
@@ -1149,12 +1080,12 @@ export default function TransactionsPage() {
 
                   {/* Notes */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict.transactions?.notes || 'Notes'} ({dict.common?.optional || 'optional'})</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{txDict?.notes || 'Notes'} ({dict.common?.optional || 'optional'})</label>
                     <textarea
                       value={manualNotes}
                       onChange={(e) => setManualNotes(e.target.value)}
                       rows={2}
-                      placeholder={dict.transactions?.notesPlaceholder || 'e.g. walk-in customer, special order…'}
+                      placeholder={txDict?.notesPlaceholder || 'e.g. walk-in customer, special order…'}
                       className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 resize-none"
                     />
                   </div>
@@ -1180,7 +1111,7 @@ export default function TransactionsPage() {
                       ) : (
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                       )}
-                      {dict.transactions?.saveTransaction || 'Save Transaction'}
+                      {txDict?.saveTransaction || 'Save Transaction'}
                     </button>
                   </div>
                 </div>
@@ -1196,7 +1127,7 @@ export default function TransactionsPage() {
               <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 bg-orange-50">
                 <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
                   <svg className="w-5 h-5 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                  {dict.transactions?.adjustRefund || 'Adjust / Refund Transaction'}
+                  {txDict?.adjustRefund || 'Adjust / Refund Transaction'}
                 </h2>
                 <button onClick={closeAdjustModal} className="p-1 hover:bg-gray-200 rounded transition-colors" aria-label="Close">
                   <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -1206,11 +1137,11 @@ export default function TransactionsPage() {
                 {/* Transaction summary */}
                 <div className="bg-gray-50 border border-gray-200 p-3 text-sm space-y-1">
                   <div className="flex justify-between">
-                    <span className="text-gray-500">{dict.transactions.date}:</span>
+                    <span className="text-gray-500">{txDict.date}:</span>
                     <span className="font-medium text-gray-800"><FormattedDate date={adjustTransaction.createdAt} includeTime={true} /></span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-500">{dict.transactions.items}:</span>
+                    <span className="text-gray-500">{txDict.items}:</span>
                     <span className="font-medium text-gray-800">{adjustTransaction.items.length}</span>
                   </div>
                   <div className="flex justify-between">
@@ -1222,30 +1153,30 @@ export default function TransactionsPage() {
                   <>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {dict.transactions?.refundReason || 'Reason'} <span className="text-red-500">*</span>
+                        {txDict?.refundReason || 'Reason'} <span className="text-red-500">*</span>
                       </label>
                       <select
                         value={adjustReason}
                         onChange={(e) => setAdjustReason(e.target.value)}
                         className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
                       >
-                        <option value="">{dict.transactions?.selectReason || '— Select a reason —'}</option>
-                        <option value="customer_request">{dict.transactions?.reasonCustomerRequest || 'Customer request'}</option>
-                        <option value="defective_item">{dict.transactions?.reasonDefectiveItem || 'Defective item'}</option>
-                        <option value="wrong_item">{dict.transactions?.reasonWrongItem || 'Wrong item'}</option>
-                        <option value="overcharge">{dict.transactions?.reasonOvercharge || 'Overcharge'}</option>
-                        <option value="other">{dict.transactions?.reasonOther || 'Other'}</option>
+                        <option value="">{txDict?.selectReason || '— Select a reason —'}</option>
+                        <option value="customer_request">{txDict?.reasonCustomerRequest || 'Customer request'}</option>
+                        <option value="defective_item">{txDict?.reasonDefectiveItem || 'Defective item'}</option>
+                        <option value="wrong_item">{txDict?.reasonWrongItem || 'Wrong item'}</option>
+                        <option value="overcharge">{txDict?.reasonOvercharge || 'Overcharge'}</option>
+                        <option value="other">{txDict?.reasonOther || 'Other'}</option>
                       </select>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {dict.transactions?.refundNotes || 'Notes (optional)'}
+                        {txDict?.refundNotes || 'Notes (optional)'}
                       </label>
                       <textarea
                         value={adjustNotes}
                         onChange={(e) => setAdjustNotes(e.target.value)}
                         rows={3}
-                        placeholder={dict.transactions?.refundNotesPlaceholder || 'Additional details…'}
+                        placeholder={txDict?.refundNotesPlaceholder || 'Additional details…'}
                         className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none"
                       />
                     </div>
@@ -1271,7 +1202,7 @@ export default function TransactionsPage() {
                         ) : (
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
                         )}
-                        {dict.transactions?.processRefund || 'Process Refund'}
+                        {txDict?.processRefund || 'Process Refund'}
                       </button>
                     </div>
                   </>
@@ -1280,8 +1211,8 @@ export default function TransactionsPage() {
                     <div className="mx-auto mb-3 flex items-center justify-center w-12 h-12 rounded-full bg-green-100">
                       <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                     </div>
-                    <p className="text-base font-semibold text-gray-900">{dict.transactions?.refundSuccess || 'Refund processed successfully'}</p>
-                    <p className="text-sm text-gray-500 mt-1">{dict.transactions?.stockRestored || 'Stock has been restored.'}</p>
+                    <p className="text-base font-semibold text-gray-900">{txDict?.refundSuccess || 'Refund processed successfully'}</p>
+                    <p className="text-sm text-gray-500 mt-1">{txDict?.stockRestored || 'Stock has been restored.'}</p>
                     <button onClick={closeAdjustModal} className="mt-4 px-6 py-2 bg-gray-800 text-white text-sm font-medium hover:bg-gray-900 transition-colors">
                       {dict.common?.close || 'Close'}
                     </button>
@@ -1300,17 +1231,17 @@ export default function TransactionsPage() {
               disabled={page === 1}
               className="w-full sm:w-auto px-6 py-3 sm:px-4 sm:py-2 border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 active:bg-gray-200 font-medium transition-colors bg-white touch-manipulation min-h-[44px] sm:min-h-0"
             >
-              {dict.transactions.previous}
+              {txDict.previous}
             </button>
             <span className="px-4 py-2 text-sm sm:text-base text-gray-700 font-medium text-center">
-              {dict.transactions.page} {page} {dict.transactions.of} {totalPages}
+              {txDict.page} {page} {txDict.of} {totalPages}
             </span>
             <button
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
               className="w-full sm:w-auto px-6 py-3 sm:px-4 sm:py-2 border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 active:bg-gray-200 font-medium transition-colors bg-white touch-manipulation min-h-[44px] sm:min-h-0"
             >
-              {dict.transactions.next}
+              {txDict.next}
             </button>
           </div>
         )}

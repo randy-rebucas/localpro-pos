@@ -3,6 +3,10 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import ErrorState from '@/components/ui/ErrorState';
+import EmptyState from '@/components/ui/EmptyState';
+import type { TranslationDict } from '@/types/dictionary';
 interface LowStockProduct {
   _id: string;
   name: string;
@@ -31,7 +35,7 @@ export default function LowStockAlerts({
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = (params?.lang as 'en' | 'es') || 'en';
-  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const [dict, setDict] = useState<TranslationDict | null>(null);
   const [alerts, setAlerts] = useState<LowStockProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -75,38 +79,38 @@ export default function LowStockAlerts({
 
   if (loading && alerts.length === 0) {
     return (
-      <div className="bg-white border border-gray-300 p-4">
-        <div className="animate-pulse">
-          <div className="h-4 bg-gray-200 w-1/4 mb-4"></div>
-          <div className="space-y-2">
-            <div className="h-3 bg-gray-200"></div>
-            <div className="h-3 bg-gray-200"></div>
-          </div>
-        </div>
+      <div className="bg-white border border-gray-300">
+        <LoadingSpinner size="sm" className="py-8" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-300 p-4">
-        <p className="text-red-800 text-sm">{error}</p>
-        <button
-          onClick={fetchAlerts}
-          className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
-        >
-          {dict?.components?.lowStockAlerts?.retry || dict?.common?.retry || 'Retry'}
-        </button>
+      <div className="bg-white border border-gray-300">
+        <ErrorState
+          title={error}
+          onRetry={fetchAlerts}
+          retryLabel={dict?.common?.retry || 'Retry'}
+          compact
+          className="py-4"
+        />
       </div>
     );
   }
 
   if (alerts.length === 0) {
     return (
-      <div className="bg-green-50 border border-green-300 p-4">
-        <p className="text-green-800 text-sm font-medium">
-          {dict?.components?.lowStockAlerts?.allProductsWellStocked || '✓ All products are well stocked'}
-        </p>
+      <div className="bg-white border border-gray-300">
+        <EmptyState
+          icon="products"
+          title={
+            dict?.components?.lowStockAlerts?.allProductsWellStocked ||
+            'All products are well stocked'
+          }
+          compact
+          className="py-4"
+        />
       </div>
     );
   }

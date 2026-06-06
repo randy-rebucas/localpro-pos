@@ -3,119 +3,28 @@
 import { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import PageLoading from '@/components/ui/PageLoading';
+import EmptyState from '@/components/ui/EmptyState';
+import ErrorState from '@/components/ui/ErrorState';
+import ReportsTabSkeleton from '@/components/reports/ReportsTabSkeleton';
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '../dictionaries-client';
 import Currency from '@/components/Currency';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import {
+  useReportsData,
+  type ReportTab,
+  type SalesReport,
+  type ProductPerformance,
+  type VATReport,
+  type ProfitLossSummary,
+  type CashDrawerReport,
+  type SalesJournalData,
+} from '@/hooks/useReportsData';
+import type { TranslationDict } from '@/types/dictionary';
 
 const DEFAULT_COLORS = ['#35979c', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
-
-interface SalesReport {
-  period: string;
-  startDate: string;
-  endDate: string;
-  totalSales: number;
-  totalTransactions: number;
-  averageTransaction: number;
-  salesByPaymentMethod: {
-    cash: number;
-    card: number;
-    digital: number;
-    on_account: number;
-  };
-  salesByDay?: Array<{
-    date: string;
-    sales: number;
-    transactions: number;
-  }>;
-}
-
-interface ProductPerformance {
-  productId: string;
-  productName: string;
-  totalSold: number;
-  totalRevenue: number;
-  averagePrice: number;
-  quantitySold: number;
-  rank: number;
-}
-
-interface VATReport {
-  vatSales: number;
-  nonVatSales: number;
-  vatAmount: number;
-  totalSales: number;
-  vatRate: number;
-}
-
-interface ProfitLossSummary {
-  period: string;
-  startDate: string;
-  endDate: string;
-  revenue: {
-    total: number;
-    cash: number;
-    card: number;
-    digital: number;
-  };
-  expenses: {
-    total: number;
-    byCategory: Array<{
-      category: string;
-      amount: number;
-    }>;
-  };
-  grossProfit: number;
-  netProfit: number;
-  profitMargin: number;
-}
-
-interface CashDrawerReport {
-  sessionId: string;
-  userId: string;
-  userName: string;
-  openingTime: string;
-  closingTime?: string;
-  openingAmount: number;
-  closingAmount?: number;
-  expectedAmount?: number;
-  shortage?: number;
-  overage?: number;
-  status: string;
-  cashSales: number;
-  cashExpenses: number;
-  netCash: number;
-}
-
-interface SalesJournalEntry {
-  receiptNumber: string;
-  date: string;
-  time: string;
-  items: string;
-  itemCount: number;
-  subtotal: number;
-  discountCategory: string;
-  discountAmount: number;
-  taxExemptAmount: number;
-  taxAmount: number;
-  total: number;
-  paymentMethod: string;
-  status: string;
-}
-
-interface SalesJournalData {
-  entries: SalesJournalEntry[];
-  summary: {
-    totalTransactions: number;
-    totalSales: number;
-    totalTax: number;
-    totalDiscounts: number;
-    totalTaxExempt: number;
-  };
-  startDate: string;
-  endDate: string;
-}
 
 export default function ReportsPage() {
   const params = useParams();
@@ -124,20 +33,30 @@ export default function ReportsPage() {
   const { settings } = useTenantSettings();
   const primaryColor = settings?.primaryColor || '#35979c';
   const COLORS = [primaryColor, ...DEFAULT_COLORS.filter(c => c !== primaryColor)].slice(0, 5);
-  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'sales' | 'products' | 'vat' | 'profit-loss' | 'cash-drawer' | 'sales-journal'>('sales');
+  const [dict, setDict] = useState<TranslationDict | null>(null);
+  const [activeTab, setActiveTab] = useState<ReportTab>('sales');
   const [period, setPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
-  // Report data
-  const [salesReport, setSalesReport] = useState<SalesReport | null>(null);
-  const [productPerformance, setProductPerformance] = useState<ProductPerformance[]>([]);
-  const [vatReport, setVatReport] = useState<VATReport | null>(null);
-  const [profitLoss, setProfitLoss] = useState<ProfitLossSummary | null>(null);
-  const [cashDrawerReports, setCashDrawerReports] = useState<CashDrawerReport[]>([]);
-  const [salesJournal, setSalesJournal] = useState<SalesJournalData | null>(null);
+  const {
+    status,
+    error,
+    refetch,
+    salesReport,
+    productPerformance,
+    vatReport,
+    profitLoss,
+    cashDrawerReports,
+    salesJournal,
+  } = useReportsData({
+    tenant,
+    activeTab,
+    period,
+    startDate,
+    endDate,
+    enabled: !!dict && !!startDate && !!endDate,
+  });
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -148,171 +67,6 @@ export default function ReportsPage() {
     setEndDate(end.toISOString().split('T')[0]);
     setStartDate(start.toISOString().split('T')[0]);
   }, [lang]);
-
-  useEffect(() => {
-    if (dict && startDate && endDate) {
-      loadReports();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, period, startDate, endDate, dict, tenant]);
-
-  const loadReports = async () => {
-    setLoading(true);
-    try {
-      switch (activeTab) {
-        case 'sales':
-          await loadSalesReport();
-          break;
-        case 'products':
-          await loadProductPerformance();
-          break;
-        case 'vat':
-          await loadVATReport();
-          break;
-        case 'profit-loss':
-          await loadProfitLoss();
-          break;
-        case 'cash-drawer':
-          await loadCashDrawerReports();
-          break;
-        case 'sales-journal':
-          await loadSalesJournal();
-          break;
-      }
-    } catch (error) {
-      console.error('Error loading reports:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadSalesReport = async () => {
-    try {
-      const params = new URLSearchParams({
-        tenant,
-        period,
-        ...(startDate && { startDate }),
-        ...(endDate && { endDate }),
-      });
-      const res = await fetch(`/api/reports/sales?${params}`);
-      const data = await res.json();
-      if (data.success) {
-        setSalesReport(data.data);
-      } else {
-        console.error('Error loading sales report:', data.error);
-        setSalesReport(null);
-      }
-    } catch (error) {
-      console.error('Error fetching sales report:', error);
-      setSalesReport(null);
-    }
-  };
-
-  const loadProductPerformance = async () => {
-    try {
-      const params = new URLSearchParams({
-        tenant,
-        ...(startDate && { startDate }),
-        ...(endDate && { endDate }),
-        limit: '20',
-      });
-      const res = await fetch(`/api/reports/products?${params}`);
-      const data = await res.json();
-      if (data.success) {
-        setProductPerformance(data.data || []);
-      } else {
-        console.error('Error loading product performance:', data.error);
-        setProductPerformance([]);
-      }
-    } catch (error) {
-      console.error('Error fetching product performance:', error);
-      setProductPerformance([]);
-    }
-  };
-
-  const loadVATReport = async () => {
-    try {
-      const params = new URLSearchParams({
-        tenant,
-        ...(startDate && { startDate }),
-        ...(endDate && { endDate }),
-      });
-      const res = await fetch(`/api/reports/vat?${params}`);
-      const data = await res.json();
-      if (data.success) {
-        setVatReport(data.data);
-      } else {
-        console.error('Error loading VAT report:', data.error);
-        setVatReport(null);
-      }
-    } catch (error) {
-      console.error('Error fetching VAT report:', error);
-      setVatReport(null);
-    }
-  };
-
-  const loadProfitLoss = async () => {
-    try {
-      const params = new URLSearchParams({
-        tenant,
-        ...(startDate && { startDate }),
-        ...(endDate && { endDate }),
-      });
-      const res = await fetch(`/api/reports/profit-loss?${params}`);
-      const data = await res.json();
-      if (data.success) {
-        setProfitLoss(data.data);
-      } else {
-        console.error('Error loading profit & loss:', data.error);
-        setProfitLoss(null);
-      }
-    } catch (error) {
-      console.error('Error fetching profit & loss:', error);
-      setProfitLoss(null);
-    }
-  };
-
-  const loadCashDrawerReports = async () => {
-    try {
-      const params = new URLSearchParams({
-        tenant,
-        ...(startDate && { startDate }),
-        ...(endDate && { endDate }),
-      });
-      const res = await fetch(`/api/reports/cash-drawer?${params}`);
-      const data = await res.json();
-      if (data.success) {
-        setCashDrawerReports(data.data || []);
-      } else {
-        console.error('Error loading cash drawer reports:', data.error);
-        setCashDrawerReports([]);
-      }
-    } catch (error) {
-      console.error('Error fetching cash drawer reports:', error);
-      setCashDrawerReports([]);
-    }
-  };
-
-  const loadSalesJournal = async () => {
-    try {
-      const params = new URLSearchParams({
-        tenant,
-        ...(startDate && { startDate }),
-        ...(endDate && { endDate }),
-      });
-      const res = await fetch(`/api/reports/sales-journal?${params}`);
-      const data = await res.json();
-      if (data.success) {
-        setSalesJournal(data.data);
-      } else {
-        console.error('Error loading sales journal:', data.error);
-        setSalesJournal(null);
-      }
-    } catch (error) {
-      console.error('Error fetching sales journal:', error);
-      setSalesJournal(null);
-    }
-  };
 
   const exportSalesJournal = async (format: 'csv' | 'excel' | 'pdf') => {
     if (format === 'csv') {
@@ -341,8 +95,72 @@ export default function ReportsPage() {
   };
 
   if (!dict) {
-    return <div className="text-center py-12">{dict?.common?.loading || 'Loading...'}</div>;
+    return <PageLoading label="Loading..." />;
   }
+
+  const reportsDict = dict.reports ?? {};
+
+  const renderEmptyState = (title: string) => (
+    <EmptyState icon="products" title={title} className="py-12" />
+  );
+
+  const renderTabContent = () => {
+    if (status === 'loading') {
+      return <ReportsTabSkeleton />;
+    }
+
+    if (status === 'error') {
+      return (
+        <ErrorState
+          title={reportsDict.failedToLoadReports || 'Failed to load report'}
+          description={error || undefined}
+          onRetry={refetch}
+          retryLabel={dict.common.retry || 'Retry'}
+        />
+      );
+    }
+
+    switch (activeTab) {
+      case 'sales':
+        return salesReport ? (
+          <SalesReportView report={salesReport} dict={dict} primaryColor={primaryColor} colors={COLORS} />
+        ) : (
+          renderEmptyState(reportsDict.noData || 'No data available for the selected period')
+        );
+      case 'products':
+        return productPerformance.length > 0 ? (
+          <ProductPerformanceView data={productPerformance} dict={dict} primaryColor={primaryColor} />
+        ) : (
+          renderEmptyState(reportsDict.noData || 'No product performance data available for the selected period')
+        );
+      case 'vat':
+        return vatReport ? (
+          <VATReportView report={vatReport} dict={dict} primaryColor={primaryColor} />
+        ) : (
+          renderEmptyState(reportsDict.noData || 'No VAT data available for the selected period')
+        );
+      case 'profit-loss':
+        return profitLoss ? (
+          <ProfitLossView summary={profitLoss} dict={dict} primaryColor={primaryColor} colors={COLORS} />
+        ) : (
+          renderEmptyState(reportsDict.noData || 'No profit & loss data available for the selected period')
+        );
+      case 'cash-drawer':
+        return cashDrawerReports.length > 0 ? (
+          <CashDrawerReportView reports={cashDrawerReports} dict={dict} />
+        ) : (
+          renderEmptyState(reportsDict.noCashDrawerReports || 'No cash drawer reports found')
+        );
+      case 'sales-journal':
+        return salesJournal && salesJournal.entries.length > 0 ? (
+          <SalesJournalView data={salesJournal} dict={dict} primaryColor={primaryColor} onExport={exportSalesJournal} />
+        ) : (
+          renderEmptyState(reportsDict.noData || 'No sales journal data available for the selected period')
+        );
+      default:
+        return null;
+    }
+  };
 
   return (
     <ProtectedRoute>
@@ -464,78 +282,7 @@ export default function ReportsPage() {
 
             {/* Tab Content */}
             <div className="p-5 sm:p-6 lg:p-8">
-              {loading ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="animate-spin h-8 w-8 border-b-2" style={{ borderBottomColor: primaryColor }}></div>
-                  <span className="ml-3 text-gray-600">{dict?.common?.loading || 'Loading...'}</span>
-                </div>
-              ) : (
-                <>
-                  {activeTab === 'sales' && (
-                    salesReport ? (
-                      <SalesReportView report={salesReport} dict={dict} primaryColor={primaryColor} colors={COLORS} />
-                    ) : (
-                      <div className="text-center py-16">
-                        <svg className="mx-auto h-16 w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                        </svg>
-                        <p className="text-gray-500 text-lg">{dict.reports?.noData || 'No sales data available for the selected period'}</p>
-                      </div>
-                    )
-                  )}
-                  {activeTab === 'products' && (
-                    productPerformance.length > 0 ? (
-                      <ProductPerformanceView data={productPerformance} dict={dict} primaryColor={primaryColor} />
-                    ) : (
-                      <div className="text-center py-16">
-                        <svg className="mx-auto h-16 w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                        </svg>
-                        <p className="text-gray-500 text-lg">{dict?.reports?.noData || 'No product performance data available for the selected period'}</p>
-                      </div>
-                    )
-                  )}
-                  {activeTab === 'vat' && (
-                    vatReport ? (
-                      <VATReportView report={vatReport} dict={dict} primaryColor={primaryColor} />
-                    ) : (
-                      <div className="text-center py-16">
-                        <svg className="mx-auto h-16 w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                        </svg>
-                        <p className="text-gray-500 text-lg">{dict.reports?.noData || 'No VAT data available for the selected period'}</p>
-                      </div>
-                    )
-                  )}
-                  {activeTab === 'profit-loss' && (
-                    profitLoss ? (
-                      <ProfitLossView summary={profitLoss} dict={dict} primaryColor={primaryColor} colors={COLORS} />
-                    ) : (
-                      <div className="text-center py-16">
-                        <svg className="mx-auto h-16 w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <p className="text-gray-500 text-lg">{dict.reports?.noData || 'No profit & loss data available for the selected period'}</p>
-                      </div>
-                    )
-                  )}
-                  {activeTab === 'cash-drawer' && (
-                    <CashDrawerReportView reports={cashDrawerReports} dict={dict} />
-                  )}
-                  {activeTab === 'sales-journal' && (
-                    salesJournal ? (
-                      <SalesJournalView data={salesJournal} dict={dict} primaryColor={primaryColor} onExport={exportSalesJournal} />
-                    ) : (
-                      <div className="text-center py-16">
-                        <svg className="mx-auto h-16 w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                        <p className="text-gray-500 text-lg">{dict.reports?.noData || 'No sales journal data available for the selected period'}</p>
-                      </div>
-                    )
-                  )}
-                </>
-              )}
+              {renderTabContent()}
             </div>
           </div>
         </div>
@@ -973,14 +720,6 @@ function CashDrawerReportView({ reports, dict }: { reports: CashDrawerReport[]; 
             ))}
           </tbody>
         </table>
-        {reports.length === 0 && (
-          <div className="text-center py-16 text-gray-500">
-            <svg className="mx-auto h-16 w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
-            <p className="text-lg">{dict.reports?.noCashDrawerReports || 'No cash drawer reports found'}</p>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -1099,11 +838,6 @@ function SalesJournalView({ data, dict, primaryColor, onExport }: { data: SalesJ
             ))}
           </tbody>
         </table>
-        {data.entries.length === 0 && (
-          <div className="text-center py-16 text-gray-500">
-            <p className="text-lg">{dict.reports?.noData || 'No sales journal entries found'}</p>
-          </div>
-        )}
       </div>
     </div>
   );
