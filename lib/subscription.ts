@@ -83,14 +83,56 @@ export class SubscriptionService {
 
       // Handle orphaned planId (plan was deleted/recreated)
       if (!plan || !plan.features) {
-        const SubscriptionPlan = (await import('@/models/SubscriptionPlan')).default;
         const fallbackPlan = await SubscriptionPlan.findOne({ tier: 'starter', isActive: true }).lean();
         if (fallbackPlan) {
           // Reassign subscription to the current starter plan
           await Subscription.findByIdAndUpdate(subscription._id, { planId: fallbackPlan._id });
-          plan = fallbackPlan;
+          plan = fallbackPlan as PopulatedPlan;
         } else {
-          return null;
+          // Subscription exists but plan data is unavailable — return a safe fallback
+          // so onboarding is not blocked by a null status.
+          logger.warn('Subscription has missing plan; using fallback status', { tenantId });
+          const now = new Date();
+          return {
+            isActive: subscription.status === 'active',
+            isTrial: subscription.isTrial || subscription.status === 'trial',
+            isExpired: subscription.endDate ? now > subscription.endDate : false,
+            isTrialExpired: subscription.trialEndDate ? now > subscription.trialEndDate : false,
+            planName: 'Starter',
+            billingCycle: subscription.billingCycle,
+            trialEndDate: subscription.trialEndDate,
+            nextBillingDate: subscription.nextBillingDate,
+            limits: {
+              maxUsers: 2,
+              maxBranches: 1,
+              maxProducts: 100,
+              maxTransactions: 500,
+            },
+            features: {
+              enableInventory: true,
+              enableCategories: true,
+              enableDiscounts: false,
+              enableLoyaltyProgram: false,
+              enableCustomerManagement: false,
+              enableBookingScheduling: false,
+              enableTableManagement: false,
+              enableReports: true,
+              enableMultiBranch: false,
+              enableHardwareIntegration: false,
+              prioritySupport: false,
+              customIntegrations: false,
+              dedicatedAccountManager: false,
+            },
+            birCompliance: {
+              ptuAssistance: false,
+              receiptFormatting: false,
+              birDocumentation: false,
+              casReporting: false,
+              auditTrailSystem: false,
+              monthlySupport: false,
+            },
+            usage: subscription.usage,
+          };
         }
       }
 
@@ -370,6 +412,70 @@ export class SubscriptionService {
       return subscription;
     } catch (error) {
       logger.error('Error creating subscription:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Ensure a tenant has a trial subscription (idempotent).
+   * Returns the existing subscription if one is already active/trial.
+   */
+  static async ensureTrialSubscription(tenantId: string): Promise<{
+    subscription: InstanceType<typeof Subscription>;
+    created: boolean;
+  }> {
+    await connectDB();
+
+    const existing = await Subscription.findOne({
+      tenantId,
+      status: { $in: ['active', 'trial'] },
+    });
+
+    if (existing) {
+      return { subscription: existing, created: false };
+    }
+
+    const starterPlan = await SubscriptionPlan.findOne({ tier: 'starter', isActive: true });
+    if (!starterPlan) {
+      throw new Error('Starter plan not available');
+    }
+
+    const now = new Date();
+    const trialEndDate = new Date(now);
+    trialEndDate.setDate(trialEndDate.getDate() + 14);
+
+    try {
+      const subscription = await Subscription.create({
+        tenantId,
+        planId: starterPlan._id,
+        status: 'trial',
+        billingCycle: 'monthly',
+        startDate: now,
+        trialEndDate,
+        nextBillingDate: trialEndDate,
+        isTrial: true,
+        autoRenew: true,
+        usage: {
+          currentUsers: 1,
+          currentBranches: 1,
+          currentProducts: 0,
+          currentTransactions: 0,
+          lastResetDate: now,
+        },
+      });
+
+      await Tenant.findByIdAndUpdate(tenantId, {
+        subscriptionId: subscription._id,
+      });
+
+      return { subscription, created: true };
+    } catch (error: unknown) {
+      if ((error as { code?: number }).code === 11000) {
+        const raced = await Subscription.findOne({ tenantId });
+        if (raced) {
+          return { subscription: raced, created: false };
+        }
+      }
       throw error;
     }
   }

@@ -55,6 +55,19 @@ const nextConfig: NextConfig = {
         protocol: 'https',
         hostname: '*.shopifycdn.com',
       },
+      // Facebook / Instagram CDN (tenant logos, social profile images)
+      {
+        protocol: 'https',
+        hostname: '**.fbcdn.net',
+      },
+      {
+        protocol: 'https',
+        hostname: '**.fbsbx.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '**.cdninstagram.com',
+      },
       // Allow OpenAI DALL-E images
       {
         protocol: 'https',

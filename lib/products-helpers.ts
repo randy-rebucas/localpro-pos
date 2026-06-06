@@ -40,6 +40,35 @@ export function generateEAN13(): string {
   return [...digits, checkDigit].join('');
 }
 
+/** Generate a random SKU from product name (max 50 chars). */
+export function generateProductSKU(name?: string): string {
+  const cleanName = (name || 'PRD').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+  const prefix = cleanName.substring(0, 3).padEnd(3, 'X');
+  const random = Math.random().toString(36).slice(2, 8).toUpperCase();
+  return `${prefix}-${random}`.slice(0, 50);
+}
+
+/** Generate a SKU unique within the tenant registry (mutates the set on success). */
+export function generateUniqueProductSKU(name: string, skuRegistry: Set<string>): string {
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const sku = generateProductSKU(name);
+    const key = sku.toLowerCase();
+    if (!skuRegistry.has(key)) {
+      skuRegistry.add(key);
+      return sku;
+    }
+  }
+  for (let i = 0; i < 50; i++) {
+    const sku = `${generateProductSKU(name)}${i.toString(36).toUpperCase()}`.slice(0, 50);
+    const key = sku.toLowerCase();
+    if (!skuRegistry.has(key)) {
+      skuRegistry.add(key);
+      return sku;
+    }
+  }
+  throw new Error('Unable to generate unique SKU');
+}
+
 export function getCategoryNameFromProduct(categoryId: { name?: string; _id?: string } | string | null | undefined, categories: { _id: string; name: string }[]): string {
   if (typeof categoryId === 'object' && categoryId?.name) {
     return categoryId.name;

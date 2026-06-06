@@ -7,6 +7,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 
 const BarcodeModal = dynamic(() => import('@/components/BarcodeModal'), { ssr: false });
+const ProductImportModal = dynamic(() => import('@/components/ProductImportModal'), { ssr: false });
 import { getDictionaryClient } from '../../dictionaries-client';
 import Currency from '@/components/Currency';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
@@ -33,6 +34,7 @@ export default function ProductsPage() {
   const lang = params.lang as 'en' | 'es';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [showProductModal, setShowProductModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [barcodeProduct, setBarcodeProduct] = useState<Product | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -133,6 +135,16 @@ export default function ProductsPage() {
               />
             </div>
             <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setShowImportModal(true)}
+                className="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium border border-gray-300 inline-flex items-center gap-2 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                {dict.products?.import || 'Import'}
+              </button>
               <Link
                 href={`/${tenant}/${lang}/admin/file-upload`}
                 className="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium border border-gray-300 inline-flex items-center gap-2 transition-colors"
@@ -272,6 +284,17 @@ export default function ProductsPage() {
             dict={dict}
             businessTypeConfig={businessTypeConfig}
             settings={settings}
+          />
+        )}
+
+        {showImportModal && (
+          <ProductImportModal
+            dict={dict}
+            onClose={() => setShowImportModal(false)}
+            onComplete={() => {
+              fetchProducts();
+              fetchCategories();
+            }}
           />
         )}
       </div>

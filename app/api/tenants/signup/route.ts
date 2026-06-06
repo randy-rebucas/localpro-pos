@@ -7,6 +7,7 @@ import { validateEmail, validatePassword, validateTenant } from '@/lib/validatio
 import { getValidationTranslator } from '@/lib/validation-translations';
 import { applyBusinessTypeDefaults } from '@/lib/business-types';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import { SubscriptionService } from '@/lib/subscription';
 import { logger } from '@/lib/logger';
 
 /**
@@ -149,6 +150,12 @@ export async function POST(request: NextRequest) {
       tenantId: tenant._id,
       isActive: true,
     });
+
+    try {
+      await SubscriptionService.ensureTrialSubscription(tenant._id.toString());
+    } catch (subscriptionError) {
+      logger.error('Failed to create trial subscription during signup:', subscriptionError);
+    }
 
     return NextResponse.json({ 
       success: true, 

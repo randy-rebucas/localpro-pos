@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useEffect, useState } from 'react';
+import { ReactNode, useEffect, useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -20,6 +20,7 @@ export function SubscriptionGuard({ children }: SubscriptionGuardProps) {
   const lang = params.lang as string;
   const [isCreatingTrial, setIsCreatingTrial] = useState(false);
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const trialSetupStarted = useRef(false);
 
   useEffect(() => {
     const l = (lang as 'en' | 'es') || 'en';
@@ -34,27 +35,27 @@ export function SubscriptionGuard({ children }: SubscriptionGuardProps) {
       // If still loading, wait
       if (loading) return;
 
-      // If no subscription exists, try to create a trial
+      // If no subscription exists, try to create a trial (once per mount)
       if (!subscriptionStatus) {
+        if (trialSetupStarted.current) return;
+        trialSetupStarted.current = true;
         setIsCreatingTrial(true);
         try {
-          await createTrialSubscription();
-        } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-          // If tenant already has a subscription, the status endpoint may have
-          // returned null due to an orphaned planId. Just refresh and continue.
-          if (error.message?.includes('already has an active subscription')) {
-            console.warn('Subscription exists but status returned null — refreshing');
-          } else {
-            console.error('Failed to create trial subscription:', error);
-            router.push(`/${tenant}/${lang}/subscription`);
-            setIsCreatingTrial(false);
-            return;
-          }
+          await ensureTrialSubscription();
+        } catch (error: unknown) {
+          console.error('Failed to create trial subscription:', error);
+          trialSetupStarted.current = false;
+          router.push(`/${tenant}/${lang}/subscription`);
+          setIsCreatingTrial(false);
+          return;
         }
         await refreshSubscription();
         setIsCreatingTrial(false);
         return;
       }
+
+      // Reset so a future null status (e.g. tenant switch) can retry setup
+      trialSetupStarted.current = false;
 
       // If trial has expired, redirect to subscription page
       if (subscriptionStatus.isTrial && subscriptionStatus.isTrialExpired) {
@@ -73,31 +74,19 @@ export function SubscriptionGuard({ children }: SubscriptionGuardProps) {
 
     handleSubscriptionCheck();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subscriptionStatus, loading, tenant, lang, router, refreshSubscription]);
+  }, [subscriptionStatus, loading, tenant, lang, router, refreshSubscription, user?.role]);
 
-  const createTrialSubscription = async () => {
-    try {
-      // Get the tenant ID from the params (this is the tenant slug)
-      const tenantSlug = tenant;
+  const ensureTrialSubscription = async () => {
+    const response = await fetch('/api/subscriptions/create-trial', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+    });
 
-      // We need to get the actual tenant ID from the database
-      // Since we can't directly query mongoose in client components,
-      // we'll use the API to create the trial subscription
-      const response = await fetch('/api/subscriptions/create-trial', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenantSlug }),
-      });
+    const result = await response.json();
 
-      const result = await response.json();
-
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to create trial subscription');
-      }
-
-    } catch (error) {
-      console.error('Error creating trial subscription:', error);
-      throw error;
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to create trial subscription');
     }
   };
 
