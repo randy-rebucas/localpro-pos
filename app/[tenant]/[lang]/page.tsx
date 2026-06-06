@@ -40,6 +40,11 @@ import { useDeviceType } from '@/hooks/useDeviceType';
 import CustomerSidePanel from '@/components/CustomerSidePanel';
 import type { CustomerSummary } from '@/types/customer';
 import FloorMap from '@/components/FloorMap';
+import CartLineItem from '@/components/pos/CartLineItem';
+import CartActionBar from '@/components/pos/CartActionBar';
+import CartDiscountSection from '@/components/pos/CartDiscountSection';
+import CartSummaryFooter from '@/components/pos/CartSummaryFooter';
+import CartUpsellSuggestions from '@/components/pos/CartUpsellSuggestions';
 import { CartVariant, CartItemModifier } from '@/hooks/useCart';
 import { RestaurantMeta, SplitPaymentEntry } from '@/hooks/usePayment';
 
@@ -162,7 +167,6 @@ export default function Dashboard() {
   const sessionSyncAbortRef = useRef<AbortController | null>(null);
 
   // Max limits
-  const MAX_PROMO_CODE_LENGTH = 50;
   const MAX_REFUND_NOTES_LENGTH = 500;
 
   // Fetch with timeout helper (defined early for use in hooks)
@@ -295,9 +299,13 @@ export default function Dashboard() {
         setShowQRScanner(false);
       } else if (showCashDrawerModal && !closingSummary) {
         setShowCashDrawerModal(null);
+      } else if (showRoamingCart) {
+        setShowRoamingCart(false);
+      } else if (showFloorMap) {
+        setShowFloorMap(false);
       }
     }
-  }, [showAgeVerificationModal, showSplitCheckModal, showPaymentModal, showRefundModal, showSavedCartsModal, showSaveCartModal, showQRScanner, showCashDrawerModal, closingSummary, setCashReceived, setPaymentProvider, setPaymentReference]);
+  }, [showAgeVerificationModal, showSplitCheckModal, showPaymentModal, showRefundModal, showSavedCartsModal, showSaveCartModal, showQRScanner, showCashDrawerModal, closingSummary, showRoamingCart, showFloorMap, setCashReceived, setPaymentProvider, setPaymentReference]);
 
   useEffect(() => {
     document.addEventListener('keydown', handleKeyDown);
@@ -448,10 +456,22 @@ export default function Dashboard() {
 
   // Refocus search box whenever any modal closes
   useEffect(() => {
-    if (!showPaymentModal && !showQRScanner && !showRefundModal && !showSavedCartsModal && !showSaveCartModal && !showAgeVerificationModal && !showSplitCheckModal) {
-      searchInputRef.current?.focus();
+    if (
+      !showPaymentModal &&
+      !showQRScanner &&
+      !showRefundModal &&
+      !showSavedCartsModal &&
+      !showSaveCartModal &&
+      !showAgeVerificationModal &&
+      !showSplitCheckModal &&
+      !showRoamingCart &&
+      !showFloorMap
+    ) {
+      if (!device.isTouch) {
+        searchInputRef.current?.focus();
+      }
     }
-  }, [showPaymentModal, showQRScanner, showRefundModal, showSavedCartsModal, showSaveCartModal, showAgeVerificationModal, showSplitCheckModal]);
+  }, [showPaymentModal, showQRScanner, showRefundModal, showSavedCartsModal, showSaveCartModal, showAgeVerificationModal, showSplitCheckModal, showRoamingCart, showFloorMap, device.isTouch]);
 
   // Handle barcode scanning
   const handleBarcodeScan = useCallback((barcode: string) => {
@@ -1161,56 +1181,24 @@ export default function Dashboard() {
           className={`order-1 flex flex-col min-h-0 flex-1 max-h-[min(50vh,440px)] sm:max-h-[min(55vh,480px)] md:max-h-none md:h-full md:min-h-0 md:flex-none md:order-2 md:shrink-0 md:w-[min(100%,280px)] lg:w-[300px] xl:w-[360px] 2xl:w-[420px] md:border-l md:border-gray-300 ${roamingMode ? 'hidden' : ''}`}
         >
             <div className="bg-white border border-gray-300 p-3 sm:p-4 md:p-4 lg:p-5 flex h-full min-h-0 flex-col flex-1 overflow-hidden md:min-h-0">
-              <div className="flex shrink-0 justify-end items-center gap-1.5 sm:gap-2 mb-2 pb-2 md:mb-3 md:pb-3 border-b border-gray-200">
-                  {cart.length > 0 && (
-                    <>
-                      <button
-                        onClick={() => setShowSaveCartModal(true)}
-                        className="px-2.5 py-2 md:px-3 md:py-2.5 min-h-[40px] min-w-[40px] bg-green-600 text-white hover:bg-green-700 transition-colors border border-green-700"
-                        title={dict.pos?.saveCart || 'Save Cart'}
-                      >
-                        <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={clearCart}
-                        className="px-2.5 py-2 md:px-3 md:py-2.5 min-h-[40px] min-w-[40px] bg-red-600 text-white hover:bg-red-700 transition-colors border border-red-700"
-                        title={dict.common.clear}
-                      >
-                        <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    </>
-                  )}
-                  <button
-                    onClick={() => {
-                      setShowSavedCartsModal(true);
-                      loadSavedCarts();
-                    }}
-                    className="px-2.5 py-2 md:px-3 md:py-2.5 min-h-[40px] min-w-[40px] text-white transition-colors border"
-                    style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
-                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = `${primaryColor}dd`; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = primaryColor; }}
-                    title={dict.pos?.loadCart || 'Load Saved Cart'}
-                  >
-                    <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                    </svg>
-                  </button>
-                  {customerDisplayUrl && (
-                    <button
-                      onClick={() => window.open(customerDisplayUrl, 'customer_display', 'width=1024,height=768')}
-                      className="px-2.5 py-2 md:px-3 md:py-2.5 min-h-[40px] min-w-[40px] bg-purple-600 text-white hover:bg-purple-700 transition-colors border border-purple-700"
-                      title={dictValue('pos.titleOpenCustomerDisplay', 'Open Customer Display')}
-                    >
-                      <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    </button>
-                  )}
-              </div>
+              <CartActionBar
+                cartLength={cart.length}
+                itemCount={cart.reduce((s, i) => s + i.quantity, 0)}
+                primaryColor={primaryColor}
+                dict={dict}
+                isCashier={isCashier}
+                customerDisplayUrl={customerDisplayUrl}
+                businessType={businessType}
+                orderType={orderType}
+                tableNumber={tableNumber}
+                compact
+                onSaveCart={() => setShowSaveCartModal(true)}
+                onClearCart={clearCart}
+                onLoadSavedCarts={() => {
+                  setShowSavedCartsModal(true);
+                  loadSavedCarts();
+                }}
+              />
 
               {/* Customer panel (retail) */}
               {businessType === 'retail' && (
@@ -1236,474 +1224,77 @@ export default function Dashboard() {
                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                   <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 -mr-1 [scrollbar-gutter:stable]">
                     <div className="divide-y divide-gray-200 border border-gray-200 bg-white">
-                    {cart.map((item) => (
-                      <div key={item.cartItemId} className="px-2 py-2 sm:px-2.5 hover:bg-gray-50/80 transition-colors">
-                        <div className="flex items-start gap-1.5 mb-1.5">
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium text-gray-900 text-sm leading-snug line-clamp-2">{item.name}</div>
-                            <div className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
-                              <Currency amount={item.price} />
-                              <span className="text-gray-400">×{item.quantity}</span>
-                              {businessType === 'retail' && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const product = products.find(p => p._id === item.productId);
-                                    if (product) handleBranchLookup(product);
-                                  }}
-                                  className="text-gray-400 hover:text-brand transition-colors p-0.5"
-                                  title={dictValue('pos.titleCheckStock', 'Check stock at other locations')}
-                                >
-                                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                                  </svg>
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                          <div className="text-sm font-bold text-gray-900 tabular-nums flex-shrink-0 pt-0.5">
-                            <Currency amount={item.price * item.quantity} />
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => removeFromCart(item.cartItemId)}
-                            className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors flex-shrink-0 rounded"
-                            aria-label={dict?.pos?.removeItem || 'Remove item'}
-                          >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                          </button>
-                        </div>
-                        <div className="flex items-center justify-between gap-2 pl-0.5">
-                          <span className="text-[10px] uppercase tracking-wide text-gray-400 font-medium">{dict.pos.each}</span>
-                          <div className="flex items-center border border-gray-300 overflow-hidden bg-white rounded-sm">
-                            <button
-                              type="button"
-                              onClick={() => updateQuantity(item.cartItemId, item.quantity - 1, (msg) => showToast.error(msg))}
-                              className="px-2 py-1 min-w-[32px] min-h-[32px] hover:bg-gray-100 active:bg-gray-200 font-bold text-base leading-none transition-colors"
-                              aria-label={dict?.pos?.decreaseQuantity || 'Decrease quantity'}
-                            >
-                              −
-                            </button>
-                            <span className="px-2 py-1 min-w-[2rem] text-center font-semibold text-sm bg-white tabular-nums border-x border-gray-300">
-                              {item.quantity}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => updateQuantity(item.cartItemId, item.quantity + 1, (msg) => showToast.error(msg))}
-                              className="px-2 py-1 min-w-[32px] min-h-[32px] hover:bg-gray-100 active:bg-gray-200 font-bold text-base leading-none disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                              disabled={(() => {
-                                const product = products.find(p => p._id === item.productId);
-                                const canSellOutOfStock = product?.allowOutOfStockSales === true;
-                                const trackInventory = product?.trackInventory !== false;
-                                return trackInventory && !canSellOutOfStock && item.quantity >= item.stock;
-                              })()}
-                              aria-label={dict?.pos?.increaseQuantity || 'Increase quantity'}
-                            >
-                              +
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                    {cart.map((item) => {
+                      const product = products.find((p) => p._id === item.productId);
+                      return (
+                        <CartLineItem
+                          key={item.cartItemId}
+                          item={item}
+                          dict={dict}
+                          businessType={businessType}
+                          product={product}
+                          onRemove={removeFromCart}
+                          onUpdateQuantity={updateQuantity}
+                          onQuantityError={(msg) => showToast.error(msg)}
+                          onBranchLookup={
+                            businessType === 'retail' && product
+                              ? () => handleBranchLookup(product)
+                              : undefined
+                          }
+                        />
+                      );
+                    })}
                     </div>
-                    {/* Upsell Suggestions (scrolls with line items) */}
-                    {upsellSuggestions.length > 0 && (
-                      <div className="border-t border-gray-200 pt-3 pb-1 mt-3">
-                        <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2 flex items-center gap-1">
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                          </svg>
-                          Often bought together
-                        </p>
-                        <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-                          {upsellSuggestions.map((s) => (
-                            <button
-                              key={s.productId}
-                              type="button"
-                              onClick={() => {
-                                const product = products.find((p) => p._id === s.productId);
-                                if (product) addToCart(product);
-                              }}
-                              className="flex-shrink-0 w-20 text-left border border-gray-200 hover:border-gray-400 bg-white p-1.5 transition-colors group"
-                              title={`Add ${s.name}`}
-                            >
-                              <div className="w-full h-12 bg-gray-100 overflow-hidden mb-1">
-                                {s.image ? (
-                                  <img // eslint-disable-line
-                                    src={s.image}
-                                    alt={s.name}
-                                    className="w-full h-full object-cover"
-                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                  />
-                                ) : (
-                                  <div className="w-full h-full flex items-center justify-center">
-                                    <svg className="w-5 h-5 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                                    </svg>
-                                  </div>
-                                )}
-                              </div>
-                              <p className="text-[10px] font-medium text-gray-700 line-clamp-2 leading-tight mb-0.5 group-hover:text-gray-900">{s.name}</p>
-                              <p className="text-[10px] font-bold" style={{ color: primaryColor }}>
-                                <Currency amount={s.price} />
-                              </p>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                    <CartUpsellSuggestions
+                      suggestions={upsellSuggestions}
+                      primaryColor={primaryColor}
+                      dict={dict}
+                      onAdd={(productId) => {
+                        const product = products.find((p) => p._id === productId);
+                        if (product) addToCart(product);
+                      }}
+                    />
                   </div>
 
-                  {/* Discount Section — collapsible */}
-                  <div className="shrink-0 border-t border-gray-200 pt-2 mt-2 bg-white">
-                    <button
-                      type="button"
-                      onClick={() => setShowDiscountSection((v) => !v)}
-                      className="w-full flex items-center justify-between gap-2 px-1 py-2 text-left hover:bg-gray-50 transition-colors rounded"
-                      aria-expanded={showDiscountSection}
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <svg className="w-4 h-4 flex-shrink-0 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                        </svg>
-                        <span className="text-sm font-semibold text-gray-800 truncate">
-                          {dict.pos?.toggleDiscounts || 'Discounts & promo'}
-                        </span>
-                        {appliedDiscount && (
-                          <span className="text-xs font-medium text-green-700 bg-green-50 border border-green-200 px-1.5 py-0.5 truncate max-w-[8rem]">
-                            −<Currency amount={appliedDiscount.amount} />
-                          </span>
-                        )}
-                      </div>
-                      <svg
-                        className={`w-4 h-4 flex-shrink-0 text-gray-500 transition-transform ${showDiscountSection ? 'rotate-180' : ''}`}
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
+                  <CartDiscountSection
+                    dict={dict}
+                    primaryColor={primaryColor}
+                    tenant={tenant}
+                    cartLength={cart.length}
+                    promoCode={promoCode}
+                    setPromoCode={setPromoCode}
+                    appliedDiscount={appliedDiscount}
+                    applyingDiscount={applyingDiscount}
+                    showDiscountSection={showDiscountSection}
+                    setShowDiscountSection={setShowDiscountSection}
+                    getSubtotal={getSubtotal}
+                    sessionId={sessionId}
+                    settings={settings ?? undefined}
+                    fetchWithTimeout={fetchWithTimeout}
+                    applyDiscount={applyDiscount}
+                    setAppliedDiscount={setAppliedDiscount}
+                    removeDiscount={removeDiscount}
+                    onDiscountApplied={(msg) => showToast.success(msg)}
+                    onDiscountError={(msg) => showToast.error(msg)}
+                  />
 
-                    {showDiscountSection && (
-                    <div className="pt-2 pb-1">
-                    {!appliedDiscount ? (
-                      <div className="mb-2">
-                        {/* SC / PWD Quick Buttons */}
-                        <div className="flex gap-1.5 mb-2">
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              try {
-                                // Try applying SC20 directly
-                                const subtotal = getSubtotal();
-                                let res = await fetchWithTimeout(`/api/discounts/validate?tenant=${tenant}`, {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ code: 'SC20', subtotal }),
-                                });
-                                let data = await res.json();
-
-                                // If code doesn't exist, seed defaults and retry
-                                if (!data.success && res.status === 404) {
-                                  await fetchWithTimeout('/api/discounts/seed-defaults', { method: 'POST', credentials: 'include' });
-                                  res = await fetchWithTimeout(`/api/discounts/validate?tenant=${tenant}`, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ code: 'SC20', subtotal }),
-                                  });
-                                  data = await res.json();
-                                }
-
-                                if (data.success) {
-                                  const discount = { code: data.data.code, amount: data.data.discountAmount, name: data.data.name };
-                                  setAppliedDiscount(discount);
-
-                                  // Sync to customer display with tax
-                                  if (sessionId) {
-                                    const subtotal = getSubtotal();
-                                    const afterDiscount = subtotal - discount.amount;
-                                    const taxableBase = Math.max(0, afterDiscount);
-                                    const taxAmount = settings?.taxEnabled && settings?.taxRate
-                                      ? Math.round(taxableBase * (settings.taxRate / 100) * 100) / 100
-                                      : 0;
-                                    const total = afterDiscount + taxAmount;
-                                    fetch(`/api/pos/session/${sessionId}`, {
-                                      method: 'POST',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({
-                                        tenant,
-                                        action: 'update-discount',
-                                        data: { discount, taxAmount, total },
-                                      }),
-                                    }).catch((err) => console.error('Failed to sync discount:', err));
-                                  }
-
-                                  setPromoCode('');
-                                  showToast.success(dict.pos.discountApplied || 'Discount applied');
-                                } else {
-                                  showToast.error(data.error || 'Failed to apply Senior discount');
-                                }
-                              } catch {
-                                showToast.error('Failed to apply discount');
-                              }
-                            }}
-                            disabled={applyingDiscount || cart.length === 0}
-                            className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-semibold border transition-colors disabled:opacity-50"
-                            style={{
-                              borderColor: `${primaryColor}80`,
-                              backgroundColor: `${primaryColor}10`,
-                              color: primaryColor,
-                            }}
-                            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = `${primaryColor}20`; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = `${primaryColor}10`; }}
-                          >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                            </svg>
-                            {dict.pos?.seniorDiscount || 'Senior (20%)'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              try {
-                                const subtotal = getSubtotal();
-                                let res = await fetchWithTimeout(`/api/discounts/validate?tenant=${tenant}`, {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ code: 'PWD20', subtotal }),
-                                });
-                                let data = await res.json();
-
-                                // If code doesn't exist, seed defaults and retry
-                                if (!data.success && res.status === 404) {
-                                  await fetchWithTimeout('/api/discounts/seed-defaults', { method: 'POST', credentials: 'include' });
-                                  res = await fetchWithTimeout(`/api/discounts/validate?tenant=${tenant}`, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ code: 'PWD20', subtotal }),
-                                  });
-                                  data = await res.json();
-                                }
-
-                                if (data.success) {
-                                  const discount = { code: data.data.code, amount: data.data.discountAmount, name: data.data.name };
-                                  setAppliedDiscount(discount);
-
-                                  // Sync to customer display with tax
-                                  if (sessionId) {
-                                    const subtotal = getSubtotal();
-                                    const afterDiscount = subtotal - discount.amount;
-                                    const taxableBase = Math.max(0, afterDiscount);
-                                    const taxAmount = settings?.taxEnabled && settings?.taxRate
-                                      ? Math.round(taxableBase * (settings.taxRate / 100) * 100) / 100
-                                      : 0;
-                                    const total = afterDiscount + taxAmount;
-                                    fetch(`/api/pos/session/${sessionId}`, {
-                                      method: 'POST',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({
-                                        tenant,
-                                        action: 'update-discount',
-                                        data: { discount, taxAmount, total },
-                                      }),
-                                    }).catch((err) => console.error('Failed to sync discount:', err));
-                                  }
-
-                                  setPromoCode('');
-                                  showToast.success(dict.pos.discountApplied || 'Discount applied');
-                                } else {
-                                  showToast.error(data.error || 'Failed to apply PWD discount');
-                                }
-                              } catch {
-                                showToast.error('Failed to apply discount');
-                              }
-                            }}
-                            disabled={applyingDiscount || cart.length === 0}
-                            className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-semibold border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 hover:border-purple-300 transition-colors disabled:opacity-50"
-                          >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                            </svg>
-                            {dict.pos?.pwdDiscount || 'PWD (20%)'}
-                          </button>
-                        </div>
-
-                        {/* Promo Code Input */}
-                        <div className="flex gap-1.5 items-stretch">
-                          <input
-                            type="text"
-                            placeholder={dict.pos.promoCode || 'Enter promo code'}
-                            value={promoCode}
-                            onChange={(e) => setPromoCode(e.target.value.toUpperCase().slice(0, MAX_PROMO_CODE_LENGTH))}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' && promoCode.trim()) {
-                                applyDiscount(getSubtotal(), tenant,
-                                  (discount) => {
-                                    setAppliedDiscount(discount);
-                                    setPromoCode('');
-                                    showToast.success(dict.pos.discountApplied || 'Discount applied');
-                                    // Sync to customer display
-                                    if (sessionId) {
-                                      const afterDiscount = getSubtotal() - discount.amount;
-                                      const taxableBase = Math.max(0, afterDiscount);
-                                      const taxAmount = settings?.taxEnabled && settings?.taxRate
-                                        ? Math.round(taxableBase * (settings.taxRate / 100) * 100) / 100
-                                        : 0;
-                                      const total = afterDiscount + taxAmount;
-                                      fetch(`/api/pos/session/${sessionId}`, {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({
-                                          tenant,
-                                          action: 'update-discount',
-                                          data: { discount, taxAmount, total },
-                                        }),
-                                      }).catch((err) => console.error('Failed to sync discount:', err));
-                                    }
-                                  },
-                                  (error) => showToast.error(error)
-                                );
-                              }
-                            }}
-                            className="flex-1 min-w-0 px-2.5 py-2 text-sm border border-gray-300 focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white transition-all placeholder:text-gray-400"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (promoCode.trim()) {
-                                applyDiscount(getSubtotal(), tenant,
-                                  (discount) => {
-                                    setAppliedDiscount(discount);
-                                    setPromoCode('');
-                                    showToast.success(dict.pos.discountApplied || 'Discount applied');
-                                    // Sync to customer display
-                                    if (sessionId) {
-                                      const afterDiscount = getSubtotal() - discount.amount;
-                                      const taxableBase = Math.max(0, afterDiscount);
-                                      const taxAmount = settings?.taxEnabled && settings?.taxRate
-                                        ? Math.round(taxableBase * (settings.taxRate / 100) * 100) / 100
-                                        : 0;
-                                      const total = afterDiscount + taxAmount;
-                                      fetch(`/api/pos/session/${sessionId}`, {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({
-                                          tenant,
-                                          action: 'update-discount',
-                                          data: { discount, taxAmount, total },
-                                        }),
-                                      }).catch((err) => console.error('Failed to sync discount:', err));
-                                    }
-                                  },
-                                  (error) => showToast.error(error)
-                                );
-                              }
-                            }}
-                            disabled={!promoCode.trim() || applyingDiscount}
-                            className="px-2.5 py-2 bg-green-600 text-white hover:bg-green-700 active:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 border border-green-700 flex items-center justify-center flex-shrink-0 min-w-[40px]"
-                            title={dict.pos.applyDiscount || 'Apply Discount'}
-                          >
-                            {applyingDiscount ? (
-                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                            ) : (
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="mb-2 p-2.5 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-300">
-                        <div className="flex justify-between items-start gap-2">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5 mb-0.5">
-                              <svg className="w-4 h-4 text-green-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                              <div className="text-xs font-bold text-green-800">{dict.pos.discountApplied}</div>
-                            </div>
-                            <div className="text-xs text-green-700 font-medium truncate pl-5">
-                              {appliedDiscount.code}
-                              {appliedDiscount.name && (
-                                <span className="text-green-600"> — {appliedDiscount.name}</span>
-                              )}
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={removeDiscount}
-                            className="p-1 text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors flex-shrink-0 rounded"
-                            title={dict.pos.removeDiscount}
-                          >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                          </button>
-                        </div>
-                      </div>
+                  <CartSummaryFooter
+                    dict={dict}
+                    primaryColor={primaryColor}
+                    subtotal={getSubtotal()}
+                    total={getTotal()}
+                    taxAmount={getTaxAmount(
+                      { taxEnabled: settings?.taxEnabled, taxRate: settings?.taxRate },
+                      Math.max(0, getSubtotal() - (appliedDiscount?.amount || 0))
                     )}
-                    </div>
-                    )}
-                  </div>
-
-                  <div className="shrink-0 border-t border-gray-300 pt-3 md:pt-4 mt-3 md:mt-4 bg-gray-50 -mx-3 sm:-mx-4 md:-mx-4 px-3 sm:px-4 md:px-4 pb-3 md:pb-4">
-                    <div className="space-y-1.5 md:space-y-2 mb-3 md:mb-4">
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="text-gray-600">{dict.pos.subtotal}:</span>
-                        <span className="font-semibold text-gray-900">
-                          <Currency amount={getSubtotal()} />
-                        </span>
-                      </div>
-                      {appliedDiscount && (
-                        <div className="flex justify-between items-center text-sm">
-                          <span className="text-gray-600">{dict.pos.discount}:</span>
-                          <span className="font-semibold text-green-600">
-                            -<Currency amount={appliedDiscount.amount} />
-                          </span>
-                        </div>
-                      )}
-                      {settings?.taxEnabled && (
-                        <div className="flex justify-between items-center text-sm">
-                          <span className="text-gray-600">{settings?.taxLabel || 'Tax'} ({settings?.taxRate}%):</span>
-                          <span className="font-semibold text-gray-900">
-                            <Currency amount={getTaxAmount({ taxEnabled: settings?.taxEnabled, taxRate: settings?.taxRate }, Math.max(0, getSubtotal() - (appliedDiscount?.amount || 0)))} />
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex justify-between items-center mb-3 md:mb-4 pt-2 md:pt-3 border-t-2 border-gray-300">
-                      <span className="text-base md:text-lg font-bold text-gray-900">{dict.common.total}:</span>
-                      <span className="text-xl md:text-2xl xl:text-3xl font-bold" style={{ color: primaryColor }}>
-                        <Currency amount={getTotal()} showConverted convertedClassName="block text-xs text-gray-500 font-normal text-right leading-tight" />
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleCheckout}
-                      disabled={processing}
-                      className="w-full bg-green-600 text-white py-3 md:py-3.5 font-bold hover:bg-green-700 active:bg-green-800 transition-all duration-200 text-base md:text-lg border border-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                    >
-                      {processing ? (
-                        <>
-                          <div className="animate-spin h-6 w-6 border-b-2 border-white"></div>
-                          <span>{dictValue('pos.processing', 'Processing...')}</span>
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          {dict.pos.checkout}
-                        </>
-                      )}
-                    </button>
-                  </div>
+                    appliedDiscount={appliedDiscount}
+                    taxEnabled={settings?.taxEnabled}
+                    taxLabel={settings?.taxLabel}
+                    taxRate={settings?.taxRate}
+                    processing={processing}
+                    processingLabel={dictValue('pos.processing', 'Processing...')}
+                    onCheckout={handleCheckout}
+                  />
                 </div>
               )}
             </div>
@@ -1718,6 +1309,7 @@ export default function Dashboard() {
                 {/* Restaurant: order-type selector + table number */}
                 {businessType === 'restaurant' ? (
                   <div className="flex flex-col gap-2 flex-1 min-w-0">
+                    <h1 className="text-xl sm:text-2xl md:text-xl lg:text-2xl font-bold text-gray-900">{dict.pos.title}</h1>
                     <div className="flex gap-1">
                       {(['dine-in', 'takeout', 'delivery'] as const).map((type) => (
                         <button
@@ -1740,7 +1332,10 @@ export default function Dashboard() {
                         <input
                           type="text"
                           value={tableNumber}
-                          onChange={(e) => setTableNumber(e.target.value.slice(0, 6))}
+                          onChange={(e) => {
+                            setTableNumber(e.target.value.slice(0, 6));
+                            setSelectedTableId('');
+                          }}
                           placeholder="e.g. 5A"
                           className="w-24 px-3 py-1.5 text-sm border-2 border-gray-300 bg-white font-semibold"
                           onFocus={(e) => { e.currentTarget.style.borderColor = primaryColor; }}
@@ -1806,7 +1401,10 @@ export default function Dashboard() {
                           <input
                             type="text"
                             value={tableNumber}
-                            onChange={(e) => setTableNumber(e.target.value.slice(0, 8))}
+                            onChange={(e) => {
+                              setTableNumber(e.target.value.slice(0, 8));
+                              setSelectedTableId('');
+                            }}
                             placeholder="T/O-1"
                             className={`text-sm border border-orange-300 bg-white font-semibold focus:outline-none focus:border-orange-500 ${roamingMode ? 'px-1 py-0.5' : 'px-2 py-1'}`}
                           />
@@ -1900,12 +1498,13 @@ export default function Dashboard() {
                       : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
                       }`}
                     style={roamingMode ? { backgroundColor: primaryColor, borderColor: primaryColor } : {}}
-                    title={roamingMode ? 'Exit Roaming Mode' : 'Enable Roaming Mode (line-busting)'}
+                    title={roamingMode ? dictValue('pos.exitRoamingMode', 'Exit roaming mode') : dictValue('pos.enableRoamingMode', 'Enable roaming mode (line-busting)')}
+                    aria-label={roamingMode ? dictValue('pos.exitRoamingMode', 'Exit roaming mode') : dictValue('pos.enableRoamingMode', 'Enable roaming mode')}
                   >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                     </svg>
-                    <span className="hidden sm:inline">{roamingMode ? 'Roaming' : 'Roam'}</span>
+                    <span className="hidden sm:inline">{roamingMode ? dictValue('pos.roamingMode', 'Roaming') : dictValue('pos.roamMode', 'Roam')}</span>
                     {roamingMode && (
                       <span className="w-2 h-2 rounded-full bg-white/80 animate-pulse" />
                     )}
@@ -1920,7 +1519,7 @@ export default function Dashboard() {
                     placeholder={dict.pos.searchPlaceholder}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    autoFocus
+                    autoFocus={!device.isTouch}
                     className="w-full px-3 sm:px-4 py-2.5 sm:py-3 pl-10 sm:pl-11 text-sm sm:text-base border-2 border-gray-300 bg-white transition-all"
                     onFocus={(e) => {
                       e.currentTarget.style.borderColor = primaryColor;
@@ -1998,17 +1597,12 @@ export default function Dashboard() {
                     return (
                       <div
                         key={product._id}
-                        onClick={() => {
-                          if (canAdd) {
-                            handleAddToCart(product);
-                          }
-                        }}
-                        className={`relative overflow-hidden border border-gray-300 hover:border-gray-400 transition-all duration-200 group ${productCardHeightClass} cursor-pointer hover:shadow-lg ${!canAdd ? 'opacity-60 cursor-not-allowed' : ''
+                        className={`relative overflow-hidden border border-gray-300 hover:border-gray-400 transition-all duration-200 group ${productCardHeightClass} hover:shadow-lg ${!canAdd ? 'opacity-60' : ''
                           }`}
                       >
                         {/* Low-stock corner notification badge — hidden for restaurant/service/laundry */}
                         {businessType !== 'restaurant' && businessType !== 'service' && businessType !== 'laundry' && availableStock <= 10 && (
-                          <div className={`absolute top-2 left-2 z-20 min-w-[1.5rem] h-6 px-1.5 flex items-center justify-center text-[11px] font-bold text-white shadow-md ${availableStock === 0
+                          <div className={`pointer-events-none absolute top-2 left-2 z-20 min-w-[1.5rem] h-6 px-1.5 flex items-center justify-center text-[11px] font-bold text-white shadow-md ${availableStock === 0
                             ? 'bg-red-500'
                             : 'bg-yellow-500'
                             }`}>
@@ -2019,44 +1613,26 @@ export default function Dashboard() {
                         {/* In-cart quantity overlay */}
                         {inCartQty > 0 && (
                           <div
-                            className="absolute top-2 left-2 z-20 min-w-[1.5rem] h-6 px-1.5 flex items-center justify-center text-[11px] font-bold text-white shadow-md"
+                            className="pointer-events-none absolute top-2 right-12 z-20 min-w-[1.5rem] h-6 px-1.5 flex items-center justify-center text-[11px] font-bold text-white shadow-md"
                             style={{ backgroundColor: primaryColor }}
+                            aria-hidden
                           >
                             {inCartQty}
                           </div>
                         )}
 
-                        {/* Pin button — absolute over image */}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            e.preventDefault();
-                            handleTogglePin(product._id, product.pinned || false);
-                          }}
-                          className={`absolute top-2 right-2 z-20 p-2.5 transition-all duration-200 flex items-center justify-center border shadow-sm ${product.pinned
-                            ? 'bg-amber-50 hover:bg-amber-100 text-amber-600 border-amber-300'
-                            : 'bg-white/80 hover:bg-white text-gray-400 hover:text-gray-600 border-gray-300 backdrop-blur-sm'
-                            }`}
-                          title={product.pinned ? 'Unpin Product' : 'Pin Product'}
-                        >
-                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12M8.5,12V4H15.5V12L17.5,14H14.3V20H9.7V14H6.5L8.5,12Z" />
-                          </svg>
-                        </button>
-
                         {/* Product Image — full cover */}
-                        <div className="absolute inset-0 w-full h-full bg-gray-50 overflow-hidden">
+                        <div className="pointer-events-none absolute inset-0 w-full h-full bg-gray-50 overflow-hidden">
                           {product.image && (product.image.startsWith('http') || product.image.startsWith('/') || product.image.startsWith('data:image/')) ? (
                             <img // eslint-disable-line
                               src={product.image}
-                              alt={product.name}
+                              alt=""
                               className="w-full h-full object-cover"
                               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                             />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center">
-                              <svg className="w-10 h-10 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <svg className="w-10 h-10 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                               </svg>
                             </div>
@@ -2064,33 +1640,24 @@ export default function Dashboard() {
                         </div>
 
                         {/* Solid black overlay for bottom section */}
-                        <div className="absolute bottom-0 left-0 right-0 h-20 bg-black/70 group-hover:bg-black/80 transition-colors duration-200 z-10"></div>
+                        <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-20 bg-black/70 group-hover:bg-black/80 transition-colors duration-200 z-10" aria-hidden />
 
                         {/* Content overlay */}
-                        <div className="absolute inset-0 flex flex-col justify-between p-4 z-10">
-                          {/* Top section */}
+                        <div className="pointer-events-none absolute inset-0 flex flex-col justify-between p-4 z-10">
                           <div className="flex items-start justify-between gap-2">
-                            {/* Category */}
                             <p className="text-xs text-gray-200 truncate h-4 opacity-90">
                               {product.category || '\u00A0'}
                             </p>
                           </div>
-
-                          {/* Bottom section */}
                           <div className="space-y-1">
-                            {/* Service/laundry: show serviceType as subtitle */}
                             {(businessType === 'service' || businessType === 'laundry') && product.serviceType && (
                               <p className="text-[10px] text-gray-300 truncate leading-none">
                                 {product.serviceType.charAt(0).toUpperCase() + product.serviceType.slice(1).replace(/-/g, ' ')}
                               </p>
                             )}
-
-                            {/* Name — fixed 2-line height */}
-                            <h3 className="font-semibold text-white text-sm leading-5 line-clamp-2">
+                            <p className="font-semibold text-white text-sm leading-5 line-clamp-2">
                               {product.name}
-                            </h3>
-
-                            {/* Price row */}
+                            </p>
                             <div className="font-bold text-lg leading-tight text-white">
                               <Currency amount={product.price} showConverted convertedClassName="block text-[10px] text-white/70 font-normal leading-tight" />
                             </div>
@@ -2099,16 +1666,45 @@ export default function Dashboard() {
 
                         {/* Restaurant: modifier chip */}
                         {businessType === 'restaurant' && product.modifiers?.length ? (
-                          <span className="absolute bottom-10 left-2 z-20 text-[9px] bg-orange-500/90 text-white px-1.5 py-0.5 font-semibold">
+                          <span className="pointer-events-none absolute bottom-10 left-2 z-20 text-[9px] bg-orange-500/90 text-white px-1.5 py-0.5 font-semibold">
                             + options
                           </span>
                         ) : null}
                         {/* Retail: variants chip */}
                         {product.hasVariations && product.variations?.length ? (
-                          <span className="absolute bottom-10 left-2 z-20 text-[9px] bg-brand/90 text-white px-1.5 py-0.5 font-semibold">
+                          <span className="pointer-events-none absolute bottom-10 left-2 z-20 text-[9px] bg-brand/90 text-white px-1.5 py-0.5 font-semibold">
                             {product.variations.length} variants
                           </span>
                         ) : null}
+
+                        {/* Add to cart — full-card hit target (sibling of pin, not a wrapper) */}
+                        <button
+                          type="button"
+                          disabled={!canAdd}
+                          onClick={() => {
+                            if (canAdd) {
+                              handleAddToCart(product);
+                            }
+                          }}
+                          className={`absolute inset-0 z-[15] w-full h-full border-0 bg-transparent p-0 text-left cursor-pointer ${!canAdd ? 'cursor-not-allowed' : ''}`}
+                          aria-label={`${dict.common?.add || 'Add'} ${product.name}`}
+                        />
+
+                        {/* Pin button — above add hit target */}
+                        <button
+                          type="button"
+                          onClick={() => handleTogglePin(product._id, product.pinned || false)}
+                          className={`absolute top-2 right-2 z-30 p-2.5 transition-all duration-200 flex items-center justify-center border shadow-sm ${product.pinned
+                            ? 'bg-amber-50 hover:bg-amber-100 text-amber-600 border-amber-300'
+                            : 'bg-white/80 hover:bg-white text-gray-400 hover:text-gray-600 border-gray-300 backdrop-blur-sm'
+                            }`}
+                          title={product.pinned ? 'Unpin Product' : 'Pin Product'}
+                          aria-label={product.pinned ? 'Unpin product' : 'Pin product'}
+                        >
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
+                            <path d="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12M8.5,12V4H15.5V12L17.5,14H14.3V20H9.7V14H6.5L8.5,12Z" />
+                          </svg>
+                        </button>
                       </div>
                     );
                   })}
@@ -2123,8 +1719,9 @@ export default function Dashboard() {
         <button
           type="button"
           onClick={() => setShowRoamingCart(true)}
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-6 py-4 text-white font-bold shadow-2xl border-2 border-white/20 transition-all active:scale-95"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-6 py-4 min-h-[44px] text-white font-bold shadow-2xl border-2 border-white/20 transition-all active:scale-95"
           style={{ backgroundColor: primaryColor }}
+          aria-label={`${dict.pos.cart}, ${cart.reduce((s, i) => s + i.quantity, 0)} ${dict.pos?.items || 'items'}, ${dict.pos?.total || dict.common?.total || 'Total'} ${getTotal()}`}
         >
           <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -2156,31 +1753,38 @@ export default function Dashboard() {
             style={{ borderTopColor: primaryColor }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Sheet handle + actions */}
-            <div className="flex shrink-0 items-center justify-end gap-2 px-5 py-3 border-b border-gray-200">
-                {cart.length > 0 && (
-                  <button
-                    onClick={clearCart}
-                    className="px-3 py-2 bg-red-600 text-white hover:bg-red-700 border border-red-700 transition-colors"
-                    title={dict.common.clear}
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                )}
-                <button
-                  onClick={() => setShowRoamingCart(false)}
-                  className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-            </div>
+            <div className="w-12 h-1 rounded-full bg-gray-300 mx-auto mt-2 mb-1 flex-shrink-0" aria-hidden />
+            <CartActionBar
+              cartLength={cart.length}
+              itemCount={cart.reduce((s, i) => s + i.quantity, 0)}
+              primaryColor={primaryColor}
+              dict={dict}
+              isCashier={isCashier}
+              customerDisplayUrl={customerDisplayUrl}
+              businessType={businessType}
+              orderType={orderType}
+              tableNumber={tableNumber}
+              onSaveCart={() => setShowSaveCartModal(true)}
+              onClearCart={clearCart}
+              onLoadSavedCarts={() => {
+                setShowSavedCartsModal(true);
+                loadSavedCarts();
+              }}
+              onClose={() => setShowRoamingCart(false)}
+              closeLabel={dictValue('pos.closeCart', 'Close cart')}
+            />
 
-            {/* Cart items */}
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 space-y-3 [scrollbar-gutter:stable]">
+            {businessType === 'retail' && (
+              <div className="shrink-0 px-5 pb-2 min-w-0">
+                <CustomerSidePanel
+                  tenant={tenant}
+                  selectedCustomer={selectedCustomer}
+                  onSelectCustomer={setSelectedCustomer}
+                />
+              </div>
+            )}
+
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 [scrollbar-gutter:stable]">
               {cart.length === 0 ? (
                 <div className="text-center py-12 text-gray-400">
                   <svg className="mx-auto h-12 w-12 text-gray-300 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -2189,75 +1793,82 @@ export default function Dashboard() {
                   <p className="text-base font-medium">{dict.pos.cartEmpty}</p>
                 </div>
               ) : (
-                cart.map((item) => (
-                  <div key={item.cartItemId} className="flex items-center gap-4 bg-gray-50 border border-gray-200 p-3">
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-900 truncate">{item.name}</p>
-                      <p className="text-sm text-gray-500"><Currency amount={item.price} /> {dict.pos.each}</p>
-                    </div>
-                    <div className="flex items-center border-2 border-gray-300 bg-white overflow-hidden flex-shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => updateQuantity(item.cartItemId, item.quantity - 1, (msg) => showToast.error(msg))}
-                        className="px-3 py-2 hover:bg-gray-100 font-bold text-base transition-colors"
-                      >−</button>
-                      <span className="px-3 py-2 min-w-[2.5rem] text-center font-semibold text-sm">{item.quantity}</span>
-                      <button
-                        type="button"
-                        onClick={() => updateQuantity(item.cartItemId, item.quantity + 1, (msg) => showToast.error(msg))}
-                        className="px-3 py-2 hover:bg-gray-100 font-bold text-base transition-colors"
-                      >+</button>
-                    </div>
-                    <div className="font-bold text-gray-900 flex-shrink-0 text-sm w-20 text-right">
-                      <Currency amount={item.price * item.quantity} />
-                    </div>
-                    <button
-                      onClick={() => removeFromCart(item.cartItemId)}
-                      className="p-2 text-red-500 hover:text-red-700 flex-shrink-0"
-                    >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                ))
+                <div className="space-y-3">
+                  {cart.map((item) => {
+                    const product = products.find((p) => p._id === item.productId);
+                    return (
+                      <CartLineItem
+                        key={item.cartItemId}
+                        item={item}
+                        variant="roaming"
+                        dict={dict}
+                        product={product}
+                        onRemove={removeFromCart}
+                        onUpdateQuantity={updateQuantity}
+                        onQuantityError={(msg) => showToast.error(msg)}
+                      />
+                    );
+                  })}
+                  <CartUpsellSuggestions
+                    suggestions={upsellSuggestions}
+                    primaryColor={primaryColor}
+                    dict={dict}
+                    onAdd={(productId) => {
+                      const product = products.find((p) => p._id === productId);
+                      if (product) addToCart(product);
+                    }}
+                  />
+                </div>
               )}
             </div>
 
-            {/* Footer with totals + checkout */}
             {cart.length > 0 && (
-              <div className="shrink-0 border-t border-gray-200 px-5 py-4 bg-gray-50 space-y-2">
-                <div className="flex justify-between text-sm text-gray-600">
-                  <span>{dict.pos.subtotal}:</span>
-                  <Currency amount={getSubtotal()} />
+              <>
+                <div className="shrink-0 px-5">
+                  <CartDiscountSection
+                    dict={dict}
+                    primaryColor={primaryColor}
+                    tenant={tenant}
+                    cartLength={cart.length}
+                    promoCode={promoCode}
+                    setPromoCode={setPromoCode}
+                    appliedDiscount={appliedDiscount}
+                    applyingDiscount={applyingDiscount}
+                    showDiscountSection={showDiscountSection}
+                    setShowDiscountSection={setShowDiscountSection}
+                    getSubtotal={getSubtotal}
+                    sessionId={sessionId}
+                    settings={settings ?? undefined}
+                    fetchWithTimeout={fetchWithTimeout}
+                    applyDiscount={applyDiscount}
+                    setAppliedDiscount={setAppliedDiscount}
+                    removeDiscount={removeDiscount}
+                    onDiscountApplied={(msg) => showToast.success(msg)}
+                    onDiscountError={(msg) => showToast.error(msg)}
+                  />
                 </div>
-                {appliedDiscount && (
-                  <div className="flex justify-between text-sm text-green-700">
-                    <span>{dict.pos.discount} ({appliedDiscount.code}):</span>
-                    <span>-<Currency amount={appliedDiscount.amount} /></span>
-                  </div>
-                )}
-                {settings?.taxEnabled && settings?.taxRate && (
-                  <div className="flex justify-between text-sm text-gray-600">
-                    <span>{settings.taxLabel || 'Tax'} ({settings.taxRate}%):</span>
-                    <Currency amount={getTaxAmount({ taxEnabled: settings.taxEnabled, taxRate: settings.taxRate }, Math.max(0, getSubtotal() - (appliedDiscount?.amount || 0)))} />
-                  </div>
-                )}
-                <div className="flex justify-between font-bold text-lg text-gray-900 pt-1 border-t border-gray-300">
-                  <span>{dict.pos.total}:</span>
-                  <Currency amount={getTotal()} showConverted convertedClassName="block text-xs text-gray-500 font-normal text-right leading-tight" />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => { setShowRoamingCart(false); handleCheckout(); }}
-                  className="w-full bg-green-600 text-white py-4 font-bold hover:bg-green-700 transition-colors text-lg border border-green-700 flex items-center justify-center gap-2 mt-2"
-                >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  {dict.pos.checkout}
-                </button>
-              </div>
+                <CartSummaryFooter
+                  dict={dict}
+                  primaryColor={primaryColor}
+                  variant="roaming"
+                  subtotal={getSubtotal()}
+                  total={getTotal()}
+                  taxAmount={getTaxAmount(
+                    { taxEnabled: settings?.taxEnabled, taxRate: settings?.taxRate },
+                    Math.max(0, getSubtotal() - (appliedDiscount?.amount || 0))
+                  )}
+                  appliedDiscount={appliedDiscount}
+                  taxEnabled={settings?.taxEnabled}
+                  taxLabel={settings?.taxLabel}
+                  taxRate={settings?.taxRate}
+                  processing={processing}
+                  processingLabel={dictValue('pos.processing', 'Processing...')}
+                  onCheckout={() => {
+                    setShowRoamingCart(false);
+                    handleCheckout();
+                  }}
+                />
+              </>
             )}
           </div>
         </div>
