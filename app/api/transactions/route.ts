@@ -22,6 +22,7 @@ import LoyaltyConfig from '@/models/LoyaltyConfig';
 import LoyaltyTransaction from '@/models/LoyaltyTransaction';
 import Table from '@/models/Table';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { wouldExceedCreditLimit } from '@/lib/customer-credit';
 
 interface VariationInput {
   size?: string;
@@ -633,36 +634,18 @@ export async function POST(request: NextRequest) {
       onAccountAmountToBill = total;
     }
 
-    if (onAccountAmountToBill > 0.009) {
-      const creditCustomer = await Customer.findOne({ _id: customerId, tenantId, isActive: true })
-        .select('accountBalance creditLimit')
-        .lean();
-      if (!creditCustomer) {
-        return NextResponse.json(
-          { success: false, error: t('validation.customerNotFound', 'Customer not found or inactive') },
-          { status: 404 }
-        );
-      }
-      const currentBal = creditCustomer.accountBalance ?? 0;
-      const projected = currentBal + onAccountAmountToBill;
-      if (
-        typeof creditCustomer.creditLimit === 'number' &&
-        creditCustomer.creditLimit >= 0 &&
-        projected - creditCustomer.creditLimit > 0.01
-      ) {
-        return NextResponse.json(
-          { success: false, error: t('validation.creditLimitExceeded', "Sale would exceed this customer's credit limit") },
-          { status: 400 }
-        );
-      }
-    }
-
     // ─── Atomic section: stock + transaction + payments in a MongoDB session ───
     // If the DB supports replica sets, all writes are atomic.
     // On standalone dev servers, session falls back gracefully.
     const session = await mongoose.startSession();
     let transaction;
     const paymentRecords: Array<{ _id: unknown; method: string; amount: number; status: string }> = [];
+    let onAccountCreditChange: {
+      customerId: string;
+      amount: number;
+      balanceBefore: number;
+      balanceAfter: number;
+    } | null = null;
 
     try {
       session.startTransaction();
@@ -879,11 +862,33 @@ export async function POST(request: NextRequest) {
       }
 
       if (onAccountAmountToBill > 0.009 && customerId) {
+        const creditCustomer = await Customer.findOne({ _id: customerId, tenantId, isActive: true })
+          .select('accountBalance creditLimit')
+          .session(session);
+
+        if (!creditCustomer) {
+          throw new Error(t('validation.customerNotFound', 'Customer not found or inactive'));
+        }
+
+        const balanceBefore = creditCustomer.accountBalance ?? 0;
+        if (wouldExceedCreditLimit(balanceBefore, onAccountAmountToBill, creditCustomer.creditLimit)) {
+          throw new Error(
+            t('validation.creditLimitExceeded', "Sale would exceed this customer's credit limit")
+          );
+        }
+
         await Customer.updateOne(
           { _id: customerId, tenantId },
           { $inc: { accountBalance: onAccountAmountToBill } },
           { session }
         );
+
+        onAccountCreditChange = {
+          customerId: String(customerId),
+          amount: onAccountAmountToBill,
+          balanceBefore,
+          balanceAfter: balanceBefore + onAccountAmountToBill,
+        };
       }
 
       await session.commitTransaction();
@@ -933,6 +938,7 @@ export async function POST(request: NextRequest) {
         paymentCount: paymentRecords.length,
         paymentIds: paymentRecords.map((p) => String(p._id)),
         isMultiplePayments: isMultiplePayments,
+        onAccountCreditChange,
       },
     });
 

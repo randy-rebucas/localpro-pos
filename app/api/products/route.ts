@@ -45,11 +45,42 @@ export async function GET(request: NextRequest) {
       query.categoryId = categoryId;
     }
 
+    const rawPage = parseInt(searchParams.get('page') || '0', 10);
+    const rawLimit = parseInt(searchParams.get('limit') || '0', 10);
+    const usePagination = rawPage > 0 && rawLimit > 0;
+    const page = usePagination ? Math.max(1, rawPage) : 1;
+    const limit = usePagination ? Math.min(Math.max(1, rawLimit), 100) : 0;
+    const sort = { pinned: -1 as const, createdAt: -1 as const };
+
+    if (usePagination) {
+      const skip = (page - 1) * limit;
+      const [products, total] = await Promise.all([
+        Product.find(query)
+          .populate('categoryId', 'name')
+          .sort(sort)
+          .skip(skip)
+          .limit(limit)
+          .lean(),
+        Product.countDocuments(query),
+      ]);
+
+      return NextResponse.json({
+        success: true,
+        data: products,
+        pagination: {
+          total,
+          page,
+          limit,
+          pages: Math.max(1, Math.ceil(total / limit)),
+        },
+      });
+    }
+
     const products = await Product.find(query)
       .populate('categoryId', 'name')
-      .sort({ pinned: -1, createdAt: -1 }) // Pinned products first, then by creation date
+      .sort(sort)
       .lean();
-    
+
     return NextResponse.json({ success: true, data: products });
   } catch (error) {
     return handleApiError(error, 'Failed to fetch products');

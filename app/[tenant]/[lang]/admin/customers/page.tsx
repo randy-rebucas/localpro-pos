@@ -36,6 +36,14 @@ export default function CustomersPage() {
   const [bpMethod, setBpMethod] = useState<'cash' | 'card' | 'digital' | 'check' | 'other'>('cash');
   const [bpNotes, setBpNotes] = useState('');
   const [bpSubmitting, setBpSubmitting] = useState(false);
+  const [balancePaymentHistory, setBalancePaymentHistory] = useState<Array<{
+    _id: string;
+    amount: number;
+    method: string;
+    notes?: string;
+    createdAt: string;
+  }>>([]);
+  const [balanceHistoryLoading, setBalanceHistoryLoading] = useState(false);
 
   const { settings } = useTenantSettings();
   const enableOnAccountSales = settings?.enableOnAccountSales === true;
@@ -126,12 +134,33 @@ export default function CustomersPage() {
     }
   };
 
+  const fetchBalancePaymentHistory = async (customerId: string) => {
+    setBalanceHistoryLoading(true);
+    try {
+      const res = await fetch(`/api/customers/${customerId}/balance-payments?limit=10`, {
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (data.success) {
+        setBalancePaymentHistory(data.data || []);
+      } else {
+        setBalancePaymentHistory([]);
+      }
+    } catch {
+      setBalancePaymentHistory([]);
+    } finally {
+      setBalanceHistoryLoading(false);
+    }
+  };
+
   const openBalancePayment = (customer: Customer) => {
     setBalancePayCustomer(customer);
     setBpAmount((Number(customer.accountBalance) || 0).toFixed(2));
     setBpMethod('cash');
     setBpNotes('');
+    setBalancePaymentHistory([]);
     setBalancePayOpen(true);
+    void fetchBalancePaymentHistory(customer._id);
   };
 
   const submitBalancePayment = async () => {
@@ -152,9 +181,15 @@ export default function CustomersPage() {
       const data = await res.json();
       if (data.success) {
         showToast.success(dict?.admin?.balancePaymentRecorded || 'Payment recorded');
-        setBalancePayOpen(false);
-        setBalancePayCustomer(null);
+        const newBalance = Math.max(0, (Number(balancePayCustomer.accountBalance) || 0) - amt);
+        setBalancePayCustomer({ ...balancePayCustomer, accountBalance: newBalance });
+        setBpAmount(newBalance > 0 ? newBalance.toFixed(2) : '');
+        await fetchBalancePaymentHistory(balancePayCustomer._id);
         await fetchCustomers();
+        if (newBalance <= 0.01) {
+          setBalancePayOpen(false);
+          setBalancePayCustomer(null);
+        }
       } else {
         showToast.error(data.error || dict?.admin?.balancePaymentFailed || 'Could not record payment');
       }
@@ -430,6 +465,31 @@ export default function CustomersPage() {
                   className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-brand resize-none"
                 />
               </div>
+              <div className="border-t border-gray-200 pt-4">
+                <h4 className="text-sm font-semibold text-gray-900 mb-2">
+                  {dict?.admin?.balancePaymentHistory || 'Recent payments'}
+                </h4>
+                {balanceHistoryLoading ? (
+                  <p className="text-xs text-gray-500">{dict?.common?.loading || 'Loading...'}</p>
+                ) : balancePaymentHistory.length === 0 ? (
+                  <p className="text-xs text-gray-500">{dict?.admin?.noBalancePayments || 'No payments recorded yet.'}</p>
+                ) : (
+                  <ul className="space-y-2 max-h-40 overflow-y-auto">
+                    {balancePaymentHistory.map((payment) => (
+                      <li key={payment._id} className="flex items-start justify-between gap-3 text-xs border border-gray-100 px-2 py-1.5 bg-gray-50">
+                        <div>
+                          <span className="font-medium text-gray-900">{formatCurrency(payment.amount, lang)}</span>
+                          <span className="text-gray-500"> · {payment.method}</span>
+                          {payment.notes && <p className="text-gray-500 mt-0.5">{payment.notes}</p>}
+                        </div>
+                        <span className="text-gray-400 whitespace-nowrap">
+                          {new Date(payment.createdAt).toLocaleDateString(lang === 'es' ? 'es' : 'en')}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
             <div className="flex justify-end gap-3 p-5 border-t border-gray-200">
               <button
@@ -536,6 +596,25 @@ export default function CustomersPage() {
                   className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-brand resize-none"
                 />
               </div>
+              {enableOnAccountSales && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {dict?.admin?.creditLimit || dict?.components?.customerSidePanel?.creditLimit || 'Credit limit'}
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={formData.creditLimit}
+                    onChange={(e) => setFormData({ creditLimit: e.target.value })}
+                    placeholder={dict?.admin?.creditLimitPlaceholder || 'Leave empty for no limit'}
+                    className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:border-brand"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    {dict?.admin?.creditLimitHint || 'Maximum balance allowed for on-account sales.'}
+                  </p>
+                </div>
+              )}
               {error && <div className="text-sm text-red-600">{error}</div>}
             </div>
             <div className="flex justify-end gap-3 p-6 border-t border-gray-200">

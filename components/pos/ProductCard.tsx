@@ -12,8 +12,65 @@ interface ProductCardProps {
   businessType: string;
   cardHeightClass: string;
   addLabel: string;
+  variant?: 'grid' | 'list';
   onAdd: (product: PosProduct) => void;
   onTogglePin: (productId: string, pinned: boolean) => void;
+}
+
+interface PinButtonProps {
+  pinned: boolean;
+  variant: 'grid' | 'list';
+  onToggle: () => void;
+}
+
+function PinButton({ pinned, variant, onToggle }: PinButtonProps) {
+  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    e.preventDefault();
+    onToggle();
+  };
+
+  const placementClass =
+    variant === 'grid'
+      ? `absolute top-2 right-2 z-30 shadow-md ${
+          pinned
+            ? 'opacity-100'
+            : 'opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100'
+        }`
+      : 'absolute right-2 top-1/2 -translate-y-1/2 z-30 shadow-sm';
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      onPointerDown={(e) => e.stopPropagation()}
+      aria-pressed={pinned}
+      title={pinned ? 'Unpin product' : 'Pin product'}
+      aria-label={pinned ? 'Unpin product' : 'Pin product'}
+      className={`${placementClass} flex h-11 w-11 items-center justify-center border-2 transition-all duration-200 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-1 ${
+        pinned
+          ? 'border-amber-400 bg-amber-500 text-white hover:bg-amber-600'
+          : 'border-white/80 bg-white/90 text-gray-500 hover:border-gray-300 hover:bg-white hover:text-gray-700 backdrop-blur-sm'
+      }`}
+    >
+      <svg
+        className="h-[18px] w-[18px]"
+        viewBox="0 0 24 24"
+        fill={pinned ? 'currentColor' : 'none'}
+        stroke="currentColor"
+        strokeWidth={pinned ? 0 : 2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden
+      >
+        {pinned ? (
+          <path d="M16 9V4h1V2H7v2h1v5l-2 2v2h5.2V22h1.6v-6.8H18v-2l-2-2z" />
+        ) : (
+          <path d="M12 17v5M9 3h6l1 7h4l-3 3v4H7v-4L4 10h4l1-7z" />
+        )}
+      </svg>
+    </button>
+  );
 }
 
 export default function ProductCard({
@@ -25,18 +82,99 @@ export default function ProductCard({
   businessType,
   cardHeightClass,
   addLabel,
+  variant = 'grid',
   onAdd,
   onTogglePin,
 }: ProductCardProps) {
+  const isPinned = Boolean(product.pinned);
   const showStockBadge =
     businessType !== 'restaurant' &&
     businessType !== 'service' &&
     businessType !== 'laundry' &&
     availableStock <= 10;
 
+  const handleTogglePin = () => onTogglePin(product._id, isPinned);
+
+  if (variant === 'list') {
+    return (
+      <div
+        className={`relative flex items-center gap-3 border bg-white hover:border-gray-400 transition-all duration-200 group min-h-[72px] px-3 py-2 ${
+          isPinned ? 'border-amber-300 bg-amber-50/40' : 'border-gray-300'
+        } ${!canAdd ? 'opacity-60' : ''}`}
+      >
+        <div className="relative w-14 h-14 flex-shrink-0 bg-gray-50 border border-gray-200 overflow-hidden">
+          {product.image &&
+          (product.image.startsWith('http') ||
+            product.image.startsWith('/') ||
+            product.image.startsWith('data:image/')) ? (
+            <img
+              src={product.image}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <svg className="w-6 h-6 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              </svg>
+            </div>
+          )}
+          {isPinned && (
+            <span className="absolute bottom-0 left-0 right-0 bg-amber-500 text-white text-[9px] font-bold text-center py-0.5">
+              PIN
+            </span>
+          )}
+        </div>
+
+        <div className="flex-1 min-w-0 pr-14">
+          <p className="text-[11px] text-gray-500 truncate">{product.category || '\u00A0'}</p>
+          <p className="font-semibold text-gray-900 text-sm leading-tight truncate">{product.name}</p>
+          <div className="font-bold text-sm mt-0.5" style={{ color: primaryColor }}>
+            <Currency amount={product.price} showConverted convertedClassName="text-[10px] text-gray-500 font-normal" />
+          </div>
+        </div>
+
+        <div className="pointer-events-none absolute right-14 top-1/2 -translate-y-1/2 z-10 flex items-center gap-2">
+          {showStockBadge && (
+            <span className={`text-[10px] font-bold px-1.5 py-0.5 text-white ${availableStock === 0 ? 'bg-red-500' : 'bg-yellow-500'}`}>
+              {availableStock === 0 ? 'OUT' : availableStock}
+            </span>
+          )}
+          {inCartQty > 0 && (
+            <span
+              className="text-[10px] font-bold px-1.5 py-0.5 text-white"
+              style={{ backgroundColor: primaryColor }}
+            >
+              {inCartQty}
+            </span>
+          )}
+        </div>
+
+        <PinButton pinned={isPinned} variant="list" onToggle={handleTogglePin} />
+
+        <button
+          type="button"
+          disabled={!canAdd}
+          onClick={() => {
+            if (canAdd) onAdd(product);
+          }}
+          className={`absolute inset-0 z-[5] w-full h-full border-0 bg-transparent p-0 text-left cursor-pointer ${!canAdd ? 'cursor-not-allowed' : ''}`}
+          aria-label={`${addLabel} ${product.name}`}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
-      className={`relative overflow-hidden border border-gray-300 hover:border-gray-400 transition-all duration-200 group ${cardHeightClass} hover:shadow-lg ${!canAdd ? 'opacity-60' : ''}`}
+      className={`relative overflow-hidden border hover:border-gray-400 transition-all duration-200 group ${cardHeightClass} hover:shadow-lg ${
+        isPinned ? 'border-amber-400 ring-2 ring-amber-300/60' : 'border-gray-300'
+      } ${!canAdd ? 'opacity-60' : ''}`}
     >
       {showStockBadge && (
         <div
@@ -48,7 +186,7 @@ export default function ProductCard({
 
       {inCartQty > 0 && (
         <div
-          className="pointer-events-none absolute top-2 right-12 z-20 min-w-[1.5rem] h-6 px-1.5 flex items-center justify-center text-[11px] font-bold text-white shadow-md"
+          className="pointer-events-none absolute top-2 right-14 z-20 min-w-[1.5rem] h-6 px-1.5 flex items-center justify-center text-[11px] font-bold text-white shadow-md"
           style={{ backgroundColor: primaryColor }}
           aria-hidden
         >
@@ -133,17 +271,7 @@ export default function ProductCard({
         aria-label={`${addLabel} ${product.name}`}
       />
 
-      <button
-        type="button"
-        onClick={() => onTogglePin(product._id, product.pinned || false)}
-        className={`absolute top-2 right-2 z-30 p-2.5 transition-all duration-200 flex items-center justify-center border shadow-sm ${product.pinned ? 'bg-amber-50 hover:bg-amber-100 text-amber-600 border-amber-300' : 'bg-white/80 hover:bg-white text-gray-400 hover:text-gray-600 border-gray-300 backdrop-blur-sm'}`}
-        title={product.pinned ? 'Unpin Product' : 'Pin Product'}
-        aria-label={product.pinned ? 'Unpin product' : 'Pin product'}
-      >
-        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
-          <path d="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12M8.5,12V4H15.5V12L17.5,14H14.3V20H9.7V14H6.5L8.5,12Z" />
-        </svg>
-      </button>
+      <PinButton pinned={isPinned} variant="grid" onToggle={handleTogglePin} />
     </div>
   );
 }

@@ -213,12 +213,17 @@ export default function Dashboard() {
     }
   }, []);
 
+  const productsScrollRef = useRef<HTMLDivElement>(null);
+
   const {
     products,
     setProducts,
     status: productsStatus,
     source: productsSource,
     error: productsError,
+    hasMore: productsHasMore,
+    loadingMore: productsLoadingMore,
+    loadMore: loadMoreProducts,
     refetch: refetchProducts,
   } = usePosProducts({
     tenant,
@@ -261,10 +266,12 @@ export default function Dashboard() {
   // Cash drawer UI state
   const [roamingMode, setRoamingMode] = useState(false);
   const [showRoamingCart, setShowRoamingCart] = useState(false);
+  const [displayMode, setDisplayMode] = useState<'grid' | 'list'>('list');
   const productGridClass = roamingMode
     ? 'grid gap-2.5 sm:gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6'
     : 'grid gap-2.5 sm:gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5';
   const productCardHeightClass = 'h-52 sm:h-56 md:h-60 xl:h-64';
+  const productListClass = 'flex flex-col gap-2';
 
   const [showCashDrawerModal, setShowCashDrawerModal] = useState<'open' | 'close' | null>(null);
   const [drawerAmount, setDrawerAmount] = useState('');
@@ -315,6 +322,17 @@ export default function Dashboard() {
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
   }, [lang]);
+
+  useEffect(() => {
+    const savedDisplayMode = localStorage.getItem(`posDisplayMode_${tenant}`);
+    if (savedDisplayMode === 'list' || savedDisplayMode === 'grid') {
+      setDisplayMode(savedDisplayMode);
+    }
+  }, [tenant]);
+
+  useEffect(() => {
+    localStorage.setItem(`posDisplayMode_${tenant}`, displayMode);
+  }, [displayMode, tenant]);
 
   // Esc key to close modals
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -1404,7 +1422,10 @@ export default function Dashboard() {
         {/* Products column: nav width matches this column only */}
         <div className={`order-2 flex flex-col min-h-0 flex-1 min-w-0 md:order-1 ${roamingMode ? 'w-full' : ''}`}>
           <Navbar />
-          <div className="flex-1 overflow-y-auto min-h-0 mx-auto w-full px-3 sm:px-4 md:px-4 lg:px-5 py-3 sm:py-4 md:py-3 lg:py-4">
+          <div
+            ref={productsScrollRef}
+            className="flex-1 overflow-y-auto min-h-0 mx-auto w-full px-3 sm:px-4 md:px-4 lg:px-5 py-3 sm:py-4 md:py-3 lg:py-4"
+          >
             <div className="mb-4 md:mb-5">
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3 md:mb-4">
                 {/* Restaurant: order-type selector + table number */}
@@ -1656,6 +1677,40 @@ export default function Dashboard() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
                   </svg>
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setDisplayMode('grid')}
+                  className="px-2.5 py-2.5 sm:px-3 sm:py-3 min-h-[44px] min-w-[44px] bg-white transition-all flex-shrink-0 border-2"
+                  style={
+                    displayMode === 'grid'
+                      ? { borderColor: primaryColor, backgroundColor: `${primaryColor}10`, color: primaryColor }
+                      : { borderColor: '#d1d5db', color: '#374151' }
+                  }
+                  title={dictValue('common.gridView', 'Grid View')}
+                  aria-label={dictValue('common.gridView', 'Grid View')}
+                  aria-pressed={displayMode === 'grid'}
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDisplayMode('list')}
+                  className="px-2.5 py-2.5 sm:px-3 sm:py-3 min-h-[44px] min-w-[44px] bg-white transition-all flex-shrink-0 border-2"
+                  style={
+                    displayMode === 'list'
+                      ? { borderColor: primaryColor, backgroundColor: `${primaryColor}10`, color: primaryColor }
+                      : { borderColor: '#d1d5db', color: '#374151' }
+                  }
+                  title={dictValue('common.listView', 'List View')}
+                  aria-label={dictValue('common.listView', 'List View')}
+                  aria-pressed={displayMode === 'list'}
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                </button>
               </div>
             </div>
 
@@ -1667,7 +1722,9 @@ export default function Dashboard() {
               error={productsError}
               search={search}
               gridClassName={productGridClass}
+              listClassName={productListClass}
               cardHeightClass={productCardHeightClass}
+              displayMode={displayMode}
               primaryColor={primaryColor}
               businessType={businessType}
               cart={cart}
@@ -1677,6 +1734,10 @@ export default function Dashboard() {
               onTogglePin={handleTogglePin}
               onClearSearch={() => setSearch('')}
               onRetry={refetchProducts}
+              hasMore={productsHasMore}
+              loadingMore={productsLoadingMore}
+              onLoadMore={loadMoreProducts}
+              scrollRootRef={productsScrollRef}
             />
           </div>
         </div>

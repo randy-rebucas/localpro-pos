@@ -1,10 +1,12 @@
 'use client';
 
+import type { RefObject } from 'react';
 import EmptyState from '@/components/ui/EmptyState';
 import ErrorState from '@/components/ui/ErrorState';
 import InlineBanner from '@/components/ui/InlineBanner';
 import ProductCardSkeleton from '@/components/ui/ProductCardSkeleton';
 import ProductCard from '@/components/pos/ProductCard';
+import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
 import type { TranslationDict } from '@/types/dictionary';
 import type { PosProduct, ProductsSource, ProductsStatus } from '@/hooks/usePosProducts';
 
@@ -15,7 +17,9 @@ interface ProductGridProps {
   error: string | null;
   search: string;
   gridClassName: string;
+  listClassName?: string;
   cardHeightClass: string;
+  displayMode?: 'grid' | 'list';
   primaryColor: string;
   businessType: string;
   cart: Array<{ productId: string; quantity: number }>;
@@ -25,6 +29,10 @@ interface ProductGridProps {
   onTogglePin: (productId: string, pinned: boolean) => void;
   onClearSearch: () => void;
   onRetry: () => void;
+  hasMore?: boolean;
+  loadingMore?: boolean;
+  onLoadMore?: () => void;
+  scrollRootRef?: RefObject<Element | null>;
 }
 
 export default function ProductGrid({
@@ -34,7 +42,9 @@ export default function ProductGrid({
   error,
   search,
   gridClassName,
+  listClassName = 'flex flex-col gap-2',
   cardHeightClass,
+  displayMode = 'grid',
   primaryColor,
   businessType,
   cart,
@@ -44,10 +54,27 @@ export default function ProductGrid({
   onTogglePin,
   onClearSearch,
   onRetry,
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore,
+  scrollRootRef,
 }: ProductGridProps) {
+  const sentinelRef = useInfiniteScroll({
+    onLoadMore: onLoadMore ?? (() => {}),
+    hasMore: Boolean(onLoadMore && hasMore),
+    isLoading: status === 'loading' || loadingMore,
+    disabled: !onLoadMore,
+    rootRef: scrollRootRef,
+  });
+
   if (status === 'loading') {
     return (
-      <ProductCardSkeleton count={16} cardClassName={cardHeightClass} gridClassName={gridClassName} />
+      <ProductCardSkeleton
+        count={displayMode === 'list' ? 12 : 16}
+        cardClassName={displayMode === 'list' ? 'min-h-[72px]' : cardHeightClass}
+        gridClassName={displayMode === 'list' ? listClassName : gridClassName}
+        variant={displayMode}
+      />
     );
   }
 
@@ -93,7 +120,7 @@ export default function ProductGrid({
           />
         </div>
       ) : (
-        <div className={gridClassName}>
+        <div className={displayMode === 'list' ? listClassName : gridClassName}>
           {[...products]
             .sort((a, b) => {
               if (a.pinned && !b.pinned) return -1;
@@ -115,12 +142,26 @@ export default function ProductGrid({
                   businessType={businessType}
                   cardHeightClass={cardHeightClass}
                   addLabel={addLabel}
+                  variant={displayMode}
                   onAdd={onAdd}
                   onTogglePin={onTogglePin}
                 />
               );
             })}
         </div>
+      )}
+
+      {products.length > 0 && hasMore && (
+        <div ref={sentinelRef} className="min-h-6" aria-hidden />
+      )}
+
+      {loadingMore && (
+        <ProductCardSkeleton
+          count={displayMode === 'list' ? 3 : 8}
+          cardClassName={displayMode === 'list' ? 'min-h-[72px]' : cardHeightClass}
+          gridClassName={displayMode === 'list' ? listClassName : gridClassName}
+          variant={displayMode}
+        />
       )}
     </div>
   );

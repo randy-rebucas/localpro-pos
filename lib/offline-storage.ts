@@ -52,6 +52,8 @@ interface CachedProduct {
   lastUpdated: number;
 }
 
+type ProductCacheInput = Omit<CachedProduct, 'tenant' | 'lastUpdated'>;
+
 class OfflineStorage {
   private db: IDBDatabase | null = null;
 
@@ -190,7 +192,7 @@ class OfflineStorage {
   }
 
   // Product cache methods
-  async cacheProducts(products: CachedProduct[], tenant: string): Promise<void> {
+  async cacheProducts(products: ProductCacheInput[], tenant: string): Promise<void> {
     return new Promise((resolve, reject) => {
       const tx = this.getDB().transaction(['products'], 'readwrite');
       const store = tx.objectStore('products');
@@ -346,5 +348,5 @@ export async function getOfflineStorage(): Promise<OfflineStorage> {
   return storageInstance;
 }
 
-export type { OfflineTransaction, CachedProduct, CachedDiscount };
+export type { OfflineTransaction, CachedProduct, CachedDiscount, ProductCacheInput };
 

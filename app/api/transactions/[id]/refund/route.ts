@@ -10,6 +10,10 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { updateStock } from '@/lib/stock';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
+import {
+  calculateOnAccountRefundAmount,
+  getOnAccountTotalForTransaction,
+} from '@/lib/customer-credit';
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -184,20 +188,40 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       paymentRefundWarning = 'Refund recorded but payment record could not be updated. Please update the payment manually.';
     }
 
+    let onAccountRefundAmount = 0;
+    let accountBalanceBefore: number | undefined;
+    let accountBalanceAfter: number | undefined;
+
     if (transaction.customerId && refundAmount > 0) {
-      const onAccountPaymentCount = await Payment.countDocuments({
+      const onAccountTotal = await getOnAccountTotalForTransaction(
         tenantId,
-        transactionId: transaction._id,
-        method: 'on_account',
-        status: 'completed',
-      });
-      const hadOnAccount =
-        transaction.paymentMethod === 'on_account' || onAccountPaymentCount > 0;
-      if (hadOnAccount) {
-        const cust = await Customer.findOne({ _id: transaction.customerId, tenantId }).select('accountBalance');
-        if (cust) {
-          const nextBal = Math.max(0, (cust.accountBalance ?? 0) - refundAmount);
-          await Customer.updateOne({ _id: cust._id }, { $set: { accountBalance: nextBal } });
+        transaction._id,
+        transaction.total,
+        transaction.paymentMethod
+      );
+
+      if (onAccountTotal > 0) {
+        onAccountRefundAmount = calculateOnAccountRefundAmount(
+          refundAmount,
+          transaction.total,
+          onAccountTotal
+        );
+
+        if (onAccountRefundAmount > 0) {
+          const cust = await Customer.findOne({ _id: transaction.customerId, tenantId }).select('accountBalance');
+          if (cust) {
+            accountBalanceBefore = cust.accountBalance ?? 0;
+            accountBalanceAfter = Math.max(0, accountBalanceBefore - onAccountRefundAmount);
+            await Customer.updateOne(
+              { _id: cust._id },
+              { $inc: { accountBalance: -onAccountRefundAmount } }
+            );
+            // Clamp negative balances from rounding edge cases
+            if (accountBalanceAfter < 0.01) {
+              await Customer.updateOne({ _id: cust._id }, { $set: { accountBalance: 0 } });
+              accountBalanceAfter = 0;
+            }
+          }
         }
       }
     }
@@ -210,6 +234,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       changes: {
         refundTransactionId: refundTransaction._id.toString(),
         refundAmount,
+        onAccountRefundAmount,
+        customerId: transaction.customerId?.toString(),
+        accountBalanceBefore,
+        accountBalanceAfter,
         itemsRefunded: refundItems.length,
         isFullRefund,
         refundPaymentId: refundPayment?._id.toString(),

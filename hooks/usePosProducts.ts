@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { getOfflineStorage } from '@/lib/offline-storage';
 
 export interface PosProduct {
@@ -32,11 +32,21 @@ export interface PosProduct {
 export type ProductsStatus = 'loading' | 'ready' | 'error';
 export type ProductsSource = 'server' | 'cache' | 'none';
 
+const PAGE_SIZE = 40;
+
 interface UsePosProductsOptions {
   tenant: string;
   debouncedSearch: string;
   isOnline: boolean;
   fetchWithTimeout: (url: string, options?: RequestInit, timeoutMs?: number) => Promise<Response>;
+}
+
+function mergeProductsById(existing: PosProduct[], incoming: PosProduct[]): PosProduct[] {
+  const map = new Map(existing.map((product) => [product._id, product]));
+  for (const product of incoming) {
+    map.set(product._id, product);
+  }
+  return Array.from(map.values());
 }
 
 export function usePosProducts({
@@ -49,6 +59,12 @@ export function usePosProducts({
   const [status, setStatus] = useState<ProductsStatus>('loading');
   const [source, setSource] = useState<ProductsSource>('none');
   const [error, setError] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const pageRef = useRef(1);
+  const fetchIdRef = useRef(0);
+  const offlineCatalogRef = useRef<PosProduct[]>([]);
 
   const filterCached = useCallback(
     (cached: PosProduct[]) => {
@@ -70,85 +86,142 @@ export function usePosProducts({
     return filterCached(cached as PosProduct[]);
   }, [tenant, filterCached]);
 
-  const fetchProducts = useCallback(async () => {
-    setStatus('loading');
-    setError(null);
+  const cacheProductsMerged = useCallback(
+    async (incoming: PosProduct[]) => {
+      const storage = await getOfflineStorage();
+      const cached = (await storage.getCachedProducts(tenant)) as PosProduct[];
+      await storage.cacheProducts(mergeProductsById(cached, incoming), tenant);
+    },
+    [tenant]
+  );
 
-    try {
-      if (isOnline) {
-        try {
-          const res = await fetchWithTimeout(
-            `/api/products?search=${encodeURIComponent(debouncedSearch)}&tenant=${tenant}`
-          );
-          const data = await res.json();
-          if (data.success) {
-            setProducts(data.data);
-            setSource('server');
-            setStatus('ready');
-            const storage = await getOfflineStorage();
-            await storage.cacheProducts(data.data, tenant);
+  const applyOfflinePage = useCallback((catalog: PosProduct[], page: number, append: boolean) => {
+    const end = page * PAGE_SIZE;
+    const nextSlice = catalog.slice(0, end);
+    setProducts((prev) => (append ? nextSlice : nextSlice));
+    setHasMore(end < catalog.length);
+    pageRef.current = page;
+    setSource('cache');
+    setStatus('ready');
+    setError(null);
+  }, []);
+
+  const fetchProducts = useCallback(
+    async (page: number, append: boolean) => {
+      const fetchId = ++fetchIdRef.current;
+
+      if (append) {
+        setLoadingMore(true);
+      } else {
+        setStatus('loading');
+        setError(null);
+        setHasMore(false);
+        pageRef.current = 1;
+      }
+
+      try {
+        if (!isOnline) {
+          if (!append) {
+            offlineCatalogRef.current = await loadFromCache();
+          }
+          if (fetchId !== fetchIdRef.current) return;
+
+          if (offlineCatalogRef.current.length > 0) {
+            applyOfflinePage(offlineCatalogRef.current, page, append);
+          } else {
+            setProducts([]);
+            setSource('none');
+            setStatus('error');
+            setError('No cached products available offline');
+            setHasMore(false);
+          }
+          return;
+        }
+
+        const res = await fetchWithTimeout(
+          `/api/products?search=${encodeURIComponent(debouncedSearch)}&tenant=${tenant}&page=${page}&limit=${PAGE_SIZE}`
+        );
+        const data = await res.json();
+        if (fetchId !== fetchIdRef.current) return;
+
+        if (data.success) {
+          const incoming = (data.data || []) as PosProduct[];
+          const pages = data.pagination?.pages ?? 1;
+
+          setProducts((prev) => (append ? [...prev, ...incoming] : incoming));
+          setSource('server');
+          setStatus('ready');
+          setHasMore(page < pages);
+          pageRef.current = page;
+          setError(null);
+
+          await cacheProductsMerged(incoming);
+
+          if (page === 1) {
             try {
               const discountRes = await fetch(`/api/discounts?tenant=${tenant}`);
               const discountData = await discountRes.json();
               if (discountData.success && discountData.data) {
+                const storage = await getOfflineStorage();
                 await storage.cacheDiscounts(discountData.data, tenant);
               }
             } catch {
               // best-effort discount cache
             }
-            return;
           }
-          throw new Error(data.error || 'Failed to fetch products');
-        } catch (fetchErr) {
-          const cached = await loadFromCache();
-          if (cached.length > 0) {
-            setProducts(cached);
-            setSource('cache');
-            setStatus('ready');
-            setError(null);
-            return;
-          }
-          throw fetchErr;
+          return;
         }
-      } else {
-        const cached = await loadFromCache();
-        if (cached.length > 0) {
-          setProducts(cached);
-          setSource('cache');
-          setStatus('ready');
-        } else {
+
+        throw new Error(data.error || 'Failed to fetch products');
+      } catch (fetchErr) {
+        if (fetchId !== fetchIdRef.current) return;
+
+        if (!append) {
+          try {
+            offlineCatalogRef.current = await loadFromCache();
+            if (fetchId !== fetchIdRef.current) return;
+
+            if (offlineCatalogRef.current.length > 0) {
+              applyOfflinePage(offlineCatalogRef.current, 1, false);
+              return;
+            }
+          } catch {
+            // fall through to error state
+          }
+        }
+
+        if (!append) {
           setProducts([]);
           setSource('none');
           setStatus('error');
-          setError('No cached products available offline');
+          setError(fetchErr instanceof Error ? fetchErr.message : 'Failed to load products');
+          setHasMore(false);
+        }
+      } finally {
+        if (fetchId === fetchIdRef.current) {
+          setLoadingMore(false);
         }
       }
-    } catch (err) {
-      console.error('Error fetching products:', err);
-      try {
-        const cached = await loadFromCache();
-        if (cached.length > 0) {
-          setProducts(cached);
-          setSource('cache');
-          setStatus('ready');
-        } else {
-          setProducts([]);
-          setSource('none');
-          setStatus('error');
-          setError(err instanceof Error ? err.message : 'Failed to load products');
-        }
-      } catch {
-        setProducts([]);
-        setSource('none');
-        setStatus('error');
-        setError(err instanceof Error ? err.message : 'Failed to load products');
-      }
-    }
-  }, [debouncedSearch, tenant, isOnline, loadFromCache, fetchWithTimeout]);
+    },
+    [
+      applyOfflinePage,
+      cacheProductsMerged,
+      debouncedSearch,
+      fetchWithTimeout,
+      isOnline,
+      loadFromCache,
+      tenant,
+    ]
+  );
 
   useEffect(() => {
-    fetchProducts();
+    fetchProducts(1, false);
   }, [fetchProducts]);
+
+  const loadMore = useCallback(() => {
+    if (loadingMore || !hasMore || status === 'loading') return;
+    fetchProducts(pageRef.current + 1, true);
+  }, [fetchProducts, hasMore, loadingMore, status]);
 
   const setProductsOptimistic = useCallback((updater: PosProduct[] | ((prev: PosProduct[]) => PosProduct[])) => {
     setProducts(updater);
@@ -160,6 +233,9 @@ export function usePosProducts({
     status,
     source,
     error,
-    refetch: fetchProducts,
+    hasMore,
+    loadingMore,
+    loadMore,
+    refetch: () => fetchProducts(1, false),
   };
 }

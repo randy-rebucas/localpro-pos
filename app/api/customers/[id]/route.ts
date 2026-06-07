@@ -6,6 +6,7 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
+import { parseCreditLimitInput } from '@/lib/customer-credit';
 
 export async function GET(
   request: NextRequest,
@@ -69,7 +70,12 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const oldData = { firstName: customer.firstName, lastName: customer.lastName, email: customer.email };
+    const oldData = {
+      firstName: customer.firstName,
+      lastName: customer.lastName,
+      email: customer.email,
+      creditLimit: customer.creditLimit ?? null,
+    };
     
     if (body.firstName !== undefined) customer.firstName = body.firstName.trim();
     if (body.lastName !== undefined) customer.lastName = body.lastName.trim();
@@ -93,16 +99,18 @@ export async function PATCH(
     if (body.tags !== undefined) customer.tags = body.tags;
     if (body.isActive !== undefined) customer.isActive = body.isActive;
     if (body.creditLimit !== undefined) {
-      const cl = body.creditLimit;
-      if (cl === null || cl === '') {
-        customer.set('creditLimit', undefined);
-      } else if (typeof cl === 'number' && cl >= 0) {
-        customer.creditLimit = cl;
-      } else {
+      const cl = parseCreditLimitInput(body.creditLimit);
+      if (cl === undefined) {
+        // no-op
+      } else if (Number.isNaN(cl)) {
         return NextResponse.json(
           { success: false, error: t('validation.creditLimitInvalid', 'Credit limit must be a non-negative number or empty to clear') },
           { status: 400 }
         );
+      } else if (cl === null) {
+        customer.set('creditLimit', undefined);
+      } else {
+        customer.creditLimit = cl;
       }
     }
 
@@ -113,7 +121,15 @@ export async function PATCH(
       action: AuditActions.UPDATE,
       entityType: 'customer',
       entityId: customer._id.toString(),
-      changes: { old: oldData, new: { firstName: customer.firstName, lastName: customer.lastName, email: customer.email } },
+      changes: {
+        old: oldData,
+        new: {
+          firstName: customer.firstName,
+          lastName: customer.lastName,
+          email: customer.email,
+          creditLimit: customer.creditLimit ?? null,
+        },
+      },
     });
     
     return NextResponse.json({ success: true, data: customer });

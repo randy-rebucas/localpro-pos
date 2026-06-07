@@ -10,6 +10,8 @@ export interface CustomerFormData {
   phone: string;
   tags: string;
   notes: string;
+  /** Empty string = no credit limit */
+  creditLimit: string;
 }
 
 interface UseCustomersFormReturn {
@@ -30,6 +32,7 @@ export function useCustomersForm(): UseCustomersFormReturn {
     phone: '',
     tags: '',
     notes: '',
+    creditLimit: '',
   });
 
   const [error, setError] = useState('');
@@ -47,6 +50,7 @@ export function useCustomersForm(): UseCustomersFormReturn {
       phone: '',
       tags: '',
       notes: '',
+      creditLimit: '',
     });
     setError('');
   }, []);
@@ -59,6 +63,10 @@ export function useCustomersForm(): UseCustomersFormReturn {
       phone: customer.phone ?? '',
       tags: (customer.tags || []).join(', '),
       notes: customer.notes ?? '',
+      creditLimit:
+        customer.creditLimit != null && !Number.isNaN(Number(customer.creditLimit))
+          ? String(customer.creditLimit)
+          : '',
     });
     setError('');
   }, []);

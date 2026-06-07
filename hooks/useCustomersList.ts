@@ -25,6 +25,14 @@ interface UseCustomersListReturn {
   toggleCustomerStatus: (id: string, isActive: boolean) => Promise<boolean>;
 }
 
+function normalizeCreditLimitFromForm(form: CustomerFormData): number | null | undefined {
+  if (form.creditLimit === undefined) return undefined;
+  const trimmed = form.creditLimit.trim();
+  if (!trimmed) return null;
+  const parsed = parseFloat(trimmed);
+  return Number.isNaN(parsed) ? undefined : parsed;
+}
+
 function normalizeTagsFromForm(form: CustomerFormData): string[] {
   const raw =
     form.tags && typeof form.tags === 'string'
@@ -87,7 +95,9 @@ export function useCustomersList(): UseCustomersListReturn {
     async (form: CustomerFormData) => {
       try {
         const tags = normalizeTagsFromForm(form);
-        const payload = { ...form, tags };
+        const creditLimit = normalizeCreditLimitFromForm(form);
+        const { creditLimit: _creditLimitField, ...rest } = form;
+        const payload = { ...rest, tags, creditLimit };
 
         const res = await fetch('/api/customers', {
           method: 'POST',
@@ -112,7 +122,9 @@ export function useCustomersList(): UseCustomersListReturn {
     async (id: string, form: CustomerFormData) => {
       try {
         const tags = normalizeTagsFromForm(form);
-        const payload = { ...form, tags };
+        const creditLimit = normalizeCreditLimitFromForm(form);
+        const { creditLimit: _creditLimitField, ...rest } = form;
+        const payload = { ...rest, tags, creditLimit };
 
         const res = await fetch(`/api/customers/${id}`, {
           method: 'PATCH',

@@ -9,6 +9,7 @@ import { logger } from '@/lib/logger';
 import { checkFeatureAccess } from '@/lib/subscription';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
+import { parseCreditLimitInput } from '@/lib/customer-credit';
 
 export async function GET(request: NextRequest) {
   try {
@@ -101,7 +102,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { firstName, lastName, email, phone, addresses, dateOfBirth, notes, tags } = body;
+    const { firstName, lastName, email, phone, addresses, dateOfBirth, notes, tags, creditLimit } = body;
 
     // Validate required fields
     if (!firstName || !firstName.trim()) {
@@ -129,6 +130,20 @@ export async function POST(request: NextRequest) {
       }
     }
     
+    let parsedCreditLimit: number | undefined;
+    if (creditLimit !== undefined) {
+      const cl = parseCreditLimitInput(creditLimit);
+      if (Number.isNaN(cl)) {
+        return NextResponse.json(
+          { success: false, error: t('validation.creditLimitInvalid', 'Credit limit must be a non-negative number or empty to clear') },
+          { status: 400 }
+        );
+      }
+      if (typeof cl === 'number') {
+        parsedCreditLimit = cl;
+      }
+    }
+
     const customer = await Customer.create({
       tenantId,
       firstName: firstName.trim(),
@@ -139,6 +154,7 @@ export async function POST(request: NextRequest) {
       dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
       notes: notes?.trim(),
       tags: tags || [],
+      creditLimit: parsedCreditLimit,
       isActive: true,
     });
     
@@ -147,7 +163,7 @@ export async function POST(request: NextRequest) {
       action: AuditActions.CREATE,
       entityType: 'customer',
       entityId: customer._id.toString(),
-      changes: { firstName, lastName, email },
+      changes: { firstName, lastName, email, creditLimit: customer.creditLimit ?? null },
     });
 
     // Send welcome email (#22 - New Customer Welcome Emails)

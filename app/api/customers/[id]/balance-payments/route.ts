@@ -14,6 +14,51 @@ import { logger } from '@/lib/logger';
 
 const VALID_METHODS = ['cash', 'card', 'digital', 'check', 'other'] as const;
 
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    await connectDB();
+    const { id: customerId } = await params;
+
+    let tenantId: string;
+    try {
+      const access = await requireTenantAccess(request);
+      tenantId = access.tenantId;
+      await requireRole(request, ['cashier', 'manager', 'admin', 'owner']);
+    } catch (authError: unknown) {
+      const msg = authError instanceof Error ? authError.message : '';
+      if (msg.includes('Unauthorized')) {
+        return NextResponse.json({ success: false, error: msg }, { status: 401 });
+      }
+      if (msg.includes('Forbidden')) {
+        return NextResponse.json({ success: false, error: msg }, { status: 403 });
+      }
+      throw authError;
+    }
+
+    const customer = await Customer.findOne({ _id: customerId, tenantId }).select('_id').lean();
+    if (!customer) {
+      return NextResponse.json({ success: false, error: 'Customer not found' }, { status: 404 });
+    }
+
+    const rawLimit = parseInt(request.nextUrl.searchParams.get('limit') || '20', 10);
+    const limit = Math.min(Math.max(1, rawLimit), 100);
+
+    const payments = await CustomerBalancePayment.find({ tenantId, customerId })
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean();
+
+    return NextResponse.json({ success: true, data: payments });
+  } catch (error: unknown) {
+    logger.error('balance-payments GET:', error);
+    const message = error instanceof Error ? error.message : 'Failed to fetch balance payments';
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
+  }
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -74,6 +119,8 @@ export async function POST(
 
     const session = await mongoose.startSession();
     let record;
+    let balanceBefore = 0;
+    let balanceAfter = 0;
     try {
       session.startTransaction();
 
@@ -86,8 +133,8 @@ export async function POST(
         );
       }
 
-      const balance = customer.accountBalance ?? 0;
-      if (amount - balance > 0.01) {
+      balanceBefore = customer.accountBalance ?? 0;
+      if (amount - balanceBefore > 0.01) {
         await session.abortTransaction();
         return NextResponse.json(
           {
@@ -118,6 +165,7 @@ export async function POST(
         { $inc: { accountBalance: -amount } },
         { session }
       );
+      balanceAfter = balanceBefore - amount;
 
       await session.commitTransaction();
     } catch (e) {
@@ -132,7 +180,13 @@ export async function POST(
       action: AuditActions.PAYMENT_CREATE,
       entityType: 'customer_balance_payment',
       entityId: record._id.toString(),
-      changes: { customerId, amount, method },
+      changes: {
+        customerId,
+        amount,
+        method,
+        accountBalanceBefore: balanceBefore,
+        accountBalanceAfter: balanceAfter,
+      },
     });
 
     return NextResponse.json({ success: true, data: record }, { status: 201 });
