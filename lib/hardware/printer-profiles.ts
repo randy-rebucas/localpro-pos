@@ -114,8 +114,63 @@ export const PRINTER_PROFILES: PrinterProfile[] = [
     productId: 0x2060,
     type: 'usb',
   },
+
+  // ── Xprinter ─────────────────────────────────────────────────────────────
+  // 58mm ESC/POS; OC-T80A is a common white-label name for XP-58C units.
+  // USB IDs vary by batch — verify in Device Manager if auto-pair fails.
+  {
+    id: 'xprinter-xp-58c',
+    name: 'Xprinter XP-58C (OC-T80A)',
+    vendor: 'Xprinter',
+    vendorId: 0x0483,
+    productId: 0x070b,
+    type: 'usb',
+  },
+  {
+    id: 'xprinter-58-series',
+    name: 'Xprinter 58mm Series',
+    vendor: 'Xprinter',
+    vendorId: 0x0483,
+    productId: 0x5743,
+    type: 'usb',
+  },
+  {
+    id: 'xprinter-usb',
+    name: 'Xprinter (other USB ID)',
+    vendor: 'Xprinter',
+    vendorId: 0x0483,
+    type: 'usb',
+  },
 ];
 
 export function findProfile(id: string): PrinterProfile | undefined {
   return PRINTER_PROFILES.find((p) => p.id === id);
+}
+
+/**
+ * Match a USB device to the best known ESC/POS profile.
+ * Order: exact VID+PID → same vendor (any PID) → generic-usb.
+ */
+export function findProfileByUsbIds(
+  vendorId: number,
+  productId?: number
+): PrinterProfile | undefined {
+  if (productId !== undefined) {
+    const exact = PRINTER_PROFILES.find(
+      (p) => p.type === 'usb' && p.vendorId === vendorId && p.productId === productId
+    );
+    if (exact) return exact;
+  }
+
+  const sameVendor = PRINTER_PROFILES.find(
+    (p) => p.type === 'usb' && p.vendorId === vendorId && p.productId === undefined
+  );
+  if (sameVendor) return sameVendor;
+
+  const vendorFallback = PRINTER_PROFILES.find(
+    (p) => p.type === 'usb' && p.vendorId === vendorId
+  );
+  if (vendorFallback) return vendorFallback;
+
+  return PRINTER_PROFILES.find((p) => p.id === 'generic-usb');
 }

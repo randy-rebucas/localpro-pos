@@ -4,6 +4,7 @@
  */
 
 import { hardwareService } from './index';
+import { getLastDetectionResults } from './device-detector';
 import { receiptPrinterService } from './receipt-printer'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { barcodeScannerService } from './barcode-scanner'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { qrReaderService } from './qr-reader'; // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -89,7 +90,6 @@ class HardwareStatusChecker {
     try {
       switch (printerConfig.type) {
         case 'usb':
-          // Check if WebUSB is available
           if (!('usb' in navigator)) {
             return {
               name: 'USB Printer',
@@ -98,12 +98,44 @@ class HardwareStatusChecker {
               message: 'WebUSB not supported in this browser',
             };
           }
-          // Note: Can't actually check connection without user interaction
+
+          const detection = getLastDetectionResults() ?? hardwareService.getLastPrinterDetection();
+          const usbDetected = detection?.filter((d) => d.connection === 'usb') ?? [];
+          const readyUsb = usbDetected.find((d) => d.probeStatus === 'ready');
+          if (readyUsb) {
+            return {
+              name: readyUsb.label || 'USB Printer',
+              type: 'printer',
+              status: 'connected',
+              message: readyUsb.matchedProfileName
+                ? `Ready — ${readyUsb.matchedProfileName}`
+                : 'Ready for direct USB printing',
+            };
+          }
+          const blockedUsb = usbDetected.find((d) => d.probeStatus === 'os_driver_claimed');
+          if (blockedUsb) {
+            return {
+              name: blockedUsb.label || 'USB Printer',
+              type: 'printer',
+              status: 'error',
+              message: 'Use Browser Print — OS driver is using this printer',
+            };
+          }
+          if (usbDetected.length > 0) {
+            const first = usbDetected[0];
+            return {
+              name: first.label || 'USB Printer',
+              type: 'printer',
+              status: first.probeStatus === 'error' ? 'error' : 'available',
+              message: first.probeMessage || 'USB printer detected — run Scan on Hardware Settings',
+            };
+          }
+
           return {
             name: 'USB Printer',
             type: 'printer',
             status: 'available',
-            message: 'USB printer configured (requires connection test)',
+            message: 'USB printer configured — use Detect Devices to verify connection',
           };
 
         case 'serial':
@@ -316,7 +348,7 @@ class HardwareStatusChecker {
             change: 10.00,
             footer: 'Hardware Status Test',
           };
-          const success = await hardwareService.printReceipt(testReceipt);
+          const success = await hardwareService.printReceipt(testReceipt, { allowDevicePicker: true });
           return { 
             success, 
             message: success 

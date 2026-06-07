@@ -79,6 +79,12 @@ async function connectDB(): Promise<typeof mongoose> {
         try {
           const conn = await mongoose.connect(MONGODB_URI, opts);
           logger.info('MongoDB connected');
+          try {
+            const { ensureTransactionIndexes } = await import('@/lib/transaction-indexes');
+            await ensureTransactionIndexes();
+          } catch (indexErr) {
+            logger.warn('Transaction index reconciliation skipped or failed', indexErr as Record<string, unknown>);
+          }
           return conn;
         } catch (e) {
           lastError = e;

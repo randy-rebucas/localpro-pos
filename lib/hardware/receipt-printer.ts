@@ -4,6 +4,16 @@
  */
 import { logger } from '@/lib/logger';
 import { findProfile } from './printer-profiles';
+import { isDevicePickerCancelled, isUsbAccessDeniedError } from './usb-probe';
+
+export interface PrinterConnectOptions {
+  /** Open USB/serial picker when nothing is paired (needs a user click). Off by default at checkout. */
+  allowDevicePicker?: boolean;
+}
+
+export interface PrintReceiptOptions {
+  allowDevicePicker?: boolean;
+}
 
 // Web API types (available in browsers that support these APIs)
 // Using any for browser APIs that may not have complete type definitions
@@ -77,7 +87,8 @@ class ReceiptPrinterService {
     this.config = config;
   }
 
-  async connect(): Promise<boolean> {
+  async connect(options: PrinterConnectOptions = {}): Promise<boolean> {
+    const { allowDevicePicker = false } = options;
     if (!this.config) {
       throw new Error('Printer configuration not set');
     }
@@ -108,8 +119,12 @@ class ReceiptPrinterService {
         }
 
         if (!device) {
-          // No paired device — fall back to the picker (requires a live user gesture,
-          // so this path only works from the hardware settings test button).
+          if (!allowDevicePicker) {
+            logger.info(
+              'No paired USB printer for checkout — use Browser Print or pair via Admin → Hardware.'
+            );
+            return false;
+          }
           device = await usb.requestDevice({
             filters: vendorId ? [{ vendorId, ...(productId ? { productId } : {}) }] : [],
           });
@@ -124,9 +139,13 @@ class ReceiptPrinterService {
           this.device = device;
           return true;
         } catch (usbError) {
-          // "Access denied" — device is claimed by OS print driver or another process.
-          // This is normal when the printer is used via OS driver (browser print mode).
-          logger.info('USB device access denied (likely claimed by OS driver). Use browser print mode instead.');
+          if (isUsbAccessDeniedError(usbError)) {
+            logger.info('USB device access denied (likely claimed by OS driver). Use browser print mode instead.');
+          } else {
+            logger.warn('USB printer connect failed:', {
+              error: usbError instanceof Error ? usbError.message : String(usbError),
+            });
+          }
           return false;
         }
       } else if (this.config.type === 'serial' && 'serial' in navigator) {
@@ -138,6 +157,10 @@ class ReceiptPrinterService {
         let port: SerialPort | null = pairedPorts[0] ?? null;
 
         if (!port) {
+          if (!allowDevicePicker) {
+            logger.info('No paired serial printer — use Browser Print or pair via Admin → Hardware.');
+            return false;
+          }
           port = await serial.requestPort();
         }
 
@@ -152,6 +175,10 @@ class ReceiptPrinterService {
       }
       return false;
     } catch (error) {
+      if (isDevicePickerCancelled(error)) {
+        logger.info('Printer device picker closed without selecting a device.');
+        return false;
+      }
       logger.error('Failed to connect to printer:', error);
       return false;
     }
@@ -241,7 +268,7 @@ class ReceiptPrinterService {
     return new Uint8Array([this.ESC, 0x45, enabled ? 1 : 0]);
   }
 
-  async printReceipt(data: ReceiptData): Promise<boolean> {
+  async printReceipt(data: ReceiptData, options: PrintReceiptOptions = {}): Promise<boolean> {
     try {
       if (this.config?.type === 'browser') {
         const printed = this.printViaBrowser(data);
@@ -255,9 +282,10 @@ class ReceiptPrinterService {
       }
 
       if (!this.device && this.config && this.config.type !== 'network') {
-        const connected = await this.connect();
+        const connected = await this.connect({
+          allowDevicePicker: options.allowDevicePicker,
+        });
         if (!connected) {
-          console.warn('Could not connect to printer, falling back to browser print');
           return this.printViaBrowser(data);
         }
       }

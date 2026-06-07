@@ -37,6 +37,16 @@ export async function generateReceiptNumber(tenantId: string): Promise<string> {
   return `${prefix}-${seq.toString().padStart(5, '0')}`;
 }
 
+export function isDuplicateReceiptNumberError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const err = error as { code?: number; message?: string };
+  if (err.code === 11000) {
+    const msg = (err.message || '').toLowerCase();
+    return msg.includes('receiptnumber');
+  }
+  return false;
+}
+
 /**
  * Generate unique invoice number (atomic, no race conditions)
  * Format: INV-YYYYMMDD-XXXXX (e.g., INV-20241118-00001)

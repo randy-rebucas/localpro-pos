@@ -8,7 +8,7 @@ import Discount from '@/models/Discount';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateAndSanitize, validateTransaction } from '@/lib/validation';
-import { generateReceiptNumber } from '@/lib/receipt';
+import { generateReceiptNumber, isDuplicateReceiptNumberError } from '@/lib/receipt';
 import { updateStock, updateBundleStock, getProductStock } from '@/lib/stock';
 import ProductBundle from '@/models/ProductBundle';
 import StockMovement from '@/models/StockMovement';
@@ -738,9 +738,9 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      const receiptNumber = await generateReceiptNumber(tenantId);
-
-      const [txn] = await Transaction.create([{
+      let transaction;
+      let receiptNumber = '';
+      const txPayloadBase = {
         tenantId,
         branchId: branchId || undefined,
         items: transactionItems,
@@ -754,18 +754,38 @@ export async function POST(request: NextRequest) {
         paymentMethod: storedPaymentMethod,
         cashReceived: storedPaymentMethod === 'cash' ? finalCashReceived : undefined,
         change: storedPaymentMethod === 'cash' ? finalChange : undefined,
-        status: 'completed',
+        status: 'completed' as const,
         customerId: customerId || undefined,
         userId: user.userId,
-        receiptNumber,
         notes,
         orderType: orderType || undefined,
         tableNumber: tableNumber || undefined,
         tableId: tableId || undefined,
         splitCount: splitCount || undefined,
         splitPayments: splitPayments || undefined,
-      }], sessionOpts(session));
-      const transaction = txn;
+      };
+
+      for (let receiptAttempt = 0; receiptAttempt < 3; receiptAttempt++) {
+        receiptNumber = await generateReceiptNumber(tenantId);
+        try {
+          const [txn] = await Transaction.create(
+            [{ ...txPayloadBase, receiptNumber }],
+            sessionOpts(session)
+          );
+          transaction = txn;
+          break;
+        } catch (createErr) {
+          if (isDuplicateReceiptNumberError(createErr) && receiptAttempt < 2) {
+            logger.warn('Duplicate receipt number, retrying with next sequence', { receiptNumber });
+            continue;
+          }
+          throw createErr;
+        }
+      }
+
+      if (!transaction) {
+        throw new Error('Failed to create transaction after receipt number retries');
+      }
 
       for (const item of items) {
         const { productId, bundleId } = item;

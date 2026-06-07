@@ -6,6 +6,14 @@
 import { receiptPrinterService, PrinterConfig, ReceiptData } from './receipt-printer';
 import { barcodeScannerService, BarcodeScannerConfig } from './barcode-scanner';
 import { qrReaderService, QRReaderConfig } from './qr-reader';
+import {
+  detectPrinters,
+  recommendPrinterSetup,
+  getLastDetectionResults,
+  type DetectedPrinter,
+  type PrinterSetupRecommendation,
+  type DetectPrintersOptions,
+} from './device-detector';
 
 export interface HardwareConfig {
   printer?: PrinterConfig;
@@ -44,8 +52,11 @@ class HardwareService {
   }
 
   // Printer methods
-  async printReceipt(data: ReceiptData): Promise<boolean> {
-    return receiptPrinterService.printReceipt(data);
+  async printReceipt(
+    data: ReceiptData,
+    options?: { allowDevicePicker?: boolean }
+  ): Promise<boolean> {
+    return receiptPrinterService.printReceipt(data, options);
   }
 
   async openCashDrawer(): Promise<boolean> {
@@ -84,47 +95,59 @@ class HardwareService {
     return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
   }
 
-  // Device detection
+  /** Enumerate QR cameras only (printers use detectPrinters on user action). */
+  async detectCameras(): Promise<Array<{ deviceId: string; label: string }>> {
+    if (!navigator.mediaDevices?.enumerateDevices) {
+      return [];
+    }
+    const mediaDevices = await navigator.mediaDevices.enumerateDevices();
+    return mediaDevices
+      .filter((device) => device.kind === 'videoinput')
+      .map((device) => ({
+        deviceId: device.deviceId,
+        label: device.label || `Camera ${device.deviceId.substring(0, 8)}`,
+      }));
+  }
+
   async detectDevices(): Promise<{
     printers: Array<{ name: string; type: string }>;
     cameras: Array<{ deviceId: string; label: string }>;
   }> {
-    const devices = {
-      printers: [] as Array<{ name: string; type: string }>,
-      cameras: [] as Array<{ deviceId: string; label: string }>,
+    const cameras = await this.detectCameras();
+    return {
+      printers: [],
+      cameras,
     };
+  }
 
-    // Detect cameras
-    if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
-      const mediaDevices = await navigator.mediaDevices.enumerateDevices();
-      devices.cameras = mediaDevices
-        .filter(device => device.kind === 'videoinput')
-        .map(device => ({
-          deviceId: device.deviceId,
-          label: device.label || `Camera ${device.deviceId.substring(0, 8)}`,
-        }));
-    }
+  async detectPrinters(options?: DetectPrintersOptions): Promise<DetectedPrinter[]> {
+    return detectPrinters(options);
+  }
 
-    // USB printers (would need user permission)
-    if ('usb' in navigator) {
-      // Note: This requires user interaction to request device access
-      devices.printers.push({ name: 'USB Printer (requires permission)', type: 'usb' });
-    }
+  recommendPrinterSetup(detected: DetectedPrinter[]): PrinterSetupRecommendation | null {
+    const webUsbSupported = typeof navigator !== 'undefined' && 'usb' in navigator;
+    return recommendPrinterSetup(detected, { webUsbSupported });
+  }
 
-    // Serial printers
-    if ('serial' in navigator) {
-      devices.printers.push({ name: 'Serial Printer (requires permission)', type: 'serial' });
-    }
-
-    // Browser print (always available)
-    devices.printers.push({ name: 'Browser Print', type: 'browser' });
-
-    return devices;
+  getLastPrinterDetection(): DetectedPrinter[] | null {
+    return getLastDetectionResults();
   }
 }
 
 export const hardwareService = new HardwareService();
 export type { PrinterConfig, ReceiptData, BarcodeScannerConfig, QRReaderConfig };
-export { PRINTER_PROFILES, findProfile } from './printer-profiles';
+export { PRINTER_PROFILES, findProfile, findProfileByUsbIds } from './printer-profiles';
 export type { PrinterProfile } from './printer-profiles';
+export {
+  detectPrinters,
+  recommendPrinterSetup,
+  printerConfigFromDetected,
+  getLastDetectionResults,
+} from './device-detector';
+export type {
+  DetectedPrinter,
+  PrinterSetupRecommendation,
+  DetectPrintersOptions,
+  PrinterProbeStatus,
+} from './device-detector';
 

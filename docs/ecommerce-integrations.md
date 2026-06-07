@@ -184,7 +184,7 @@ Unique index: `(tenantId, provider, externalVariantId)`.
 |-------|-------------|
 | `salesChannel` | `shopify` \| `woocommerce` (imported orders) |
 | `externalOrderId` | Store order id string |
-| `channelSyncKey` | `${provider}:${externalOrderId}` — **sparse unique** with `tenantId` for idempotency |
+| `channelSyncKey` | `${provider}:${externalOrderId}` — **partial unique** with `tenantId` for idempotency (POS rows omit this field) |
 | `channelImportedAt` | When the POS record was created from a webhook |
 
 ---
@@ -325,7 +325,7 @@ Implemented in `lib/ecommerce/import-channel-order.ts`.
 
 ### Idempotency
 
-- **Unique:** `(tenantId, channelSyncKey)` sparse index on `Transaction`.
+- **Unique:** `(tenantId, channelSyncKey)` partial index on `Transaction` (only when `channelSyncKey` is a non-empty string).
 - Duplicate webhooks return success without double-counting stock.
 
 ---

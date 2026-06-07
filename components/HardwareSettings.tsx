@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { hardwareService, HardwareConfig, PrinterConfig, PRINTER_PROFILES } from '@/lib/hardware';
+import PrinterDetectionPanel from '@/components/hardware/PrinterDetectionPanel';
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '@/app/[tenant]/[lang]/dictionaries-client';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
@@ -48,7 +49,7 @@ export default function HardwareSettings({
       // Only load from localStorage if not controlled by parent
       loadConfig();
     }
-    detectDevices();
+    detectCameras();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenant]);
 
@@ -89,14 +90,17 @@ export default function HardwareSettings({
     hardwareService.setConfig(newConfig);
   };
 
-  const detectDevices = async () => {
+  const detectCameras = async () => {
     try {
-      const detected = await hardwareService.detectDevices();
-      setDevices(detected);
+      const cameras = await hardwareService.detectCameras();
+      setDevices((prev) => ({ ...prev, cameras }));
     } catch (error) {
-      console.error('Failed to detect devices:', error);
+      console.error('Failed to detect cameras:', error);
     }
   };
+
+  const dictValue = (key: string, fallback: string) =>
+    dict?.components?.hardwareSettings?.[key] ?? fallback;
 
   const testPrinter = async () => {
     if (!config.printer) {
@@ -121,7 +125,7 @@ export default function HardwareSettings({
         footer: 'This is a test receipt',
       };
 
-      const success = await hardwareService.printReceipt(testReceipt);
+      const success = await hardwareService.printReceipt(testReceipt, { allowDevicePicker: true });
       if (success) {
         showToast.success(dict?.common?.testReceiptSent || 'Test receipt sent successfully!');
       } else {
@@ -173,6 +177,15 @@ export default function HardwareSettings({
         <div className="border-b border-gray-200 pb-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">{dict?.components?.hardwareSettings?.receiptPrinter || 'Receipt Printer'}</h3>
           <div className="space-y-4">
+            <PrinterDetectionPanel
+              dictValue={dictValue}
+              primaryColor={primaryColor}
+              onApplyPrinter={(printer) =>
+                updateConfig({
+                  printer: { ...config.printer, ...printer } as PrinterConfig,
+                })
+              }
+            />
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 {dict?.components?.hardwareSettings?.printerType || 'Printer Type'}
