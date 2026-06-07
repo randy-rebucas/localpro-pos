@@ -38,17 +38,32 @@ export default function ProductsPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [barcodeProduct, setBarcodeProduct] = useState<Product | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 20;
   const { settings } = useTenantSettings();
   const { confirm, Dialog } = useConfirm();
   const [businessTypeConfig, setBusinessTypeConfig] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const { products, categories, loading, message, fetchProducts, fetchCategories, deleteProduct } = useProductsList(tenant);
+  const { products, categories, loading, pagination, message, fetchProducts, fetchCategories, deleteProduct } = useProductsList(tenant);
+
+  const loadProducts = useCallback(() => {
+    fetchProducts({ page, limit: PAGE_SIZE, search: debouncedSearch });
+  }, [fetchProducts, page, debouncedSearch]);
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
-    fetchProducts();
     fetchCategories();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang, tenant]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchTerm), 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    loadProducts();
+  }, [loadProducts]);
 
   useEffect(() => {
     if (settings) {
@@ -69,17 +84,15 @@ export default function ProductsPage() {
     const result = await deleteProduct(productId);
     if (result.success) {
       showToast.success(getProductDeletedMessage(dict));
+      if (products.length === 1 && page > 1) {
+        setPage(page - 1);
+      } else {
+        loadProducts();
+      }
     } else {
       showToast.error(result.error || getProductDeleteErrorMessage(dict));
     }
   };
-
-  const filteredProducts = products.filter(product =>
-    product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    product.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    product.barcode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    product.description?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   if (!dict || loading) {
     return (
@@ -130,7 +143,10 @@ export default function ProductsPage() {
                 type="text"
                 placeholder={dict.common?.search || 'Search products...'}
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setPage(1);
+                }}
                 className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
               />
             </div>
@@ -180,7 +196,7 @@ export default function ProductsPage() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredProducts.map((product) => (
+                {products.map((product) => (
                   <tr key={product._id}>
                     <td className="px-4 py-4 w-14">
                       {product.image ? (
@@ -252,12 +268,46 @@ export default function ProductsPage() {
                 ))}
               </tbody>
             </table>
-            {filteredProducts.length === 0 && (
+            {products.length === 0 && (
               <div className="text-center py-8 text-gray-500">
-                {searchTerm ? (dict.common?.noResults || 'No products found') : (dict.common?.noData || 'No products yet')}
+                {debouncedSearch ? (dict.common?.noResults || 'No products found') : (dict.common?.noData || 'No products yet')}
               </div>
             )}
           </div>
+          {pagination.pages > 1 && (
+            <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <p className="text-sm text-gray-600">
+                {dict.admin?.showing || 'Showing'}{' '}
+                {(pagination.page - 1) * pagination.limit + 1}
+                {' '}{dict.admin?.to || 'to'}{' '}
+                {Math.min(pagination.page * pagination.limit, pagination.total)}
+                {' '}{dict.admin?.of || 'of'}{' '}
+                {pagination.total}
+                {' '}{dict.admin?.results || 'results'}
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="px-4 py-2 border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed bg-white"
+                >
+                  {dict.common?.previous || 'Previous'}
+                </button>
+                <span className="px-2 text-sm text-gray-700">
+                  {dict.admin?.page || 'Page'} {page} {dict.admin?.of || 'of'} {pagination.pages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(pagination.pages, p + 1))}
+                  disabled={page >= pagination.pages}
+                  className="px-4 py-2 border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed bg-white"
+                >
+                  {dict.common?.next || 'Next'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {barcodeProduct && (
@@ -277,7 +327,7 @@ export default function ProductsPage() {
               setEditingProduct(null);
             }}
             onSave={() => {
-              fetchProducts();
+              loadProducts();
               setShowProductModal(false);
               setEditingProduct(null);
             }}
@@ -292,7 +342,7 @@ export default function ProductsPage() {
             dict={dict}
             onClose={() => setShowImportModal(false)}
             onComplete={() => {
-              fetchProducts();
+              loadProducts();
               fetchCategories();
             }}
           />

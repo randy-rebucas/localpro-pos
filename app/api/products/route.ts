@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
         { name: { $regex: escapedSearch, $options: 'i' } },
         { description: { $regex: escapedSearch, $options: 'i' } },
         { sku: { $regex: escapedSearch, $options: 'i' } },
+        { barcode: { $regex: escapedSearch, $options: 'i' } },
       ];
     }
     if (category) {
