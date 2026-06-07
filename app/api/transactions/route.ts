@@ -23,6 +23,11 @@ import LoyaltyTransaction from '@/models/LoyaltyTransaction';
 import Table from '@/models/Table';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { wouldExceedCreditLimit } from '@/lib/customer-credit';
+import {
+  runWithOptionalMongoTransaction,
+  sessionOpts,
+  withOptionalSession,
+} from '@/lib/mongo-session';
 
 interface VariationInput {
   size?: string;
@@ -72,6 +77,41 @@ function toPaymentRecordMethod(
   if (m === 'check') return 'check';
   if (['digital', 'tap_to_pay', 'wallet', 'qr_code', 'bnpl'].includes(m)) return 'digital';
   return 'other';
+}
+
+const TRANSACTION_PAYMENT_METHODS = new Set([
+  'cash', 'card', 'digital', 'tap_to_pay', 'wallet', 'qr_code', 'bnpl', 'on_account',
+]);
+
+function normalizeTransactionPaymentMethod(m: string): string {
+  if (TRANSACTION_PAYMENT_METHODS.has(m)) return m;
+  if (m === 'check' || m === 'other') return 'digital';
+  throw new Error(`Invalid payment method: ${m}`);
+}
+
+function getTransactionErrorStatus(error: unknown): number {
+  if (error && typeof error === 'object') {
+    const err = error as { name?: string; code?: number; message?: string };
+    if (err.name === 'ValidationError' || err.name === 'CastError') return 400;
+    if (err.code === 11000) return 400;
+  }
+  const message = error instanceof Error ? error.message.toLowerCase() : '';
+  const businessPatterns = [
+    'insufficient stock',
+    'invalid',
+    'not found',
+    'not enabled',
+    'limit',
+    'required',
+    'unauthorized',
+    'forbidden',
+    'validation failed',
+    'duplicate',
+    'already exists',
+    'credit limit',
+  ];
+  if (businessPatterns.some((p) => message.includes(p))) return 400;
+  return 500;
 }
 
 interface TransactionItemRecord {
@@ -178,10 +218,17 @@ export async function POST(request: NextRequest) {
 
     const { items, paymentMethod, cashReceived, notes, discountCode, branchId, payments } = data as unknown as TransactionInput;
     const customerId = body.customerId as string | undefined;
+    if (customerId && !mongoose.Types.ObjectId.isValid(customerId)) {
+      return NextResponse.json({ success: false, error: 'Invalid customer ID' }, { status: 400 });
+    }
     const loyaltyPointsToRedeem = typeof body.loyaltyPointsToRedeem === 'number' ? Math.floor(body.loyaltyPointsToRedeem) : 0;
 
     // Restaurant & split-billing fields
-    const orderType = typeof body.orderType === 'string' ? body.orderType : undefined;
+    const rawOrderType = typeof body.orderType === 'string' ? body.orderType : undefined;
+    const orderType =
+      rawOrderType && ['dine-in', 'takeout', 'delivery'].includes(rawOrderType)
+        ? rawOrderType
+        : undefined;
     const tableNumber = typeof body.tableNumber === 'string' ? body.tableNumber : undefined;
     const tableId = typeof body.tableId === 'string' ? body.tableId : undefined;
     const splitCount = typeof body.splitCount === 'number' ? body.splitCount : undefined;
@@ -634,21 +681,17 @@ export async function POST(request: NextRequest) {
       onAccountAmountToBill = total;
     }
 
-    // ─── Atomic section: stock + transaction + payments in a MongoDB session ───
-    // If the DB supports replica sets, all writes are atomic.
-    // On standalone dev servers, session falls back gracefully.
-    const session = await mongoose.startSession();
-    let transaction;
-    const paymentRecords: Array<{ _id: unknown; method: string; amount: number; status: string }> = [];
-    let onAccountCreditChange: {
-      customerId: string;
-      amount: number;
-      balanceBefore: number;
-      balanceAfter: number;
-    } | null = null;
+    const storedPaymentMethod = normalizeTransactionPaymentMethod(finalPaymentMethod);
 
-    try {
-      session.startTransaction();
+    // ─── Atomic section: stock + transaction + payments (transaction when DB supports it) ───
+    const checkoutResult = await runWithOptionalMongoTransaction(async (session) => {
+      const paymentRecords: Array<{ _id: unknown; method: string; amount: number; status: string }> = [];
+      let onAccountCreditChange: {
+        customerId: string;
+        amount: number;
+        balanceBefore: number;
+        balanceAfter: number;
+      } | null = null;
 
       // Update stock BEFORE creating transaction (critical - must succeed)
       for (const item of items) {
@@ -673,7 +716,10 @@ export async function POST(request: NextRequest) {
             session
           );
         } else if (productId) {
-          const product = await Product.findOne({ _id: productId, tenantId }).session(session);
+          const product = await withOptionalSession(
+            Product.findOne({ _id: productId, tenantId }),
+            session
+          );
           if (product && product.trackInventory !== false) {
             await updateStock(
               productId,
@@ -692,10 +738,8 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Generate receipt number
       const receiptNumber = await generateReceiptNumber(tenantId);
 
-      // Create transaction
       const [txn] = await Transaction.create([{
         tenantId,
         branchId: branchId || undefined,
@@ -707,24 +751,22 @@ export async function POST(request: NextRequest) {
         taxExemptAmount: taxResult?.exemptAmount || 0,
         taxAmount: taxAmount > 0 ? taxAmount : undefined,
         total,
-        paymentMethod: finalPaymentMethod,
-        cashReceived: finalPaymentMethod === 'cash' ? finalCashReceived : undefined,
-        change: finalPaymentMethod === 'cash' ? finalChange : undefined,
+        paymentMethod: storedPaymentMethod,
+        cashReceived: storedPaymentMethod === 'cash' ? finalCashReceived : undefined,
+        change: storedPaymentMethod === 'cash' ? finalChange : undefined,
         status: 'completed',
         customerId: customerId || undefined,
         userId: user.userId,
         receiptNumber,
         notes,
-        // Restaurant & split billing
         orderType: orderType || undefined,
         tableNumber: tableNumber || undefined,
         tableId: tableId || undefined,
         splitCount: splitCount || undefined,
         splitPayments: splitPayments || undefined,
-      }], { session });
-      transaction = txn;
+      }], sessionOpts(session));
+      const transaction = txn;
 
-      // Link stock movements to transaction
       for (const item of items) {
         const { productId, bundleId } = item;
         if (productId || bundleId) {
@@ -736,18 +778,16 @@ export async function POST(request: NextRequest) {
               transactionId: { $exists: false },
             },
             { $set: { transactionId: transaction._id } },
-            { session }
+            sessionOpts(session)
           );
         }
       }
 
-      // ─── Loyalty: earn and/or redeem points ───
       if (loyaltyEnabled && loyaltyCustomer && loyaltyConfig) {
         const currentBalance = loyaltyCustomer.loyaltyPointsBalance ?? 0;
         let newBalance = currentBalance;
-
-        // Redeem first
         const loyaltyUpdate: Record<string, number> = {};
+
         if (loyaltyPointsToRedeem > 0) {
           const balanceAfterRedeem = Math.max(0, newBalance - loyaltyPointsToRedeem);
           await LoyaltyTransaction.create([{
@@ -760,12 +800,11 @@ export async function POST(request: NextRequest) {
             balanceAfter: balanceAfterRedeem,
             description: `Redeemed ${loyaltyPointsToRedeem} points (₱${loyaltyDiscountAmount.toFixed(2)} discount)`,
             createdBy: user.userId,
-          }], { session });
+          }], sessionOpts(session));
           newBalance = balanceAfterRedeem;
           loyaltyUpdate.loyaltyPointsRedeemed = loyaltyPointsToRedeem;
         }
 
-        // Earn points on total paid (after redemption discount)
         const pointsEarned = Math.floor(total * loyaltyConfig.pointsPerPeso);
         if (pointsEarned > 0) {
           const balanceAfterEarn = newBalance + pointsEarned;
@@ -779,25 +818,22 @@ export async function POST(request: NextRequest) {
             balanceAfter: balanceAfterEarn,
             description: `Earned ${pointsEarned} points from receipt #${transaction.receiptNumber}`,
             createdBy: user.userId,
-          }], { session });
+          }], sessionOpts(session));
           newBalance = balanceAfterEarn;
           loyaltyUpdate.loyaltyPointsEarned = pointsEarned;
         }
 
-        // Single update for all loyalty fields
         if (Object.keys(loyaltyUpdate).length > 0) {
-          await Transaction.updateOne({ _id: transaction._id }, { $set: loyaltyUpdate }, { session });
+          await Transaction.updateOne({ _id: transaction._id }, { $set: loyaltyUpdate }, sessionOpts(session));
         }
 
-        // Persist updated balance on customer
         await Customer.updateOne(
           { _id: loyaltyCustomer._id },
           { $set: { loyaltyPointsBalance: newBalance } },
-          { session }
+          sessionOpts(session)
         );
       }
 
-      // Create Payment record(s)
       if (body.createPaymentRecord !== false) {
         if (isMultiplePayments && effectivePayments) {
           for (const payment of effectivePayments) {
@@ -829,7 +865,7 @@ export async function POST(request: NextRequest) {
               details: Object.keys(paymentDetails).length > 0 ? paymentDetails : undefined,
               processedBy: user.userId,
               processedAt: new Date(),
-            }], { session });
+            }], sessionOpts(session));
             paymentRecords.push(paymentRecord);
           }
         } else {
@@ -856,15 +892,16 @@ export async function POST(request: NextRequest) {
             details: Object.keys(paymentDetails).length > 0 ? paymentDetails : undefined,
             processedBy: user.userId,
             processedAt: new Date(),
-          }], { session });
+          }], sessionOpts(session));
           paymentRecords.push(paymentRecord);
         }
       }
 
       if (onAccountAmountToBill > 0.009 && customerId) {
-        const creditCustomer = await Customer.findOne({ _id: customerId, tenantId, isActive: true })
-          .select('accountBalance creditLimit')
-          .session(session);
+        const creditCustomer = await withOptionalSession(
+          Customer.findOne({ _id: customerId, tenantId, isActive: true }).select('accountBalance creditLimit'),
+          session
+        );
 
         if (!creditCustomer) {
           throw new Error(t('validation.customerNotFound', 'Customer not found or inactive'));
@@ -880,7 +917,7 @@ export async function POST(request: NextRequest) {
         await Customer.updateOne(
           { _id: customerId, tenantId },
           { $inc: { accountBalance: onAccountAmountToBill } },
-          { session }
+          sessionOpts(session)
         );
 
         onAccountCreditChange = {
@@ -891,13 +928,10 @@ export async function POST(request: NextRequest) {
         };
       }
 
-      await session.commitTransaction();
-    } catch (sessionError) {
-      await session.abortTransaction();
-      throw sessionError;
-    } finally {
-      session.endSession();
-    }
+      return { transaction, paymentRecords, onAccountCreditChange };
+    });
+
+    const { transaction, paymentRecords, onAccountCreditChange } = checkoutResult;
 
     {
       const productIdsForChannel = items
@@ -973,11 +1007,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, data: responseData }, { status: 201 });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Transaction failed';
-    // Business validation errors (stock, discount, payment) are 400; unexpected errors are 500
-    const businessErrors = ['Insufficient stock', 'Invalid', 'not found', 'not enabled', 'limit', 'required', 'Unauthorized', 'Forbidden'];
-    const isBusinessError = businessErrors.some(e => message.toLowerCase().includes(e.toLowerCase()));
+    const status = getTransactionErrorStatus(error);
     logger.error('Transaction POST error:', error);
-    return NextResponse.json({ success: false, error: message }, { status: isBusinessError ? 400 : 500 });
+    return NextResponse.json({ success: false, error: message }, { status });
   }
 }
 

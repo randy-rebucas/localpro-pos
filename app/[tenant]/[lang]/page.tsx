@@ -1011,6 +1011,12 @@ export default function Dashboard() {
           }),
         }).catch((err) => console.error('Failed to sync transaction:', err));
       }
+    } else if (result) {
+      const message =
+        result.error ||
+        (Array.isArray(result.errors) && result.errors.map((e) => e.message).filter(Boolean).join(', ')) ||
+        dictValue('pos.paymentFailed', 'Payment failed');
+      showToast.error(message);
     }
   };
 
@@ -1090,6 +1096,12 @@ export default function Dashboard() {
         setTableNumber('');
       }
       if (result.data) printReceipt(result.data);
+    } else if (result) {
+      const message =
+        result.error ||
+        (Array.isArray(result.errors) && result.errors.map((e) => e.message).filter(Boolean).join(', ')) ||
+        dictValue('pos.paymentFailed', 'Payment failed');
+      showToast.error(message);
     }
   };
 

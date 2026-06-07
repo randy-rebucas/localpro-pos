@@ -212,18 +212,28 @@ export function usePayment(): UsePaymentReturn {
           }));
         }
 
-        const res = await fetchWithTimeout(
-          `/api/transactions?tenant=${tenant}`,
-          {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 30000);
+        try {
+          const res = await fetch(`/api/transactions?tenant=${tenant}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify(bodyPayload),
-          },
-          30000
-        );
-
-        const data = await res.json();
-        return data;
+            signal: controller.signal,
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            const apiError =
+              (typeof data?.error === 'string' && data.error) ||
+              (Array.isArray(data?.errors) && data.errors.map((e: { message?: string }) => e.message).filter(Boolean).join(', ')) ||
+              `Payment failed (HTTP ${res.status})`;
+            return { success: false, error: apiError, errors: data?.errors };
+          }
+          return data;
+        } finally {
+          clearTimeout(timer);
+        }
       } catch (error: unknown) {
         return {
           success: false,
