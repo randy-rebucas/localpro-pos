@@ -71,6 +71,72 @@ textarea {
   border-radius: 0;
 }
 
+/* Windows 8 / Metro-style checkboxes — square, flat, brand accent */
+input[type="checkbox"].checkbox-win8 {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  min-width: 1.25rem;
+  min-height: 1.25rem;
+  border: 2px solid #9ca3af;
+  border-radius: 0;
+  background: #ffffff;
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+  vertical-align: middle;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+input[type="checkbox"].checkbox-win8:hover {
+  border-color: var(--primary-color);
+}
+
+input[type="checkbox"].checkbox-win8:checked {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+}
+
+input[type="checkbox"].checkbox-win8:checked::after {
+  content: '';
+  position: absolute;
+  left: 0.3125rem;
+  top: 0.0625rem;
+  width: 0.3125rem;
+  height: 0.625rem;
+  border: solid #ffffff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+input[type="checkbox"].checkbox-win8:indeterminate {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+}
+
+input[type="checkbox"].checkbox-win8:indeterminate::after {
+  content: '';
+  position: absolute;
+  left: 0.1875rem;
+  top: 0.4375rem;
+  width: 0.625rem;
+  height: 0;
+  border: none;
+  border-top: 2px solid #ffffff;
+  transform: none;
+}
+
+input[type="checkbox"].checkbox-win8:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 1px;
+}
+
+input[type="checkbox"].checkbox-win8:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Loading spinner animation */
 @keyframes spin {
   to {

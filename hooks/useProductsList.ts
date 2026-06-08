@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
+import type { BulkProductUpdates } from '@/lib/validation';
 
 export interface Product {
   _id: string;
@@ -39,6 +40,7 @@ export interface Product {
   serviceDuration?: number;
   staffRequired?: number;
   equipmentRequired?: string[];
+  isActive?: boolean;
 }
 
 export interface Category {
@@ -57,6 +59,7 @@ export interface FetchProductsOptions {
   page?: number;
   limit?: number;
   search?: string;
+  isActive?: boolean | null | 'all';
 }
 
 export const useProductsList = (_tenant: string) => {
@@ -87,6 +90,13 @@ export const useProductsList = (_tenant: string) => {
         limit: String(limit),
       });
       if (search) params.set('search', search);
+      if (options.isActive === true) {
+        params.set('isActive', 'true');
+      } else if (options.isActive === false) {
+        params.set('isActive', 'false');
+      } else if (options.isActive === 'all') {
+        params.set('isActive', 'all');
+      }
 
       const res = await fetch(`/api/products?${params}`, { credentials: 'include', signal: controller.signal });
       const data = await res.json();
@@ -167,6 +177,37 @@ export const useProductsList = (_tenant: string) => {
     setMessage(msg);
   }, []);
 
+  const bulkUpdateProducts = useCallback(async (productIds: string[], updates: BulkProductUpdates) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000);
+
+    try {
+      const res = await fetch('/api/products/bulk', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ productIds, action: 'update', updates }),
+        signal: controller.signal,
+      });
+      const data = await res.json();
+      if (data.success) {
+        return { success: true as const, message: data.message as string, modifiedCount: data.modifiedCount as number };
+      }
+      const errorMsg =
+        data.error ||
+        (Array.isArray(data.errors) ? data.errors.map((e: { message: string }) => e.message).join(', ') : null) ||
+        'Failed to update products';
+      return { success: false as const, error: errorMsg };
+    } catch (error) {
+      if ((error as Error).name !== 'AbortError') {
+        return { success: false as const, error: 'Failed to update products' };
+      }
+      return { success: false as const, error: 'Request timeout' };
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }, []);
+
   return {
     products,
     categories,
@@ -177,5 +218,6 @@ export const useProductsList = (_tenant: string) => {
     fetchCategories,
     deleteProduct,
     updateMessage,
+    bulkUpdateProducts,
   };
 };

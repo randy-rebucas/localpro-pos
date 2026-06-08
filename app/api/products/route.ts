@@ -28,8 +28,18 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || '';
     const category = searchParams.get('category') || '';
     const categoryId = searchParams.get('categoryId') || '';
+    const isActiveParam = searchParams.get('isActive');
 
-    const query: any = { tenantId, isActive: { $ne: false } }; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const query: any = { tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
+    if (isActiveParam === 'true') {
+      query.isActive = { $ne: false };
+    } else if (isActiveParam === 'false') {
+      query.isActive = false;
+    } else if (isActiveParam === 'all') {
+      // no isActive filter
+    } else {
+      query.isActive = { $ne: false };
+    }
     if (search) {
       const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       query.$or = [

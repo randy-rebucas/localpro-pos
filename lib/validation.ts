@@ -108,6 +108,127 @@ export function validateProduct(data: Record<string, unknown>, t?: TranslationFu
   return errors;
 }
 
+export interface BulkProductPriceUpdate {
+  mode: 'set' | 'percent' | 'add';
+  value: number;
+}
+
+export interface BulkProductStockUpdate {
+  mode: 'set' | 'add';
+  value: number;
+}
+
+export interface BulkProductUpdates {
+  categoryId?: string;
+  price?: BulkProductPriceUpdate;
+  stock?: BulkProductStockUpdate;
+  trackInventory?: boolean;
+  lowStockThreshold?: number;
+}
+
+/**
+ * Validate partial bulk product update payload (only present fields).
+ */
+export function validateBulkProductUpdate(
+  updates: Record<string, unknown>,
+  t?: TranslationFunction
+): ValidationError[] {
+  const errors: ValidationError[] = [];
+  const translate = (key: string, fallback: string) => (t ? t(key, fallback) : fallback);
+
+  if (updates.categoryId !== undefined) {
+    const categoryId = typeof updates.categoryId === 'string' ? updates.categoryId.trim() : '';
+    if (!categoryId) {
+      errors.push({
+        field: 'categoryId',
+        message: translate('validation.categoryIdRequired', 'Category is required'),
+        code: 'categoryIdRequired',
+      });
+    }
+  }
+
+  if (updates.price !== undefined) {
+    const price = updates.price as BulkProductPriceUpdate;
+    if (!price || typeof price !== 'object' || !['set', 'percent', 'add'].includes(price.mode)) {
+      errors.push({
+        field: 'price.mode',
+        message: translate('validation.priceModeInvalid', 'Price mode must be set, percent, or add'),
+        code: 'priceModeInvalid',
+      });
+    }
+    if (typeof price?.value !== 'number' || isNaN(price.value)) {
+      errors.push({
+        field: 'price.value',
+        message: translate('validation.priceValueRequired', 'Price value is required'),
+        code: 'priceValueRequired',
+      });
+    } else if (price.mode === 'set' && price.value < 0) {
+      errors.push({
+        field: 'price.value',
+        message: translate('validation.pricePositive', 'Price must be a positive number'),
+        code: 'pricePositive',
+      });
+    } else if (price.mode === 'percent' && price.value < -100) {
+      errors.push({
+        field: 'price.value',
+        message: translate('validation.pricePercentMin', 'Percent adjustment cannot be less than -100'),
+        code: 'pricePercentMin',
+      });
+    }
+  }
+
+  if (updates.stock !== undefined) {
+    const stock = updates.stock as BulkProductStockUpdate;
+    if (!stock || typeof stock !== 'object' || !['set', 'add'].includes(stock.mode)) {
+      errors.push({
+        field: 'stock.mode',
+        message: translate('validation.stockModeInvalid', 'Stock mode must be set or add'),
+        code: 'stockModeInvalid',
+      });
+    }
+    if (typeof stock?.value !== 'number' || isNaN(stock.value)) {
+      errors.push({
+        field: 'stock.value',
+        message: translate('validation.stockValueRequired', 'Stock value is required'),
+        code: 'stockValueRequired',
+      });
+    } else if (stock.mode === 'set' && (!Number.isInteger(stock.value) || stock.value < 0)) {
+      errors.push({
+        field: 'stock.value',
+        message: translate('validation.stockNonNegative', 'Stock must be a non-negative integer'),
+        code: 'stockNonNegative',
+      });
+    } else if (stock.mode === 'add' && !Number.isInteger(stock.value)) {
+      errors.push({
+        field: 'stock.value',
+        message: translate('validation.stockDeltaInteger', 'Stock adjustment must be an integer'),
+        code: 'stockDeltaInteger',
+      });
+    }
+  }
+
+  if (updates.trackInventory !== undefined && typeof updates.trackInventory !== 'boolean') {
+    errors.push({
+      field: 'trackInventory',
+      message: translate('validation.trackInventoryBoolean', 'Track inventory must be a boolean'),
+      code: 'trackInventoryBoolean',
+    });
+  }
+
+  if (updates.lowStockThreshold !== undefined) {
+    const threshold = updates.lowStockThreshold;
+    if (typeof threshold !== 'number' || !Number.isInteger(threshold) || threshold < 0) {
+      errors.push({
+        field: 'lowStockThreshold',
+        message: translate('validation.lowStockThresholdNonNegative', 'Low stock threshold must be a non-negative integer'),
+        code: 'lowStockThresholdNonNegative',
+      });
+    }
+  }
+
+  return errors;
+}
+
 /**
  * Validate transaction data
  */

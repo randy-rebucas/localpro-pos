@@ -15,18 +15,32 @@ import { showToast } from '@/lib/toast';
 import { useConfirm } from '@/lib/confirm';
 import { getBusinessTypeConfig, getAllowedProductTypes } from '@/lib/business-types'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getBusinessType } from '@/lib/business-type-helpers';
-import { RefreshCw } from 'lucide-react';
+import { Barcode, Pencil, RefreshCw, Trash2 } from 'lucide-react';
 import { useProductsList, type Product, type Category } from '@/hooks/useProductsList';
 import { useProductsForm } from '@/hooks/useProductsForm';
+import type { BulkProductUpdates } from '@/lib/validation';
 import {
   getProductDeletedMessage,
   getProductDeleteErrorMessage,
   getDeleteProductConfirmTitle,
   getDeleteProductConfirmMessage,
+  getBulkProductUpdateConfirmMessage,
+  getBulkProductUpdateSuccessMessage,
   generateEAN13 as generateEAN13Helper,
 } from '@/lib/products-helpers';
 
-
+const btnPrimary =
+  'px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium border border-brand-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+const btnPrimarySm = `${btnPrimary} text-sm`;
+const btnSecondary =
+  'px-4 py-2 border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 bg-white transition-colors';
+const btnSecondarySm =
+  `${btnSecondary} text-sm disabled:opacity-50 disabled:cursor-not-allowed`;
+const btnSecondaryIcon = `${btnSecondary} inline-flex items-center gap-2`;
+const btnDropdownItem =
+  'block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed';
+const btnTableIcon =
+  'p-1.5 border border-transparent hover:border-gray-200 hover:bg-gray-50 transition-colors';
 
 export default function ProductsPage() {
   const params = useParams();
@@ -40,11 +54,25 @@ export default function ProductsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
+  const [showBulkEditModal, setShowBulkEditModal] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const selectAllRef = useRef<HTMLInputElement>(null);
   const PAGE_SIZE = 20;
   const { settings } = useTenantSettings();
   const { confirm, Dialog } = useConfirm();
   const [businessTypeConfig, setBusinessTypeConfig] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const { products, categories, loading, pagination, message, fetchProducts, fetchCategories, deleteProduct } = useProductsList(tenant);
+  const {
+    products,
+    categories,
+    loading,
+    pagination,
+    message,
+    fetchProducts,
+    fetchCategories,
+    deleteProduct,
+    bulkUpdateProducts,
+  } = useProductsList(tenant);
 
   const loadProducts = useCallback(() => {
     fetchProducts({ page, limit: PAGE_SIZE, search: debouncedSearch });
@@ -64,6 +92,17 @@ export default function ProductsPage() {
   useEffect(() => {
     loadProducts();
   }, [loadProducts]);
+
+  useEffect(() => {
+    setSelectedProducts(new Set());
+  }, [page, debouncedSearch]);
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate =
+        selectedProducts.size > 0 && selectedProducts.size < products.length;
+    }
+  }, [selectedProducts, products.length]);
 
   useEffect(() => {
     if (settings) {
@@ -91,6 +130,117 @@ export default function ProductsPage() {
       }
     } else {
       showToast.error(result.error || getProductDeleteErrorMessage(dict));
+    }
+  };
+
+  const handleSelectAll = () => {
+    if (selectedProducts.size === products.length) {
+      setSelectedProducts(new Set());
+    } else {
+      setSelectedProducts(new Set(products.map((p) => p._id)));
+    }
+  };
+
+  const handleSelectProduct = (productId: string) => {
+    const next = new Set(selectedProducts);
+    if (next.has(productId)) {
+      next.delete(productId);
+    } else {
+      next.add(productId);
+    }
+    setSelectedProducts(next);
+  };
+
+  const handleBulkEditSave = async (updates: BulkProductUpdates) => {
+    if (selectedProducts.size === 0) return;
+    if (!dict) return;
+
+    const confirmed = await confirm(
+      dict.products?.bulkEditTitle || 'Bulk Edit Products',
+      getBulkProductUpdateConfirmMessage(selectedProducts.size, dict)
+    );
+    if (!confirmed) return;
+
+    const result = await bulkUpdateProducts(Array.from(selectedProducts), updates);
+    if (result.success) {
+      showToast.success(
+        result.message || getBulkProductUpdateSuccessMessage(result.modifiedCount ?? selectedProducts.size, dict)
+      );
+      setSelectedProducts(new Set());
+      setShowBulkEditModal(false);
+      loadProducts();
+    } else {
+      showToast.error(result.error || 'Failed to update products');
+    }
+  };
+
+  const handleExport = async (format: 'csv' | 'excel' | 'pdf' = 'csv') => {
+    if (!dict || exporting) return;
+
+    setExporting(true);
+    try {
+      let exportProducts: Product[];
+
+      if (selectedProducts.size > 0) {
+        exportProducts = products.filter((p) => selectedProducts.has(p._id));
+      } else {
+        const params = new URLSearchParams();
+        if (debouncedSearch) params.set('search', debouncedSearch);
+        const res = await fetch(`/api/products?${params}`, { credentials: 'include' });
+        const data = await res.json();
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to fetch products');
+        }
+        exportProducts = data.data || [];
+      }
+
+      if (exportProducts.length === 0) {
+        showToast.error(dict.products?.exportEmpty || 'No products to export');
+        return;
+      }
+
+      const baseFilename = `products_export_${new Date().toISOString().split('T')[0]}`;
+      const { downloadCSV, downloadExcel, downloadPDF } = await import('@/lib/export');
+      const {
+        productsToExportCSV,
+        mapProductToDisplayRow,
+        getProductDisplayExportHeaders,
+      } = await import('@/lib/product-export');
+
+      const labels = {
+        name: dict.admin?.name || 'Name',
+        sku: 'SKU',
+        category: dict.admin?.category || 'Category',
+        price: dict.admin?.price || 'Price',
+      };
+
+      if (format === 'csv') {
+        downloadCSV(productsToExportCSV(exportProducts), `${baseFilename}.csv`);
+      } else {
+        const headers = getProductDisplayExportHeaders(labels);
+        const exportData = exportProducts.map((product) => mapProductToDisplayRow(product, labels));
+
+        if (format === 'excel') {
+          await downloadExcel(exportData, headers, baseFilename);
+        } else {
+          await downloadPDF(exportData, headers, baseFilename, dict.admin?.products || 'Products');
+        }
+      }
+
+      showToast.success(
+        (dict.products?.exportSuccess || 'Exported {count} product(s)').replace(
+          '{count}',
+          String(exportProducts.length)
+        )
+      );
+    } catch (error) {
+      showToast.error(
+        error instanceof Error
+          ? error.message
+          : dict.products?.exportError || 'Failed to export products'
+      );
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -150,11 +300,49 @@ export default function ProductsPage() {
                 className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
               />
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
+              <div className="relative group">
+                <button
+                  type="button"
+                  onClick={() => handleExport('csv')}
+                  disabled={exporting}
+                  className={btnSecondarySm}
+                >
+                  {exporting
+                    ? (dict.products?.exporting || 'Exporting...')
+                    : `${dict.admin?.export || 'Export'} ▼`}
+                </button>
+                <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-300 shadow-lg hidden group-hover:block z-10">
+                  <button
+                    type="button"
+                    onClick={() => handleExport('csv')}
+                    disabled={exporting}
+                    className={btnDropdownItem}
+                  >
+                    {dict.admin?.exportCSV || 'Export CSV'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleExport('excel')}
+                    disabled={exporting}
+                    className={btnDropdownItem}
+                  >
+                    {dict.admin?.exportExcel || 'Export Excel'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleExport('pdf')}
+                    disabled={exporting}
+                    className={btnDropdownItem}
+                  >
+                    {dict.admin?.exportPDF || 'Export PDF'}
+                  </button>
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={() => setShowImportModal(true)}
-                className="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium border border-gray-300 inline-flex items-center gap-2 transition-colors"
+                className={btnSecondaryIcon}
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
@@ -163,7 +351,7 @@ export default function ProductsPage() {
               </button>
               <Link
                 href={`/${tenant}/${lang}/admin/file-upload`}
-                className="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium border border-gray-300 inline-flex items-center gap-2 transition-colors"
+                className={btnSecondaryIcon}
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
@@ -175,16 +363,51 @@ export default function ProductsPage() {
                   setEditingProduct(null);
                   setShowProductModal(true);
                 }}
-                className="px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium border border-brand-hover"
+                className={btnPrimary}
               >
                 {dict.common?.add || 'Add'} {dict.admin?.product || 'Product'}
               </button>
             </div>
           </div>
+
+          {selectedProducts.size > 0 && (
+            <div className="mb-4 p-3 bg-brand-soft border border-teal-200 flex items-center justify-between flex-wrap gap-2">
+              <span className="text-sm font-medium text-brand-navy-deep">
+                {selectedProducts.size} {dict.admin?.selected || 'selected'}
+              </span>
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkEditModal(true)}
+                  className={btnPrimarySm}
+                >
+                  {dict.products?.bulkEdit || 'Edit Selected'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedProducts(new Set())}
+                  className={btnSecondarySm}
+                >
+                  {dict.common?.cancel || 'Cancel'}
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-10">
+                    <input
+                      ref={selectAllRef}
+                      type="checkbox"
+                      checked={selectedProducts.size === products.length && products.length > 0}
+                      onChange={handleSelectAll}
+                      className="checkbox-win8"
+                      aria-label={dict.common?.selectAll || 'Select all'}
+                    />
+                  </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.products?.imageHeader || 'Image'}</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.name || 'Name'}</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
@@ -192,12 +415,21 @@ export default function ProductsPage() {
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.price || 'Price'}</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.stock || 'Stock'}</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.type || 'Type'}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.actions || 'Actions'}</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{dict.common?.actions || 'Actions'}</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {products.map((product) => (
                   <tr key={product._id}>
+                    <td className="px-4 py-4 w-10">
+                      <input
+                        type="checkbox"
+                        checked={selectedProducts.has(product._id)}
+                        onChange={() => handleSelectProduct(product._id)}
+                        className="checkbox-win8"
+                        aria-label={`Select ${product.name}`}
+                      />
+                    </td>
                     <td className="px-4 py-4 w-14">
                       {product.image ? (
                         // eslint-disable-next-line @next/next/no-img-element
@@ -239,28 +471,37 @@ export default function ProductsPage() {
                         {product.hasVariations && ` ${dict.products?.variations || '(variations)'}`}
                       </span>
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex gap-2">
+                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-right">
+                      <div className="flex items-center justify-end gap-1">
                         <button
+                          type="button"
                           onClick={() => setBarcodeProduct(product)}
-                          className="text-gray-600 hover:text-gray-900"
+                          className={`${btnTableIcon} text-gray-600 hover:text-gray-900`}
+                          title={dict.products?.barcode || 'Barcode'}
+                          aria-label={dict.products?.barcode || 'Barcode'}
                         >
-                          {dict.products?.barcode || 'Barcode'}
+                          <Barcode className="w-4 h-4" aria-hidden />
                         </button>
                         <button
+                          type="button"
                           onClick={() => {
                             setEditingProduct(product);
                             setShowProductModal(true);
                           }}
-                          className="text-brand hover:text-brand-navy-deep"
+                          className={`${btnTableIcon} text-brand hover:text-brand-navy-deep`}
+                          title={dict.common?.edit || 'Edit'}
+                          aria-label={dict.common?.edit || 'Edit'}
                         >
-                          {dict.common?.edit || 'Edit'}
+                          <Pencil className="w-4 h-4" aria-hidden />
                         </button>
                         <button
+                          type="button"
                           onClick={() => handleDeleteProduct(product._id)}
-                          className="text-red-600 hover:text-red-900"
+                          className={`${btnTableIcon} text-red-600 hover:text-red-900`}
+                          title={dict.common?.delete || 'Delete'}
+                          aria-label={dict.common?.delete || 'Delete'}
                         >
-                          {dict.common?.delete || 'Delete'}
+                          <Trash2 className="w-4 h-4" aria-hidden />
                         </button>
                       </div>
                     </td>
@@ -290,7 +531,7 @@ export default function ProductsPage() {
                   type="button"
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page === 1}
-                  className="px-4 py-2 border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed bg-white"
+                  className={btnSecondarySm}
                 >
                   {dict.common?.previous || 'Previous'}
                 </button>
@@ -301,7 +542,7 @@ export default function ProductsPage() {
                   type="button"
                   onClick={() => setPage((p) => Math.min(pagination.pages, p + 1))}
                   disabled={page >= pagination.pages}
-                  className="px-4 py-2 border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed bg-white"
+                  className={btnSecondarySm}
                 >
                   {dict.common?.next || 'Next'}
                 </button>
@@ -345,6 +586,17 @@ export default function ProductsPage() {
               loadProducts();
               fetchCategories();
             }}
+          />
+        )}
+
+        {showBulkEditModal && (
+          <BulkEditModal
+            categories={categories}
+            dict={dict}
+            count={selectedProducts.size}
+            businessTypeConfig={businessTypeConfig}
+            onClose={() => setShowBulkEditModal(false)}
+            onSave={handleBulkEditSave}
           />
         )}
       </div>
@@ -785,7 +1037,7 @@ function ProductModal({
                     type="checkbox"
                     checked={formData.trackInventory}
                     onChange={(e) => updateFormData({ trackInventory: e.target.checked })}
-                    className="mr-2"
+                    className="checkbox-win8 mr-2"
                   />
                   <span className="text-sm font-medium text-gray-700">
                     {dict.admin?.trackInventory || 'Track Inventory'}
@@ -884,7 +1136,7 @@ function ProductModal({
                                 mods[gi] = { ...mods[gi], required: e.target.checked };
                                 updateFormData({ modifiers: mods });
                               }}
-                              className="rounded"
+                              className="checkbox-win8"
                             />
                             {dict.products?.required || 'Required'}
                           </label>
@@ -1000,7 +1252,7 @@ function ProductModal({
                         type="checkbox"
                         checked={formData.weightBased}
                         onChange={(e) => updateFormData({ weightBased: e.target.checked })}
-                        className="mr-2"
+                        className="checkbox-win8 mr-2"
                       />
                       <span className="text-sm font-medium text-gray-700">{dict.products?.weightBased || 'Weight-based pricing'}</span>
                     </label>
@@ -1011,7 +1263,7 @@ function ProductModal({
                         type="checkbox"
                         checked={formData.pickupDelivery}
                         onChange={(e) => updateFormData({ pickupDelivery: e.target.checked })}
-                        className="mr-2"
+                        className="checkbox-win8 mr-2"
                       />
                       <span className="text-sm font-medium text-gray-700">{dict.products?.pickupDelivery || 'Pickup & Delivery'}</span>
                     </label>
@@ -1083,14 +1335,14 @@ function ProductModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
+                className={btnSecondary}
               >
                 {dict.common?.cancel || 'Cancel'}
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="px-4 py-2 bg-brand text-white hover:bg-brand-hover disabled:opacity-50 border border-brand-hover"
+                className={btnPrimary}
               >
                 {saving ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
               </button>
@@ -1118,7 +1370,7 @@ function ProductModal({
                 onChange={e => setPickerSearch(e.target.value)}
                 className="flex-1 px-3 py-2 border border-gray-300 text-sm bg-white"
               />
-              <label className={`px-4 py-2 text-sm font-medium text-white cursor-pointer bg-brand hover:bg-brand-hover ${pickerUploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+              <label className={`${btnPrimarySm} cursor-pointer ${pickerUploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
                 {pickerUploading ? (dict.products?.uploading || 'Uploading...') : (dict.products?.uploadNew || 'Upload New')}
                 <input
                   ref={pickerFileInputRef}
@@ -1173,7 +1425,7 @@ function ProductModal({
             </div>
             {/* Footer */}
             <div className="flex justify-end px-5 py-3 border-t border-gray-200">
-              <button type="button" onClick={() => setShowImagePicker(false)} className="px-4 py-2 border border-gray-300 text-gray-700 text-sm hover:bg-gray-50 bg-white">
+              <button type="button" onClick={() => setShowImagePicker(false)} className={btnSecondarySm}>
                 {dict.common?.cancel || 'Cancel'}
               </button>
             </div>
@@ -1181,6 +1433,341 @@ function ProductModal({
         </div>
       )}
     </>
+  );
+}
+
+function BulkEditModal({
+  categories,
+  dict,
+  count,
+  businessTypeConfig,
+  onClose,
+  onSave,
+}: {
+  categories: Category[];
+  dict: Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  count: number;
+  businessTypeConfig: { defaultFeatures?: { enableInventory?: boolean } } | null;
+  onClose: () => void;
+  onSave: (updates: BulkProductUpdates) => Promise<void>;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const [applyCategory, setApplyCategory] = useState(false);
+  const [categoryId, setCategoryId] = useState('');
+  const [categorySearch, setCategorySearch] = useState('');
+  const [showCategorySuggestions, setShowCategorySuggestions] = useState(false);
+  const categoryInputRef = useRef<HTMLInputElement>(null);
+  const categoryListRef = useRef<HTMLDivElement>(null);
+
+  const [applyPrice, setApplyPrice] = useState(false);
+  const [priceMode, setPriceMode] = useState<'set' | 'percent' | 'add'>('set');
+  const [priceValue, setPriceValue] = useState('');
+
+  const [applyStock, setApplyStock] = useState(false);
+  const [stockMode, setStockMode] = useState<'set' | 'add'>('set');
+  const [stockValue, setStockValue] = useState('');
+
+  const [applyTrackInventory, setApplyTrackInventory] = useState(false);
+  const [trackInventory, setTrackInventory] = useState(true);
+
+  const [applyLowStockThreshold, setApplyLowStockThreshold] = useState(false);
+  const [lowStockThreshold, setLowStockThreshold] = useState('10');
+
+  const showInventory = businessTypeConfig?.defaultFeatures?.enableInventory !== false;
+
+  const filteredCategories = useMemo(() => {
+    if (!categorySearch.trim()) return categories;
+    return categories.filter((cat) =>
+      cat.name.toLowerCase().includes(categorySearch.toLowerCase())
+    );
+  }, [categorySearch, categories]);
+
+  const handleCategorySelect = (category: Category) => {
+    setCategoryId(category._id);
+    setCategorySearch(category.name);
+    setShowCategorySuggestions(false);
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        categoryInputRef.current &&
+        categoryListRef.current &&
+        !categoryInputRef.current.contains(event.target as Node) &&
+        !categoryListRef.current.contains(event.target as Node)
+      ) {
+        setShowCategorySuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    const updates: BulkProductUpdates = {};
+
+    if (applyCategory) {
+      if (!categoryId) {
+        setError(dict.admin?.noCategoryFound || 'Please select a category');
+        return;
+      }
+      updates.categoryId = categoryId;
+    }
+
+    if (applyPrice) {
+      const value = parseFloat(priceValue);
+      if (isNaN(value)) {
+        setError(dict.admin?.price || 'Price' + ' is required');
+        return;
+      }
+      updates.price = { mode: priceMode, value };
+    }
+
+    if (applyStock && showInventory) {
+      const value = parseInt(stockValue, 10);
+      if (isNaN(value)) {
+        setError(dict.admin?.stock || 'Stock' + ' is required');
+        return;
+      }
+      updates.stock = { mode: stockMode, value };
+    }
+
+    if (applyTrackInventory && showInventory) {
+      updates.trackInventory = trackInventory;
+    }
+
+    if (applyLowStockThreshold && showInventory) {
+      const value = parseInt(lowStockThreshold, 10);
+      if (isNaN(value) || value < 0) {
+        setError(dict.admin?.lowStockThreshold || 'Low stock threshold' + ' is required');
+        return;
+      }
+      updates.lowStockThreshold = value;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      setError(dict.products?.bulkEditSubtitle || 'Select at least one field to apply');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await onSave(updates);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white border border-gray-200 shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">
+              {dict.products?.bulkEditTitle || 'Bulk Edit Products'}
+            </h2>
+            <p className="text-sm text-gray-500 mt-1">
+              {(dict.products?.bulkEditSubtitle || 'Only checked fields will be applied.') + ` (${count})`}
+            </p>
+          </div>
+          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">
+            ×
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+              <input
+                type="checkbox"
+                checked={applyCategory}
+                onChange={(e) => setApplyCategory(e.target.checked)}
+                className="checkbox-win8"
+              />
+              {dict.products?.applyField || 'Apply'} {dict.admin?.category || 'Category'}
+            </label>
+            {applyCategory && (
+              <div ref={categoryInputRef} className="relative">
+                <input
+                  type="text"
+                  value={categorySearch}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setCategorySearch(value);
+                    setShowCategorySuggestions(true);
+                    const match = categories.find(
+                      (cat) => cat.name.toLowerCase() === value.toLowerCase()
+                    );
+                    setCategoryId(match?._id || '');
+                  }}
+                  onFocus={() => setShowCategorySuggestions(true)}
+                  placeholder={dict.admin?.searchCategory || 'Type to search categories...'}
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
+                />
+                {showCategorySuggestions && filteredCategories.length > 0 && (
+                  <div
+                    ref={categoryListRef}
+                    className="absolute z-50 w-full mt-1 bg-white border border-gray-300 max-h-40 overflow-y-auto"
+                  >
+                    {filteredCategories.map((cat) => (
+                      <button
+                        key={cat._id}
+                        type="button"
+                        onClick={() => handleCategorySelect(cat)}
+                        className={`w-full text-left px-4 py-2 hover:bg-brand-soft focus:bg-brand-soft focus:outline-none ${
+                          categoryId === cat._id ? 'bg-brand-soft' : ''
+                        }`}
+                      >
+                        {cat.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+              <input
+                type="checkbox"
+                checked={applyPrice}
+                onChange={(e) => setApplyPrice(e.target.checked)}
+                className="checkbox-win8"
+              />
+              {dict.products?.applyField || 'Apply'} {dict.admin?.price || 'Price'}
+            </label>
+            {applyPrice && (
+              <div className="flex gap-2">
+                <select
+                  value={priceMode}
+                  onChange={(e) => setPriceMode(e.target.value as 'set' | 'percent' | 'add')}
+                  className="px-3 py-2 border border-gray-300 bg-white"
+                >
+                  <option value="set">{dict.products?.priceModeSet || 'Set to'}</option>
+                  <option value="percent">{dict.products?.priceModePercent || 'Increase by %'}</option>
+                  <option value="add">{dict.products?.priceModeAdd || 'Add amount'}</option>
+                </select>
+                <input
+                  type="number"
+                  step={priceMode === 'set' ? '0.01' : '1'}
+                  value={priceValue}
+                  onChange={(e) => setPriceValue(e.target.value)}
+                  className="flex-1 px-3 py-2 border border-gray-300 bg-white"
+                  placeholder="0"
+                />
+              </div>
+            )}
+          </div>
+
+          {showInventory && (
+            <>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={applyStock}
+                    onChange={(e) => setApplyStock(e.target.checked)}
+                    className="checkbox-win8"
+                  />
+                  {dict.products?.applyField || 'Apply'} {dict.admin?.stock || 'Stock'}
+                </label>
+                {applyStock && (
+                  <div className="flex gap-2">
+                    <select
+                      value={stockMode}
+                      onChange={(e) => setStockMode(e.target.value as 'set' | 'add')}
+                      className="px-3 py-2 border border-gray-300 bg-white"
+                    >
+                      <option value="set">{dict.products?.stockModeSet || 'Set to'}</option>
+                      <option value="add">{dict.products?.stockModeAdd || 'Add'}</option>
+                    </select>
+                    <input
+                      type="number"
+                      step="1"
+                      value={stockValue}
+                      onChange={(e) => setStockValue(e.target.value)}
+                      className="flex-1 px-3 py-2 border border-gray-300 bg-white"
+                      placeholder="0"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={applyTrackInventory}
+                    onChange={(e) => setApplyTrackInventory(e.target.checked)}
+                    className="checkbox-win8"
+                  />
+                  {dict.products?.applyField || 'Apply'} {dict.admin?.trackInventory || 'Track Inventory'}
+                </label>
+                {applyTrackInventory && (
+                  <label className="flex items-center gap-2 text-sm text-gray-600 ml-6">
+                    <input
+                      type="checkbox"
+                      checked={trackInventory}
+                      onChange={(e) => setTrackInventory(e.target.checked)}
+                      className="checkbox-win8"
+                    />
+                    {dict.admin?.trackInventory || 'Track Inventory'}
+                  </label>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={applyLowStockThreshold}
+                    onChange={(e) => setApplyLowStockThreshold(e.target.checked)}
+                    className="checkbox-win8"
+                  />
+                  {dict.products?.applyField || 'Apply'} {dict.admin?.lowStockThreshold || 'Low Stock Threshold'}
+                </label>
+                {applyLowStockThreshold && (
+                  <input
+                    type="number"
+                    min="0"
+                    value={lowStockThreshold}
+                    onChange={(e) => setLowStockThreshold(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 bg-white"
+                  />
+                )}
+              </div>
+            </>
+          )}
+
+          {error && (
+            <div className="bg-red-50 text-red-800 border border-red-300 p-3 text-sm">{error}</div>
+          )}
+
+          <div className="flex gap-3 justify-end pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className={btnSecondary}
+            >
+              {dict.common?.cancel || 'Cancel'}
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className={btnPrimary}
+            >
+              {saving ? (dict.common?.loading || 'Saving...') : (dict.common?.save || 'Save')}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }
 

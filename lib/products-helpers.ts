@@ -69,6 +69,21 @@ export function generateUniqueProductSKU(name: string, skuRegistry: Set<string>)
   throw new Error('Unable to generate unique SKU');
 }
 
+export function getBulkProductUpdateConfirmMessage(count: number, dict: Dict): string {
+  const defaultMsg = `Apply changes to ${count} selected product(s)?`;
+  return (
+    dict?.common?.bulkUpdateProductConfirm
+      ?.replace('{count}', count.toString()) || defaultMsg
+  );
+}
+
+export function getBulkProductUpdateSuccessMessage(count: number, dict: Dict): string {
+  return (
+    dict?.common?.bulkUpdateSuccess
+      ?.replace('{count}', count.toString()) || `${count} product(s) updated successfully`
+  );
+}
+
 export function getCategoryNameFromProduct(categoryId: { name?: string; _id?: string } | string | null | undefined, categories: { _id: string; name: string }[]): string {
   if (typeof categoryId === 'object' && categoryId?.name) {
     return categoryId.name;
