@@ -31,6 +31,7 @@ interface PaymentInputData {
     quantity: number;
     variation?: { size?: string; color?: string; type?: string };
     modifiers?: Array<{ name: string; chosenOption: string; price: number }>;
+    saleUnit?: string;
   }>;
   paymentMethod: PaymentMethodType;
   cashReceived?: number;
@@ -188,6 +189,7 @@ export function usePayment(): UsePaymentReturn {
             quantity: item.quantity,
             variation: item.variation,
             modifiers: item.selectedModifiers,
+            saleUnit: item.saleUnit,
           })),
           paymentMethod: primaryMethod,
           cashReceived: primaryMethod === 'cash' && !splitPayments ? parseFloat(cashReceived) : undefined,

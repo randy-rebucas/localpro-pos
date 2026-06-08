@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { Product } from './useProductsList';
+import { getSaleUnits, type ProductSaleUnit } from '@/lib/product-units';
 
 export interface ProductFormData {
   name: string;
@@ -32,6 +33,8 @@ export interface ProductFormData {
   serviceDuration?: number;
   staffRequired: number;
   equipmentRequired: string[];
+  baseUnit: string;
+  saleUnits: ProductSaleUnit[];
 }
 
 interface BusinessTypeConfig {
@@ -77,6 +80,8 @@ const getDefaultFormData = (
     serviceDuration: product?.serviceDuration || undefined,
     staffRequired: product?.staffRequired || 1,
     equipmentRequired: product?.equipmentRequired || [],
+    baseUnit: product?.baseUnit || 'pc',
+    saleUnits: getSaleUnits(product ?? {}),
   };
 };
 
@@ -119,6 +124,8 @@ export const useProductsForm = (product: Product | null, businessTypeConfig: Bus
           productType: formData.productType,
           trackInventory: formData.trackInventory,
           lowStockThreshold: formData.lowStockThreshold,
+          baseUnit: formData.baseUnit?.trim() || 'pc',
+          saleUnits: formData.saleUnits,
         };
 
         // Add restaurant-specific fields

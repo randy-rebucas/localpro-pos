@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
+import type { ProductSaleUnit } from '@/lib/product-units';
 
 export interface Product {
   _id: string;
@@ -39,6 +40,8 @@ export interface Product {
   serviceDuration?: number;
   staffRequired?: number;
   equipmentRequired?: string[];
+  baseUnit?: string;
+  saleUnits?: ProductSaleUnit[];
 }
 
 export interface Category {

@@ -96,6 +96,14 @@ import CartUpsellSuggestions from '@/components/pos/CartUpsellSuggestions';
 import ProductGrid from '@/components/pos/ProductGrid';
 import { usePosProducts, type PosProduct } from '@/hooks/usePosProducts';
 import { CartVariant, CartItemModifier } from '@/hooks/useCart';
+import {
+  findProductByBarcode,
+  getMaxSaleUnitQuantity,
+  getSaleUnits,
+  hasMultipleSaleUnits,
+  resolveSaleUnitPrice,
+  type ProductSaleUnit,
+} from '@/lib/product-units';
 import { RestaurantMeta, SplitPaymentEntry } from '@/hooks/usePayment';
 import type { SplitGuestPayment } from '@/components/pos/modals/PosSplitCheckModal';
 import type { RefundTransaction as PosRefundTransaction } from '@/components/pos/modals/PosRefundModal';
@@ -165,6 +173,12 @@ export default function Dashboard() {
   // Retail: variant selector modal
   const [pendingVariantProduct, setPendingVariantProduct] = useState<Product | null>(null);
   const [showVariantModal, setShowVariantModal] = useState(false);
+
+  // Sale unit selector modal
+  const [pendingUnitProduct, setPendingUnitProduct] = useState<Product | null>(null);
+  const [pendingUnitVariant, setPendingUnitVariant] = useState<CartVariant | undefined>();
+  const [pendingUnitModifiers, setPendingUnitModifiers] = useState<CartItemModifier[] | undefined>();
+  const [showUnitModal, setShowUnitModal] = useState(false);
 
   // Retail: customer side panel
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerSummary | null>(null);
@@ -535,20 +549,16 @@ export default function Dashboard() {
   const handleBarcodeScan = useCallback((barcode: string) => {
     const code = barcode.trim();
     if (!code) return;
-    // Match against barcode field, SKU, or _id
-    const product = products.find(
-      p => p.barcode === code || p.sku === code || p._id === code
-    );
-    // Clear any text that the scanner may have typed into the search box
+    const match = findProductByBarcode(products, code);
     setSearch('');
-    if (product && (product.stock > 0 || product.allowOutOfStockSales)) {
-      handleAddToCart(product);
+    if (match && (match.product.stock > 0 || match.product.allowOutOfStockSales)) {
+      handleAddToCart(match.product, undefined, undefined, match.saleUnit);
     } else {
       if (dict) {
         showToast.error(dict.pos.productNotFound || 'Product not found');
       }
     }
-  }, [products, dict, addToCart]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [products, dict]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Handle QR code scan
   const handleQRScan = useCallback((data: string) => {
@@ -654,7 +664,12 @@ export default function Dashboard() {
 
   // Wrap addToCart with context-aware checks (e.g. age verification for alcohol)
   const ALCOHOL_PATTERN = /alcohol|beer|wine|spirits|liquor|whiskey|whisky|vodka|rum|gin|brandy|tequila|cider|mead|sake/i;
-  const handleAddToCart = (product: Product, variant?: CartVariant, modifiers?: CartItemModifier[]) => {
+  const handleAddToCart = (
+    product: Product,
+    variant?: CartVariant,
+    modifiers?: CartItemModifier[],
+    saleUnit?: ProductSaleUnit
+  ) => {
     if (ALCOHOL_PATTERN.test(product.category || '') || ALCOHOL_PATTERN.test(product.name || '')) {
       setPendingAgeVerifyProduct(product);
       setShowAgeVerificationModal(true);
@@ -671,7 +686,14 @@ export default function Dashboard() {
       setShowModifierModal(true);
       return;
     }
-    addToCart(product, variant, modifiers);
+    if (!saleUnit && hasMultipleSaleUnits(product)) {
+      setPendingUnitProduct(product);
+      setPendingUnitVariant(variant);
+      setPendingUnitModifiers(modifiers);
+      setShowUnitModal(true);
+      return;
+    }
+    addToCart(product, variant, modifiers, saleUnit);
   };
 
   const handleBranchLookup = async (product: Product) => {
@@ -1382,7 +1404,7 @@ export default function Dashboard() {
                       dict={dict}
                       onAdd={(productId) => {
                         const product = products.find((p) => p._id === productId);
-                        if (product) addToCart(product);
+                        if (product) handleAddToCart(product);
                       }}
                     />
                   </div>
@@ -1995,7 +2017,7 @@ export default function Dashboard() {
           }}
           onConfirm={() => {
             if (pendingAgeVerifyProduct) {
-              addToCart(pendingAgeVerifyProduct);
+              handleAddToCart(pendingAgeVerifyProduct);
             }
             setShowAgeVerificationModal(false);
             setPendingAgeVerifyProduct(null);
@@ -2028,6 +2050,80 @@ export default function Dashboard() {
       )}
 
       {confirmDialog}
+
+      {/* Sale Unit Selector Modal */}
+      {showUnitModal && pendingUnitProduct && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md shadow-2xl">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+              <div>
+                <h2 className="font-bold text-gray-900 text-lg">{pendingUnitProduct.name}</h2>
+                <p className="text-sm text-gray-500">{dict.pos?.selectSaleUnit || 'Select sale unit'}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowUnitModal(false);
+                  setPendingUnitProduct(null);
+                  setPendingUnitVariant(undefined);
+                  setPendingUnitModifiers(undefined);
+                }}
+                className="p-2 text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-5 grid grid-cols-1 gap-3 max-h-80 overflow-y-auto">
+              {getSaleUnits(pendingUnitProduct).map((unit) => {
+                const stockBase = pendingUnitVariant?.stock ?? pendingUnitProduct.stock;
+                const maxQty = getMaxSaleUnitQuantity(stockBase, unit.factor);
+                const basePrice = pendingUnitVariant?.price ?? pendingUnitProduct.price;
+                const unitPrice = resolveSaleUnitPrice({ price: basePrice }, unit);
+                const outOfStock =
+                  maxQty === 0 && !pendingUnitProduct.allowOutOfStockSales && pendingUnitProduct.trackInventory !== false;
+                return (
+                  <button
+                    key={unit.code}
+                    type="button"
+                    disabled={outOfStock}
+                    onClick={() => {
+                      addToCart(
+                        pendingUnitProduct,
+                        pendingUnitVariant,
+                        pendingUnitModifiers,
+                        unit
+                      );
+                      setShowUnitModal(false);
+                      setPendingUnitProduct(null);
+                      setPendingUnitVariant(undefined);
+                      setPendingUnitModifiers(undefined);
+                    }}
+                    className={`flex items-center justify-between p-3 border-2 transition-all text-left ${
+                      outOfStock
+                        ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
+                        : 'border-gray-300 hover:border-brand hover:bg-brand-soft cursor-pointer'
+                    }`}
+                  >
+                    <div>
+                      <span className="font-semibold text-sm text-gray-900">{unit.label}</span>
+                      <span className={`block text-[11px] mt-1 font-medium ${
+                        outOfStock ? 'text-red-500' : maxQty <= 5 ? 'text-yellow-600' : 'text-green-600'
+                      }`}>
+                        {outOfStock
+                          ? (dict.pos?.outOfStock || 'Out of stock')
+                          : `${maxQty} ${dict.pos?.available || 'available'}`}
+                      </span>
+                    </div>
+                    <Currency amount={unitPrice} />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Variant Selector Modal */}
       {showVariantModal && pendingVariantProduct && (

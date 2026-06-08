@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getOfflineStorage } from '@/lib/offline-storage';
+import type { ProductSaleUnit } from '@/lib/product-units';
 
 export interface PosProduct {
   _id: string;
@@ -27,6 +28,8 @@ export interface PosProduct {
     stock?: number;
   }>;
   branchStock?: Array<{ branchId: string; stock: number }>;
+  baseUnit?: string;
+  saleUnits?: ProductSaleUnit[];
 }
 
 export type ProductsStatus = 'loading' | 'ready' | 'error';
@@ -74,7 +77,13 @@ export function usePosProducts({
         (p) =>
           p.name.toLowerCase().includes(searchLower) ||
           p.sku?.toLowerCase().includes(searchLower) ||
-          p.category?.toLowerCase().includes(searchLower)
+          p.barcode?.toLowerCase().includes(searchLower) ||
+          p.category?.toLowerCase().includes(searchLower) ||
+          p.saleUnits?.some(
+            (u) =>
+              u.label.toLowerCase().includes(searchLower) ||
+              u.barcode?.toLowerCase().includes(searchLower)
+          )
       );
     },
     [debouncedSearch]

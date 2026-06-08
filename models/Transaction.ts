@@ -13,6 +13,13 @@ export interface ITransactionItem {
   quantity: number;
   subtotal: number;
   modifiers?: ITransactionItemModifier[];
+  /** Sale unit code snapshot (e.g. pc, box). */
+  saleUnit?: string;
+  saleUnitLabel?: string;
+  /** Units per sale line item → base units (e.g. 100 for a box). */
+  unitFactor?: number;
+  /** quantity × unitFactor — base units deducted from stock. */
+  baseQuantity?: number;
 }
 
 export interface ISplitPayment {
@@ -100,6 +107,10 @@ const TransactionItemSchema: Schema = new Schema({
     type: [TransactionItemModifierSchema],
     default: undefined,
   },
+  saleUnit: { type: String, trim: true },
+  saleUnitLabel: { type: String, trim: true },
+  unitFactor: { type: Number, min: 0.0001 },
+  baseQuantity: { type: Number, min: 0 },
 });
 
 const SplitPaymentSchema: Schema = new Schema({

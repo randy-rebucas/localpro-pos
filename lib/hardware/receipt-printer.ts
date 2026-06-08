@@ -3,6 +3,7 @@
  * Supports ESC/POS printers via WebUSB, Serial API, or network printing
  */
 import { logger } from '@/lib/logger';
+import { formatReceiptItemLine } from '@/lib/product-units';
 import { findProfile } from './printer-profiles';
 import { isDevicePickerCancelled, isUsbAccessDeniedError } from './usb-probe';
 
@@ -51,6 +52,7 @@ export interface ReceiptData {
     price: number;
     subtotal: number;
     sku?: string;
+    saleUnitLabel?: string;
   }>;
   subtotal: number;
   discount?: number;
@@ -335,9 +337,10 @@ class ReceiptPrinterService {
 
       // Items
       data.items.forEach((item) => {
-        const name = item.name.substring(0, 20).padEnd(20);
-        const qty = `x${item.quantity}`.padStart(4);
-        commands.push(this.encodeText(`${name} ${qty}\n`));
+        const displayName = formatReceiptItemLine(item.name, item.quantity, item.saleUnitLabel);
+        const name = displayName.substring(0, 20).padEnd(20);
+        const qty = item.saleUnitLabel ? ''.padStart(4) : `x${item.quantity}`.padStart(4);
+        commands.push(this.encodeText(`${name}${qty ? ` ${qty}` : ''}\n`));
         const atPrice = `  @ ${fmt(item.price)}`.padEnd(20);
         const subtotalStr = fmt(item.subtotal).padStart(12);
         commands.push(this.encodeText(`${atPrice}${subtotalStr}\n`));
@@ -571,14 +574,18 @@ class ReceiptPrinterService {
   </div>
   <br>` : ''}
 
-  ${data.items.map(item => `
+  ${data.items.map(item => {
+    const lineLabel = formatReceiptItemLine(item.name, item.quantity, item.saleUnitLabel);
+    const qtySuffix = item.saleUnitLabel ? '' : ` x${item.quantity}`;
+    return `
   <div class="item">
     <div>
-      ${item.name} x${item.quantity}<br>
+      ${lineLabel}${qtySuffix}<br>
       <span class="small">@ ${fmt(item.price)}</span>
     </div>
     <div>${fmt(item.subtotal)}</div>
-  </div>`).join('')}
+  </div>`;
+  }).join('')}
 
   <div class="total">
     <div class="item"><div>Subtotal:</div><div>${fmt(data.subtotal)}</div></div>

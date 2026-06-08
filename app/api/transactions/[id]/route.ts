@@ -100,10 +100,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         for (const item of transaction.items) {
           const product = await Product.findOne({ _id: item.product.toString(), tenantId });
           if (product && product.trackInventory !== false) {
+            const restoreQty = item.baseQuantity ?? item.quantity * (item.unitFactor ?? 1);
             await updateStock(
               item.product.toString(),
               tenantId,
-              item.quantity, // Positive to restore
+              restoreQty,
               'return',
               {
                 transactionId: transaction._id.toString(),

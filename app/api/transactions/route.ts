@@ -28,6 +28,12 @@ import {
   sessionOpts,
   withOptionalSession,
 } from '@/lib/mongo-session';
+import {
+  findSaleUnit,
+  getBaseQuantity,
+  resolveSaleUnitPrice,
+  type ProductSaleUnit,
+} from '@/lib/product-units';
 
 interface VariationInput {
   size?: string;
@@ -40,6 +46,7 @@ interface TransactionItemInput {
   quantity: number;
   variation?: VariationInput;
   bundleId?: string;
+  saleUnit?: string;
 }
 
 interface PaymentInput {
@@ -124,6 +131,10 @@ interface TransactionItemRecord {
   categoryId?: string;
   taxExempt?: boolean;
   modifiers?: Array<{ name: string; chosenOption: string; price: number }>;
+  saleUnit?: string;
+  saleUnitLabel?: string;
+  unitFactor?: number;
+  baseQuantity?: number;
 }
 
 export async function GET(request: NextRequest) {
@@ -383,7 +394,7 @@ export async function POST(request: NextRequest) {
     }
 
     for (const item of items) {
-      const { productId, quantity, variation, bundleId } = item;
+      const { productId, quantity, variation, bundleId, saleUnit: saleUnitCode } = item;
       const itemModifiers = Array.isArray((item as any).modifiers) ? (item as any).modifiers : undefined; // eslint-disable-line @typescript-eslint/no-explicit-any
 
       // Handle bundles
@@ -454,6 +465,13 @@ export async function POST(request: NextRequest) {
         const trackInventory = product.trackInventory !== false; // Default to true if not set
         const allowOutOfStockSales = product.allowOutOfStockSales === true;
 
+        const saleUnit: ProductSaleUnit = findSaleUnit(
+          { saleUnits: product.saleUnits as ProductSaleUnit[] | undefined },
+          saleUnitCode
+        );
+        const unitFactor = saleUnit.factor;
+        const baseQuantity = getBaseQuantity(quantity, unitFactor);
+
         if (trackInventory && !allowOutOfStockSales) {
           if (!productId) {
             return NextResponse.json({ success: false, error: t('validation.productIdMissing', 'Product ID is missing') }, { status: 400 });
@@ -463,11 +481,11 @@ export async function POST(request: NextRequest) {
             variation,
           });
 
-          if (availableStock < quantity) {
+          if (availableStock < baseQuantity) {
             const errorMsg = t('validation.insufficientStockProduct', 'Insufficient stock for {productName}. Available: {available}, Requested: {requested}')
                   .replace('{productName}', product.name)
                   .replace('{available}', availableStock.toString())
-                  .replace('{requested}', quantity.toString());
+                  .replace('{requested}', baseQuantity.toString());
             return NextResponse.json(
               {
                 success: false,
@@ -492,22 +510,33 @@ export async function POST(request: NextRequest) {
           }
         }
 
+        const saleUnitPrice = resolveSaleUnitPrice({ price: itemPrice }, saleUnit);
+
         // Add modifier surcharge to item price
         const modifierSurcharge = itemModifiers
           ? (itemModifiers as Array<{ price: number }>).reduce((s, m) => s + (m.price || 0), 0)
           : 0;
-        const effectiveItemPrice = itemPrice + modifierSurcharge;
+        const effectiveItemPrice = saleUnitPrice + modifierSurcharge;
         const itemSubtotal = effectiveItemPrice * quantity;
         subtotal += itemSubtotal;
 
+        const itemName =
+          unitFactor > 1 || (saleUnitCode && saleUnitCode !== 'pc')
+            ? `${product.name} — ${saleUnit.label}`
+            : product.name;
+
         transactionItems.push({
           product: product._id,
-          name: product.name,
+          name: itemName,
           price: effectiveItemPrice,
           quantity: quantity,
           subtotal: itemSubtotal,
           taxExempt: product.taxExempt || false,
           modifiers: itemModifiers || undefined,
+          saleUnit: saleUnit.code,
+          saleUnitLabel: saleUnit.label,
+          unitFactor,
+          baseQuantity,
         });
       }
     }
@@ -695,7 +724,7 @@ export async function POST(request: NextRequest) {
 
       // Update stock BEFORE creating transaction (critical - must succeed)
       for (const item of items) {
-        const { productId, quantity, variation, bundleId } = item;
+        const { productId, quantity, variation, bundleId, saleUnit: saleUnitCode } = item;
 
         if (!productId && !bundleId) {
           logger.warn('Skipping stock update: missing productId and bundleId', item as unknown as Record<string, unknown>);
@@ -721,10 +750,15 @@ export async function POST(request: NextRequest) {
             session
           );
           if (product && product.trackInventory !== false) {
+            const saleUnit = findSaleUnit(
+              { saleUnits: product.saleUnits as ProductSaleUnit[] | undefined },
+              saleUnitCode
+            );
+            const stockDelta = -getBaseQuantity(quantity, saleUnit.factor);
             await updateStock(
               productId,
               tenantId,
-              -quantity,
+              stockDelta,
               'sale',
               {
                 userId: user.userId,

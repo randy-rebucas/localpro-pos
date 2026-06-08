@@ -118,10 +118,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     for (const refundItem of refundItems) {
       const product = await Product.findOne({ _id: refundItem.productId, tenantId });
       if (product && product.trackInventory !== false) {
+        const originalItem = transaction.items.find(
+          (i: { product: { toString: () => string }; quantity: number; baseQuantity?: number; unitFactor?: number }) =>
+            i.product.toString() === refundItem.productId
+        ) as { quantity: number; baseQuantity?: number; unitFactor?: number } | undefined;
+        const restoreQty = originalItem?.baseQuantity
+          ?? refundItem.quantity * (originalItem?.unitFactor ?? 1);
         await updateStock(
           refundItem.productId,
           tenantId,
-          refundItem.quantity, // Positive to restore
+          restoreQty,
           'return',
           {
             transactionId: refundTransaction._id.toString(),

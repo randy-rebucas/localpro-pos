@@ -1,4 +1,9 @@
 import { useState, useCallback } from 'react';
+import {
+  getMaxSaleUnitQuantity,
+  resolveSaleUnitPrice,
+  type ProductSaleUnit,
+} from '@/lib/product-units';
 
 export interface CartItemVariation {
   size?: string;
@@ -7,22 +12,26 @@ export interface CartItemVariation {
 }
 
 export interface CartItemModifier {
-  name: string;        // e.g. "Temperature"
-  chosenOption: string; // e.g. "Medium Rare"
-  price: number;        // 0 for free options
+  name: string;
+  chosenOption: string;
+  price: number;
 }
 
 export interface CartItem {
   productId: string;
-  cartItemId: string; // unique per line: productId or productId:variationSku or productId:modHash
+  cartItemId: string;
   name: string;
   price: number;
   quantity: number;
+  /** Max quantity in selected sale units (derived from base stock). */
   stock: number;
-  variationLabel?: string; // e.g. "S / Blue"
+  variationLabel?: string;
   variation?: CartItemVariation;
   selectedModifiers?: CartItemModifier[];
-  modifierSurcharge?: number; // sum of all chosen modifier prices
+  modifierSurcharge?: number;
+  saleUnit?: string;
+  saleUnitLabel?: string;
+  unitFactor?: number;
 }
 
 export interface CartVariant {
@@ -37,9 +46,17 @@ interface UseCartReturn {
   cart: CartItem[];
   setCart: (items: CartItem[]) => void;
   addToCart: (
-    product: { _id: string; name: string; price: number; stock: number; trackInventory?: boolean; allowOutOfStockSales?: boolean },
+    product: {
+      _id: string;
+      name: string;
+      price: number;
+      stock: number;
+      trackInventory?: boolean;
+      allowOutOfStockSales?: boolean;
+    },
     variant?: CartVariant,
-    modifiers?: CartItemModifier[]
+    modifiers?: CartItemModifier[],
+    saleUnit?: ProductSaleUnit
   ) => void;
   removeFromCart: (cartItemId: string) => void;
   updateQuantity: (cartItemId: string, quantity: number, onError: (message: string) => void) => void;
@@ -71,18 +88,28 @@ export function useCart(showError: (msg: string) => void): UseCartReturn {
   }, [getSubtotal, getTaxAmount]);
 
   const addToCart = useCallback((
-    product: { _id: string; name: string; price: number; stock: number; trackInventory?: boolean; allowOutOfStockSales?: boolean },
+    product: {
+      _id: string;
+      name: string;
+      price: number;
+      stock: number;
+      trackInventory?: boolean;
+      allowOutOfStockSales?: boolean;
+    },
     variant?: CartVariant,
-    modifiers?: CartItemModifier[]
+    modifiers?: CartItemModifier[],
+    saleUnit?: ProductSaleUnit
   ) => {
-    const effectiveStock = variant?.stock ?? product.stock;
+    const unit = saleUnit ?? { code: 'pc', label: 'Piece', factor: 1, isDefault: true };
+    const stockInBaseUnits = variant?.stock ?? product.stock;
+    const maxSaleQty = getMaxSaleUnitQuantity(stockInBaseUnits, unit.factor);
     const basePrice = variant?.price ?? product.price;
+    const unitPrice = resolveSaleUnitPrice({ price: basePrice }, unit);
     const surcharge = modifiers ? modifiers.reduce((s, m) => s + m.price, 0) : 0;
-    const effectivePrice = basePrice + surcharge;
+    const effectivePrice = unitPrice + surcharge;
 
-    // Build a stable cartItemId that includes modifier choices so different
-    // modifier combos on the same product become separate cart lines.
     let cartItemId = variant ? `${product._id}:${variant.sku}` : product._id;
+    cartItemId = `${cartItemId}:unit:${unit.code}`;
     if (modifiers && modifiers.length > 0) {
       const modHash = modifiers
         .map((m) => `${m.name}=${m.chosenOption}`)
@@ -91,13 +118,15 @@ export function useCart(showError: (msg: string) => void): UseCartReturn {
       cartItemId = `${cartItemId}:${modHash}`;
     }
 
-    const displayName = variant ? `${product.name} (${variant.label})` : product.name;
+    let displayName = variant ? `${product.name} (${variant.label})` : product.name;
+    if (unit.factor > 1 || unit.code !== 'pc') {
+      displayName = `${displayName} — ${unit.label}`;
+    }
 
-    const isOutOfStock = effectiveStock === 0;
     const canSellOutOfStock = product.allowOutOfStockSales === true;
     const trackInventory = product.trackInventory !== false;
 
-    if (isOutOfStock && !canSellOutOfStock) {
+    if (maxSaleQty === 0 && !canSellOutOfStock && trackInventory) {
       showError('Out of stock');
       return;
     }
@@ -105,7 +134,7 @@ export function useCart(showError: (msg: string) => void): UseCartReturn {
     setCart((prevCart) => {
       const existingItem = prevCart.find((item) => item.cartItemId === cartItemId);
       if (existingItem) {
-        if (trackInventory && !canSellOutOfStock && existingItem.quantity >= effectiveStock) {
+        if (trackInventory && !canSellOutOfStock && existingItem.quantity >= maxSaleQty) {
           showError('Cannot exceed available stock');
           return prevCart;
         }
@@ -114,23 +143,26 @@ export function useCart(showError: (msg: string) => void): UseCartReturn {
             ? { ...item, quantity: Math.min(item.quantity + 1, MAX_QUANTITY) }
             : item
         );
-      } else {
-        return [
-          ...prevCart,
-          {
-            productId: product._id,
-            cartItemId,
-            name: displayName,
-            price: effectivePrice,
-            quantity: 1,
-            stock: effectiveStock,
-            variationLabel: variant?.label,
-            variation: variant?.variation,
-            selectedModifiers: modifiers && modifiers.length > 0 ? modifiers : undefined,
-            modifierSurcharge: surcharge > 0 ? surcharge : undefined,
-          },
-        ];
       }
+
+      return [
+        ...prevCart,
+        {
+          productId: product._id,
+          cartItemId,
+          name: displayName,
+          price: effectivePrice,
+          quantity: 1,
+          stock: maxSaleQty,
+          variationLabel: variant?.label,
+          variation: variant?.variation,
+          selectedModifiers: modifiers && modifiers.length > 0 ? modifiers : undefined,
+          modifierSurcharge: surcharge > 0 ? surcharge : undefined,
+          saleUnit: unit.code,
+          saleUnitLabel: unit.label,
+          unitFactor: unit.factor,
+        },
+      ];
     });
   }, [showError]);
 
@@ -147,18 +179,17 @@ export function useCart(showError: (msg: string) => void): UseCartReturn {
       onError(`Maximum quantity is ${MAX_QUANTITY}`);
       return;
     }
-    const item = cart.find((item) => item.cartItemId === cartItemId);
+    const item = cart.find((i) => i.cartItemId === cartItemId);
     if (!item) return;
 
-    // Check stock constraints
     if (item.stock !== undefined && quantity > item.stock) {
       onError('Cannot exceed available stock');
       return;
     }
 
     setCart((prevCart) =>
-      prevCart.map((item) =>
-        item.cartItemId === cartItemId ? { ...item, quantity } : item
+      prevCart.map((i) =>
+        i.cartItemId === cartItemId ? { ...i, quantity } : i
       )
     );
   }, [cart, removeFromCart]);

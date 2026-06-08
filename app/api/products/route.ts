@@ -37,6 +37,8 @@ export async function GET(request: NextRequest) {
         { description: { $regex: escapedSearch, $options: 'i' } },
         { sku: { $regex: escapedSearch, $options: 'i' } },
         { barcode: { $regex: escapedSearch, $options: 'i' } },
+        { 'saleUnits.barcode': { $regex: escapedSearch, $options: 'i' } },
+        { 'saleUnits.label': { $regex: escapedSearch, $options: 'i' } },
       ];
     }
     if (category) {

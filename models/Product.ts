@@ -14,6 +14,15 @@ export interface IBranchStock {
   stock: number;
 }
 
+export interface IProductSaleUnit {
+  code: string;
+  label: string;
+  factor: number;
+  price?: number;
+  barcode?: string;
+  isDefault?: boolean;
+}
+
 export interface IProduct extends Document {
   tenantId: mongoose.Types.ObjectId;
   name: string;
@@ -35,6 +44,10 @@ export interface IProduct extends Document {
   allowOutOfStockSales?: boolean; // Whether to allow sales when out of stock
   lowStockThreshold?: number; // Product-specific threshold (overrides tenant default)
   pinned?: boolean; // Whether the product is pinned to the top
+  /** Stock count unit (e.g. pc, tablet). Stock is always in base units. */
+  baseUnit?: string;
+  /** Sellable units with conversion factor to baseUnit. */
+  saleUnits?: IProductSaleUnit[];
   
   // Industry-specific fields (optional, used based on business type)
   // Restaurant/Food Service
@@ -176,7 +189,20 @@ const ProductSchema: Schema = new Schema(
       default: false,
       index: true,
     },
-    
+    baseUnit: {
+      type: String,
+      trim: true,
+      default: 'pc',
+    },
+    saleUnits: [{
+      code: { type: String, trim: true, required: true },
+      label: { type: String, trim: true, required: true },
+      factor: { type: Number, required: true, min: 0.0001 },
+      price: { type: Number, min: 0 },
+      barcode: { type: String, trim: true },
+      isDefault: { type: Boolean, default: false },
+    }],
+
     // Industry-specific fields
     // Restaurant/Food Service
     modifiers: [{

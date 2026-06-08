@@ -1,5 +1,6 @@
 import { validateProduct } from '@/lib/validation';
 import { generateUniqueProductSKU } from '@/lib/products-helpers';
+import type { ProductSaleUnit } from '@/lib/product-units';
 
 export const PRODUCT_IMPORT_HEADERS = [
   'name',
@@ -14,6 +15,12 @@ export const PRODUCT_IMPORT_HEADERS = [
   'track_inventory',
   'tax_exempt',
   'low_stock_threshold',
+  'base_unit',
+  'sale_unit_code',
+  'sale_unit_label',
+  'sale_unit_factor',
+  'sale_unit_price',
+  'sale_unit_barcode',
 ] as const;
 
 export type ProductImportHeader = (typeof PRODUCT_IMPORT_HEADERS)[number];
@@ -31,6 +38,8 @@ export interface ProductImportRow {
   trackInventory: boolean;
   taxExempt: boolean;
   lowStockThreshold?: number;
+  baseUnit?: string;
+  saleUnits?: ProductSaleUnit[];
 }
 
 export interface ProductImportPreviewRow {
@@ -58,6 +67,18 @@ const HEADER_ALIASES: Record<string, ProductImportHeader> = {
   taxexempt: 'tax_exempt',
   low_stock_threshold: 'low_stock_threshold',
   lowstockthreshold: 'low_stock_threshold',
+  base_unit: 'base_unit',
+  baseunit: 'base_unit',
+  sale_unit_code: 'sale_unit_code',
+  saleunitcode: 'sale_unit_code',
+  sale_unit_label: 'sale_unit_label',
+  saleunitlabel: 'sale_unit_label',
+  sale_unit_factor: 'sale_unit_factor',
+  saleunitfactor: 'sale_unit_factor',
+  sale_unit_price: 'sale_unit_price',
+  saleunitprice: 'sale_unit_price',
+  sale_unit_barcode: 'sale_unit_barcode',
+  saleunitbarcode: 'sale_unit_barcode',
 };
 
 export function getProductImportTemplateCSV(): string {
@@ -75,6 +96,12 @@ export function getProductImportTemplateCSV(): string {
     'yes',
     'no',
     '10',
+    'pc',
+    'box',
+    'Box of 100',
+    '100',
+    '450',
+    '',
   ].join(',');
   return `${headers}\n${example}\n`;
 }
@@ -224,6 +251,31 @@ export function mapCsvRecordToProductRow(
     }
   }
 
+  const baseUnit = record.base_unit?.trim() || 'pc';
+  const saleUnits: ProductSaleUnit[] = [{ code: 'pc', label: 'Piece', factor: 1, isDefault: true }];
+  const altCode = record.sale_unit_code?.trim();
+  const altLabel = record.sale_unit_label?.trim();
+  const altFactorRaw = record.sale_unit_factor?.trim();
+  if (altCode && altLabel && altFactorRaw) {
+    const altFactor = Number(altFactorRaw);
+    if (!Number.isNaN(altFactor) && altFactor > 0) {
+      saleUnits.push({
+        code: altCode.toLowerCase(),
+        label: altLabel,
+        factor: altFactor,
+        ...(record.sale_unit_price?.trim()
+          ? { price: Number(record.sale_unit_price) }
+          : {}),
+        ...(record.sale_unit_barcode?.trim()
+          ? { barcode: record.sale_unit_barcode.trim() }
+          : {}),
+        isDefault: false,
+      });
+    } else {
+      errors.push('Sale unit factor must be a positive number when sale unit code/label are set');
+    }
+  }
+
   const data: ProductImportRow = {
     name: name || '',
     sku: record.sku?.trim() || undefined,
@@ -237,6 +289,8 @@ export function mapCsvRecordToProductRow(
     trackInventory: parseBoolean(record.track_inventory, true),
     taxExempt: parseBoolean(record.tax_exempt, false),
     lowStockThreshold,
+    baseUnit,
+    saleUnits,
   };
 
   const validationErrors = validateProduct({
@@ -247,6 +301,8 @@ export function mapCsvRecordToProductRow(
     barcode: data.barcode,
     image: data.image,
     trackInventory: data.trackInventory,
+    baseUnit: data.baseUnit,
+    saleUnits: data.saleUnits,
   });
   for (const err of validationErrors) {
     errors.push(err.message);

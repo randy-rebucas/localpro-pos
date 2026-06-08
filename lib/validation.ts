@@ -2,6 +2,8 @@
  * Validation utilities for enterprise-grade validation
  */
 
+import { validateSaleUnitsConfig, type ProductSaleUnit } from '@/lib/product-units';
+
 export interface ValidationError {
   field: string;
   message: string;
@@ -105,6 +107,13 @@ export function validateProduct(data: Record<string, unknown>, t?: TranslationFu
   if (data.allowOutOfStockSales !== undefined && typeof data.allowOutOfStockSales !== 'boolean') {
     errors.push({ field: 'allowOutOfStockSales', message: translate('validation.allowOutOfStockSalesBoolean', 'Allow out of stock sales must be a boolean'), code: 'allowOutOfStockSalesBoolean' });
   }
+
+  const baseUnit = typeof data.baseUnit === 'string' ? data.baseUnit : undefined;
+  const saleUnits = Array.isArray(data.saleUnits) ? (data.saleUnits as ProductSaleUnit[]) : undefined;
+  for (const unitErr of validateSaleUnitsConfig(baseUnit, saleUnits)) {
+    errors.push({ field: unitErr.field, message: unitErr.message, code: 'saleUnitsInvalid' });
+  }
+
   return errors;
 }
 

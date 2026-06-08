@@ -186,6 +186,8 @@ export async function POST(request: NextRequest) {
             trackInventory: item.data.trackInventory,
             taxExempt: item.data.taxExempt,
             lowStockThreshold: item.data.lowStockThreshold,
+            baseUnit: item.data.baseUnit || 'pc',
+            saleUnits: item.data.saleUnits,
             hasVariations: false,
             isActive: true,
           });

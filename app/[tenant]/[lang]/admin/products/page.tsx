@@ -25,6 +25,20 @@ import {
   getDeleteProductConfirmMessage,
   generateEAN13 as generateEAN13Helper,
 } from '@/lib/products-helpers';
+import { formatStockWithUnits, type ProductSaleUnit } from '@/lib/product-units';
+import {
+  applyUnitPreset,
+  applyUnitType,
+  COMMON_BASE_UNITS,
+  detectUnitPreset,
+  getPresetLabelKey,
+  getUnitTypeLabelKey,
+  matchUnitType,
+  UNIT_PRESETS,
+  UNIT_TYPE_OPTIONS,
+  type UnitPresetId,
+  type UnitTypeId,
+} from '@/lib/product-unit-presets';
 
 
 
@@ -230,7 +244,9 @@ export default function ProductsPage() {
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap">
                       <span className={`text-sm font-medium ${product.stock < (product.lowStockThreshold || 10) ? 'text-red-600' : 'text-gray-900'}`}>
-                        {product.trackInventory ? product.stock : '∞'}
+                        {product.trackInventory
+                          ? formatStockWithUnits(product.stock, product.baseUnit || 'pc', product.saleUnits)
+                          : '∞'}
                       </span>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap">
@@ -371,6 +387,9 @@ function ProductModal({
   settings: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }) {
   const { formData, saving, error, updateFormData, submitForm } = useProductsForm(product, businessTypeConfig);
+  const [selectedPreset, setSelectedPreset] = useState<UnitPresetId>(() =>
+    detectUnitPreset(formData.baseUnit, formData.saleUnits)
+  );
   const [categorySearch, setCategorySearch] = useState('');
   const [showCategorySuggestions, setShowCategorySuggestions] = useState(false);
   const categoryInputRef = useRef<HTMLInputElement>(null);
@@ -425,6 +444,54 @@ function ProductModal({
       if (pickerFileInputRef.current) pickerFileInputRef.current.value = '';
     }
   };
+
+  const isCommonBaseUnit = COMMON_BASE_UNITS.includes(
+    formData.baseUnit as (typeof COMMON_BASE_UNITS)[number]
+  );
+
+  const getPresetLabel = (presetId: UnitPresetId) => {
+    const key = getPresetLabelKey(presetId);
+    return (dict.products as Record<string, string> | undefined)?.[key] || presetId;
+  };
+
+  const getUnitTypeLabel = (unitTypeId: UnitTypeId) => {
+    const key = getUnitTypeLabelKey(unitTypeId);
+    return (dict.products as Record<string, string> | undefined)?.[key] || unitTypeId;
+  };
+
+  const handlePresetChange = (presetId: UnitPresetId) => {
+    setSelectedPreset(presetId);
+    if (presetId === 'custom') return;
+    const applied = applyUnitPreset(presetId, formData.saleUnits);
+    if (applied) {
+      updateFormData({ baseUnit: applied.baseUnit, saleUnits: applied.saleUnits });
+    }
+  };
+
+  const handleSaleUnitTypeChange = (ui: number, unitTypeId: UnitTypeId) => {
+    const saleUnits = [...(formData.saleUnits || [])];
+    const existing = saleUnits[ui];
+    saleUnits[ui] = { ...existing, ...applyUnitType(unitTypeId, existing) };
+    updateFormData({ saleUnits });
+    setSelectedPreset(detectUnitPreset(formData.baseUnit, saleUnits));
+  };
+
+  const handleSaleUnitFieldChange = (
+    ui: number,
+    field: keyof ProductSaleUnit,
+    value: string | number | boolean | undefined
+  ) => {
+    const saleUnits = [...(formData.saleUnits || [])];
+    saleUnits[ui] = { ...saleUnits[ui], [field]: value };
+    updateFormData({ saleUnits });
+    setSelectedPreset(detectUnitPreset(formData.baseUnit, saleUnits));
+  };
+
+  // Sync preset dropdown when opening modal for a different product
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelectedPreset(detectUnitPreset(formData.baseUnit, formData.saleUnits));
+  }, [product?._id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Initialize category search with current category name
   useEffect(() => {
@@ -663,7 +730,7 @@ function ProductModal({
               {businessTypeConfig?.defaultFeatures?.enableInventory !== false && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {dict.admin?.stock || 'Stock'}
+                    {dict.products?.stockInBaseUnits || 'Stock (base units)'}
                   </label>
                   <input
                     type="number"
@@ -673,6 +740,11 @@ function ProductModal({
                     className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                     disabled={!formData.trackInventory}
                   />
+                  {formData.trackInventory && formData.stock > 0 && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      {formatStockWithUnits(formData.stock, formData.baseUnit, formData.saleUnits)}
+                    </p>
+                  )}
                 </div>
               )}
               {businessTypeConfig?.defaultFeatures?.enableInventory !== false && (
@@ -690,6 +762,209 @@ function ProductModal({
                 </div>
               )}
             </div>
+
+            <div className="space-y-3 pt-4 border-t border-gray-200">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold text-gray-900">
+                  {dict.products?.saleUnitsTitle || 'Sale units'}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const saleUnits = [
+                      ...(formData.saleUnits || []),
+                      {
+                        code: '',
+                        label: '',
+                        factor: 1,
+                        isDefault: (formData.saleUnits || []).length === 0,
+                      },
+                    ];
+                    updateFormData({ saleUnits });
+                    setSelectedPreset('custom');
+                  }}
+                  className="text-xs px-2 py-1 bg-brand-soft border border-brand text-brand-navy hover:bg-brand-soft/80 font-semibold"
+                >
+                  {dict.products?.addSaleUnit || '+ Add unit'}
+                </button>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {dict.products?.unitPreset || 'Unit configuration'}
+                </label>
+                <select
+                  value={selectedPreset}
+                  onChange={(e) => handlePresetChange(e.target.value as UnitPresetId)}
+                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
+                >
+                  {UNIT_PRESETS.map((preset) => (
+                    <option key={preset.id} value={preset.id}>
+                      {getPresetLabel(preset.id)}
+                    </option>
+                  ))}
+                  <option value="custom">{getPresetLabel('custom')}</option>
+                </select>
+              </div>
+              <p className="text-xs text-gray-500">
+                {dict.products?.saleUnitsHint || 'Stock is counted in base units. Sale units convert when selling (e.g. 1 box = 100 pieces).'}
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {dict.products?.baseUnit || 'Base unit'}
+                  </label>
+                  <select
+                    value={isCommonBaseUnit ? formData.baseUnit : '__other__'}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === '__other__') {
+                        updateFormData({ baseUnit: '' });
+                        setSelectedPreset('custom');
+                        return;
+                      }
+                      updateFormData({ baseUnit: value });
+                      setSelectedPreset(detectUnitPreset(value, formData.saleUnits));
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
+                  >
+                    {COMMON_BASE_UNITS.map((unit) => (
+                      <option key={unit} value={unit}>
+                        {unit}
+                      </option>
+                    ))}
+                    <option value="__other__">{dict.products?.baseUnitOther || 'Other'}</option>
+                  </select>
+                  {!isCommonBaseUnit && (
+                    <input
+                      type="text"
+                      value={formData.baseUnit}
+                      onChange={(e) => {
+                        updateFormData({ baseUnit: e.target.value });
+                        setSelectedPreset(detectUnitPreset(e.target.value, formData.saleUnits));
+                      }}
+                      placeholder="pc"
+                      className="w-full mt-2 px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
+                    />
+                  )}
+                </div>
+              </div>
+              <div className="space-y-2">
+                {(formData.saleUnits || []).map((unit: ProductSaleUnit, ui: number) => (
+                  <div key={ui} className="grid grid-cols-12 gap-2 items-end border border-gray-200 p-3 bg-gray-50">
+                    <div className="col-span-2">
+                      <label className="block text-xs text-gray-600 mb-1">{dict.products?.unitType || 'Unit type'}</label>
+                      <select
+                        value={matchUnitType(unit.code, unit.label, unit.factor)}
+                        onChange={(e) => handleSaleUnitTypeChange(ui, e.target.value as UnitTypeId)}
+                        className="w-full px-2 py-1.5 text-sm border border-gray-300 bg-white"
+                      >
+                        {UNIT_TYPE_OPTIONS.map((type) => (
+                          <option key={type.id} value={type.id}>
+                            {getUnitTypeLabel(type.id)}
+                          </option>
+                        ))}
+                      </select>
+                      {matchUnitType(unit.code, unit.label, unit.factor) === 'custom' && (
+                        <input
+                          type="text"
+                          value={unit.code}
+                          onChange={(e) => handleSaleUnitFieldChange(ui, 'code', e.target.value)}
+                          placeholder={dict.products?.unitCode || 'Code'}
+                          className="w-full mt-1 px-2 py-1.5 text-sm border border-gray-300 bg-white"
+                        />
+                      )}
+                    </div>
+                    <div className="col-span-3">
+                      <label className="block text-xs text-gray-600 mb-1">{dict.products?.unitLabel || 'Label'}</label>
+                      <input
+                        type="text"
+                        value={unit.label}
+                        onChange={(e) => handleSaleUnitFieldChange(ui, 'label', e.target.value)}
+                        placeholder="Box of 100"
+                        className="w-full px-2 py-1.5 text-sm border border-gray-300 bg-white"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-xs text-gray-600 mb-1">{dict.products?.unitFactor || 'Factor'}</label>
+                      <input
+                        type="number"
+                        min="0.0001"
+                        step="1"
+                        value={unit.factor}
+                        onChange={(e) =>
+                          handleSaleUnitFieldChange(ui, 'factor', parseFloat(e.target.value) || 1)
+                        }
+                        className="w-full px-2 py-1.5 text-sm border border-gray-300 bg-white"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-xs text-gray-600 mb-1">{dict.products?.unitPrice || 'Price'}</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={unit.price ?? ''}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          handleSaleUnitFieldChange(
+                            ui,
+                            'price',
+                            raw === '' ? undefined : parseFloat(raw) || 0
+                          );
+                        }}
+                        placeholder={dict.products?.unitPriceAuto || 'Auto'}
+                        className="w-full px-2 py-1.5 text-sm border border-gray-300 bg-white"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-xs text-gray-600 mb-1">{dict.products?.unitBarcode || 'Barcode'}</label>
+                      <input
+                        type="text"
+                        value={unit.barcode || ''}
+                        onChange={(e) => handleSaleUnitFieldChange(ui, 'barcode', e.target.value)}
+                        className="w-full px-2 py-1.5 text-sm border border-gray-300 bg-white"
+                      />
+                    </div>
+                    <div className="col-span-1 flex flex-col items-center gap-1">
+                      <label className="flex items-center gap-1 text-xs text-gray-600 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="defaultSaleUnit"
+                          checked={unit.isDefault === true}
+                          onChange={() => {
+                            const saleUnits = (formData.saleUnits || []).map((u, idx) => ({
+                              ...u,
+                              isDefault: idx === ui,
+                            }));
+                            updateFormData({ saleUnits });
+                            setSelectedPreset(detectUnitPreset(formData.baseUnit, saleUnits));
+                          }}
+                        />
+                        {dict.products?.unitDefault || 'Def'}
+                      </label>
+                      {(formData.saleUnits || []).length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const saleUnits = [...(formData.saleUnits || [])];
+                            saleUnits.splice(ui, 1);
+                            if (!saleUnits.some((u) => u.isDefault) && saleUnits.length > 0) {
+                              saleUnits[0].isDefault = true;
+                            }
+                            updateFormData({ saleUnits });
+                            setSelectedPreset(detectUnitPreset(formData.baseUnit, saleUnits));
+                          }}
+                          className="text-red-500 hover:text-red-700 text-xs"
+                        >
+                          {dict.common?.delete || 'Del'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="relative">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
