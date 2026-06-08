@@ -61,8 +61,9 @@ When **On-account sales** is enabled in **Settings** (see [Settings & Configurat
 - **POS** can attach a customer and use **On account** as a payment method so the sale increases **balance due**.
 - The customer list shows **Balance due** per customer.
 - For customers with a positive balance, use **Record payment** to post a **cash, card, digital, check, or other** payment against the balance (optional notes).
+- When adding or editing a customer, set an optional **Credit limit** to cap on-account debt. Leave the field empty for no limit. Checkout is blocked if a sale would exceed the limit.
 
-**Credit limit** can be maintained via the customer API for tenants that use it; it caps how far on-account debt can go when enforced at checkout.
+For full feature documentation — split payments, refunds, API, and troubleshooting — see [Customer Credit (On-Account Sales)](../customer-credit.md).
 
 ## Linking customers at the POS
 
@@ -80,6 +81,7 @@ Tags are free-form strings (e.g. **VIP**, **PWD**, **Wholesale**). Enter them as
 
 ## Related guides
 
+- [Customer Credit (On-Account Sales)](../customer-credit.md) — Full reference for balance due, credit limits, payments, and refunds  
 - [Point of Sale](./03-point-of-sale.md) — Attaching customers and on-account checkout  
 - [Settings & Configuration](./12-settings.md) — Customer Management and On-account toggles  
 - [Subscriptions & Billing](./14-subscriptions.md) — Plan features that gate customer tools  

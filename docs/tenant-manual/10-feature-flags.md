@@ -125,7 +125,7 @@ When OFF:
 - Customer admin and POS customer attach flows are unavailable (subject to plan checks)
 - Transactions proceed without an attached customer
 
-**Pairing with On-account:** `enableOnAccountSales` only makes sense when staff can attach customers (`enableCustomerManagement` ON and plan includes customers). On-account charges post to the customer’s **balance due**; payments are recorded from the customer list. See [Tenant Settings Reference](./02-tenant-settings.md) and [User Manual: Customers](../user-manual/08-customers.md).
+**Pairing with On-account:** `enableOnAccountSales` only makes sense when staff can attach customers (`enableCustomerManagement` ON and plan includes customers). On-account charges post to the customer’s **balance due**; payments are recorded from the customer list. See [Customer Credit](../customer-credit.md), [Tenant Settings Reference](./02-tenant-settings.md), and [User Manual: Customers](../user-manual/08-customers.md).
 
 ### On-account sales (`enableOnAccountSales`)
 
