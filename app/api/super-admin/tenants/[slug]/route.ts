@@ -41,7 +41,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const body = await request.json();
-    const { name, domain, subdomain, isActive, settings } = body;
+    const { name, domain, subdomain, isActive, settings, onboardingStatus, notes } = body;
 
     const updateData: Record<string, unknown> = {};
 
@@ -54,6 +54,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (domain !== undefined) updateData.domain = domain.trim() || null;
     if (subdomain !== undefined) updateData.subdomain = subdomain.trim().toLowerCase() || null;
     if (isActive !== undefined) updateData.isActive = isActive;
+    if (onboardingStatus !== undefined) updateData.onboardingStatus = onboardingStatus;
+    if (notes !== undefined) updateData.notes = notes;
 
     if (settings !== undefined) {
       const currentBusinessType = oldTenant.settings?.businessType;

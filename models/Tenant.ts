@@ -6,6 +6,8 @@ import mongoose, { Schema, Document, Model } from 'mongoose';
 export type { ITenantSettings } from '@/types/tenant';
 import type { ITenantSettings } from '@/types/tenant';
 
+export type OnboardingStatus = 'not_started' | 'in_progress' | 'complete';
+
 export interface ITenant extends Document {
   slug: string;
   name: string;
@@ -13,6 +15,9 @@ export interface ITenant extends Document {
   subdomain?: string;
   settings: ITenantSettings;
   isActive: boolean;
+  onboardingStatus: OnboardingStatus;
+  notes?: string;
+  createdBy?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -444,6 +449,19 @@ const TenantSchema: Schema = new Schema(
     isActive: {
       type: Boolean,
       default: true,
+    },
+    onboardingStatus: {
+      type: String,
+      enum: ['not_started', 'in_progress', 'complete'],
+      default: 'not_started',
+    },
+    notes: {
+      type: String,
+      trim: true,
+    },
+    createdBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
     },
   },
   {

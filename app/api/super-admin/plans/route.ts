@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import SubscriptionPlan from '@/models/SubscriptionPlan';
+import Subscription from '@/models/Subscription';
 import { requireRole } from '@/lib/auth';
 import { handleApiError } from '@/lib/error-handler';
 
@@ -13,7 +14,15 @@ export async function GET(request: NextRequest) {
       .sort({ 'price.monthly': 1 })
       .lean();
 
-    return NextResponse.json({ success: true, data: plans });
+    // Attach active subscriber count to each plan
+    const counts = await Subscription.aggregate([
+      { $match: { status: { $in: ['active', 'trial'] } } },
+      { $group: { _id: '$planId', count: { $sum: 1 } } },
+    ]);
+    const countMap = Object.fromEntries(counts.map(c => [String(c._id), c.count]));
+    const plansWithCounts = plans.map(p => ({ ...p, subscriberCount: countMap[String(p._id)] || 0 }));
+
+    return NextResponse.json({ success: true, data: plansWithCounts });
   } catch (error: unknown) {
     if (error instanceof Error && (error.message === 'Unauthorized' || error.message.includes('Forbidden'))) {
       return NextResponse.json(
@@ -31,7 +40,7 @@ export async function POST(request: NextRequest) {
     await requireRole(request, ['super_admin']);
 
     const body = await request.json();
-    const { name, tier, description, price, features, birCompliance, isActive, isCustom } = body;
+    const { name, tier, description, price, features, birCompliance, isActive, isCustom, availableToNewTenants, yearlyDiscount } = body;
 
     if (!name || !tier || price?.monthly === undefined) {
       return NextResponse.json(
@@ -57,6 +66,8 @@ export async function POST(request: NextRequest) {
       birCompliance,
       isActive: isActive !== undefined ? isActive : true,
       isCustom: isCustom || false,
+      availableToNewTenants: availableToNewTenants !== undefined ? availableToNewTenants : true,
+      yearlyDiscount: yearlyDiscount || 0,
     });
 
     return NextResponse.json({ success: true, data: plan }, { status: 201 });

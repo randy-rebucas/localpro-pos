@@ -1,6 +1,6 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 
-export type SubscriptionStatus = 'active' | 'inactive' | 'cancelled' | 'suspended' | 'trial';
+export type SubscriptionStatus = 'active' | 'inactive' | 'cancelled' | 'suspended' | 'trial' | 'paused';
 export type BillingCycle = 'monthly' | 'yearly';
 
 export interface ISubscription extends Document {
@@ -14,7 +14,13 @@ export interface ISubscription extends Document {
   nextBillingDate?: Date;
   lastBillingDate?: Date;
   cancelledAt?: Date;
+  cancellationReason?: string;
   suspendedAt?: Date;
+  pausedAt?: Date;
+  pauseReason?: string;
+  pauseEndsAt?: Date;
+  gracePeriodEndDate?: Date;
+  trialConvertedAt?: Date;
   paymentMethod?: {
     type: 'card' | 'bank' | 'paypal' | 'manual';
     last4?: string;
@@ -59,7 +65,7 @@ const SubscriptionSchema: Schema = new Schema(
     },
     status: {
       type: String,
-      enum: ['active', 'inactive', 'cancelled', 'suspended', 'trial'],
+      enum: ['active', 'inactive', 'cancelled', 'suspended', 'trial', 'paused'],
       default: 'trial',
       required: true,
     },
@@ -89,7 +95,27 @@ const SubscriptionSchema: Schema = new Schema(
     cancelledAt: {
       type: Date,
     },
+    cancellationReason: {
+      type: String,
+      trim: true,
+    },
     suspendedAt: {
+      type: Date,
+    },
+    pausedAt: {
+      type: Date,
+    },
+    pauseReason: {
+      type: String,
+      trim: true,
+    },
+    pauseEndsAt: {
+      type: Date,
+    },
+    gracePeriodEndDate: {
+      type: Date,
+    },
+    trialConvertedAt: {
       type: Date,
     },
     paymentMethod: {

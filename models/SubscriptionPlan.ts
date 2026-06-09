@@ -39,7 +39,9 @@ export interface ISubscriptionPlan extends Document {
     monthlySupport: boolean; // Monthly compliance support
   };
   isActive: boolean;
-  isCustom: boolean; // For enterprise/custom pricing
+  isCustom: boolean;
+  availableToNewTenants: boolean;
+  yearlyDiscount: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -208,6 +210,16 @@ const SubscriptionPlanSchema: Schema = new Schema(
     isCustom: {
       type: Boolean,
       default: false,
+    },
+    availableToNewTenants: {
+      type: Boolean,
+      default: true,
+    },
+    yearlyDiscount: {
+      type: Number,
+      default: 0,
+      min: [0, 'Discount cannot be negative'],
+      max: [100, 'Discount cannot exceed 100%'],
     },
   },
   {

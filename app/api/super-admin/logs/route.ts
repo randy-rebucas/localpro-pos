@@ -51,16 +51,48 @@ export async function GET(request: NextRequest) {
       query.createdAt = dateFilter;
     }
 
+    const format = searchParams.get('format') || 'json';
+    const csvLimit = format === 'csv' ? 5000 : limit;
+
     const [logs, total] = await Promise.all([
       AuditLog.find(query)
         .populate('tenantId', 'slug name')
         .populate('userId', 'name email')
         .sort({ createdAt: -1 })
-        .skip((page - 1) * limit)
-        .limit(limit)
+        .skip(format === 'csv' ? 0 : (page - 1) * limit)
+        .limit(csvLimit)
         .lean(),
       AuditLog.countDocuments(query),
     ]);
+
+    if (format === 'csv') {
+      type LogEntry = {
+        createdAt: Date;
+        tenantId?: { slug?: string; name?: string };
+        action?: string;
+        entityType?: string;
+        entityId?: string;
+        userId?: { name?: string; email?: string };
+        ipAddress?: string;
+      };
+      const csvRows = [
+        'Timestamp,Tenant,Action,Entity Type,Entity ID,User,IP',
+        ...logs.map((l) => {
+          const log = l as LogEntry;
+          const ts = new Date(log.createdAt).toISOString();
+          const tenant = log.tenantId ? `${(log.tenantId as { slug?: string }).slug || ''}` : '';
+          const user = log.userId ? `${(log.userId as { email?: string }).email || ''}` : '';
+          return `"${ts}","${tenant}","${log.action || ''}","${log.entityType || ''}","${log.entityId || ''}","${user}","${log.ipAddress || ''}"`;
+        }),
+      ].join('\n');
+
+      return new NextResponse(csvRows, {
+        headers: {
+          'Content-Type': 'text/csv',
+          'Content-Disposition': `attachment; filename="audit-logs-${new Date().toISOString().slice(0, 10)}.csv"`,
+        },
+      });
+    }
 
     return NextResponse.json({
       success: true,

@@ -41,6 +41,9 @@ interface Plan {
   birCompliance: BirCompliance;
   isActive: boolean;
   isCustom: boolean;
+  availableToNewTenants: boolean;
+  yearlyDiscount: number;
+  subscriberCount?: number;
 }
 
 const TIER_ORDER = ['starter', 'pro', 'business', 'enterprise'];
@@ -89,6 +92,7 @@ const defaultPlan = {
   features: defaultFeatures,
   birCompliance: defaultBir,
   isActive: true, isCustom: false,
+  availableToNewTenants: true, yearlyDiscount: 0,
 };
 
 export default function PlansPage() {
@@ -141,6 +145,8 @@ export default function PlansPage() {
       birCompliance: { ...plan.birCompliance },
       isActive: plan.isActive,
       isCustom: plan.isCustom,
+      availableToNewTenants: plan.availableToNewTenants ?? true,
+      yearlyDiscount: plan.yearlyDiscount ?? 0,
     });
     setFormError('');
     setShowModal(true);
@@ -202,23 +208,16 @@ export default function PlansPage() {
   const formatLimit = (v: number) => v === -1 ? '∞' : v.toLocaleString();
 
   return (
-    <SuperAdminShell>
-      <div className="p-6 w-full">
-        <div className="mb-6 flex items-center gap-4">
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold text-gray-900">Subscription Plans</h1>
-            <p className="text-sm text-gray-500 mt-1">Manage subscription tiers and pricing</p>
-          </div>
-          <button
-            onClick={openCreate}
-            className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover transition-colors"
-          >
+    <SuperAdminShell title="Subscription Plans">
+      <div className="space-y-4">
+        <div className="flex justify-end">
+          <button onClick={openCreate} className="px-4 py-2 bg-brand-teal text-white rounded-lg text-sm font-medium hover:bg-brand-teal/90">
             + New Plan
           </button>
         </div>
 
         {message && (
-          <div className={`mb-4 p-3 border text-sm ${message.type === 'success' ? 'bg-green-50 border-green-300 text-green-800' : 'bg-red-50 border-red-300 text-red-800'}`}>
+          <div className={`p-3 border rounded-xl text-sm ${message.type === 'success' ? 'bg-green-50 border-green-300 text-green-800' : 'bg-red-50 border-red-300 text-red-800'}`}>
             {message.text}
           </div>
         )}
@@ -238,7 +237,7 @@ export default function PlansPage() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    {['Name', 'Tier', 'Monthly Price', 'Max Users', 'Max Branches', 'Active', 'Actions'].map(h => (
+                    {['Name', 'Tier', 'Monthly Price', 'Yearly Disc.', 'Subscribers', 'Max Users', 'Active', 'Actions'].map(h => (
                       <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{h}</th>
                     ))}
                   </tr>
@@ -258,8 +257,14 @@ export default function PlansPage() {
                       <td className="px-4 py-4 text-sm font-medium text-gray-900">
                         {plan.price.monthly === 0 ? 'Free' : `${plan.price.currency} ${plan.price.monthly.toLocaleString()}`}
                       </td>
+                      <td className="px-4 py-4 text-sm text-gray-500">
+                        {plan.yearlyDiscount ? <span className="text-green-600 font-medium">{plan.yearlyDiscount}% off</span> : '—'}
+                      </td>
+                      <td className="px-4 py-4 text-sm text-gray-700 font-medium">
+                        {plan.subscriberCount ?? 0}
+                        {!plan.availableToNewTenants && <span className="ml-1 text-xs text-orange-500" title="Not available to new tenants">⚠</span>}
+                      </td>
                       <td className="px-4 py-4 text-sm text-gray-500">{formatLimit(plan.features.maxUsers)}</td>
-                      <td className="px-4 py-4 text-sm text-gray-500">{formatLimit(plan.features.maxBranches)}</td>
                       <td className="px-4 py-4">
                         <span className={`px-2 py-0.5 text-xs font-semibold border ${plan.isActive ? 'bg-green-100 text-green-800 border-green-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
                           {plan.isActive ? 'Yes' : 'No'}
@@ -359,6 +364,26 @@ export default function PlansPage() {
                         onChange={e => setFormData(f => ({ ...f, price: { ...f.price, currency: e.target.value.toUpperCase() } }))}
                         className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white"
                       />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 mt-3">
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Yearly Discount (%)</label>
+                      <input
+                        type="number" min="0" max="100"
+                        value={formData.yearlyDiscount}
+                        onChange={e => setFormData(f => ({ ...f, yearlyDiscount: Number(e.target.value) }))}
+                        className="w-full px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand bg-white"
+                        placeholder="0"
+                      />
+                    </div>
+                    <div className="flex items-end pb-2 gap-4">
+                      <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                        <input type="checkbox" checked={formData.availableToNewTenants}
+                          onChange={e => setFormData(f => ({ ...f, availableToNewTenants: e.target.checked }))}
+                          className="rounded" />
+                        Available to new tenants
+                      </label>
                     </div>
                   </div>
                 </div>
