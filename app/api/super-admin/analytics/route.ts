@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Subscription from '@/models/Subscription';
+import '@/models/SubscriptionPlan';
 import Transaction from '@/models/Transaction';
 import Tenant from '@/models/Tenant';
 import { requireRole } from '@/lib/auth';

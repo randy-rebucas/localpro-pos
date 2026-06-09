@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Subscription from '@/models/Subscription';
+import '@/models/SubscriptionPlan';
 import { requireAuth } from '@/lib/auth';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { logger } from '@/lib/logger';
