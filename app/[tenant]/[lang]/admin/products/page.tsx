@@ -8,6 +8,7 @@ import Link from 'next/link';
 
 const BarcodeModal = dynamic(() => import('@/components/BarcodeModal'), { ssr: false });
 const ProductImportModal = dynamic(() => import('@/components/ProductImportModal'), { ssr: false });
+const BulkBarcodeModal = dynamic(() => import('@/components/BulkBarcodeModal'), { ssr: false });
 import { getDictionaryClient } from '../../dictionaries-client';
 import Currency from '@/components/Currency';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
@@ -56,6 +57,7 @@ export default function ProductsPage() {
   const [page, setPage] = useState(1);
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
   const [showBulkEditModal, setShowBulkEditModal] = useState(false);
+  const [showBulkBarcodeModal, setShowBulkBarcodeModal] = useState(false);
   const [exporting, setExporting] = useState(false);
   const selectAllRef = useRef<HTMLInputElement>(null);
   const PAGE_SIZE = 20;
@@ -385,6 +387,13 @@ export default function ProductsPage() {
                 </button>
                 <button
                   type="button"
+                  onClick={() => setShowBulkBarcodeModal(true)}
+                  className={btnSecondarySm}
+                >
+                  {dict.products?.printBarcodes || 'Print Barcodes'}
+                </button>
+                <button
+                  type="button"
                   onClick={() => setSelectedProducts(new Set())}
                   className={btnSecondarySm}
                 >
@@ -597,6 +606,14 @@ export default function ProductsPage() {
             businessTypeConfig={businessTypeConfig}
             onClose={() => setShowBulkEditModal(false)}
             onSave={handleBulkEditSave}
+          />
+        )}
+
+        {showBulkBarcodeModal && (
+          <BulkBarcodeModal
+            products={products.filter((p) => selectedProducts.has(p._id))}
+            dict={dict}
+            onClose={() => setShowBulkBarcodeModal(false)}
           />
         )}
       </div>
