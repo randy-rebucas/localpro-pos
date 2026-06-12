@@ -40,10 +40,11 @@ export async function ensureTransactionIndexes(): Promise<void> {
   }
 
   const channelSyncIdx = indexes.find((idx) => idx.name === CHANNEL_SYNC_INDEX);
+  const pfe = channelSyncIdx?.partialFilterExpression as Record<string, unknown> | undefined;
+  const channelSyncKeyFilter = pfe?.channelSyncKey as Record<string, unknown> | undefined;
   const needsRebuild =
     channelSyncIdx &&
-    (!channelSyncIdx.partialFilterExpression ||
-      JSON.stringify(channelSyncIdx.partialFilterExpression).includes('$ne'));
+    (!pfe || '$ne' in (channelSyncKeyFilter ?? {}));
   if (needsRebuild) {
     await collection.dropIndex(CHANNEL_SYNC_INDEX);
     logger.info(
