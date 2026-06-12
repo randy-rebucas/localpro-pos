@@ -40,7 +40,11 @@ export async function ensureTransactionIndexes(): Promise<void> {
   }
 
   const channelSyncIdx = indexes.find((idx) => idx.name === CHANNEL_SYNC_INDEX);
-  if (channelSyncIdx && !channelSyncIdx.partialFilterExpression) {
+  const needsRebuild =
+    channelSyncIdx &&
+    (!channelSyncIdx.partialFilterExpression ||
+      JSON.stringify(channelSyncIdx.partialFilterExpression).includes('$ne'));
+  if (needsRebuild) {
     await collection.dropIndex(CHANNEL_SYNC_INDEX);
     logger.info(
       'Dropped legacy transactions channelSyncKey index (recreating with partial filter)'

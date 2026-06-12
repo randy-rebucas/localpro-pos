@@ -279,7 +279,7 @@ TransactionSchema.index(
   {
     unique: true,
     partialFilterExpression: {
-      channelSyncKey: { $exists: true, $type: 'string', $ne: '' },
+      channelSyncKey: { $exists: true, $type: 'string', $gt: '' },
     },
   }
 );
