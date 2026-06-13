@@ -29,6 +29,7 @@ export async function GET(request: NextRequest) {
     const category = searchParams.get('category') || '';
     const categoryId = searchParams.get('categoryId') || '';
     const isActiveParam = searchParams.get('isActive');
+    const filterParam = searchParams.get('filter'); // 'missing-barcode' | 'missing-image' | null
 
     const query: any = { tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
     if (isActiveParam === 'true') {
@@ -40,14 +41,34 @@ export async function GET(request: NextRequest) {
     } else {
       query.isActive = { $ne: false };
     }
+
+    // Pre-set filters for the mobile bulk-scan workflow
+    if (filterParam === 'missing-barcode') {
+      query.$or = [
+        { barcode: { $exists: false } },
+        { barcode: null },
+        { barcode: '' },
+        { barcode: /^\s*$/ },
+      ];
+    } else if (filterParam === 'missing-image') {
+      query.$or = [{ image: { $exists: false } }, { image: null }, { image: '' }];
+    }
+
     if (search) {
       const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      query.$or = [
+      const searchOr = [
         { name: { $regex: escapedSearch, $options: 'i' } },
         { description: { $regex: escapedSearch, $options: 'i' } },
         { sku: { $regex: escapedSearch, $options: 'i' } },
         { barcode: { $regex: escapedSearch, $options: 'i' } },
       ];
+      // Merge with existing $or if a filter is already applied
+      if (query.$or) {
+        query.$and = [{ $or: query.$or }, { $or: searchOr }];
+        delete query.$or;
+      } else {
+        query.$or = searchOr;
+      }
     }
     if (category) {
       query.category = category;

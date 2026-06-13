@@ -1727,30 +1727,39 @@ export default function Dashboard() {
             </div>
 
 
-            <ProductGrid
-              products={products}
-              status={productsStatus}
-              source={productsSource}
-              error={productsError}
-              search={search}
-              gridClassName={productGridClass}
-              listClassName={productListClass}
-              cardHeightClass={productCardHeightClass}
-              displayMode={displayMode}
-              primaryColor={primaryColor}
-              businessType={businessType}
-              cart={cart}
-              dict={dict}
-              addLabel={dict.common?.add || 'Add'}
-              onAdd={handleAddToCart}
-              onTogglePin={handleTogglePin}
-              onClearSearch={() => setSearch('')}
-              onRetry={refetchProducts}
-              hasMore={productsHasMore}
-              loadingMore={productsLoadingMore}
-              onLoadMore={loadMoreProducts}
-              scrollRootRef={productsScrollRef}
-            />
+            {debouncedSearch.trim() ? (
+              <ProductGrid
+                products={products}
+                status={productsStatus}
+                source={productsSource}
+                error={productsError}
+                search={search}
+                gridClassName={productGridClass}
+                listClassName={productListClass}
+                cardHeightClass={productCardHeightClass}
+                displayMode={displayMode}
+                primaryColor={primaryColor}
+                businessType={businessType}
+                cart={cart}
+                dict={dict}
+                addLabel={dict.common?.add || 'Add'}
+                onAdd={handleAddToCart}
+                onTogglePin={handleTogglePin}
+                onClearSearch={() => setSearch('')}
+                onRetry={refetchProducts}
+                hasMore={productsHasMore}
+                loadingMore={productsLoadingMore}
+                onLoadMore={loadMoreProducts}
+                scrollRootRef={productsScrollRef}
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center py-24 gap-4 text-center select-none">
+                <svg className="w-16 h-16 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+                </svg>
+                <p className="text-lg font-medium opacity-40">{dict.pos?.searchPrompt || 'Search for a product to begin'}</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
