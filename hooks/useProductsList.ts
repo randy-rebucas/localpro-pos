@@ -60,6 +60,7 @@ export interface FetchProductsOptions {
   limit?: number;
   search?: string;
   isActive?: boolean | null | 'all';
+  filter?: 'all' | 'missing-barcode' | 'missing-image';
 }
 
 export const useProductsList = (_tenant: string) => {
@@ -96,6 +97,9 @@ export const useProductsList = (_tenant: string) => {
         params.set('isActive', 'false');
       } else if (options.isActive === 'all') {
         params.set('isActive', 'all');
+      }
+      if (options.filter && options.filter !== 'all') {
+        params.set('filter', options.filter);
       }
 
       const res = await fetch(`/api/products?${params}`, { credentials: 'include', signal: controller.signal });

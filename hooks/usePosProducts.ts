@@ -29,7 +29,7 @@ export interface PosProduct {
   branchStock?: Array<{ branchId: string; stock: number }>;
 }
 
-export type ProductsStatus = 'loading' | 'ready' | 'error';
+export type ProductsStatus = 'idle' | 'loading' | 'ready' | 'error';
 export type ProductsSource = 'server' | 'cache' | 'none';
 
 const PAGE_SIZE = 40;
@@ -56,7 +56,7 @@ export function usePosProducts({
   fetchWithTimeout,
 }: UsePosProductsOptions) {
   const [products, setProducts] = useState<PosProduct[]>([]);
-  const [status, setStatus] = useState<ProductsStatus>('loading');
+  const [status, setStatus] = useState<ProductsStatus>('idle');
   const [source, setSource] = useState<ProductsSource>('none');
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
@@ -108,6 +108,14 @@ export function usePosProducts({
 
   const fetchProducts = useCallback(
     async (page: number, append: boolean) => {
+      if (!debouncedSearch.trim()) {
+        setProducts([]);
+        setStatus('idle');
+        setError(null);
+        setHasMore(false);
+        return;
+      }
+
       const fetchId = ++fetchIdRef.current;
 
       if (append) {

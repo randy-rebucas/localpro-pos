@@ -54,6 +54,7 @@ export default function ProductsPage() {
   const [barcodeProduct, setBarcodeProduct] = useState<Product | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [productFilter, setProductFilter] = useState<'missing-barcode' | 'all'>('missing-barcode');
   const [page, setPage] = useState(1);
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
   const [showBulkEditModal, setShowBulkEditModal] = useState(false);
@@ -77,8 +78,8 @@ export default function ProductsPage() {
   } = useProductsList(tenant);
 
   const loadProducts = useCallback(() => {
-    fetchProducts({ page, limit: PAGE_SIZE, search: debouncedSearch });
-  }, [fetchProducts, page, debouncedSearch]);
+    fetchProducts({ page, limit: PAGE_SIZE, search: debouncedSearch, filter: productFilter === 'all' ? undefined : productFilter });
+  }, [fetchProducts, page, debouncedSearch, productFilter]);
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -97,7 +98,7 @@ export default function ProductsPage() {
 
   useEffect(() => {
     setSelectedProducts(new Set());
-  }, [page, debouncedSearch]);
+  }, [page, debouncedSearch, productFilter]);
 
   useEffect(() => {
     if (selectAllRef.current) {
@@ -289,6 +290,32 @@ export default function ProductsPage() {
         )}
 
         <div className="bg-white border border-gray-300 p-6">
+          {/* Filter tabs */}
+          <div className="flex gap-1 mb-4 border-b border-gray-200">
+            {([
+              { value: 'missing-barcode', label: 'Missing Barcode' },
+              { value: 'all', label: 'All Products' },
+            ] as const).map((tab) => (
+              <button
+                key={tab.value}
+                type="button"
+                onClick={() => { setProductFilter(tab.value); setPage(1); }}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
+                  productFilter === tab.value
+                    ? 'border-brand text-brand bg-brand-soft'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                {tab.label}
+                {productFilter === tab.value && pagination.total > 0 && (
+                  <span className="ml-2 px-1.5 py-0.5 text-xs rounded-full bg-brand text-white">
+                    {pagination.total}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
           <div className="flex justify-between items-center mb-6 flex-wrap gap-2">
             <div className="flex-1 max-w-md">
               <input

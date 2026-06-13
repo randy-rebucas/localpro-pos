@@ -200,6 +200,7 @@ function validateCsrf(request: NextRequest): boolean {
  */
 const PUBLIC_API_PATHS = new Set([
   '/api/auth/login',
+  '/api/auth/mobile-login',
   '/api/auth/logout',
   '/api/auth/register',
   '/api/auth/reset-password',
@@ -211,6 +212,9 @@ const PUBLIC_API_PATHS = new Set([
   '/api/business-types',
   '/api/health',
   '/api/super-admin/auth/login',
+  '/api/stores/retail',
+  '/api/stores',        // pre-login ?slug= mode; auth enforced inside route
+  '/api/public/',
 ]);
 
 /** Automation routes are protected by CRON_SECRET, not JWT */
