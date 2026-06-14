@@ -453,6 +453,14 @@ export default function SignupPage() {
               {dict?.signup?.selectStoreToLogin || 'Select a store to login'}
             </Link>
           </p>
+
+          <p className="text-center text-xs text-gray-400">
+            By creating an account, you agree to our{' '}
+            <Link href="/privacy" className="underline hover:text-gray-600 transition-colors">
+              Privacy Policy
+            </Link>
+            .
+          </p>
         </form>
       </div>
     </div>

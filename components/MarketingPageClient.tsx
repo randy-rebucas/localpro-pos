@@ -841,6 +841,7 @@ export default function MarketingPageClient() {
                 <li><a href="#" className="hover:text-white transition-colors">{d?.footerAbout || 'About'}</a></li>
                 <li><a href="#" className="hover:text-white transition-colors">{d?.footerBlog || 'Blog'}</a></li>
                 <li><a href="#" className="hover:text-white transition-colors">{d?.footerContact || 'Contact'}</a></li>
+                <li><Link href="/privacy" className="hover:text-white transition-colors">{d?.footerPrivacy || 'Privacy Policy'}</Link></li>
               </ul>
             </nav>
             <nav aria-label="Resources links">
