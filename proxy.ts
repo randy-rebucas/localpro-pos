@@ -342,6 +342,7 @@ export function proxy(request: NextRequest) {
     pathname === '/login' ||
     pathname === '/signup' ||
     pathname === '/stores' ||
+    pathname === '/privacy' ||
     pathname.startsWith('/super-admin')
   ) {
     return NextResponse.next();

@@ -202,7 +202,7 @@ export default function PrivacyPage() {
       {/* Footer */}
       <footer className="max-w-4xl mx-auto px-4 py-8 text-center text-sm text-gray-500">
         <p>
-          &copy; {new Date().getFullYear()} 1pos. All rights reserved.{' '}
+          &copy; 2026 1pos. All rights reserved.{' '}
           <Link href="/" className="text-brand hover:text-brand-hover">
             Home
           </Link>
