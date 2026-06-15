@@ -827,3 +827,17 @@ This POS system includes **100+ enterprise features** covering:
 ---
 
 **Built with ❤️ using Next.js, MongoDB, and modern web technologies.**
+
+npm run db:backup	Full DB backup to ./backups/, keeps last 7
+npm run db:backup:cloud	Same + uploads to S3-compatible cloud storage
+npm run db:backup:list	Lists all backup files with size and timestamp
+
+
+# Backup a single tenant
+npm run db:backup -- --tenant=64abc123def456
+
+# Custom output dir + keep 14 backups
+npm run db:backup -- --out=/mnt/backups --keep=14
+
+# Delete a specific backup
+npm run db:backup -- --delete=backup-2026-01-01T02-00-00-000Z.json
