@@ -217,6 +217,12 @@ This allows collection-level selection — for example, backing up only `product
 
 ---
 
+## Restore
+
+See **[database-restore.md](database-restore.md)** for the full restore documentation — CLI (`npm run db:restore`), API (`POST /api/super-admin/backups/restore`), super-admin UI, and common scenarios.
+
+---
+
 ## Cloud Storage (S3-compatible)
 
 Set these environment variables to enable cloud uploads:
@@ -275,6 +281,8 @@ backups/<tenantId>/<filename>    # single-tenant backups
 | `app/api/automations/backups/create/route.ts` | Cron-protected HTTP trigger |
 | `app/api/super-admin/backups/route.ts` | Super-admin list + create API |
 | `app/api/super-admin/backups/[filename]/route.ts` | Super-admin download + delete API |
+| `app/api/super-admin/backups/restore/route.ts` | Super-admin restore API (server file or upload) |
+| `scripts/restore-database.ts` | CLI restore script |
 | `app/super-admin/backups/page.tsx` | Super-admin backup management UI |
 | `app/[tenant]/[lang]/admin/backup-reset/page.tsx` | Per-tenant backup/restore/reset UI |
 | `app/api/tenants/[slug]/reset-collections/route.ts` | Per-tenant backup/reset/restore API |

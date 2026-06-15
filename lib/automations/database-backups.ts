@@ -134,6 +134,123 @@ export async function createDatabaseBackup(
   }
 }
 
+export interface DatabaseRestoreOptions {
+  backupFilePath: string; // Absolute path to the JSON backup file
+  clearExisting?: boolean; // Drop each collection's documents before inserting (default: false)
+  collections?: string[]; // Restore only these collections; omit to restore all
+  dryRun?: boolean; // Parse and count without writing to the database
+}
+
+export interface RestoreCollectionResult {
+  inserted: number;
+  cleared: number;
+  skipped?: boolean;
+}
+
+export interface DatabaseRestoreResult {
+  success: boolean;
+  message: string;
+  dryRun: boolean;
+  collections: Record<string, RestoreCollectionResult>;
+  errors: string[];
+}
+
+/**
+ * Restore database from a JSON backup file produced by createDatabaseBackup
+ */
+export async function restoreDatabaseBackup(
+  options: DatabaseRestoreOptions
+): Promise<DatabaseRestoreResult> {
+  await connectDB();
+
+  const result: DatabaseRestoreResult = {
+    success: true,
+    message: '',
+    dryRun: options.dryRun ?? false,
+    collections: {},
+    errors: [],
+  };
+
+  try {
+    const fs = await _importFs();
+    const raw = await fs.readFile(options.backupFilePath, 'utf-8');
+    const backupData = JSON.parse(raw);
+
+    // Support both formats: flat { collectionName: [...] } and wrapped { collections: { ... } }
+    const collectionsMap: Record<string, unknown[]> =
+      backupData.collections ?? backupData;
+
+    const db = mongoose.connection.db;
+    if (!db) throw new Error('Database connection not available');
+
+    const targetCollections = options.collections
+      ? options.collections
+      : Object.keys(collectionsMap);
+
+    for (const collectionName of targetCollections) {
+      const docs = collectionsMap[collectionName];
+      if (!Array.isArray(docs)) {
+        result.collections[collectionName] = { inserted: 0, cleared: 0, skipped: true };
+        continue;
+      }
+
+      if (options.dryRun) {
+        result.collections[collectionName] = { inserted: docs.length, cleared: 0 };
+        continue;
+      }
+
+      const collection = db.collection(collectionName);
+      let cleared = 0;
+
+      if (options.clearExisting) {
+        const del = await collection.deleteMany({});
+        cleared = del.deletedCount ?? 0;
+      }
+
+      let inserted = 0;
+      if (docs.length > 0) {
+        // Re-hydrate _id fields that were serialised as strings or plain objects
+        const hydrated = docs.map((doc: unknown) => {
+          const d = { ...(doc as Record<string, unknown>) };
+          if (d._id && typeof d._id === 'string' && mongoose.Types.ObjectId.isValid(d._id as string)) {
+            d._id = new mongoose.Types.ObjectId(d._id as string);
+          } else if (d._id && typeof d._id === 'object' && (d._id as Record<string, unknown>).$oid) {
+            d._id = new mongoose.Types.ObjectId((d._id as Record<string, unknown>).$oid as string);
+          }
+          return d;
+        });
+
+        // Insert in chunks to avoid hitting the 16 MB BSON limit per batch
+        const CHUNK = 500;
+        for (let i = 0; i < hydrated.length; i += CHUNK) {
+          try {
+            const res = await collection.insertMany(hydrated.slice(i, i + CHUNK), { ordered: false });
+            inserted += res.insertedCount;
+          } catch (err: unknown) {
+            // ordered:false — count what succeeded, record the rest as errors
+            const bulkErr = err as { result?: { insertedCount?: number }; message?: string };
+            inserted += bulkErr.result?.insertedCount ?? 0;
+            result.errors.push(`${collectionName} chunk ${i / CHUNK + 1}: ${bulkErr.message ?? err}`);
+          }
+        }
+      }
+
+      result.collections[collectionName] = { inserted, cleared };
+    }
+
+    const totalInserted = Object.values(result.collections).reduce((s, c) => s + c.inserted, 0);
+    const prefix = options.dryRun ? '[DRY RUN] Would restore' : 'Restored';
+    result.message = `${prefix} ${totalInserted} documents across ${Object.keys(result.collections).length} collection(s)`;
+
+    return result;
+  } catch (err: unknown) {
+    result.success = false;
+    result.message = `Restore failed: ${err instanceof Error ? err.message : String(err)}`;
+    result.errors.push(result.message);
+    return result;
+  }
+}
+
 /**
  * Upload backup file to S3-compatible storage
  * Requires env vars: BACKUP_S3_BUCKET, BACKUP_S3_REGION, BACKUP_S3_ACCESS_KEY_ID, BACKUP_S3_SECRET_ACCESS_KEY

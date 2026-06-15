@@ -27,9 +27,9 @@ export async function GET(
     const fs = await _importFs();
     const filePath = path.join(process.cwd(), 'backups', safe);
 
-    let content: Buffer;
+    let content: string;
     try {
-      content = await fs.readFile(filePath);
+      content = await fs.readFile(filePath, 'utf-8');
     } catch {
       return NextResponse.json({ success: false, error: 'Backup not found' }, { status: 404 });
     }

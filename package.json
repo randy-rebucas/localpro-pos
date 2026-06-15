@@ -15,6 +15,7 @@
     "db:backup": "tsx scripts/backup-database.ts",
     "db:backup:cloud": "tsx scripts/backup-database.ts --cloud",
     "db:backup:list": "tsx scripts/backup-database.ts --list",
+    "db:restore": "tsx scripts/restore-database.ts",
     "test:automations": "tsx scripts/test-automations.ts",
     "test:customer-auth": "tsx scripts/test-customer-auth.ts",
     "seed:subscription-plans": "tsx scripts/create-subscription-plans.ts",
