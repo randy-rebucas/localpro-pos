@@ -25,7 +25,6 @@ const AttendanceSchema: Schema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'User',
       required: [true, 'User ID is required'],
-      index: true,
     },
     tenantId: {
       type: Schema.Types.ObjectId,
@@ -35,11 +34,9 @@ const AttendanceSchema: Schema = new Schema(
     clockIn: {
       type: Date,
       required: [true, 'Clock-in time is required'],
-      index: true,
     },
     clockOut: {
       type: Date,
-      index: true,
     },
     breakStart: {
       type: Date,
@@ -106,9 +103,10 @@ AttendanceSchema.pre('save', function (next) {
 // Compound indexes for efficient queries
 AttendanceSchema.index({ tenantId: 1, userId: 1, clockIn: -1 });
 AttendanceSchema.index({ tenantId: 1, clockIn: -1 });
-AttendanceSchema.index({ userId: 1, clockIn: -1 });
-// Index for finding active sessions (clocked in but not out)
+// Per-user active session lookup (clock-in/out routes)
 AttendanceSchema.index({ userId: 1, clockOut: 1 }, { partialFilterExpression: { clockOut: null } });
+// Tenant-wide active session scan (automations: auto-clockout, break detection, cash-count reminders)
+AttendanceSchema.index({ tenantId: 1, clockOut: 1 }, { partialFilterExpression: { clockOut: null } });
 AttendanceSchema.index({ tenantId: 1, isActive: 1 });
 
 const Attendance: Model<IAttendance> = mongoose.models.Attendance || mongoose.model<IAttendance>('Attendance', AttendanceSchema);

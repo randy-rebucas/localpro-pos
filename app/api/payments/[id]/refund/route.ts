@@ -48,6 +48,7 @@ export async function POST(
     // Create audit log
     await createAuditLog(request, {
       tenantId,
+      userId: user.userId,
       action: AuditActions.PAYMENT_REFUND,
       entityType: 'payment',
       entityId: payment._id.toString(),

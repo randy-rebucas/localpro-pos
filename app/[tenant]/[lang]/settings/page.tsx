@@ -13,6 +13,7 @@ import SettingsPageSkeleton from '@/components/settings/SettingsPageSkeleton';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import EcommerceIntegrationsSettings from '@/components/settings/EcommerceIntegrationsSettings';
+import ImageUploadField from '@/components/settings/ImageUploadField';
 import PageLoading from '@/components/ui/PageLoading';
 import ErrorState from '@/components/ui/ErrorState';
 import InlineBanner from '@/components/ui/InlineBanner';
@@ -715,8 +716,7 @@ export default function SettingsPage() {
               <section className="space-y-8">
                 <div>
                   <h2 className="text-xl font-bold text-gray-900 mb-5">{settingsDict.basicBranding || 'Basic Branding'}</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
+                  <div className="max-w-md">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       {settingsDict.companyName || 'Company Name'}
                     </label>
@@ -727,30 +727,36 @@ export default function SettingsPage() {
                       className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {settingsDict.logoUrl || 'Logo URL'}
-                    </label>
-                    <input
-                      type="url"
+                </div>
+
+                <div className="pt-2">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">{settingsDict.logoAndFavicon || 'Logo & Favicon'}</h3>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <ImageUploadField
+                      tenant={tenant}
+                      label={settingsDict.logoUrl || 'Logo'}
                       value={settings.logo || ''}
-                      onChange={(e) => updateSetting('logo', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
-                      placeholder="https://example.com/logo.png"
+                      onChange={(url) => updateSetting('logo', url)}
+                      recommendedSize="200x200px (square) or 400x100px (wide)"
+                      helpText="Shown in the navbar, receipts, and invoices."
+                      previewClassName="h-16 w-16"
                     />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {settingsDict.faviconUrl || 'Favicon URL'}
-                    </label>
-                    <input
-                      type="url"
+                    <ImageUploadField
+                      tenant={tenant}
+                      label={settingsDict.faviconUrl || 'Favicon'}
                       value={settings.favicon || ''}
-                      onChange={(e) => updateSetting('favicon', e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
-                      placeholder="https://example.com/favicon.ico"
+                      onChange={(url) => updateSetting('favicon', url)}
+                      recommendedSize="32x32px or 64x64px (square)"
+                      helpText="Shown in the browser tab for your store."
+                      previewClassName="h-10 w-10"
+                      accept="image/png,image/x-icon,image/vnd.microsoft.icon"
                     />
                   </div>
+                </div>
+
+                <div className="pt-2">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">{settingsDict.colors || 'Colors'}</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       {settingsDict.primaryColor || 'Primary Color'}
@@ -851,7 +857,7 @@ export default function SettingsPage() {
                       />
                     </div>
                   </div>
-                </div>
+                  </div>
                 </div>
 
                 {/* Advanced Branding Section - Moved to Admin */}

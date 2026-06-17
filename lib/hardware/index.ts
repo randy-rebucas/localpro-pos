@@ -6,6 +6,7 @@
 import { receiptPrinterService, PrinterConfig, ReceiptData } from './receipt-printer';
 import { barcodeScannerService, BarcodeScannerConfig } from './barcode-scanner';
 import { qrReaderService, QRReaderConfig } from './qr-reader';
+import { cashDrawerService, CashDrawerConfig } from './cash-drawer';
 import {
   detectPrinters,
   recommendPrinterSetup,
@@ -22,6 +23,8 @@ export interface HardwareConfig {
   cashDrawer?: {
     enabled: boolean;
     connectedToPrinter: boolean;
+    /** Device config when connectedToPrinter is false (standalone USB/serial drawer). */
+    direct?: CashDrawerConfig;
   };
   touchscreen?: {
     enabled: boolean;
@@ -45,6 +48,10 @@ class HardwareService {
     if (config.qrReader) {
       qrReaderService.setConfig(config.qrReader);
     }
+
+    if (config.cashDrawer?.enabled && !config.cashDrawer.connectedToPrinter && config.cashDrawer.direct) {
+      cashDrawerService.setConfig(config.cashDrawer.direct);
+    }
   }
 
   getConfig(): HardwareConfig {
@@ -64,7 +71,9 @@ class HardwareService {
       if (this.config.cashDrawer.connectedToPrinter) {
         return receiptPrinterService.openCashDrawer();
       }
-      // Could add direct cash drawer control here
+      if (this.config.cashDrawer.direct) {
+        return cashDrawerService.open();
+      }
     }
     return false;
   }
@@ -135,7 +144,7 @@ class HardwareService {
 }
 
 export const hardwareService = new HardwareService();
-export type { PrinterConfig, ReceiptData, BarcodeScannerConfig, QRReaderConfig };
+export type { PrinterConfig, ReceiptData, BarcodeScannerConfig, QRReaderConfig, CashDrawerConfig };
 export { PRINTER_PROFILES, findProfile, findProfileByUsbIds } from './printer-profiles';
 export type { PrinterProfile } from './printer-profiles';
 export {

@@ -60,6 +60,9 @@ AuditLogSchema.index({ tenantId: 1, createdAt: -1 });
 AuditLogSchema.index({ tenantId: 1, userId: 1, createdAt: -1 });
 AuditLogSchema.index({ tenantId: 1, entityType: 1, entityId: 1 });
 AuditLogSchema.index({ createdAt: -1 }); // For cleanup queries
+// TTL backstop: auto-purge audit logs after 90 days even if the scheduled
+// cleanup job (app/api/automations/audit-logs/cleanup) never runs.
+AuditLogSchema.index({ createdAt: 1 }, { expireAfterSeconds: 7776000 });
 
 const AuditLog: Model<IAuditLog> = mongoose.models.AuditLog || mongoose.model<IAuditLog>('AuditLog', AuditLogSchema);
 

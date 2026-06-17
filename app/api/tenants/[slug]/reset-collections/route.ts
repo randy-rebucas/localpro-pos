@@ -129,6 +129,7 @@ export async function GET(
     // Create audit log
     await createAuditLog(request, {
       tenantId: tenant._id,
+      userId: user.userId,
       action: AuditActions.VIEW,
       entityType: 'collections',
       entityId: 'backup',
@@ -221,6 +222,7 @@ export async function POST(
     // Create audit log
     await createAuditLog(request, {
       tenantId: tenant._id,
+      userId: user.userId,
       action: AuditActions.DELETE,
       entityType: 'collections',
       entityId: 'reset',
@@ -344,6 +346,7 @@ export async function PUT(
     // Create audit log
     await createAuditLog(request, {
       tenantId: tenant._id,
+      userId: user.userId,
       action: AuditActions.UPDATE,
       entityType: 'collections',
       entityId: 'restore',

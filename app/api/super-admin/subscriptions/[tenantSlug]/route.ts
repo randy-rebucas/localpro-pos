@@ -110,6 +110,7 @@ export async function PUT(
         await subscription.save();
         await createAuditLog(request, {
           tenantId,
+          userId: adminUser.userId,
           action: 'subscription.assign_plan',
           entityType: 'Subscription',
           entityId: String(subscription._id),
@@ -136,6 +137,7 @@ export async function PUT(
         await subscription.save();
         await createAuditLog(request, {
           tenantId,
+          userId: adminUser.userId,
           action: 'subscription.extend_trial',
           entityType: 'Subscription',
           entityId: String(subscription._id),
@@ -160,6 +162,7 @@ export async function PUT(
         });
         await createAuditLog(request, {
           tenantId,
+          userId: adminUser.userId,
           action: 'subscription.cancel',
           entityType: 'Subscription',
           entityId: String(subscription._id),
@@ -196,6 +199,7 @@ export async function PUT(
         }
         await createAuditLog(request, {
           tenantId,
+          userId: adminUser.userId,
           action: 'subscription.activate',
           entityType: 'Subscription',
           entityId: String(subscription._id),
@@ -224,6 +228,7 @@ export async function PUT(
         });
         await createAuditLog(request, {
           tenantId,
+          userId: adminUser.userId,
           action: 'subscription.suspend',
           entityType: 'Subscription',
           entityId: String(subscription._id),
@@ -253,6 +258,7 @@ export async function PUT(
         });
         await createAuditLog(request, {
           tenantId,
+          userId: adminUser.userId,
           action: 'subscription.pause',
           entityType: 'Subscription',
           entityId: String(subscription._id),
@@ -277,6 +283,7 @@ export async function PUT(
         });
         await createAuditLog(request, {
           tenantId,
+          userId: adminUser.userId,
           action: 'subscription.resume',
           entityType: 'Subscription',
           entityId: String(subscription._id),

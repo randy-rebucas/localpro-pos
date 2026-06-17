@@ -436,10 +436,12 @@ export default function TransactionsPage() {
                         </span>
                       </div>
                       <div className="mb-3">
-                        <div className="text-xs text-gray-500 mb-1">{txDict.items}</div>
-                        <div className="text-sm font-medium text-gray-900">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-gray-600 bg-gray-100 border border-gray-200 rounded-full">
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 10-8 0v4M5 9h14l1 11H4L5 9z" />
+                          </svg>
                           {transaction.items.length} {transaction.items.length === 1 ? txDict.item : txDict.items}
-                        </div>
+                        </span>
                       </div>
                       <div className="flex flex-wrap gap-2 mb-3">
                         <span
@@ -529,23 +531,20 @@ export default function TransactionsPage() {
               if (item.type === 'transaction') {
                 const transaction = item.data as Transaction;
                 return (
-                  <div key={transaction._id} className="group relative px-4 sm:px-6 py-4 sm:py-5 hover:bg-gray-50 transition-colors">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div key={transaction._id} className="group relative px-4 sm:px-5 py-2.5 sm:py-3 hover:bg-gray-50 transition-colors">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-start gap-3 mb-2">
-                          <div className="flex-1">
-                            <div className="text-xs text-gray-500 mb-1">{txDict.date}</div>
-                            <div className="text-sm text-gray-600"><FormattedDate date={transaction.createdAt} includeTime={true} /></div>
-                          </div>
-                          <span className={`inline-block px-2.5 py-1 text-xs font-medium border ${transaction.status === 'completed' ? 'bg-green-100 text-green-800 border-green-300' : transaction.status === 'refunded' ? 'bg-orange-100 text-orange-800 border-orange-300' : 'bg-red-100 text-red-800 border-red-300'}`}>{txDict[transaction.status]}</span>
-                        </div>
-                        <div className="mb-2">
-                          <div className="text-xs text-gray-500 mb-1">{txDict.items}</div>
-                          <div className="text-sm font-medium text-gray-900">{transaction.items.length} {transaction.items.length === 1 ? txDict.item : txDict.items}</div>
-                        </div>
-                        <div className="flex flex-wrap gap-2 text-xs sm:text-sm text-gray-600">
+                        <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm">
+                          <span className="text-gray-600"><FormattedDate date={transaction.createdAt} includeTime={true} /></span>
+                          <span className={`inline-block px-2 py-0.5 text-xs font-medium border ${transaction.status === 'completed' ? 'bg-green-100 text-green-800 border-green-300' : transaction.status === 'refunded' ? 'bg-orange-100 text-orange-800 border-orange-300' : 'bg-red-100 text-red-800 border-red-300'}`}>{txDict[transaction.status]}</span>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-gray-600 bg-gray-100 border border-gray-200 rounded-full">
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 10-8 0v4M5 9h14l1 11H4L5 9z" />
+                            </svg>
+                            {transaction.items.length} {transaction.items.length === 1 ? txDict.item : txDict.items}
+                          </span>
                           <span
-                            className="inline-block px-2.5 py-1 text-xs font-medium capitalize border"
+                            className="inline-block px-2 py-0.5 text-xs font-medium capitalize border"
                             style={{
                               backgroundColor: `${primaryColor}20`,
                               color: primaryColor,
@@ -555,28 +554,25 @@ export default function TransactionsPage() {
                             {dict.pos[transaction.paymentMethod]}
                           </span>
                           {transaction.cashReceived && (
-                            <div className="text-xs text-gray-500">
+                            <span className="text-xs text-gray-500">
                               {txDict.cash}: <Currency amount={transaction.cashReceived} />
                               {transaction.change && <span className="ml-1">{txDict.change}: <Currency amount={transaction.change} /></span>}
-                            </div>
+                            </span>
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-4 sm:gap-6">
-                        <div className="text-right">
-                          <div className="text-xs text-gray-500 mb-1 hidden sm:block">{dict.common.total}</div>
-                          <div className="font-bold text-lg sm:text-xl" style={{ color: primaryColor }}><Currency amount={transaction.total} /></div>
-                        </div>
-                        <div className="flex gap-2 actions-touch-visible transition-opacity duration-200">
-                          <button onClick={() => { setSelectedTransaction(transaction); setSelectedExpense(null); }} className="px-3 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 active:bg-gray-300 transition-all duration-200 border border-gray-300 flex items-center justify-center touch-manipulation min-h-[44px] sm:min-h-0" title={txDict.view} aria-label={txDict.view}>
-                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                      <div className="flex items-center gap-3 sm:gap-4">
+                        <div className="font-bold text-base sm:text-lg" style={{ color: primaryColor }}><Currency amount={transaction.total} /></div>
+                        <div className="flex gap-1.5 actions-touch-visible transition-opacity duration-200">
+                          <button onClick={() => { setSelectedTransaction(transaction); setSelectedExpense(null); }} className="px-2.5 py-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200 active:bg-gray-300 transition-all duration-200 border border-gray-300 flex items-center justify-center touch-manipulation min-h-[36px] sm:min-h-0" title={txDict.view} aria-label={txDict.view}>
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                           </button>
-                          <button onClick={() => printReceipt(transaction)} className="px-3 py-2 text-white transition-all duration-200 border flex items-center justify-center touch-manipulation min-h-[44px] sm:min-h-0 hover:opacity-80" style={{ backgroundColor: primaryColor, borderColor: primaryColor }} title={dict.common.print} aria-label={dict.common.print}>
-                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                          <button onClick={() => printReceipt(transaction)} className="px-2.5 py-1.5 text-white transition-all duration-200 border flex items-center justify-center touch-manipulation min-h-[36px] sm:min-h-0 hover:opacity-80" style={{ backgroundColor: primaryColor, borderColor: primaryColor }} title={dict.common.print} aria-label={dict.common.print}>
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
                           </button>
                           {transaction.status === 'completed' && (
-                            <button onClick={() => openAdjustModal(transaction)} className="px-3 py-2 bg-orange-500 text-white hover:bg-orange-600 active:bg-orange-700 transition-all duration-200 border border-orange-600 flex items-center justify-center touch-manipulation min-h-[44px] sm:min-h-0" title={txDict?.adjust || 'Adjust / Refund'}>
-                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            <button onClick={() => openAdjustModal(transaction)} className="px-2.5 py-1.5 bg-orange-500 text-white hover:bg-orange-600 active:bg-orange-700 transition-all duration-200 border border-orange-600 flex items-center justify-center touch-manipulation min-h-[36px] sm:min-h-0" title={txDict?.adjust || 'Adjust / Refund'}>
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                             </button>
                           )}
                         </div>
@@ -587,32 +583,21 @@ export default function TransactionsPage() {
               } else {
                 const expense = item.data as Expense;
                 return (
-                  <div key={expense._id} className="group relative px-4 sm:px-6 py-4 sm:py-5 hover:bg-gray-50 transition-colors border-l-4 border-red-500">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div key={expense._id} className="group relative px-4 sm:px-5 py-2.5 sm:py-3 hover:bg-gray-50 transition-colors border-l-4 border-red-500">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-start gap-3 mb-2">
-                          <div className="flex-1">
-                            <div className="text-xs text-gray-500 mb-1">{txDict.date}</div>
-                            <div className="text-sm text-gray-600"><FormattedDate date={expense.date || expense.createdAt} includeTime={true} /></div>
-                          </div>
-                          <span className="inline-block px-2.5 py-1 text-xs font-medium bg-orange-100 text-orange-800 border border-orange-300">{txDict?.expense || 'Expense'}</span>
+                        <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm mb-1">
+                          <span className="text-gray-600"><FormattedDate date={expense.date || expense.createdAt} includeTime={true} /></span>
+                          <span className="inline-block px-2 py-0.5 text-xs font-medium bg-orange-100 text-orange-800 border border-orange-300">{txDict?.expense || 'Expense'}</span>
+                          <span className="inline-block px-2 py-0.5 text-xs font-medium bg-red-100 text-red-800 capitalize border border-red-300">{dict.pos?.[expense.paymentMethod] || expense.paymentMethod}</span>
                         </div>
-                        <div className="mb-2">
-                          <div className="text-xs text-gray-500 mb-1">{txDict?.name || 'Name'}</div>
-                          <div className="text-base font-semibold text-gray-900">{expense.name}</div>
-                          {expense.description && <div className="text-sm text-gray-500 mt-1 line-clamp-1">{expense.description}</div>}
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          <span className="inline-block px-2.5 py-1 text-xs font-medium bg-red-100 text-red-800 capitalize border border-red-300">{dict.pos?.[expense.paymentMethod] || expense.paymentMethod}</span>
-                        </div>
+                        <div className="text-sm font-semibold text-gray-900 truncate">{expense.name}</div>
+                        {expense.description && <div className="text-xs text-gray-500 line-clamp-1">{expense.description}</div>}
                       </div>
-                      <div className="flex items-center gap-4 sm:gap-6">
-                        <div className="text-right">
-                          <div className="text-xs text-gray-500 mb-1 hidden sm:block">{dict.common.total}</div>
-                          <div className="font-bold text-red-600 text-lg sm:text-xl"><Currency amount={expense.amount} /></div>
-                        </div>
-                        <button onClick={() => { setSelectedExpense(selectedExpense?._id === expense._id ? null : expense); setSelectedTransaction(null); }} className="px-3 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 active:bg-gray-300 transition-all duration-200 border border-gray-300 flex items-center justify-center touch-manipulation min-h-[44px] sm:min-h-0" title={selectedExpense?._id === expense._id ? txDict.hide : txDict.view}>
-                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                      <div className="flex items-center gap-3 sm:gap-4">
+                        <div className="font-bold text-red-600 text-base sm:text-lg"><Currency amount={expense.amount} /></div>
+                        <button onClick={() => { setSelectedExpense(selectedExpense?._id === expense._id ? null : expense); setSelectedTransaction(null); }} className="px-2.5 py-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200 active:bg-gray-300 transition-all duration-200 border border-gray-300 flex items-center justify-center touch-manipulation min-h-[36px] sm:min-h-0" title={selectedExpense?._id === expense._id ? txDict.hide : txDict.view}>
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                         </button>
                       </div>
                     </div>

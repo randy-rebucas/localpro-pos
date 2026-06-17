@@ -205,10 +205,7 @@ const SubscriptionSchema: Schema = new Schema(
 
 // Create indexes
 SubscriptionSchema.index({ tenantId: 1 }, { unique: true }); // One subscription per tenant
-SubscriptionSchema.index({ status: 1 });
-SubscriptionSchema.index({ nextBillingDate: 1 });
-SubscriptionSchema.index({ endDate: 1 });
-SubscriptionSchema.index({ trialEndDate: 1 });
+SubscriptionSchema.index({ status: 1 }); // super-admin cross-tenant analytics (active/trial MRR)
 // Compound index for plan usage reporting
 SubscriptionSchema.index({ planId: 1, status: 1 });
 // Compound index for expiry automation (finding subscriptions due for billing)

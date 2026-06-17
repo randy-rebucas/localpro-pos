@@ -138,6 +138,7 @@ export async function POST(
 
     await createAuditLog(request, {
       tenantId: tenant._id,
+      userId: user.userId,
       action: AuditActions.CREATE,
       entityType: 'receipt_template',
       entityId: newTemplate.id,
@@ -241,6 +242,7 @@ export async function PUT(
 
     await createAuditLog(request, {
       tenantId: tenant._id,
+      userId: user.userId,
       action: AuditActions.UPDATE,
       entityType: 'receipt_template',
       entityId: id,
@@ -317,6 +319,7 @@ export async function DELETE(
 
     await createAuditLog(request, {
       tenantId: tenant._id,
+      userId: user.userId,
       action: AuditActions.DELETE,
       entityType: 'receipt_template',
       entityId: id,

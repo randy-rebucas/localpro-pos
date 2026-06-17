@@ -8,6 +8,7 @@ import { getLastDetectionResults } from './device-detector';
 import { receiptPrinterService } from './receipt-printer'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { barcodeScannerService } from './barcode-scanner'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { qrReaderService } from './qr-reader'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import { cashDrawerService } from './cash-drawer';
 
 export interface DeviceStatus {
   name: string;
@@ -294,12 +295,41 @@ class HardwareStatusChecker {
       };
     }
 
-    // Direct cash drawer connection (not implemented yet)
+    // Direct (non-printer) cash drawer connection
+    if (!drawerConfig.direct) {
+      return {
+        name: 'Cash Drawer',
+        type: 'cash-drawer',
+        status: 'not-configured',
+        message: 'Direct cash drawer connection not configured',
+      };
+    }
+
+    if (drawerConfig.direct.type === 'usb' && !('usb' in navigator)) {
+      return {
+        name: 'Cash Drawer',
+        type: 'cash-drawer',
+        status: 'error',
+        message: 'WebUSB not supported in this browser',
+      };
+    }
+
+    if (drawerConfig.direct.type === 'serial' && !('serial' in navigator)) {
+      return {
+        name: 'Cash Drawer',
+        type: 'cash-drawer',
+        status: 'error',
+        message: 'Web Serial not supported in this browser',
+      };
+    }
+
     return {
       name: 'Cash Drawer',
       type: 'cash-drawer',
-      status: 'not-configured',
-      message: 'Direct cash drawer connection not configured',
+      status: cashDrawerService.isConnected() ? 'connected' : 'available',
+      message: cashDrawerService.isConnected()
+        ? 'Direct connection active'
+        : 'Direct connection configured — will pair on next use',
     };
   }
 

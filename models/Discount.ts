@@ -32,7 +32,6 @@ const DiscountSchema: Schema = new Schema(
       required: [true, 'Discount code is required'],
       uppercase: true,
       trim: true,
-      index: true,
     },
     name: {
       type: String,
@@ -144,6 +143,8 @@ DiscountSchema.pre('deleteOne', { document: false, query: true }, async function
 
 // Compound index for tenant and code uniqueness
 DiscountSchema.index({ tenantId: 1, code: 1 }, { unique: true });
+// Supports discount-management automation scans (activate/deactivate/usage-limit checks)
+DiscountSchema.index({ tenantId: 1, isActive: 1, validFrom: 1, validUntil: 1 });
 
 const Discount: Model<IDiscount> = mongoose.models.Discount || mongoose.model<IDiscount>('Discount', DiscountSchema);
 

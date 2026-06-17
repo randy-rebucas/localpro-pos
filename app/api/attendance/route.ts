@@ -24,13 +24,16 @@ export async function GET(request: NextRequest) {
     // Build query
     const query: any = { tenantId: user.tenantId, isActive: { $ne: false } }; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-    // If userId is provided and user is manager+, allow viewing other users
-    if (userId && (user.role === 'owner' || user.role === 'admin' || user.role === 'manager')) {
+    const isManagerPlus = user.role === 'owner' || user.role === 'admin' || user.role === 'manager';
+
+    if (userId && isManagerPlus) {
+      // Manager+ viewing a specific employee
       query.userId = userId;
-    } else {
-      // Otherwise, only show own records
+    } else if (!isManagerPlus) {
+      // Non-managers can only see their own records
       query.userId = user.userId;
     }
+    // Manager+ with no userId filter: show all tenant records (no userId constraint)
 
     // Date range filter
     if (startDate || endDate) {
@@ -39,7 +42,9 @@ export async function GET(request: NextRequest) {
         query.clockIn.$gte = new Date(startDate);
       }
       if (endDate) {
-        query.clockIn.$lte = new Date(endDate);
+        const endOfDay = new Date(endDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        query.clockIn.$lte = endOfDay;
       }
     }
 
@@ -108,6 +113,7 @@ export async function POST(request: NextRequest) {
 
       await createAuditLog(request, {
         tenantId: user.tenantId,
+        userId: user.userId,
         action: AuditActions.ATTENDANCE_CLOCK_IN,
         entityType: 'attendance',
         entityId: attendance._id.toString(),
@@ -142,6 +148,7 @@ export async function POST(request: NextRequest) {
 
       await createAuditLog(request, {
         tenantId: user.tenantId,
+        userId: user.userId,
         action: AuditActions.ATTENDANCE_CLOCK_OUT,
         entityType: 'attendance',
         entityId: activeSession._id.toString(),

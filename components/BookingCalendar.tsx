@@ -122,6 +122,37 @@ export default function BookingCalendar({
     setCurrentDate(newDate);
   };
 
+  const navigateWeek = (direction: 'prev' | 'next') => {
+    const newDate = new Date(currentDate);
+    newDate.setDate(newDate.getDate() + (direction === 'prev' ? -7 : 7));
+    setCurrentDate(newDate);
+  };
+
+  const navigateDay = (direction: 'prev' | 'next') => {
+    const newDate = new Date(currentDate);
+    newDate.setDate(newDate.getDate() + (direction === 'prev' ? -1 : 1));
+    setCurrentDate(newDate);
+  };
+
+  const navigate = (direction: 'prev' | 'next') => {
+    if (view === 'month') navigateMonth(direction);
+    else if (view === 'week') navigateWeek(direction);
+    else navigateDay(direction);
+  };
+
+  const getWeekDays = (date: Date): Date[] => {
+    const start = new Date(date);
+    start.setDate(start.getDate() - start.getDay());
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      return d;
+    });
+  };
+
+  const sortByStartTime = (a: Booking, b: Booking) =>
+    new Date(a.startTime).getTime() - new Date(b.startTime).getTime();
+
   const days = getDaysInMonth(currentDate);
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -134,7 +165,7 @@ export default function BookingCalendar({
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => navigateMonth('prev')}
+            onClick={() => navigate('prev')}
             className="p-2 hover:bg-gray-100 transition-colors border border-gray-300 bg-white"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -142,10 +173,12 @@ export default function BookingCalendar({
             </svg>
           </button>
           <h2 className="text-xl font-bold text-gray-900">
-            {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
+            {view === 'day'
+              ? currentDate.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })
+              : `${monthNames[currentDate.getMonth()]} ${currentDate.getFullYear()}`}
           </h2>
           <button
-            onClick={() => navigateMonth('next')}
+            onClick={() => navigate('next')}
             className="p-2 hover:bg-gray-100 transition-colors border border-gray-300 bg-white"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -316,14 +349,73 @@ export default function BookingCalendar({
       )}
 
       {view === 'week' && (
-        <div className="space-y-4">
-          <p className="text-gray-600">{dict?.components?.bookingCalendar?.weekViewComingSoon || 'Week view coming soon...'}</p>
+        <div className="grid grid-cols-7 gap-2">
+          {getWeekDays(currentDate).map((date) => {
+            const dayBookings = getBookingsForDate(date).sort(sortByStartTime);
+            const isToday = date.toDateString() === today.toDateString();
+            const isSelected = selectedDate && date.toDateString() === selectedDate.toDateString();
+
+            return (
+              <div
+                key={date.toISOString()}
+                onClick={() => onDateSelect?.(date)}
+                className="min-h-[220px] p-2 border cursor-pointer transition-colors"
+                style={{
+                  borderColor: isToday ? (settings?.primaryColor || '#35979c') : isSelected ? (settings?.primaryColor || '#35979c') : '#e5e7eb',
+                  backgroundColor: isToday ? `${settings?.primaryColor || '#35979c'}15` : isSelected ? `${settings?.primaryColor || '#35979c'}25` : '#ffffff'
+                }}
+              >
+                <div className="text-center mb-1">
+                  <div className="text-xs font-semibold text-gray-500">{dayNames[date.getDay()]}</div>
+                  <div className="text-sm font-semibold" style={{ color: isToday ? (settings?.primaryColor || '#35979c') : '#111827' }}>
+                    {date.getDate()}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  {dayBookings.map((booking) => (
+                    <div
+                      key={booking._id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onBookingSelect?.(booking);
+                      }}
+                      className={`text-xs p-1 border ${getStatusColor(booking.status)} truncate`}
+                      title={`${formatTime(booking.startTime)} - ${booking.customerName}: ${booking.serviceName}`}
+                    >
+                      {formatTime(booking.startTime)} {booking.customerName}
+                    </div>
+                  ))}
+                  {dayBookings.length === 0 && (
+                    <div className="text-xs text-gray-400">{dict?.components?.bookingCalendar?.noBookings || 'No bookings'}</div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
       {view === 'day' && (
-        <div className="space-y-4">
-          <p className="text-gray-600">{dict?.components?.bookingCalendar?.dayViewComingSoon || 'Day view coming soon...'}</p>
+        <div className="space-y-2">
+          {getBookingsForDate(currentDate).sort(sortByStartTime).map((booking) => (
+            <div
+              key={booking._id}
+              onClick={() => onBookingSelect?.(booking)}
+              className={`p-3 border cursor-pointer transition-colors ${getStatusColor(booking.status)}`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-semibold">{formatTime(booking.startTime)} - {formatTime(booking.endTime)}</span>
+                <span className="text-xs uppercase">{booking.status}</span>
+              </div>
+              <div className="text-sm mt-1">{booking.customerName} — {booking.serviceName}</div>
+              {booking.staffName && (
+                <div className="text-xs text-gray-600 mt-0.5">{booking.staffName}</div>
+              )}
+            </div>
+          ))}
+          {getBookingsForDate(currentDate).length === 0 && (
+            <p className="text-gray-500">{dict?.components?.bookingCalendar?.noBookings || 'No bookings'}</p>
+          )}
         </div>
       )}
 

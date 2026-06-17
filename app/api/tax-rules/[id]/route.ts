@@ -77,6 +77,7 @@ export async function PATCH(
     
     await createAuditLog(request, {
       tenantId,
+      userId: user.userId,
       action: AuditActions.UPDATE,
       entityType: 'taxRule',
       entityId: taxRule._id.toString(),
@@ -112,6 +113,7 @@ export async function DELETE(
     
     await createAuditLog(request, {
       tenantId,
+      userId: user.userId,
       action: AuditActions.DELETE,
       entityType: 'taxRule',
       entityId: id,

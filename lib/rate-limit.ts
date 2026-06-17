@@ -69,17 +69,6 @@ export function resetRateLimit(key: string): void {
 }
 
 /**
- * Return the current hit count for a key within the given window,
- * without recording a new request. Useful for introspection/logging.
- */
-export function getRateLimitCount(key: string, windowMs: number): number {
-  const entry = store.get(key);
-  if (!entry) return 0;
-  const windowStart = Date.now() - windowMs;
-  return entry.timestamps.filter(t => t > windowStart).length;
-}
-
-/**
  * Get the best available client IP from a Next.js request.
  */
 export function getClientIp(request: Request): string {

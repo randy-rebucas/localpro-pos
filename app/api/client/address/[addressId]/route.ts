@@ -76,6 +76,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     await createAuditLog(request, {
       tenantId: address.tenantId.toString(),
+      userId: currentUser.userId,
       action: AuditActions.UPDATE,
       entityType: 'address',
       entityId: addressId,
@@ -144,6 +145,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     await createAuditLog(request, {
       tenantId: tenantId.toString(),
+      userId: currentUser.userId,
       action: AuditActions.DELETE,
       entityType: 'address',
       entityId: addressId,

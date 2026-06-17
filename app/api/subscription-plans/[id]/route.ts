@@ -120,6 +120,7 @@ export async function PUT(
 
     await createAuditLog(request, {
       tenantId: currentUser?.tenantId || '',
+      userId: currentUser?.userId,
       action: AuditActions.UPDATE,
       entityType: 'subscription_plan',
       entityId: id,
@@ -169,6 +170,7 @@ export async function DELETE(
 
       await createAuditLog(request, {
         tenantId: deleteUser?.tenantId || '',
+        userId: deleteUser?.userId,
         action: AuditActions.UPDATE,
         entityType: 'subscription_plan',
         entityId: id,
@@ -187,6 +189,7 @@ export async function DELETE(
 
     await createAuditLog(request, {
       tenantId: deleteUser?.tenantId || '',
+      userId: deleteUser?.userId,
       action: AuditActions.DELETE,
       entityType: 'subscription_plan',
       entityId: id,

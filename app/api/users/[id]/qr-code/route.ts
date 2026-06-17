@@ -109,6 +109,7 @@ export async function POST(
 
     await createAuditLog(request, {
       tenantId,
+      userId: currentUser?.userId,
       action: AuditActions.UPDATE,
       entityType: 'user',
       entityId: id,

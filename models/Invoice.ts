@@ -166,7 +166,6 @@ InvoiceSchema.index({ tenantId: 1, invoiceNumber: 1 }, { unique: true });
 InvoiceSchema.index({ tenantId: 1, status: 1, dueDate: 1 });
 InvoiceSchema.index({ tenantId: 1, customerId: 1 });
 InvoiceSchema.index({ tenantId: 1, transactionId: 1 });
-InvoiceSchema.index({ dueDate: 1, status: 1 }); // For overdue queries
 InvoiceSchema.index({ tenantId: 1, isActive: 1 });
 
 const Invoice: Model<IInvoice> = mongoose.models.Invoice || mongoose.model<IInvoice>('Invoice', InvoiceSchema);

@@ -99,6 +99,7 @@ export async function PATCH(
     // Create audit log
     await createAuditLog(request, {
       tenantId,
+      userId: user.userId,
       action: auditAction,
       entityType: 'invoice',
       entityId: invoice._id.toString(),

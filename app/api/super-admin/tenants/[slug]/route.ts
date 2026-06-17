@@ -82,6 +82,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     await createAuditLog(request, {
       tenantId: tenant._id,
+      userId: user.userId,
       action: AuditActions.UPDATE,
       entityType: 'tenant',
       entityId: tenant._id.toString(),

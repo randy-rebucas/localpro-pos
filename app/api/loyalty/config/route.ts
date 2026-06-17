@@ -115,6 +115,7 @@ export async function PUT(request: NextRequest) {
 
     await createAuditLog(request, {
       tenantId: tenantId.toString(),
+      userId: user.userId,
       action: AuditActions.UPDATE,
       entityType: 'loyalty_config',
       entityId: config._id.toString(),

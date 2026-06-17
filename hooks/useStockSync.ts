@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface StockUpdatePayload {
   productId: string;
@@ -29,9 +29,7 @@ export function useStockSync({
   const onStockUpdateRef = useRef(onStockUpdate);
   useEffect(() => { onStockUpdateRef.current = onStockUpdate; }, [onStockUpdate]);
 
-  const scheduleReconnect = useCallback(() => {
-    setTimeout(() => setReconnectCount((c) => c + 1), 5000);
-  }, []);
+  const MAX_RECONNECT_DELAY_MS = 60000;
 
   useEffect(() => {
     if (!tenant || !isOnline) {
@@ -44,6 +42,7 @@ export function useStockSync({
     if (branchId) url += `&branchId=${branchId}`;
 
     const eventSource = new EventSource(url);
+    let reconnectTimeoutId: ReturnType<typeof setTimeout> | undefined;
 
     eventSource.onopen = () => {
       setConnected(true);
@@ -73,14 +72,18 @@ export function useStockSync({
     eventSource.onerror = () => {
       setConnected(false);
       eventSource.close();
-      scheduleReconnect();
+      // Exponential backoff (capped) instead of a fixed 5s retry forever,
+      // so a persistently failing connection doesn't hammer the server.
+      const delay = Math.min(5000 * 2 ** reconnectCount, MAX_RECONNECT_DELAY_MS);
+      reconnectTimeoutId = setTimeout(() => setReconnectCount((c) => c + 1), delay);
     };
 
     return () => {
       eventSource.close();
       setConnected(false);
+      if (reconnectTimeoutId) clearTimeout(reconnectTimeoutId);
     };
-  }, [tenant, branchId, isOnline, reconnectCount, scheduleReconnect]);
+  }, [tenant, branchId, isOnline, reconnectCount]);
 
   return { connected };
 }

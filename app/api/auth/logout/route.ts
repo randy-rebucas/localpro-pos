@@ -19,6 +19,7 @@ export async function POST(request: NextRequest) {
     if (user && user.role !== 'super_admin') {
       await createAuditLog(request, {
         tenantId: user.tenantId,
+        userId: user.userId,
         action: AuditActions.LOGOUT,
         entityType: 'user',
         entityId: user.userId,

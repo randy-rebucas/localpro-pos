@@ -5,7 +5,10 @@ import Customer from '@/models/Customer';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
+import { sendEmail, sendSMS } from '@/lib/notifications';
 import mongoose from 'mongoose';
+
+const SEND_BATCH_SIZE = 25;
 
 // Segment filter helpers (mirrors the /api/crm/segments logic)
 const LAPSED_DAYS = 90;
@@ -74,13 +77,30 @@ export async function POST(
       return matchesSegment(campaign.segment, c, orderCount);
     });
 
-    // --- Delivery stub ---
-    // In production: iterate recipients and call configured Twilio / SendGrid integration.
-    // Here we log the intent and mark as sent.
-    // The actual delivery integration would be configured per-tenant in TenantSettings.
-    const sentCount = recipients.length;
+    // Deliver via the existing multi-provider notification layer (lib/notifications.ts),
+    // in small batches so we don't fire hundreds of provider calls at once.
+    let sentCount = 0;
+    let failedCount = 0;
 
-    campaign.status = 'sent';
+    for (let i = 0; i < recipients.length; i += SEND_BATCH_SIZE) {
+      const batch = recipients.slice(i, i + SEND_BATCH_SIZE);
+      const results = await Promise.allSettled(
+        batch.map((recipient) =>
+          campaign.channel === 'email'
+            ? sendEmail({ to: recipient.email as string, subject: campaign.subject, message: campaign.body, type: 'email' })
+            : sendSMS({ to: recipient.phone as string, message: campaign.body, type: 'sms' })
+        )
+      );
+      for (const result of results) {
+        if (result.status === 'fulfilled' && result.value) {
+          sentCount++;
+        } else {
+          failedCount++;
+        }
+      }
+    }
+
+    campaign.status = sentCount > 0 ? 'sent' : 'failed';
     campaign.sentCount = sentCount;
     campaign.sentAt = new Date();
     await campaign.save();
@@ -90,12 +110,12 @@ export async function POST(
       action: AuditActions.UPDATE,
       entityType: 'campaign',
       entityId: String(campaign._id),
-      changes: { action: 'send', sentCount, channel: campaign.channel, segment: campaign.segment },
+      changes: { action: 'send', sentCount, failedCount, channel: campaign.channel, segment: campaign.segment },
     });
 
     return NextResponse.json({
       success: true,
-      data: { sentCount, channel: campaign.channel, segment: campaign.segment },
+      data: { sentCount, failedCount, channel: campaign.channel, segment: campaign.segment },
     });
   } catch (error) {
     return handleApiError(error, 'Failed to send campaign');

@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
             logger.error('Error polling stock movements:', error);
             send({ type: 'error', message: t('validation.pollingError', 'Polling error') });
           }
-        }, 2000); // Poll every 2 seconds
+        }, 5000); // Poll every 5 seconds
 
         // Keep connection alive with heartbeat
         const heartbeat = setInterval(() => {

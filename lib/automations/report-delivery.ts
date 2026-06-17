@@ -75,7 +75,7 @@ export async function sendSalesReport(
         switch (period) {
           case 'daily':
             startDate = new Date(endDate);
-            startDate.setDate(startDate.getDate() - 1);
+            startDate.setHours(0, 0, 0, 0);
             break;
           case 'weekly':
             startDate = new Date(endDate);

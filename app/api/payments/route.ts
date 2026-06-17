@@ -123,6 +123,7 @@ export async function POST(request: NextRequest) {
     // Create audit log
     await createAuditLog(request, {
       tenantId,
+      userId: user.userId,
       action: AuditActions.PAYMENT_CREATE,
       entityType: 'payment',
       entityId: payment._id.toString(),

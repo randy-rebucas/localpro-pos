@@ -37,6 +37,8 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get('endDate')
       ? new Date(searchParams.get('endDate')!)
       : new Date();
+    startDate.setHours(0, 0, 0, 0);
+    if (searchParams.get('endDate')) endDate.setHours(23, 59, 59, 999);
     const format = searchParams.get('format') || 'json'; // json, csv
 
     // Query transactions for the date range

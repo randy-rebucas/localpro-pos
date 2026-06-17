@@ -15,45 +15,6 @@ export function ptuExpiringSoon(expiryDate: string): boolean {
 }
 
 /**
- * Format TIN display (NNN-NNN-NNN-NNN)
- */
-export function formatTin(tin: string): string {
-  if (!tin) return '';
-  const digits = tin.replace(/\D/g, '');
-  if (digits.length !== 12) return tin;
-  return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6, 9)}-${digits.slice(9, 12)}`;
-}
-
-/**
- * Validate TIN format
- */
-export function validateTin(tin: string): boolean {
-  if (!tin) return true; // optional field
-  const digits = tin.replace(/\D/g, '');
-  return digits.length === 12;
-}
-
-/**
- * Validate date is not in the future
- */
-export function validateDateNotFuture(date: string): boolean {
-  if (!date) return true; // optional field
-  const inputDate = new Date(date);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return inputDate <= today;
-}
-
-/**
- * Format date for display (YYYY-MM-DD)
- */
-export function formatDateDisplay(date: string): string {
-  if (!date) return '';
-  const d = new Date(date);
-  return d.toISOString().split('T')[0];
-}
-
-/**
  * Check if all required PTU fields are filled
  */
 export function hasCompletePtuInfo(birSettings: {

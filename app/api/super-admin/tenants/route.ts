@@ -157,6 +157,7 @@ export async function POST(request: NextRequest) {
 
     await createAuditLog(request, {
       tenantId: tenant._id,
+      userId: user.userId,
       action: AuditActions.CREATE,
       entityType: 'tenant',
       entityId: tenant._id.toString(),

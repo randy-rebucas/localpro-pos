@@ -32,6 +32,8 @@ export async function GET(request: NextRequest) {
     const period = (searchParams.get('period') || 'daily') as 'daily' | 'weekly' | 'monthly';
     const startDate = searchParams.get('startDate') ? new Date(searchParams.get('startDate')!) : undefined;
     const endDate = searchParams.get('endDate') ? new Date(searchParams.get('endDate')!) : undefined;
+    if (startDate) startDate.setHours(0, 0, 0, 0);
+    if (endDate) endDate.setHours(23, 59, 59, 999);
 
     const report = await getSalesReport(tenantId, period, startDate, endDate);
 

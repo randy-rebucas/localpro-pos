@@ -104,6 +104,8 @@ const PaymentSchema: Schema = new Schema(
 PaymentSchema.index({ tenantId: 1, transactionId: 1 });
 PaymentSchema.index({ tenantId: 1, status: 1, createdAt: -1 });
 PaymentSchema.index({ tenantId: 1, method: 1, createdAt: -1 });
+// Supports GET /api/payments when both status and method filters are applied together
+PaymentSchema.index({ tenantId: 1, status: 1, method: 1, createdAt: -1 });
 PaymentSchema.index({ processedBy: 1, createdAt: -1 });
 PaymentSchema.index({ tenantId: 1, isActive: 1 });
 

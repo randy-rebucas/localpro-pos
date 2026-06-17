@@ -17,11 +17,17 @@ export interface PaginationInfo {
 export const useLoyaltyCustomers = () => {
   const [customers, setCustomers] = useState<LoyaltyCustomer[]>([]);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCustomers, setTotalCustomers] = useState(0);
   const [loading, setLoading] = useState(true);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(search), 350);
+    return () => clearTimeout(id);
+  }, [search]);
 
   const fetchCustomers = useCallback(async (pageNum: number, searchTerm: string) => {
     try {
@@ -59,14 +65,17 @@ export const useLoyaltyCustomers = () => {
   const handleSearch = useCallback((searchTerm: string) => {
     setSearch(searchTerm);
     setPage(1);
-    fetchCustomers(1, searchTerm);
-  }, [fetchCustomers]);
+  }, []);
 
   const goToPage = useCallback((pageNum: number) => {
-    const validPage = Math.max(1, Math.min(pageNum, totalPages));
-    setPage(validPage);
-    fetchCustomers(validPage, search);
-  }, [search, totalPages, fetchCustomers]);
+    setPage((prev) => Math.max(1, Math.min(pageNum, totalPages || prev)));
+  }, [totalPages]);
+
+  // Fetch whenever the debounced search term or page changes (debounced so typing
+  // doesn't fire a request per keystroke).
+  useEffect(() => {
+    fetchCustomers(page, debouncedSearch);
+  }, [page, debouncedSearch, fetchCustomers]);
 
   useEffect(() => {
     return () => {

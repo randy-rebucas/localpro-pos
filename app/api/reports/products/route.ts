@@ -45,12 +45,14 @@ export async function GET(request: NextRequest) {
     }
 
     const searchParams = request.nextUrl.searchParams;
-    const startDate = searchParams.get('startDate') 
-      ? new Date(searchParams.get('startDate')!) 
+    const startDate = searchParams.get('startDate')
+      ? new Date(searchParams.get('startDate')!)
       : new Date(new Date().setDate(new Date().getDate() - 30));
-    const endDate = searchParams.get('endDate') 
-      ? new Date(searchParams.get('endDate')!) 
+    const endDate = searchParams.get('endDate')
+      ? new Date(searchParams.get('endDate')!)
       : new Date();
+    startDate.setHours(0, 0, 0, 0);
+    if (searchParams.get('endDate')) endDate.setHours(23, 59, 59, 999);
     const limit = parseInt(searchParams.get('limit') || '10', 10);
 
     const performance = await getProductPerformance(tenantId, startDate, endDate, limit);

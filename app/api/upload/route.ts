@@ -86,6 +86,7 @@ export async function POST(request: NextRequest) {
     // Create audit log for file upload
     await createAuditLog(request, {
       tenantId,
+      userId: user.userId,
       action: 'upload_file',
       entityType: 'File',
       entityId: fileDoc._id.toString(),
@@ -205,6 +206,7 @@ export async function DELETE(request: NextRequest) {
     // Create audit log for file deletion
     await createAuditLog(request, {
       tenantId,
+      userId: user.userId,
       action: 'delete_file',
       entityType: 'File',
       entityId: fileId,

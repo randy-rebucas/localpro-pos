@@ -238,6 +238,7 @@ export async function PUT(
 
     await createAuditLog(request, {
       tenantId,
+      userId: user.userId,
       action: AuditActions.UPDATE,
       entityType: 'booking',
       entityId: id,
@@ -318,6 +319,7 @@ export async function DELETE(
 
     await createAuditLog(request, {
       tenantId,
+      userId: user.userId,
       action: AuditActions.DELETE,
       entityType: 'booking',
       entityId: id,

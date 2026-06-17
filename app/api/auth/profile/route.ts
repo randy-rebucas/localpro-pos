@@ -183,6 +183,7 @@ export async function PUT(request: NextRequest) {
 
     await createAuditLog(request, {
       tenantId: currentUser.tenantId,
+      userId: currentUser.userId,
       action: AuditActions.UPDATE,
       entityType: 'user',
       entityId: currentUser.userId,

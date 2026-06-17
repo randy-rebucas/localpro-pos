@@ -111,6 +111,7 @@ export async function POST(request: NextRequest) {
 
       await createAuditLog(request, {
         tenantId,
+        userId: user.userId,
         action: AuditActions.CREATE,
         entityType: 'cashDrawerSession',
         entityId: session._id.toString(),
@@ -199,6 +200,7 @@ export async function POST(request: NextRequest) {
 
       await createAuditLog(request, {
         tenantId,
+        userId: user.userId,
         action: AuditActions.UPDATE,
         entityType: 'cashDrawerSession',
         entityId: openSession._id.toString(),

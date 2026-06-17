@@ -98,7 +98,6 @@ const BillingEventSchema: Schema = new Schema(
 );
 
 BillingEventSchema.index({ tenantId: 1, createdAt: -1 });
-BillingEventSchema.index({ subscriptionId: 1, createdAt: -1 });
 
 const BillingEvent: Model<IBillingEvent> =
   mongoose.models.BillingEvent ||

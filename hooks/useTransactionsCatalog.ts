@@ -52,7 +52,7 @@ export function useTransactionsCatalog(tenant: string, page: number) {
     setError(null);
     try {
       const [txRes, expRes] = await Promise.all([
-        fetch(`/api/transactions?page=${page}&limit=20&tenant=${tenant}`, { credentials: 'include' }),
+        fetch(`/api/transactions?page=${page}&limit=10&tenant=${tenant}`, { credentials: 'include' }),
         fetch(`/api/expenses?tenant=${tenant}`, { credentials: 'include' }),
       ]);
       const [txData, expData] = await Promise.all([txRes.json(), expRes.json()]);

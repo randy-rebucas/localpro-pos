@@ -42,13 +42,15 @@ export default function ProductsPage() {
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const PRODUCTS_PER_PAGE = 10;
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isRefillModalOpen, setIsRefillModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [refillingProduct, setRefillingProduct] = useState<Product | null>(null);
   const [barcodeProduct, setBarcodeProduct] = useState<Product | null>(null);
   const [dict, setDict] = useState<TranslationDict | null>(null);
-  const [displayMode, setDisplayMode] = useState<'grid' | 'list'>('grid');
+  const [displayMode, setDisplayMode] = useState<'grid' | 'list'>('list');
   const { confirm, Dialog: ConfirmDialog } = useConfirm();
   const { settings } = useTenantSettings();
   const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#35979c';
@@ -76,6 +78,13 @@ export default function ProductsPage() {
     if (!a.pinned && b.pinned) return 1;
     return 0;
   });
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, products.length]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedProducts.length / PRODUCTS_PER_PAGE));
+  const paginatedProducts = sortedProducts.slice((page - 1) * PRODUCTS_PER_PAGE, page * PRODUCTS_PER_PAGE);
 
   const handleDelete = async (id: string) => {
     if (!dict) return;
@@ -181,7 +190,7 @@ export default function ProductsPage() {
     if (displayMode === 'grid') {
       return (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-6">
-          {sortedProducts.map((product) => (
+          {paginatedProducts.map((product) => (
             <div
               key={product._id}
               className="group relative bg-white border border-gray-300 rounded-lg p-4 sm:p-5 transition-all duration-200 flex flex-col"
@@ -347,17 +356,17 @@ export default function ProductsPage() {
 
     return (
       <div className="bg-white border border-gray-300 divide-y divide-gray-300">
-        {sortedProducts.map((product) => (
-          <div key={product._id} className="group relative px-4 sm:px-6 py-4 sm:py-5 hover:bg-gray-50 transition-colors">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        {paginatedProducts.map((product) => (
+          <div key={product._id} className="group relative px-4 sm:px-5 py-2.5 sm:py-3 hover:bg-gray-50 transition-colors">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
               <div className="flex gap-3 flex-1 min-w-0">
                 {product.image ? (
-                  <div className="relative w-14 h-14 flex-shrink-0 self-start">
+                  <div className="relative w-10 h-10 flex-shrink-0 self-center">
                     <Image
                       src={normalizeImageUrl(product.image)}
                       alt={product.name}
                       fill
-                      sizes="56px"
+                      sizes="40px"
                       loading="lazy"
                       className="object-cover border border-gray-200"
                       onError={(e) => {
@@ -370,116 +379,90 @@ export default function ProductsPage() {
                   </div>
                 ) : null}
                 <div
-                  className="w-14 h-14 bg-gray-100 border border-gray-200 flex-shrink-0 items-center justify-center self-start"
+                  className="w-10 h-10 bg-gray-100 border border-gray-200 flex-shrink-0 items-center justify-center self-center"
                   style={{ display: product.image ? 'none' : 'flex' }}
                 >
-                  <svg className="w-6 h-6 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-4 h-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-start gap-2 mb-2">
-                    <h3 className="font-semibold text-gray-900 text-base sm:text-lg flex-1">
-                      {product.name}
-                      {product.pinned && (
-                        <svg className="inline-block w-4 h-4 ml-2" style={{ color: primaryColor }} fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M10 2a1 1 0 011 1v1.323l3.954 1.582 1.599-.8a1 1 0 01.894 1.79l-1.233.616 1.738 5.42a1 1 0 01-.285 1.05A3.989 3.989 0 0115 15a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.715-5.349L11 6.477V16a1 1 0 11-2 0V6.477L5.237 7.582l1.715 5.349a1 1 0 01-.285 1.05A3.989 3.989 0 013 15a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.738-5.42-1.233-.617a1 1 0 01.894-1.788l1.599.799L9 4.323V3a1 1 0 011-1z" />
-                        </svg>
-                      )}
-                    </h3>
-                  </div>
-                  {product.description && (
-                    <p className="text-sm text-gray-500 mb-2 line-clamp-1">{product.description}</p>
-                  )}
-                  <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs sm:text-sm text-gray-600">
-                    {product.sku && (
-                      <div className="flex items-center gap-1">
-                        <span className="font-medium">{productsDict.sku}:</span>
-                        <span>{product.sku}</span>
-                      </div>
+                  <h3 className="font-semibold text-gray-900 text-sm sm:text-base truncate">
+                    {product.name}
+                    {product.pinned && (
+                      <svg className="inline-block w-3.5 h-3.5 ml-1.5" style={{ color: primaryColor }} fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M10 2a1 1 0 011 1v1.323l3.954 1.582 1.599-.8a1 1 0 01.894 1.79l-1.233.616 1.738 5.42a1 1 0 01-.285 1.05A3.989 3.989 0 0115 15a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.715-5.349L11 6.477V16a1 1 0 11-2 0V6.477L5.237 7.582l1.715 5.349a1 1 0 01-.285 1.05A3.989 3.989 0 013 15a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.738-5.42-1.233-.617a1 1 0 01.894-1.788l1.599.799L9 4.323V3a1 1 0 011-1z" />
+                      </svg>
                     )}
-                    {product.barcode && (
-                      <div className="flex items-center gap-1 font-mono">
-                        <svg className="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m0 14v1M4.22 4.22l.707.707m12.728 12.728.707.707M1 12h1m20 0h1M4.22 19.778l.707-.707M18.95 5.05l.707-.707" />
-                        </svg>
-                        <span>{product.barcode}</span>
-                      </div>
-                    )}
+                  </h3>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+                    {product.sku && <span>{productsDict.sku}: {product.sku}</span>}
+                    {product.barcode && <span className="font-mono">{product.barcode}</span>}
                     {product.category && (
-                      <div className="flex items-center gap-1">
-                        <span className="font-medium">{productsDict.category}:</span>
-                        <span className="px-2 py-0.5 bg-gray-100 rounded border border-gray-300">{product.category}</span>
-                      </div>
+                      <span className="px-1.5 py-0.5 bg-gray-100 rounded border border-gray-300">{product.category}</span>
                     )}
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-4 sm:gap-6">
-                <div className="text-right">
-                  <div className="text-xs text-gray-500 mb-1 hidden sm:block">{productsDict.price}</div>
-                  <div className="font-bold text-lg sm:text-xl" style={{ color: primaryColor }}>
-                    <Currency amount={product.price} />
-                  </div>
+              <div className="flex items-center gap-3 sm:gap-4">
+                <div className="font-bold text-base sm:text-lg" style={{ color: primaryColor }}>
+                  <Currency amount={product.price} />
                 </div>
                 {inventoryEnabled && (
-                  <div className="text-right">
-                    <div className="text-xs text-gray-500 mb-1 hidden sm:block">{productsDict.stock}</div>
-                    <span
-                      className={`inline-block text-xs font-semibold px-3 py-1.5 rounded border ${
-                        product.stock > 10
-                          ? 'bg-green-100 text-green-800 border-green-300'
-                          : product.stock > 0
-                          ? 'bg-yellow-100 text-yellow-800 border-yellow-300'
-                          : 'bg-red-100 text-red-800 border-red-300'
-                      }`}
-                    >
-                      {product.stock} {productsDict.inStock}
-                    </span>
-                  </div>
+                  <span
+                    className={`inline-block text-xs font-semibold px-2 py-1 rounded border ${
+                      product.stock > 10
+                        ? 'bg-green-100 text-green-800 border-green-300'
+                        : product.stock > 0
+                        ? 'bg-yellow-100 text-yellow-800 border-yellow-300'
+                        : 'bg-red-100 text-red-800 border-red-300'
+                    }`}
+                  >
+                    {product.stock} {productsDict.inStock}
+                  </span>
                 )}
-                <div className="flex gap-2 actions-touch-visible transition-opacity duration-200">
+                <div className="flex gap-1.5 actions-touch-visible transition-opacity duration-200">
                   {inventoryEnabled && (
                     <button
                       onClick={() => handleRefill(product)}
-                      className="px-3 py-2 bg-green-600 text-white hover:bg-green-700 active:bg-green-800 transition-all duration-200 border border-green-700 flex items-center justify-center touch-manipulation min-h-[44px] sm:min-h-0"
+                      className="px-2.5 py-1.5 bg-green-600 text-white hover:bg-green-700 active:bg-green-800 transition-all duration-200 border border-green-700 flex items-center justify-center touch-manipulation min-h-[36px] sm:min-h-0"
                       title={productsDict.refill?.title || 'Refill Stock'}
                       aria-label={productsDict.refill?.title || 'Refill Stock'}
                     >
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                       </svg>
                     </button>
                   )}
                   <button
                     onClick={() => setBarcodeProduct(product)}
-                    className="px-3 py-2 bg-gray-700 text-white hover:bg-gray-800 active:bg-gray-900 transition-all duration-200 border border-gray-800 flex items-center justify-center touch-manipulation min-h-[44px] sm:min-h-0"
+                    className="px-2.5 py-1.5 bg-gray-700 text-white hover:bg-gray-800 active:bg-gray-900 transition-all duration-200 border border-gray-800 flex items-center justify-center touch-manipulation min-h-[36px] sm:min-h-0"
                     title={productsDict.viewBarcode || 'View Barcode'}
                     aria-label={productsDict.viewBarcode || 'View Barcode'}
                   >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h1v12H4V6zm2 0h1v12H6V6zm3 0h2v12H9V6zm3 0h1v12h-1V6zm2 0h2v12h-2V6zm3 0h1v12h-1V6z" />
                     </svg>
                   </button>
                   <button
                     onClick={() => handleEdit(product)}
                     style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
-                    className="px-3 py-2 text-white active:opacity-80 transition-all duration-200 border flex items-center justify-center touch-manipulation min-h-[44px] sm:min-h-0 hover:opacity-90"
+                    className="px-2.5 py-1.5 text-white active:opacity-80 transition-all duration-200 border flex items-center justify-center touch-manipulation min-h-[36px] sm:min-h-0 hover:opacity-90"
                     title={dict.common.edit}
                     aria-label={dict.common.edit}
                   >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                     </svg>
                   </button>
                   <button
                     onClick={() => handleDelete(product._id)}
-                    className="px-3 py-2 bg-red-600 text-white hover:bg-red-700 active:bg-red-800 transition-all duration-200 border border-red-700 flex items-center justify-center touch-manipulation min-h-[44px] sm:min-h-0"
+                    className="px-2.5 py-1.5 bg-red-600 text-white hover:bg-red-700 active:bg-red-800 transition-all duration-200 border border-red-700 flex items-center justify-center touch-manipulation min-h-[36px] sm:min-h-0"
                     title={dict.common.delete}
                     aria-label={dict.common.delete}
                   >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
                   </button>
@@ -593,6 +576,28 @@ export default function ProductsPage() {
         </div>
 
         {renderProductContent()}
+
+        {status === 'ready' && totalPages > 1 && (
+          <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row justify-center items-center gap-3 sm:gap-4">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="w-full sm:w-auto px-6 py-3 sm:px-4 sm:py-2 border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 active:bg-gray-200 font-medium transition-colors bg-white touch-manipulation min-h-[44px] sm:min-h-0"
+            >
+              {dict.common?.previous || 'Previous'}
+            </button>
+            <span className="px-4 py-2 text-sm sm:text-base text-gray-700 font-medium text-center">
+              {page} / {totalPages}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="w-full sm:w-auto px-6 py-3 sm:px-4 sm:py-2 border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 active:bg-gray-200 font-medium transition-colors bg-white touch-manipulation min-h-[44px] sm:min-h-0"
+            >
+              {dict.common?.next || 'Next'}
+            </button>
+          </div>
+        )}
 
         {isModalOpen && (
           <ProductModal product={editingProduct} onClose={handleCloseModal} lang={lang} />

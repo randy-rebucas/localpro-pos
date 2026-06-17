@@ -21,15 +21,11 @@ export default function LoyaltyPage() {
   }, [lang]);
 
   const { config, configForm, loading: configLoading, saving: savingConfig, dirty: configDirty, fetchConfig, updateConfigForm, saveConfig } = useLoyaltyConfig();
-  const { customers, search, page, totalPages, totalCustomers, loading, enrolledCount, totalPoints, setSearch, setPage, fetchCustomers } = useLoyaltyCustomers();
+  const { customers, search, page, totalPages, totalCustomers, loading, enrolledCount, totalPoints, setSearch, setPage } = useLoyaltyCustomers();
 
   useEffect(() => {
     fetchConfig();
   }, [fetchConfig]);
-
-  useEffect(() => {
-    fetchCustomers(1, '');
-  }, [fetchCustomers]);
 
   const handleConfigSave = async (e: React.FormEvent) => {
     e.preventDefault();

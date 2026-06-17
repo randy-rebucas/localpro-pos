@@ -77,6 +77,7 @@ export async function POST(request: NextRequest) {
     
     await createAuditLog(request, {
       tenantId,
+      userId: user.userId,
       action: AuditActions.CREATE,
       entityType: 'taxRule',
       entityId: taxRule._id.toString(),

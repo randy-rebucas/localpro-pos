@@ -65,6 +65,7 @@ export async function POST(request: NextRequest) {
 
     await createAuditLog(request, {
       tenantId,
+      userId: user.userId,
       action: AuditActions.CREATE,
       entityType: 'campaign',
       entityId: String(campaign._id),

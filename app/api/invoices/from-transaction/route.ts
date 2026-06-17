@@ -98,6 +98,7 @@ export async function POST(request: NextRequest) {
     // Create audit log
     await createAuditLog(request, {
       tenantId,
+      userId: user.userId,
       action: AuditActions.INVOICE_CREATE,
       entityType: 'invoice',
       entityId: invoice._id.toString(),

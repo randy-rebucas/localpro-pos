@@ -46,33 +46,10 @@ export async function GET(request: NextRequest) {
       createdAt: { $gte: startDate, $lte: endDate },
     };
 
-    const stats = await Transaction.aggregate([
-      { $match: matchQuery },
-      {
-        $group: {
-          _id: null,
-          totalSales: { $sum: '$total' },
-          totalTransactions: { $sum: 1 },
-          averageTransaction: { $avg: '$total' },
-        },
-      },
-    ]);
-
-    const paymentMethodStats = await Transaction.aggregate([
-      { $match: matchQuery },
-      {
-        $group: {
-          _id: '$paymentMethod',
-          total: { $sum: '$total' },
-          count: { $sum: 1 },
-        },
-      },
-    ]);
-
     // Time-series data for chart
     let timeSeriesGroup: any; // eslint-disable-line @typescript-eslint/no-explicit-any
     let dateFormat: string;
-    
+
     if (period === 'today') {
       // Group by hour for today
       timeSeriesGroup = {
@@ -97,20 +74,51 @@ export async function GET(request: NextRequest) {
       dateFormat = 'day';
     }
 
-    const timeSeriesData = await Transaction.aggregate([
+    // Single aggregation: one $match scan, three facets computed in one round-trip
+    // instead of three separate Transaction.aggregate() calls.
+    const [facetResult] = await Transaction.aggregate([
       { $match: matchQuery },
       {
-        $group: {
-          _id: timeSeriesGroup,
-          sales: { $sum: '$total' },
-          transactions: { $sum: 1 },
+        $facet: {
+          stats: [
+            {
+              $group: {
+                _id: null,
+                totalSales: { $sum: '$total' },
+                totalTransactions: { $sum: 1 },
+                averageTransaction: { $avg: '$total' },
+              },
+            },
+          ],
+          paymentMethodStats: [
+            {
+              $group: {
+                _id: '$paymentMethod',
+                total: { $sum: '$total' },
+                count: { $sum: 1 },
+              },
+            },
+          ],
+          timeSeriesData: [
+            {
+              $group: {
+                _id: timeSeriesGroup,
+                sales: { $sum: '$total' },
+                transactions: { $sum: 1 },
+              },
+            },
+            { $sort: { _id: 1 } },
+          ],
         },
       },
-      { $sort: { _id: 1 } },
     ]);
 
+    const stats = facetResult.stats;
+    const paymentMethodStats = facetResult.paymentMethodStats;
+    const timeSeriesData = facetResult.timeSeriesData;
+
     // Format time-series data for chart
-    const chartData = timeSeriesData.map((item) => {
+    const chartData = timeSeriesData.map((item: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
       let label: string;
       if (dateFormat === 'hour') {
         const hour = item._id;

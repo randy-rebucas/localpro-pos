@@ -83,8 +83,8 @@ export function initializeCronJobs() {
     timezone: 'UTC',
   });
 
-  // 3. Daily Sales Report - Every day at 8 AM
-  const dailyReportJob = cron.schedule('0 8 * * *', async () => {
+  // 3. Daily Sales Report - End of day at 10 PM
+  const dailyReportJob = cron.schedule('0 22 * * *', async () => {
     logger.info('📊 Running daily sales report automation...');
     try {
       const result = await sendSalesReport({ period: 'daily' });

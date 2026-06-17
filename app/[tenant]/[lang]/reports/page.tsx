@@ -68,6 +68,19 @@ export default function ReportsPage() {
     setStartDate(start.toISOString().split('T')[0]);
   }, [lang]);
 
+  const handlePeriodChange = (newPeriod: 'daily' | 'weekly' | 'monthly') => {
+    setPeriod(newPeriod);
+    const end = new Date();
+    const start = new Date();
+    if (newPeriod === 'weekly') {
+      start.setDate(start.getDate() - 6);
+    } else if (newPeriod === 'monthly') {
+      start.setDate(start.getDate() - 29);
+    }
+    setEndDate(end.toISOString().split('T')[0]);
+    setStartDate(start.toISOString().split('T')[0]);
+  };
+
   const exportSalesJournal = async (format: 'csv' | 'excel' | 'pdf') => {
     if (format === 'csv') {
       const params = new URLSearchParams({
@@ -176,113 +189,122 @@ export default function ReportsPage() {
             </p>
           </div>
 
-          {/* Date Range Selector */}
-          <div className="bg-white border border-gray-300 p-5 sm:p-6 mb-6">
-            <div className="flex flex-wrap items-center gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {dict.reports?.startDate || 'Start Date'}
-                </label>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  style={{
-                    borderWidth: '2px',
-                    borderColor: '#d1d5db',
-                  }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = primaryColor;
-                    e.currentTarget.style.outline = 'none';
-                    e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = '#d1d5db';
-                    e.currentTarget.style.boxShadow = 'none';
-                  }}
-                  className="px-4 py-3 transition-all bg-white"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {dict.reports?.endDate || 'End Date'}
-                </label>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  style={{
-                    borderWidth: '2px',
-                    borderColor: '#d1d5db',
-                  }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = primaryColor;
-                    e.currentTarget.style.outline = 'none';
-                    e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = '#d1d5db';
-                    e.currentTarget.style.boxShadow = 'none';
-                  }}
-                  className="px-4 py-3 transition-all bg-white"
-                />
-              </div>
-              {activeTab === 'sales' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    {dict.reports?.period || 'Period'}
-                  </label>
-                  <select
-                    value={period}
-                    onChange={(e) => setPeriod(e.target.value as any)} // eslint-disable-line @typescript-eslint/no-explicit-any
-                    style={{
-                      borderWidth: '2px',
-                      borderColor: '#d1d5db',
-                    }}
-                    onFocus={(e) => {
-                      e.currentTarget.style.borderColor = primaryColor;
-                      e.currentTarget.style.outline = 'none';
-                      e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.borderColor = '#d1d5db';
-                      e.currentTarget.style.boxShadow = 'none';
-                    }}
-                    className="px-4 py-3 transition-all bg-white"
-                  >
-                    <option value="daily">{dict.reports?.daily || 'Daily'}</option>
-                    <option value="weekly">{dict.reports?.weekly || 'Weekly'}</option>
-                    <option value="monthly">{dict.reports?.monthly || 'Monthly'}</option>
-                  </select>
+          <div className="flex flex-col lg:flex-row gap-6">
+            {/* Date Range Selector (left sidebar) */}
+            <aside className="w-full lg:w-64 shrink-0">
+              <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:sticky lg:top-6">
+                <h2 className="text-sm font-semibold text-gray-900 mb-4 uppercase tracking-wide">
+                  Filters
+                </h2>
+                <div className="flex flex-col gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      {dict.reports?.startDate || 'Start Date'}
+                    </label>
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      style={{
+                        borderWidth: '2px',
+                        borderColor: '#d1d5db',
+                      }}
+                      onFocus={(e) => {
+                        e.currentTarget.style.borderColor = primaryColor;
+                        e.currentTarget.style.outline = 'none';
+                        e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                      }}
+                      onBlur={(e) => {
+                        e.currentTarget.style.borderColor = '#d1d5db';
+                        e.currentTarget.style.boxShadow = 'none';
+                      }}
+                      className="w-full px-4 py-3 transition-all bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      {dict.reports?.endDate || 'End Date'}
+                    </label>
+                    <input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      style={{
+                        borderWidth: '2px',
+                        borderColor: '#d1d5db',
+                      }}
+                      onFocus={(e) => {
+                        e.currentTarget.style.borderColor = primaryColor;
+                        e.currentTarget.style.outline = 'none';
+                        e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                      }}
+                      onBlur={(e) => {
+                        e.currentTarget.style.borderColor = '#d1d5db';
+                        e.currentTarget.style.boxShadow = 'none';
+                      }}
+                      className="w-full px-4 py-3 transition-all bg-white"
+                    />
+                  </div>
+                  {activeTab === 'sales' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        {dict.reports?.period || 'Period'}
+                      </label>
+                      <select
+                        value={period}
+                        onChange={(e) => handlePeriodChange(e.target.value as 'daily' | 'weekly' | 'monthly')}
+                        style={{
+                          borderWidth: '2px',
+                          borderColor: '#d1d5db',
+                        }}
+                        onFocus={(e) => {
+                          e.currentTarget.style.borderColor = primaryColor;
+                          e.currentTarget.style.outline = 'none';
+                          e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                        }}
+                        onBlur={(e) => {
+                          e.currentTarget.style.borderColor = '#d1d5db';
+                          e.currentTarget.style.boxShadow = 'none';
+                        }}
+                        className="w-full px-4 py-3 transition-all bg-white"
+                      >
+                        <option value="daily">{dict.reports?.daily || 'Daily'}</option>
+                        <option value="weekly">{dict.reports?.weekly || 'Weekly'}</option>
+                        <option value="monthly">{dict.reports?.monthly || 'Monthly'}</option>
+                      </select>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          </div>
+              </div>
+            </aside>
 
-          {/* Tabs */}
-          <div className="bg-white border border-gray-300 overflow-hidden mb-6">
-            <div className="border-b border-gray-200">
-              <nav className="flex overflow-x-auto" aria-label={dict?.common?.tabs || 'Tabs'}>
-                {(['sales', 'products', 'vat', 'profit-loss', 'cash-drawer', 'sales-journal'] as const).map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setActiveTab(tab)}
-                    className={`px-6 py-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                      activeTab === tab
-                        ? 'border-transparent text-gray-900'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
-                    style={activeTab === tab ? { borderBottomColor: primaryColor, color: primaryColor } : undefined}
-                  >
-                    {dict.reports?.tabs?.[tab] || tab.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
-                  </button>
-                ))}
-              </nav>
-            </div>
+            {/* Tabs + Content */}
+            <div className="flex-1 min-w-0">
+              <div className="bg-white border border-gray-300 overflow-hidden">
+                <div className="border-b border-gray-200">
+                  <nav className="flex overflow-x-auto" aria-label={dict?.common?.tabs || 'Tabs'}>
+                    {(['sales', 'products', 'vat', 'profit-loss', 'cash-drawer', 'sales-journal'] as const).map((tab) => (
+                      <button
+                        key={tab}
+                        onClick={() => setActiveTab(tab)}
+                        className={`px-6 py-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                          activeTab === tab
+                            ? 'border-transparent text-gray-900'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        }`}
+                        style={activeTab === tab ? { borderBottomColor: primaryColor, color: primaryColor } : undefined}
+                      >
+                        {dict.reports?.tabs?.[tab] || tab.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                      </button>
+                    ))}
+                  </nav>
+                </div>
 
-            {/* Tab Content */}
-            <div className="p-5 sm:p-6 lg:p-8">
-              {renderTabContent()}
+                {/* Tab Content */}
+                <div className="p-5 sm:p-6 lg:p-8">
+                  {renderTabContent()}
+                </div>
+              </div>
             </div>
           </div>
         </div>

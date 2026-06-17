@@ -86,6 +86,7 @@ export async function POST(request: NextRequest) {
 
       await createAuditLog(request, {
         tenantId: tenantId.toString(),
+        userId: user.userId,
         action: AuditActions.UPDATE,
         entityType: 'loyalty_adjust',
         entityId: loyaltyTx[0]._id.toString(),

@@ -177,6 +177,7 @@ export async function POST(
 
     await createAuditLog(request, {
       tenantId,
+      userId,
       action: AuditActions.PAYMENT_CREATE,
       entityType: 'customer_balance_payment',
       entityId: record._id.toString(),

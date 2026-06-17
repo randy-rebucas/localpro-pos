@@ -16,24 +16,36 @@ export interface AuditLogData {
 }
 
 /**
- * Create audit log entry
+ * Create audit log entry.
+ *
+ * Pass `userId` (and `tenantId`) when the caller has already resolved the user via
+ * requireAuth/getCurrentUser/requireTenantAccess earlier in the request handler —
+ * this avoids re-running the auth lookup (token revocation + User.findById reads).
+ * userId is only re-derived from the request when the caller doesn't already have it.
  */
 export async function createAuditLog(
   request: NextRequest,
-  data: Omit<AuditLogData, 'userId'> & { tenantId?: string | mongoose.Types.ObjectId }
+  data: Omit<AuditLogData, 'userId'> & {
+    tenantId?: string | mongoose.Types.ObjectId;
+    userId?: string;
+  }
 ): Promise<void> {
   try {
     await connectDB();
-    
-    const user = await getCurrentUser(request);
-    const ipAddress = request.headers.get('x-forwarded-for') || 
-                     request.headers.get('x-real-ip') || 
+
+    const ipAddress = request.headers.get('x-forwarded-for') ||
+                     request.headers.get('x-real-ip') ||
                      'unknown';
     const userAgent = request.headers.get('user-agent') || 'unknown';
 
+    // Only re-fetch the user from the request if the caller didn't already
+    // resolve one (and pass its userId/tenantId through) earlier in the handler.
+    const user = (data.userId && data.tenantId) ? null : await getCurrentUser(request);
+    const resolvedUserId = data.userId ?? user?.userId;
+
     // Get tenantId from parameter, user, or request
     let tenantId: string | mongoose.Types.ObjectId;
-    
+
     if (data.tenantId) {
       // Use provided tenantId (could be ObjectId or string)
       tenantId = data.tenantId;
@@ -94,7 +106,7 @@ export async function createAuditLog(
 
     await AuditLog.create({
       tenantId,
-      userId: user?.userId,
+      userId: resolvedUserId,
       action: data.action,
       entityType: data.entityType,
       entityId: data.entityId,

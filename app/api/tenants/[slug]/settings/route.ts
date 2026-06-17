@@ -127,6 +127,7 @@ export async function PUT(
 
     await createAuditLog(request, {
       tenantId: tenant._id,
+      userId: user?.userId,
       action: AuditActions.UPDATE,
       entityType: 'tenant',
       entityId: tenant._id.toString(),
