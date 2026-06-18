@@ -84,14 +84,18 @@ export async function PUT(request: NextRequest) {
     // Get translation function
     t = await getValidationTranslatorFromRequest(request);
 
-    const oldUser = await User.findById(currentUser.userId).lean();
-    if (!oldUser || !oldUser.isActive) {
+    // Fetch as a document (with password) so password changes go through the
+    // pre('save') hash hook — findByIdAndUpdate skips document middleware and
+    // would otherwise write the new password in plaintext.
+    const userDoc = await User.findById(currentUser.userId).select('+password');
+    if (!userDoc || !userDoc.isActive) {
       return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
     }
+    const oldUser = userDoc.toObject();
 
     // Build update object
     const updateData: Record<string, unknown> = {};
-    
+
     if (email !== undefined && email !== oldUser.email) {
       if (!validateEmail(email)) {
         return NextResponse.json(
@@ -101,7 +105,7 @@ export async function PUT(request: NextRequest) {
       }
       updateData.email = email.toLowerCase();
     }
-    
+
     if (name !== undefined && name !== oldUser.name) {
       if (!name.trim()) {
         return NextResponse.json(
@@ -111,7 +115,7 @@ export async function PUT(request: NextRequest) {
       }
       updateData.name = name.trim();
     }
-    
+
     // Password change requires current password
     if (password !== undefined && password) {
       if (!currentPassword) {
@@ -119,12 +123,6 @@ export async function PUT(request: NextRequest) {
           { success: false, error: t('validation.currentPasswordRequired', 'Current password is required to change password') },
           { status: 400 }
         );
-      }
-
-      // Verify current password
-      const userDoc = await User.findById(currentUser.userId).select('+password');
-      if (!userDoc) {
-        return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
       }
 
       const isPasswordValid = await userDoc.comparePassword(currentPassword);
@@ -152,15 +150,11 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const user = await User.findByIdAndUpdate(
-      currentUser.userId,
-      updateData,
-      { new: true, runValidators: true }
-    ).select('-password');
-
-    if (!user) {
-      return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
-    }
+    // Assign through the document instance and save() so the pre('save')
+    // hash hook runs for password changes.
+    Object.assign(userDoc, updateData);
+    await userDoc.save();
+    const user = userDoc.toObject();
 
     // Revoke all existing tokens when password is changed
     if (updateData.password) {
