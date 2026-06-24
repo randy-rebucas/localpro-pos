@@ -84,7 +84,17 @@ export async function POST(
   try {
     await connectDB();
     const { sessionId } = await params;
-    const body = await request.json();
+
+    let body: { tenant?: string; action?: string; data?: Record<string, unknown> };
+    try {
+      body = await request.json();
+    } catch {
+      // Body can arrive empty/truncated when a sync request is aborted mid-flight; not a server error.
+      return NextResponse.json(
+        { success: false, error: 'Empty or invalid request body' },
+        { status: 400 }
+      );
+    }
     const { tenant, action, data } = body;
 
     if (!tenant || !sessionId) {
@@ -141,23 +151,23 @@ export async function POST(
     } else if (session) {
       const updates: Record<string, unknown> = { lastUpdate: Date.now() };
 
-      if (action === 'update-cart') {
+      if (action === 'update-cart' && data) {
         if (data.cart) updates.cart = data.cart;
         if (data.subtotal != null) updates.subtotal = data.subtotal;
         if (data.taxAmount != null) updates.taxAmount = data.taxAmount;
         if (data.taxRate != null) updates.taxRate = data.taxRate;
         if (data.taxLabel != null) updates.taxLabel = data.taxLabel;
         if (data.total != null) updates.total = data.total;
-      } else if (action === 'update-discount') {
+      } else if (action === 'update-discount' && data) {
         updates.discount = data.discount;
         if (data.taxAmount != null) updates.taxAmount = data.taxAmount;
         if (data.total != null) updates.total = data.total;
-      } else if (action === 'update-tip') {
+      } else if (action === 'update-tip' && data) {
         updates.tip = data.tip ?? 0;
         if (data.total != null) updates.total = data.total;
-      } else if (action === 'update-payment-method') {
+      } else if (action === 'update-payment-method' && data) {
         updates.paymentMethod = data.paymentMethod || null;
-      } else if (action === 'update-payment-status') {
+      } else if (action === 'update-payment-status' && data) {
         updates.paymentStatus = data.status || 'pending';
       } else if (action === 'clear') {
         updates.cart = [];

@@ -532,15 +532,32 @@ export default function Dashboard() {
   }, [showPaymentModal, showQRScanner, showRefundModal, showSavedCartsModal, showSaveCartModal, showAgeVerificationModal, showSplitCheckModal, showRoamingCart, showFloorMap, device.isTouch]);
 
   // Handle barcode scanning
-  const handleBarcodeScan = useCallback((barcode: string) => {
+  const handleBarcodeScan = useCallback(async (barcode: string) => {
     const code = barcode.trim();
     if (!code) return;
-    // Match against barcode field, SKU, or _id
-    const product = products.find(
+
+    setSearch('');
+
+    // Fast path: check in-memory products first
+    let product = products.find(
       p => p.barcode === code || p.sku === code || p._id === code
     );
-    // Clear any text that the scanner may have typed into the search box
-    setSearch('');
+
+    // Fallback: API lookup for when products aren't loaded in memory yet
+    if (!product) {
+      try {
+        const res = await fetch(`/api/products/by-barcode?code=${encodeURIComponent(code)}&tenant=${tenant}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.data?.product) {
+            product = data.data.product as PosProduct;
+          }
+        }
+      } catch {
+        // fall through to "not found"
+      }
+    }
+
     if (product && (product.stock > 0 || product.allowOutOfStockSales)) {
       handleAddToCart(product);
     } else {
@@ -548,7 +565,7 @@ export default function Dashboard() {
         showToast.error(dict.pos.productNotFound || 'Product not found');
       }
     }
-  }, [products, dict, addToCart]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [products, tenant, dict, addToCart]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Handle QR code scan
   const handleQRScan = useCallback((data: string) => {
