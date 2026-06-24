@@ -37,6 +37,13 @@ export interface BirComplianceFeatures {
   monthlySupport: boolean;
 }
 
+export interface PharmacyComplianceFeatures {
+  enablePharmacyCompliance: boolean;
+  prescriptionManagement: boolean;
+  expiryTracking: boolean;
+  pdeaReporting: boolean;
+}
+
 export interface SubscriptionStatus {
   isActive: boolean;
   isTrial: boolean;
@@ -46,6 +53,7 @@ export interface SubscriptionStatus {
   limits: SubscriptionLimits;
   features: SubscriptionFeatures;
   birCompliance: BirComplianceFeatures;
+  pharmacyCompliance: PharmacyComplianceFeatures;
   usage: {
     currentUsers: number;
     currentBranches: number;
@@ -66,7 +74,7 @@ export class SubscriptionService {
       await connectDB();
 
       const subscription = await Subscription.findOne({ tenantId })
-        .populate('planId', 'name tier price features birCompliance')
+        .populate('planId', 'name tier price features birCompliance pharmacyCompliance')
         .lean();
 
       if (!subscription) {
@@ -131,6 +139,12 @@ export class SubscriptionService {
               auditTrailSystem: false,
               monthlySupport: false,
             },
+            pharmacyCompliance: {
+              enablePharmacyCompliance: false,
+              prescriptionManagement: false,
+              expiryTracking: false,
+              pdeaReporting: false,
+            },
             usage: subscription.usage,
           };
         }
@@ -173,6 +187,12 @@ export class SubscriptionService {
           casReporting: plan.birCompliance?.casReporting ?? false,
           auditTrailSystem: plan.birCompliance?.auditTrailSystem ?? false,
           monthlySupport: plan.birCompliance?.monthlySupport ?? false,
+        },
+        pharmacyCompliance: {
+          enablePharmacyCompliance: (plan as any).pharmacyCompliance?.enablePharmacyCompliance ?? false, // eslint-disable-line @typescript-eslint/no-explicit-any
+          prescriptionManagement: (plan as any).pharmacyCompliance?.prescriptionManagement ?? false, // eslint-disable-line @typescript-eslint/no-explicit-any
+          expiryTracking: (plan as any).pharmacyCompliance?.expiryTracking ?? false, // eslint-disable-line @typescript-eslint/no-explicit-any
+          pdeaReporting: (plan as any).pharmacyCompliance?.pdeaReporting ?? false, // eslint-disable-line @typescript-eslint/no-explicit-any
         },
         usage: subscription.usage,
       };

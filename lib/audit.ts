@@ -147,5 +147,11 @@ export const AuditActions = {
   INVOICE_UPDATE: 'invoice.update',
   INVOICE_SEND: 'invoice.send',
   INVOICE_MARK_PAID: 'invoice.mark_paid',
+  PRESCRIPTION_CREATE: 'prescription.create',
+  PRESCRIPTION_UPDATE: 'prescription.update',
+  PRESCRIPTION_DISPENSE: 'prescription.dispense',
+  PRESCRIPTION_CANCEL: 'prescription.cancel',
+  PHARMACY_SETTINGS_UPDATE: 'pharmacy_settings.update',
+  EXPIRY_REPORT_VIEW: 'expiry_report.view',
 } as const;
 

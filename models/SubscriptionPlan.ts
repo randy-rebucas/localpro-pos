@@ -38,6 +38,12 @@ export interface ISubscriptionPlan extends Document {
     auditTrailSystem: boolean; // Full audit trail
     monthlySupport: boolean; // Monthly compliance support
   };
+  pharmacyCompliance: {
+    enablePharmacyCompliance: boolean;
+    prescriptionManagement: boolean;
+    expiryTracking: boolean;
+    pdeaReporting: boolean;
+  };
   isActive: boolean;
   isCustom: boolean;
   availableToNewTenants: boolean;
@@ -202,6 +208,12 @@ const SubscriptionPlanSchema: Schema = new Schema(
         type: Boolean,
         default: false,
       },
+    },
+    pharmacyCompliance: {
+      enablePharmacyCompliance: { type: Boolean, default: false },
+      prescriptionManagement: { type: Boolean, default: false },
+      expiryTracking: { type: Boolean, default: false },
+      pdeaReporting: { type: Boolean, default: false },
     },
     isActive: {
       type: Boolean,

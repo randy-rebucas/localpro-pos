@@ -225,6 +225,78 @@ export interface ITenantSettings {
     }>;
   };
 
+  // Business Permits — universal, applies to ALL business types (Philippine LGU)
+  businessPermits?: {
+    mayorsPermitNumber?: string;
+    mayorsPermitExpiry?: Date;
+    barangayClearanceNumber?: string;
+    barangayClearanceExpiry?: Date;
+    dtiSecRegistration?: string; // DTI for sole prop, SEC for corp/partnership
+    birCertificateOfRegistration?: string; // BIR COR number
+    fireSafetyInspectionCertificate?: string; // FSIC number
+    fsicExpiry?: Date;
+    sanitaryPermitNumber?: string; // shared by most business types
+    sanitaryPermitExpiry?: Date;
+  };
+
+  // Restaurant / Food Service Compliance (RA 10611 Food Safety Act)
+  restaurantCompliance?: {
+    fdaFoodBusinessLicense?: string; // FDA FBL number
+    fdaFblExpiry?: Date;
+    foodSafetyCertificateNumber?: string; // FSC per establishment
+    foodSafetyCertificateExpiry?: Date;
+    foodHandlersCertified?: boolean; // all food handlers have health certificates
+    numberOfCertifiedHandlers?: number;
+    healthCertificateExpiry?: Date; // earliest expiry among food handlers
+    kitchenSanitationCompliant?: boolean;
+  };
+
+  // Retail Store Compliance (RA 7394 Consumer Act)
+  retailCompliance?: {
+    dtiBusinessNameRegistration?: string; // DTI BN Registration No.
+    priceTaggingCompliant?: boolean; // all items have visible price tags
+    weightsAndMeasuresCompliant?: boolean; // calibrated scales / measuring devices
+    btiAccreditation?: string; // Bureau of Trade & Industry accreditation (optional)
+    productLabelsCompliant?: boolean; // RA 7394 label requirements
+  };
+
+  // Laundry Service Compliance (DENR/EMB wastewater)
+  laundryCompliance?: {
+    environmentalComplianceCertificate?: string; // ECC from DENR/EMB
+    eccExpiry?: Date;
+    wastewaterDischargePermit?: string; // Discharge Permit from DENR
+    wastewaterPermitExpiry?: Date;
+    solidWasteManagementPlan?: boolean; // RA 9003 compliance
+  };
+
+  // Service Business Compliance (salon, spa, repair — DOH/LGU)
+  serviceCompliance?: {
+    dohAccreditation?: string; // DOH accreditation for health-related services
+    dohAccreditationExpiry?: Date;
+    practitionerLicenses?: Array<{
+      name: string;
+      licenseType: string; // Beautician, Cosmetologist, Massage Therapist, etc.
+      prcNumber?: string;
+      ptrNumber?: string;
+      licenseExpiry?: Date;
+    }>;
+  };
+
+  // Pharmacy Compliance Settings (only relevant when businessType = 'pharmacy')
+  pharmacyCompliance?: {
+    pharmacistName?: string;
+    pharmacistPRCNumber?: string; // Philippine PRC license number
+    pharmacistPTRNumber?: string; // Professional Tax Receipt number
+    fdaLTO?: string; // FDA License to Operate number
+    fdaLTOExpiryDate?: Date;
+    dohAccreditation?: string;
+    pdeaLicense?: string; // Required for dangerous drugs
+    pdeaLicenseExpiry?: Date;
+    requirePrescriptionForRx?: boolean;
+    trackExpiryDates?: boolean;
+    expiryAlertDays?: number;
+  };
+
   // Holiday Calendar
   holidays?: Array<{
     id: string;

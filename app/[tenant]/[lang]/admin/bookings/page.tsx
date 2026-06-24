@@ -1,9 +1,8 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import toast from 'react-hot-toast';
-import Navbar from '@/components/Navbar';
 import BookingCalendar from '@/components/BookingCalendar';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
@@ -111,7 +110,7 @@ export default function BookingsPage() {
 
   if (loading && bookings.length === 0) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="flex items-center justify-center py-24">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
           <p className="mt-4 text-gray-600">{dict?.admin?.loadingBookings || 'Loading bookings...'}</p>
@@ -121,15 +120,14 @@ export default function BookingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+    <div>
+      <div className="px-4 sm:px-6 py-6">
         <div className="mb-6 flex items-center justify-between">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
               {dict?.admin?.bookings || 'Booking & Scheduling'}
             </h1>
-            <p className="text-gray-600">{dict?.admin?.bookingsSubtitle || 'Manage appointments and bookings'}</p>
+            <p className="text-sm text-gray-500">{dict?.admin?.bookingsSubtitle || 'Manage appointments and bookings'}</p>
           </div>
           <button
             type="button"
@@ -200,118 +198,113 @@ export default function BookingsPage() {
           </select>
         </div>
 
-        {/* Calendar View */}
-        <div className="mb-8">
-          <BookingCalendar
-            bookings={bookings}
-            onDateSelect={(date) => {
-              setSelectedDate(date);
-              const dayBookings = bookings.filter((b) => {
-                const bookingDate = new Date(b.startTime).toDateString();
-                return bookingDate === date.toDateString();
-              });
-              if (dayBookings.length > 0) {
-                setSelectedBooking(dayBookings[0]);
-                setShowModal(true);
-              }
-            }}
-            onBookingSelect={(booking) => {
-              setSelectedBooking(booking);
-              setShowModal(true);
-            }}
-            selectedDate={selectedDate || undefined}
-          />
-        </div>
-
-        {/* Bookings List */}
-        <div className="bg-white border border-gray-300 overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">{dict?.admin?.allBookings || 'All Bookings'}</h2>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {dict?.admin?.customerName || 'Customer'}
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {dict?.admin?.serviceName || 'Service'}
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {dict?.admin?.dateTime || 'Date & Time'}
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {dict?.admin?.staff || 'Staff'}
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {dict?.admin?.status || 'Status'}
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {dict?.common?.actions || 'Actions'}
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {bookings.map((booking) => (
-                  <tr key={booking._id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{booking.customerName}</div>
-                      {booking.customerEmail && (
-                        <div className="text-sm text-gray-500">{booking.customerEmail}</div>
-                      )}
-                      {booking.customerPhone && (
-                        <div className="text-sm text-gray-500">{booking.customerPhone}</div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{booking.serviceName}</div>
-                      {booking.serviceDescription && (
-                        <div className="text-sm text-gray-500">{booking.serviceDescription}</div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{formatBookingDateTime(booking.startTime)}</div>
-                      <div className="text-sm text-gray-500">{dict?.admin?.duration || 'Duration'}: {booking.duration} min</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {booking.staffName || booking.staffId?.name || dict?.admin?.unassigned || 'Unassigned'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs font-semibold border ${getStatusColor(booking.status)}`}>
-                        {dict?.admin?.[booking.status] || booking.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            setSelectedBooking(booking);
-                            setShowModal(true);
-                          }}
-                          className="text-brand hover:text-brand-navy-deep"
-                        >
-                          {dict?.common?.view || 'View'}
-                        </button>
-                        {booking.status === 'pending' || booking.status === 'confirmed' ? (
-                          <button
-                            onClick={() => handleSendReminder(booking._id)}
-                            className="text-green-600 hover:text-green-900"
-                          >
-                            {dict?.admin?.remind || 'Remind'}
-                          </button>
-                        ) : null}
-                      </div>
-                    </td>
+        {/* Two-column: bookings list left, calendar right */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+          {/* Left — Bookings list */}
+          <div className="bg-white border border-gray-300 overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-gray-900">{dict?.admin?.allBookings || 'All Bookings'}</h2>
+              <span className="text-xs text-gray-400">{bookings.length} {bookings.length === 1 ? 'booking' : 'bookings'}</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      {dict?.admin?.customerName || 'Customer'}
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      {dict?.admin?.serviceName || 'Service'}
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      {dict?.admin?.dateTime || 'Date & Time'}
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      {dict?.admin?.status || 'Status'}
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      {dict?.common?.actions || 'Actions'}
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-            {bookings.length === 0 && (
-              <div className="text-center py-12 text-gray-500">
-                {dict?.admin?.noBookingsFound || 'No bookings found'}
-              </div>
-            )}
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {bookings.map((booking) => (
+                    <tr key={booking._id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3">
+                        <div className="text-sm font-medium text-gray-900">{booking.customerName}</div>
+                        {booking.customerPhone && (
+                          <div className="text-xs text-gray-500">{booking.customerPhone}</div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="text-sm text-gray-900">{booking.serviceName}</div>
+                        <div className="text-xs text-gray-500">{booking.duration} min</div>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">{formatBookingDateTime(booking.startTime)}</div>
+                        <div className="text-xs text-gray-500">
+                          {booking.staffName || booking.staffId?.name || dict?.admin?.unassigned || 'Unassigned'}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className={`px-2 py-1 text-xs font-semibold border ${getStatusColor(booking.status)}`}>
+                          {dict?.admin?.[booking.status] || booking.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              setSelectedBooking(booking);
+                              setShowModal(true);
+                            }}
+                            className="text-brand hover:text-brand-navy-deep"
+                          >
+                            {dict?.common?.view || 'View'}
+                          </button>
+                          {(booking.status === 'pending' || booking.status === 'confirmed') && (
+                            <button
+                              onClick={() => handleSendReminder(booking._id)}
+                              className="text-green-600 hover:text-green-900"
+                            >
+                              {dict?.admin?.remind || 'Remind'}
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {bookings.length === 0 && (
+                <div className="text-center py-12 text-gray-500">
+                  {dict?.admin?.noBookingsFound || 'No bookings found'}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right — Calendar */}
+          <div className="xl:sticky xl:top-6">
+            <BookingCalendar
+              bookings={bookings}
+              onDateSelect={(date) => {
+                setSelectedDate(date);
+                const dayBookings = bookings.filter((b) => {
+                  const bookingDate = new Date(b.startTime).toDateString();
+                  return bookingDate === date.toDateString();
+                });
+                if (dayBookings.length > 0) {
+                  setSelectedBooking(dayBookings[0]);
+                  setShowModal(true);
+                }
+              }}
+              onBookingSelect={(booking) => {
+                setSelectedBooking(booking);
+                setShowModal(true);
+              }}
+              selectedDate={selectedDate || undefined}
+            />
           </div>
         </div>
       </div>

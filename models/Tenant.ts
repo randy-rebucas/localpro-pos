@@ -172,6 +172,78 @@ const TenantSchema: Schema = new Schema(
       birBusinessStyle: { type: String, trim: true },
       birSystemProvider: { type: String, trim: true },
 
+      // Business Permits (all business types)
+      businessPermits: {
+        mayorsPermitNumber: { type: String, trim: true },
+        mayorsPermitExpiry: { type: Date },
+        barangayClearanceNumber: { type: String, trim: true },
+        barangayClearanceExpiry: { type: Date },
+        dtiSecRegistration: { type: String, trim: true },
+        birCertificateOfRegistration: { type: String, trim: true },
+        fireSafetyInspectionCertificate: { type: String, trim: true },
+        fsicExpiry: { type: Date },
+        sanitaryPermitNumber: { type: String, trim: true },
+        sanitaryPermitExpiry: { type: Date },
+      },
+
+      // Restaurant Compliance (RA 10611 Food Safety Act)
+      restaurantCompliance: {
+        fdaFoodBusinessLicense: { type: String, trim: true },
+        fdaFblExpiry: { type: Date },
+        foodSafetyCertificateNumber: { type: String, trim: true },
+        foodSafetyCertificateExpiry: { type: Date },
+        foodHandlersCertified: { type: Boolean, default: false },
+        numberOfCertifiedHandlers: { type: Number, min: 0 },
+        healthCertificateExpiry: { type: Date },
+        kitchenSanitationCompliant: { type: Boolean, default: false },
+      },
+
+      // Retail Compliance (RA 7394 Consumer Act)
+      retailCompliance: {
+        dtiBusinessNameRegistration: { type: String, trim: true },
+        priceTaggingCompliant: { type: Boolean, default: false },
+        weightsAndMeasuresCompliant: { type: Boolean, default: false },
+        btiAccreditation: { type: String, trim: true },
+        productLabelsCompliant: { type: Boolean, default: false },
+      },
+
+      // Laundry Compliance (DENR/EMB wastewater)
+      laundryCompliance: {
+        environmentalComplianceCertificate: { type: String, trim: true },
+        eccExpiry: { type: Date },
+        wastewaterDischargePermit: { type: String, trim: true },
+        wastewaterPermitExpiry: { type: Date },
+        solidWasteManagementPlan: { type: Boolean, default: false },
+      },
+
+      // Service Business Compliance (DOH/LGU — salon, spa, repair)
+      serviceCompliance: {
+        dohAccreditation: { type: String, trim: true },
+        dohAccreditationExpiry: { type: Date },
+        practitionerLicenses: [{
+          name: { type: String, trim: true },
+          licenseType: { type: String, trim: true },
+          prcNumber: { type: String, trim: true },
+          ptrNumber: { type: String, trim: true },
+          licenseExpiry: { type: Date },
+        }],
+      },
+
+      // Pharmacy Compliance Settings
+      pharmacyCompliance: {
+        pharmacistName: { type: String, trim: true },
+        pharmacistPRCNumber: { type: String, trim: true },
+        pharmacistPTRNumber: { type: String, trim: true },
+        fdaLTO: { type: String, trim: true },
+        fdaLTOExpiryDate: { type: Date },
+        dohAccreditation: { type: String, trim: true },
+        pdeaLicense: { type: String, trim: true },
+        pdeaLicenseExpiry: { type: Date },
+        requirePrescriptionForRx: { type: Boolean, default: true },
+        trackExpiryDates: { type: Boolean, default: true },
+        expiryAlertDays: { type: Number, default: 90 },
+      },
+
       // Notification Settings
       lowStockThreshold: {
         type: Number,

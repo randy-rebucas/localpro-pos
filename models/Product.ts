@@ -64,7 +64,20 @@ export interface IProduct extends Document {
   serviceDuration?: number; // Service duration in minutes
   staffRequired?: number; // Number of staff members required
   equipmentRequired?: string[]; // List of required equipment
-  
+
+  // Pharmacy (Philippine FDA/DOH/PDEA)
+  genericName?: string;
+  manufacturer?: string;
+  prn?: string; // FDA Product Registration Number
+  batchNumber?: string; // Lot/batch for recall tracking
+  expiryDate?: Date;
+  drugSchedule?: 'otc' | 'rx' | 'dangerous';
+  requiresPrescription?: boolean;
+  storageConditions?: string;
+  activeIngredient?: string;
+  dosageStrength?: string; // e.g. "500mg"
+  dosageForm?: string; // tablet, capsule, syrup, etc.
+
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -230,6 +243,23 @@ const ProductSchema: Schema = new Schema(
       default: 1,
     },
     equipmentRequired: [String],
+
+    // Pharmacy fields
+    genericName: { type: String, trim: true },
+    manufacturer: { type: String, trim: true },
+    prn: { type: String, trim: true },
+    batchNumber: { type: String, trim: true },
+    expiryDate: { type: Date },
+    drugSchedule: {
+      type: String,
+      enum: ['otc', 'rx', 'dangerous'],
+    },
+    requiresPrescription: { type: Boolean, default: false },
+    storageConditions: { type: String, trim: true },
+    activeIngredient: { type: String, trim: true },
+    dosageStrength: { type: String, trim: true },
+    dosageForm: { type: String, trim: true },
+
     isActive: {
       type: Boolean,
       default: true,
@@ -331,6 +361,9 @@ ProductSchema.index({ tenantId: 1, productType: 1, trackInventory: 1 });
 ProductSchema.index({ tenantId: 1, hasVariations: 1 });
 // Compound index for POS pinned product queries (pinned first, then newest)
 ProductSchema.index({ tenantId: 1, pinned: -1, createdAt: -1 });
+// Pharmacy: near-expiry report and drug schedule lookup
+ProductSchema.index({ tenantId: 1, expiryDate: 1 });
+ProductSchema.index({ tenantId: 1, drugSchedule: 1 });
 
 const Product: Model<IProduct> = mongoose.models.Product || mongoose.model<IProduct>('Product', ProductSchema);
 

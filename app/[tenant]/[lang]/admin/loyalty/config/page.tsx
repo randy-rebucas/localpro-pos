@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
@@ -15,7 +15,7 @@ export default function LoyaltyConfigPage() {
   }, [router, tenant, lang]);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+    <div className="flex items-center justify-center py-24">
       <div className="text-center">
         <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
         <p className="mt-4 text-gray-600">Redirecting...</p>

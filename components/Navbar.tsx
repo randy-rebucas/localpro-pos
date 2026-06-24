@@ -9,8 +9,10 @@ import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
+import { useAdminLayout } from '@/contexts/AdminLayoutContext';
 
 export default function Navbar() {
+  const { inAdminLayout } = useAdminLayout();
   const pathname = usePathname();
   const params = useParams();
   const router = useRouter();
@@ -119,6 +121,8 @@ export default function Navbar() {
       </nav>
     );
   }
+
+  if (inAdminLayout) return null;
 
   return (
     <>

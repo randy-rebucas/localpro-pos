@@ -13,6 +13,7 @@ export interface ITransactionItem {
   quantity: number;
   subtotal: number;
   modifiers?: ITransactionItemModifier[];
+  prescriptionId?: mongoose.Types.ObjectId; // Pharmacy: links Rx item to prescription
 }
 
 export interface ISplitPayment {
@@ -99,6 +100,10 @@ const TransactionItemSchema: Schema = new Schema({
   modifiers: {
     type: [TransactionItemModifierSchema],
     default: undefined,
+  },
+  prescriptionId: {
+    type: Schema.Types.ObjectId,
+    ref: 'Prescription',
   },
 });
 

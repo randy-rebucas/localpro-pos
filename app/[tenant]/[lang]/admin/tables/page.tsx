@@ -1,9 +1,8 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import toast from 'react-hot-toast';
-import Navbar from '@/components/Navbar';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getDictionaryClient } from '../../dictionaries-client';
 
@@ -167,8 +166,7 @@ export default function TablesPage() {
 
   return (
     <div>
-      <Navbar />
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      <div className="px-4 sm:px-6 py-6">
         {/* Header */}
         <div className="mb-8 flex flex-wrap gap-3 justify-between items-center">
           <div>

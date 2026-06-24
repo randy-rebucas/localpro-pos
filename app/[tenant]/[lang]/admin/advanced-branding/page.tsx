@@ -1,7 +1,6 @@
-'use client';
+﻿'use client';
 
 import React, { useEffect, useCallback } from 'react';
-import Navbar from '@/components/Navbar';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
@@ -61,7 +60,7 @@ export default function AdvancedBrandingPage() {
 
   if (!dict || loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="flex items-center justify-center py-24">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
@@ -72,9 +71,8 @@ export default function AdvancedBrandingPage() {
 
   if (!settings) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <Navbar />
-        <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      <div>
+        <div className="px-4 sm:px-6 py-6">
           <div className="bg-red-50 border-2 border-red-300 p-5 sm:p-6">
             <h2 className="text-xl font-bold text-red-800 mb-2">{dict?.settings?.failedToLoad || 'Failed to Load Settings'}</h2>
             <p className="text-red-700 mb-4">
@@ -93,9 +91,8 @@ export default function AdvancedBrandingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+    <div>
+      <div className="px-4 sm:px-6 py-6">
         <div className="mb-6">
           <Link
             href={`/${tenant}/${lang}/admin`}
@@ -106,7 +103,7 @@ export default function AdvancedBrandingPage() {
             </svg>
             {dict?.common?.back || 'Back'} to Admin
           </Link>
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">
             {dict?.admin?.advancedBranding || 'Advanced Branding'}
           </h1>
           <p className="text-gray-600">

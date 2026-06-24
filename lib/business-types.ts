@@ -5,7 +5,7 @@
  * while maintaining consistency with the Standard POS Architecture Baseline
  */
 
-export type BusinessType = 'retail' | 'restaurant' | 'laundry' | 'service' | 'general';
+export type BusinessType = 'retail' | 'restaurant' | 'laundry' | 'service' | 'general' | 'pharmacy';
 
 export interface BusinessTypeConfig {
   type: BusinessType;
@@ -132,6 +132,33 @@ export const BUSINESS_TYPE_CONFIGS: Record<BusinessType, BusinessTypeConfig> = {
       businessType: 'general',
       enableInventory: true,
       enableCategories: true,
+    },
+  },
+  pharmacy: {
+    type: 'pharmacy',
+    name: 'Pharmacy',
+    description: 'Licensed pharmacy or drug store under Philippine FDA, DOH, and PDEA regulations',
+    defaultFeatures: {
+      enableInventory: true,
+      enableCategories: true,
+      enableDiscounts: true,
+      enableLoyaltyProgram: true,
+      enableCustomerManagement: true,
+      enableBookingScheduling: false,
+    },
+    productTypes: ['regular'],
+    requiredFields: ['name', 'price', 'sku', 'prn', 'expiryDate', 'batchNumber'],
+    optionalFields: [
+      'description', 'image', 'genericName', 'manufacturer', 'activeIngredient',
+      'dosageStrength', 'dosageForm', 'drugSchedule', 'storageConditions', 'requiresPrescription',
+    ],
+    defaultSettings: {
+      businessType: 'pharmacy',
+      enableInventory: true,
+      enableCategories: true,
+      trackExpiry: true,
+      requirePrescriptionForRx: true,
+      expiryAlertDays: 90,
     },
   },
 };

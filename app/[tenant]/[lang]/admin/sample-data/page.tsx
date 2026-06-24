@@ -1,7 +1,6 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState } from 'react';
-import Navbar from '@/components/Navbar';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
@@ -46,7 +45,7 @@ export default function SampleDataPage() {
 
   if (pageLoading || !dict) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="flex items-center justify-center py-24">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 rounded-full" style={{ borderColor: primaryColor }} />
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
@@ -68,21 +67,11 @@ export default function SampleDataPage() {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+    <div>
+      <div className="px-4 sm:px-6 py-6">
 
         {/* Header */}
         <div className="mb-6 sm:mb-8">
-          <Link
-            href={`/${tenant}/${lang}/admin`}
-            className="inline-flex items-center text-brand hover:text-brand-hover font-medium mb-4 transition-colors"
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            {dict?.admin?.backToAdmin || 'Back to Admin'}
-          </Link>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">{dict?.sampleData?.title || 'Install Sample Data'}</h1>
           <p className="text-gray-600">
             {dict?.sampleData?.subtitle || 'Quickly populate your store with realistic sample products, categories, customers, and discount codes tailored to your business type.'}

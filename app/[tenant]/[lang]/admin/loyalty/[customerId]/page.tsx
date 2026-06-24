@@ -1,7 +1,6 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useEffect } from 'react';
-import Navbar from '@/components/Navbar';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { showToast } from '@/lib/toast';
@@ -41,8 +40,7 @@ export default function LoyaltyCustomerPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
+    <div>
       <div className="w-full p-6">
         <div className="mb-4">
           <Link
