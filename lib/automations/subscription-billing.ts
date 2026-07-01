@@ -28,6 +28,7 @@ const DEACTIVATION_BUFFER_DAYS = 3; // deactivate 3 days after grace period ends
 const LATE_FEE_DAYS = 15;
 const LATE_FEE_PERCENT = 0.10;
 const REACTIVATION_FEE_DAYS = 30;
+const BILLING_ADMIN_EMAIL = process.env.BILLING_ADMIN_EMAIL || 'admin@localpro.asia';
 
 export interface SubscriptionBillingResult {
   success: boolean;
@@ -66,6 +67,14 @@ async function notifyTenant(
   const body = renderNotificationTemplate(template.body, { ...variables, companyName }, settings);
 
   await sendEmail({ to: recipientEmail, subject, message: body, type: 'email' });
+}
+
+/**
+ * Internal ops alert to LocalPro staff for dues/unpaid bills — separate from
+ * the tenant-facing notifyTenant() above, plain text, not template-driven.
+ */
+async function notifyAdmin(subject: string, message: string): Promise<void> {
+  await sendEmail({ to: BILLING_ADMIN_EMAIL, subject, message, type: 'email' });
 }
 
 export async function processSubscriptionBilling(
@@ -188,6 +197,16 @@ export async function processSubscriptionBilling(
           gracePeriodEndDate: sub.gracePeriodEndDate.toDateString(),
         });
 
+        try {
+          await notifyAdmin(
+            `[Billing] Payment overdue: ${tenant?.name || sub.tenantId}`,
+            `Tenant: ${tenant?.name || sub.tenantId} (${sub.tenantId})\nSubscription: ${sub._id}\nAmount due: ${plan?.price.monthly || 0} ${plan?.price.currency || 'PHP'}\nDue date: ${sub.nextBillingDate!.toDateString()}\nGrace period ends: ${sub.gracePeriodEndDate.toDateString()}`
+          );
+        } catch (adminError) {
+          const adminMsg = adminError instanceof Error ? adminError.message : String(adminError);
+          errors.push(`Admin notify (overdue) for subscription ${sub._id}: ${adminMsg}`);
+        }
+
         details.overdueFlagged++;
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
@@ -216,6 +235,16 @@ export async function processSubscriptionBilling(
           amount: plan?.price.monthly || 0,
           deactivationDate: deactivationDate.toDateString(),
         });
+
+        try {
+          await notifyAdmin(
+            `[Billing] Final notice sent: ${tenant?.name || sub.tenantId}`,
+            `Tenant: ${tenant?.name || sub.tenantId} (${sub.tenantId})\nSubscription: ${sub._id}\nAmount due: ${plan?.price.monthly || 0} ${plan?.price.currency || 'PHP'}\nAccount will be deactivated on: ${deactivationDate.toDateString()}`
+          );
+        } catch (adminError) {
+          const adminMsg = adminError instanceof Error ? adminError.message : String(adminError);
+          errors.push(`Admin notify (reminder) for subscription ${sub._id}: ${adminMsg}`);
+        }
 
         details.remindersSent++;
       } catch (error) {
@@ -259,6 +288,16 @@ export async function processSubscriptionBilling(
           amount: plan?.price.monthly || 0,
         });
 
+        try {
+          await notifyAdmin(
+            `[Billing] Account deactivated: ${tenant?.name || sub.tenantId}`,
+            `Tenant: ${tenant?.name || sub.tenantId} (${sub.tenantId})\nSubscription: ${sub._id}\nAmount due: ${plan?.price.monthly || 0} ${plan?.price.currency || 'PHP'}\nDeactivated after 10 days of non-payment.`
+          );
+        } catch (adminError) {
+          const adminMsg = adminError instanceof Error ? adminError.message : String(adminError);
+          errors.push(`Admin notify (deactivation) for subscription ${sub._id}: ${adminMsg}`);
+        }
+
         details.accountsDeactivated++;
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
@@ -300,6 +339,17 @@ export async function processSubscriptionBilling(
           description: `10% late charge applied after ${LATE_FEE_DAYS} days of non-payment`,
         });
 
+        try {
+          const tenant = await Tenant.findById(sub.tenantId).select('name').lean();
+          await notifyAdmin(
+            `[Billing] Late fee applied: ${tenant?.name || sub.tenantId}`,
+            `Tenant: ${tenant?.name || sub.tenantId} (${sub.tenantId})\nSubscription: ${sub._id}\nLate fee: ${lateFeeAmount} ${plan.price.currency || 'PHP'}\nOutstanding balance: ${sub.outstandingBalance} ${plan.price.currency || 'PHP'}`
+          );
+        } catch (adminError) {
+          const adminMsg = adminError instanceof Error ? adminError.message : String(adminError);
+          errors.push(`Admin notify (late fee) for subscription ${sub._id}: ${adminMsg}`);
+        }
+
         details.lateFeesApplied++;
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
@@ -334,6 +384,17 @@ export async function processSubscriptionBilling(
           currency: plan.price.currency || 'PHP',
           description: `Reactivation fee applied after ${REACTIVATION_FEE_DAYS} days of non-payment`,
         });
+
+        try {
+          const tenant = await Tenant.findById(sub.tenantId).select('name').lean();
+          await notifyAdmin(
+            `[Billing] Reactivation fee applied: ${tenant?.name || sub.tenantId}`,
+            `Tenant: ${tenant?.name || sub.tenantId} (${sub.tenantId})\nSubscription: ${sub._id}\nReactivation fee: ${fee} ${plan.price.currency || 'PHP'}\nOutstanding balance: ${sub.outstandingBalance} ${plan.price.currency || 'PHP'}`
+          );
+        } catch (adminError) {
+          const adminMsg = adminError instanceof Error ? adminError.message : String(adminError);
+          errors.push(`Admin notify (reactivation fee) for subscription ${sub._id}: ${adminMsg}`);
+        }
 
         details.reactivationFeesApplied++;
       } catch (error) {

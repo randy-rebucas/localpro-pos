@@ -18,6 +18,11 @@ pass. Intended for developers/QA verifying the workflow end-to-end.
 Every step is idempotent (guarded by a timestamp field), so re-running the
 automation on the same data is safe and won't double-apply anything.
 
+Steps 2-6 also send an internal ops alert to `admin@localpro.asia` (override
+with the `BILLING_ADMIN_EMAIL` env var) each time they fire, separate from
+the tenant-facing email — watch for a second "📧 Email notification"
+console-mode log addressed to that inbox alongside the tenant one.
+
 ---
 
 ## 1. Prerequisites
