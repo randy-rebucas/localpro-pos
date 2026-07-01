@@ -10,7 +10,7 @@ import {
   UtensilsCrossed, ShoppingBag, WashingMachine, Briefcase, Pill, CalendarClock,
   Settings, Clock, Users2, GitBranch, Calculator, CreditCard, Monitor, Bell,
   Palette, ToggleLeft, ClipboardList, Database, ChevronDown, ChevronRight,
-  LogOut, Store
+  LogOut, Store, ShoppingCart
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
@@ -95,6 +95,7 @@ export default function AdminSidebar() {
         { label: 'Bookings', href: `${base}/admin/bookings`, icon: CalendarDays },
         { label: 'Tables', href: `${base}/admin/tables`, icon: LayoutGrid },
         { label: 'Attendance', href: `${base}/admin/attendance`, icon: UserCheck },
+        { label: 'Channel Orders', href: `${base}/admin/channel-orders`, icon: ShoppingCart },
       ],
     },
     {

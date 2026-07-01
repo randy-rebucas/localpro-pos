@@ -21,6 +21,7 @@ export interface ICustomer extends Document {
   accountBalance?: number;
   /** Max allowed accountBalance after a sale; omit for no limit. */
   creditLimit?: number;
+  shopifyCustomerId?: string;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -102,6 +103,10 @@ const CustomerSchema: Schema = new Schema(
       type: Number,
       min: 0,
     },
+    shopifyCustomerId: {
+      type: String,
+      trim: true,
+    },
     isActive: {
       type: Boolean,
       default: true,
@@ -116,6 +121,7 @@ const CustomerSchema: Schema = new Schema(
 CustomerSchema.index({ tenantId: 1, email: 1 }, { unique: true, sparse: true });
 CustomerSchema.index({ tenantId: 1, phone: 1 }, { sparse: true });
 CustomerSchema.index({ tenantId: 1, isActive: 1 });
+CustomerSchema.index({ tenantId: 1, shopifyCustomerId: 1 }, { sparse: true });
 CustomerSchema.index({ tenantId: 1, tags: 1 });
 
 // Virtual for full name

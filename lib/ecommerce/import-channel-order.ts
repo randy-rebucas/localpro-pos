@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import connectDB from '@/lib/mongodb';
 import Transaction from '@/models/Transaction';
 import Payment from '@/models/Payment';
+import Customer from '@/models/Customer';
 import ProductChannelListing from '@/models/ProductChannelListing';
 import StockMovement from '@/models/StockMovement';
 import { generateReceiptNumber } from '@/lib/receipt';
@@ -61,6 +62,32 @@ export async function importPaidChannelOrder(
     return { ok: false, reason: 'no_mapped_line_items' };
   }
 
+  // Auto-link or create customer from order snapshot
+  let customerId: mongoose.Types.ObjectId | undefined;
+  const cs = order.customerSnapshot;
+  if (cs?.email) {
+    try {
+      let cust = await Customer.findOne({ tenantId, email: cs.email });
+      if (!cust) {
+        cust = await Customer.create({
+          tenantId,
+          firstName: cs.firstName || '',
+          lastName: cs.lastName || '',
+          email: cs.email,
+          phone: cs.phone,
+          tags: [order.provider],
+          shopifyCustomerId: cs.shopifyCustomerId,
+        });
+      } else if (cs.shopifyCustomerId && !cust.shopifyCustomerId) {
+        cust.shopifyCustomerId = cs.shopifyCustomerId;
+        await cust.save();
+      }
+      customerId = cust._id as mongoose.Types.ObjectId;
+    } catch (err) {
+      logger.warn('importPaidChannelOrder: customer auto-link failed', { err });
+    }
+  }
+
   const session = await mongoose.startSession();
   let transactionId = '';
 
@@ -113,6 +140,7 @@ export async function importPaidChannelOrder(
           externalOrderId: order.externalOrderId,
           channelSyncKey: key,
           channelImportedAt: new Date(),
+          ...(customerId ? { customerId } : {}),
         },
       ],
       { session }

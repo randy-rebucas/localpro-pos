@@ -4,7 +4,7 @@ import type { ITenantEcommerceIntegration } from '@/models/TenantEcommerceIntegr
 import { getShopifyAccessTokenForIntegration } from '@/lib/ecommerce/shopify-token';
 import { logger } from '@/lib/logger';
 
-const TOPICS = ['orders/paid', 'orders/updated'] as const;
+const TOPICS = ['orders/paid', 'orders/updated', 'refunds/create', 'products/update'] as const;
 
 export async function registerShopifyWebhooksForIntegration(
   integration: ITenantEcommerceIntegration,
