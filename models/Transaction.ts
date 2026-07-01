@@ -63,6 +63,8 @@ export interface ITransaction extends Document {
   /** `${provider}:${externalOrderId}` for idempotent unique index */
   channelSyncKey?: string;
   channelImportedAt?: Date;
+  shopifyFulfilledAt?: Date;
+  shopifyFulfillmentId?: string;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -262,6 +264,13 @@ const TransactionSchema: Schema = new Schema(
     },
     channelImportedAt: {
       type: Date,
+    },
+    shopifyFulfilledAt: {
+      type: Date,
+    },
+    shopifyFulfillmentId: {
+      type: String,
+      trim: true,
     },
     isActive: {
       type: Boolean,

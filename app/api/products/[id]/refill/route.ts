@@ -59,6 +59,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ success: false, error: t('validation.productNotFound', 'Product not found') }, { status: 404 });
     }
     
+    // Push updated stock to connected storefronts (fire-and-forget)
+    {
+      const { pushChannelInventoryForProduct } = await import('@/lib/ecommerce/inventory-push');
+      void pushChannelInventoryForProduct(tenantId, id, { stockReason: 'purchase' });
+    }
+
     // Create audit log
     await createAuditLog(request, {
       tenantId,

@@ -30,6 +30,14 @@ export interface NormalizedOrderLine {
   sku: string | null;
 }
 
+export interface NormalizedCustomerSnapshot {
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  shopifyCustomerId?: string;
+}
+
 export interface NormalizedPaidOrder {
   provider: EcommerceProvider;
   externalOrderId: string;
@@ -38,6 +46,7 @@ export interface NormalizedPaidOrder {
   taxTotal: number;
   total: number;
   lines: NormalizedOrderLine[];
+  customerSnapshot?: NormalizedCustomerSnapshot;
   rawTopic?: string;
 }
 

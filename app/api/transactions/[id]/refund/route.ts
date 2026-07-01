@@ -140,6 +140,28 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       });
     }
 
+    // If this was a Shopify-imported order, mirror the refund on Shopify
+    if (transaction.salesChannel === 'shopify' && transaction.externalOrderId) {
+      const integration = await (await import('@/models/TenantEcommerceIntegration')).default.findOne({
+        tenantId,
+        provider: 'shopify',
+        isActive: true,
+      }).lean();
+      if (integration?.shopDomain) {
+        const { getShopifyAccessTokenForIntegration } = await import('@/lib/ecommerce/shopify-token');
+        const { createShopifyRefund } = await import('@/lib/ecommerce/shopify-refund');
+        const accessToken = await getShopifyAccessTokenForIntegration(integration);
+        void createShopifyRefund(
+          integration.shopDomain,
+          accessToken,
+          tenantId,
+          transaction.externalOrderId,
+          refundItems.map((i) => ({ productId: i.productId, quantity: i.quantity })),
+          refundAmount
+        );
+      }
+    }
+
     // Mark original transaction as refunded if full refund
     const isFullRefund = refundItems.length === transaction.items.length &&
       refundItems.every((item: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any

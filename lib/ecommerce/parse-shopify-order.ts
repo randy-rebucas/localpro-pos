@@ -1,4 +1,4 @@
-import type { NormalizedOrderLine, NormalizedPaidOrder } from '@/lib/ecommerce/types';
+import type { NormalizedOrderLine, NormalizedPaidOrder, NormalizedCustomerSnapshot } from '@/lib/ecommerce/types';
 
 interface ShopifyLineItem {
   id: number;
@@ -10,6 +10,14 @@ interface ShopifyLineItem {
   sku: string | null;
 }
 
+interface ShopifyCustomer {
+  id?: number;
+  email?: string;
+  first_name?: string;
+  last_name?: string;
+  phone?: string;
+}
+
 interface ShopifyOrderPayload {
   id: number;
   financial_status?: string;
@@ -18,6 +26,7 @@ interface ShopifyOrderPayload {
   total_tax?: string;
   total_price?: string;
   line_items?: ShopifyLineItem[];
+  customer?: ShopifyCustomer;
 }
 
 export function parseShopifyOrderWebhook(payload: unknown): NormalizedPaidOrder | null {
@@ -38,6 +47,18 @@ export function parseShopifyOrderWebhook(payload: unknown): NormalizedPaidOrder 
 
   if (!lines.length) return null;
 
+  let customerSnapshot: NormalizedCustomerSnapshot | undefined;
+  if (order.customer) {
+    const c = order.customer;
+    customerSnapshot = {
+      ...(c.email ? { email: c.email } : {}),
+      ...(c.first_name ? { firstName: c.first_name } : {}),
+      ...(c.last_name ? { lastName: c.last_name } : {}),
+      ...(c.phone ? { phone: c.phone } : {}),
+      ...(c.id ? { shopifyCustomerId: String(c.id) } : {}),
+    };
+  }
+
   return {
     provider: 'shopify',
     externalOrderId: String(order.id),
@@ -46,5 +67,6 @@ export function parseShopifyOrderWebhook(payload: unknown): NormalizedPaidOrder 
     taxTotal: parseFloat(order.total_tax || '0') || 0,
     total: parseFloat(order.total_price || '0') || 0,
     lines,
+    customerSnapshot,
   };
 }
