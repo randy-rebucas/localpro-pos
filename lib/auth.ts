@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import jwt from 'jsonwebtoken';
 import connectDB from './mongodb';
 import User from '@/models/User';
+import Tenant from '@/models/Tenant';
 import { isTokenRevoked, isTokenIssuedBeforeRevocation } from '@/lib/token-blacklist';
 import { logger } from '@/lib/logger';
 
@@ -90,6 +91,15 @@ export async function getCurrentUser(request: NextRequest): Promise<{
     // super_admin users have no tenantId — skip this check
     if (payload.role !== 'super_admin' && user.tenantId && user.tenantId.toString() !== payload.tenantId) {
       return null;
+    }
+
+    // Deactivated tenants (e.g. suspended for non-payment) lose access even with a
+    // still-valid token — login blocks new sessions, this blocks existing ones.
+    if (payload.role !== 'super_admin' && user.tenantId) {
+      const tenant = await Tenant.findById(user.tenantId).select('isActive').lean();
+      if (!tenant || !tenant.isActive) {
+        return null;
+      }
     }
 
     return payload;

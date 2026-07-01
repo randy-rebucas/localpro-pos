@@ -11,6 +11,7 @@ export interface ISubscriptionPlan extends Document {
     setupFee: number; // One-time setup fee
     currency: string;
   };
+  reactivationFee: number; // Flat fee charged to reactivate an account deactivated for non-payment
   features: {
     maxUsers: number;
     maxBranches: number;
@@ -84,6 +85,11 @@ const SubscriptionPlanSchema: Schema = new Schema(
         type: String,
         default: 'PHP',
       },
+    },
+    reactivationFee: {
+      type: Number,
+      default: 500,
+      min: [0, 'Reactivation fee cannot be negative'],
     },
     features: {
       maxUsers: {

@@ -171,7 +171,14 @@ export async function PUT(
         break;
       }
       case 'activate': {
+        if ((subscription.outstandingBalance || 0) > 0) {
+          return NextResponse.json(
+            { success: false, error: `Outstanding balance of ${subscription.outstandingBalance} must be settled (via record-payment) before reactivating` },
+            { status: 400 }
+          );
+        }
         const wasTrial = subscription.isTrial;
+        const wasDeactivated = !!subscription.deactivatedAt;
         subscription.status = 'active';
         subscription.isTrial = false;
         if (wasTrial && !subscription.trialConvertedAt) {
@@ -185,7 +192,23 @@ export async function PUT(
         }
         subscription.nextBillingDate = nextBilling;
         subscription.gracePeriodEndDate = undefined;
+        subscription.paymentOverdue = false;
+        subscription.deactivatedAt = undefined;
+        subscription.lateFeeAppliedAt = undefined;
+        subscription.reactivationFeeAppliedAt = undefined;
         await subscription.save();
+        if (wasDeactivated) {
+          await Tenant.findByIdAndUpdate(tenantId, { isActive: true });
+          await BillingEvent.create({
+            tenantId,
+            subscriptionId: subscription._id,
+            type: 'account_reactivated',
+            amount: 0,
+            currency: 'PHP',
+            description: 'Account reactivated by super-admin after outstanding balance settled',
+            recordedBy: adminUser.userId,
+          });
+        }
         if (wasTrial) {
           await BillingEvent.create({
             tenantId,
@@ -314,7 +337,45 @@ export async function PUT(
           status: 'paid',
           transactionId: payTxId,
         });
+        subscription.outstandingBalance = Math.max(0, (subscription.outstandingBalance || 0) - Number(payAmount));
+
+        const wasDeactivated = !!subscription.deactivatedAt || subscription.status === 'suspended';
+        const fullyPaid = subscription.outstandingBalance <= 0;
+        const wasOverdue = subscription.paymentOverdue;
+
+        if (fullyPaid && (wasOverdue || wasDeactivated)) {
+          const nextBilling = new Date();
+          if (subscription.billingCycle === 'yearly') {
+            nextBilling.setFullYear(nextBilling.getFullYear() + 1);
+          } else {
+            nextBilling.setMonth(nextBilling.getMonth() + 1);
+          }
+          subscription.nextBillingDate = nextBilling;
+          subscription.paymentOverdue = false;
+          subscription.gracePeriodEndDate = undefined;
+          subscription.deactivatedAt = undefined;
+          subscription.lateFeeAppliedAt = undefined;
+          subscription.reactivationFeeAppliedAt = undefined;
+
+          if (wasDeactivated) {
+            subscription.status = 'active';
+          }
+        }
+
         await subscription.save();
+
+        if (fullyPaid && wasDeactivated) {
+          await Tenant.findByIdAndUpdate(tenantId, { isActive: true });
+          await BillingEvent.create({
+            tenantId,
+            subscriptionId: subscription._id,
+            type: 'account_reactivated',
+            amount: 0,
+            currency: 'PHP',
+            description: 'Account reactivated automatically after payment settled outstanding balance',
+            recordedBy: adminUser.userId,
+          });
+        }
         break;
       }
       default:

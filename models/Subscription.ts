@@ -21,6 +21,12 @@ export interface ISubscription extends Document {
   pauseEndsAt?: Date;
   gracePeriodEndDate?: Date;
   trialConvertedAt?: Date;
+  paymentOverdue: boolean;
+  outstandingBalance: number;
+  lastInvoiceGeneratedAt?: Date;
+  lateFeeAppliedAt?: Date;
+  reactivationFeeAppliedAt?: Date;
+  deactivatedAt?: Date;
   paymentMethod?: {
     type: 'card' | 'bank' | 'paypal' | 'manual';
     last4?: string;
@@ -116,6 +122,27 @@ const SubscriptionSchema: Schema = new Schema(
       type: Date,
     },
     trialConvertedAt: {
+      type: Date,
+    },
+    paymentOverdue: {
+      type: Boolean,
+      default: false,
+    },
+    outstandingBalance: {
+      type: Number,
+      default: 0,
+      min: [0, 'Outstanding balance cannot be negative'],
+    },
+    lastInvoiceGeneratedAt: {
+      type: Date,
+    },
+    lateFeeAppliedAt: {
+      type: Date,
+    },
+    reactivationFeeAppliedAt: {
+      type: Date,
+    },
+    deactivatedAt: {
       type: Date,
     },
     paymentMethod: {

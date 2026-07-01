@@ -163,6 +163,20 @@ export function initializeCronJobs() {
     timezone: 'UTC',
   });
 
+  // 8b. Subscription Billing Lifecycle - Every day at 2 AM
+  const subscriptionBillingJob = cron.schedule('0 2 * * *', async () => {
+    logger.info('🧾 Running subscription billing automation...');
+    try {
+      const { processSubscriptionBilling } = await import('./automations/subscription-billing');
+      const result = await processSubscriptionBilling();
+      logger.info('✅ Subscription billing:' + result.message);
+    } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+      logger.error('❌ Subscription billing error:' + error.message);
+    }
+  }, {
+    timezone: 'UTC',
+  });
+
   // 9. Cash Drawer Auto-Close - Every day at 10 PM
   const cashDrawerCloseJob = cron.schedule('0 22 * * *', async () => {
     logger.info('💵 Running cash drawer auto-close automation...');
@@ -467,6 +481,7 @@ export function initializeCronJobs() {
     monthlyReportJob,
     pendingReceiptsJob,
     discountManagementJob,
+    subscriptionBillingJob,
     attendanceViolationsJob,
     breakDetectionJob,
     autoClockOutJob,

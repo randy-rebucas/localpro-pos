@@ -10,7 +10,7 @@ export interface NotificationTemplate {
   id: string;
   name: string;
   type: 'email' | 'sms';
-  category: 'booking' | 'stock' | 'attendance' | 'transaction';
+  category: 'booking' | 'stock' | 'attendance' | 'transaction' | 'billing';
   subject?: string; // For email only
   body: string;
   variables?: string[]; // Available variables
@@ -110,6 +110,80 @@ Best regards,
     body: `Low stock alert: {{productName}} ({{sku}}) has {{currentStock}} units remaining. Threshold: {{threshold}}`,
     variables: ['productName', 'sku', 'currentStock', 'threshold'],
   },
+  email_invoice_generated: {
+    id: 'email_invoice_generated',
+    name: 'Invoice Generated (Email)',
+    type: 'email',
+    category: 'billing',
+    subject: 'Upcoming Payment: Invoice {{invoiceNumber}} for {{companyName}}',
+    body: `Hello,
+
+Your next subscription payment for {{companyName}} is coming up.
+
+Invoice: {{invoiceNumber}}
+Amount Due: {{amount}}
+Due Date: {{dueDate}}
+
+Please settle this invoice on or before the due date to avoid any service interruption.
+
+Best regards,
+Billing Team`,
+    variables: ['companyName', 'invoiceNumber', 'amount', 'dueDate'],
+  },
+  email_payment_reminder: {
+    id: 'email_payment_reminder',
+    name: 'Payment Reminder - Grace Period (Email)',
+    type: 'email',
+    category: 'billing',
+    subject: 'Payment Overdue: Invoice {{invoiceNumber}} for {{companyName}}',
+    body: `Hello,
+
+Your invoice {{invoiceNumber}} for {{companyName}} was due on {{dueDate}} and remains unpaid.
+
+Amount Due: {{amount}}
+
+You have until {{gracePeriodEndDate}} to settle this invoice before your account is deactivated. Please pay now to avoid service interruption.
+
+Best regards,
+Billing Team`,
+    variables: ['companyName', 'invoiceNumber', 'amount', 'dueDate', 'gracePeriodEndDate'],
+  },
+  email_payment_overdue_final_notice: {
+    id: 'email_payment_overdue_final_notice',
+    name: 'Final Notice Before Deactivation (Email)',
+    type: 'email',
+    category: 'billing',
+    subject: 'Final Notice: {{companyName}} Account Will Be Deactivated Soon',
+    body: `Hello,
+
+This is a final notice. Invoice {{invoiceNumber}} for {{companyName}} is still unpaid.
+
+Amount Due: {{amount}}
+
+Your account will be deactivated on {{deactivationDate}} unless payment is received. Please settle your invoice now or contact support to make arrangements.
+
+Best regards,
+Billing Team`,
+    variables: ['companyName', 'invoiceNumber', 'amount', 'deactivationDate'],
+  },
+  email_account_deactivated: {
+    id: 'email_account_deactivated',
+    name: 'Account Deactivated (Email)',
+    type: 'email',
+    category: 'billing',
+    subject: 'Account Deactivated: {{companyName}}',
+    body: `Hello,
+
+Your account for {{companyName}} has been deactivated due to non-payment of invoice {{invoiceNumber}} (Amount Due: {{amount}}).
+
+Please settle your outstanding balance to restore access. Note that unpaid balances accrue a late charge after 15 days and a reactivation fee after 30 days.
+
+Contact support if you need assistance.
+
+Best regards,
+Billing Team`,
+    variables: ['companyName', 'invoiceNumber', 'amount'],
+  },
 };
 
 /**
@@ -201,7 +275,7 @@ function processTemplateContent(content: string, variables: TemplateVariables): 
  */
 export function getDefaultTemplate(
   type: 'email' | 'sms',
-  category: 'booking' | 'stock' | 'attendance' | 'transaction',
+  category: 'booking' | 'stock' | 'attendance' | 'transaction' | 'billing',
   subcategory?: string
 ): NotificationTemplate | null {
   const key = `${type}_${category}${subcategory ? `_${subcategory}` : ''}`;

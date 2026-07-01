@@ -13,7 +13,13 @@ export type BillingEventType =
   | 'subscription_suspended'
   | 'subscription_paused'
   | 'subscription_resumed'
-  | 'manual_adjustment';
+  | 'manual_adjustment'
+  | 'invoice_generated'
+  | 'payment_overdue'
+  | 'late_fee_applied'
+  | 'reactivation_fee_applied'
+  | 'account_deactivated'
+  | 'account_reactivated';
 
 export interface IBillingEvent extends Document {
   tenantId: mongoose.Types.ObjectId;
@@ -59,6 +65,12 @@ const BillingEventSchema: Schema = new Schema(
         'subscription_paused',
         'subscription_resumed',
         'manual_adjustment',
+        'invoice_generated',
+        'payment_overdue',
+        'late_fee_applied',
+        'reactivation_fee_applied',
+        'account_deactivated',
+        'account_reactivated',
       ],
       required: true,
     },
