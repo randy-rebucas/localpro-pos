@@ -775,6 +775,46 @@ export default function MarketingPageClient() {
         </section>
 
         {/* CTA */}
+        <section aria-labelledby="mobile-app-heading" className="py-24 px-4 bg-gray-900 relative overflow-hidden">
+          <div className="relative max-w-5xl mx-auto text-center">
+            <div className="inline-block bg-white/10 text-white px-4 py-2 text-sm font-semibold mb-6 tracking-wide">
+              📱 {d?.mobileAppBadge || 'COMPANION APP'}
+            </div>
+            <h2 id="mobile-app-heading" className="text-4xl md:text-5xl font-bold mb-5 text-white tracking-tight">
+              {d?.mobileAppHeading || 'Get the 1POS companion app'}
+            </h2>
+            <p className="text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed mb-8">
+              {d?.mobileAppDesc ||
+                'Use your phone camera to scan QR codes and barcodes, and snap product photos straight into your catalog — a handy companion to your 1POS terminal.'}
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 max-w-xl mx-auto mb-10 text-left">
+              <div className="bg-white/5 border border-white/10 px-5 py-4">
+                <div className="text-2xl mb-2" aria-hidden="true">📷</div>
+                <h3 className="text-white font-semibold text-sm mb-1">{d?.mobileAppScanTitle || 'Scan barcodes & QR codes'}</h3>
+                <p className="text-gray-400 text-sm leading-relaxed">
+                  {d?.mobileAppScanBody || 'Look up or add products instantly by scanning with your phone camera.'}
+                </p>
+              </div>
+              <div className="bg-white/5 border border-white/10 px-5 py-4">
+                <div className="text-2xl mb-2" aria-hidden="true">🖼️</div>
+                <h3 className="text-white font-semibold text-sm mb-1">{d?.mobileAppPhotoTitle || 'Add product photos'}</h3>
+                <p className="text-gray-400 text-sm leading-relaxed">
+                  {d?.mobileAppPhotoBody || 'Snap and upload product images directly from your phone to your catalog.'}
+                </p>
+              </div>
+            </div>
+            <a
+              href="https://play.google.com/store/apps/details?id=com.app.onepos"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-3 bg-white text-gray-900 px-8 py-4 font-bold hover:bg-gray-100 transition-all duration-300 hover:scale-105"
+            >
+              <span className="text-2xl" aria-hidden="true">▶️</span>
+              {d?.mobileAppGetItOn || 'Get it on Google Play'}
+            </a>
+          </div>
+        </section>
+
         <section aria-labelledby="cta-heading" className="relative py-24 px-4 bg-gradient-to-br from-brand via-brand-navy to-brand-navy-deep text-white overflow-hidden">
           <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
             <div className="absolute top-0 left-0 w-96 h-96 bg-brand-muted/25 blur-3xl animate-pulse" />
