@@ -193,17 +193,14 @@ export default function ProductsPage() {
           {paginatedProducts.map((product) => (
             <div
               key={product._id}
-              className="group relative bg-white border border-gray-300 rounded-lg p-4 sm:p-5 transition-all duration-200 flex flex-col"
+              className="group relative bg-white border border-gray-300 p-4 sm:p-5 transition-all duration-200 flex flex-col"
               style={{
-                boxShadow: 'none',
                 borderColor: '#d1d5db',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.1)';
                 e.currentTarget.style.borderColor = primaryColor;
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.boxShadow = 'none';
                 e.currentTarget.style.borderColor = '#d1d5db';
               }}
             >
@@ -216,7 +213,7 @@ export default function ProductsPage() {
                       fill
                       sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 16vw"
                       loading="lazy"
-                      className="object-cover rounded-t-lg"
+                      className="object-cover"
                       onError={(e) => {
                         const img = e.target as HTMLImageElement;
                         img.style.display = 'none';
@@ -227,7 +224,7 @@ export default function ProductsPage() {
                   </div>
                 ) : null}
                 <div
-                  className="w-full h-36 bg-gray-100 rounded-t-lg flex items-center justify-center"
+                  className="w-full h-36 bg-gray-100 flex items-center justify-center"
                   style={{ display: product.image ? 'none' : 'flex' }}
                 >
                   <svg className="w-10 h-10 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -270,7 +267,7 @@ export default function ProductsPage() {
                   {product.category && (
                     <div className="flex items-center gap-1">
                       <span className="font-medium">{productsDict.category}:</span>
-                      <span className="px-2 py-0.5 bg-gray-100 rounded border border-gray-300">{product.category}</span>
+                      <span className="px-2 py-0.5 bg-gray-100 border border-gray-300">{product.category}</span>
                     </div>
                   )}
                 </div>
@@ -288,7 +285,7 @@ export default function ProductsPage() {
                     <div className="text-right">
                       <div className="text-xs text-gray-500 mb-1">{productsDict.stock}</div>
                       <span
-                        className={`inline-block text-xs font-semibold px-3 py-1.5 rounded border ${
+                        className={`inline-block text-xs font-semibold px-3 py-1.5 border ${
                           product.stock > 10
                             ? 'bg-green-100 text-green-800 border-green-300'
                             : product.stock > 0
@@ -399,7 +396,7 @@ export default function ProductsPage() {
                     {product.sku && <span>{productsDict.sku}: {product.sku}</span>}
                     {product.barcode && <span className="font-mono">{product.barcode}</span>}
                     {product.category && (
-                      <span className="px-1.5 py-0.5 bg-gray-100 rounded border border-gray-300">{product.category}</span>
+                      <span className="px-1.5 py-0.5 bg-gray-100 border border-gray-300">{product.category}</span>
                     )}
                   </div>
                 </div>
@@ -411,7 +408,7 @@ export default function ProductsPage() {
                 </div>
                 {inventoryEnabled && (
                   <span
-                    className={`inline-block text-xs font-semibold px-2 py-1 rounded border ${
+                    className={`inline-block text-xs font-semibold px-2 py-1 border ${
                       product.stock > 10
                         ? 'bg-green-100 text-green-800 border-green-300'
                         : product.stock > 0

@@ -424,7 +424,7 @@ export default function TransactionsPage() {
               if (item.type === 'transaction') {
                 const transaction = item.data as Transaction;
                 return (
-                  <div key={transaction._id} className="group relative bg-white border border-gray-300 rounded-lg p-4 sm:p-5 hover:shadow-lg hover:border-teal-300 transition-all duration-200 flex flex-col">
+                  <div key={transaction._id} className="group relative bg-white border border-gray-300 p-4 sm:p-5 hover:border-teal-300 transition-all duration-200 flex flex-col">
                     <div className="flex-1 mb-4">
                       <div className="flex items-start justify-between mb-2">
                         <div className="flex-1">
@@ -436,7 +436,7 @@ export default function TransactionsPage() {
                         </span>
                       </div>
                       <div className="mb-3">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-gray-600 bg-gray-100 border border-gray-200 rounded-full">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-gray-600 bg-gray-100 border border-gray-200">
                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 10-8 0v4M5 9h14l1 11H4L5 9z" />
                           </svg>
@@ -490,7 +490,7 @@ export default function TransactionsPage() {
               } else {
                 const expense = item.data as Expense;
                 return (
-                  <div key={expense._id} className="group relative bg-white border-l-4 border-red-500 border border-gray-300 rounded-lg p-4 sm:p-5 hover:shadow-lg hover:border-red-400 transition-all duration-200 flex flex-col">
+                  <div key={expense._id} className="group relative bg-white border-l-4 border-red-500 border border-gray-300 p-4 sm:p-5 hover:border-red-400 transition-all duration-200 flex flex-col">
                     <div className="flex-1 mb-4">
                       <div className="flex items-start justify-between mb-2">
                         <div className="flex-1">
@@ -537,7 +537,7 @@ export default function TransactionsPage() {
                         <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm">
                           <span className="text-gray-600"><FormattedDate date={transaction.createdAt} includeTime={true} /></span>
                           <span className={`inline-block px-2 py-0.5 text-xs font-medium border ${transaction.status === 'completed' ? 'bg-green-100 text-green-800 border-green-300' : transaction.status === 'refunded' ? 'bg-orange-100 text-orange-800 border-orange-300' : 'bg-red-100 text-red-800 border-red-300'}`}>{txDict[transaction.status]}</span>
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-gray-600 bg-gray-100 border border-gray-200 rounded-full">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-gray-600 bg-gray-100 border border-gray-200">
                             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 10-8 0v4M5 9h14l1 11H4L5 9z" />
                             </svg>
@@ -802,20 +802,20 @@ export default function TransactionsPage() {
         {/* Add Manual Expense Modal */}
         {showExpenseModal && (
           <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 overflow-y-auto" onClick={(e) => { if (e.target === e.currentTarget) setShowExpenseModal(false); }}>
-            <div className="bg-white w-full max-w-md border border-gray-300 shadow-xl my-6">
+            <div className="bg-white w-full max-w-md border border-gray-300 my-6">
               <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 bg-red-50">
                 <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
                   <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
                   {txDict?.addExpense || 'Add Expense'}
                 </h2>
-                <button onClick={() => setShowExpenseModal(false)} className="p-1 hover:bg-gray-200 rounded transition-colors" aria-label="Close">
+                <button onClick={() => setShowExpenseModal(false)} className="p-1 hover:bg-gray-200 transition-colors" aria-label="Close">
                   <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
 
               {expenseSuccess ? (
                 <div className="px-5 py-10 text-center">
-                  <div className="mx-auto mb-3 flex items-center justify-center w-12 h-12 rounded-full bg-green-100">
+                  <div className="mx-auto mb-3 flex items-center justify-center w-12 h-12 bg-green-100">
                     <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                   </div>
                   <p className="text-base font-semibold text-gray-900">{txDict?.expenseCreated || 'Expense recorded successfully'}</p>
@@ -915,7 +915,7 @@ export default function TransactionsPage() {
                       className="flex-1 px-4 py-2.5 bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed border border-red-700 text-sm font-medium transition-colors flex items-center justify-center gap-2"
                     >
                       {expenseLoading ? (
-                        <span className="inline-block w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                        <span className="inline-block w-4 h-4 border-2 border-white/40 border-t-white animate-spin" />
                       ) : (
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                       )}
@@ -931,20 +931,20 @@ export default function TransactionsPage() {
         {/* Add Manual Transaction Modal */}
         {showAddModal && (
           <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 overflow-y-auto" onClick={(e) => { if (e.target === e.currentTarget) setShowAddModal(false); }}>
-            <div className="bg-white w-full max-w-lg border border-gray-300 shadow-xl my-6">
+            <div className="bg-white w-full max-w-lg border border-gray-300 my-6">
               <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 bg-green-50">
                 <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
                   <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
                   {txDict?.addManual || 'Add Manual Transaction'}
                 </h2>
-                <button onClick={() => setShowAddModal(false)} className="p-1 hover:bg-gray-200 rounded transition-colors" aria-label="Close">
+                <button onClick={() => setShowAddModal(false)} className="p-1 hover:bg-gray-200 transition-colors" aria-label="Close">
                   <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
 
               {manualSuccess ? (
                 <div className="px-5 py-10 text-center">
-                  <div className="mx-auto mb-3 flex items-center justify-center w-12 h-12 rounded-full bg-green-100">
+                  <div className="mx-auto mb-3 flex items-center justify-center w-12 h-12 bg-green-100">
                     <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                   </div>
                   <p className="text-base font-semibold text-gray-900">{txDict?.transactionCreated || 'Transaction created successfully'}</p>
@@ -1092,7 +1092,7 @@ export default function TransactionsPage() {
                       className="flex-1 px-4 py-2.5 bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed border border-green-700 text-sm font-medium transition-colors flex items-center justify-center gap-2"
                     >
                       {manualLoading ? (
-                        <span className="inline-block w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                        <span className="inline-block w-4 h-4 border-2 border-white/40 border-t-white animate-spin" />
                       ) : (
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                       )}
@@ -1108,13 +1108,13 @@ export default function TransactionsPage() {
         {/* Adjustment / Refund Modal */}
         {adjustTransaction && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={(e) => { if (e.target === e.currentTarget) closeAdjustModal(); }}>
-            <div className="bg-white w-full max-w-md border border-gray-300 shadow-xl">
+            <div className="bg-white w-full max-w-md border border-gray-300">
               <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 bg-orange-50">
                 <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
                   <svg className="w-5 h-5 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                   {txDict?.adjustRefund || 'Adjust / Refund Transaction'}
                 </h2>
-                <button onClick={closeAdjustModal} className="p-1 hover:bg-gray-200 rounded transition-colors" aria-label="Close">
+                <button onClick={closeAdjustModal} className="p-1 hover:bg-gray-200 transition-colors" aria-label="Close">
                   <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
@@ -1183,7 +1183,7 @@ export default function TransactionsPage() {
                         className="flex-1 px-4 py-2.5 bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed border border-orange-600 text-sm font-medium transition-colors flex items-center justify-center gap-2"
                       >
                         {adjustLoading ? (
-                          <span className="inline-block w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                          <span className="inline-block w-4 h-4 border-2 border-white/40 border-t-white animate-spin" />
                         ) : (
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
                         )}
@@ -1193,7 +1193,7 @@ export default function TransactionsPage() {
                   </>
                 ) : (
                   <div className="text-center py-6">
-                    <div className="mx-auto mb-3 flex items-center justify-center w-12 h-12 rounded-full bg-green-100">
+                    <div className="mx-auto mb-3 flex items-center justify-center w-12 h-12 bg-green-100">
                       <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                     </div>
                     <p className="text-base font-semibold text-gray-900">{txDict?.refundSuccess || 'Refund processed successfully'}</p>

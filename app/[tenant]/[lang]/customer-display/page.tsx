@@ -78,7 +78,7 @@ export default function CustomerDisplay() {
 
   if (!dict) {
     return (
-      <div className="w-screen h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 to-gray-800">
+      <div className="w-screen h-screen flex items-center justify-center bg-gray-900">
         <LoadingSpinner size="lg" label="Loading..." color="#ffffff" className="[&_p]:text-white" />
       </div>
     );
@@ -147,7 +147,7 @@ export default function CustomerDisplay() {
   }
 
   return (
-    <div className="w-screen h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex flex-col p-8 overflow-hidden">
+    <div className="w-screen h-screen bg-gray-900 flex flex-col p-8 overflow-hidden">
       <div className="text-center mb-8 flex-shrink-0">
         <h1 className="text-6xl font-bold text-white mb-2">
           {displayDict.yourOrder || 'Your Order'}
@@ -159,7 +159,7 @@ export default function CustomerDisplay() {
 
       <div className="flex-1 flex gap-8 min-h-0">
         <div className="flex-1 flex flex-col min-h-0">
-          <div className="bg-gray-800 rounded-2xl p-8 border border-gray-700 flex-1 overflow-y-auto overscroll-contain">
+          <div className="bg-gray-800 p-8 border border-gray-700 flex-1 overflow-y-auto overscroll-contain">
             <h2 className="text-3xl font-bold text-white mb-6 flex-shrink-0">
               {displayDict.items || 'Items'}
             </h2>
@@ -167,7 +167,7 @@ export default function CustomerDisplay() {
               {sessionData.cart.map((item) => (
                 <div
                   key={item.productId}
-                  className="bg-gray-700 rounded-xl p-6 flex justify-between items-center flex-shrink-0"
+                  className="bg-gray-700 border border-gray-600 p-6 flex justify-between items-center flex-shrink-0"
                 >
                   <div className="flex-1 min-w-0 pr-4">
                     <p className="text-2xl font-semibold text-white truncate">{item.name}</p>
@@ -188,7 +188,7 @@ export default function CustomerDisplay() {
             </div>
           </div>
 
-          <div className="bg-gray-700 rounded-xl p-6 mt-4 border border-gray-600 flex-shrink-0">
+          <div className="bg-gray-700 p-6 mt-4 border border-gray-600 flex-shrink-0">
             <div className="flex justify-between items-center mb-4">
               <p className="text-gray-300 text-xl">{dict.pos?.subtotal || 'Subtotal'}</p>
               <p className="text-2xl font-bold text-white">
@@ -234,7 +234,7 @@ export default function CustomerDisplay() {
 
         <div className="w-96 flex flex-col gap-6 min-h-0">
           {showPaymentScreen && (
-            <div className="bg-gradient-to-br from-brand to-brand-navy-deep p-8 border border-brand flex flex-col justify-between flex-1 min-h-0 overflow-y-auto">
+            <div className="bg-brand p-8 border border-brand-navy-deep flex flex-col justify-between flex-1 min-h-0 overflow-y-auto">
               <div className="flex-shrink-0">
                 <h2 className="text-4xl font-bold text-white mb-2">
                   {displayDict.readyToPay || 'Ready to Pay?'}
@@ -262,7 +262,7 @@ export default function CustomerDisplay() {
                       });
                     }}
                     aria-label={`Pay with ${method}`}
-                    className={`w-full py-6 bg-white font-bold text-2xl rounded-xl transition-colors flex items-center justify-center gap-3 ${
+                    className={`w-full py-6 bg-white font-bold text-2xl border border-gray-200 transition-colors flex items-center justify-center gap-3 ${
                       method === 'cash'
                         ? 'text-green-700 hover:bg-green-50'
                         : method === 'card'
@@ -285,7 +285,7 @@ export default function CustomerDisplay() {
 
           {sessionData.paymentStatus === 'processing' && (
             <div
-              className="bg-gradient-to-br from-orange-600 to-orange-800 rounded-2xl p-8 border border-orange-500 flex flex-col justify-center items-center flex-1 min-h-0"
+              className="bg-orange-700 p-8 border border-orange-500 flex flex-col justify-center items-center flex-1 min-h-0"
               role="status"
             >
               <LoadingSpinner

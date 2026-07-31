@@ -790,7 +790,7 @@ export default function ProductModal({ product, onClose, lang = 'en' }: ProductM
 
       {showImagePicker && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-          <div className="bg-white border border-gray-200 shadow-xl w-full max-w-2xl flex flex-col max-h-[80vh]">
+          <div className="bg-white border border-gray-300 w-full max-w-2xl flex flex-col max-h-[80vh]">
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
               <h3 className="text-base font-semibold text-gray-900">Select Image</h3>
@@ -830,7 +830,7 @@ export default function ProductModal({ product, onClose, lang = 'en' }: ProductM
             <div className="flex-1 overflow-y-auto p-4">
               {pickerLoading ? (
                 <div className="flex items-center justify-center py-12">
-                  <div className="animate-spin h-6 w-6 border-2 border-gray-400 border-t-transparent rounded-full" />
+                  <div className="animate-spin h-6 w-6 border-2 border-gray-400 border-t-transparent" />
                 </div>
               ) : pickerFiles.filter(f => f.name.toLowerCase().includes(pickerSearch.toLowerCase())).length === 0 ? (
                 <div className="text-center py-12 text-gray-400 text-sm">

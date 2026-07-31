@@ -365,8 +365,6 @@ function SalesReportView({ report, dict, primaryColor, colors }: { report: Sales
                   contentStyle={{ 
                     backgroundColor: '#fff', 
                     border: '1px solid #e5e7eb',
-                    borderRadius: '8px',
-                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                   }}
                 />
                 <Legend />
@@ -400,8 +398,6 @@ function SalesReportView({ report, dict, primaryColor, colors }: { report: Sales
                 contentStyle={{
                   backgroundColor: '#fff',
                   border: '1px solid #e5e7eb',
-                  borderRadius: '8px',
-                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                 }}
               />
             </PieChart>
@@ -428,8 +424,6 @@ function ProductPerformanceView({ data, dict, primaryColor }: { data: ProductPer
               contentStyle={{ 
                 backgroundColor: '#fff', 
                 border: '1px solid #e5e7eb',
-                borderRadius: '8px',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
               }}
             />
             <Legend />
@@ -548,8 +542,6 @@ function VATReportView({ report, dict, primaryColor }: { report: VATReport; dict
               contentStyle={{ 
                 backgroundColor: '#fff', 
                 border: '1px solid #e5e7eb',
-                borderRadius: '8px',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
               }}
             />
           </PieChart>
@@ -623,8 +615,6 @@ function ProfitLossView({ summary, dict, primaryColor, colors }: { summary: Prof
               contentStyle={{ 
                 backgroundColor: '#fff', 
                 border: '1px solid #e5e7eb',
-                borderRadius: '8px',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
               }}
             />
             <Bar dataKey="value" fill={primaryColor} />
@@ -658,8 +648,6 @@ function ProfitLossView({ summary, dict, primaryColor, colors }: { summary: Prof
                 contentStyle={{
                   backgroundColor: '#fff',
                   border: '1px solid #e5e7eb',
-                  borderRadius: '8px',
-                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                 }}
               />
             </PieChart>

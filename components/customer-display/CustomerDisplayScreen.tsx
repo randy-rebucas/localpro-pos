@@ -5,11 +5,11 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner';
 type ScreenVariant = 'loading' | 'error' | 'empty' | 'no-session' | 'success';
 
 const BACKGROUND: Record<ScreenVariant, string> = {
-  loading: 'bg-gradient-to-br from-gray-900 to-gray-800',
-  error: 'bg-gradient-to-br from-red-900 to-red-800',
-  empty: 'bg-gradient-to-br from-gray-900 to-gray-800',
-  'no-session': 'bg-gradient-to-br from-gray-900 to-gray-800',
-  success: 'bg-gradient-to-br from-green-600 to-green-900',
+  loading: 'bg-gray-900',
+  error: 'bg-red-900',
+  empty: 'bg-gray-900',
+  'no-session': 'bg-gray-900',
+  success: 'bg-green-800',
 };
 
 interface CustomerDisplayScreenProps {
@@ -131,7 +131,7 @@ export default function CustomerDisplayScreen({
           <button
             type="button"
             onClick={onRetry}
-            className="mt-2 px-6 py-3 bg-white text-red-700 font-bold rounded-lg hover:bg-red-50 transition-colors"
+            className="mt-2 px-6 py-3 bg-white text-red-700 font-bold border border-red-200 hover:bg-red-50 transition-colors"
           >
             {retryLabel}
           </button>

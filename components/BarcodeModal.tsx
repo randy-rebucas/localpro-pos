@@ -125,7 +125,7 @@ export default function BarcodeModal({ value, productName, onClose }: BarcodeMod
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
-      <div className="bg-white border border-gray-200 shadow-xl w-full max-w-sm">
+      <div className="bg-white border border-gray-300 w-full max-w-sm">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
           <div>
