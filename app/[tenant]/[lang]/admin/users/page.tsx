@@ -19,7 +19,8 @@ import {
   getToggleActionClasses,
   getDeleteConfirmMessage,
   getRegenerateQRConfirmMessage,
-  USER_ROLES,
+  assignableRoles,
+  canManageRole,
 } from '@/lib/users-helpers';
 
 export default function UsersPage() {
@@ -35,8 +36,7 @@ export default function UsersPage() {
 
   const { user: currentUser } = useAuth();
   const { confirm, Dialog: ConfirmDialog } = useConfirm();
-  const { users, loading, fetchUsers } = useUsersList();
-  const { deleteUser, toggleUserStatus } = useUsersList();
+  const { users, loading, fetchUsers, deleteUser, toggleUserStatus } = useUsersList();
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -159,22 +159,26 @@ export default function UsersPage() {
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            setEditingUser(user);
-                            setShowUserModal(true);
-                          }}
-                          className="text-brand hover:text-brand-navy-deep"
-                        >
-                          {dict.common?.edit || 'Edit'}
-                        </button>
-                        <button
-                          onClick={() => handleToggleUserStatus(user)}
-                          className={getToggleActionClasses(user.isActive)}
-                        >
-                          {getToggleActionLabel(user.isActive, dict)}
-                        </button>
-                        {currentUser?._id !== user._id && (
+                        {canManageRole(currentUser?.role ?? '', user.role) && (
+                          <button
+                            onClick={() => {
+                              setEditingUser(user);
+                              setShowUserModal(true);
+                            }}
+                            className="text-brand hover:text-brand-navy-deep"
+                          >
+                            {dict.common?.edit || 'Edit'}
+                          </button>
+                        )}
+                        {currentUser?._id !== user._id && canManageRole(currentUser?.role ?? '', user.role) && (
+                          <button
+                            onClick={() => handleToggleUserStatus(user)}
+                            className={getToggleActionClasses(user.isActive)}
+                          >
+                            {getToggleActionLabel(user.isActive, dict)}
+                          </button>
+                        )}
+                        {currentUser?._id !== user._id && canManageRole(currentUser?.role ?? '', user.role) && (
                           <button
                             onClick={() => handleDeleteUser(user._id)}
                             className="text-red-600 hover:text-red-900"
@@ -197,6 +201,7 @@ export default function UsersPage() {
         {showUserModal && (
           <UserModal
             user={editingUser}
+            currentUserRole={currentUser?.role ?? ''}
             onClose={() => {
               setShowUserModal(false);
               setEditingUser(null);
@@ -230,11 +235,13 @@ export default function UsersPage() {
 
 function UserModal({
   user,
+  currentUserRole,
   onClose,
   onSave,
   dict,
 }: {
   user: User | null;
+  currentUserRole: string;
   onClose: () => void;
   onSave: () => void;
   dict: any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -306,7 +313,7 @@ function UserModal({
                 onChange={(e) => setFormData({ ...formData, role: e.target.value as any })} // eslint-disable-line @typescript-eslint/no-explicit-any
                 className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
               >
-                {USER_ROLES.map((role) => (
+                {assignableRoles(currentUserRole).map((role) => (
                   <option key={role.value} value={role.value}>
                     {getRoleLabel(role.value, dict)}
                   </option>

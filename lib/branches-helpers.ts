@@ -66,9 +66,3 @@ export function getDeactivateConfirmMessage(dict?: Record<string, Record<string,
   );
 }
 
-/**
- * Get delete confirmation message
- */
-export function getDeleteConfirmMessage(dict?: Record<string, Record<string, string>>): string {
-  return dict?.common?.deleteBranchConfirm || 'Are you sure you want to delete this branch?';
-}

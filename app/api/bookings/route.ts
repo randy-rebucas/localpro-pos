@@ -10,6 +10,7 @@ import { sendBookingConfirmation } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { requireBookingSchedulingAccess } from '@/lib/booking-scheduling-access';
+import { getClosedHolidayForDate } from '@/lib/holidays';
 import { logger } from '@/lib/logger';
 
 /**
@@ -173,6 +174,20 @@ export async function POST(request: NextRequest) {
     const start = new Date(startTime);
     const end = new Date(start.getTime() + duration * 60000);
 
+    // Block bookings on days the tenant has marked the business closed
+    // (Admin → Holidays) — this is the whole point of that calendar.
+    const holidaySettings = await getTenantSettingsById(tenantId);
+    const closedHoliday = getClosedHolidayForDate(holidaySettings?.holidays, start);
+    if (closedHoliday) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: t('validation.businessClosedForHoliday', 'Business is closed on this date ({holiday})').replace('{holiday}', closedHoliday.name),
+        },
+        { status: 409 }
+      );
+    }
+
     // Check for conflicts with existing bookings
     const conflictingBookings = await Booking.find({
       tenantId,
@@ -244,7 +259,7 @@ export async function POST(request: NextRequest) {
     // Send confirmation if status is confirmed and contact info is provided
     if (status === 'confirmed' && (customerEmail || customerPhone)) {
       try {
-        const tenantSettings = await getTenantSettingsById(tenantId);
+        const tenantSettings = holidaySettings;
         await sendBookingConfirmation({
           customerName,
           customerEmail,

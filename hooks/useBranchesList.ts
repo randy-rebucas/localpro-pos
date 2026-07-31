@@ -59,37 +59,6 @@ export function useBranchesList() {
     }
   }, []);
 
-  const deleteBranch = useCallback(
-    async (branchId: string, onSuccess?: (message: string) => void, onError?: (error: string) => void) => {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 20000);
-
-      try {
-        const res = await globalThis.fetch(`/api/branches/${branchId}`, {
-          method: 'DELETE',
-          credentials: 'include',
-          signal: controller.signal,
-        });
-
-        const data = await res.json();
-
-        if (data.success) {
-          await fetchBranches();
-          onSuccess?.(data.message || 'Branch deleted successfully');
-        } else {
-          const errorMsg = data.error || 'Failed to delete branch';
-          onError?.(errorMsg);
-        }
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'Failed to delete branch';
-        onError?.(errorMsg);
-      } finally {
-        clearTimeout(timeout);
-      }
-    },
-    [fetchBranches]
-  );
-
   const toggleBranchStatus = useCallback(
     async (branchId: string, isActive: boolean, onSuccess?: (message: string) => void, onError?: (error: string) => void) => {
       const controller = new AbortController();
@@ -123,5 +92,5 @@ export function useBranchesList() {
     [fetchBranches]
   );
 
-  return { branches, loading, error, fetchBranches, deleteBranch, toggleBranchStatus };
+  return { branches, loading, error, fetchBranches, toggleBranchStatus };
 }

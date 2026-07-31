@@ -59,8 +59,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const selectedDate = new Date(dateParam);
-    selectedDate.setHours(0, 0, 0, 0);
+    // Parse as a local calendar date directly — `new Date(dateParam)` parses a
+    // bare "YYYY-MM-DD" string as UTC midnight, and the server's local timezone
+    // may be behind UTC, so a subsequent setHours(0,0,0,0) would silently shift
+    // the selected day back by one.
+    const [dateYear, dateMonth, dateDay] = dateParam.split('-').map(Number);
+    const selectedDate = new Date(dateYear, (dateMonth || 1) - 1, dateDay || 1, 0, 0, 0, 0);
 
     const endDate = new Date(selectedDate);
     endDate.setHours(23, 59, 59, 999);

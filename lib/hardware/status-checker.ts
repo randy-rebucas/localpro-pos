@@ -200,7 +200,12 @@ class HardwareStatusChecker {
       const timeoutId = setTimeout(() => controller.abort(), 2000);
 
       try {
-        // Note: CORS will likely block this, but we can try
+        // In `no-cors` mode, fetch resolves successfully (with an opaque,
+        // unreadable response) as long as the host actually accepted the
+        // connection — CORS only blocks reading the response body, not the
+        // connection itself. So a resolved promise here is a genuine signal
+        // the host is reachable; a rejected one means it genuinely isn't
+        // (refused/unreachable/timed out) — don't paper over that as success.
         const response = await fetch(`http://${ip}:${port}`, { // eslint-disable-line @typescript-eslint/no-unused-vars
           method: 'GET',
           signal: controller.signal,
@@ -210,9 +215,10 @@ class HardwareStatusChecker {
         return { connected: true, message: 'Printer reachable' };
       } catch (error) {
         clearTimeout(timeoutId);
-        // Even if fetch fails, the printer might be reachable (CORS issue)
-        // We'll assume it's configured correctly
-        return { connected: true, message: 'Printer configured (connection test limited by browser)' };
+        if (controller.signal.aborted) {
+          return { connected: false, message: 'Printer connection timed out' };
+        }
+        return { connected: false, message: 'Printer unreachable — check IP/port and that it\'s powered on' };
       }
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       return { connected: false, message: error.message || 'Cannot reach printer' };
@@ -229,13 +235,14 @@ class HardwareStatusChecker {
       };
     }
 
-    // Barcode scanners work as keyboard input, so they're always "available"
-    // if enabled. We can't actually detect if one is connected.
+    // Barcode scanners work as keyboard input, so this only confirms the
+    // setting is on — it's not a real connectivity check for a physical
+    // device, since any keyboard-emulating scanner is invisible to the OS.
     return {
       name: 'Barcode Scanner',
       type: 'barcode-scanner',
       status: 'available',
-      message: 'Scanner enabled (keyboard input mode)',
+      message: 'Configured (keyboard input mode — scan a barcode to verify)',
     };
   }
 
@@ -259,11 +266,13 @@ class HardwareStatusChecker {
       };
     }
 
+    // This only confirms the browser exposes a camera API — it does not
+    // verify a camera exists or that permission has been granted.
     return {
       name: 'QR Code Reader',
       type: 'qr-reader',
       status: 'available',
-      message: 'Camera access available',
+      message: 'Configured (camera not verified until scanning starts)',
     };
   }
 
@@ -287,11 +296,14 @@ class HardwareStatusChecker {
           message: 'Cash drawer requires printer configuration',
         };
       }
+      // Status mirrors the printer's own status rather than being verified
+      // independently — the drawer only actually opens via the printer's
+      // pulse command, so "available" here means "will attempt via printer."
       return {
         name: 'Cash Drawer',
         type: 'cash-drawer',
         status: 'available',
-        message: 'Connected to printer',
+        message: 'Configured (opens via printer — not independently verified)',
       };
     }
 

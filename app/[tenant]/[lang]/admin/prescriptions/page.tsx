@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { FileText, Plus, ChevronRight, CheckCircle, Clock, XCircle } from 'lucide-react';
 
 interface PrescriptionItem {
+  productId?: string;
   drugName: string;
   quantity: number;
   dosage: string;
@@ -13,6 +14,13 @@ interface PrescriptionItem {
   instructions?: string;
   dispensed: boolean;
   dispensedAt?: string;
+}
+
+interface ProductOption {
+  _id: string;
+  name: string;
+  drugSchedule?: string;
+  stock?: number;
 }
 
 interface Prescription {
@@ -61,9 +69,18 @@ export default function PrescriptionsPage() {
     patientName: '', patientAge: '', doctorName: '', doctorPRCNumber: '',
     doctorClinic: '', issuedDate: new Date().toISOString().split('T')[0],
     validUntil: '', notes: '',
-    items: [{ drugName: '', quantity: 1, dosage: '', frequency: '', instructions: '' }],
+    items: [{ productId: undefined as string | undefined, drugName: '', quantity: 1, dosage: '', frequency: '', instructions: '' }],
   });
   const [creating, setCreating] = useState(false);
+  const [products, setProducts] = useState<ProductOption[]>([]);
+
+  useEffect(() => {
+    if (!showCreate) return;
+    fetch('/api/products?isActive=true&limit=500')
+      .then(res => res.json())
+      .then(json => { if (json.success) setProducts(json.data || []); })
+      .catch(() => { /* non-critical — falls back to manual drug-name entry */ });
+  }, [showCreate]);
 
   const fetchPrescriptions = useCallback(async () => {
     setLoading(true);
@@ -232,7 +249,7 @@ export default function PrescriptionsPage() {
                         onChange={e => setDispensingIndexes(prev =>
                           e.target.checked ? [...prev, idx] : prev.filter(i => i !== idx)
                         )}
-                        className="mt-0.5 w-4 h-4 accent-brand"
+                        className="checkbox-win8 mt-0.5"
                       />
                     )}
                     {item.dispensed && <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 shrink-0" />}
@@ -265,7 +282,7 @@ export default function PrescriptionsPage() {
       {/* Create Modal */}
       {showCreate && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+          <div className="bg-white border border-gray-300 w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
               <h2 className="text-sm font-semibold text-gray-800 uppercase tracking-wide">New Prescription</h2>
             </div>
@@ -304,19 +321,46 @@ export default function PrescriptionsPage() {
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-xs font-medium text-gray-600">Drug Items</label>
-                  <button onClick={() => setNewRx(s => ({ ...s, items: [...s.items, { drugName: '', quantity: 1, dosage: '', frequency: '', instructions: '' }] }))} className="text-xs font-medium text-brand hover:text-brand-hover">+ Add Item</button>
+                  <button onClick={() => setNewRx(s => ({ ...s, items: [...s.items, { productId: undefined, drugName: '', quantity: 1, dosage: '', frequency: '', instructions: '' }] }))} className="text-xs font-medium text-brand hover:text-brand-hover">+ Add Item</button>
                 </div>
-                {newRx.items.map((item, idx) => (
-                  <div key={idx} className="border border-gray-200 p-3 mb-2 space-y-2">
-                    <div className="grid grid-cols-2 gap-2">
-                      <input placeholder="Drug name *" className="border border-gray-300 px-2 py-1.5 text-sm col-span-2 bg-white focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand" value={item.drugName} onChange={e => { const items = [...newRx.items]; items[idx].drugName = e.target.value; setNewRx(s => ({ ...s, items })); }} />
-                      <input placeholder="Dosage e.g. 500mg" className="border border-gray-300 px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand" value={item.dosage} onChange={e => { const items = [...newRx.items]; items[idx].dosage = e.target.value; setNewRx(s => ({ ...s, items })); }} />
-                      <input placeholder="Frequency e.g. 3x daily" className="border border-gray-300 px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand" value={item.frequency} onChange={e => { const items = [...newRx.items]; items[idx].frequency = e.target.value; setNewRx(s => ({ ...s, items })); }} />
-                      <input type="number" min={1} placeholder="Qty" className="border border-gray-300 px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand" value={item.quantity} onChange={e => { const items = [...newRx.items]; items[idx].quantity = Number(e.target.value); setNewRx(s => ({ ...s, items })); }} />
-                      <input placeholder="Instructions (optional)" className="border border-gray-300 px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand" value={item.instructions} onChange={e => { const items = [...newRx.items]; items[idx].instructions = e.target.value; setNewRx(s => ({ ...s, items })); }} />
+                <datalist id="rx-product-options">
+                  {products.map(p => <option key={p._id} value={p.name} />)}
+                </datalist>
+                {newRx.items.map((item, idx) => {
+                  const matchedProduct = products.find(p => p.name === item.drugName);
+                  return (
+                    <div key={idx} className="border border-gray-200 p-3 mb-2 space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="col-span-2">
+                          <input
+                            list="rx-product-options"
+                            placeholder="Drug name *"
+                            className="w-full border border-gray-300 px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand"
+                            value={item.drugName}
+                            onChange={e => {
+                              const drugName = e.target.value;
+                              const match = products.find(p => p.name === drugName);
+                              const items = [...newRx.items];
+                              items[idx] = { ...items[idx], drugName, productId: match?._id };
+                              setNewRx(s => ({ ...s, items }));
+                            }}
+                          />
+                          {item.productId ? (
+                            <p className="text-[11px] text-green-600 mt-0.5">
+                              Linked to inventory{matchedProduct?.drugSchedule === 'dangerous' ? ' — dangerous drug (PDEA license required to dispense)' : ''}
+                            </p>
+                          ) : (
+                            <p className="text-[11px] text-amber-600 mt-0.5">Not linked to inventory — stock won&apos;t be deducted on dispense</p>
+                          )}
+                        </div>
+                        <input placeholder="Dosage e.g. 500mg" className="border border-gray-300 px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand" value={item.dosage} onChange={e => { const items = [...newRx.items]; items[idx].dosage = e.target.value; setNewRx(s => ({ ...s, items })); }} />
+                        <input placeholder="Frequency e.g. 3x daily" className="border border-gray-300 px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand" value={item.frequency} onChange={e => { const items = [...newRx.items]; items[idx].frequency = e.target.value; setNewRx(s => ({ ...s, items })); }} />
+                        <input type="number" min={1} placeholder="Qty" className="border border-gray-300 px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand" value={item.quantity} onChange={e => { const items = [...newRx.items]; items[idx].quantity = Number(e.target.value); setNewRx(s => ({ ...s, items })); }} />
+                        <input placeholder="Instructions (optional)" className="border border-gray-300 px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand" value={item.instructions} onChange={e => { const items = [...newRx.items]; items[idx].instructions = e.target.value; setNewRx(s => ({ ...s, items })); }} />
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               <div>

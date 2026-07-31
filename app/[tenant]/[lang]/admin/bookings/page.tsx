@@ -55,9 +55,13 @@ export default function BookingsPage() {
 
   useEffect(() => {
     fetchBookings((error) => toast.error(error));
-    fetchStaff();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterStatus, filterStaff]);
+
+  useEffect(() => {
+    fetchStaff((error) => toast.error(error));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleCreateBooking = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -406,7 +410,7 @@ export default function BookingsPage() {
                   onClick={() => handleDeleteBooking(selectedBooking._id)}
                   className="flex-1 px-4 py-2 bg-red-600 text-white hover:bg-red-700 transition-colors border border-red-700"
                 >
-                  {dict?.common?.delete || 'Delete'}
+                  {dict?.common?.cancelBooking || 'Cancel Booking'}
                 </button>
               </div>
             </div>

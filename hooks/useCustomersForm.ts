@@ -19,7 +19,7 @@ interface UseCustomersFormReturn {
   setFormData: (data: Partial<CustomerFormData>) => void;
   error: string;
   submitting: boolean;
-  handleSubmit: (onSubmit: (data: CustomerFormData) => Promise<boolean>) => Promise<void>;
+  handleSubmit: (onSubmit: (data: CustomerFormData) => Promise<true | string>) => Promise<void>;
   resetForm: () => void;
   initializeForm: (customer: Customer) => void;
 }
@@ -72,7 +72,7 @@ export function useCustomersForm(): UseCustomersFormReturn {
   }, []);
 
   const handleSubmit = useCallback(
-    async (onSubmit: (data: CustomerFormData) => Promise<boolean>) => {
+    async (onSubmit: (data: CustomerFormData) => Promise<true | string>) => {
       setError('');
 
       // Validate required fields
@@ -87,9 +87,9 @@ export function useCustomersForm(): UseCustomersFormReturn {
 
       setSubmitting(true);
       try {
-        const success = await onSubmit(formData);
-        if (!success) {
-          setError('Failed to save customer');
+        const result = await onSubmit(formData);
+        if (result !== true) {
+          setError(result);
         }
       } catch {
         setError('An error occurred while saving');

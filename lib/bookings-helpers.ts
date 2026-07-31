@@ -92,10 +92,12 @@ export function canEditBooking(status: BookingStatus): boolean {
 }
 
 /**
- * Get delete confirmation message
+ * Get cancel confirmation message.
+ * The "delete" action is actually a soft-cancel (status set to 'cancelled',
+ * isActive: false) — the record and its history are preserved, not removed.
  */
 export function getDeleteBookingConfirmMessage(dict?: Dict): string {
-  return dict?.common?.deleteBookingConfirm || 'Are you sure you want to delete this booking?';
+  return dict?.common?.cancelBookingConfirm || 'Are you sure you want to cancel this booking?';
 }
 
 /**

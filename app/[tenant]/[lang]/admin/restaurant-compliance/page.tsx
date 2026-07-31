@@ -17,9 +17,23 @@ interface RestaurantCompliance {
   kitchenSanitationCompliant?: boolean;
 }
 
+/**
+ * Whole calendar days between today and the given date, comparing local
+ * midnight-to-midnight rather than raw instants — a live Date.now() against
+ * a stored midnight timestamp (via Math.ceil on the raw ms diff) would flip
+ * the result by a day depending on what time of day it currently is.
+ */
+function daysUntil(dateStr: string): number {
+  const target = new Date(dateStr);
+  const targetMidnight = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+  const todayMidnight = new Date();
+  todayMidnight.setHours(0, 0, 0, 0);
+  return Math.round((targetMidnight.getTime() - todayMidnight.getTime()) / 86400000);
+}
+
 function ExpiryWarning({ dateStr }: { dateStr?: string }) {
   if (!dateStr) return null;
-  const days = Math.ceil((new Date(dateStr).getTime() - Date.now()) / 86400000);
+  const days = daysUntil(dateStr);
   if (days > 30) return null;
   return (
     <p className="flex items-center gap-1 text-xs mt-1 font-medium text-amber-600">
@@ -172,11 +186,11 @@ export default function RestaurantCompliancePage() {
               </div>
               <div className="p-5 space-y-4">
                 <label className="flex items-center gap-3 cursor-pointer">
-                  <input type="checkbox" checked={data.foodHandlersCertified ?? false} onChange={e => set('foodHandlersCertified')(e.target.checked)} className="w-4 h-4 accent-brand" />
+                  <input type="checkbox" checked={data.foodHandlersCertified ?? false} onChange={e => set('foodHandlersCertified')(e.target.checked)} className="checkbox-win8" />
                   <span className="text-sm text-gray-700">All food handlers have valid health certificates</span>
                 </label>
                 <label className="flex items-center gap-3 cursor-pointer">
-                  <input type="checkbox" checked={data.kitchenSanitationCompliant ?? false} onChange={e => set('kitchenSanitationCompliant')(e.target.checked)} className="w-4 h-4 accent-brand" />
+                  <input type="checkbox" checked={data.kitchenSanitationCompliant ?? false} onChange={e => set('kitchenSanitationCompliant')(e.target.checked)} className="checkbox-win8" />
                   <span className="text-sm text-gray-700">Kitchen sanitation standards are met (RA 10611)</span>
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-gray-100">

@@ -37,8 +37,10 @@ interface UseExpensesListReturn {
   setFilters: (filters: ExpenseFilters) => void;
   setMessage: (message: { type: 'success' | 'error'; text: string } | null) => void;
   fetchExpenses: () => Promise<void>;
-  createExpense: (form: ExpenseFormData) => Promise<boolean>;
-  updateExpense: (id: string, form: ExpenseFormData) => Promise<boolean>;
+  /** Resolves `true` on success, or the server's specific error message on failure. */
+  createExpense: (form: ExpenseFormData) => Promise<true | string>;
+  /** Resolves `true` on success, or the server's specific error message on failure. */
+  updateExpense: (id: string, form: ExpenseFormData) => Promise<true | string>;
   deleteExpense: (id: string) => Promise<boolean>;
   setDeletingId: (id: string | null) => void;
 }
@@ -78,7 +80,10 @@ export function useExpensesList(): UseExpensesListReturn {
         // Extract unique expense names
         const uniqueNames = Array.from(new Set((data.data || []).map((e: Expense) => e.name))).sort() as string[];
         setExpenseNames(uniqueNames);
-        setMessage(null);
+        // Note: intentionally not clearing `message` here — callers commonly
+        // set a success/error message right before triggering a refetch
+        // (delete, save), and clearing it here would wipe that feedback out
+        // from under them.
       } else {
         setMessage({ type: 'error', text: data.error || 'Failed to fetch expenses' });
       }
@@ -105,11 +110,13 @@ export function useExpensesList(): UseExpensesListReturn {
       if (data.success) {
         return true;
       }
-      setMessage({ type: 'error', text: data.error || 'Failed to save expense' });
-      return false;
+      const errorText = data.error || 'Failed to save expense';
+      setMessage({ type: 'error', text: errorText });
+      return errorText;
     } catch {
-      setMessage({ type: 'error', text: 'Failed to save expense' });
-      return false;
+      const errorText = 'Failed to save expense';
+      setMessage({ type: 'error', text: errorText });
+      return errorText;
     }
   }, []);
 
@@ -126,11 +133,13 @@ export function useExpensesList(): UseExpensesListReturn {
       if (data.success) {
         return true;
       }
-      setMessage({ type: 'error', text: data.error || 'Failed to update expense' });
-      return false;
+      const errorText = data.error || 'Failed to update expense';
+      setMessage({ type: 'error', text: errorText });
+      return errorText;
     } catch {
-      setMessage({ type: 'error', text: 'Failed to update expense' });
-      return false;
+      const errorText = 'Failed to update expense';
+      setMessage({ type: 'error', text: errorText });
+      return errorText;
     }
   }, []);
 

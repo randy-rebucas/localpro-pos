@@ -174,7 +174,7 @@ export default function MultiCurrencyPage() {
                       ? (ratesRaw as Map<string, number>).get(currency)
                       : (ratesRaw as Record<string, number> | undefined)?.[currency];
                   return (
-                    <div key={currency} className="flex items-center justify-between p-3 bg-gray-50 rounded border border-gray-200">
+                    <div key={currency} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200">
                       <span className="text-sm font-medium text-gray-900">{currency}</span>
                       <input
                         type="number"
@@ -191,7 +191,7 @@ export default function MultiCurrencyPage() {
                           const newRates = { ...existing, [currency]: isNaN(parsed) ? 0 : parsed };
                           updateSetting('multiCurrency.exchangeRates', newRates);
                         }}
-                        className="w-32 px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-brand focus:border-brand"
+                        className="w-32 px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-brand focus:border-brand"
                         placeholder={dict?.admin?.ratePlaceholder || 'Rate'}
                       />
                     </div>
@@ -202,7 +202,7 @@ export default function MultiCurrencyPage() {
           )}
 
           {(!multiCurrency.displayCurrencies || multiCurrency.displayCurrencies.length === 0) && (
-            <div className="p-4 bg-yellow-50 border border-yellow-300 rounded">
+            <div className="p-4 bg-yellow-50 border border-yellow-300">
               <p className="text-sm text-yellow-800">
                 {dict?.admin?.noDisplayCurrencies || 'No display currencies configured. Please configure display currencies in Settings → Multi-Currency.'}
               </p>

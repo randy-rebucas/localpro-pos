@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Campaign from '@/models/Campaign';
 import Customer from '@/models/Customer';
+import Transaction from '@/models/Transaction';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
@@ -71,9 +72,21 @@ export async function POST(
       { _id: 1, email: 1, phone: 1, lastPurchaseDate: 1, loyaltyPointsBalance: 1, totalSpent: 1 }
     ).lean();
 
-    // For order counts we'd normally join — use totalSpent proxy here to avoid heavy aggregation
+    // Real order counts per customer — must match the same logic /api/crm/segments
+    // uses, so who actually receives a segment's campaign matches who the admin
+    // saw in that segment when composing it. (aggregate() requires an explicit
+    // ObjectId cast — tenantId here is a string, unlike the auto-cast .find() above.)
+    const tenantObjectId = new mongoose.Types.ObjectId(tenantId);
+    const orderStats = await Transaction.aggregate([
+      { $match: { tenantId: tenantObjectId, status: 'completed' } },
+      { $group: { _id: '$customerId', orderCount: { $sum: 1 } } },
+    ]);
+    const orderCountMap = new Map<string, number>(
+      orderStats.filter((s) => s._id != null).map((s) => [String(s._id), s.orderCount])
+    );
+
     const recipients = candidates.filter((c) => {
-      const orderCount = c.totalSpent && c.totalSpent > 0 ? Math.max(1, Math.round(c.totalSpent / 300)) : 0;
+      const orderCount = orderCountMap.get(String(c._id)) ?? 0;
       return matchesSegment(campaign.segment, c, orderCount);
     });
 

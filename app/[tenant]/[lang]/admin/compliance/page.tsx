@@ -53,10 +53,25 @@ function statusBg(s: ComplianceStatus) {
   }
 }
 
+/**
+ * Whole calendar days between today and the given date, comparing local
+ * midnight-to-midnight rather than raw instants. Using live `Date.now()`
+ * against a stored midnight timestamp (via Math.ceil on the raw ms diff)
+ * would flip the result by a day depending on what time of day it is "today",
+ * which matters right at renewal-deadline boundaries.
+ */
+function daysUntil(dateStr: string): number {
+  const target = new Date(dateStr);
+  const targetMidnight = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+  const todayMidnight = new Date();
+  todayMidnight.setHours(0, 0, 0, 0);
+  return Math.round((targetMidnight.getTime() - todayMidnight.getTime()) / 86400000);
+}
+
 function expiryStatus(dateStr: string | null | undefined, isPresent: boolean): ComplianceStatus {
   if (!isPresent) return 'missing';
   if (!dateStr) return 'compliant';
-  const days = Math.ceil((new Date(dateStr).getTime() - Date.now()) / 86400000);
+  const days = daysUntil(dateStr);
   if (days < 0) return 'expired';
   if (days <= 30) return 'warning';
   return 'compliant';
@@ -64,7 +79,7 @@ function expiryStatus(dateStr: string | null | undefined, isPresent: boolean): C
 
 function daysLeft(dateStr?: string | null) {
   if (!dateStr) return undefined;
-  return Math.ceil((new Date(dateStr).getTime() - Date.now()) / 86400000);
+  return daysUntil(dateStr);
 }
 
 export default function CompliancePage() {
@@ -80,10 +95,10 @@ export default function CompliancePage() {
   const buildDashboard = useCallback(async () => {
     try {
       // Fetch all compliance data in parallel
-      const [birRes, permitsRes, subRes, restaurantRes, retailRes, laundryRes, serviceRes, pharmacyRes] = await Promise.all([
+      const [birRes, permitsRes, settingsRes, restaurantRes, retailRes, laundryRes, serviceRes, pharmacyRes] = await Promise.all([
         fetch(`/api/tenants/${tenant}/bir-settings`),
         fetch(`/api/tenants/${tenant}/business-permits`),
-        fetch('/api/subscription/status'),
+        fetch(`/api/tenants/${tenant}/settings`),
         fetch(`/api/tenants/${tenant}/restaurant-compliance`),
         fetch(`/api/tenants/${tenant}/retail-compliance`),
         fetch(`/api/tenants/${tenant}/laundry-compliance`),
@@ -91,22 +106,22 @@ export default function CompliancePage() {
         fetch(`/api/tenants/${tenant}/pharmacy-settings`),
       ]);
 
-      const [birJson, permitsJson, subJson, restaurantJson, retailJson, laundryJson, serviceJson, pharmacyJson] = await Promise.all([
-        birRes.json(), permitsRes.json(), subRes.json(),
+      const [birJson, permitsJson, settingsJson, restaurantJson, retailJson, laundryJson, serviceJson, pharmacyJson] = await Promise.all([
+        birRes.json(), permitsRes.json(), settingsRes.json(),
         restaurantRes.json(), retailRes.json(), laundryRes.json(),
         serviceRes.json(), pharmacyRes.json(),
       ]);
 
       const bir = birJson.success ? birJson.data : {};
       const permits = permitsJson.success ? permitsJson.data : {};
-      const sub = subJson.data ?? {};
+      const tenantSettings = settingsJson.success ? settingsJson.data : {};
       const restaurant = restaurantJson.success ? restaurantJson.data : {};
       const retail = retailJson.success ? retailJson.data : {};
       const laundry = laundryJson.success ? laundryJson.data : {};
       const service = serviceJson.success ? serviceJson.data : {};
       const pharmacy = pharmacyJson.success ? pharmacyJson.data : {};
 
-      const bType = (sub.businessType as string) ?? '';
+      const bType = (tenantSettings.businessType as string) ?? '';
       setBusinessType(bType);
 
       const base = () => `/${tenant}/${lang}/admin`;

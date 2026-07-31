@@ -5,7 +5,7 @@ import { BRAND_PRIMARY_HEX } from '@/lib/brand-defaults';
 import { ITenantSettings } from '@/types/tenant';
 
 interface TaxRule {
-  id: string;
+  _id: string;
   name: string;
   rate: number;
   label: string;
@@ -45,7 +45,7 @@ export default function TaxRulesManager({ settings, tenant, primaryColor = BRAND
   const fetchRules = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/tenants/${tenant}/tax-rules`, { credentials: 'include' });
+      const res = await fetch(`/api/tax-rules`, { credentials: 'include' });
       const data = await res.json();
       if (data.success) {
         setRules(data.data || []);
@@ -60,15 +60,14 @@ export default function TaxRulesManager({ settings, tenant, primaryColor = BRAND
   const handleSave = async (rule: Partial<TaxRule>) => {
     try {
       setMessage(null);
-      const url = `/api/tenants/${tenant}/tax-rules`;
-      const method = editing ? 'PUT' : 'POST';
-      const body = editing ? { id: editing.id, ...rule } : rule;
+      const url = editing ? `/api/tax-rules/${editing._id}` : '/api/tax-rules';
+      const method = editing ? 'PATCH' : 'POST';
 
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(body),
+        body: JSON.stringify(rule),
       });
 
       const data = await res.json();
@@ -89,7 +88,7 @@ export default function TaxRulesManager({ settings, tenant, primaryColor = BRAND
     if (!confirm(dict?.taxRules?.deleteConfirm || 'Are you sure you want to delete this tax rule?')) return;
 
     try {
-      const res = await fetch(`/api/tenants/${tenant}/tax-rules?id=${id}`, {
+      const res = await fetch(`/api/tax-rules/${id}`, {
         method: 'DELETE',
         credentials: 'include',
       });
@@ -128,8 +127,8 @@ export default function TaxRulesManager({ settings, tenant, primaryColor = BRAND
 
       {message && (
         <div
-          className={`p-3 rounded ${
-            message.type === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
+          className={`p-3 border ${
+            message.type === 'success' ? 'bg-green-50 text-green-800 border-green-300' : 'bg-red-50 text-red-800 border-red-300'
           }`}
         >
           {message.text}
@@ -159,8 +158,8 @@ export default function TaxRulesManager({ settings, tenant, primaryColor = BRAND
             .sort((a, b) => b.priority - a.priority)
             .map((rule) => (
               <div
-                key={rule.id}
-                className={`p-4 border-2 rounded ${
+                key={rule._id}
+                className={`p-4 border-2 ${
                   rule.isActive ? 'border-gray-300 bg-white' : 'border-gray-200 bg-gray-50 opacity-60'
                 }`}
               >
@@ -195,7 +194,7 @@ export default function TaxRulesManager({ settings, tenant, primaryColor = BRAND
                       {dict?.common?.edit || 'Edit'}
                     </button>
                     <button
-                      onClick={() => handleDelete(rule.id)}
+                      onClick={() => handleDelete(rule._id)}
                       className="px-3 py-1 text-xs text-red-600 hover:text-red-700 font-medium"
                     >
                       {dict?.common?.delete || 'Delete'}
@@ -233,9 +232,23 @@ function TaxRuleForm({
   const [state, setState] = useState(rule?.region?.state || '');
   const [city, setCity] = useState(rule?.region?.city || '');
   const [zipCodes, setZipCodes] = useState(rule?.region?.zipCodes?.join(', ') || '');
+  const [categoryIds, setCategoryIds] = useState<string[]>(rule?.categoryIds || []);
+  const [categories, setCategories] = useState<Array<{ _id: string; name: string }>>([]);
+
+  useEffect(() => {
+    if (appliesTo !== 'categories') return;
+    fetch('/api/categories', { credentials: 'include' })
+      .then((res) => res.json())
+      .then((data) => { if (data.success) setCategories(data.data || []); })
+      .catch(() => { /* non-critical */ });
+  }, [appliesTo]);
+
+  const toggleCategory = (id: string) => {
+    setCategoryIds((prev) => (prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]));
+  };
 
   return (
-    <div className="border-2 border-gray-300 rounded p-6 bg-white">
+    <div className="border-2 border-gray-300 p-6 bg-white">
       <h4 className="text-lg font-semibold mb-4">{rule ? (dict?.taxRules?.editTaxRule || 'Edit Tax Rule') : (dict?.taxRules?.addTaxRule || 'Add Tax Rule')}</h4>
 
       <div className="space-y-4">
@@ -325,6 +338,34 @@ function TaxRuleForm({
             <option value="categories">{dict?.taxRules?.specificCategories || 'Specific Categories'}</option>
           </select>
         </div>
+
+        {appliesTo === 'categories' && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">{dict?.taxRules?.selectCategories || 'Categories'} *</label>
+            {categories.length === 0 ? (
+              <p className="text-xs text-gray-500">{dict?.taxRules?.noCategories || 'No categories found.'}</p>
+            ) : (
+              <div className="border-2 border-gray-300 p-3 max-h-40 overflow-y-auto space-y-1.5">
+                {categories.map((c) => (
+                  <label key={c._id} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="checkbox-win8"
+                      checked={categoryIds.includes(c._id)}
+                      onChange={() => toggleCategory(c._id)}
+                    />
+                    <span className="text-sm text-gray-700">{c.name}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+            {categoryIds.length === 0 && (
+              <p className="text-xs text-amber-600 mt-1">
+                {dict?.taxRules?.noCategoriesSelectedWarning || 'No categories selected — this rule will not apply to anything until at least one is checked.'}
+              </p>
+            )}
+          </div>
+        )}
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">{dict?.taxRules?.regionOptional || 'Region (Optional)'}</label>
@@ -418,8 +459,7 @@ function TaxRuleForm({
               id="isActive"
               checked={isActive}
               onChange={(e) => setIsActive(e.target.checked)}
-              className="w-4 h-4 border-gray-300 rounded"
-              style={{ accentColor: primaryColor }}
+              className="checkbox-win8"
             />
             <label htmlFor="isActive" className="ml-2 text-sm text-gray-700">
               {dict?.taxRules?.active || 'Active'}
@@ -435,6 +475,7 @@ function TaxRuleForm({
                 rate: parseFloat(rate),
                 label,
                 appliesTo,
+                categoryIds: appliesTo === 'categories' ? categoryIds : undefined,
                 priority: parseInt(priority) || 0,
                 isActive,
                 region: country || state || city || zipCodes ? {

@@ -50,6 +50,11 @@ export async function GET(request: NextRequest) {
       ? new Date(startDateParam)
       : new Date(new Date().setDate(new Date().getDate() - 30));
     const endDate = endDateParam ? new Date(endDateParam) : new Date();
+    // A bare "YYYY-MM-DD" endDate parses to UTC midnight (start of that day),
+    // which would make createdAt $lte exclude nearly the entire end day's
+    // transactions from what should be an inclusive BIR filing period —
+    // extend to end-of-day, matching the other /api/reports/* routes.
+    if (endDateParam) endDate.setHours(23, 59, 59, 999);
 
     const transactions = await Transaction.find({
       tenantId,

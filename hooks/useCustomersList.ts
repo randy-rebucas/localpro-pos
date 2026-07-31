@@ -19,10 +19,12 @@ interface UseCustomersListReturn {
   fetchCustomers: () => Promise<void>;
   /** True after the first list fetch has finished (success or error). */
   initialLoadComplete: boolean;
-  createCustomer: (form: CustomerFormData) => Promise<boolean>;
-  updateCustomer: (id: string, form: CustomerFormData) => Promise<boolean>;
-  deleteCustomer: (id: string) => Promise<boolean>;
-  toggleCustomerStatus: (id: string, isActive: boolean) => Promise<boolean>;
+  /** Resolves `true` on success, or the server's specific error message on failure. */
+  createCustomer: (form: CustomerFormData) => Promise<true | string>;
+  /** Resolves `true` on success, or the server's specific error message on failure. */
+  updateCustomer: (id: string, form: CustomerFormData) => Promise<true | string>;
+  deleteCustomer: (id: string) => Promise<true | string>;
+  toggleCustomerStatus: (id: string, isActive: boolean) => Promise<true | string>;
 }
 
 function normalizeCreditLimitFromForm(form: CustomerFormData): number | null | undefined {
@@ -110,9 +112,9 @@ export function useCustomersList(): UseCustomersListReturn {
         if (data.success) {
           return true;
         }
-        return false;
+        return data.error || 'Failed to save customer';
       } catch {
-        return false;
+        return 'Failed to save customer';
       }
     },
     []
@@ -137,9 +139,9 @@ export function useCustomersList(): UseCustomersListReturn {
         if (data.success) {
           return true;
         }
-        return false;
+        return data.error || 'Failed to update customer';
       } catch {
-        return false;
+        return 'Failed to update customer';
       }
     },
     []
@@ -156,9 +158,9 @@ export function useCustomersList(): UseCustomersListReturn {
       if (data.success) {
         return true;
       }
-      return false;
+      return data.error || 'Failed to deactivate customer';
     } catch {
-      return false;
+      return 'Failed to deactivate customer';
     }
   }, []);
 
@@ -176,9 +178,9 @@ export function useCustomersList(): UseCustomersListReturn {
         if (data.success) {
           return true;
         }
-        return false;
+        return data.error || 'Could not update customer status';
       } catch {
-        return false;
+        return 'Could not update customer status';
       }
     },
     []

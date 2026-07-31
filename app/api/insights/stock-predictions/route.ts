@@ -18,18 +18,23 @@ export async function GET(request: NextRequest) {
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId } = authResult;
 
+    const branchId = request.nextUrl.searchParams.get('branchId') || undefined;
+
     const since = new Date();
     since.setDate(since.getDate() - VELOCITY_WINDOW_DAYS);
 
-    // Aggregate sales quantity per product over the window
+    // Aggregate sales quantity per product over the window, scoped to the
+    // selected branch when provided so it matches the other branch-scoped
+    // panels on the inventory page (LowStockAlerts, RealTimeStockTracker).
+    const salesMatch: Record<string, unknown> = {
+      tenantId,
+      type: 'sale',
+      createdAt: { $gte: since },
+    };
+    if (branchId) salesMatch.branchId = branchId;
+
     const salesByProduct = await StockMovement.aggregate([
-      {
-        $match: {
-          tenantId,
-          type: 'sale',
-          createdAt: { $gte: since },
-        },
-      },
+      { $match: salesMatch },
       {
         $group: {
           _id: '$productId',
@@ -46,26 +51,33 @@ export async function GET(request: NextRequest) {
 
     const products = await Product.find(
       { _id: { $in: productIds }, tenantId, isActive: { $ne: false }, trackInventory: { $ne: false } },
-      { _id: 1, name: 1, stock: 1, image: 1, category: 1 }
+      { _id: 1, name: 1, stock: 1, image: 1, category: 1, branchStock: 1 }
     ).lean();
 
     const stockMap = new Map(products.map((p) => [String(p._id), p]));
+
+    const getStock = (product: (typeof products)[number]) => {
+      if (!branchId) return product.stock;
+      const branchEntry = product.branchStock?.find((b) => String(b.branchId) === branchId);
+      return branchEntry ? branchEntry.stock : product.stock;
+    };
 
     const predictions = salesByProduct
       .map((s) => {
         const product = stockMap.get(String(s._id));
         if (!product) return null;
 
+        const currentStock = getStock(product);
         const avgDailySales = s.totalSold / VELOCITY_WINDOW_DAYS;
         const daysUntilStockout =
-          avgDailySales > 0 ? Math.floor(product.stock / avgDailySales) : null;
+          avgDailySales > 0 ? Math.floor(currentStock / avgDailySales) : null;
 
         return {
           productId: String(s._id),
           name: product.name,
           image: product.image ?? null,
           category: product.category ?? null,
-          currentStock: product.stock,
+          currentStock,
           avgDailySales: Math.round(avgDailySales * 10) / 10,
           daysUntilStockout,
         };

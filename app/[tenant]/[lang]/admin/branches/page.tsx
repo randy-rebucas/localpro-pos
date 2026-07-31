@@ -13,7 +13,6 @@ import {
   formatAddress,
   getManagerName,
   getDeactivateConfirmMessage,
-  getDeleteConfirmMessage,
 } from '@/lib/branches-helpers';
 
 export default function BranchesPage() {
@@ -24,8 +23,8 @@ export default function BranchesPage() {
   const [showBranchModal, setShowBranchModal] = useState(false);
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
 
-  const { branches, loading, fetchBranches, deleteBranch, toggleBranchStatus } = useBranchesList();
-  const { users: staff } = useUsersList();
+  const { branches, loading, fetchBranches, toggleBranchStatus } = useBranchesList();
+  const { users: staff, fetchUsers } = useUsersList();
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -33,22 +32,9 @@ export default function BranchesPage() {
 
   useEffect(() => {
     fetchBranches((error) => toast.error(error));
+    fetchUsers((error) => toast.error(error));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const handleDeleteBranch = async (branchId: string) => {
-    if (!dict) return;
-    if (!confirm(getDeleteConfirmMessage(dict))) return;
-
-    await deleteBranch(
-      branchId,
-      async (message) => {
-        toast.success(message);
-        await fetchBranches();
-      },
-      (error) => toast.error(error)
-    );
-  };
 
   const handleToggleBranchStatus = async (branch: Branch) => {
     if (!dict) return;
@@ -124,9 +110,6 @@ export default function BranchesPage() {
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{getManagerName(branch.managerId)}</td>
                     <td className="px-4 py-4 whitespace-nowrap">
                       <span className={`px-2 py-1 text-xs font-semibold border ${getStatusColor(branch.isActive)}`}>
-                          {branch.isActive ? (dict.admin?.active || 'Active') : (dict.admin?.inactive || 'Inactive')}
-                        </span>
-                      <span className={`px-2 py-1 text-xs font-semibold border ${getStatusColor(branch.isActive)}`}>
                         {branch.isActive ? (dict.admin?.active || 'Active') : (dict.admin?.inactive || 'Inactive')}
                       </span>
                     </td>
@@ -147,12 +130,6 @@ export default function BranchesPage() {
                         >
                           {branch.isActive ? (dict.admin?.deactivate || 'Deactivate') : (dict.admin?.activate || 'Activate')}
                         </button>
-                        <button
-                          onClick={() => handleDeleteBranch(branch._id)}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          {dict.common?.delete || 'Delete'}
-                        </button>
                       </div>
                     </td>
                   </tr>
@@ -168,7 +145,7 @@ export default function BranchesPage() {
         {showBranchModal && (
           <BranchModal
             branch={editingBranch}
-            users={staff}
+            users={staff.filter((u) => u.isActive)}
             onClose={() => {
               setShowBranchModal(false);
               setEditingBranch(null);

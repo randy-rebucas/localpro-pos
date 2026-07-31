@@ -403,41 +403,41 @@ export default function BundlesPage() {
                 <div>
                   {/* Summary Cards */}
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                    <div className="bg-brand-soft border border-teal-200 p-4">
-                      <div className="text-sm text-brand mb-1">{dict.admin?.totalBundles || 'Total Bundles'}</div>
-                      <div className="text-2xl font-bold text-brand-navy-deep">{analytics.summary.totalBundles}</div>
+                    <div className="p-4 text-white" style={{ backgroundColor: settings?.primaryColor || '#35979c' }}>
+                      <div className="text-sm mb-1 text-white/80">{dict.admin?.totalBundles || 'Total Bundles'}</div>
+                      <div className="text-2xl font-bold">{analytics.summary.totalBundles}</div>
                     </div>
-                    <div className="bg-green-50 border border-green-200 p-4">
-                      <div className="text-sm text-green-600 mb-1">{dict.admin?.totalSales || 'Total Sales'}</div>
-                      <div className="text-2xl font-bold text-green-900">
+                    <div className="p-4 text-white" style={{ backgroundColor: '#0f9d58' }}>
+                      <div className="text-sm mb-1 text-white/80">{dict.admin?.totalSales || 'Total Sales'}</div>
+                      <div className="text-2xl font-bold">
                         <Currency amount={analytics.summary.totalSales} />
                       </div>
                     </div>
-                    <div className="bg-purple-50 border border-purple-200 p-4">
-                      <div className="text-sm text-purple-600 mb-1">{dict.admin?.totalQuantity || 'Total Quantity'}</div>
-                      <div className="text-2xl font-bold text-purple-900">{analytics.summary.totalQuantity}</div>
+                    <div className="p-4 text-white" style={{ backgroundColor: '#7a3fc9' }}>
+                      <div className="text-sm mb-1 text-white/80">{dict.admin?.totalQuantity || 'Total Quantity'}</div>
+                      <div className="text-2xl font-bold">{analytics.summary.totalQuantity}</div>
                     </div>
-                    <div className="bg-orange-50 border border-orange-200 p-4">
-                      <div className="text-sm text-orange-600 mb-1">{dict.admin?.totalTransactions || 'Transactions'}</div>
-                      <div className="text-2xl font-bold text-orange-900">{analytics.summary.totalTransactions}</div>
+                    <div className="p-4 text-white" style={{ backgroundColor: '#e3a008' }}>
+                      <div className="text-sm mb-1 text-white/80">{dict.admin?.totalTransactions || 'Transactions'}</div>
+                      <div className="text-2xl font-bold">{analytics.summary.totalTransactions}</div>
                     </div>
                   </div>
 
                   {/* Bundle Performance Charts */}
                   {analytics.analytics && analytics.analytics.length > 0 && (
-                    <BundlePerformanceCharts 
+                    <BundlePerformanceCharts
                       analytics={analytics.analytics.map((item: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
                         bundleId: item.bundleId,
                         bundleName: item.bundleName,
-                        bundlePrice: 0, // Not available in API response
-                        totalSales: item.totalRevenue,
-                        totalQuantity: item.unitsSold,
-                        transactionCount: item.unitsSold, // Use unitsSold as transaction count
+                        bundlePrice: item.bundlePrice,
+                        totalSales: item.totalSales,
+                        totalQuantity: item.totalQuantity,
+                        transactionCount: item.transactionCount,
                         averageOrderValue: item.averageOrderValue,
-                        averageQuantity: item.unitsSold,
-                        revenuePerUnit: item.totalRevenue / (item.unitsSold || 1),
-                      }))} 
-                      dict={dict} 
+                        averageQuantity: item.averageQuantity,
+                        revenuePerUnit: item.revenuePerUnit,
+                      }))}
+                      dict={dict}
                     />
                   )}
 
@@ -458,10 +458,10 @@ export default function BundlesPage() {
                         {analytics.analytics.map((item: any) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
                           <tr key={item.bundleId}>
                             <td className="px-4 py-4 text-sm font-medium text-gray-900">{item.bundleName}</td>
-                            <td className="px-4 py-4 text-sm text-gray-500">-</td>
-                            <td className="px-4 py-4 text-sm font-medium text-gray-900"><Currency amount={item.totalRevenue} /></td>
-                            <td className="px-4 py-4 text-sm text-gray-500">{item.unitsSold}</td>
-                            <td className="px-4 py-4 text-sm text-gray-500">{item.unitsSold}</td>
+                            <td className="px-4 py-4 text-sm text-gray-500"><Currency amount={item.bundlePrice} /></td>
+                            <td className="px-4 py-4 text-sm font-medium text-gray-900"><Currency amount={item.totalSales} /></td>
+                            <td className="px-4 py-4 text-sm text-gray-500">{item.totalQuantity}</td>
+                            <td className="px-4 py-4 text-sm text-gray-500">{item.transactionCount}</td>
                             <td className="px-4 py-4 text-sm text-gray-500"><Currency amount={item.averageOrderValue} /></td>
                           </tr>
                         ))}
@@ -516,7 +516,7 @@ export default function BundlesPage() {
                 >
                   {dict.admin?.export || 'Export'} ▼
                 </button>
-                <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-300 shadow-lg hidden group-hover:block z-10">
+                <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-300 hidden group-hover:block z-10">
                   <button
                     onClick={() => handleExport('csv')}
                     className="block w-full text-left px-4 py-2 hover:bg-gray-100 text-sm"
@@ -680,7 +680,7 @@ export default function BundlesPage() {
                       type="checkbox"
                       checked={selectedBundles.size === bundles.length && bundles.length > 0}
                       onChange={handleSelectAll}
-                      className="rounded border-gray-300"
+                      className="border-gray-300"
                     />
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.name || 'Name'}</th>
@@ -700,7 +700,7 @@ export default function BundlesPage() {
                         type="checkbox"
                         checked={selectedBundles.has(bundle._id)}
                         onChange={() => handleSelectBundle(bundle._id)}
-                        className="rounded border-gray-300"
+                        className="border-gray-300"
                       />
                     </td>
                     <td className="px-4 py-4">
@@ -1167,7 +1167,7 @@ function BundleModal({
                     {showProductSuggestions && (
                       <div 
                         ref={suggestionsRef}
-                        className="absolute z-[100] w-full mt-1 bg-white border border-gray-300 shadow-xl rounded-md max-h-60 overflow-y-auto"
+                        className="absolute z-[100] w-full mt-1 bg-white border border-gray-300 max-h-60 overflow-y-auto"
                         style={{ top: '100%' }}
                       >
                         {productsLoading ? (

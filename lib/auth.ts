@@ -109,21 +109,31 @@ export async function getCurrentUser(request: NextRequest): Promise<{
   }
 }
 
+const ROLE_HIERARCHY: Record<string, number> = {
+  viewer: 1,
+  cashier: 2,
+  manager: 3,
+  admin: 4,
+  owner: 5,
+  super_admin: 6,
+};
+
+/**
+ * Numeric privilege rank for a role — higher outranks lower. Used for
+ * comparing an acting user's privilege against a target user/role, e.g. to
+ * stop a manager from editing an admin account, or an admin from minting
+ * a new owner.
+ */
+export function getRoleRank(role: string): number {
+  return ROLE_HIERARCHY[role] || 0;
+}
+
 /**
  * Check if user has required role
  */
 export function hasRole(userRole: string, requiredRoles: string[]): boolean {
-  const roleHierarchy: Record<string, number> = {
-    viewer: 1,
-    cashier: 2,
-    manager: 3,
-    admin: 4,
-    owner: 5,
-    super_admin: 6,
-  };
-
-  const userLevel = roleHierarchy[userRole] || 0;
-  return requiredRoles.some(role => roleHierarchy[role] <= userLevel);
+  const userLevel = ROLE_HIERARCHY[userRole] || 0;
+  return requiredRoles.some(role => ROLE_HIERARCHY[role] <= userLevel);
 }
 
 /**

@@ -9,6 +9,7 @@ import { sendBookingConfirmation, sendBookingCancellation, sendBookingReminder }
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { requireBookingSchedulingAccess } from '@/lib/booking-scheduling-access';
+import { getClosedHolidayForDate } from '@/lib/holidays';
 import { logger } from '@/lib/logger';
 
 /**
@@ -135,6 +136,21 @@ export async function PUT(
     }
     if (startTime || duration) {
       newEndTime = new Date(newStartTime.getTime() + newDuration * 60000);
+    }
+
+    // Block rescheduling onto a day the tenant has marked the business closed
+    if (startTime) {
+      const holidaySettings = await getTenantSettingsById(tenantId);
+      const closedHoliday = getClosedHolidayForDate(holidaySettings?.holidays, newStartTime);
+      if (closedHoliday) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: t('validation.businessClosedForHoliday', 'Business is closed on this date ({holiday})').replace('{holiday}', closedHoliday.name),
+          },
+          { status: 409 }
+        );
+      }
     }
 
     // Check for conflicts if time changed

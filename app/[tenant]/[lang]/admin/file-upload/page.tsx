@@ -255,7 +255,7 @@ export default function FileUploadPage() {
                 onDragLeave={handleDrag}
                 onDragOver={handleDrag}
                 onDrop={handleDrop}
-                className={`w-full border-2 border-dashed rounded p-8 text-center cursor-pointer transition-colors ${
+                className={`w-full border-2 border-dashed p-8 text-center cursor-pointer transition-colors ${
                   dragActive
                     ? 'border-brand bg-brand-soft'
                     : 'border-gray-300 bg-gray-50 hover:border-gray-400'
@@ -364,11 +364,11 @@ export default function FileUploadPage() {
                   {uploadedFiles.map((file, idx) => (
                   <div
                     key={idx}
-                    className="border border-gray-300 p-4 hover:shadow-md transition-shadow"
+                    className="border border-gray-300 p-4 hover:bg-gray-50 transition-colors"
                   >
                     <div className="flex items-start gap-4 flex-wrap">
                       <div className="flex-shrink-0">
-                        <div className="w-12 h-12 bg-gray-100 flex items-center justify-center overflow-hidden rounded">
+                        <div className="w-12 h-12 bg-gray-100 flex items-center justify-center overflow-hidden">
                           {file.type.startsWith('image/') ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img 
@@ -466,7 +466,7 @@ export default function FileUploadPage() {
       {/* Delete Confirmation Dialog */}
       {deletingFileId && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white border border-gray-300 rounded-lg max-w-sm w-full">
+          <div className="bg-white border border-gray-300 max-w-sm w-full">
             <div className="p-6">
               <h3 className="text-lg font-bold text-gray-900 mb-2">{(dict as any)?.fileUpload?.deleteFileTitle || 'Delete File?'}</h3> {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
               <p className="text-gray-600 mb-6">
@@ -475,13 +475,13 @@ export default function FileUploadPage() {
               <div className="flex gap-3 justify-end">
                 <button
                   onClick={() => setDeletingFileId(null)}
-                  className="px-4 py-2 bg-gray-200 text-gray-900 hover:bg-gray-300 font-medium transition-colors rounded"
+                  className="px-4 py-2 bg-gray-200 text-gray-900 hover:bg-gray-300 font-medium transition-colors"
                 >
                   {(dict as any)?.common?.cancel || 'Cancel'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
                 </button>
                 <button
                   onClick={() => deleteFile(deletingFileId)}
-                  className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 font-medium transition-colors rounded"
+                  className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 font-medium transition-colors"
                 >
                   {(dict as any)?.fileUpload?.delete || 'Delete'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
                 </button>

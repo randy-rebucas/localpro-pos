@@ -10,6 +10,8 @@ export async function GET(
 ) {
   try {
     await connectDB();
+    // Cross-tenant subscription lookup by id — super_admin only
+    await requireRole(request, ['super_admin']);
     const { id } = await params;
 
     const subscription = await Subscription.findById(id)
@@ -36,7 +38,8 @@ export async function PUT(
 ) {
   try {
     await connectDB();
-    await requireRole(request, ['admin']);
+    // Cross-tenant subscription mutation by id — super_admin only
+    await requireRole(request, ['super_admin']);
     const { id } = await params;
 
     const body = await request.json();
@@ -121,7 +124,8 @@ export async function DELETE(
 ) {
   try {
     await connectDB();
-    await requireRole(request, ['admin']);
+    // Cross-tenant subscription cancellation by id — super_admin only
+    await requireRole(request, ['super_admin']);
     const { id } = await params;
 
     const subscription = await Subscription.findOneAndUpdate(

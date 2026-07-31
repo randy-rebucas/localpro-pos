@@ -19,7 +19,7 @@ export function useStaffList(tenant: string) {
     const timeout = setTimeout(() => controller.abort(), 15000);
 
     try {
-      const res = await globalThis.fetch(`/api/users?tenant=${tenant}`, {
+      const res = await globalThis.fetch(`/api/users?tenant=${tenant}&isActive=true`, {
         credentials: 'include',
         signal: controller.signal,
       });

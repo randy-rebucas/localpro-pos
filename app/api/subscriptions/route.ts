@@ -10,14 +10,13 @@ export async function GET(request: NextRequest) {
   try {
     await connectDB();
 
-    // Require admin role to list subscriptions
-    await requireRole(request, ['admin']);
+    // Cross-tenant subscription list — super_admin only
+    await requireRole(request, ['super_admin']);
 
     // Get query parameters
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
 
-    // tenantId is never user-supplied to prevent IDOR
     const query: Record<string, unknown> = { isActive: { $ne: false } };
 
     if (status) {
@@ -46,8 +45,8 @@ export async function POST(request: NextRequest) {
   try {
     await connectDB();
 
-    // Only admins can create subscriptions (tenants cannot create their own subscriptions)
-    await requireRole(request, ['admin']);
+    // Creating a subscription for an arbitrary tenantId — super_admin only
+    await requireRole(request, ['super_admin']);
 
     const body = await request.json();
     const { tenantId, planId, billingCycle = 'monthly', isTrial = false } = body;

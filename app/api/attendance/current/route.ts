@@ -13,8 +13,15 @@ export async function GET(request: NextRequest) {
     const user = await requireAuth(request);
     await connectDB();
 
+    // Manager+ can look up another employee's active session (e.g. the admin
+    // attendance page polling every employee's current clock-in status);
+    // everyone else can only ever see their own.
+    const requestedUserId = new URL(request.url).searchParams.get('userId');
+    const isManagerPlus = user.role === 'owner' || user.role === 'admin' || user.role === 'manager';
+    const targetUserId = requestedUserId && isManagerPlus ? requestedUserId : user.userId;
+
     const activeSession = await Attendance.findOne({
-      userId: user.userId,
+      userId: targetUserId,
       tenantId: user.tenantId,
       clockOut: null,
     })

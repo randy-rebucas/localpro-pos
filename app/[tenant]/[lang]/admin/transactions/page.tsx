@@ -22,13 +22,27 @@ interface Transaction {
   discountCode?: string;
   discountAmount?: number;
   total: number;
-  paymentMethod: 'cash' | 'card' | 'digital';
+  paymentMethod: 'cash' | 'card' | 'digital' | 'tap_to_pay' | 'wallet' | 'qr_code' | 'bnpl' | 'on_account';
   cashReceived?: number;
   change?: number;
   status: 'completed' | 'cancelled' | 'refunded';
   userId?: string | { name: string; email: string };
   notes?: string;
   createdAt: string;
+}
+
+function getPaymentMethodLabel(method: Transaction['paymentMethod'], dict: any): string { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const labels: Record<Transaction['paymentMethod'], string> = {
+    cash: dict.admin?.cash || dict.pos?.cash || 'Cash',
+    card: dict.admin?.card || dict.pos?.card || 'Card',
+    digital: dict.admin?.digital || dict.pos?.digital || 'Digital',
+    tap_to_pay: dict.pos?.tapToPay || 'Tap to Pay',
+    wallet: dict.pos?.wallet || 'Wallet',
+    qr_code: dict.pos?.qrCode || 'QR Code',
+    bnpl: dict.pos?.bnpl || 'BNPL',
+    on_account: dict.pos?.onAccount || 'On account',
+  };
+  return labels[method] || method;
 }
 
 export default function TransactionsPage() {
@@ -165,7 +179,7 @@ export default function TransactionsPage() {
                           borderColor: primaryColor,
                         }}
                       >
-                        {transaction.paymentMethod === 'cash' ? (dict.admin?.cash || 'Cash') : transaction.paymentMethod === 'card' ? (dict.admin?.card || 'Card') : transaction.paymentMethod === 'digital' ? (dict.admin?.digital || 'Digital') : transaction.paymentMethod}
+                        {getPaymentMethodLabel(transaction.paymentMethod, dict)}
                       </span>
                       {transaction.paymentMethod === 'cash' && transaction.change !== undefined && (
                         <div className="text-xs text-gray-500 mt-1">{dict.transactions?.change || dict.admin?.change || 'Change'}: <Currency amount={transaction.change} /></div>
@@ -291,7 +305,7 @@ function TransactionDetailModal({
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-500">{dict.transactions?.payment || 'Payment Method'}</label>
-                <div className="text-lg">{transaction.paymentMethod === 'cash' ? (dict.admin?.cash || 'Cash') : transaction.paymentMethod === 'card' ? (dict.admin?.card || 'Card') : transaction.paymentMethod === 'digital' ? (dict.admin?.digital || 'Digital') : transaction.paymentMethod}</div>
+                <div className="text-lg">{getPaymentMethodLabel(transaction.paymentMethod, dict)}</div>
               </div>
             </div>
             <div>

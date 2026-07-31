@@ -100,7 +100,9 @@ export function useBundlesList() {
         const data = await res.json();
 
         if (data.success) {
-          await fetchBundles();
+          // Caller is responsible for refetching with its current filters —
+          // refetching here (unfiltered) would clobber the visible list, only
+          // for the caller to immediately refetch again with real filters.
           onSuccess?.(data.message || 'Bundle deleted successfully');
         } else {
           const errorMsg = data.error || 'Failed to delete bundle';
@@ -113,7 +115,7 @@ export function useBundlesList() {
         clearTimeout(timeout);
       }
     },
-    [fetchBundles]
+    []
   );
 
   const toggleBundleStatus = useCallback(

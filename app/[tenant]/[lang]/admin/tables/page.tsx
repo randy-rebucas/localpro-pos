@@ -179,9 +179,9 @@ export default function TablesPage() {
             <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
               <input
                 type="checkbox"
+                className="checkbox-win8"
                 checked={showInactive}
                 onChange={(e) => setShowInactive(e.target.checked)}
-                className="rounded"
               />
               {dict?.tables?.showInactive || 'Show inactive'}
             </label>
@@ -215,17 +215,17 @@ export default function TablesPage() {
                 <div
                   key={table._id}
                   className={`bg-white border-2 p-4 transition ${
-                    table.isActive ? 'border-gray-200 hover:shadow-md' : 'border-dashed border-gray-200 opacity-60'
+                    table.isActive ? 'border-gray-200' : 'border-dashed border-gray-200 opacity-60'
                   }`}
                 >
                   <div className="flex justify-between items-start mb-2">
                     <h3 className="text-lg font-bold text-gray-900">{table.name}</h3>
                     {table.isActive ? (
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusCfg.cls}`}>
+                      <span className={`px-2 py-0.5 text-xs font-medium ${statusCfg.cls}`}>
                         {statusLabels[table.status] || statusCfg.label}
                       </span>
                     ) : (
-                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
+                      <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-500">
                         {dict?.admin?.inactive || 'Inactive'}
                       </span>
                     )}
@@ -301,7 +301,7 @@ export default function TablesPage() {
         {!loading && activeTables.length > 0 && (
           <div className="flex flex-wrap gap-3 mt-4 text-xs text-gray-500">
             {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
-              <span key={key} className={`px-2 py-0.5 rounded-full font-medium ${cfg.cls}`}>{statusLabels[key] || cfg.label}</span>
+              <span key={key} className={`px-2 py-0.5 font-medium ${cfg.cls}`}>{statusLabels[key] || cfg.label}</span>
             ))}
             <span className="ml-auto">{dict?.tables?.resetToOpenHint || '"Reset to Open" clears stuck occupied status'}</span>
           </div>
@@ -315,7 +315,7 @@ export default function TablesPage() {
           onClick={() => setShowModal(false)}
         >
           <div
-            className="bg-white w-full max-w-sm shadow-2xl"
+            className="bg-white w-full max-w-sm border border-gray-300"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">

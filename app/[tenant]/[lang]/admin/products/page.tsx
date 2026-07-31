@@ -297,7 +297,7 @@ export default function ProductsPage() {
               >
                 {tab.label}
                 {productFilter === tab.value && pagination.total > 0 && (
-                  <span className="ml-2 px-1.5 py-0.5 text-xs rounded-full bg-brand text-white">
+                  <span className="ml-2 px-1.5 py-0.5 text-xs bg-brand text-white">
                     {pagination.total}
                   </span>
                 )}
@@ -330,7 +330,7 @@ export default function ProductsPage() {
                     ? (dict.products?.exporting || 'Exporting...')
                     : `${dict.admin?.export || 'Export'} ▼`}
                 </button>
-                <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-300 shadow-lg hidden group-hover:block z-10">
+                <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-300 hidden group-hover:block z-10">
                   <button
                     type="button"
                     onClick={() => handleExport('csv')}
@@ -458,9 +458,9 @@ export default function ProductsPage() {
                     <td className="px-4 py-4 w-14">
                       {product.image ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={product.image} alt={product.name} className="w-10 h-10 object-cover border border-gray-200 rounded" />
+                        <img src={product.image} alt={product.name} className="w-10 h-10 object-cover border border-gray-200" />
                       ) : (
-                        <div className="w-10 h-10 bg-gray-100 border border-gray-200 rounded flex items-center justify-center">
+                        <div className="w-10 h-10 bg-gray-100 border border-gray-200 flex items-center justify-center">
                           <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                           </svg>
@@ -777,7 +777,7 @@ function ProductModal({
             {product ? (dict.admin?.editProduct || 'Edit Product') : (dict.admin?.addProduct || 'Add Product')}
           </h2>
           {businessTypeConfig && (
-            <div className="mb-4 p-3 bg-brand-soft border border-teal-200 rounded">
+            <div className="mb-4 p-3 bg-brand-soft border border-teal-200">
               <p className="text-sm text-brand-navy-deep">
                 <strong>{dict.products?.businessType || 'Business Type'}:</strong> {businessTypeConfig.name}
               </p>
@@ -862,7 +862,7 @@ function ProductModal({
                   <img
                     src={formData.image}
                     alt="Preview"
-                    className="w-20 h-20 object-cover border border-gray-200 rounded flex-shrink-0"
+                    className="w-20 h-20 object-cover border border-gray-200 flex-shrink-0"
                   />
                 )}
                 <div className="flex-1 space-y-2">
@@ -1388,7 +1388,7 @@ function ProductModal({
       {/* Image Picker Modal */}
       {showImagePicker && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-          <div className="bg-white border border-gray-200 shadow-xl w-full max-w-2xl flex flex-col max-h-[80vh]">
+          <div className="bg-white border border-gray-200 w-full max-w-2xl flex flex-col max-h-[80vh]">
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
               <h3 className="text-base font-semibold text-gray-900">{dict.products?.selectImage || 'Select Image'}</h3>
@@ -1419,7 +1419,7 @@ function ProductModal({
             <div className="flex-1 overflow-y-auto p-4">
               {pickerLoading ? (
                 <div className="flex items-center justify-center py-12">
-                  <div className="animate-spin h-6 w-6 border-2 border-gray-400 border-t-transparent rounded-full" />
+                  <div className="animate-spin h-6 w-6 border-2 border-gray-400 border-t-transparent" />
                 </div>
               ) : pickerFiles.filter(f => f.name.toLowerCase().includes(pickerSearch.toLowerCase())).length === 0 ? (
                 <div className="text-center py-12 text-gray-400 text-sm">
@@ -1598,7 +1598,7 @@ function BulkEditModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white border border-gray-200 shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div className="bg-white border border-gray-200 w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">

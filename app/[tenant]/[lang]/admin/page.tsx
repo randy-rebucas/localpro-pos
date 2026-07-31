@@ -16,10 +16,10 @@ import { useAuth } from '@/contexts/AuthContext';
 interface RecentTx {
   _id: string;
   receiptNumber?: string;
-  totalAmount: number;
+  total: number;
   paymentMethod: string;
   createdAt: string;
-  customerName?: string;
+  customerId?: { firstName?: string; lastName?: string } | string;
 }
 
 interface DashboardData {
@@ -67,16 +67,12 @@ export default function AdminDashboard() {
 
   const fetchDashboard = useCallback(async () => {
     try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const startDate = today.toISOString();
-      const endDate = new Date().toISOString();
-
-      const [txRes, productsRes, customersRes, lowStockRes] = await Promise.allSettled([
-        fetch(`/api/transactions?startDate=${startDate}&endDate=${endDate}&limit=5`),
-        fetch(`/api/products?limit=1`),
+      const [statsRes, txRes, productsRes, customersRes, lowStockRes] = await Promise.allSettled([
+        fetch(`/api/transactions/stats?period=today`),
+        fetch(`/api/transactions?limit=5`),
+        fetch(`/api/products?page=1&limit=1`),
         fetch(`/api/customers?limit=1`),
-        fetch(`/api/products?lowStock=true&limit=1`),
+        fetch(`/api/inventory/low-stock`),
       ]);
 
       let todayRevenue = 0;
@@ -86,25 +82,30 @@ export default function AdminDashboard() {
       let totalCustomers = 0;
       let lowStockCount = 0;
 
+      if (statsRes.status === 'fulfilled' && statsRes.value.ok) {
+        const json = await statsRes.value.json();
+        if (json.success) {
+          todayRevenue = json.data?.totalSales ?? 0;
+          todayTransactions = json.data?.totalTransactions ?? 0;
+        }
+      }
       if (txRes.status === 'fulfilled' && txRes.value.ok) {
         const json = await txRes.value.json();
         if (json.success) {
-          recentTransactions = (json.transactions || json.data || []).slice(0, 5);
-          todayTransactions = json.total ?? recentTransactions.length;
-          todayRevenue = recentTransactions.reduce((s: number, t: RecentTx) => s + (t.totalAmount || 0), 0);
+          recentTransactions = (json.data || []).slice(0, 5);
         }
       }
       if (productsRes.status === 'fulfilled' && productsRes.value.ok) {
         const json = await productsRes.value.json();
-        totalProducts = json.total ?? json.count ?? 0;
+        totalProducts = json.pagination?.total ?? 0;
       }
       if (customersRes.status === 'fulfilled' && customersRes.value.ok) {
         const json = await customersRes.value.json();
-        totalCustomers = json.total ?? json.count ?? 0;
+        totalCustomers = json.pagination?.total ?? 0;
       }
       if (lowStockRes.status === 'fulfilled' && lowStockRes.value.ok) {
         const json = await lowStockRes.value.json();
-        lowStockCount = json.total ?? json.count ?? 0;
+        lowStockCount = json.count ?? 0;
       }
 
       let expiringCount = 0;
@@ -113,7 +114,7 @@ export default function AdminDashboard() {
           const expRes = await fetch(`/api/reports/expiry?days=30`);
           if (expRes.ok) {
             const j = await expRes.json();
-            expiringCount = (j.expiring?.length ?? 0) + (j.expired?.length ?? 0);
+            expiringCount = (j.data?.totalExpired ?? 0) + (j.data?.totalExpiring ?? 0);
           }
         } catch { /* ignore */ }
       }
@@ -134,32 +135,28 @@ export default function AdminDashboard() {
       value: data ? fmt(data.todayRevenue, currencySymbol) : '—',
       sub: `${data?.todayTransactions ?? 0} transactions`,
       icon: TrendingUp,
-      accent: '#10b981',
-      bg: '#f0fdf4',
+      tile: '#0f9d58',
     },
     {
       label: 'Transactions Today',
       value: data ? data.todayTransactions.toLocaleString() : '—',
       sub: 'Completed sales',
       icon: ShoppingCart,
-      accent: '#f59e0b',
-      bg: '#fffbeb',
+      tile: '#e3a008',
     },
     {
       label: 'Total Products',
       value: data ? data.totalProducts.toLocaleString() : '—',
       sub: data?.lowStockCount ? `${data.lowStockCount} low stock` : 'All stocked',
       icon: Package,
-      accent: '#3b82f6',
-      bg: '#eff6ff',
+      tile: '#1e70bf',
     },
     {
       label: 'Total Customers',
       value: data ? data.totalCustomers.toLocaleString() : '—',
       sub: 'Registered accounts',
       icon: Users,
-      accent: '#8b5cf6',
-      bg: '#f5f3ff',
+      tile: '#7a3fc9',
     },
   ];
 
@@ -225,20 +222,21 @@ export default function AdminDashboard() {
         {stats.map(s => {
           const Icon = s.icon;
           return (
-            <div key={s.label} className="bg-white border border-gray-300 p-4">
-              <div
-                className="inline-flex p-2 mb-3"
-                style={{ backgroundColor: s.bg, color: s.accent }}
-              >
+            <div
+              key={s.label}
+              className="p-4 text-white transition-[filter] hover:brightness-110"
+              style={{ backgroundColor: s.tile }}
+            >
+              <div className="inline-flex p-2 mb-3 bg-white/15">
                 <Icon className="w-5 h-5" />
               </div>
               {loading ? (
-                <div className="h-7 w-24 bg-gray-100 animate-pulse mb-1" />
+                <div className="h-7 w-24 bg-white/20 animate-pulse mb-1" />
               ) : (
-                <p className="text-xl font-bold text-gray-900 mb-0.5">{s.value}</p>
+                <p className="text-xl font-bold mb-0.5">{s.value}</p>
               )}
-              <p className="text-xs text-gray-500">{s.sub}</p>
-              <p className="text-xs font-medium text-gray-400 mt-1">{s.label}</p>
+              <p className="text-xs text-white/80">{s.sub}</p>
+              <p className="text-xs font-medium text-white/70 mt-1">{s.label}</p>
             </div>
           );
         })}
@@ -276,7 +274,7 @@ export default function AdminDashboard() {
                   <th className="text-left px-3 py-2.5 text-xs font-medium text-gray-500">Customer</th>
                   <th className="text-left px-3 py-2.5 text-xs font-medium text-gray-500">Method</th>
                   <th className="text-right px-5 py-2.5 text-xs font-medium text-gray-500">Amount</th>
-                  <th className="text-right px-5 py-2.5 text-xs font-medium text-gray-500">Time</th>
+                  <th className="text-right px-5 py-2.5 text-xs font-medium text-gray-500">Date</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -286,14 +284,16 @@ export default function AdminDashboard() {
                       {tx.receiptNumber || tx._id.slice(-6).toUpperCase()}
                     </td>
                     <td className="px-3 py-3 text-gray-700 truncate max-w-[120px]">
-                      {tx.customerName || 'Walk-in'}
+                      {(typeof tx.customerId === 'object' && tx.customerId
+                        ? `${tx.customerId.firstName ?? ''} ${tx.customerId.lastName ?? ''}`.trim()
+                        : '') || 'Walk-in'}
                     </td>
                     <td className="px-3 py-3 text-gray-500 capitalize">{tx.paymentMethod}</td>
                     <td className="px-5 py-3 text-right font-semibold text-gray-900">
-                      {fmt(tx.totalAmount, currencySymbol)}
+                      {fmt(tx.total, currencySymbol)}
                     </td>
                     <td className="px-5 py-3 text-right text-gray-400 text-xs">
-                      {new Date(tx.createdAt).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' })}
+                      {new Date(tx.createdAt).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </td>
                   </tr>
                 ))}

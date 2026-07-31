@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
-import { requireRole } from '@/lib/auth';
+import { requireRole, getRoleRank } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateEmail, validatePassword } from '@/lib/validation';
 import { handleApiError } from '@/lib/error-handler';
@@ -45,15 +45,15 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   let t: (key: string, fallback: string) => string;
   try {
     await connectDB();
-    await requireRole(request, ['admin', 'manager']);
+    const actingUser = await requireRole(request, ['admin', 'manager']);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
     t = await getValidationTranslatorFromRequest(request);
-    
+
     if (!tenantId) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
-    
+
     const body = await request.json();
     const { email, password, name, role, isActive } = body;
 
@@ -62,9 +62,58 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ success: false, error: t('validation.userNotFound', 'User not found') }, { status: 404 });
     }
 
+    // SECURITY: A manager/admin cannot modify an account ranked above their
+    // own (e.g. a manager editing an admin or owner account).
+    if (getRoleRank(oldUser.role) > getRoleRank(actingUser.role)) {
+      return NextResponse.json(
+        { success: false, error: t('validation.cannotModifyHigherRole', 'You cannot modify a user with a higher role than your own') },
+        { status: 403 }
+      );
+    }
+
+    // SECURITY: prevent privilege escalation via role changes.
+    if (role !== undefined) {
+      if (getRoleRank(role) > getRoleRank(actingUser.role)) {
+        return NextResponse.json(
+          { success: false, error: t('validation.cannotGrantHigherRole', 'You cannot assign a role higher than your own') },
+          { status: 403 }
+        );
+      }
+      if (role === 'owner' && actingUser.role !== 'owner') {
+        return NextResponse.json(
+          { success: false, error: t('validation.onlyOwnerCanGrantOwner', 'Only an owner can grant the owner role') },
+          { status: 403 }
+        );
+      }
+    }
+
+    // SECURITY: prevent self-lockout — a user cannot deactivate their own account.
+    if (isActive === false && id === actingUser.userId) {
+      return NextResponse.json(
+        { success: false, error: t('validation.cannotDeactivateSelf', 'You cannot deactivate your own account') },
+        { status: 400 }
+      );
+    }
+
+    // SECURITY: prevent a tenant from being left with no active owner/admin.
+    if (isActive === false && oldUser.isActive !== false && ['owner', 'admin'].includes(oldUser.role)) {
+      const remainingActiveAdmins = await User.countDocuments({
+        tenantId,
+        _id: { $ne: id },
+        isActive: { $ne: false },
+        role: { $in: ['owner', 'admin'] },
+      });
+      if (remainingActiveAdmins === 0) {
+        return NextResponse.json(
+          { success: false, error: t('validation.cannotDeactivateLastAdmin', 'Cannot deactivate the last active owner/admin for this tenant') },
+          { status: 400 }
+        );
+      }
+    }
+
     // Build update object
     const updateData: any = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
-    
+
     if (email !== undefined) {
       if (!validateEmail(email)) {
         return NextResponse.json(
@@ -168,17 +217,45 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await connectDB();
-    await requireRole(request, ['admin']);
+    const actingUser = await requireRole(request, ['admin']);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
-    
+
     if (!tenantId) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
-    
+
     const user = await User.findOne({ _id: id, tenantId }).lean();
     if (!user) {
       return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
+    }
+
+    // SECURITY: can't delete your own account, and can't delete a user
+    // ranked above you (e.g. an admin deleting an owner).
+    if (id === actingUser.userId) {
+      return NextResponse.json({ success: false, error: 'You cannot delete your own account' }, { status: 400 });
+    }
+    if (getRoleRank(user.role) > getRoleRank(actingUser.role)) {
+      return NextResponse.json(
+        { success: false, error: 'You cannot delete a user with a higher role than your own' },
+        { status: 403 }
+      );
+    }
+
+    // SECURITY: prevent a tenant from being left with no active owner/admin.
+    if (user.isActive !== false && ['owner', 'admin'].includes(user.role)) {
+      const remainingActiveAdmins = await User.countDocuments({
+        tenantId,
+        _id: { $ne: id },
+        isActive: { $ne: false },
+        role: { $in: ['owner', 'admin'] },
+      });
+      if (remainingActiveAdmins === 0) {
+        return NextResponse.json(
+          { success: false, error: 'Cannot delete the last active owner/admin for this tenant' },
+          { status: 400 }
+        );
+      }
     }
 
     // Hard delete - actually remove the user from the database

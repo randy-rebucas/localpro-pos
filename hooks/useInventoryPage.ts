@@ -20,7 +20,7 @@ export interface StockPrediction {
 
 export type FetchStatus = 'loading' | 'ready' | 'error';
 
-export function useInventoryPage(tenant: string) {
+export function useInventoryPage(tenant: string, branchId?: string) {
   const [branches, setBranches] = useState<InventoryBranch[]>([]);
   const [branchesStatus, setBranchesStatus] = useState<FetchStatus>('loading');
   const [branchesError, setBranchesError] = useState<string | null>(null);
@@ -55,7 +55,9 @@ export function useInventoryPage(tenant: string) {
     setPredictionsStatus('loading');
     setPredictionsError(null);
     try {
-      const res = await fetch(`/api/insights/stock-predictions?tenant=${tenant}`, {
+      const params = new URLSearchParams({ tenant });
+      if (branchId) params.set('branchId', branchId);
+      const res = await fetch(`/api/insights/stock-predictions?${params}`, {
         credentials: 'include',
       });
       const data = await res.json();
@@ -73,7 +75,7 @@ export function useInventoryPage(tenant: string) {
       setPredictionsError('Failed to load predictions');
       setPredictionsStatus('error');
     }
-  }, [tenant]);
+  }, [tenant, branchId]);
 
   useEffect(() => {
     refetchBranches();

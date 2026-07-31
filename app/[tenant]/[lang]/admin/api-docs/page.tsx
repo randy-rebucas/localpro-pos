@@ -104,13 +104,13 @@ export default function ApiDocsPage() {
             <div className="space-y-4">
               <div>
                 <h3 className="text-sm font-semibold text-gray-700 mb-2">{dict?.apiDocs?.authHeader || 'Authorization Header'}</h3>
-                <div className="bg-gray-100 p-4 rounded border border-gray-300 font-mono text-sm overflow-x-auto">
+                <div className="bg-gray-100 p-4 border border-gray-300 font-mono text-sm overflow-x-auto">
                   <code>Authorization: Bearer {'<JWT_TOKEN>'}</code>
                 </div>
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-gray-700 mb-2">{dict?.apiDocs?.authCookie || 'Cookie'}</h3>
-                <div className="bg-gray-100 p-4 rounded border border-gray-300 font-mono text-sm">
+                <div className="bg-gray-100 p-4 border border-gray-300 font-mono text-sm">
                   <code>auth-token: {'<JWT_TOKEN>'}</code>
                 </div>
               </div>
@@ -130,7 +130,7 @@ export default function ApiDocsPage() {
                     {category.endpoints.map((endpoint, endIdx) => (
                       <div
                         key={endIdx}
-                        className="border border-gray-300 p-4 hover:shadow-md transition-shadow"
+                        className="border border-gray-300 p-4 hover:bg-gray-50 transition-colors"
                       >
                         <div className="flex items-start gap-4 flex-wrap">
                           <span
@@ -161,7 +161,7 @@ export default function ApiDocsPage() {
             <p className="text-gray-600 mb-4">
               {dict?.apiDocs?.responseFormatDesc || 'All API responses follow a standard JSON format with success status and data or error information.'}
             </p>
-            <div className="bg-gray-100 p-4 rounded border border-gray-300 font-mono text-sm overflow-x-auto">
+            <div className="bg-gray-100 p-4 border border-gray-300 font-mono text-sm overflow-x-auto">
               <pre>{`{
   "success": true,
   "data": { /* response data */ }
@@ -178,7 +178,7 @@ export default function ApiDocsPage() {
           {/* Base URL Section */}
           <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8">
             <h2 className="text-xl font-bold text-gray-900 mb-4">{dict?.apiDocs?.baseUrlSection || 'Base URL'}</h2>
-            <div className="bg-gray-100 p-4 rounded border border-gray-300 font-mono text-sm">
+            <div className="bg-gray-100 p-4 border border-gray-300 font-mono text-sm">
               <code>https://your-instance.localpro.app/api</code>
             </div>
             <p className="text-gray-600 mt-4">

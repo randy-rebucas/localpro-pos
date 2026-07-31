@@ -59,8 +59,6 @@ export default function HolidaysManager({ settings, tenant, onUpdate, dict }: Ho
       const method = editing ? 'PUT' : 'POST';
       const body = editing ? { id: editing.id, ...holiday } : holiday;
 
-      console.log('Saving holiday:', body); // Debug log
-
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
@@ -69,7 +67,6 @@ export default function HolidaysManager({ settings, tenant, onUpdate, dict }: Ho
       });
 
       const data = await res.json();
-      console.log('Holiday save response:', data); // Debug log
 
       if (data.success) {
         setMessage({ type: 'success', text: editing ? (dict?.holidays?.holidayUpdated || 'Holiday updated successfully') : (dict?.holidays?.holidayCreated || 'Holiday created successfully') });
@@ -127,8 +124,8 @@ export default function HolidaysManager({ settings, tenant, onUpdate, dict }: Ho
 
       {message && (
         <div
-          className={`p-3 rounded ${
-            message.type === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
+          className={`p-3 border ${
+            message.type === 'success' ? 'bg-green-50 text-green-800 border-green-300' : 'bg-red-50 text-red-800 border-red-300'
           }`}
         >
           {message.text}
@@ -156,7 +153,7 @@ export default function HolidaysManager({ settings, tenant, onUpdate, dict }: Ho
           holidays.map((holiday) => (
             <div
               key={holiday.id}
-              className="p-4 border-2 border-gray-300 rounded hover:bg-gray-50"
+              className="p-4 border-2 border-gray-300 hover:bg-gray-50"
             >
               <div className="flex items-center justify-between">
                 <div>
@@ -225,7 +222,7 @@ function HolidayForm({
   const [dayOfWeek, setDayOfWeek] = useState(holiday?.recurring?.dayOfWeek?.toString() || '0');
 
   return (
-    <div className="border-2 border-gray-300 rounded p-6 bg-white">
+    <div className="border-2 border-gray-300 p-6 bg-white">
       <h4 className="text-lg font-semibold mb-4">{holiday ? (dict?.holidays?.editHoliday || 'Edit Holiday') : (dict?.holidays?.addHoliday || 'Add Holiday')}</h4>
 
       <div className="space-y-4">
@@ -344,7 +341,7 @@ function HolidayForm({
             id="isBusinessClosed"
             checked={isBusinessClosed}
             onChange={(e) => setIsBusinessClosed(e.target.checked)}
-            className="w-4 h-4 text-brand border-gray-300 rounded focus:ring-brand"
+            className="checkbox-win8"
           />
           <label htmlFor="isBusinessClosed" className="text-sm text-gray-700">
             {dict?.holidays?.businessClosedLabel || 'Business is closed on this holiday'}

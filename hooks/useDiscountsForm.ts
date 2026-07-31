@@ -24,7 +24,7 @@ interface UseDiscountsFormReturn {
   setFormData: (data: Partial<DiscountFormData>) => void;
   error: string;
   submitting: boolean;
-  handleSubmit: (onSubmit: (data: DiscountFormData) => Promise<boolean>) => Promise<void>;
+  handleSubmit: (onSubmit: (data: DiscountFormData) => Promise<true | string>) => Promise<void>;
   resetForm: () => void;
   initializeForm: (discount: Discount) => void;
 }
@@ -79,7 +79,7 @@ export function useDiscountsForm(): UseDiscountsFormReturn {
   }, []);
 
   const handleSubmit = useCallback(
-    async (onSubmit: (data: DiscountFormData) => Promise<boolean>) => {
+    async (onSubmit: (data: DiscountFormData) => Promise<true | string>) => {
       setError('');
 
       // Validate required fields
@@ -110,9 +110,9 @@ export function useDiscountsForm(): UseDiscountsFormReturn {
           isActive: formData.isActive,
         };
 
-        const success = await onSubmit(payload);
-        if (!success) {
-          setError('Failed to save discount');
+        const result = await onSubmit(payload);
+        if (result !== true) {
+          setError(result);
         }
       } catch {
         setError('An error occurred while saving');

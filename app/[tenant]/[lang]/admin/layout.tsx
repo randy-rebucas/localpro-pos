@@ -34,7 +34,7 @@ function AdminShell({ children }: { children: ReactNode }) {
           {/* Mobile hamburger */}
           <button
             onClick={toggleMobileSidebar}
-            className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 lg:hidden"
+            className="p-2 hover:bg-gray-100 text-gray-500 lg:hidden"
             aria-label="Open menu"
           >
             <Menu className="w-5 h-5" />
@@ -42,7 +42,7 @@ function AdminShell({ children }: { children: ReactNode }) {
           {/* Desktop collapse toggle */}
           <button
             onClick={toggleCollapse}
-            className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 hidden lg:flex"
+            className="p-2 hover:bg-gray-100 text-gray-500 hidden lg:flex"
             aria-label="Toggle sidebar"
           >
             {sidebarCollapsed ? <PanelLeftOpen className="w-5 h-5" /> : <PanelLeftClose className="w-5 h-5" />}
@@ -51,7 +51,7 @@ function AdminShell({ children }: { children: ReactNode }) {
           {/* Brand */}
           <div className="flex items-center gap-2">
             <div
-              className="w-7 h-7 rounded-md flex items-center justify-center text-white text-xs font-bold"
+              className="w-7 h-7 flex items-center justify-center text-white text-xs font-bold"
               style={{ backgroundColor: primaryColor }}
             >
               {businessName.charAt(0).toUpperCase()}
@@ -67,12 +67,12 @@ function AdminShell({ children }: { children: ReactNode }) {
 
         {/* Right: notifications + user chip */}
         <div className="flex items-center gap-2">
-          <button className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 relative" aria-label="Notifications">
+          <button className="p-2 hover:bg-gray-100 text-gray-500 relative" aria-label="Notifications">
             <Bell className="w-5 h-5" />
           </button>
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-50 border border-gray-200">
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200">
             <div
-              className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-semibold flex-shrink-0"
+              className="w-6 h-6 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0"
               style={{ backgroundColor: primaryColor }}
             >
               {user?.name?.charAt(0)?.toUpperCase() || 'U'}

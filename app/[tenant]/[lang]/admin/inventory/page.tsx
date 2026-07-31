@@ -38,7 +38,7 @@ export default function AdminInventoryPage() {
     predictionsStatus,
     predictionsError,
     refetchPredictions,
-  } = useInventoryPage(tenant);
+  } = useInventoryPage(tenant, selectedBranch || undefined);
 
   const inventoryEnabled = supportsFeature(settings ?? undefined, 'inventory');
   const businessTypeConfig = settings ? getBusinessTypeConfig(getBusinessType(settings)) : null;

@@ -253,7 +253,7 @@ export default function AdminSettingsPage() {
 
   const inputCls = 'w-full border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand';
   const labelCls = 'block text-xs font-medium text-gray-600 mb-1';
-  const checkboxCls = 'w-4 h-4 accent-brand';
+  const checkboxCls = 'checkbox-win8 w-4 h-4';
 
   const Toggle = ({ label, desc, checked, onChange }: { label: string; desc?: string; checked: boolean; onChange: (v: boolean) => void }) => (
     <label className="flex items-start gap-3 cursor-pointer py-2">

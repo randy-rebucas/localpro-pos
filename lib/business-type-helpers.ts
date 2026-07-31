@@ -16,7 +16,7 @@ export function getBusinessType(settings?: ITenantSettings): BusinessType {
     return 'general';
   }
   const type = settings.businessType.toLowerCase() as BusinessType;
-  return ['retail', 'restaurant', 'laundry', 'service', 'general'].includes(type) ? type : 'general';
+  return ['retail', 'restaurant', 'laundry', 'service', 'general', 'pharmacy'].includes(type) ? type : 'general';
 }
 
 /**

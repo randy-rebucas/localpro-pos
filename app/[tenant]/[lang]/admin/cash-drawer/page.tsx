@@ -15,6 +15,7 @@ import {
   getStatusBadgeClasses,
   getStatusLabel,
   formatSessionTime,
+  getRefreshSuccessMessage,
 } from '@/lib/cash-drawer-helpers';
 
 export default function CashDrawerPage() {
@@ -39,7 +40,14 @@ export default function CashDrawerPage() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await fetchSessions(statusFilter, (error) => toast.error(error));
+    let failed = false;
+    await fetchSessions(statusFilter, (error) => {
+      failed = true;
+      toast.error(error);
+    });
+    if (!failed) {
+      toast.success(getRefreshSuccessMessage(dict));
+    }
     setRefreshing(false);
   };
 

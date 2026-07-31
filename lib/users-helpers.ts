@@ -13,6 +13,32 @@ export const USER_ROLES = [
 
 export type UserRole = typeof USER_ROLES[number]['value'];
 
+const ROLE_RANK: Record<UserRole, number> = {
+  viewer: 1,
+  cashier: 2,
+  manager: 3,
+  admin: 4,
+  owner: 5,
+};
+
+/**
+ * Roles assignable by an actor of the given role — mirrors the server-side
+ * check in app/api/users routes (a user can't grant a role ranked above
+ * their own). Used to keep the role picker from offering choices the write
+ * endpoint will reject.
+ */
+export function assignableRoles(actingUserRole: string): typeof USER_ROLES[number][] {
+  const actingRank = ROLE_RANK[actingUserRole as UserRole] ?? 0;
+  return USER_ROLES.filter((r) => ROLE_RANK[r.value] <= actingRank);
+}
+
+/** Whether an actor can modify (edit/deactivate/delete) a user of the given target role. */
+export function canManageRole(actingUserRole: string, targetRole: string): boolean {
+  const actingRank = ROLE_RANK[actingUserRole as UserRole] ?? 0;
+  const targetRank = ROLE_RANK[targetRole as UserRole] ?? 0;
+  return targetRank <= actingRank;
+}
+
 /**
  * Get display name for a user role
  */

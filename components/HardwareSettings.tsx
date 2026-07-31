@@ -70,6 +70,23 @@ export default function HardwareSettings({
   const saveConfig = async () => {
     setLoading(true);
     try {
+      // In uncontrolled mode (no `config`/`onChange` from a parent that owns
+      // persistence — e.g. the admin hardware page), this component is the
+      // only thing that can persist the change, so it must write through to
+      // the tenant record, not just localStorage — otherwise the config only
+      // exists in this one browser and silently never reaches other devices.
+      if (externalConfig === undefined) {
+        const res = await fetch(`/api/tenants/${tenant}/settings`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ hardwareConfig: config }),
+        });
+        const data = await res.json();
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to save hardware settings');
+        }
+      }
       const hardwareConfigKey = `hardware_config_${tenant}`;
       localStorage.setItem(hardwareConfigKey, JSON.stringify(config));
       await hardwareService.setConfig(config);
@@ -77,7 +94,7 @@ export default function HardwareSettings({
       if (onClose) onClose();
     } catch (error) {
       console.error('Failed to save hardware config:', error);
-      showToast.error(dict?.common?.failedToSaveHardwareSettings || 'Failed to save hardware settings');
+      showToast.error(error instanceof Error ? error.message : (dict?.common?.failedToSaveHardwareSettings || 'Failed to save hardware settings'));
     } finally {
       setLoading(false);
     }
@@ -134,6 +151,23 @@ export default function HardwareSettings({
     } catch (error) {
       console.error('Print test error:', error);
       showToast.error(dict?.common?.failedToPrintTestReceipt || 'Failed to print test receipt');
+    } finally {
+      setTesting(null);
+    }
+  };
+
+  const pairCashDrawer = async () => {
+    setTesting('drawer-pair');
+    try {
+      const paired = await hardwareService.pairDirectCashDrawer();
+      if (paired) {
+        showToast.success(dict?.common?.cashDrawerPaired || 'Cash drawer paired!');
+      } else {
+        showToast.error(dict?.common?.failedToPairCashDrawer || 'Failed to pair cash drawer');
+      }
+    } catch (error) {
+      console.error('Cash drawer pairing error:', error);
+      showToast.error(dict?.common?.failedToPairCashDrawer || 'Failed to pair cash drawer');
     } finally {
       setTesting(null);
     }
@@ -337,11 +371,12 @@ export default function HardwareSettings({
                 checked={config.cashDrawer?.enabled || false}
                 onChange={(e) => updateConfig({
                   cashDrawer: {
+                    ...config.cashDrawer,
                     enabled: e.target.checked,
                     connectedToPrinter: config.cashDrawer?.connectedToPrinter || false,
                   },
                 })}
-                className="mr-2"
+                className="mr-2 checkbox-win8"
               />
               <span className="text-sm text-gray-700">{dict?.components?.hardwareSettings?.enableCashDrawer || 'Enable Cash Drawer'}</span>
             </label>
@@ -352,14 +387,59 @@ export default function HardwareSettings({
                   checked={config.cashDrawer?.connectedToPrinter || false}
                   onChange={(e) => updateConfig({
                     cashDrawer: {
+                      ...config.cashDrawer,
                       enabled: config.cashDrawer?.enabled ?? false,
                       connectedToPrinter: e.target.checked,
                     },
                   })}
-                  className="mr-2"
+                  className="mr-2 checkbox-win8"
                 />
                 <span className="text-sm text-gray-700">{dict?.components?.hardwareSettings?.connectedToPrinter || 'Connected to Printer'}</span>
               </label>
+            )}
+            {config.cashDrawer?.enabled && !config.cashDrawer?.connectedToPrinter && (
+              <div className="pl-6 space-y-3 border-l-2 border-gray-200">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {dict?.components?.hardwareSettings?.connectionType || 'Connection Type'}
+                  </label>
+                  <select
+                    value={config.cashDrawer?.direct?.type || 'usb'}
+                    onChange={(e) => updateConfig({
+                      cashDrawer: {
+                        ...config.cashDrawer,
+                        enabled: config.cashDrawer?.enabled ?? false,
+                        connectedToPrinter: false,
+                        direct: { ...config.cashDrawer?.direct, type: e.target.value as 'usb' | 'serial' },
+                      },
+                    })}
+                    className="w-full px-4 py-2 border border-gray-300 bg-white"
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = primaryColor;
+                      e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.borderColor = '#d1d5db';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
+                  >
+                    <option value="usb">USB</option>
+                    <option value="serial">Serial</option>
+                  </select>
+                </div>
+                <button
+                  onClick={pairCashDrawer}
+                  disabled={testing === 'drawer-pair'}
+                  className="px-4 py-2 text-sm border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                >
+                  {testing === 'drawer-pair'
+                    ? (dict?.components?.hardwareSettings?.pairing || 'Pairing...')
+                    : (dict?.components?.hardwareSettings?.pairCashDrawer || 'Pair Cash Drawer')}
+                </button>
+                <p className="text-xs text-gray-500">
+                  {dict?.components?.hardwareSettings?.directCashDrawerHint || 'Pair once per device — the browser will prompt you to select the drawer.'}
+                </p>
+              </div>
             )}
             {config.cashDrawer?.enabled && (
               <button
@@ -393,7 +473,7 @@ export default function HardwareSettings({
                     enabled: e.target.checked,
                   },
                 })}
-                className="mr-2"
+                className="mr-2 checkbox-win8"
               />
               <span className="text-sm text-gray-700">{dict?.components?.hardwareSettings?.enableBarcodeScanner || 'Enable Barcode Scanner (Keyboard Input)'}</span>
             </label>
@@ -417,7 +497,7 @@ export default function HardwareSettings({
                     cameraId: config.qrReader?.cameraId,
                   },
                 })}
-                className="mr-2"
+                className="mr-2 checkbox-win8"
               />
               <span className="text-sm text-gray-700">{dict?.components?.hardwareSettings?.enableQRCodeReader || 'Enable QR Code Reader'}</span>
             </label>
@@ -469,7 +549,7 @@ export default function HardwareSettings({
                     enabled: e.target.checked,
                   },
                 })}
-                className="mr-2"
+                className="mr-2 checkbox-win8"
               />
               <span className="text-sm text-gray-700">{dict?.components?.hardwareSettings?.enableTouchscreenOptimizations || 'Enable Touchscreen Optimizations'}</span>
             </label>

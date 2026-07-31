@@ -12,8 +12,6 @@ import {
   getStatusLabel,
   getActionButtonColor,
   getActionButtonLabel,
-  getDeleteConfirmMessage,
-  getDeleteSuccessMessage,
   getStatusChangeMessage,
 } from '@/lib/categories-helpers';
 
@@ -25,7 +23,7 @@ export default function CategoriesPage() {
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
 
-  const { categories, loading, fetchCategories, deleteCategory, toggleCategoryStatus } = useCategoriesList();
+  const { categories, loading, fetchCategories, toggleCategoryStatus } = useCategoriesList();
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -35,19 +33,6 @@ export default function CategoriesPage() {
     fetchCategories((error) => toast.error(error));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const handleDeleteCategory = async (categoryId: string) => {
-    if (!dict) return;
-    if (!window.confirm(getDeleteConfirmMessage(dict))) return;
-
-    await deleteCategory(
-      categoryId,
-      () => {
-        toast.success(getDeleteSuccessMessage(dict));
-      },
-      (error) => toast.error(error)
-    );
-  };
 
   const handleToggleCategoryStatus = async (category: Category) => {
     if (!dict) return;
@@ -137,12 +122,6 @@ export default function CategoriesPage() {
                           className={`${getActionButtonColor(category.isActive)}`}
                         >
                           {getActionButtonLabel(category.isActive, dict)}
-                        </button>
-                        <button
-                          onClick={() => handleDeleteCategory(category._id)}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          {dict.common?.delete || 'Delete'}
                         </button>
                       </div>
                     </td>

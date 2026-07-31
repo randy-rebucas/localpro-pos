@@ -670,7 +670,7 @@ export default function SettingsPage() {
                         id="taxEnabled"
                         checked={settings.taxEnabled || false}
                         onChange={(e) => updateSetting('taxEnabled', e.target.checked)}
-                        className="h-4 w-4 text-brand focus:ring-brand border-gray-300 cursor-pointer"
+                        className="checkbox-win8 h-4 w-4 cursor-pointer"
                       />
                       <label htmlFor="taxEnabled" className="ml-2 text-sm font-medium text-gray-700">
                         {settingsDict.enableTax || 'Enable Tax'}
@@ -862,7 +862,7 @@ export default function SettingsPage() {
 
                 {/* Advanced Branding Section - Moved to Admin */}
                 <div className="pt-8 mt-8 border-t-2 border-gray-200">
-                  <div className="p-4 bg-brand-soft border border-teal-200 rounded">
+                  <div className="p-4 bg-brand-soft border border-teal-200">
                     <h3 className="text-lg font-semibold text-gray-900 mb-2">{settingsDict.advancedBranding || 'Advanced Branding'}</h3>
                     <p className="text-sm text-brand-navy mb-3">
                       {settingsDict.advancedBrandingNote || 'Advanced branding features (custom fonts, themes, CSS) have been moved to Admin → Advanced Branding for better access control.'}
@@ -998,7 +998,7 @@ export default function SettingsPage() {
                           id="receiptShowLogo"
                           checked={settings.receiptShowLogo !== false}
                           onChange={(e) => updateSetting('receiptShowLogo', e.target.checked)}
-                          className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
+                          className="checkbox-win8 h-5 w-5 cursor-pointer"
                         />
                         <label htmlFor="receiptShowLogo" className="ml-3 text-sm font-medium text-gray-700">
                           {settingsDict.showLogoOnReceipts || 'Show Logo on Receipts'}
@@ -1010,7 +1010,7 @@ export default function SettingsPage() {
                           id="receiptShowAddress"
                           checked={settings.receiptShowAddress !== false}
                           onChange={(e) => updateSetting('receiptShowAddress', e.target.checked)}
-                          className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
+                          className="checkbox-win8 h-5 w-5 cursor-pointer"
                         />
                         <label htmlFor="receiptShowAddress" className="ml-3 text-sm font-medium text-gray-700">
                           {settingsDict.showAddressOnReceipts || 'Show Address on Receipts'}
@@ -1022,7 +1022,7 @@ export default function SettingsPage() {
                           id="receiptShowPhone"
                           checked={settings.receiptShowPhone || false}
                           onChange={(e) => updateSetting('receiptShowPhone', e.target.checked)}
-                          className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
+                          className="checkbox-win8 h-5 w-5 cursor-pointer"
                         />
                         <label htmlFor="receiptShowPhone" className="ml-3 text-sm font-medium text-gray-700">
                           {settingsDict.showPhoneOnReceipts || 'Show Phone on Receipts'}
@@ -1034,7 +1034,7 @@ export default function SettingsPage() {
                           id="receiptShowEmail"
                           checked={settings.receiptShowEmail || false}
                           onChange={(e) => updateSetting('receiptShowEmail', e.target.checked)}
-                          className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
+                          className="checkbox-win8 h-5 w-5 cursor-pointer"
                         />
                         <label htmlFor="receiptShowEmail" className="ml-3 text-sm font-medium text-gray-700">
                           {settingsDict.showEmailOnReceipts || 'Show Email on Receipts'}
@@ -1261,7 +1261,7 @@ export default function SettingsPage() {
                             id="enableInventory"
                             checked={settings.enableInventory !== false}
                             onChange={(e) => updateSetting('enableInventory', e.target.checked)}
-                            className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
+                            className="checkbox-win8 h-5 w-5 cursor-pointer"
                           />
                           <label htmlFor="enableInventory" className="ml-3 flex-1">
                             <div className="text-sm font-medium text-gray-900">{settingsDict.inventoryManagement || 'Inventory Management'}</div>
@@ -1274,7 +1274,7 @@ export default function SettingsPage() {
                             id="enableCategories"
                             checked={settings.enableCategories !== false}
                             onChange={(e) => updateSetting('enableCategories', e.target.checked)}
-                            className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
+                            className="checkbox-win8 h-5 w-5 cursor-pointer"
                           />
                           <label htmlFor="enableCategories" className="ml-3 flex-1">
                             <div className="text-sm font-medium text-gray-900">{settingsDict.categoriesFeature || 'Categories'}</div>
@@ -1287,7 +1287,7 @@ export default function SettingsPage() {
                             id="enableDiscounts"
                             checked={settings.enableDiscounts || false}
                             onChange={(e) => updateSetting('enableDiscounts', e.target.checked)}
-                            className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
+                            className="checkbox-win8 h-5 w-5 cursor-pointer"
                           />
                           <label htmlFor="enableDiscounts" className="ml-3 flex-1">
                             <div className="text-sm font-medium text-gray-900">{settingsDict.discountsPromotions || 'Discounts & Promotions'}</div>
@@ -1300,7 +1300,7 @@ export default function SettingsPage() {
                             id="enableLoyaltyProgram"
                             checked={settings.enableLoyaltyProgram || false}
                             onChange={(e) => updateSetting('enableLoyaltyProgram', e.target.checked)}
-                            className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
+                            className="checkbox-win8 h-5 w-5 cursor-pointer"
                           />
                           <label htmlFor="enableLoyaltyProgram" className="ml-3 flex-1">
                             <div className="text-sm font-medium text-gray-900">{settingsDict.loyaltyProgram || 'Loyalty Program'}</div>
@@ -1313,7 +1313,7 @@ export default function SettingsPage() {
                             id="enableCustomerManagement"
                             checked={settings.enableCustomerManagement || false}
                             onChange={(e) => updateSetting('enableCustomerManagement', e.target.checked)}
-                            className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
+                            className="checkbox-win8 h-5 w-5 cursor-pointer"
                           />
                           <label htmlFor="enableCustomerManagement" className="ml-3 flex-1">
                             <div className="text-sm font-medium text-gray-900">{settingsDict.customerManagementFeature || 'Customer Management'}</div>
@@ -1326,7 +1326,7 @@ export default function SettingsPage() {
                             id="enableOnAccountSales"
                             checked={settings.enableOnAccountSales || false}
                             onChange={(e) => updateSetting('enableOnAccountSales', e.target.checked)}
-                            className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
+                            className="checkbox-win8 h-5 w-5 cursor-pointer"
                           />
                           <label htmlFor="enableOnAccountSales" className="ml-3 flex-1">
                             <div className="text-sm font-medium text-gray-900">{settingsDict.onAccountSales || 'Charge to customer account (pay later)'}</div>
@@ -1339,7 +1339,7 @@ export default function SettingsPage() {
                             id="enableBookingScheduling"
                             checked={settings.enableBookingScheduling || false}
                             onChange={(e) => updateSetting('enableBookingScheduling', e.target.checked)}
-                            className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
+                            className="checkbox-win8 h-5 w-5 cursor-pointer"
                           />
                           <label htmlFor="enableBookingScheduling" className="ml-3 flex-1">
                             <div className="text-sm font-medium text-gray-900">{settingsDict.bookingScheduling || 'Booking & Scheduling'}</div>
@@ -1361,7 +1361,7 @@ export default function SettingsPage() {
                   {settingsDict.configureNotificationPreferences || 'Configure notification preferences and alert thresholds'}
                 </p>
                 <div className="space-y-6">
-                  <div className="p-4 bg-brand-soft border border-teal-200 rounded">
+                  <div className="p-4 bg-brand-soft border border-teal-200">
                     <p className="text-sm text-brand-navy mb-2">
                       <strong>Note:</strong> {settingsDict.notificationTemplateNote || 'Notification template customization has been moved to Admin → Notification Templates for better access control.'}
                     </p>
@@ -1396,7 +1396,7 @@ export default function SettingsPage() {
                           id="lowStockAlert"
                           checked={settings.lowStockAlert !== false}
                           onChange={(e) => updateSetting('lowStockAlert', e.target.checked)}
-                          className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
+                          className="checkbox-win8 h-5 w-5 cursor-pointer"
                         />
                         <label htmlFor="lowStockAlert" className="ml-3 flex-1">
                           <div className="text-sm font-medium text-gray-900">
@@ -1418,7 +1418,7 @@ export default function SettingsPage() {
                           id="emailNotifications"
                           checked={settings.emailNotifications || false}
                           onChange={(e) => updateSetting('emailNotifications', e.target.checked)}
-                          className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
+                          className="checkbox-win8 h-5 w-5 cursor-pointer"
                         />
                         <label htmlFor="emailNotifications" className="ml-3 flex-1">
                           <div className="text-sm font-medium text-gray-900">
@@ -1435,7 +1435,7 @@ export default function SettingsPage() {
                           id="smsNotifications"
                           checked={settings.smsNotifications || false}
                           onChange={(e) => updateSetting('smsNotifications', e.target.checked)}
-                          className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
+                          className="checkbox-win8 h-5 w-5 cursor-pointer"
                         />
                         <label htmlFor="smsNotifications" className="ml-3 flex-1">
                           <div className="text-sm font-medium text-gray-900">
@@ -1460,7 +1460,7 @@ export default function SettingsPage() {
                           id="attendanceNotificationsEnabled"
                           checked={settings.attendanceNotifications?.enabled !== false}
                           onChange={(e) => updateSetting('attendanceNotifications.enabled', e.target.checked)}
-                          className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
+                          className="checkbox-win8 h-5 w-5 cursor-pointer"
                         />
                         <label htmlFor="attendanceNotificationsEnabled" className="ml-3 flex-1">
                           <div className="text-sm font-medium text-gray-900">{settingsDict.enableAttendanceAlerts || 'Enable Attendance Alerts'}</div>

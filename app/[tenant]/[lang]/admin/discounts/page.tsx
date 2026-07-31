@@ -36,6 +36,7 @@ export default function DiscountsPage() {
     deleteDiscount,
     toggleDiscountStatus,
     clearMessage,
+    setMessage,
   } = useDiscountsList();
 
   const { settings } = useTenantSettings();
@@ -54,7 +55,6 @@ export default function DiscountsPage() {
 
     const success = await deleteDiscount(discountId);
     if (success) {
-      clearMessage();
       await fetchDiscounts();
     }
   };
@@ -62,7 +62,6 @@ export default function DiscountsPage() {
   const handleToggleDiscountStatus = async (discount: Discount) => {
     const success = await toggleDiscountStatus(discount._id, !discount.isActive);
     if (success) {
-      clearMessage();
       await fetchDiscounts();
     }
   };
@@ -125,6 +124,7 @@ export default function DiscountsPage() {
             {discountsEnabled && (
               <button
                 onClick={() => {
+                  clearMessage();
                   setEditingDiscount(null);
                   setShowDiscountModal(true);
                 }}
@@ -188,6 +188,7 @@ export default function DiscountsPage() {
                         <div className="flex gap-2">
                           <button
                             onClick={() => {
+                              clearMessage();
                               setEditingDiscount(discount);
                               setShowDiscountModal(true);
                             }}
@@ -228,6 +229,12 @@ export default function DiscountsPage() {
               setEditingDiscount(null);
             }}
             onSave={async () => {
+              setMessage({
+                type: 'success',
+                text: editingDiscount
+                  ? (dict.admin?.updateSuccess || 'Discount updated successfully')
+                  : (dict.admin?.saveSuccess || 'Discount created successfully'),
+              });
               await fetchDiscounts();
               setShowDiscountModal(false);
               setEditingDiscount(null);
@@ -269,11 +276,11 @@ function DiscountModal({
     e.preventDefault();
     await handleSubmit(async (payload) => {
       const isEdit = !!discount;
-      const success = isEdit ? await updateDiscount(discount._id, payload) : await createDiscount(payload);
-      if (success) {
+      const result = isEdit ? await updateDiscount(discount._id, payload) : await createDiscount(payload);
+      if (result === true) {
         await onSave();
       }
-      return success;
+      return result;
     });
   };
 
@@ -350,7 +357,7 @@ function DiscountModal({
                     type="checkbox"
                     checked={formData.requiresIdVerification}
                     onChange={(e) => setFormData({ requiresIdVerification: e.target.checked })}
-                    className="w-4 h-4 rounded border-gray-300"
+                    className="w-4 h-4 border-gray-300"
                   />
                   <span className="text-sm text-gray-700">{dict.admin?.requiresId || 'Requires ID verification'}</span>
                 </label>

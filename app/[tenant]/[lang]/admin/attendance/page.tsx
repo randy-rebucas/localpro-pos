@@ -347,7 +347,7 @@ export default function AttendancePage() {
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                             {clockOut ? clockOut.toLocaleString() : (
                               <span className="inline-flex items-center gap-1 text-green-600 font-semibold">
-                                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                                <span className="w-1.5 h-1.5 bg-green-500 animate-pulse" />
                                 {dict.admin?.active || 'Active'}
                               </span>
                             )}

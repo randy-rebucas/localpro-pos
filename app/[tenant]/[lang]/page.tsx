@@ -1173,7 +1173,7 @@ export default function Dashboard() {
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5 text-xs">
-              <span className={`w-2 h-2 rounded-full ${stockSyncConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
+              <span className={`w-2 h-2 ${stockSyncConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
               <span className={stockSyncConnected ? 'text-green-700' : 'text-gray-500'}>
                 {stockSyncConnected ? 'Stock Live' : 'Stock Offline'}
               </span>
@@ -1187,7 +1187,7 @@ export default function Dashboard() {
                 setClosingSummary(null);
                 setShowCashDrawerModal('close');
               }}
-              className="px-3 py-1 bg-red-100 text-red-700 hover:bg-red-200 rounded text-xs font-medium transition-colors"
+              className="px-3 py-1 bg-red-100 text-red-700 hover:bg-red-200 text-xs font-medium transition-colors"
             >
               End Shift
             </button>
@@ -1198,8 +1198,8 @@ export default function Dashboard() {
       {/* Start Shift Overlay - only blocks cashier role when no cash drawer session */}
       {isCashier && !cashDrawerSession && !cashDrawerLoading && productsStatus !== 'loading' && (
         <div className="fixed inset-0 z-50 bg-gray-900/60 flex items-center justify-center" style={{ top: '64px' }}>
-          <div className="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full mx-4 text-center">
-            <div className="w-16 h-16 mx-auto mb-4 bg-brand-soft rounded-full flex items-center justify-center">
+          <div className="bg-white border border-gray-300 p-8 max-w-md w-full mx-4 text-center">
+            <div className="w-16 h-16 mx-auto mb-4 bg-brand-soft border border-teal-300 flex items-center justify-center">
               <svg className="w-8 h-8 text-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
@@ -1212,7 +1212,7 @@ export default function Dashboard() {
                 setDrawerNotes('');
                 setShowCashDrawerModal('open');
               }}
-              className="w-full py-3 text-white font-semibold rounded-lg transition-colors mb-3"
+              className="w-full py-3 text-white font-semibold transition-colors mb-3"
               style={{ backgroundColor: primaryColor }}
             >
               {dictValue('pos.openCashDrawer', 'Open Cash Drawer')}
@@ -1222,7 +1222,7 @@ export default function Dashboard() {
                 await logout();
                 window.location.href = `/${tenant}/${lang}/login`;
               }}
-              className="w-full py-2.5 text-gray-600 font-medium rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors text-sm"
+              className="w-full py-2.5 text-gray-600 font-medium border border-gray-300 hover:bg-gray-50 transition-colors text-sm"
             >
               {dictValue('common.logout', 'Logout')}
             </button>
@@ -1233,7 +1233,7 @@ export default function Dashboard() {
       {/* Cash Drawer Open/Close Modal */}
       {showCashDrawerModal && (
         <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center">
-          <div className="bg-white rounded-lg shadow-2xl p-6 max-w-md w-full mx-4">
+          <div className="bg-white border border-gray-300 p-6 max-w-md w-full mx-4">
             <h3 className="text-lg font-bold text-gray-900 mb-4">
               {showCashDrawerModal === 'open' ? dictValue('pos.openCashDrawer', 'Open Cash Drawer') : dictValue('pos.closeCashDrawer', 'Close Cash Drawer')}
             </h3>
@@ -1241,7 +1241,7 @@ export default function Dashboard() {
             {closingSummary ? (
               <div className="space-y-3 mb-6">
                 <h4 className="font-semibold text-gray-800">{dictValue('pos.shiftSummary', 'Shift Summary')}</h4>
-                <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
+                <div className="bg-gray-50 border border-gray-200 p-4 space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-600">{dictValue('admin.expectedAmount', 'Expected Amount')}:</span>
                     <span className="font-medium"><Currency amount={closingSummary.expectedAmount || 0} /></span>
@@ -1267,7 +1267,7 @@ export default function Dashboard() {
                     setClosingSummary(null);
                     setShowCashDrawerModal(null);
                   }}
-                  className="w-full py-2 bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 transition-colors"
+                  className="w-full py-2 bg-gray-900 text-white font-medium hover:bg-gray-800 transition-colors"
                 >
                   Done
                 </button>
@@ -1286,7 +1286,7 @@ export default function Dashboard() {
                       value={drawerAmount}
                       onChange={(e) => setDrawerAmount(e.target.value)}
                       placeholder="0.00"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-brand focus:border-brand"
+                      className="w-full px-4 py-3 border border-gray-300 text-lg focus:ring-2 focus:ring-brand focus:border-brand"
                       autoFocus
                     />
                   </div>
@@ -1297,7 +1297,7 @@ export default function Dashboard() {
                       value={drawerNotes}
                       onChange={(e) => setDrawerNotes(e.target.value)}
                       placeholder="e.g. Morning shift"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-brand"
+                      className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand"
                     />
                   </div>
                 </div>
@@ -1308,14 +1308,14 @@ export default function Dashboard() {
                       setDrawerAmount('');
                       setDrawerNotes('');
                     }}
-                    className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                    className="flex-1 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={showCashDrawerModal === 'open' ? handleOpenDrawer : handleCloseDrawer}
                     disabled={cashDrawerLoading || !drawerAmount}
-                    className="flex-1 py-2 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+                    className="flex-1 py-2 text-white font-medium transition-colors disabled:opacity-50"
                     style={{ backgroundColor: showCashDrawerModal === 'open' ? primaryColor : '#dc2626' }}
                   >
                     {cashDrawerLoading ? 'Processing...' : showCashDrawerModal === 'open' ? 'Open Drawer' : 'Close Drawer'}
@@ -1657,7 +1657,7 @@ export default function Dashboard() {
                     </svg>
                     <span className="hidden sm:inline">{roamingMode ? dictValue('pos.roamingMode', 'Roaming') : dictValue('pos.roamMode', 'Roam')}</span>
                     {roamingMode && (
-                      <span className="w-2 h-2 rounded-full bg-white/80 animate-pulse" />
+                      <span className="w-2 h-2 bg-white/80 animate-pulse" />
                     )}
                   </button>
                 </div>
@@ -1786,7 +1786,7 @@ export default function Dashboard() {
         <button
           type="button"
           onClick={() => setShowRoamingCart(true)}
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-6 py-4 min-h-[44px] text-white font-bold shadow-2xl border-2 border-white/20 transition-all active:scale-95"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-6 py-4 min-h-[44px] text-white font-bold border-2 border-white/20 transition-all hover:brightness-110"
           style={{ backgroundColor: primaryColor }}
           aria-label={`${dict.pos.cart}, ${cart.reduce((s, i) => s + i.quantity, 0)} ${dict.pos?.items || 'items'}, ${dict.pos?.total || dict.common?.total || 'Total'} ${getTotal()}`}
         >
@@ -2058,7 +2058,7 @@ export default function Dashboard() {
       {/* Variant Selector Modal */}
       {showVariantModal && pendingVariantProduct && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md shadow-2xl">
+          <div className="bg-white w-full max-w-md border border-gray-300">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
               <div>
                 <h2 className="font-bold text-gray-900 text-lg">{pendingVariantProduct.name}</h2>

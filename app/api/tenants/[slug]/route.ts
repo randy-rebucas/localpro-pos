@@ -27,16 +27,20 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
     await connectDB();
-    await requireRole(request, ['admin']);
+    const user = await requireRole(request, ['admin']);
     const { slug } = await params;
     const t = await getValidationTranslatorFromRequest(request);
-    
+
     const body = await request.json();
     const { name, domain, subdomain, isActive, settings } = body;
 
     const oldTenant = await Tenant.findOne({ slug }).lean();
     if (!oldTenant) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
+    }
+
+    if (user.role !== 'super_admin' && user.tenantId !== oldTenant._id.toString()) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
     const updateData: any = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -135,13 +139,17 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
     await connectDB();
-    await requireRole(request, ['admin']);
+    const user = await requireRole(request, ['admin']);
     const { slug } = await params;
     const t = await getValidationTranslatorFromRequest(request);
-    
+
     const tenant = await Tenant.findOne({ slug }).lean();
     if (!tenant) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
+    }
+
+    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
     // Soft delete - set isActive to false

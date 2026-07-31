@@ -21,6 +21,7 @@ import {
   formatCurrency,
 } from '@/lib/customers-helpers';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { supportsFeature } from '@/lib/business-type-helpers';
 
 export default function CustomersPage() {
   const params = useParams();
@@ -46,6 +47,7 @@ export default function CustomersPage() {
 
   const { settings } = useTenantSettings();
   const enableOnAccountSales = settings?.enableOnAccountSales === true;
+  const enableLoyalty = supportsFeature(settings ?? undefined, 'loyalty');
 
   const {
     customers,
@@ -91,18 +93,18 @@ export default function CustomersPage() {
   const handleSave = async () => {
     await handleSubmit(async (data) => {
       const isEdit = !!editingCustomer;
-      const success = isEdit
+      const result = isEdit
         ? await updateCustomer(editingCustomer._id, data)
         : await createCustomer(data);
 
-      if (success) {
+      if (result === true) {
         showToast.success(getSaveSuccessMessage(isEdit, dict));
         setShowModal(false);
         await fetchCustomers();
       } else {
-        showToast.error(getSaveErrorMessage(dict));
+        showToast.error(result || getSaveErrorMessage(dict));
       }
-      return success;
+      return result;
     });
   };
 
@@ -114,22 +116,22 @@ export default function CustomersPage() {
     );
     if (!confirmed) return;
 
-    const success = await deleteCustomer(customer._id);
-    if (success) {
+    const result = await deleteCustomer(customer._id);
+    if (result === true) {
       showToast.success(getDeleteSuccessMessage(dict));
       await fetchCustomers();
     } else {
-      showToast.error(getDeleteErrorMessage(dict));
+      showToast.error(result || getDeleteErrorMessage(dict));
     }
   };
 
   const handleToggleStatus = async (customer: Customer) => {
-    const success = await toggleCustomerStatus(customer._id, !customer.isActive);
-    if (success) {
+    const result = await toggleCustomerStatus(customer._id, !customer.isActive);
+    if (result === true) {
       showToast.success(getToggleStatusMessage(!customer.isActive, dict));
       await fetchCustomers();
     } else {
-      showToast.error(getToggleStatusErrorMessage(dict));
+      showToast.error(result || getToggleStatusErrorMessage(dict));
     }
   };
 
@@ -292,6 +294,9 @@ export default function CustomersPage() {
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict?.admin?.phone || 'Phone'}</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict?.common?.totalSpent || 'Total Spent'}</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict?.admin?.balanceDueShort || 'Balance due'}</th>
+                    {enableLoyalty && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict?.admin?.loyaltyPoints || 'Loyalty Points'}</th>
+                    )}
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict?.admin?.tags || 'Tags'}</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict?.admin?.status || 'Status'}</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict?.common?.actions || 'Actions'}</th>
@@ -315,6 +320,11 @@ export default function CustomersPage() {
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                         {formatCurrency(Number(customer.accountBalance) || 0, lang)}
                       </td>
+                      {enableLoyalty && (
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {(customer.loyaltyPointsBalance ?? 0).toLocaleString()}
+                        </td>
+                      )}
                       <td className="px-4 py-4 whitespace-nowrap">
                         <div className="flex gap-1 flex-wrap">
                           {(customer.tags || []).slice(0, 3).map((tag, idx) => (
@@ -397,7 +407,7 @@ export default function CustomersPage() {
       {/* Record balance payment */}
       {balancePayOpen && balancePayCustomer && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white w-full max-w-md border border-gray-300 shadow-lg">
+          <div className="bg-white w-full max-w-md border border-gray-300">
             <div className="flex items-center justify-between p-5 border-b border-gray-200">
               <h3 className="text-lg font-bold text-gray-900">
                 {dict?.admin?.recordBalancePaymentTitle || 'Record account payment'}

@@ -136,7 +136,7 @@ export default function FeatureFlagsPage() {
                       id={flagKey}
                       checked={isChecked}
                       onChange={(e) => updateSetting(flagKey, e.target.checked)}
-                      className="h-5 w-5 text-brand focus:ring-brand border-gray-300 cursor-pointer"
+                      className="checkbox-win8 h-5 w-5 cursor-pointer"
                     />
                     <label htmlFor={flagKey} className="ml-3 flex-1">
                       <div className="text-sm font-medium text-gray-900">

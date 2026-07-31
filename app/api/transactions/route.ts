@@ -159,6 +159,7 @@ export async function GET(request: NextRequest) {
       .limit(limit)
       .skip(skip)
       .populate('items.product', 'name')
+      .populate('customerId', 'firstName lastName')
       .lean();
 
     const total = await Transaction.countDocuments(txQuery);

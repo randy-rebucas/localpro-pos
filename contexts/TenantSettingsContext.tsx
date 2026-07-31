@@ -78,6 +78,51 @@ export function TenantSettingsProvider({ children }: { children: ReactNode }) {
     }
   }, [settings?.primaryColor]);
 
+  // Apply Advanced Branding — font + custom CSS. `theme` and `borderRadius`
+  // are intentionally not applied here: this app has no dark-mode styling
+  // and enforces sharp (non-rounded) corners everywhere as its design system,
+  // so wiring those up would mean building dark-mode from scratch / fighting
+  // the flat-design mandate rather than a straightforward "make it work" fix.
+  // Custom CSS remains the tenant's escape hatch for that kind of override.
+  useEffect(() => {
+    const branding = settings?.advancedBranding;
+
+    // Font family + source
+    const googleLinkId = 'tenant-google-font';
+    const customFontStyleId = 'tenant-custom-font';
+    document.getElementById(googleLinkId)?.remove();
+    document.getElementById(customFontStyleId)?.remove();
+
+    if (branding?.fontSource === 'google' && branding.googleFontUrl) {
+      const link = document.createElement('link');
+      link.id = googleLinkId;
+      link.rel = 'stylesheet';
+      link.href = branding.googleFontUrl;
+      document.head.appendChild(link);
+    } else if (branding?.fontSource === 'custom' && branding.customFontUrl && branding.fontFamily) {
+      const style = document.createElement('style');
+      style.id = customFontStyleId;
+      style.textContent = `@font-face { font-family: '${branding.fontFamily}'; src: url('${branding.customFontUrl}'); font-display: swap; }`;
+      document.head.appendChild(style);
+    }
+
+    if (branding?.fontFamily) {
+      document.documentElement.style.setProperty('--tenant-font-family', `'${branding.fontFamily}'`);
+    } else {
+      document.documentElement.style.removeProperty('--tenant-font-family');
+    }
+
+    // Custom CSS
+    const customCssStyleId = 'tenant-custom-css';
+    document.getElementById(customCssStyleId)?.remove();
+    if (branding?.customTheme?.css) {
+      const style = document.createElement('style');
+      style.id = customCssStyleId;
+      style.textContent = branding.customTheme.css;
+      document.head.appendChild(style);
+    }
+  }, [settings?.advancedBranding]);
+
   return (
     <TenantSettingsContext.Provider value={{ settings, loading, refreshSettings: fetchSettings }}>
       {children}

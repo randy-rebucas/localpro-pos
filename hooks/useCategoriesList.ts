@@ -45,37 +45,6 @@ export function useCategoriesList() {
     }
   }, []);
 
-  const deleteCategory = useCallback(
-    async (categoryId: string, onSuccess?: (message: string) => void, onError?: (error: string) => void) => {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 20000);
-
-      try {
-        const res = await globalThis.fetch(`/api/categories/${categoryId}`, {
-          method: 'DELETE',
-          credentials: 'include',
-          signal: controller.signal,
-        });
-
-        const data = await res.json();
-
-        if (data.success) {
-          setCategories((prev) => prev.filter((c) => c._id !== categoryId));
-          onSuccess?.(data.message || 'Category deleted successfully');
-        } else {
-          const errorMsg = data.error || 'Failed to delete category';
-          onError?.(errorMsg);
-        }
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'Failed to delete category';
-        onError?.(errorMsg);
-      } finally {
-        clearTimeout(timeout);
-      }
-    },
-    []
-  );
-
   const toggleCategoryStatus = useCallback(
     async (categoryId: string, newStatus: boolean, onSuccess?: (message: string) => void, onError?: (error: string) => void) => {
       const controller = new AbortController();
@@ -111,5 +80,5 @@ export function useCategoriesList() {
     []
   );
 
-  return { categories, loading, error, fetchCategories, deleteCategory, toggleCategoryStatus };
+  return { categories, loading, error, fetchCategories, toggleCategoryStatus };
 }

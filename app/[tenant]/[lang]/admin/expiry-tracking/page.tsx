@@ -144,29 +144,29 @@ export default function ExpiryTrackingPage() {
           {/* Summary Cards */}
           {report && (
             <div className="grid grid-cols-3 gap-4">
-              <div className="bg-red-50 border border-red-200 px-5 py-4">
+              <div className="px-5 py-4 text-white" style={{ backgroundColor: '#c0392b' }}>
                 <div className="flex items-center gap-2 mb-1">
-                  <AlertTriangle className="w-4 h-4 text-red-500" />
-                  <span className="text-xs font-medium text-red-800 uppercase tracking-wide">Expired</span>
+                  <AlertTriangle className="w-4 h-4 text-white/80" />
+                  <span className="text-xs font-medium text-white/80 uppercase tracking-wide">Expired</span>
                 </div>
-                <p className="text-2xl font-bold text-red-700">{report.totalExpired}</p>
-                <p className="text-xs text-red-600 mt-0.5">Pull from shelf immediately</p>
+                <p className="text-2xl font-bold">{report.totalExpired}</p>
+                <p className="text-xs text-white/80 mt-0.5">Pull from shelf immediately</p>
               </div>
-              <div className="bg-orange-50 border border-orange-200 px-5 py-4">
+              <div className="px-5 py-4 text-white" style={{ backgroundColor: '#e3a008' }}>
                 <div className="flex items-center gap-2 mb-1">
-                  <AlertTriangle className="w-4 h-4 text-orange-500" />
-                  <span className="text-xs font-medium text-orange-800 uppercase tracking-wide">Critical (≤30d)</span>
+                  <AlertTriangle className="w-4 h-4 text-white/80" />
+                  <span className="text-xs font-medium text-white/80 uppercase tracking-wide">Critical (≤30d)</span>
                 </div>
-                <p className="text-2xl font-bold text-orange-700">
+                <p className="text-2xl font-bold">
                   {report.expiring.filter(p => p.daysUntilExpiry <= 30).length}
                 </p>
               </div>
-              <div className="bg-yellow-50 border border-yellow-200 px-5 py-4">
+              <div className="px-5 py-4 text-white" style={{ backgroundColor: '#35979c' }}>
                 <div className="flex items-center gap-2 mb-1">
-                  <Package className="w-4 h-4 text-yellow-600" />
-                  <span className="text-xs font-medium text-yellow-800 uppercase tracking-wide">Within {alertDays}d</span>
+                  <Package className="w-4 h-4 text-white/80" />
+                  <span className="text-xs font-medium text-white/80 uppercase tracking-wide">Within {alertDays}d</span>
                 </div>
-                <p className="text-2xl font-bold text-yellow-700">{report.totalExpiring}</p>
+                <p className="text-2xl font-bold">{report.totalExpiring}</p>
               </div>
             </div>
           )}

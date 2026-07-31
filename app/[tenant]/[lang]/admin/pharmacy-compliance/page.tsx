@@ -20,6 +20,32 @@ interface PharmacySettings {
   expiryAlertDays?: number;
 }
 
+/**
+ * Whole calendar days between today and the given date, comparing local
+ * midnight-to-midnight rather than raw instants — a live Date.now() against
+ * a stored midnight timestamp (via Math.ceil on the raw ms diff) would flip
+ * the result by a day depending on what time of day it currently is.
+ */
+function daysUntil(dateStr: string): number {
+  const target = new Date(dateStr);
+  const targetMidnight = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+  const todayMidnight = new Date();
+  todayMidnight.setHours(0, 0, 0, 0);
+  return Math.round((targetMidnight.getTime() - todayMidnight.getTime()) / 86400000);
+}
+
+function ExpiryWarning({ dateStr }: { dateStr?: string }) {
+  if (!dateStr) return null;
+  const days = daysUntil(dateStr);
+  if (days > 30) return null;
+  return (
+    <p className="flex items-center gap-1 text-xs mt-1 font-medium text-amber-600">
+      <AlertTriangle className="w-3 h-3" />
+      {days < 0 ? `Expired ${Math.abs(days)} day(s) ago` : `Expires in ${days} day(s)`}
+    </p>
+  );
+}
+
 function LockOverlay() {
   const { tenant, lang } = useParams() as { tenant: string; lang: string };
   return (
@@ -96,10 +122,6 @@ export default function PharmacyCompliancePage() {
       setSaving(false);
     }
   };
-
-  const fdaExpiry = settings.fdaLTOExpiryDate ? new Date(settings.fdaLTOExpiryDate) : null;
-  const fdaDaysLeft = fdaExpiry ? Math.ceil((fdaExpiry.getTime() - Date.now()) / 86400000) : null;
-  const fdaWarning = fdaDaysLeft !== null && fdaDaysLeft <= 30;
 
   return (
     <div className="px-4 sm:px-6 py-6">
@@ -238,12 +260,7 @@ export default function PharmacyCompliancePage() {
                     onChange={e => setSettings(s => ({ ...s, fdaLTOExpiryDate: e.target.value }))}
                     className="w-full border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand"
                   />
-                  {fdaWarning && (
-                    <p className="flex items-center gap-1 text-amber-600 text-xs mt-1 font-medium">
-                      <AlertTriangle className="w-3 h-3" />
-                      {fdaDaysLeft! < 0 ? 'LTO has expired!' : `Expires in ${fdaDaysLeft} day(s)`}
-                    </p>
-                  )}
+                  <ExpiryWarning dateStr={settings.fdaLTOExpiryDate} />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">DOH Accreditation</label>
@@ -284,6 +301,7 @@ export default function PharmacyCompliancePage() {
                     onChange={e => setSettings(s => ({ ...s, pdeaLicenseExpiry: e.target.value }))}
                     className="w-full border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand"
                   />
+                  <ExpiryWarning dateStr={settings.pdeaLicenseExpiry} />
                 </div>
               </div>
             </div>
@@ -300,7 +318,7 @@ export default function PharmacyCompliancePage() {
                     type="checkbox"
                     checked={settings.requirePrescriptionForRx ?? true}
                     onChange={e => setSettings(s => ({ ...s, requirePrescriptionForRx: e.target.checked }))}
-                    className="w-4 h-4 accent-brand"
+                    className="checkbox-win8"
                   />
                   <span className="text-sm text-gray-700">Require prescription for Rx-only drugs</span>
                 </label>
@@ -309,7 +327,7 @@ export default function PharmacyCompliancePage() {
                     type="checkbox"
                     checked={settings.trackExpiryDates ?? true}
                     onChange={e => setSettings(s => ({ ...s, trackExpiryDates: e.target.checked }))}
-                    className="w-4 h-4 accent-brand"
+                    className="checkbox-win8"
                   />
                   <span className="text-sm text-gray-700">Track expiry dates on all products</span>
                 </label>

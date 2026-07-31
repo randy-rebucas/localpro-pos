@@ -1,28 +1,22 @@
 import { useCallback, useState } from 'react';
 
 export interface BundlesAnalytics {
-  topBundles: Array<{
-    _id: string;
-    name: string;
-    totalSale: number;
-    quantity: number;
-  }>;
   analytics: Array<{
     bundleId: string;
     bundleName: string;
-    totalRevenue: number;
-    unitsSold: number;
+    bundlePrice: number;
+    totalSales: number;
+    totalQuantity: number;
+    transactionCount: number;
     averageOrderValue: number;
+    averageQuantity: number;
+    revenuePerUnit: number;
   }>;
   summary: {
     totalBundles: number;
     totalSales: number;
     totalQuantity: number;
     totalTransactions: number;
-    totalRevenue: number;
-    totalUnitsSold: number;
-    averageOrderValue: number;
-    percentage: number;
   };
 }
 
@@ -54,21 +48,9 @@ export function useBundlesAnalytics() {
         const data = await res.json();
 
         if (data.success && data.data) {
-          const analyticsData = data.data;
-          
-          // Calculate missing summary fields
-          const calculatedSummary = {
-            ...analyticsData.summary,
-            totalBundles: analyticsData.analytics?.length || 0,
-            totalSales: analyticsData.analytics?.reduce((sum: number, item: any) => sum + (item.totalRevenue || 0), 0) || 0, // eslint-disable-line @typescript-eslint/no-explicit-any
-            totalQuantity: analyticsData.analytics?.reduce((sum: number, item: any) => sum + (item.unitsSold || 0), 0) || 0, // eslint-disable-line @typescript-eslint/no-explicit-any
-            totalTransactions: analyticsData.analytics?.length || 0,
-          };
-          
-          setAnalytics({
-            ...analyticsData,
-            summary: calculatedSummary,
-          });
+          // The API already computes an accurate summary (totalBundles,
+          // totalSales, totalQuantity, totalTransactions) — use it as-is.
+          setAnalytics(data.data);
         } else {
           const errorMsg = data.error || 'Failed to fetch analytics';
           setError(errorMsg);

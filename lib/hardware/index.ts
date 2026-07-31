@@ -78,6 +78,18 @@ class HardwareService {
     return false;
   }
 
+  /**
+   * Prompt the browser's WebUSB/WebSerial device picker to pair a standalone
+   * cash drawer. Must be called directly from a user gesture (button click).
+   * `openCashDrawer()`/`cashDrawerService.open()` deliberately don't show a
+   * picker on their own — pairing has to happen here, once, from Settings.
+   */
+  async pairDirectCashDrawer(): Promise<boolean> {
+    if (!this.config.cashDrawer?.direct) return false;
+    cashDrawerService.setConfig(this.config.cashDrawer.direct);
+    return cashDrawerService.connect({ allowDevicePicker: true });
+  }
+
   // Barcode scanner methods
   onBarcodeScan(callback: (barcode: string) => void): () => void {
     return barcodeScannerService.onScan(callback);

@@ -28,6 +28,10 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
+    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
+
     const multiCurrency = tenant.settings.multiCurrency;
     if (!multiCurrency?.enabled) {
       return NextResponse.json({ success: false, error: 'Multi-currency not enabled' }, { status: 400 });
@@ -57,7 +61,7 @@ export async function POST(
     }
 
     // Check if user is admin or manager
-    if (user.role !== 'admin' && user.role !== 'manager') {
+    if (user.role !== 'admin' && user.role !== 'manager' && user.role !== 'super_admin') {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
@@ -70,6 +74,10 @@ export async function POST(
     const tenant = await Tenant.findOne({ slug });
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+    }
+
+    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
     if (action === 'fetch') {

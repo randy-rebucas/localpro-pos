@@ -325,7 +325,7 @@ export default function ProfilePage() {
                   >
                     {saving ? (
                       <>
-                        <div className="animate-spin h-5 w-5 border-b-2 border-white rounded-full" />
+                        <div className="animate-spin h-5 w-5 border-b-2 border-white" />
                         <span>{profileDict.saving || 'Saving...'}</span>
                       </>
                     ) : (
@@ -465,7 +465,7 @@ export default function ProfilePage() {
                     >
                       {saving ? (
                         <>
-                          <div className="animate-spin h-5 w-5 border-b-2 border-white rounded-full" />
+                          <div className="animate-spin h-5 w-5 border-b-2 border-white" />
                           <span>{profileDict.saving || 'Saving...'}</span>
                         </>
                       ) : (

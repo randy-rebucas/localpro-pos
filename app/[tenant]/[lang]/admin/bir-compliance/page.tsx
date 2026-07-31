@@ -18,7 +18,7 @@ function LockOverlay({ plan, dict }: { plan?: string; dict: any }) { // eslint-d
   const { tenant, lang } = useParams() as { tenant: string; lang: string };
   const label = plan || 'Pro';
   return (
-    <div className="absolute inset-0 bg-gray-50 bg-opacity-90 flex items-center justify-center z-10 rounded">
+    <div className="absolute inset-0 bg-gray-50 bg-opacity-90 flex items-center justify-center z-10">
       <div className="text-center px-4">
         <svg className="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -111,14 +111,14 @@ export default function BirCompliancePage() {
           {/* 1. Audit Trail — always available */}
           <div className="bg-white border border-gray-300 p-6">
             <div className="flex items-start gap-3 mb-4">
-              <div className="flex-shrink-0 w-10 h-10 bg-green-100 flex items-center justify-center rounded">
+              <div className="flex-shrink-0 w-10 h-10 bg-green-100 flex items-center justify-center">
                 <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">{dict?.bir?.auditTrail || 'Audit Trail'}</h2>
-                <span className="inline-block text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded mt-1">{dict?.bir?.allPlans || 'All Plans'}</span>
+                <span className="inline-block text-xs bg-green-100 text-green-700 px-2 py-0.5 mt-1">{dict?.bir?.allPlans || 'All Plans'}</span>
               </div>
             </div>
             <p className="text-sm text-gray-600 mb-4">
@@ -139,14 +139,14 @@ export default function BirCompliancePage() {
           <div className="relative bg-white border border-gray-300 p-6 overflow-hidden">
             {!birFeatures?.receiptFormatting && <LockOverlay plan="Pro" dict={dict} />}
             <div className="flex items-start gap-3 mb-4">
-              <div className="flex-shrink-0 w-10 h-10 bg-brand-soft flex items-center justify-center rounded">
+              <div className="flex-shrink-0 w-10 h-10 bg-brand-soft flex items-center justify-center">
                 <svg className="w-5 h-5 text-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">{dict?.bir?.receiptFormatting || 'Receipt Formatting'}</h2>
-                <span className="inline-block text-xs bg-brand-soft text-brand-hover px-2 py-0.5 rounded mt-1">Pro+</span>
+                <span className="inline-block text-xs bg-brand-soft text-brand-hover px-2 py-0.5 mt-1">Pro+</span>
               </div>
             </div>
             <p className="text-sm text-gray-600 mb-4">
@@ -168,14 +168,14 @@ export default function BirCompliancePage() {
           <div className="relative bg-white border border-gray-300 p-6 overflow-hidden">
             {!birFeatures?.ptuAssistance && <LockOverlay plan="Pro" dict={dict} />}
             <div className="flex items-start gap-3 mb-4">
-              <div className="flex-shrink-0 w-10 h-10 bg-yellow-100 flex items-center justify-center rounded">
+              <div className="flex-shrink-0 w-10 h-10 bg-yellow-100 flex items-center justify-center">
                 <svg className="w-5 h-5 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 9l-3 3m0 0l-3-3m3 3V4m0 13a9 9 0 110-18 9 9 0 010 18z" />
                 </svg>
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">{dict?.bir?.ptuAssistance || 'PTU Assistance'}</h2>
-                <span className="inline-block text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded mt-1">Pro+</span>
+                <span className="inline-block text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 mt-1">Pro+</span>
               </div>
             </div>
             <p className="text-sm text-gray-600 mb-4">
@@ -245,14 +245,14 @@ export default function BirCompliancePage() {
           <div className="relative bg-white border border-gray-300 p-6 overflow-hidden">
             {!birFeatures?.casReporting && <LockOverlay plan="Business" dict={dict} />}
             <div className="flex items-start gap-3 mb-4">
-              <div className="flex-shrink-0 w-10 h-10 bg-purple-100 flex items-center justify-center rounded">
+              <div className="flex-shrink-0 w-10 h-10 bg-purple-100 flex items-center justify-center">
                 <svg className="w-5 h-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">{dict?.bir?.casReporting || 'CAS Reporting'}</h2>
-                <span className="inline-block text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded mt-1">Business+</span>
+                <span className="inline-block text-xs bg-purple-100 text-purple-700 px-2 py-0.5 mt-1">Business+</span>
               </div>
             </div>
             <p className="text-sm text-gray-600 mb-4">
@@ -296,29 +296,29 @@ export default function BirCompliancePage() {
           <div className="relative bg-white border border-gray-300 p-6 overflow-hidden lg:col-span-2">
             {!birFeatures?.monthlySupport && <LockOverlay plan="Business" dict={dict} />}
             <div className="flex items-start gap-3 mb-4">
-              <div className="flex-shrink-0 w-10 h-10 bg-green-100 flex items-center justify-center rounded">
+              <div className="flex-shrink-0 w-10 h-10 bg-green-100 flex items-center justify-center">
                 <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" />
                 </svg>
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">{dict?.bir?.monthlySupport || 'Monthly BIR Compliance Support'}</h2>
-                <span className="inline-block text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded mt-1">Business+</span>
+                <span className="inline-block text-xs bg-green-100 text-green-700 px-2 py-0.5 mt-1">Business+</span>
               </div>
             </div>
             <p className="text-sm text-gray-600 mb-4">
               {dict?.bir?.monthlySupportDesc || 'Get dedicated monthly support for BIR compliance — including assistance with VAT filings, PTU renewals, CAS submissions, and documentation review.'}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="border border-gray-200 p-4 rounded">
+              <div className="border border-gray-200 p-4">
                 <div className="text-sm font-medium text-gray-900 mb-1">{dict?.bir?.vatFilingAssistance || 'VAT Filing Assistance'}</div>
                 <p className="text-xs text-gray-500">{dict?.bir?.vatFilingAssistanceDesc || 'Monthly 2550M and quarterly 2550Q filing guidance'}</p>
               </div>
-              <div className="border border-gray-200 p-4 rounded">
+              <div className="border border-gray-200 p-4">
                 <div className="text-sm font-medium text-gray-900 mb-1">{dict?.bir?.ptuRenewal || 'PTU Renewal'}</div>
                 <p className="text-xs text-gray-500">{dict?.bir?.ptuRenewalDesc || 'Annual Permit to Use renewal reminders and support'}</p>
               </div>
-              <div className="border border-gray-200 p-4 rounded">
+              <div className="border border-gray-200 p-4">
                 <div className="text-sm font-medium text-gray-900 mb-1">{dict?.bir?.casSubmission || 'CAS Submission'}</div>
                 <p className="text-xs text-gray-500">{dict?.bir?.casSubmissionDesc || 'Help with BIR CAS accreditation and periodic submissions'}</p>
               </div>

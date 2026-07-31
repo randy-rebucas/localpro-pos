@@ -19,7 +19,7 @@ export default function MultiCurrencyDisplaySettings({ settings, tenant, lang, o
 
   return (
     <div className="space-y-6">
-      <div className="p-4 bg-brand-soft border border-teal-200 rounded">
+      <div className="p-4 bg-brand-soft border border-teal-200">
         <p className="text-sm text-brand-navy mb-2">
           <strong>Note:</strong> {dict?.admin?.multiCurrencyNote || 'Exchange rate management has been moved to Admin → Multi-Currency for better access control.'}
         </p>
@@ -44,7 +44,7 @@ export default function MultiCurrencyDisplaySettings({ settings, tenant, lang, o
                 },
               });
             }}
-            className="w-4 h-4 text-brand border-gray-300 rounded focus:ring-brand"
+            className="checkbox-win8"
           />
           <span className="text-sm font-medium text-gray-700">{dict?.admin?.enableMultiCurrencyDisplay || 'Enable Multi-Currency Display'}</span>
         </label>
@@ -74,7 +74,7 @@ export default function MultiCurrencyDisplaySettings({ settings, tenant, lang, o
                       },
                     });
                   }}
-                  className="w-4 h-4 text-brand border-gray-300 rounded focus:ring-brand"
+                  className="checkbox-win8"
                 />
                 <span className="text-sm text-gray-700">{currency}</span>
               </label>

@@ -93,7 +93,7 @@ export default function NotificationTemplatesManager({ settings, tenant, onUpdat
     try {
       setMessage(null);
       const res = await fetch(`/api/tenants/${tenant}/notification-templates`, {
-        method: 'POST',
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
@@ -151,8 +151,8 @@ export default function NotificationTemplatesManager({ settings, tenant, onUpdat
 
       {message && (
         <div
-          className={`p-3 rounded ${
-            message.type === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
+          className={`p-3 border ${
+            message.type === 'success' ? 'bg-green-50 text-green-800 border-green-300' : 'bg-red-50 text-red-800 border-red-300'
           }`}
         >
           {message.text}
@@ -163,7 +163,7 @@ export default function NotificationTemplatesManager({ settings, tenant, onUpdat
         {(Object.keys(CATEGORY_VARIABLES) as TemplateCategory[]).map((category) => (
           <div
             key={category}
-            className="p-4 border-2 border-gray-300 rounded hover:bg-gray-50"
+            className="p-4 border-2 border-gray-300 hover:bg-gray-50"
           >
             <div className="flex items-center justify-between mb-2">
               <h4 className="font-medium text-gray-900">{getCategoryLabel(category, dict)}</h4>
@@ -250,7 +250,7 @@ function TemplateEditor({
           <div className="font-medium mb-1">{dict?.notificationTemplates?.availableVariables || 'Available variables'}:</div>
           <div className="flex flex-wrap gap-1">
             {CATEGORY_VARIABLES[category].map((variable) => (
-              <code key={variable} className="px-1 py-0.5 bg-gray-100 rounded text-xs">
+              <code key={variable} className="px-1 py-0.5 bg-gray-100 text-xs">
                 {variable}
               </code>
             ))}

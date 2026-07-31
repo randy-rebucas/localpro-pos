@@ -27,11 +27,14 @@ interface UseDiscountsListReturn {
   loading: boolean;
   message: { type: 'success' | 'error'; text: string } | null;
   fetchDiscounts: () => Promise<void>;
-  createDiscount: (form: DiscountFormData) => Promise<boolean>;
-  updateDiscount: (id: string, form: DiscountFormData) => Promise<boolean>;
+  /** Resolves `true` on success, or the server's specific error message on failure. */
+  createDiscount: (form: DiscountFormData) => Promise<true | string>;
+  /** Resolves `true` on success, or the server's specific error message on failure. */
+  updateDiscount: (id: string, form: DiscountFormData) => Promise<true | string>;
   deleteDiscount: (id: string) => Promise<boolean>;
   toggleDiscountStatus: (id: string, isActive: boolean) => Promise<boolean>;
   clearMessage: () => void;
+  setMessage: (message: { type: 'success' | 'error'; text: string } | null) => void;
 }
 
 export function useDiscountsList(): UseDiscountsListReturn {
@@ -55,7 +58,10 @@ export function useDiscountsList(): UseDiscountsListReturn {
       const data = await res.json();
       if (data.success) {
         setDiscounts(data.data || []);
-        setMessage(null);
+        // Note: intentionally not clearing `message` here — callers commonly
+        // set a success/error message right before triggering a refetch
+        // (delete, toggle, save), and clearing it here would wipe that
+        // feedback out from under them. Use clearMessage() explicitly instead.
       } else {
         setMessage({ type: 'error', text: data.error || 'Failed to fetch discounts' });
       }
@@ -80,13 +86,16 @@ export function useDiscountsList(): UseDiscountsListReturn {
 
       const data = await res.json();
       if (data.success) {
+        setMessage({ type: 'success', text: 'Discount created successfully' });
         return true;
       }
-      setMessage({ type: 'error', text: data.error || 'Failed to save discount' });
-      return false;
+      const errorText = data.error || 'Failed to save discount';
+      setMessage({ type: 'error', text: errorText });
+      return errorText;
     } catch {
-      setMessage({ type: 'error', text: 'Failed to save discount' });
-      return false;
+      const errorText = 'Failed to save discount';
+      setMessage({ type: 'error', text: errorText });
+      return errorText;
     }
   }, []);
 
@@ -101,13 +110,16 @@ export function useDiscountsList(): UseDiscountsListReturn {
 
       const data = await res.json();
       if (data.success) {
+        setMessage({ type: 'success', text: 'Discount updated successfully' });
         return true;
       }
-      setMessage({ type: 'error', text: data.error || 'Failed to update discount' });
-      return false;
+      const errorText = data.error || 'Failed to update discount';
+      setMessage({ type: 'error', text: errorText });
+      return errorText;
     } catch {
-      setMessage({ type: 'error', text: 'Failed to update discount' });
-      return false;
+      const errorText = 'Failed to update discount';
+      setMessage({ type: 'error', text: errorText });
+      return errorText;
     }
   }, []);
 
@@ -120,6 +132,7 @@ export function useDiscountsList(): UseDiscountsListReturn {
 
       const data = await res.json();
       if (data.success) {
+        setMessage({ type: 'success', text: 'Discount deleted successfully' });
         return true;
       }
       setMessage({ type: 'error', text: data.error || 'Failed to delete discount' });
@@ -141,6 +154,10 @@ export function useDiscountsList(): UseDiscountsListReturn {
 
       const data = await res.json();
       if (data.success) {
+        setMessage({
+          type: 'success',
+          text: isActive ? 'Discount activated successfully' : 'Discount deactivated successfully',
+        });
         return true;
       }
       setMessage({ type: 'error', text: data.error || 'Failed to update discount' });
@@ -163,5 +180,6 @@ export function useDiscountsList(): UseDiscountsListReturn {
     deleteDiscount,
     toggleDiscountStatus,
     clearMessage,
+    setMessage,
   };
 }

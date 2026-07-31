@@ -18,7 +18,7 @@ interface UseExpensesFormReturn {
   setFormData: (data: Partial<ExpenseFormData>) => void;
   error: string;
   submitting: boolean;
-  handleSubmit: (onSubmit: (data: ExpenseFormData) => Promise<boolean>) => Promise<void>;
+  handleSubmit: (onSubmit: (data: ExpenseFormData) => Promise<true | string>) => Promise<void>;
   resetForm: () => void;
   initializeForm: (expense: Expense) => void;
 }
@@ -61,7 +61,7 @@ export function useExpensesForm(): UseExpensesFormReturn {
   }, []);
 
   const handleSubmit = useCallback(
-    async (onSubmit: (data: ExpenseFormData) => Promise<boolean>) => {
+    async (onSubmit: (data: ExpenseFormData) => Promise<true | string>) => {
       setError('');
 
       // Validate required fields
@@ -101,9 +101,9 @@ export function useExpensesForm(): UseExpensesFormReturn {
           notes: formData.notes?.trim() || '',
         };
 
-        const success = await onSubmit(payload);
-        if (!success) {
-          setError('Failed to save expense');
+        const result = await onSubmit(payload);
+        if (result !== true) {
+          setError(result);
         }
       } catch {
         setError('An error occurred while saving');

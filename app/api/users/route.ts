@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
-import { requireRole } from '@/lib/auth';
+import { requireRole, getRoleRank } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateEmail, validatePassword } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -29,7 +29,12 @@ export async function GET(request: NextRequest) {
       throw authError;
     }
 
-    const users = await User.find({ tenantId })
+    const isActiveParam = request.nextUrl.searchParams.get('isActive');
+    const query: Record<string, unknown> = { tenantId };
+    if (isActiveParam === 'true') query.isActive = { $ne: false };
+    else if (isActiveParam === 'false') query.isActive = false;
+
+    const users = await User.find(query)
       .select('-password')
       .sort({ createdAt: -1 })
       .lean();
@@ -52,11 +57,12 @@ export async function POST(request: NextRequest) {
     await connectDB();
     // SECURITY: Validate tenant access for authenticated requests
     let tenantId: string;
+    let actingUser: { userId: string; role: string };
     try {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
       // Also check role
-      await requireRole(request, ['admin', 'manager']);
+      actingUser = await requireRole(request, ['admin', 'manager']);
     } catch (authError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       t = await getValidationTranslatorFromRequest(request);
       if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
@@ -101,6 +107,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { success: false, error: t('validation.invalidRole', 'Invalid role') },
         { status: 400 }
+      );
+    }
+
+    // SECURITY: Prevent privilege escalation — an actor can't grant a role
+    // ranked above their own (e.g. a manager creating an admin), and only an
+    // owner can create another owner.
+    if (role && getRoleRank(role) > getRoleRank(actingUser.role)) {
+      return NextResponse.json(
+        { success: false, error: t('validation.cannotGrantHigherRole', 'You cannot assign a role higher than your own') },
+        { status: 403 }
+      );
+    }
+    if (role === 'owner' && actingUser.role !== 'owner') {
+      return NextResponse.json(
+        { success: false, error: t('validation.onlyOwnerCanGrantOwner', 'Only an owner can grant the owner role') },
+        { status: 403 }
       );
     }
 

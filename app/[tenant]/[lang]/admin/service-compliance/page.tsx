@@ -20,9 +20,23 @@ interface ServiceCompliance {
   practitionerLicenses?: PractitionerLicense[];
 }
 
+/**
+ * Whole calendar days between today and the given date, comparing local
+ * midnight-to-midnight rather than raw instants — a live Date.now() against
+ * a stored midnight timestamp (via Math.ceil on the raw ms diff) would flip
+ * the result by a day depending on what time of day it currently is.
+ */
+function daysUntil(dateStr: string): number {
+  const target = new Date(dateStr);
+  const targetMidnight = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+  const todayMidnight = new Date();
+  todayMidnight.setHours(0, 0, 0, 0);
+  return Math.round((targetMidnight.getTime() - todayMidnight.getTime()) / 86400000);
+}
+
 function ExpiryWarning({ dateStr }: { dateStr?: string }) {
   if (!dateStr) return null;
-  const days = Math.ceil((new Date(dateStr).getTime() - Date.now()) / 86400000);
+  const days = daysUntil(dateStr);
   if (days > 30) return null;
   return (
     <p className="flex items-center gap-1 text-xs mt-1 font-medium text-amber-600">

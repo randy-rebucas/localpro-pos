@@ -297,25 +297,25 @@ function SalesReportView({ report, dict, primaryColor, colors }: { report: Sales
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
-        <div className="border p-5 sm:p-6" style={{ backgroundColor: `${primaryColor}10`, borderColor: `${primaryColor}40` }}>
-          <div className="font-semibold mb-2 uppercase tracking-wide text-xs sm:text-sm" style={{ color: primaryColor }}>
+        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: primaryColor }}>
+          <div className="font-semibold mb-2 uppercase tracking-wide text-xs sm:text-sm text-white/80">
             {dict.reports?.totalSales || 'Total Sales'}
           </div>
-          <div className="text-2xl sm:text-3xl font-bold" style={{ color: primaryColor }}>
+          <div className="text-2xl sm:text-3xl font-bold">
             <Currency amount={report.totalSales} />
           </div>
         </div>
-        <div className="bg-green-50 border border-green-300 p-5 sm:p-6">
-          <div className="text-xs sm:text-sm text-green-600 font-semibold mb-2 uppercase tracking-wide">
+        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: '#0f9d58' }}>
+          <div className="text-xs sm:text-sm text-white/80 font-semibold mb-2 uppercase tracking-wide">
             {dict.reports?.totalTransactions || 'Total Transactions'}
           </div>
-          <div className="text-2xl sm:text-3xl font-bold text-green-900">{report.totalTransactions}</div>
+          <div className="text-2xl sm:text-3xl font-bold">{report.totalTransactions}</div>
         </div>
-        <div className="bg-purple-50 border border-purple-300 p-5 sm:p-6">
-          <div className="text-xs sm:text-sm text-purple-600 font-semibold mb-2 uppercase tracking-wide">
+        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: '#7a3fc9' }}>
+          <div className="text-xs sm:text-sm text-white/80 font-semibold mb-2 uppercase tracking-wide">
             {dict.reports?.averageTransaction || 'Average Transaction'}
           </div>
-          <div className="text-2xl sm:text-3xl font-bold text-purple-900">
+          <div className="text-2xl sm:text-3xl font-bold">
             <Currency amount={report.averageTransaction} />
           </div>
         </div>
@@ -332,7 +332,7 @@ function SalesReportView({ report, dict, primaryColor, colors }: { report: Sales
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                 <XAxis dataKey="date" stroke="#6b7280" style={{ fontSize: '12px' }} />
                 <YAxis stroke="#6b7280" style={{ fontSize: '12px' }} />
-                <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }} />
+                <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: 0 }} />
                 <Legend />
                 <Line type="monotone" dataKey="sales" stroke={primaryColor} strokeWidth={2} name={dict.reports?.sales || 'Sales'} />
               </LineChart>
@@ -359,7 +359,7 @@ function SalesReportView({ report, dict, primaryColor, colors }: { report: Sales
                   <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
                 ))}
               </Pie>
-              <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }} />
+              <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: 0 }} />
             </PieChart>
           </ResponsiveContainer>
         </div>
@@ -380,7 +380,7 @@ function ProductPerformanceView({ data, dict, primaryColor }: { data: ProductPer
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis dataKey="productName" angle={-45} textAnchor="end" height={100} stroke="#6b7280" style={{ fontSize: '12px' }} />
             <YAxis stroke="#6b7280" style={{ fontSize: '12px' }} />
-            <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }} />
+            <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: 0 }} />
             <Legend />
             <Bar dataKey="totalRevenue" fill={primaryColor} name={dict.reports?.revenue || 'Revenue'} />
           </BarChart>
@@ -418,31 +418,31 @@ function VATReportView({ report, dict, primaryColor }: { report: VATReport; dict
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-        <div className="border p-5 sm:p-6" style={{ backgroundColor: `${primaryColor}10`, borderColor: `${primaryColor}40` }}>
-          <div className="font-semibold mb-2 uppercase tracking-wide text-xs sm:text-sm" style={{ color: primaryColor }}>
+        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: primaryColor }}>
+          <div className="font-semibold mb-2 uppercase tracking-wide text-xs sm:text-sm text-white/80">
             {dict.reports?.vatSales || 'VAT Sales'}
           </div>
-          <div className="text-2xl sm:text-3xl font-bold" style={{ color: primaryColor }}>
+          <div className="text-2xl sm:text-3xl font-bold">
             <Currency amount={report.vatSales} />
           </div>
         </div>
-        <div className="bg-green-50 border border-green-300 p-5 sm:p-6">
-          <div className="text-xs sm:text-sm text-green-600 font-semibold mb-2 uppercase tracking-wide">
+        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: '#0f9d58' }}>
+          <div className="text-xs sm:text-sm text-white/80 font-semibold mb-2 uppercase tracking-wide">
             {dict.reports?.nonVatSales || 'Non-VAT Sales'}
           </div>
-          <div className="text-2xl sm:text-3xl font-bold text-green-900"><Currency amount={report.nonVatSales} /></div>
+          <div className="text-2xl sm:text-3xl font-bold"><Currency amount={report.nonVatSales} /></div>
         </div>
-        <div className="bg-purple-50 border border-purple-300 p-5 sm:p-6">
-          <div className="text-xs sm:text-sm text-purple-600 font-semibold mb-2 uppercase tracking-wide">
+        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: '#7a3fc9' }}>
+          <div className="text-xs sm:text-sm text-white/80 font-semibold mb-2 uppercase tracking-wide">
             {dict.reports?.vatAmount || 'VAT Amount'}
           </div>
-          <div className="text-2xl sm:text-3xl font-bold text-purple-900"><Currency amount={report.vatAmount} /></div>
+          <div className="text-2xl sm:text-3xl font-bold"><Currency amount={report.vatAmount} /></div>
         </div>
-        <div className="bg-orange-50 border border-orange-300 p-5 sm:p-6">
-          <div className="text-xs sm:text-sm text-orange-600 font-semibold mb-2 uppercase tracking-wide">
+        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: '#e3a008' }}>
+          <div className="text-xs sm:text-sm text-white/80 font-semibold mb-2 uppercase tracking-wide">
             {dict.reports?.vatRate || 'VAT Rate'}
           </div>
-          <div className="text-2xl sm:text-3xl font-bold text-orange-900">{report.vatRate}%</div>
+          <div className="text-2xl sm:text-3xl font-bold">{report.vatRate}%</div>
         </div>
       </div>
       <div className="bg-white border border-gray-300 p-5 sm:p-6">
@@ -467,7 +467,7 @@ function VATReportView({ report, dict, primaryColor }: { report: VATReport; dict
               <Cell fill={primaryColor} />
               <Cell fill="#10b981" />
             </Pie>
-            <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }} />
+            <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: 0 }} />
           </PieChart>
         </ResponsiveContainer>
       </div>
@@ -484,31 +484,31 @@ function ProfitLossView({ summary, dict, primaryColor, colors }: { summary: Prof
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-        <div className="bg-green-50 border border-green-300 p-5 sm:p-6">
-          <div className="text-xs sm:text-sm text-green-600 font-semibold mb-2 uppercase tracking-wide">
+        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: '#0f9d58' }}>
+          <div className="text-xs sm:text-sm text-white/80 font-semibold mb-2 uppercase tracking-wide">
             {dict.reports?.totalRevenue || 'Total Revenue'}
           </div>
-          <div className="text-2xl sm:text-3xl font-bold text-green-900"><Currency amount={summary.revenue.total} /></div>
+          <div className="text-2xl sm:text-3xl font-bold"><Currency amount={summary.revenue.total} /></div>
         </div>
-        <div className="bg-red-50 border border-red-300 p-5 sm:p-6">
-          <div className="text-xs sm:text-sm text-red-600 font-semibold mb-2 uppercase tracking-wide">
+        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: '#c0392b' }}>
+          <div className="text-xs sm:text-sm text-white/80 font-semibold mb-2 uppercase tracking-wide">
             {dict.reports?.totalExpenses || 'Total Expenses'}
           </div>
-          <div className="text-2xl sm:text-3xl font-bold text-red-900"><Currency amount={summary.expenses.total} /></div>
+          <div className="text-2xl sm:text-3xl font-bold"><Currency amount={summary.expenses.total} /></div>
         </div>
-        <div className="border p-5 sm:p-6" style={{ backgroundColor: `${primaryColor}10`, borderColor: `${primaryColor}40` }}>
-          <div className="font-semibold mb-2 uppercase tracking-wide text-xs sm:text-sm" style={{ color: primaryColor }}>
+        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: primaryColor }}>
+          <div className="font-semibold mb-2 uppercase tracking-wide text-xs sm:text-sm text-white/80">
             {dict.reports?.netProfit || 'Net Profit'}
           </div>
-          <div className="text-2xl sm:text-3xl font-bold" style={{ color: primaryColor }}>
+          <div className="text-2xl sm:text-3xl font-bold">
             <Currency amount={summary.netProfit} />
           </div>
         </div>
-        <div className="bg-purple-50 border border-purple-300 p-5 sm:p-6">
-          <div className="text-xs sm:text-sm text-purple-600 font-semibold mb-2 uppercase tracking-wide">
+        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: '#7a3fc9' }}>
+          <div className="text-xs sm:text-sm text-white/80 font-semibold mb-2 uppercase tracking-wide">
             {dict.reports?.profitMargin || 'Profit Margin'}
           </div>
-          <div className="text-2xl sm:text-3xl font-bold text-purple-900">{summary.profitMargin.toFixed(2)}%</div>
+          <div className="text-2xl sm:text-3xl font-bold">{summary.profitMargin.toFixed(2)}%</div>
         </div>
       </div>
 
@@ -525,7 +525,7 @@ function ProfitLossView({ summary, dict, primaryColor, colors }: { summary: Prof
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis dataKey="name" stroke="#6b7280" style={{ fontSize: '12px' }} />
             <YAxis stroke="#6b7280" style={{ fontSize: '12px' }} />
-            <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }} />
+            <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: 0 }} />
             <Bar dataKey="value" fill={primaryColor} />
           </BarChart>
         </ResponsiveContainer>
@@ -552,7 +552,7 @@ function ProfitLossView({ summary, dict, primaryColor, colors }: { summary: Prof
                   <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
                 ))}
               </Pie>
-              <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }} />
+              <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: 0 }} />
             </PieChart>
           </ResponsiveContainer>
         </div>
@@ -620,35 +620,35 @@ function SalesJournalView({ data, dict, primaryColor, onExport }: { data: SalesJ
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-6">
-        <div className="border p-5 sm:p-6" style={{ backgroundColor: `${primaryColor}10`, borderColor: `${primaryColor}40` }}>
-          <div className="font-semibold mb-2 uppercase tracking-wide text-xs sm:text-sm" style={{ color: primaryColor }}>
+        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: primaryColor }}>
+          <div className="font-semibold mb-2 uppercase tracking-wide text-xs sm:text-sm text-white/80">
             {dict.reports?.totalTransactions || 'Transactions'}
           </div>
-          <div className="text-2xl sm:text-3xl font-bold" style={{ color: primaryColor }}>{data.summary.totalTransactions}</div>
+          <div className="text-2xl sm:text-3xl font-bold">{data.summary.totalTransactions}</div>
         </div>
-        <div className="bg-green-50 border border-green-300 p-5 sm:p-6">
-          <div className="text-xs sm:text-sm text-green-600 font-semibold mb-2 uppercase tracking-wide">
+        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: '#0f9d58' }}>
+          <div className="text-xs sm:text-sm text-white/80 font-semibold mb-2 uppercase tracking-wide">
             {dict.reports?.totalSales || 'Total Sales'}
           </div>
-          <div className="text-2xl sm:text-3xl font-bold text-green-900"><Currency amount={data.summary.totalSales} /></div>
+          <div className="text-2xl sm:text-3xl font-bold"><Currency amount={data.summary.totalSales} /></div>
         </div>
-        <div className="bg-purple-50 border border-purple-300 p-5 sm:p-6">
-          <div className="text-xs sm:text-sm text-purple-600 font-semibold mb-2 uppercase tracking-wide">
+        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: '#7a3fc9' }}>
+          <div className="text-xs sm:text-sm text-white/80 font-semibold mb-2 uppercase tracking-wide">
             {dict.reports?.totalTax || 'Total Tax'}
           </div>
-          <div className="text-2xl sm:text-3xl font-bold text-purple-900"><Currency amount={data.summary.totalTax} /></div>
+          <div className="text-2xl sm:text-3xl font-bold"><Currency amount={data.summary.totalTax} /></div>
         </div>
-        <div className="bg-orange-50 border border-orange-300 p-5 sm:p-6">
-          <div className="text-xs sm:text-sm text-orange-600 font-semibold mb-2 uppercase tracking-wide">
+        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: '#e3a008' }}>
+          <div className="text-xs sm:text-sm text-white/80 font-semibold mb-2 uppercase tracking-wide">
             {dict.reports?.totalDiscounts || 'Total Discounts'}
           </div>
-          <div className="text-2xl sm:text-3xl font-bold text-orange-900"><Currency amount={data.summary.totalDiscounts} /></div>
+          <div className="text-2xl sm:text-3xl font-bold"><Currency amount={data.summary.totalDiscounts} /></div>
         </div>
-        <div className="bg-red-50 border border-red-300 p-5 sm:p-6">
-          <div className="text-xs sm:text-sm text-red-600 font-semibold mb-2 uppercase tracking-wide">
+        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: '#c0392b' }}>
+          <div className="text-xs sm:text-sm text-white/80 font-semibold mb-2 uppercase tracking-wide">
             {dict.reports?.totalTaxExempt || 'Tax Exempt'}
           </div>
-          <div className="text-2xl sm:text-3xl font-bold text-red-900"><Currency amount={data.summary.totalTaxExempt} /></div>
+          <div className="text-2xl sm:text-3xl font-bold"><Currency amount={data.summary.totalTaxExempt} /></div>
         </div>
       </div>
 

@@ -109,7 +109,7 @@ export default function BusinessHoursManager({ settings, tenant, onUpdate, dict 
     <div className="space-y-6">
       {message && (
         <div
-          className={`p-3 rounded ${
+          className={`p-3 ${
             message.type === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
           }`}
         >
@@ -134,14 +134,14 @@ export default function BusinessHoursManager({ settings, tenant, onUpdate, dict 
           {DAYS.map((day) => {
             const daySchedule = schedule[day] || { enabled: false, openTime: '09:00', closeTime: '17:00', breaks: [] };
             return (
-              <div key={day} className="p-4 border-2 border-gray-300 rounded">
+              <div key={day} className="p-4 border-2 border-gray-300">
                 <div className="flex items-center justify-between mb-3">
                   <label className="flex items-center space-x-2">
                     <input
                       type="checkbox"
                       checked={daySchedule.enabled || false}
                       onChange={(e) => updateDaySchedule(day, { enabled: e.target.checked })}
-                      className="w-4 h-4 text-brand border-gray-300 rounded focus:ring-brand"
+                      className="checkbox-win8"
                     />
                     <span className="text-sm font-medium text-gray-700">{dict?.businessHours?.[day] || day.charAt(0).toUpperCase() + day.slice(1)}</span>
                   </label>
@@ -154,7 +154,7 @@ export default function BusinessHoursManager({ settings, tenant, onUpdate, dict 
                         type="time"
                         value={daySchedule.openTime || '09:00'}
                         onChange={(e) => updateDaySchedule(day, { openTime: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded"
+                        className="w-full px-3 py-2 border border-gray-300"
                       />
                     </div>
                     <div>
@@ -163,7 +163,7 @@ export default function BusinessHoursManager({ settings, tenant, onUpdate, dict 
                         type="time"
                         value={daySchedule.closeTime || '17:00'}
                         onChange={(e) => updateDaySchedule(day, { closeTime: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded"
+                        className="w-full px-3 py-2 border border-gray-300"
                       />
                     </div>
                   </div>
@@ -186,7 +186,7 @@ export default function BusinessHoursManager({ settings, tenant, onUpdate, dict 
         </div>
         <div className="space-y-3">
           {specialHours.map((special, index) => (
-            <div key={index} className="p-4 border-2 border-gray-300 rounded">
+            <div key={index} className="p-4 border-2 border-gray-300">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                 <div>
                   <label className="block text-xs text-gray-600 mb-1">{dict?.businessHours?.date || 'Date'}</label>
@@ -194,7 +194,7 @@ export default function BusinessHoursManager({ settings, tenant, onUpdate, dict 
                     type="date"
                     value={special.date || ''}
                     onChange={(e) => updateSpecialHour(index, { date: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded"
+                    className="w-full px-3 py-2 border border-gray-300"
                   />
                 </div>
                 <div className="flex items-center pt-6">
@@ -202,7 +202,7 @@ export default function BusinessHoursManager({ settings, tenant, onUpdate, dict 
                     type="checkbox"
                     checked={special.enabled !== false}
                     onChange={(e) => updateSpecialHour(index, { enabled: e.target.checked })}
-                    className="w-4 h-4 text-brand border-gray-300 rounded focus:ring-brand"
+                    className="checkbox-win8"
                   />
                   <label className="ml-2 text-xs text-gray-700">{dict?.businessHours?.open || 'Open'}</label>
                 </div>
@@ -214,7 +214,7 @@ export default function BusinessHoursManager({ settings, tenant, onUpdate, dict 
                         type="time"
                         value={special.openTime || '09:00'}
                         onChange={(e) => updateSpecialHour(index, { openTime: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded"
+                        className="w-full px-3 py-2 border border-gray-300"
                       />
                     </div>
                     <div>
@@ -223,7 +223,7 @@ export default function BusinessHoursManager({ settings, tenant, onUpdate, dict 
                         type="time"
                         value={special.closeTime || '17:00'}
                         onChange={(e) => updateSpecialHour(index, { closeTime: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded"
+                        className="w-full px-3 py-2 border border-gray-300"
                       />
                     </div>
                   </>
@@ -234,7 +234,7 @@ export default function BusinessHoursManager({ settings, tenant, onUpdate, dict 
                     type="text"
                     value={special.note || ''}
                     onChange={(e) => updateSpecialHour(index, { note: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded"
+                    className="w-full px-3 py-2 border border-gray-300"
                     placeholder={dict?.businessHours?.holidayHoursPlaceholder || 'e.g., Holiday hours'}
                   />
                 </div>

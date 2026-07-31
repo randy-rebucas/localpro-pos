@@ -122,6 +122,12 @@ export interface ITenantSettings {
     cashDrawer?: {
       enabled: boolean;
       connectedToPrinter: boolean;
+      /** Device config when connectedToPrinter is false (standalone USB/serial drawer). */
+      direct?: {
+        type: 'usb' | 'serial';
+        vendorId?: number;
+        productId?: number;
+      };
     };
     touchscreen?: {
       enabled: boolean;

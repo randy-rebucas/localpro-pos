@@ -8,10 +8,16 @@
  */
 export function ptuExpiringSoon(expiryDate: string): boolean {
   if (!expiryDate) return false;
+  // Compare calendar days (local midnight-to-midnight) rather than raw
+  // instants — `new Date() + 30 days` retains the current time-of-day, so
+  // comparing it directly against a midnight-stored expiry date would make
+  // the 30-day threshold fuzzy by up to a day depending on time of day.
   const expiry = new Date(expiryDate);
-  const thirtyDays = new Date();
-  thirtyDays.setDate(thirtyDays.getDate() + 30);
-  return expiry <= thirtyDays;
+  const expiryMidnight = new Date(expiry.getFullYear(), expiry.getMonth(), expiry.getDate());
+  const thirtyDaysOut = new Date();
+  thirtyDaysOut.setHours(0, 0, 0, 0);
+  thirtyDaysOut.setDate(thirtyDaysOut.getDate() + 30);
+  return expiryMidnight <= thirtyDaysOut;
 }
 
 /**

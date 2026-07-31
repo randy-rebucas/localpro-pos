@@ -138,7 +138,7 @@ export default function RetailCompliancePage() {
                     type="checkbox"
                     checked={data.priceTaggingCompliant ?? false}
                     onChange={e => set('priceTaggingCompliant')(e.target.checked)}
-                    className="w-4 h-4 mt-0.5 accent-brand"
+                    className="checkbox-win8 mt-0.5"
                   />
                   <div>
                     <span className="text-sm text-gray-700 font-medium">Price Tagging Compliant</span>
@@ -150,7 +150,7 @@ export default function RetailCompliancePage() {
                     type="checkbox"
                     checked={data.weightsAndMeasuresCompliant ?? false}
                     onChange={e => set('weightsAndMeasuresCompliant')(e.target.checked)}
-                    className="w-4 h-4 mt-0.5 accent-brand"
+                    className="checkbox-win8 mt-0.5"
                   />
                   <div>
                     <span className="text-sm text-gray-700 font-medium">Weights &amp; Measures Compliant</span>
@@ -162,7 +162,7 @@ export default function RetailCompliancePage() {
                     type="checkbox"
                     checked={data.productLabelsCompliant ?? false}
                     onChange={e => set('productLabelsCompliant')(e.target.checked)}
-                    className="w-4 h-4 mt-0.5 accent-brand"
+                    className="checkbox-win8 mt-0.5"
                   />
                   <div>
                     <span className="text-sm text-gray-700 font-medium">Product Labels Compliant</span>

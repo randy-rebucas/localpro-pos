@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
             if (recentMovements.length > 0) {
               // Batch-load all referenced products in one query
               const productIds = [...new Set(recentMovements.map((m) => String(m.productId)))];
-              const products = await Product.find({ _id: { $in: productIds } })
+              const products = await Product.find({ _id: { $in: productIds }, tenantId })
                 .select('_id')
                 .lean();
               const productSet = new Set(products.map((p) => String(p._id)));

@@ -205,7 +205,7 @@ export default function AdminSidebar() {
       <div className="px-4 py-4 border-b border-gray-100">
         <div className="flex items-center gap-3">
           <div
-            className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-semibold flex-shrink-0"
+            className="w-9 h-9 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0"
             style={{ backgroundColor: primaryColor }}
           >
             {user?.name?.charAt(0)?.toUpperCase() || 'U'}
@@ -231,7 +231,7 @@ export default function AdminSidebar() {
               {!collapsed && (
                 <button
                   onClick={() => toggleGroup(group.id)}
-                  className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-xs font-semibold uppercase tracking-wider transition-colors ${
+                  className={`w-full flex items-center justify-between px-2 py-1.5 text-xs font-semibold uppercase tracking-wider transition-colors ${
                     groupActive ? 'text-gray-800' : 'text-gray-400 hover:text-gray-600'
                   }`}
                 >
@@ -252,7 +252,7 @@ export default function AdminSidebar() {
                           href={item.href}
                           onClick={closeMobileSidebar}
                           title={collapsed ? item.label : undefined}
-                          className={`flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm transition-colors ${
+                          className={`flex items-center gap-2.5 px-2.5 py-2 text-sm transition-colors ${
                             active
                               ? 'font-semibold text-white'
                               : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
@@ -281,7 +281,7 @@ export default function AdminSidebar() {
           href={base}
           onClick={closeMobileSidebar}
           title={collapsed ? 'Go to POS' : undefined}
-          className={`flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors ${collapsed ? 'justify-center' : ''}`}
+          className={`flex items-center gap-2.5 px-2.5 py-2 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors ${collapsed ? 'justify-center' : ''}`}
         >
           <Store className="w-4 h-4 flex-shrink-0" />
           {!collapsed && <span>Go to POS</span>}
@@ -289,7 +289,7 @@ export default function AdminSidebar() {
         <button
           onClick={logout}
           title={collapsed ? 'Logout' : undefined}
-          className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm text-gray-600 hover:bg-red-50 hover:text-red-600 transition-colors ${collapsed ? 'justify-center' : ''}`}
+          className={`w-full flex items-center gap-2.5 px-2.5 py-2 text-sm text-gray-600 hover:bg-red-50 hover:text-red-600 transition-colors ${collapsed ? 'justify-center' : ''}`}
         >
           <LogOut className="w-4 h-4 flex-shrink-0" />
           {!collapsed && <span>Logout</span>}

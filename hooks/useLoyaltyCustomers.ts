@@ -21,6 +21,8 @@ export const useLoyaltyCustomers = () => {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCustomers, setTotalCustomers] = useState(0);
+  const [enrolledCount, setEnrolledCount] = useState(0);
+  const [totalPoints, setTotalPoints] = useState(0);
   const [loading, setLoading] = useState(true);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -83,9 +85,26 @@ export const useLoyaltyCustomers = () => {
     };
   }, []);
 
-  // Derived stats
-  const enrolledCount = customers.filter((c) => (c.loyaltyPointsBalance ?? 0) > 0).length;
-  const totalPoints = customers.reduce((sum, c) => sum + (c.loyaltyPointsBalance ?? 0), 0);
+  // Tenant-wide totals — fetched separately via aggregation, since `customers`
+  // above only holds the current paginated page and would silently undercount
+  // enrolled customers / points outstanding for tenants with >20 customers.
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch('/api/loyalty/stats', { credentials: 'include', signal: controller.signal })
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.success) {
+          setEnrolledCount(json.data.enrolledCount ?? 0);
+          setTotalPoints(json.data.totalPoints ?? 0);
+        }
+      })
+      .catch((error: unknown) => {
+        if (error instanceof Error && error.name !== 'AbortError') {
+          console.error('Error fetching loyalty stats:', error);
+        }
+      });
+    return () => controller.abort();
+  }, []);
 
   return {
     customers,

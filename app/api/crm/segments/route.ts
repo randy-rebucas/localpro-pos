@@ -28,8 +28,12 @@ export async function GET(request: NextRequest) {
     const skip = (page - 1) * limit;
 
     // Get order counts per customer
+    // NOTE: tenantId from requireTenantAccess() is a string, but Transaction.tenantId
+    // is stored as ObjectId — aggregate() pipelines don't auto-cast like .find() does,
+    // so this must be cast explicitly or the $match silently matches nothing.
+    const tenantObjectId = new mongoose.Types.ObjectId(tenantId);
     const orderStats = await Transaction.aggregate([
-      { $match: { tenantId, status: 'completed' } },
+      { $match: { tenantId: tenantObjectId, status: 'completed' } },
       {
         $group: {
           _id: '$customerId',

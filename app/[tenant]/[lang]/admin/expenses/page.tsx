@@ -317,8 +317,8 @@ function ExpenseModal({
   onClose: () => void;
   onSave: () => Promise<void>;
   dict: TranslationDict | null;
-  createExpense: (form: ExpenseFormData) => Promise<boolean>;
-  updateExpense: (id: string, form: ExpenseFormData) => Promise<boolean>;
+  createExpense: (form: ExpenseFormData) => Promise<true | string>;
+  updateExpense: (id: string, form: ExpenseFormData) => Promise<true | string>;
 }) {
   const { formData, setFormData, error, submitting, handleSubmit, initializeForm, resetForm } = useExpensesForm();
 
@@ -334,11 +334,11 @@ function ExpenseModal({
     e.preventDefault();
     await handleSubmit(async (payload) => {
       const isEdit = !!expense;
-      const success = isEdit ? await updateExpense(expense._id, payload) : await createExpense(payload);
-      if (success) {
+      const result = isEdit ? await updateExpense(expense._id, payload) : await createExpense(payload);
+      if (result === true) {
         await onSave();
       }
-      return success;
+      return result;
     });
   };
 
