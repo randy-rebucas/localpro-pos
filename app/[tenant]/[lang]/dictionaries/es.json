@@ -574,6 +574,7 @@
     "title": "Gestión de Inventario",
     "branch": "Sucursal",
     "allBranches": "Todas las Sucursales",
+    "printAuditSheet": "Imprimir Hoja de Auditoría",
     "features": "Características de Inventario",
     "realtimeTracking": "Seguimiento de Stock en Tiempo Real",
     "realtimeTrackingDesc": "Monitoree los niveles de stock en tiempo real en todas las sucursales",

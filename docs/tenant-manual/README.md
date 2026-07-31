@@ -29,6 +29,7 @@ Staff can open this same content in the app from the top navigation bar: **User 
 | 13 | [Security & Access Control](./13-security.md) | Authentication, RBAC, audit logs, token management |
 | 14 | [Tenant API Reference](./14-api-reference.md) | Key API endpoints for tenant management |
 | 15 | [Troubleshooting & Limits](./15-troubleshooting.md) | Common issues, subscription limits, error codes |
+| 16 | [Role Permission Matrix](./16-role-permission-matrix.md) | Feature-by-feature access breakdown for each role |
 
 ---
 

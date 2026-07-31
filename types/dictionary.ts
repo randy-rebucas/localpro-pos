@@ -145,6 +145,7 @@ export interface TranslationDict {
     title?: string;
     branch?: string;
     allBranches?: string;
+    printAuditSheet?: string;
     features?: string;
     quickActions?: string;
     manageStock?: string;

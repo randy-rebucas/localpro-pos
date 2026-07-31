@@ -2,41 +2,41 @@
 
 ## Plan Tiers
 
-1POS offers four subscription tiers:
+1POS offers four subscription tiers (current seed data — see `scripts/create-subscription-plans.ts`):
 
-| Feature | Starter | Pro | Business | Enterprise |
-|---------|---------|-----|----------|------------|
-| **Monthly Price** | Lowest | Mid | Higher | Custom |
-| **Setup Fee** | None | None | None | Custom |
-| **Max Users** | Limited | More | Even more | Unlimited (-1) |
-| **Max Branches** | 1 | Limited | More | Unlimited (-1) |
-| **Max Products** | Limited | More | Even more | Unlimited (-1) |
-| **Max Transactions** | Limited | More | Even more | Unlimited (-1) |
+| | Basic (`starter`) | Standard (`pro`) | Premium (`business`) | Enterprise (`enterprise`) |
+|---|---|---|---|---|
+| **Monthly Price** | ₱1,500 | ₱2,500 | ₱5,000 | Custom |
+| **Setup Fee** | ₱50,000 | ₱70,000 | ₱100,000 | Custom |
+| **Max Users** | 3 | 10 | 25 | Unlimited (-1) |
+| **Max Branches** | 1 | 2 | 5 | Unlimited (-1) |
+| **Max Products** | 100 | 1,000 | 5,000 | Unlimited (-1) |
+| **Max Transactions/mo** | 1,000 | 10,000 | 50,000 | Unlimited (-1) |
 | **Inventory** | Yes | Yes | Yes | Yes |
 | **Categories** | Yes | Yes | Yes | Yes |
 | **Discounts** | No | Yes | Yes | Yes |
-| **Loyalty Program** | No | No | Yes | Yes |
+| **Loyalty Program** | No | Yes | Yes | Yes |
 | **Customer Management** | No | Yes | Yes | Yes |
 | **Booking/Scheduling** | No | No | Yes | Yes |
-| **Reports** | Basic | Yes | Yes | Yes |
+| **Reports** | Yes | Yes | Yes | Yes |
 | **Multi-Branch** | No | No | Yes | Yes |
-| **Hardware Integration** | No | Yes | Yes | Yes |
-| **Priority Support** | No | No | No | Yes |
+| **Hardware Integration** | Yes | Yes | Yes | Yes |
+| **Priority Support** | No | No | Yes | Yes |
 | **Custom Integrations** | No | No | No | Yes |
 | **Dedicated Account Mgr** | No | No | No | Yes |
 
-> `-1` means unlimited in the system.
+> `-1` means unlimited in the system. Enterprise pricing/limits are set per customer agreement (`isCustom: true`) and this tier is hidden from the self-serve upgrade UI.
 
 ## BIR Compliance by Plan
 
-| BIR Feature | Starter | Pro | Business | Enterprise |
+| BIR Feature | Basic | Standard | Premium | Enterprise |
 |-------------|---------|-----|----------|------------|
-| PTU Assistance | No | No | Yes | Yes |
+| PTU Assistance | No | Yes | Yes | Yes |
 | Receipt Formatting | No | Yes | Yes | Yes |
-| BIR Documentation | No | No | Yes | Yes |
+| BIR Documentation | No | Yes | Yes | Yes |
 | CAS Reporting | No | No | Yes | Yes |
-| Audit Trail System | No | Yes | Yes | Yes |
-| Monthly Support | No | No | No | Yes |
+| Audit Trail System | Yes | Yes | Yes | Yes |
+| Monthly Support | No | No | Yes | Yes |
 
 ## Plan Data Structure
 

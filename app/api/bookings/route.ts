@@ -23,8 +23,10 @@ import { logger } from '@/lib/logger';
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
-    const user = await getCurrentUser(request);
-    if (!user) {
+    let user;
+    try {
+      user = await requireRole(request, ['cashier']);
+    } catch {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }

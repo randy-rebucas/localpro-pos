@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Customer from '@/models/Customer';
-import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
+import { requireTenantAccess } from '@/lib/api-tenant';
+import { hasRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -15,12 +16,16 @@ export async function GET(
   try {
     await connectDB();
     const { id } = await params;
-    const tenantId = await getTenantIdFromRequest(request);
-    
+
+    // Require authentication to prevent unauthenticated customer lookups
+    const authResult = await requireTenantAccess(request);
+    if (authResult instanceof NextResponse) return authResult;
+    const tenantId = authResult.tenantId;
+
     if (!tenantId) {
       return NextResponse.json({ success: false, error: 'Tenant not found or access denied' }, { status: 403 });
     }
-    
+
     const customer = await Customer.findOne({ _id: id, tenantId, isActive: { $ne: false } }).lean();
 
     if (!customer) {
@@ -45,6 +50,12 @@ export async function PATCH(
     try {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
+      if (!hasRole(tenantAccess.user.role, ['manager'])) {
+        return NextResponse.json(
+          { success: false, error: 'Forbidden: Insufficient permissions' },
+          { status: 403 }
+        );
+      }
     } catch (authError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       const t = await getValidationTranslatorFromRequest(request); // eslint-disable-line @typescript-eslint/no-unused-vars
       if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
@@ -150,6 +161,12 @@ export async function DELETE(
     try {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
+      if (!hasRole(tenantAccess.user.role, ['manager'])) {
+        return NextResponse.json(
+          { success: false, error: 'Forbidden: Insufficient permissions' },
+          { status: 403 }
+        );
+      }
     } catch (authError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       const t = await getValidationTranslatorFromRequest(request); // eslint-disable-line @typescript-eslint/no-unused-vars
       if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {

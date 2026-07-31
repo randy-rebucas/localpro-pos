@@ -12,7 +12,7 @@ import { logger } from '@/lib/logger';
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
-    await requireAuth(request);
+    await requireRole(request, ['cashier']);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
 

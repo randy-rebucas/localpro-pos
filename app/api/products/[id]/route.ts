@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
-import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
-import { requireAuth } from '@/lib/auth'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import { requireTenantAccess } from '@/lib/api-tenant';
+import { hasRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateAndSanitize, validateProduct } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -13,13 +13,17 @@ import { validateProductForBusiness } from '@/lib/business-type-helpers';
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await connectDB();
-    const tenantId = await getTenantIdFromRequest(request);
+
+    // Require authentication to prevent unauthenticated product lookups
+    const authResult = await requireTenantAccess(request);
+    if (authResult instanceof NextResponse) return authResult;
+    const tenantId = authResult.tenantId;
     const { id } = await params;
-    
+
     if (!tenantId) {
       return NextResponse.json({ success: false, error: 'Tenant not found or access denied' }, { status: 403 });
     }
-    
+
     const product = await Product.findOne({ _id: id, tenantId, isActive: { $ne: false } }).lean();
 
     if (!product) {
@@ -32,10 +36,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       trackInventory: product.trackInventory !== undefined ? Boolean(product.trackInventory) : true,
       allowOutOfStockSales: product.allowOutOfStockSales !== undefined ? Boolean(product.allowOutOfStockSales) : false,
     };
-    
+
     return NextResponse.json({ success: true, data: productData });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error) {
+    return handleApiError(error, 'Failed to fetch product');
   }
 }
 
@@ -47,6 +51,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     try {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
+      if (!hasRole(tenantAccess.user.role, ['manager'])) {
+        return NextResponse.json(
+          { success: false, error: 'Forbidden: Insufficient permissions' },
+          { status: 403 }
+        );
+      }
     } catch (authError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
         return NextResponse.json(
@@ -153,6 +163,12 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     try {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
+      if (!hasRole(tenantAccess.user.role, ['manager'])) {
+        return NextResponse.json(
+          { success: false, error: 'Forbidden: Insufficient permissions' },
+          { status: 403 }
+        );
+      }
     } catch (authError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
         return NextResponse.json(

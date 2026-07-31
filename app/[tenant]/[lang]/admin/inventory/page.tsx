@@ -26,6 +26,8 @@ export default function AdminInventoryPage() {
   const [dict, setDict] = useState<TranslationDict | null>(null);
   const [selectedBranch, setSelectedBranch] = useState<string>('');
   const [stockRefreshTrigger, setStockRefreshTrigger] = useState(0);
+  const [auditGenerating, setAuditGenerating] = useState(false);
+  const [auditError, setAuditError] = useState<string | null>(null);
 
   const {
     branches,
@@ -48,6 +50,47 @@ export default function AdminInventoryPage() {
   const handleStockUpdate = useCallback(() => {
     setStockRefreshTrigger((n) => n + 1);
   }, []);
+
+  const handlePrintAuditSheet = useCallback(async () => {
+    setAuditGenerating(true);
+    setAuditError(null);
+    try {
+      const res = await fetch('/api/products');
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Failed to load products');
+
+      const rows = (json.data as Array<Record<string, unknown>>).flatMap((p) => {
+        const category = ((p.categoryId as { name?: string } | undefined)?.name) || (p.category as string) || '';
+        if (p.hasVariations && Array.isArray(p.variations) && p.variations.length) {
+          return (p.variations as Array<Record<string, unknown>>).map((v) => ({
+            name: `${p.name as string} - ${(v.name as string) || (v.label as string) || (v.sku as string) || ''}`,
+            sku: (v.sku as string) || '',
+            category,
+            stock: (v.stock as number) ?? 0,
+            branchStock: (v.branchStock as { branchId: string; stock: number }[]) || (p.branchStock as { branchId: string; stock: number }[]) || [],
+          }));
+        }
+        return [{
+          name: p.name as string,
+          sku: (p.sku as string) || '',
+          category,
+          stock: (p.stock as number) ?? 0,
+          branchStock: (p.branchStock as { branchId: string; stock: number }[]) || [],
+        }];
+      });
+
+      const { downloadInventoryAuditPDF } = await import('@/lib/export');
+      const branchSuffix = selectedBranch
+        ? (branches.find((b) => b._id === selectedBranch)?.name || 'branch')
+        : 'all-branches';
+      const filename = `inventory-audit-${branchSuffix}-${new Date().toISOString().slice(0, 10)}`;
+      await downloadInventoryAuditPDF(rows, branches, selectedBranch || undefined, filename, settings?.companyName);
+    } catch (err) {
+      setAuditError(err instanceof Error ? err.message : 'Failed to generate audit sheet');
+    } finally {
+      setAuditGenerating(false);
+    }
+  }, [selectedBranch, branches, settings?.companyName]);
 
   if (!dict) {
     return <PageLoading label="Loading..." />;
@@ -111,6 +154,17 @@ export default function AdminInventoryPage() {
             </select>
           </div>
 
+          <button
+            type="button"
+            onClick={handlePrintAuditSheet}
+            disabled={auditGenerating}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+          >
+            {auditGenerating
+              ? dict.common.loading || 'Loading...'
+              : invDict.printAuditSheet || 'Print Audit Sheet'}
+          </button>
+
           <div className="bg-white border border-gray-300 px-3 py-2 flex items-center">
             <RealTimeStockTracker
               branchId={selectedBranch || undefined}
@@ -119,6 +173,17 @@ export default function AdminInventoryPage() {
           </div>
         </div>
       </div>
+
+      {auditError && (
+        <div className="mb-4">
+          <InlineBanner
+            variant="warning"
+            message={auditError}
+            onRetry={handlePrintAuditSheet}
+            retryLabel={dict.common.retry || 'Retry'}
+          />
+        </div>
+      )}
 
       {branchesStatus === 'error' && (
         <div className="mb-4">

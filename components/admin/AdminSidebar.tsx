@@ -10,7 +10,7 @@ import {
   UtensilsCrossed, ShoppingBag, WashingMachine, Briefcase, Pill, CalendarClock,
   Settings, Clock, Users2, GitBranch, Calculator, CreditCard, Monitor, Bell,
   Palette, ToggleLeft, ClipboardList, Database, ChevronDown, ChevronRight,
-  LogOut, Store, ShoppingCart
+  LogOut, Store, ShoppingCart, Code2, Sparkles
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
@@ -134,6 +134,8 @@ export default function AdminSidebar() {
         { label: 'Feature Flags', href: `${base}/admin/feature-flags`, icon: ToggleLeft },
         { label: 'Audit Logs', href: `${base}/admin/audit-logs`, icon: ClipboardList },
         { label: 'Backup & Reset', href: `${base}/admin/backup-reset`, icon: Database },
+        { label: 'Sample Data', href: `${base}/admin/sample-data`, icon: Sparkles },
+        { label: 'API Docs', href: `${base}/admin/api-docs`, icon: Code2 },
         { label: 'Settings', href: `${base}/admin/settings`, icon: Settings },
       ],
     },

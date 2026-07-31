@@ -204,3 +204,151 @@ export async function downloadPDF(
     throw new Error('PDF export failed. Please ensure jspdf package is installed.');
   }
 }
+
+export interface AuditProductRow {
+  name: string;
+  sku?: string;
+  category?: string;
+  stock: number;
+  branchStock?: { branchId: string; stock: number }[];
+}
+
+export interface AuditBranchInfo {
+  _id: string;
+  name: string;
+  code?: string;
+}
+
+/**
+ * Generate a printable inventory audit sheet (PDF) with blank fillable
+ * columns for staff to record physical counts against system stock.
+ */
+export async function downloadInventoryAuditPDF(
+  products: AuditProductRow[],
+  branches: AuditBranchInfo[],
+  selectedBranchId: string | undefined,
+  filename: string,
+  companyName?: string
+): Promise<void> {
+  try {
+    const jsPDF = (await import('jspdf')).default;
+
+    const doc = new jsPDF({ orientation: 'landscape' });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 10;
+
+    const columns: { label: string; width: number }[] = [
+      { label: '#', width: 10 },
+      { label: 'Product Name', width: 80 },
+      { label: 'SKU', width: 35 },
+      { label: 'Category', width: 35 },
+      { label: 'System Qty', width: 25 },
+      { label: 'Counted Qty', width: 30 },
+      { label: 'Discrepancy', width: 30 },
+      { label: 'Notes', width: 0 }, // fills remaining width
+    ];
+    const fixedWidth = columns.reduce((sum, c) => sum + c.width, 0);
+    columns[columns.length - 1].width = pageWidth - 2 * margin - fixedWidth;
+
+    const rowHeight = 9;
+
+    const stockForBranch = (row: AuditProductRow, branchId: string): number => {
+      const entry = row.branchStock?.find((b) => b.branchId === branchId);
+      return entry ? entry.stock : row.stock;
+    };
+
+    const drawTableHeader = (y: number): number => {
+      doc.setFontSize(9);
+      doc.setFont(undefined, 'bold');
+      let x = margin;
+      columns.forEach((col) => {
+        doc.rect(x, y, col.width, rowHeight);
+        doc.text(col.label, x + 2, y + rowHeight - 3);
+        x += col.width;
+      });
+      doc.setFont(undefined, 'normal');
+      return y + rowHeight;
+    };
+
+    const drawSectionHeader = (branchLabel: string): number => {
+      let y = margin;
+
+      if (companyName) {
+        doc.setFontSize(13);
+        doc.setFont(undefined, 'bold');
+        doc.text(companyName, margin, y);
+        y += 7;
+      }
+
+      doc.setFontSize(16);
+      doc.setFont(undefined, 'bold');
+      doc.text('Inventory Audit Sheet', margin, y);
+      y += 8;
+
+      doc.setFontSize(10);
+      doc.setFont(undefined, 'normal');
+      doc.text(`Branch: ${branchLabel}`, margin, y);
+      y += 6;
+      doc.text('Date: _______________        Counted by: _______________', margin, y);
+      y += 8;
+
+      return drawTableHeader(y);
+    };
+
+    const drawRow = (y: number, index: number, row: AuditProductRow, qty: number): number => {
+      let x = margin;
+      const values = [
+        String(index + 1),
+        row.name,
+        row.sku || '',
+        row.category || '',
+        String(qty),
+        '',
+        '',
+        '',
+      ];
+      doc.setFontSize(9);
+      values.forEach((value, colIndex) => {
+        const col = columns[colIndex];
+        doc.rect(x, y, col.width, rowHeight);
+        if (value) {
+          const text = doc.splitTextToSize(value, col.width - 3);
+          doc.text(text[0], x + 2, y + rowHeight - 3);
+        }
+        x += col.width;
+      });
+      return y + rowHeight;
+    };
+
+    const renderSection = (branchId: string | undefined, branchLabel: string, first: boolean) => {
+      if (!first) doc.addPage();
+      let y = drawSectionHeader(branchLabel);
+
+      products.forEach((row, index) => {
+        if (y + rowHeight > pageHeight - margin) {
+          doc.addPage();
+          y = drawTableHeader(margin);
+        }
+        const qty = branchId ? stockForBranch(row, branchId) : row.stock;
+        y = drawRow(y, index, row, qty);
+      });
+    };
+
+    if (selectedBranchId) {
+      const branch = branches.find((b) => b._id === selectedBranchId);
+      renderSection(selectedBranchId, branch?.name || 'Selected Branch', true);
+    } else if (branches.length > 0) {
+      branches.forEach((branch, i) => {
+        renderSection(branch._id, branch.name, i === 0);
+      });
+    } else {
+      renderSection(undefined, 'All Branches', true);
+    }
+
+    doc.save(filename.endsWith('.pdf') ? filename : `${filename}.pdf`);
+  } catch (error) {
+    logger.error('Error generating inventory audit PDF:', error);
+    throw new Error('Inventory audit PDF generation failed. Please ensure jspdf package is installed.');
+  }
+}

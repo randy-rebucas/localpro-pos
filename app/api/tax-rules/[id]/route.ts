@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import TaxRule from '@/models/TaxRule';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
-import { requireAuth } from '@/lib/auth';
+import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
+import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
@@ -13,12 +13,16 @@ export async function GET(
   try {
     await connectDB();
     const { id } = await params;
-    const tenantId = await getTenantIdFromRequest(request);
-    
+
+    // Require authentication to prevent unauthenticated tax-rule lookups
+    const authResult = await requireTenantAccess(request);
+    if (authResult instanceof NextResponse) return authResult;
+    const tenantId = authResult.tenantId;
+
     if (!tenantId) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
-    
+
     const taxRule = await TaxRule.findOne({ _id: id, tenantId }).lean();
     
     if (!taxRule) {
@@ -38,7 +42,7 @@ export async function PATCH(
   try {
     await connectDB();
     const { id } = await params;
-    const user = await requireAuth(request); // eslint-disable-line @typescript-eslint/no-unused-vars
+    const user = await requireRole(request, ['admin']);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
     
@@ -97,7 +101,7 @@ export async function DELETE(
   try {
     await connectDB();
     const { id } = await params;
-    const user = await requireAuth(request); // eslint-disable-line @typescript-eslint/no-unused-vars
+    const user = await requireRole(request, ['admin']);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
     

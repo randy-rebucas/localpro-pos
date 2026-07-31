@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Expense from '@/models/Expense';
 import { requireTenantAccess } from '@/lib/api-tenant';
+import { hasRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -50,6 +51,10 @@ export async function POST(request: NextRequest) {
     const { tenantId, user } = authResult;
     const userId = user.userId;
     const t = await getValidationTranslatorFromRequest(request);
+
+    if (!hasRole(user.role, ['manager'])) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
 
     const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
     const { allowed } = checkRateLimit(`write:expenses:${tenantId}:${ip}`, 30, 60_000);

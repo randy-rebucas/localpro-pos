@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Transaction from '@/models/Transaction';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
-import { requireAuth } from '@/lib/auth';
+import { requireRole } from '@/lib/auth';
 import { generateReceiptNumber } from '@/lib/receipt';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     try {
       tenantId = (await getTenantIdFromRequest(request)) as string;
       if (!tenantId) throw new Error('Tenant not found');
-      await requireAuth(request);
+      await requireRole(request, ['cashier']);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : '';
       const status = msg.includes('Unauthorized') ? 401 : msg.includes('Forbidden') ? 403 : 400;

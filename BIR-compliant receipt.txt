@@ -1,0 +1,53 @@
+================================================
+               JUAN DIGITAL SOLUTIONS           
+            (Registered Corporate Name)         
+       123 Business Road, Brgy. Central,         
+             Makati City, Philippines            
+                                                
+         TIN: 123-456-789-00000 (Head Office)   
+                 VAT REGISTERED                 
+================================================
+Terminal SN  : HW-XYZ-987654321                 
+MIN          : 260730123456789                  
+Invoice No   : INV-0000000001                   
+Date & Time  : 2026-07-30 22:45:12               
+Cashier Name : Maria Santos                      
+================================================
+ITEMS                     QTY   PRICE     AMOUNT
+------------------------------------------------
+Digital Marketing Guide     1V  500.00    500.00
+Consulting Hour (SaaS)      2V  300.00    600.00
+Prescription Medicine      1E  150.00    150.00
+------------------------------------------------
+TOTAL ITEM COUNT: 3                             
+================================================
+VATable Sales                           x x x.xx
+VAT Amount (12%)                        x x x.xx
+VAT-Exempt Sales                        x x x.xx
+Zero-Rated Sales                            0.00
+------------------------------------------------
+GRAND TOTAL                             1,250.00
+================================================
+           SENIOR CITIZEN / PWD BLOCK           
+SC/PWD Name : _________________________________ 
+SC/PWD ID   : _________________________________ 
+Gross Sales (Less VAT)                  x x x.xx
+20% Discount                            x x x.xx
+NET AMOUNT DUE                          x x x.xx
+================================================
+                  FOOTER BLOCK                  
+          Thank you for your business!          
+       This document is a Sales Invoice.        
+                                                
+               SYSTEM PROVIDER:                 
+            JUAN DIGITAL SOLUTIONS              
+ 123 Business Road, Brgy. Central, Makati City  
+              TIN: 123-456-789-00000            
+                                                
+Accreditation No: ACC-1234567-2026-001          
+Date Issued     : 2026-06-15                    
+Valid Until     : 2029-06-14                    
+                                                
+PTU Number      : PTU-9876543-2026-002          
+Date Issued     : 2026-07-01                    
+================================================

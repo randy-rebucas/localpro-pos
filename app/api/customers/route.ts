@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import type { FilterQuery } from 'mongoose';
 import connectDB from '@/lib/mongodb';
 import Customer, { type ICustomer } from '@/models/Customer';
-import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
+import { requireTenantAccess } from '@/lib/api-tenant';
+import { hasRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
@@ -14,12 +15,16 @@ import { parseCreditLimitInput } from '@/lib/customer-credit';
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
-    const tenantId = await getTenantIdFromRequest(request);
-    
+
+    // Require authentication to prevent unauthenticated customer enumeration
+    const authResult = await requireTenantAccess(request);
+    if (authResult instanceof NextResponse) return authResult;
+    const tenantId = authResult.tenantId;
+
     if (!tenantId) {
       return NextResponse.json({ success: false, error: 'Tenant not found or access denied' }, { status: 403 });
     }
-    
+
     const searchParams = request.nextUrl.searchParams;
     const rawLimit = parseInt(searchParams.get('limit') || '50');
     const limit = Math.min(Math.max(1, rawLimit), 200);
@@ -73,6 +78,12 @@ export async function POST(request: NextRequest) {
     try {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
+      if (!hasRole(tenantAccess.user.role, ['cashier'])) {
+        return NextResponse.json(
+          { success: false, error: 'Forbidden: Insufficient permissions' },
+          { status: 403 }
+        );
+      }
     } catch (authError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       const t = await getValidationTranslatorFromRequest(request); // eslint-disable-line @typescript-eslint/no-unused-vars
       if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {

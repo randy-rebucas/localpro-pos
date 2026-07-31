@@ -574,6 +574,7 @@
     "title": "Inventory Management",
     "branch": "Branch",
     "allBranches": "All Branches",
+    "printAuditSheet": "Print Audit Sheet",
     "features": "Inventory Features",
     "realtimeTracking": "Real-time Stock Tracking",
     "realtimeTrackingDesc": "Monitor stock levels in real-time across all branches",

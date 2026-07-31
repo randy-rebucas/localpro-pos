@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import AuditLog from '@/models/AuditLog';
-import { requireAuth } from '@/lib/auth';
+import { requireAuth, hasRole } from '@/lib/auth';
 import User from '@/models/User'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
@@ -14,8 +14,8 @@ export async function GET(request: NextRequest) {
     // Get translation function
     const t = await getValidationTranslatorFromRequest(request);
 
-    // Only admin and owner can view audit logs
-    if (user.role !== 'admin' && user.role !== 'owner') {
+    // Manager and above can view audit logs
+    if (!hasRole(user.role, ['manager'])) {
       return NextResponse.json(
         { success: false, error: t('validation.forbiddenAdminAccess', 'Forbidden: Admin access required') },
         { status: 403 }
