@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import CashDrawerSession from '@/models/CashDrawerSession';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
-import { requireAuth, requireRole } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import Transaction from '@/models/Transaction';
 import Expense from '@/models/Expense';
@@ -12,12 +13,16 @@ import { logger } from '@/lib/logger';
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
-    await requireRole(request, ['cashier']);
+    const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
+    }
+
+    if (!(await hasTenantPermission(user.role, tenantId, 'cash_drawer.manage'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
     const searchParams = request.nextUrl.searchParams;
@@ -139,7 +144,9 @@ export async function POST(request: NextRequest) {
       });
       // Fallback: any open session (for managers closing another cashier's drawer)
       if (!openSession) {
-        await requireRole(request, ['manager', 'admin', 'owner']);
+        if (!(await hasTenantPermission(user.role, tenantId, 'cash_drawer.close'))) {
+          return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+        }
         openSession = await CashDrawerSession.findOne({ tenantId, status: 'open' });
       }
 

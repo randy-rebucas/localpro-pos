@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb';
 import LoyaltyConfig from '@/models/LoyaltyConfig';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { getCurrentUser } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { checkFeatureAccess } from '@/lib/subscription';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -64,13 +65,13 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (!['owner', 'admin'].includes(user.role)) {
-      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
-    }
-
     const tenantId = await getTenantIdFromRequest(request);
     if (!tenantId) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+    }
+
+    if (!(await hasTenantPermission(user.role, tenantId, 'loyalty.config'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
     try {

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Branch from '@/models/Branch';
 import { requireTenantAccess } from '@/lib/api-tenant';
-import { hasRole } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -43,7 +43,7 @@ export async function PUT(
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId, user } = authResult;
-    if (!hasRole(user.role, ['manager'])) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'branches.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
     const { id } = await params;
@@ -97,7 +97,7 @@ export async function DELETE(
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId, user } = authResult;
-    if (!hasRole(user.role, ['admin'])) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'branches.delete'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
     const { id } = await params;

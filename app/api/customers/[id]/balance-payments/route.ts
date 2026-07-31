@@ -5,7 +5,7 @@ import connectDB from '@/lib/mongodb';
 import Customer from '@/models/Customer';
 import CustomerBalancePayment from '@/models/CustomerBalancePayment';
 import { requireTenantAccess } from '@/lib/api-tenant';
-import { requireRole } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -26,7 +26,9 @@ export async function GET(
     try {
       const access = await requireTenantAccess(request);
       tenantId = access.tenantId;
-      await requireRole(request, ['cashier', 'manager', 'admin', 'owner']);
+      if (!(await hasTenantPermission(access.user.role, tenantId, 'customers.balance_payments'))) {
+        throw new Error('Forbidden: Insufficient permissions');
+      }
     } catch (authError: unknown) {
       const msg = authError instanceof Error ? authError.message : '';
       if (msg.includes('Unauthorized')) {
@@ -74,7 +76,9 @@ export async function POST(
       const access = await requireTenantAccess(request);
       tenantId = access.tenantId;
       userId = access.user.userId;
-      await requireRole(request, ['cashier', 'manager', 'admin', 'owner']);
+      if (!(await hasTenantPermission(access.user.role, tenantId, 'customers.balance_payments'))) {
+        throw new Error('Forbidden: Insufficient permissions');
+      }
     } catch (authError: unknown) {
       const msg = authError instanceof Error ? authError.message : '';
       if (msg.includes('Unauthorized')) {

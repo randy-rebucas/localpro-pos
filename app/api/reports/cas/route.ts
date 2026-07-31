@@ -7,7 +7,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
-import { requireAuth, requireRole } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import Transaction from '@/models/Transaction';
 import { checkBirFeatureAccess } from '@/lib/subscription';
 import { arrayToCSV } from '@/lib/export';
@@ -15,12 +16,15 @@ import { arrayToCSV } from '@/lib/export';
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
-    await requireAuth(request);
-    await requireRole(request, ['admin', 'manager', 'owner']);
+    const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
 
     if (!tenantId) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+    }
+
+    if (!(await hasTenantPermission(user.role, tenantId, 'reports.view'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
     // Gate on CAS reporting BIR feature

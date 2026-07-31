@@ -10,20 +10,21 @@ import {
   UtensilsCrossed, ShoppingBag, WashingMachine, Briefcase, Pill, CalendarClock,
   Settings, Clock, Users2, GitBranch, Calculator, CreditCard, Monitor, Bell,
   Palette, ToggleLeft, ClipboardList, Database, ChevronDown, ChevronRight,
-  LogOut, Store, ShoppingCart, Code2, Sparkles
+  LogOut, Store, ShoppingCart, Code2, Sparkles, Lock
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { useAdminLayout } from '@/contexts/AdminLayoutContext';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface NavItem {
   label: string;
   href: string;
   icon: React.ElementType;
   exact?: boolean;
-  /** Minimum role required to see this item. Owner/admin/super_admin always see everything regardless. Defaults to 'viewer' (any admin-panel user). */
-  minRole?: string;
+  /** Permission key (see lib/permissions.ts) gating this item. Owner/admin/super_admin always see everything regardless. Omit for items visible to any admin-panel user. */
+  permission?: string;
 }
 
 interface NavGroup {
@@ -38,12 +39,13 @@ export default function AdminSidebar() {
   const pathname = usePathname();
   const tenant = (params?.tenant as string) || 'default';
   const lang = (params?.lang as string) || 'en';
-  const { user, logout, hasRole } = useAuth();
+  const { user, logout } = useAuth();
+  const { canAccess } = usePermissions();
 
-  // Owner/admin/super_admin always see every nav item, regardless of minRole.
+  // Owner/admin/super_admin always see every nav item, regardless of permission.
   const canSeeItem = (item: NavItem) => {
-    if (user?.role === 'owner' || user?.role === 'admin' || user?.role === 'super_admin') return true;
-    return hasRole([item.minRole ?? 'viewer']);
+    if (!item.permission) return true;
+    return canAccess(item.permission);
   };
   const { settings } = useTenantSettings();
   const { sidebarOpen, sidebarCollapsed, closeMobileSidebar } = useAdminLayout();
@@ -58,8 +60,8 @@ export default function AdminSidebar() {
       title: 'Overview',
       defaultOpen: true,
       items: [
-        { label: 'Dashboard', href: `${base}/admin`, icon: LayoutDashboard, exact: true },
-        { label: 'Reports', href: `${base}/admin/reports`, icon: BarChart2, minRole: 'manager' },
+        { label: 'Dashboard', href: `${base}/admin`, icon: LayoutDashboard, exact: true, permission: 'dashboard.view' },
+        { label: 'Reports', href: `${base}/admin/reports`, icon: BarChart2, permission: 'reports.view' },
       ],
     },
     {
@@ -67,11 +69,11 @@ export default function AdminSidebar() {
       title: 'Catalog',
       defaultOpen: true,
       items: [
-        { label: 'Products', href: `${base}/admin/products`, icon: Package, minRole: 'manager' },
-        { label: 'Categories', href: `${base}/admin/categories`, icon: Tag, minRole: 'manager' },
-        { label: 'Bundles', href: `${base}/admin/bundles`, icon: Layers, minRole: 'manager' },
-        { label: 'Inventory', href: `${base}/admin/inventory`, icon: Boxes, minRole: 'manager' },
-        { label: 'Stock Movements', href: `${base}/admin/stock-movements`, icon: ArrowUpDown, minRole: 'manager' },
+        { label: 'Products', href: `${base}/admin/products`, icon: Package, permission: 'products.manage' },
+        { label: 'Categories', href: `${base}/admin/categories`, icon: Tag, permission: 'categories.manage' },
+        { label: 'Bundles', href: `${base}/admin/bundles`, icon: Layers, permission: 'bundles.manage' },
+        { label: 'Inventory', href: `${base}/admin/inventory`, icon: Boxes, permission: 'inventory.manage' },
+        { label: 'Stock Movements', href: `${base}/admin/stock-movements`, icon: ArrowUpDown, permission: 'stock_movements.manage' },
       ],
     },
     {
@@ -79,10 +81,10 @@ export default function AdminSidebar() {
       title: 'Sales',
       defaultOpen: true,
       items: [
-        { label: 'Transactions', href: `${base}/admin/transactions`, icon: Receipt, minRole: 'cashier' },
-        { label: 'Discounts', href: `${base}/admin/discounts`, icon: Percent, minRole: 'manager' },
-        { label: 'Cash Drawer', href: `${base}/admin/cash-drawer`, icon: DollarSign, minRole: 'cashier' },
-        { label: 'Expenses', href: `${base}/admin/expenses`, icon: TrendingDown, minRole: 'manager' },
+        { label: 'Transactions', href: `${base}/admin/transactions`, icon: Receipt, permission: 'transactions.view' },
+        { label: 'Discounts', href: `${base}/admin/discounts`, icon: Percent, permission: 'discounts.manage' },
+        { label: 'Cash Drawer', href: `${base}/admin/cash-drawer`, icon: DollarSign, permission: 'cash_drawer.manage' },
+        { label: 'Expenses', href: `${base}/admin/expenses`, icon: TrendingDown, permission: 'expenses.manage' },
       ],
     },
     {
@@ -90,9 +92,9 @@ export default function AdminSidebar() {
       title: 'Customers',
       defaultOpen: false,
       items: [
-        { label: 'Customers', href: `${base}/admin/customers`, icon: Users, minRole: 'cashier' },
-        { label: 'Loyalty', href: `${base}/admin/loyalty`, icon: Heart, minRole: 'cashier' },
-        { label: 'CRM', href: `${base}/admin/crm`, icon: Megaphone, minRole: 'manager' },
+        { label: 'Customers', href: `${base}/admin/customers`, icon: Users, permission: 'customers.manage' },
+        { label: 'Loyalty', href: `${base}/admin/loyalty`, icon: Heart, permission: 'loyalty.manage' },
+        { label: 'CRM', href: `${base}/admin/crm`, icon: Megaphone, permission: 'crm.manage' },
       ],
     },
     {
@@ -100,10 +102,10 @@ export default function AdminSidebar() {
       title: 'Operations',
       defaultOpen: false,
       items: [
-        { label: 'Bookings', href: `${base}/admin/bookings`, icon: CalendarDays, minRole: 'cashier' },
-        { label: 'Tables', href: `${base}/admin/tables`, icon: LayoutGrid, minRole: 'cashier' },
-        { label: 'Attendance', href: `${base}/admin/attendance`, icon: UserCheck, minRole: 'manager' },
-        { label: 'Channel Orders', href: `${base}/admin/channel-orders`, icon: ShoppingCart, minRole: 'manager' },
+        { label: 'Bookings', href: `${base}/admin/bookings`, icon: CalendarDays, permission: 'bookings.manage' },
+        { label: 'Tables', href: `${base}/admin/tables`, icon: LayoutGrid, permission: 'tables.manage' },
+        { label: 'Attendance', href: `${base}/admin/attendance`, icon: UserCheck, permission: 'attendance.manage' },
+        { label: 'Channel Orders', href: `${base}/admin/channel-orders`, icon: ShoppingCart, permission: 'channel_orders.manage' },
       ],
     },
     {
@@ -111,16 +113,16 @@ export default function AdminSidebar() {
       title: 'Compliance',
       defaultOpen: false,
       items: [
-        { label: 'Compliance Status', href: `${base}/admin/compliance`, icon: ShieldCheck, minRole: 'manager' },
-        { label: 'Business Permits', href: `${base}/admin/business-permits`, icon: Building2, minRole: 'admin' },
-        { label: 'BIR Compliance', href: `${base}/admin/bir-compliance`, icon: FileText, minRole: 'admin' },
-        { label: 'Restaurant', href: `${base}/admin/restaurant-compliance`, icon: UtensilsCrossed, minRole: 'admin' },
-        { label: 'Retail', href: `${base}/admin/retail-compliance`, icon: ShoppingBag, minRole: 'admin' },
-        { label: 'Laundry', href: `${base}/admin/laundry-compliance`, icon: WashingMachine, minRole: 'admin' },
-        { label: 'Service', href: `${base}/admin/service-compliance`, icon: Briefcase, minRole: 'admin' },
-        { label: 'Pharmacy', href: `${base}/admin/pharmacy-compliance`, icon: Pill, minRole: 'admin' },
-        { label: 'Prescriptions', href: `${base}/admin/prescriptions`, icon: FileText, minRole: 'manager' },
-        { label: 'Expiry Tracking', href: `${base}/admin/expiry-tracking`, icon: CalendarClock, minRole: 'manager' },
+        { label: 'Compliance Status', href: `${base}/admin/compliance`, icon: ShieldCheck, permission: 'compliance.view' },
+        { label: 'Business Permits', href: `${base}/admin/business-permits`, icon: Building2, permission: 'business_permits.manage' },
+        { label: 'BIR Compliance', href: `${base}/admin/bir-compliance`, icon: FileText, permission: 'bir_compliance.manage' },
+        { label: 'Restaurant', href: `${base}/admin/restaurant-compliance`, icon: UtensilsCrossed, permission: 'restaurant_compliance.manage' },
+        { label: 'Retail', href: `${base}/admin/retail-compliance`, icon: ShoppingBag, permission: 'retail_compliance.manage' },
+        { label: 'Laundry', href: `${base}/admin/laundry-compliance`, icon: WashingMachine, permission: 'laundry_compliance.manage' },
+        { label: 'Service', href: `${base}/admin/service-compliance`, icon: Briefcase, permission: 'service_compliance.manage' },
+        { label: 'Pharmacy', href: `${base}/admin/pharmacy-compliance`, icon: Pill, permission: 'pharmacy_compliance.manage' },
+        { label: 'Prescriptions', href: `${base}/admin/prescriptions`, icon: FileText, permission: 'prescriptions.manage' },
+        { label: 'Expiry Tracking', href: `${base}/admin/expiry-tracking`, icon: CalendarClock, permission: 'expiry_tracking.manage' },
       ],
     },
     {
@@ -128,23 +130,24 @@ export default function AdminSidebar() {
       title: 'Configuration',
       defaultOpen: false,
       items: [
-        { label: 'Users', href: `${base}/admin/users`, icon: Users2, minRole: 'admin' },
-        { label: 'Branches', href: `${base}/admin/branches`, icon: GitBranch, minRole: 'manager' },
-        { label: 'Business Type', href: `${base}/admin/business-types`, icon: Store, minRole: 'admin' },
-        { label: 'Business Hours', href: `${base}/admin/business-hours`, icon: Clock, minRole: 'manager' },
-        { label: 'Tax Rules', href: `${base}/admin/tax-rules`, icon: Calculator, minRole: 'admin' },
-        { label: 'Subscriptions', href: `${base}/admin/subscriptions`, icon: CreditCard, minRole: 'admin' },
-        { label: 'Hardware', href: `${base}/admin/hardware`, icon: Monitor, minRole: 'manager' },
-        { label: 'Notifications', href: `${base}/admin/notification-templates`, icon: Bell, minRole: 'manager' },
-        { label: 'Branding', href: `${base}/admin/advanced-branding`, icon: Palette, minRole: 'admin' },
-        { label: 'Multi-Currency', href: `${base}/admin/multi-currency`, icon: DollarSign, minRole: 'admin' },
-        { label: 'Holidays', href: `${base}/admin/holidays`, icon: CalendarDays, minRole: 'manager' },
-        { label: 'Feature Flags', href: `${base}/admin/feature-flags`, icon: ToggleLeft, minRole: 'admin' },
-        { label: 'Audit Logs', href: `${base}/admin/audit-logs`, icon: ClipboardList, minRole: 'admin' },
-        { label: 'Backup & Reset', href: `${base}/admin/backup-reset`, icon: Database, minRole: 'admin' },
-        { label: 'Sample Data', href: `${base}/admin/sample-data`, icon: Sparkles, minRole: 'admin' },
-        { label: 'API Docs', href: `${base}/admin/api-docs`, icon: Code2, minRole: 'viewer' },
-        { label: 'Settings', href: `${base}/admin/settings`, icon: Settings, minRole: 'admin' },
+        { label: 'Users', href: `${base}/admin/users`, icon: Users2, permission: 'users.manage' },
+        { label: 'Branches', href: `${base}/admin/branches`, icon: GitBranch, permission: 'branches.manage' },
+        { label: 'Business Type', href: `${base}/admin/business-types`, icon: Store, permission: 'business_types.manage' },
+        { label: 'Business Hours', href: `${base}/admin/business-hours`, icon: Clock, permission: 'business_hours.manage' },
+        { label: 'Tax Rules', href: `${base}/admin/tax-rules`, icon: Calculator, permission: 'tax_rules.manage' },
+        { label: 'Subscriptions', href: `${base}/admin/subscriptions`, icon: CreditCard, permission: 'subscriptions.manage' },
+        { label: 'Hardware', href: `${base}/admin/hardware`, icon: Monitor, permission: 'hardware.manage' },
+        { label: 'Notifications', href: `${base}/admin/notification-templates`, icon: Bell, permission: 'notifications.manage' },
+        { label: 'Branding', href: `${base}/admin/advanced-branding`, icon: Palette, permission: 'branding.manage' },
+        { label: 'Multi-Currency', href: `${base}/admin/multi-currency`, icon: DollarSign, permission: 'multi_currency.manage' },
+        { label: 'Holidays', href: `${base}/admin/holidays`, icon: CalendarDays, permission: 'holidays.manage' },
+        { label: 'Feature Flags', href: `${base}/admin/feature-flags`, icon: ToggleLeft, permission: 'feature_flags.manage' },
+        { label: 'Roles & Permissions', href: `${base}/admin/roles-permissions`, icon: Lock, permission: 'roles_permissions.manage' },
+        { label: 'Audit Logs', href: `${base}/admin/audit-logs`, icon: ClipboardList, permission: 'audit_logs.view' },
+        { label: 'Backup & Reset', href: `${base}/admin/backup-reset`, icon: Database, permission: 'backup_reset.manage' },
+        { label: 'Sample Data', href: `${base}/admin/sample-data`, icon: Sparkles, permission: 'sample_data.manage' },
+        { label: 'API Docs', href: `${base}/admin/api-docs`, icon: Code2, permission: 'api_docs.view' },
+        { label: 'Settings', href: `${base}/admin/settings`, icon: Settings, permission: 'settings.manage' },
       ],
     },
   ];

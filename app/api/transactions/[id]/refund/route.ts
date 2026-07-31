@@ -5,7 +5,8 @@ import Payment from '@/models/Payment';
 import Product from '@/models/Product';
 import Customer from '@/models/Customer';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
-import { requireRole, getCurrentUser } from '@/lib/auth';
+import { requireAuth, getCurrentUser } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { updateStock } from '@/lib/stock';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -18,14 +19,18 @@ import {
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await connectDB();
-    await requireRole(request, ['admin', 'manager']);
+    const authUser = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
     const body = await request.json();
     const t = await getValidationTranslatorFromRequest(request);
-    
+
     if (!tenantId) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
+    }
+
+    if (!(await hasTenantPermission(authUser.role, tenantId, 'refunds.process'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
     const transaction = await Transaction.findOne({ _id: id, tenantId });

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import connectDB from '@/lib/mongodb';
 import { requireTenantAccess } from '@/lib/api-tenant';
-import { requireRole } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import TenantEcommerceIntegration from '@/models/TenantEcommerceIntegration';
 import { encryptCredentialsPayload } from '@/lib/ecommerce/crypto';
 import { wooFetchJson, normalizeWooCommerceSiteUrl } from '@/lib/ecommerce/woocommerce-api';
@@ -16,8 +16,10 @@ import mongoose from 'mongoose';
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
-    const { tenantId } = await requireTenantAccess(request);
-    await requireRole(request, ['admin', 'manager', 'owner', 'super_admin']);
+    const { tenantId, user } = await requireTenantAccess(request);
+    if (!(await hasTenantPermission(user.role, tenantId, 'integrations.manage'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
     await requireEcommerceIntegrationFeature(tenantId);
     await requireEcommerceProviderConnectAllowed(tenantId, 'woocommerce');
 

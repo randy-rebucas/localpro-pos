@@ -4,7 +4,7 @@ import Campaign from '@/models/Campaign';
 import Customer from '@/models/Customer';
 import Transaction from '@/models/Transaction';
 import { requireTenantAccess } from '@/lib/api-tenant';
-import { hasRole } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
 import { sendEmail, sendSMS } from '@/lib/notifications';
@@ -54,7 +54,7 @@ export async function POST(
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId, user } = authResult;
-    if (!hasRole(user.role, ['manager'])) {
+    if (!(await hasTenantPermission(user.role, tenantId, 'crm.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 

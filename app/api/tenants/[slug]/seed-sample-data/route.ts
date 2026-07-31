@@ -5,7 +5,8 @@ import Category from '@/models/Category';
 import Product from '@/models/Product';
 import Customer from '@/models/Customer';
 import Discount from '@/models/Discount';
-import { requireRole } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { logger } from '@/lib/logger';
 
@@ -201,12 +202,20 @@ export async function GET(
 ) {
   try {
     await connectDB();
-    await requireRole(request, ['admin', 'owner']);
+    const user = await requireAuth(request);
     const { slug } = await params;
 
     const tenant = await Tenant.findOne({ slug, isActive: true }).lean();
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+    }
+
+    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
+
+    if (!(await hasTenantPermission(user.role, tenant._id.toString(), 'sample_data.manage'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
     const settings = (tenant as any).settings; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -257,7 +266,7 @@ export async function POST(
 ) {
   try {
     await connectDB();
-    await requireRole(request, ['admin', 'owner']);
+    const user = await requireAuth(request);
     const { slug } = await params;
 
     const body = await request.json().catch(() => ({}));
@@ -266,6 +275,14 @@ export async function POST(
     const tenant = await Tenant.findOne({ slug, isActive: true });
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+    }
+
+    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
+
+    if (!(await hasTenantPermission(user.role, tenant._id.toString(), 'sample_data.manage'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
     const tenantId = tenant._id;

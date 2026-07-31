@@ -17,7 +17,8 @@ export async function GET(request: NextRequest) {
     // Otherwise return limited public info for store selector (no auth required)
     let isAdmin = false;
     try {
-      await requireRole(request, ['admin']);
+      // Cross-tenant listing — super_admin only (not a per-tenant admin action)
+      await requireRole(request, ['super_admin']);
       isAdmin = true;
     } catch {
       // Not authenticated — allow public read of active tenants
@@ -51,8 +52,9 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
-    await requireRole(request, ['admin']);
-    
+    // Creating a brand-new tenant is a platform-level action — super_admin only
+    await requireRole(request, ['super_admin']);
+
     const body = await request.json();
     const { slug, name, domain, subdomain, currency, language, email, phone, companyName } = body;
 

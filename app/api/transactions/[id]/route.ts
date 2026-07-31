@@ -3,7 +3,8 @@ import connectDB from '@/lib/mongodb';
 import Transaction from '@/models/Transaction';
 import Product from '@/models/Product';
 import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
-import { requireAuth, requireRole } from '@/lib/auth'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import { requireAuth } from '@/lib/auth'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { updateStock } from '@/lib/stock';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -58,7 +59,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
       // Also check role
-      await requireRole(request, ['admin', 'manager']);
+      if (!(await hasTenantPermission(tenantAccess.user.role, tenantId, 'transactions.edit'))) {
+        throw new Error('Forbidden: Insufficient permissions');
+      }
     } catch (authError: unknown) {
       const authMsg = authError instanceof Error ? authError.message : '';
       if (authMsg.includes('Unauthorized') || authMsg.includes('Forbidden')) {

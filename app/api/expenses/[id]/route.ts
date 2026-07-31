@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Expense from '@/models/Expense';
 import { requireTenantAccess } from '@/lib/api-tenant';
-import { hasRole } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -45,7 +45,7 @@ export async function PUT(
     const { tenantId } = authResult;
     const { id } = await params;
 
-    if (!hasRole(authResult.user.role, ['manager'])) {
+    if (!(await hasTenantPermission(authResult.user.role, authResult.tenantId, 'expenses.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
@@ -101,7 +101,7 @@ export async function DELETE(
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
 
-    if (!hasRole(authResult.user.role, ['manager'])) {
+    if (!(await hasTenantPermission(authResult.user.role, authResult.tenantId, 'expenses.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 

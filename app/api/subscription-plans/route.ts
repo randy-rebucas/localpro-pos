@@ -20,7 +20,8 @@ export async function GET(request: NextRequest) { // eslint-disable-line @typesc
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
-    await requireRole(request, ['admin']);
+    // Creating a global subscription plan tier (visible to every tenant) — super_admin only
+    await requireRole(request, ['super_admin']);
 
     const body = await request.json();
     const { name, tier, description, price, features, birCompliance, isCustom = false } = body;

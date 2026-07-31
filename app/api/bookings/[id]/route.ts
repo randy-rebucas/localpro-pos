@@ -3,7 +3,8 @@ import connectDB from '@/lib/mongodb';
 import Booking from '@/models/Booking';
 import User from '@/models/User';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
-import { requireRole, getCurrentUser } from '@/lib/auth';
+import { getCurrentUser } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { sendBookingConfirmation, sendBookingCancellation, sendBookingReminder } from '@/lib/notifications'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -79,14 +80,17 @@ export async function PUT(
       );
     }
 
-    await requireRole(request, ['owner', 'admin', 'manager', 'cashier']);
     const tenantId = await getTenantIdFromRequest(request);
-    
+
     if (!tenantId) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
         { status: 404 }
       );
+    }
+
+    if (!(await hasTenantPermission(user.role, tenantId, 'bookings.manage'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
     try {
@@ -290,14 +294,17 @@ export async function DELETE(
       );
     }
 
-    await requireRole(request, ['owner', 'admin', 'manager', 'cashier']);
     const tenantId = await getTenantIdFromRequest(request);
-    
+
     if (!tenantId) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
         { status: 404 }
       );
+    }
+
+    if (!(await hasTenantPermission(user.role, tenantId, 'bookings.manage'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
     const { id } = await params;

@@ -3,7 +3,8 @@ import connectDB from '@/lib/mongodb';
 import Booking from '@/models/Booking';
 import User from '@/models/User';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
-import { requireRole, getCurrentUser } from '@/lib/auth';
+import { requireAuth, getCurrentUser } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { sendBookingConfirmation } from '@/lib/notifications';
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest) {
     await connectDB();
     let user;
     try {
-      user = await requireRole(request, ['cashier']);
+      user = await requireAuth(request);
     } catch {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
@@ -40,6 +41,10 @@ export async function GET(request: NextRequest) {
         { success: false, error: 'Tenant not found' },
         { status: 404 }
       );
+    }
+
+    if (!(await hasTenantPermission(user.role, tenantId, 'bookings.manage'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -112,7 +117,12 @@ export async function POST(request: NextRequest) {
           { status: 401 }
         );
       }
-      await requireRole(request, ['owner', 'admin', 'manager', 'cashier']);
+      if (!(await hasTenantPermission(user.role, user.tenantId, 'bookings.manage'))) {
+        return NextResponse.json(
+          { success: false, error: 'Forbidden: Insufficient permissions' },
+          { status: 403 }
+        );
+      }
       tenantId = await getTenantIdFromRequest(request);
     }
     

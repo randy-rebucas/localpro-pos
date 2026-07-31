@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
 import { requireTenantAccess } from '@/lib/api-tenant';
-import { hasRole } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateAndSanitize, validateProduct } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -51,7 +51,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     try {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
-      if (!hasRole(tenantAccess.user.role, ['manager'])) {
+      if (!(await hasTenantPermission(tenantAccess.user.role, tenantId, 'products.manage'))) {
         return NextResponse.json(
           { success: false, error: 'Forbidden: Insufficient permissions' },
           { status: 403 }
@@ -163,7 +163,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     try {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
-      if (!hasRole(tenantAccess.user.role, ['manager'])) {
+      if (!(await hasTenantPermission(tenantAccess.user.role, tenantId, 'products.manage'))) {
         return NextResponse.json(
           { success: false, error: 'Forbidden: Insufficient permissions' },
           { status: 403 }

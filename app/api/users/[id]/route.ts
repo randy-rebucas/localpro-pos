@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
-import { requireRole, getRoleRank } from '@/lib/auth';
+import { requireAuth, getRoleRank } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateEmail, validatePassword } from '@/lib/validation';
 import { handleApiError } from '@/lib/error-handler';
@@ -12,15 +13,19 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await connectDB();
-    await requireRole(request, ['admin', 'manager']);
+    const authUser = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
-    
+
     if (!tenantId) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
-    
+
+    if (!(await hasTenantPermission(authUser.role, tenantId, 'users.manage'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
+
     const user = await User.findOne({ _id: id, tenantId })
       .select('-password')
       .lean();
@@ -45,13 +50,17 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   let t: (key: string, fallback: string) => string;
   try {
     await connectDB();
-    const actingUser = await requireRole(request, ['admin', 'manager']);
+    const actingUser = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
     t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
+    }
+
+    if (!(await hasTenantPermission(actingUser.role, tenantId, 'users.manage'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
     const body = await request.json();
@@ -217,12 +226,16 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await connectDB();
-    const actingUser = await requireRole(request, ['admin']);
+    const actingUser = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
 
     if (!tenantId) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+    }
+
+    if (!(await hasTenantPermission(actingUser.role, tenantId, 'users.delete'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
     const user = await User.findOne({ _id: id, tenantId }).lean();

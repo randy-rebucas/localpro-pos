@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import { requireTenantAccess } from '@/lib/api-tenant';
-import { requireRole } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import TenantEcommerceIntegration from '@/models/TenantEcommerceIntegration';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { SubscriptionService } from '@/lib/subscription';
@@ -10,8 +10,10 @@ import { getTenantEcommerceIntegrationPolicy } from '@/lib/ecommerce/tenant-inte
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
-    const { tenantId } = await requireTenantAccess(request);
-    await requireRole(request, ['admin', 'manager', 'owner', 'super_admin']);
+    const { tenantId, user } = await requireTenantAccess(request);
+    if (!(await hasTenantPermission(user.role, tenantId, 'integrations.manage'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
 
     const rl = checkRateLimit(`ecom-status:${tenantId}`, 60, 60_000);
     if (!rl.allowed) {

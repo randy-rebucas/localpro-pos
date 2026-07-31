@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import { requireTenantAccess } from '@/lib/api-tenant';
-import { requireRole } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import TenantEcommerceIntegration from '@/models/TenantEcommerceIntegration';
 import ProductChannelListing from '@/models/ProductChannelListing';
 import { requireEcommerceIntegrationFeature } from '@/lib/ecommerce/require-ecommerce-feature';
@@ -11,8 +11,10 @@ import type { EcommerceProvider } from '@/lib/ecommerce/constants';
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
-    const { tenantId } = await requireTenantAccess(request);
-    await requireRole(request, ['admin', 'owner', 'super_admin']);
+    const { tenantId, user } = await requireTenantAccess(request);
+    if (!(await hasTenantPermission(user.role, tenantId, 'integrations.disconnect'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
     await requireEcommerceIntegrationFeature(tenantId);
 
     const rl = checkRateLimit(`ecom-disconnect:${tenantId}`, 20, 60_000);

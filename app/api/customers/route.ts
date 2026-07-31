@@ -3,7 +3,7 @@ import type { FilterQuery } from 'mongoose';
 import connectDB from '@/lib/mongodb';
 import Customer, { type ICustomer } from '@/models/Customer';
 import { requireTenantAccess } from '@/lib/api-tenant';
-import { hasRole } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
     try {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
-      if (!hasRole(tenantAccess.user.role, ['cashier'])) {
+      if (!(await hasTenantPermission(tenantAccess.user.role, tenantId, 'customers.manage'))) {
         return NextResponse.json(
           { success: false, error: 'Forbidden: Insufficient permissions' },
           { status: 403 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import { requireTenantAccess } from '@/lib/api-tenant';
-import { requireRole } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import TenantEcommerceIntegration from '@/models/TenantEcommerceIntegration';
 import { runCatalogSync } from '@/lib/ecommerce/sync-catalog';
 import mongoose from 'mongoose';
@@ -15,9 +15,11 @@ export async function POST(request: NextRequest) {
 
   try {
     await connectDB();
-    const { tenantId } = await requireTenantAccess(request);
+    const { tenantId, user } = await requireTenantAccess(request);
     syncTenantId = tenantId;
-    await requireRole(request, ['admin', 'manager', 'owner', 'super_admin']);
+    if (!(await hasTenantPermission(user.role, tenantId, 'integrations.manage'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
     await requireEcommerceIntegrationFeature(tenantId);
 
     const rl = checkRateLimit(`ecom-sync:${tenantId}`, 10, 60_000);

@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Booking from '@/models/Booking';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
-import { requireRole, getCurrentUser } from '@/lib/auth';
+import { getCurrentUser } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { sendBookingReminder } from '@/lib/notifications';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { getTenantSettingsById } from '@/lib/tenant';
@@ -29,14 +30,17 @@ export async function POST(request: NextRequest) {
 
     // Only allow admins/managers to trigger reminders manually
     // In production, this would be called by a cron job
-    await requireRole(request, ['owner', 'admin', 'manager']);
     const tenantId = await getTenantIdFromRequest(request);
-    
+
     if (!tenantId) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
         { status: 404 }
       );
+    }
+
+    if (!(await hasTenantPermission(user.role, tenantId, 'bookings.send_reminders'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
     try {

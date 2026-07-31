@@ -3,7 +3,7 @@ import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
 import '@/models/Category'; // register schema for populate
 import { requireTenantAccess } from '@/lib/api-tenant';
-import { hasRole } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateAndSanitize, validateProduct } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
     try {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
-      if (!hasRole(tenantAccess.user.role, ['manager'])) {
+      if (!(await hasTenantPermission(tenantAccess.user.role, tenantId, 'products.manage'))) {
         return NextResponse.json(
           { success: false, error: 'Forbidden: Insufficient permissions' },
           { status: 403 }

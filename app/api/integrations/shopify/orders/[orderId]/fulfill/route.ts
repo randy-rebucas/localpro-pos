@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb';
 import Transaction from '@/models/Transaction';
 import TenantEcommerceIntegration from '@/models/TenantEcommerceIntegration';
 import { getCurrentUser } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -17,7 +18,7 @@ export async function POST(
   try {
     const user = await getCurrentUser(request);
     if (!user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    if (!['owner', 'admin', 'manager'].includes(user.role)) {
+    if (!(await hasTenantPermission(user.role, user.tenantId, 'integrations.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Tenant from '@/models/Tenant';
-import { requireRole } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import Product from '@/models/Product';
 import Transaction from '@/models/Transaction';
@@ -71,7 +72,7 @@ export async function GET(
 ) {
   try {
     await connectDB();
-    const user = await requireRole(request, ['admin']);
+    const user = await requireAuth(request);
     const { slug } = await params;
     const t = await getValidationTranslatorFromRequest(request);
     
@@ -87,6 +88,13 @@ export async function GET(
     if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
       return NextResponse.json(
         { success: false, error: t('validation.forbidden', 'You do not have access to this tenant') },
+        { status: 403 }
+      );
+    }
+
+    if (!(await hasTenantPermission(user.role, tenant._id.toString(), 'reset_collections.manage'))) {
+      return NextResponse.json(
+        { success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') },
         { status: 403 }
       );
     }
@@ -169,7 +177,7 @@ export async function POST(
 ) {
   try {
     await connectDB();
-    const user = await requireRole(request, ['admin']);
+    const user = await requireAuth(request);
     const { slug } = await params;
     
     const tenant = await Tenant.findOne({ slug, isActive: true });
@@ -185,6 +193,13 @@ export async function POST(
     if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
       return NextResponse.json(
         { success: false, error: t('validation.forbidden', 'You do not have access to this tenant') },
+        { status: 403 }
+      );
+    }
+
+    if (!(await hasTenantPermission(user.role, tenant._id.toString(), 'reset_collections.manage'))) {
+      return NextResponse.json(
+        { success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') },
         { status: 403 }
       );
     }
@@ -262,7 +277,7 @@ export async function PUT(
 ) {
   try {
     await connectDB();
-    const user = await requireRole(request, ['admin']);
+    const user = await requireAuth(request);
     const { slug } = await params;
     
     const tenant = await Tenant.findOne({ slug, isActive: true });
@@ -278,6 +293,13 @@ export async function PUT(
     if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
       return NextResponse.json(
         { success: false, error: t('validation.forbidden', 'You do not have access to this tenant') },
+        { status: 403 }
+      );
+    }
+
+    if (!(await hasTenantPermission(user.role, tenant._id.toString(), 'reset_collections.manage'))) {
+      return NextResponse.json(
+        { success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') },
         { status: 403 }
       );
     }

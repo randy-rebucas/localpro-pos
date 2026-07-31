@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Attendance from '@/models/Attendance';
 import { requireAuth } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest) {
     // Build query
     const query: any = { tenantId: user.tenantId, isActive: { $ne: false } }; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-    const isManagerPlus = user.role === 'owner' || user.role === 'admin' || user.role === 'manager';
+    const isManagerPlus = await hasTenantPermission(user.role, user.tenantId, 'attendance.manage');
 
     if (userId && isManagerPlus) {
       // Manager+ viewing a specific employee

@@ -32,7 +32,7 @@ export async function PUT(
 ) {
   try {
     await connectDB();
-    await requireRole(request, ['admin']);
+    await requireRole(request, ['super_admin']); // global plan catalog — super_admin only
     const currentUser = await getCurrentUser(request);
     const { id } = await params;
 
@@ -145,7 +145,7 @@ export async function DELETE(
 ) {
   try {
     await connectDB();
-    await requireRole(request, ['admin']);
+    await requireRole(request, ['super_admin']); // global plan catalog — super_admin only
     const deleteUser = await getCurrentUser(request);
     const { id } = await params;
 

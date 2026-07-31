@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
-import { requireRole, getRoleRank } from '@/lib/auth';
+import { getRoleRank } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateEmail, validatePassword } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -18,7 +19,9 @@ export async function GET(request: NextRequest) {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
       // Also check role
-      await requireRole(request, ['admin', 'manager']);
+      if (!(await hasTenantPermission(tenantAccess.user.role, tenantId, 'users.manage'))) {
+        throw new Error('Forbidden: Insufficient permissions');
+      }
     } catch (authError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
         return NextResponse.json(
@@ -62,7 +65,10 @@ export async function POST(request: NextRequest) {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
       // Also check role
-      actingUser = await requireRole(request, ['admin', 'manager']);
+      if (!(await hasTenantPermission(tenantAccess.user.role, tenantId, 'users.manage'))) {
+        throw new Error('Forbidden: Insufficient permissions');
+      }
+      actingUser = tenantAccess.user;
     } catch (authError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       t = await getValidationTranslatorFromRequest(request);
       if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {

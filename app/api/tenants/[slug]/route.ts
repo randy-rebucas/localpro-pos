@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Tenant from '@/models/Tenant';
-import { requireRole } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
     await connectDB();
-    const user = await requireRole(request, ['admin']);
+    const user = await requireAuth(request);
     const { slug } = await params;
     const t = await getValidationTranslatorFromRequest(request);
 
@@ -41,6 +42,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     if (user.role !== 'super_admin' && user.tenantId !== oldTenant._id.toString()) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
+
+    if (!(await hasTenantPermission(user.role, oldTenant._id.toString(), 'tenant_profile.manage'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
     const updateData: any = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -139,7 +144,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
     await connectDB();
-    const user = await requireRole(request, ['admin']);
+    const user = await requireAuth(request);
     const { slug } = await params;
     const t = await getValidationTranslatorFromRequest(request);
 
@@ -150,6 +155,10 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
+
+    if (!(await hasTenantPermission(user.role, tenant._id.toString(), 'tenant_profile.manage'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
     // Soft delete - set isActive to false

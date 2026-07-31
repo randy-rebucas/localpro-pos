@@ -1,17 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import { requireTenantAccess } from '@/lib/api-tenant';
-import { requireRole } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { logger } from '@/lib/logger';
 import { ensureLegalDiscounts } from '@/lib/discount-seeds';
 
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
-    await requireRole(request, ['cashier', 'manager', 'admin', 'owner']);
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
-    const tenantId = authResult.tenantId;
+    const { tenantId, user } = authResult;
+    if (!(await hasTenantPermission(user.role, tenantId, 'discounts.seed_defaults'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
 
     await ensureLegalDiscounts(tenantId);
 

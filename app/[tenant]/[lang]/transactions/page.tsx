@@ -12,7 +12,7 @@ import TransactionsCatalogSkeleton from '@/components/transactions/TransactionsC
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '../dictionaries-client';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
-import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { formatDateTime } from '@/lib/formatting';
 import { hardwareService } from '@/lib/hardware';
@@ -71,10 +71,11 @@ export default function TransactionsPage() {
   const [dict, setDict] = useState<TranslationDict | null>(null);
   const { settings: tenantSettings } = useTenantSettings();
   const primaryColor = (tenantSettings || getDefaultTenantSettings()).primaryColor || '#35979c';
-  const { hasRole } = useAuth();
-  // Refunds and manual expense entries are manager-tier actions on the backend (see app/api/transactions/[id]/refund
-  // and app/api/expenses); hide the buttons for cashiers/viewers so the UI doesn't offer an action the API will reject.
-  const canRefund = hasRole(['manager']);
+  const { canAccess } = usePermissions();
+  // Mirror the backend's refunds.process / expenses.manage permission checks so the UI doesn't
+  // offer an action the API will reject — respects tenant-configured role overrides.
+  const canRefund = canAccess('refunds.process');
+  const canManageExpenses = canAccess('expenses.manage');
 
   const {
     transactions,
@@ -292,7 +293,7 @@ export default function TransactionsPage() {
           <div className="flex items-center justify-between gap-4">
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">{txDict.title || 'Transactions'}</h1>
             <div className="flex gap-2">
-              {canRefund && (
+              {canManageExpenses && (
                 <button
                   onClick={() => { setShowExpenseModal(true); setExpenseName(''); setExpenseDescription(''); setExpenseAmount(''); setExpenseDate(new Date().toISOString().slice(0, 10)); setExpensePayment('cash'); setExpenseNotes(''); setExpenseError(''); setExpenseSuccess(false); }}
                   className="flex items-center gap-2 px-4 py-2.5 bg-red-600 text-white hover:bg-red-700 active:bg-red-800 border border-red-700 text-sm font-medium transition-colors touch-manipulation min-h-[44px] sm:min-h-0 whitespace-nowrap"
@@ -396,7 +397,7 @@ export default function TransactionsPage() {
             }
             action={
               viewType === 'expenses'
-                ? (!canRefund ? undefined : {
+                ? (!canManageExpenses ? undefined : {
                     label: txDict.addExpense || 'Add Expense',
                     onClick: () => {
                       setShowExpenseModal(true);

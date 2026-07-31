@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Tenant from '@/models/Tenant';
-import { requireRole, getCurrentUser } from '@/lib/auth';
+import { getCurrentUser } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -44,12 +45,18 @@ export async function PUT(
     await connectDB();
     const { slug } = await params;
 
-    await requireRole(request, ['admin', 'manager', 'owner', 'super_admin']);
     const user = await getCurrentUser(request);
+    if (!user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
 
     const rl = checkRateLimit(`settings:${slug}`, 30, 60_000);
     if (!rl.allowed) {
       return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
+    }
+
+    if (!(await hasTenantPermission(user.role, user.tenantId, 'settings.manage'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
     const body = await request.json();

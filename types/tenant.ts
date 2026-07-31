@@ -318,4 +318,13 @@ export interface ITenantSettings {
     isBusinessClosed: boolean;
     createdAt?: Date;
   }>;
+
+  // Per-role feature-permission overrides. Keyed by role ('viewer' | 'cashier' | 'manager'),
+  // then by permission key (see lib/permissions.ts) → boolean. Owner/admin/super_admin are
+  // never stored here — they always have full access regardless of overrides.
+  rolePermissionOverrides?: {
+    [role: string]: {
+      [permissionKey: string]: boolean;
+    };
+  };
 }

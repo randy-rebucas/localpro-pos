@@ -5,6 +5,7 @@ import Prescription from '@/models/Prescription';
 import Product from '@/models/Product';
 import Tenant from '@/models/Tenant';
 import { getCurrentUser } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -19,7 +20,7 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (!['owner', 'admin', 'manager', 'cashier'].includes(user.role)) {
+    if (!(await hasTenantPermission(user.role, user.tenantId, 'prescriptions.dispense'))) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 

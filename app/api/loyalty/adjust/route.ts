@@ -5,6 +5,7 @@ import Customer from '@/models/Customer';
 import LoyaltyTransaction from '@/models/LoyaltyTransaction';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { getCurrentUser } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { checkFeatureAccess } from '@/lib/subscription';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -19,13 +20,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (!['owner', 'admin', 'manager'].includes(user.role)) {
-      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
-    }
-
     const tenantId = await getTenantIdFromRequest(request);
     if (!tenantId) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+    }
+
+    if (!(await hasTenantPermission(user.role, tenantId, 'loyalty.adjust'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
     try {

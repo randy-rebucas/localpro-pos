@@ -82,6 +82,7 @@ const FloorMap = dynamic(() => import('@/components/FloorMap'), {
 import { hardwareService } from '@/lib/hardware';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import { showToast } from '@/lib/toast';
 import { useConfirm } from '@/lib/confirm';
 import { getDefaultTenantSettings } from '@/lib/currency';
@@ -121,11 +122,12 @@ export default function Dashboard() {
   const [dict, setDict] = useState<TranslationDict | null>(null);
   const { isOnline } = useNetworkStatus(tenant);
   const { settings } = useTenantSettings();
-  const { logout, user: authUser, hasRole } = useAuth();
+  const { logout, user: authUser } = useAuth();
+  const { canAccess } = usePermissions();
   const isCashier = authUser?.role === 'cashier';
-  // Refunds are a manager-tier action on the backend (see app/api/transactions/[id]/refund) — hide the
-  // refund entry points for cashiers so the UI doesn't offer an action the API will reject.
-  const canRefund = hasRole(['manager']);
+  // Mirrors the backend's refunds.process permission check (see app/api/transactions/[id]/refund) —
+  // hides the refund entry points for roles that can't refund, respecting tenant overrides.
+  const canRefund = canAccess('refunds.process');
   const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#35979c';
   const enableOnAccountSales = settings?.enableOnAccountSales === true;
   const rawBt = (settings?.businessType || 'general').toLowerCase();

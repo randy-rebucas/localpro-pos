@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Transaction from '@/models/Transaction';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
-import { requireRole } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { generateReceiptNumber } from '@/lib/receipt';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -21,7 +22,10 @@ export async function POST(request: NextRequest) {
     try {
       tenantId = (await getTenantIdFromRequest(request)) as string;
       if (!tenantId) throw new Error('Tenant not found');
-      await requireRole(request, ['cashier']);
+      const user = await requireAuth(request);
+      if (!(await hasTenantPermission(user.role, tenantId, 'transactions.create_manual'))) {
+        throw new Error('Forbidden: Insufficient permissions');
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : '';
       const status = msg.includes('Unauthorized') ? 401 : msg.includes('Forbidden') ? 403 : 400;

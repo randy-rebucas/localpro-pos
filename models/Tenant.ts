@@ -517,6 +517,13 @@ const TenantSchema: Schema = new Schema(
           default: Date.now,
         },
       }],
+
+      // Per-role feature-permission overrides (viewer/cashier/manager only —
+      // owner/admin/super_admin always have full access and are never overridable)
+      rolePermissionOverrides: {
+        type: Schema.Types.Mixed,
+        default: {},
+      },
     },
     isActive: {
       type: Boolean,

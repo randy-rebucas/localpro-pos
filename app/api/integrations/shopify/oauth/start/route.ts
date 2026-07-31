@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireTenantAccess, getTenantSlugFromRequest } from '@/lib/api-tenant';
-import { requireRole } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { signShopifyOAuthState } from '@/lib/ecommerce/shopify-oauth-state';
 import { getShopifyOAuthRedirectUri } from '@/lib/ecommerce/public-url';
 import { requireEcommerceIntegrationFeature } from '@/lib/ecommerce/require-ecommerce-feature';
@@ -31,7 +31,9 @@ function shopifyOAuthScopeParam(): string {
 export async function GET(request: NextRequest) {
   try {
     const { tenantId, user } = await requireTenantAccess(request);
-    await requireRole(request, ['admin', 'manager', 'owner', 'super_admin']);
+    if (!(await hasTenantPermission(user.role, tenantId, 'integrations.manage'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
     await requireEcommerceIntegrationFeature(tenantId);
     await requireEcommerceProviderConnectAllowed(tenantId, 'shopify');
 
