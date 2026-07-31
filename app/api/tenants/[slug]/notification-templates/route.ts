@@ -52,7 +52,7 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (user.role !== 'admin' && user.role !== 'manager' && user.role !== 'super_admin') {
+    if (user.role !== 'admin' && user.role !== 'manager' && user.role !== 'owner' && user.role !== 'super_admin') {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 

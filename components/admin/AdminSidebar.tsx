@@ -22,6 +22,8 @@ interface NavItem {
   href: string;
   icon: React.ElementType;
   exact?: boolean;
+  /** Minimum role required to see this item. Owner/admin/super_admin always see everything regardless. Defaults to 'viewer' (any admin-panel user). */
+  minRole?: string;
 }
 
 interface NavGroup {
@@ -36,7 +38,13 @@ export default function AdminSidebar() {
   const pathname = usePathname();
   const tenant = (params?.tenant as string) || 'default';
   const lang = (params?.lang as string) || 'en';
-  const { user, logout } = useAuth();
+  const { user, logout, hasRole } = useAuth();
+
+  // Owner/admin/super_admin always see every nav item, regardless of minRole.
+  const canSeeItem = (item: NavItem) => {
+    if (user?.role === 'owner' || user?.role === 'admin' || user?.role === 'super_admin') return true;
+    return hasRole([item.minRole ?? 'viewer']);
+  };
   const { settings } = useTenantSettings();
   const { sidebarOpen, sidebarCollapsed, closeMobileSidebar } = useAdminLayout();
 
@@ -51,7 +59,7 @@ export default function AdminSidebar() {
       defaultOpen: true,
       items: [
         { label: 'Dashboard', href: `${base}/admin`, icon: LayoutDashboard, exact: true },
-        { label: 'Reports', href: `${base}/admin/reports`, icon: BarChart2 },
+        { label: 'Reports', href: `${base}/admin/reports`, icon: BarChart2, minRole: 'manager' },
       ],
     },
     {
@@ -59,11 +67,11 @@ export default function AdminSidebar() {
       title: 'Catalog',
       defaultOpen: true,
       items: [
-        { label: 'Products', href: `${base}/admin/products`, icon: Package },
-        { label: 'Categories', href: `${base}/admin/categories`, icon: Tag },
-        { label: 'Bundles', href: `${base}/admin/bundles`, icon: Layers },
-        { label: 'Inventory', href: `${base}/admin/inventory`, icon: Boxes },
-        { label: 'Stock Movements', href: `${base}/admin/stock-movements`, icon: ArrowUpDown },
+        { label: 'Products', href: `${base}/admin/products`, icon: Package, minRole: 'manager' },
+        { label: 'Categories', href: `${base}/admin/categories`, icon: Tag, minRole: 'manager' },
+        { label: 'Bundles', href: `${base}/admin/bundles`, icon: Layers, minRole: 'manager' },
+        { label: 'Inventory', href: `${base}/admin/inventory`, icon: Boxes, minRole: 'manager' },
+        { label: 'Stock Movements', href: `${base}/admin/stock-movements`, icon: ArrowUpDown, minRole: 'manager' },
       ],
     },
     {
@@ -71,10 +79,10 @@ export default function AdminSidebar() {
       title: 'Sales',
       defaultOpen: true,
       items: [
-        { label: 'Transactions', href: `${base}/admin/transactions`, icon: Receipt },
-        { label: 'Discounts', href: `${base}/admin/discounts`, icon: Percent },
-        { label: 'Cash Drawer', href: `${base}/admin/cash-drawer`, icon: DollarSign },
-        { label: 'Expenses', href: `${base}/admin/expenses`, icon: TrendingDown },
+        { label: 'Transactions', href: `${base}/admin/transactions`, icon: Receipt, minRole: 'cashier' },
+        { label: 'Discounts', href: `${base}/admin/discounts`, icon: Percent, minRole: 'manager' },
+        { label: 'Cash Drawer', href: `${base}/admin/cash-drawer`, icon: DollarSign, minRole: 'cashier' },
+        { label: 'Expenses', href: `${base}/admin/expenses`, icon: TrendingDown, minRole: 'manager' },
       ],
     },
     {
@@ -82,9 +90,9 @@ export default function AdminSidebar() {
       title: 'Customers',
       defaultOpen: false,
       items: [
-        { label: 'Customers', href: `${base}/admin/customers`, icon: Users },
-        { label: 'Loyalty', href: `${base}/admin/loyalty`, icon: Heart },
-        { label: 'CRM', href: `${base}/admin/crm`, icon: Megaphone },
+        { label: 'Customers', href: `${base}/admin/customers`, icon: Users, minRole: 'cashier' },
+        { label: 'Loyalty', href: `${base}/admin/loyalty`, icon: Heart, minRole: 'cashier' },
+        { label: 'CRM', href: `${base}/admin/crm`, icon: Megaphone, minRole: 'manager' },
       ],
     },
     {
@@ -92,10 +100,10 @@ export default function AdminSidebar() {
       title: 'Operations',
       defaultOpen: false,
       items: [
-        { label: 'Bookings', href: `${base}/admin/bookings`, icon: CalendarDays },
-        { label: 'Tables', href: `${base}/admin/tables`, icon: LayoutGrid },
-        { label: 'Attendance', href: `${base}/admin/attendance`, icon: UserCheck },
-        { label: 'Channel Orders', href: `${base}/admin/channel-orders`, icon: ShoppingCart },
+        { label: 'Bookings', href: `${base}/admin/bookings`, icon: CalendarDays, minRole: 'cashier' },
+        { label: 'Tables', href: `${base}/admin/tables`, icon: LayoutGrid, minRole: 'cashier' },
+        { label: 'Attendance', href: `${base}/admin/attendance`, icon: UserCheck, minRole: 'manager' },
+        { label: 'Channel Orders', href: `${base}/admin/channel-orders`, icon: ShoppingCart, minRole: 'manager' },
       ],
     },
     {
@@ -103,16 +111,16 @@ export default function AdminSidebar() {
       title: 'Compliance',
       defaultOpen: false,
       items: [
-        { label: 'Compliance Status', href: `${base}/admin/compliance`, icon: ShieldCheck },
-        { label: 'Business Permits', href: `${base}/admin/business-permits`, icon: Building2 },
-        { label: 'BIR Compliance', href: `${base}/admin/bir-compliance`, icon: FileText },
-        { label: 'Restaurant', href: `${base}/admin/restaurant-compliance`, icon: UtensilsCrossed },
-        { label: 'Retail', href: `${base}/admin/retail-compliance`, icon: ShoppingBag },
-        { label: 'Laundry', href: `${base}/admin/laundry-compliance`, icon: WashingMachine },
-        { label: 'Service', href: `${base}/admin/service-compliance`, icon: Briefcase },
-        { label: 'Pharmacy', href: `${base}/admin/pharmacy-compliance`, icon: Pill },
-        { label: 'Prescriptions', href: `${base}/admin/prescriptions`, icon: FileText },
-        { label: 'Expiry Tracking', href: `${base}/admin/expiry-tracking`, icon: CalendarClock },
+        { label: 'Compliance Status', href: `${base}/admin/compliance`, icon: ShieldCheck, minRole: 'manager' },
+        { label: 'Business Permits', href: `${base}/admin/business-permits`, icon: Building2, minRole: 'admin' },
+        { label: 'BIR Compliance', href: `${base}/admin/bir-compliance`, icon: FileText, minRole: 'admin' },
+        { label: 'Restaurant', href: `${base}/admin/restaurant-compliance`, icon: UtensilsCrossed, minRole: 'admin' },
+        { label: 'Retail', href: `${base}/admin/retail-compliance`, icon: ShoppingBag, minRole: 'admin' },
+        { label: 'Laundry', href: `${base}/admin/laundry-compliance`, icon: WashingMachine, minRole: 'admin' },
+        { label: 'Service', href: `${base}/admin/service-compliance`, icon: Briefcase, minRole: 'admin' },
+        { label: 'Pharmacy', href: `${base}/admin/pharmacy-compliance`, icon: Pill, minRole: 'admin' },
+        { label: 'Prescriptions', href: `${base}/admin/prescriptions`, icon: FileText, minRole: 'manager' },
+        { label: 'Expiry Tracking', href: `${base}/admin/expiry-tracking`, icon: CalendarClock, minRole: 'manager' },
       ],
     },
     {
@@ -120,26 +128,31 @@ export default function AdminSidebar() {
       title: 'Configuration',
       defaultOpen: false,
       items: [
-        { label: 'Users', href: `${base}/admin/users`, icon: Users2 },
-        { label: 'Branches', href: `${base}/admin/branches`, icon: GitBranch },
-        { label: 'Business Type', href: `${base}/admin/business-types`, icon: Store },
-        { label: 'Business Hours', href: `${base}/admin/business-hours`, icon: Clock },
-        { label: 'Tax Rules', href: `${base}/admin/tax-rules`, icon: Calculator },
-        { label: 'Subscriptions', href: `${base}/admin/subscriptions`, icon: CreditCard },
-        { label: 'Hardware', href: `${base}/admin/hardware`, icon: Monitor },
-        { label: 'Notifications', href: `${base}/admin/notification-templates`, icon: Bell },
-        { label: 'Branding', href: `${base}/admin/advanced-branding`, icon: Palette },
-        { label: 'Multi-Currency', href: `${base}/admin/multi-currency`, icon: DollarSign },
-        { label: 'Holidays', href: `${base}/admin/holidays`, icon: CalendarDays },
-        { label: 'Feature Flags', href: `${base}/admin/feature-flags`, icon: ToggleLeft },
-        { label: 'Audit Logs', href: `${base}/admin/audit-logs`, icon: ClipboardList },
-        { label: 'Backup & Reset', href: `${base}/admin/backup-reset`, icon: Database },
-        { label: 'Sample Data', href: `${base}/admin/sample-data`, icon: Sparkles },
-        { label: 'API Docs', href: `${base}/admin/api-docs`, icon: Code2 },
-        { label: 'Settings', href: `${base}/admin/settings`, icon: Settings },
+        { label: 'Users', href: `${base}/admin/users`, icon: Users2, minRole: 'admin' },
+        { label: 'Branches', href: `${base}/admin/branches`, icon: GitBranch, minRole: 'manager' },
+        { label: 'Business Type', href: `${base}/admin/business-types`, icon: Store, minRole: 'admin' },
+        { label: 'Business Hours', href: `${base}/admin/business-hours`, icon: Clock, minRole: 'manager' },
+        { label: 'Tax Rules', href: `${base}/admin/tax-rules`, icon: Calculator, minRole: 'admin' },
+        { label: 'Subscriptions', href: `${base}/admin/subscriptions`, icon: CreditCard, minRole: 'admin' },
+        { label: 'Hardware', href: `${base}/admin/hardware`, icon: Monitor, minRole: 'manager' },
+        { label: 'Notifications', href: `${base}/admin/notification-templates`, icon: Bell, minRole: 'manager' },
+        { label: 'Branding', href: `${base}/admin/advanced-branding`, icon: Palette, minRole: 'admin' },
+        { label: 'Multi-Currency', href: `${base}/admin/multi-currency`, icon: DollarSign, minRole: 'admin' },
+        { label: 'Holidays', href: `${base}/admin/holidays`, icon: CalendarDays, minRole: 'manager' },
+        { label: 'Feature Flags', href: `${base}/admin/feature-flags`, icon: ToggleLeft, minRole: 'admin' },
+        { label: 'Audit Logs', href: `${base}/admin/audit-logs`, icon: ClipboardList, minRole: 'admin' },
+        { label: 'Backup & Reset', href: `${base}/admin/backup-reset`, icon: Database, minRole: 'admin' },
+        { label: 'Sample Data', href: `${base}/admin/sample-data`, icon: Sparkles, minRole: 'admin' },
+        { label: 'API Docs', href: `${base}/admin/api-docs`, icon: Code2, minRole: 'viewer' },
+        { label: 'Settings', href: `${base}/admin/settings`, icon: Settings, minRole: 'admin' },
       ],
     },
   ];
+
+  // Filter out items the current role can't see, then drop groups left with no items.
+  const visibleNavGroups: NavGroup[] = navGroups
+    .map(group => ({ ...group, items: group.items.filter(canSeeItem) }))
+    .filter(group => group.items.length > 0);
 
   const isActive = (item: NavItem) => {
     if (item.exact) return pathname === item.href;
@@ -153,7 +166,7 @@ export default function AdminSidebar() {
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
     // Seed from defaults
     const init: Record<string, boolean> = {};
-    navGroups.forEach(g => { init[g.id] = g.defaultOpen ?? false; });
+    visibleNavGroups.forEach(g => { init[g.id] = g.defaultOpen ?? false; });
 
     // Override with persisted state if available
     try {
@@ -171,7 +184,7 @@ export default function AdminSidebar() {
   useEffect(() => {
     setOpenGroups(prev => {
       const next = { ...prev };
-      navGroups.forEach(g => {
+      visibleNavGroups.forEach(g => {
         if (isGroupActive(g)) next[g.id] = true;
       });
       return next;
@@ -221,7 +234,7 @@ export default function AdminSidebar() {
 
       {/* Nav groups */}
       <nav className="flex-1 overflow-y-auto py-3 px-2">
-        {navGroups.map(group => {
+        {visibleNavGroups.map(group => {
           const groupActive = isGroupActive(group);
           const isOpen = openGroups[group.id];
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Payment from '@/models/Payment';
 import { requireTenantAccess } from '@/lib/api-tenant';
+import { hasRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 
 export async function POST(
@@ -11,7 +12,10 @@ export async function POST(
   try {
     await connectDB();
     const tenantAccess = await requireTenantAccess(request);
-    const { tenantId, user } = tenantAccess; // eslint-disable-line @typescript-eslint/no-unused-vars
+    const { tenantId, user } = tenantAccess;
+    if (!hasRole(user.role, ['manager'])) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
     const { id: paymentId } = await params;
     
     const { refundReason } = await request.json();

@@ -4,6 +4,7 @@ import Invoice from '@/models/Invoice';
 import Transaction from '@/models/Transaction';
 import Customer from '@/models/Customer';
 import { requireTenantAccess } from '@/lib/api-tenant';
+import { hasRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { generateInvoiceNumber } from '@/lib/receipt';
 
@@ -75,13 +76,16 @@ export async function POST(request: NextRequest) {
   try {
     await connectDB();
     const tenantAccess = await requireTenantAccess(request);
-    const { tenantId, user } = tenantAccess; // eslint-disable-line @typescript-eslint/no-unused-vars
-    
+    const { tenantId, user } = tenantAccess;
+    if (!hasRole(user.role, ['cashier'])) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
+
     const body = await request.json();
-    const { 
-      transactionId, 
-      customerId, 
-      items, 
+    const {
+      transactionId,
+      customerId,
+      items,
       subtotal, 
       discountAmount, 
       taxAmount, 

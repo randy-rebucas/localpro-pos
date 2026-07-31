@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Branch from '@/models/Branch';
 import { requireTenantAccess } from '@/lib/api-tenant';
+import { hasRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkSubscriptionLimit, checkFeatureAccess, SubscriptionService } from '@/lib/subscription';
@@ -40,7 +41,10 @@ export async function POST(request: NextRequest) {
     await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
-    const { tenantId } = authResult;
+    const { tenantId, user } = authResult;
+    if (!hasRole(user.role, ['manager'])) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
     const t = await getValidationTranslatorFromRequest(request);
 
     const ip = request.headers.get('x-forwarded-for') ?? 'unknown';

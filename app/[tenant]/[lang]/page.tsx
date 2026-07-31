@@ -121,8 +121,11 @@ export default function Dashboard() {
   const [dict, setDict] = useState<TranslationDict | null>(null);
   const { isOnline } = useNetworkStatus(tenant);
   const { settings } = useTenantSettings();
-  const { logout, user: authUser } = useAuth();
+  const { logout, user: authUser, hasRole } = useAuth();
   const isCashier = authUser?.role === 'cashier';
+  // Refunds are a manager-tier action on the backend (see app/api/transactions/[id]/refund) — hide the
+  // refund entry points for cashiers so the UI doesn't offer an action the API will reject.
+  const canRefund = hasRole(['manager']);
   const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#35979c';
   const enableOnAccountSales = settings?.enableOnAccountSales === true;
   const rawBt = (settings?.businessType || 'general').toLowerCase();
@@ -1614,6 +1617,7 @@ export default function Dashboard() {
                         </svg>
                         <span>{dictValue('pos.holdOrder', 'Hold Order')}</span>
                       </button>
+                      {canRefund && (
                       <button
                         type="button"
                         onClick={() => setShowRefundModal(true)}
@@ -1625,6 +1629,7 @@ export default function Dashboard() {
                         </svg>
                         <span>{dictValue('pos.refund', 'Refund')}</span>
                       </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => { setShowSavedCartsModal(true); loadSavedCarts(); }}
@@ -1697,6 +1702,7 @@ export default function Dashboard() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
                   </svg>
                 </button>
+                {canRefund && (
                 <button
                   onClick={() => setShowRefundModal(true)}
                   className="px-2.5 py-2.5 sm:px-3 sm:py-3 min-h-[44px] min-w-[44px] bg-red-600 text-white hover:bg-red-700 transition-colors border border-red-700 flex-shrink-0"
@@ -1706,6 +1712,7 @@ export default function Dashboard() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
                   </svg>
                 </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setDisplayMode('grid')}

@@ -12,6 +12,7 @@ import TransactionsCatalogSkeleton from '@/components/transactions/TransactionsC
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '../dictionaries-client';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { formatDateTime } from '@/lib/formatting';
 import { hardwareService } from '@/lib/hardware';
@@ -70,6 +71,10 @@ export default function TransactionsPage() {
   const [dict, setDict] = useState<TranslationDict | null>(null);
   const { settings: tenantSettings } = useTenantSettings();
   const primaryColor = (tenantSettings || getDefaultTenantSettings()).primaryColor || '#35979c';
+  const { hasRole } = useAuth();
+  // Refunds and manual expense entries are manager-tier actions on the backend (see app/api/transactions/[id]/refund
+  // and app/api/expenses); hide the buttons for cashiers/viewers so the UI doesn't offer an action the API will reject.
+  const canRefund = hasRole(['manager']);
 
   const {
     transactions,
@@ -287,14 +292,16 @@ export default function TransactionsPage() {
           <div className="flex items-center justify-between gap-4">
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">{txDict.title || 'Transactions'}</h1>
             <div className="flex gap-2">
-              <button
-                onClick={() => { setShowExpenseModal(true); setExpenseName(''); setExpenseDescription(''); setExpenseAmount(''); setExpenseDate(new Date().toISOString().slice(0, 10)); setExpensePayment('cash'); setExpenseNotes(''); setExpenseError(''); setExpenseSuccess(false); }}
-                className="flex items-center gap-2 px-4 py-2.5 bg-red-600 text-white hover:bg-red-700 active:bg-red-800 border border-red-700 text-sm font-medium transition-colors touch-manipulation min-h-[44px] sm:min-h-0 whitespace-nowrap"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                <span className="hidden sm:inline">{txDict?.addExpense || 'Add Expense'}</span>
-                <span className="sm:hidden">Expense</span>
-              </button>
+              {canRefund && (
+                <button
+                  onClick={() => { setShowExpenseModal(true); setExpenseName(''); setExpenseDescription(''); setExpenseAmount(''); setExpenseDate(new Date().toISOString().slice(0, 10)); setExpensePayment('cash'); setExpenseNotes(''); setExpenseError(''); setExpenseSuccess(false); }}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-red-600 text-white hover:bg-red-700 active:bg-red-800 border border-red-700 text-sm font-medium transition-colors touch-manipulation min-h-[44px] sm:min-h-0 whitespace-nowrap"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                  <span className="hidden sm:inline">{txDict?.addExpense || 'Add Expense'}</span>
+                  <span className="sm:hidden">Expense</span>
+                </button>
+              )}
               <button
                 onClick={() => { setShowAddModal(true); setManualItems([emptyItem()]); setManualPayment('cash'); setManualCash(''); setManualNotes(''); setManualError(''); setManualSuccess(false); }}
                 className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white hover:bg-green-700 active:bg-green-800 border border-green-700 text-sm font-medium transition-colors touch-manipulation min-h-[44px] sm:min-h-0 whitespace-nowrap"
@@ -389,7 +396,7 @@ export default function TransactionsPage() {
             }
             action={
               viewType === 'expenses'
-                ? {
+                ? (!canRefund ? undefined : {
                     label: txDict.addExpense || 'Add Expense',
                     onClick: () => {
                       setShowExpenseModal(true);
@@ -402,7 +409,7 @@ export default function TransactionsPage() {
                       setExpenseError('');
                       setExpenseSuccess(false);
                     },
-                  }
+                  })
                 : {
                     label: txDict.addManual || 'Add Transaction',
                     onClick: () => {
@@ -477,7 +484,7 @@ export default function TransactionsPage() {
                           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
                           <span className="hidden sm:inline">{dict.common.print}</span>
                         </button>
-                        {transaction.status === 'completed' && (
+                        {transaction.status === 'completed' && canRefund && (
                           <button onClick={() => openAdjustModal(transaction)} className="flex-1 px-4 py-2.5 bg-orange-500 text-white hover:bg-orange-600 active:bg-orange-700 transition-all duration-200 border border-orange-600 flex items-center justify-center gap-2 touch-manipulation min-h-[44px] text-sm font-medium" title={txDict?.adjust || 'Adjust / Refund'}>
                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                             <span className="hidden sm:inline">{txDict?.adjust || 'Adjust'}</span>
@@ -570,7 +577,7 @@ export default function TransactionsPage() {
                           <button onClick={() => printReceipt(transaction)} className="px-2.5 py-1.5 text-white transition-all duration-200 border flex items-center justify-center touch-manipulation min-h-[36px] sm:min-h-0 hover:opacity-80" style={{ backgroundColor: primaryColor, borderColor: primaryColor }} title={dict.common.print} aria-label={dict.common.print}>
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
                           </button>
-                          {transaction.status === 'completed' && (
+                          {transaction.status === 'completed' && canRefund && (
                             <button onClick={() => openAdjustModal(transaction)} className="px-2.5 py-1.5 bg-orange-500 text-white hover:bg-orange-600 active:bg-orange-700 transition-all duration-200 border border-orange-600 flex items-center justify-center touch-manipulation min-h-[36px] sm:min-h-0" title={txDict?.adjust || 'Adjust / Refund'}>
                               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                             </button>
@@ -784,7 +791,7 @@ export default function TransactionsPage() {
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
                     {dict.common.print}
                   </button>
-                  {selectedTransaction.status === 'completed' && (
+                  {selectedTransaction.status === 'completed' && canRefund && (
                     <button
                       onClick={() => { openAdjustModal(selectedTransaction); setSelectedTransaction(null); }}
                       className="flex-1 py-2.5 bg-orange-500 text-white hover:bg-orange-600 active:bg-orange-700 transition-all duration-200 border border-orange-600 flex items-center justify-center gap-2 min-h-[44px] text-sm font-medium"
