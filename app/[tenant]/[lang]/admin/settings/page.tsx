@@ -5,39 +5,12 @@ import { useParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { Settings } from 'lucide-react';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
-
-const SECTIONS = [
-  { id: 'general', label: 'General' },
-  { id: 'branding', label: 'Branding' },
-  { id: 'contact', label: 'Contact' },
-  { id: 'receipt', label: 'Receipt' },
-  { id: 'features', label: 'Features' },
-  { id: 'notifications', label: 'Notifications' },
-];
+import { getDictionaryClient } from '../../dictionaries-client';
 
 const TIMEZONES = [
   'UTC', 'Asia/Manila', 'Asia/Singapore', 'Asia/Tokyo', 'Asia/Bangkok',
   'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
   'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Australia/Sydney',
-];
-
-const CURRENCIES = [
-  { code: 'PHP', label: 'Philippine Peso (PHP)' },
-  { code: 'USD', label: 'US Dollar (USD)' },
-  { code: 'EUR', label: 'Euro (EUR)' },
-  { code: 'GBP', label: 'British Pound (GBP)' },
-  { code: 'SGD', label: 'Singapore Dollar (SGD)' },
-  { code: 'JPY', label: 'Japanese Yen (JPY)' },
-  { code: 'AUD', label: 'Australian Dollar (AUD)' },
-];
-
-const BUSINESS_TYPES = [
-  { value: 'retail', label: 'Retail Store' },
-  { value: 'restaurant', label: 'Restaurant / Food Service' },
-  { value: 'laundry', label: 'Laundry Service' },
-  { value: 'service', label: 'Service Business' },
-  { value: 'pharmacy', label: 'Pharmacy' },
-  { value: 'general', label: 'General' },
 ];
 
 interface FormData {
@@ -95,7 +68,41 @@ interface FormData {
 export default function AdminSettingsPage() {
   const params = useParams();
   const tenant = params.tenant as string;
+  const lang = params.lang as string;
   const { refreshSettings } = useTenantSettings();
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+
+  useEffect(() => {
+    getDictionaryClient(lang as 'en' | 'es').then(setDict);
+  }, [lang]);
+
+  const SECTIONS = [
+    { id: 'general', label: dict?.settings?.tabs?.general || 'General' },
+    { id: 'branding', label: dict?.settings?.tabs?.branding || 'Branding' },
+    { id: 'contact', label: dict?.settings?.tabs?.contact || 'Contact' },
+    { id: 'receipt', label: dict?.settings?.tabs?.receipt || 'Receipt' },
+    { id: 'features', label: dict?.settings?.tabs?.features || 'Features' },
+    { id: 'notifications', label: dict?.settings?.tabs?.notifications || 'Notifications' },
+  ];
+
+  const CURRENCIES = [
+    { code: 'PHP', label: dict?.settings?.currencyPHP || 'Philippine Peso (PHP)' },
+    { code: 'USD', label: dict?.settings?.currencyUSD || 'US Dollar (USD)' },
+    { code: 'EUR', label: dict?.settings?.currencyEUR || 'Euro (EUR)' },
+    { code: 'GBP', label: dict?.settings?.currencyGBP || 'British Pound (GBP)' },
+    { code: 'SGD', label: dict?.settings?.currencySGD || 'Singapore Dollar (SGD)' },
+    { code: 'JPY', label: dict?.settings?.currencyJPY || 'Japanese Yen (JPY)' },
+    { code: 'AUD', label: dict?.settings?.currencyAUD || 'Australian Dollar (AUD)' },
+  ];
+
+  const BUSINESS_TYPES = [
+    { value: 'retail', label: dict?.settings?.businessTypeRetail || 'Retail Store' },
+    { value: 'restaurant', label: dict?.settings?.businessTypeRestaurant || 'Restaurant / Food Service' },
+    { value: 'laundry', label: dict?.settings?.businessTypeLaundry || 'Laundry Service' },
+    { value: 'service', label: dict?.settings?.businessTypeService || 'Service Business' },
+    { value: 'pharmacy', label: dict?.settings?.businessTypePharmacy || 'Pharmacy' },
+    { value: 'general', label: dict?.settings?.businessTypeGeneralOption || 'General' },
+  ];
 
   const [activeSection, setActiveSection] = useState('general');
   const [loading, setLoading] = useState(true);
@@ -172,11 +179,11 @@ export default function AdminSettingsPage() {
         }));
       }
     } catch {
-      toast.error('Failed to load settings');
+      toast.error(dict?.settings?.failedToLoad || 'Failed to load settings');
     } finally {
       setLoading(false);
     }
-  }, [tenant]);
+  }, [tenant, dict]);
 
   useEffect(() => { fetchSettings(); }, [fetchSettings]);
 
@@ -239,13 +246,13 @@ export default function AdminSettingsPage() {
       });
       const json = await res.json();
       if (json.success) {
-        toast.success('Settings saved');
+        toast.success(dict?.settings?.saved || 'Settings saved');
         await refreshSettings();
       } else {
-        toast.error(json.error || 'Failed to save settings');
+        toast.error(json.error || dict?.settings?.error || 'Failed to save settings');
       }
     } catch {
-      toast.error('Failed to save settings');
+      toast.error(dict?.settings?.error || 'Failed to save settings');
     } finally {
       setSaving(false);
     }
@@ -273,8 +280,8 @@ export default function AdminSettingsPage() {
         <div className="flex items-center gap-3">
           <Settings className="w-7 h-7 text-brand flex-shrink-0" />
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-            <p className="text-sm text-gray-500 mt-0.5">Configure your store preferences and business information</p>
+            <h1 className="text-2xl font-bold text-gray-900">{dict?.settings?.title || 'Settings'}</h1>
+            <p className="text-sm text-gray-500 mt-0.5">{dict?.settings?.subtitle || 'Configure your store preferences and business information'}</p>
           </div>
         </div>
         <button
@@ -282,7 +289,7 @@ export default function AdminSettingsPage() {
           disabled={saving || loading}
           className="px-4 py-2 text-sm font-medium bg-brand text-white border border-brand-hover hover:bg-brand-hover disabled:opacity-50 transition-colors"
         >
-          {saving ? 'Saving...' : 'Save Settings'}
+          {saving ? (dict?.settings?.saving || 'Saving...') : (dict?.settings?.save || 'Save Settings')}
         </button>
       </div>
 
@@ -290,7 +297,7 @@ export default function AdminSettingsPage() {
         <div className="flex items-center justify-center py-24">
           <div className="text-center">
             <div className="inline-block animate-spin h-7 w-7 border-b-2 border-brand mb-3" />
-            <p className="text-sm text-gray-400">Loading settings...</p>
+            <p className="text-sm text-gray-400">{dict?.settings?.loading || 'Loading settings...'}</p>
           </div>
         </div>
       ) : (
@@ -299,7 +306,7 @@ export default function AdminSettingsPage() {
           {/* Left — section nav */}
           <aside className="w-44 shrink-0 sticky top-6">
             <div className="bg-white border border-gray-300">
-              <p className="px-4 pt-4 pb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Sections</p>
+              <p className="px-4 pt-4 pb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">{dict?.settings?.sectionsNavLabel || 'Sections'}</p>
               <nav className="pb-2">
                 {SECTIONS.map(s => (
                   <button
@@ -325,51 +332,51 @@ export default function AdminSettingsPage() {
             {activeSection === 'general' && (
               <div className="bg-white border border-gray-300">
                 <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
-                  <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">General</h2>
-                  <p className="text-xs text-gray-400 mt-0.5">Business identity, locale, and currency settings</p>
+                  <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{dict?.settings?.tabs?.general || 'General'}</h2>
+                  <p className="text-xs text-gray-400 mt-0.5">{dict?.settings?.generalSectionDesc || 'Business identity, locale, and currency settings'}</p>
                 </div>
                 <div className="p-5 space-y-6">
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="sm:col-span-2">
-                      <label className={labelCls}>Company / Store Name</label>
-                      <input type="text" value={form.companyName} onChange={e => set('companyName', e.target.value)} placeholder="Your business name" className={inputCls} />
+                      <label className={labelCls}>{dict?.settings?.companyStoreNameLabel || 'Company / Store Name'}</label>
+                      <input type="text" value={form.companyName} onChange={e => set('companyName', e.target.value)} placeholder={dict?.settings?.businessNamePlaceholder || 'Your business name'} className={inputCls} />
                     </div>
                     <div>
-                      <label className={labelCls}>Business Type</label>
+                      <label className={labelCls}>{dict?.settings?.businessType || 'Business Type'}</label>
                       <select value={form.businessType} onChange={e => set('businessType', e.target.value)} className={inputCls}>
-                        <option value="">Select type...</option>
+                        <option value="">{dict?.settings?.selectTypePlaceholder || 'Select type...'}</option>
                         {BUSINESS_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                       </select>
                     </div>
                     <div>
-                      <label className={labelCls}>Tax ID / TIN</label>
-                      <input type="text" value={form.taxId} onChange={e => set('taxId', e.target.value)} placeholder="e.g. 123-456-789-000" className={inputCls} />
+                      <label className={labelCls}>{dict?.settings?.taxIdEin || 'Tax ID / TIN'}</label>
+                      <input type="text" value={form.taxId} onChange={e => set('taxId', e.target.value)} placeholder={dict?.settings?.taxIdPlaceholderExample || 'e.g. 123-456-789-000'} className={inputCls} />
                     </div>
                     <div>
-                      <label className={labelCls}>Registration Number</label>
-                      <input type="text" value={form.registrationNumber} onChange={e => set('registrationNumber', e.target.value)} placeholder="DTI / SEC / CDA" className={inputCls} />
+                      <label className={labelCls}>{dict?.settings?.registrationNumberLabel || 'Registration Number'}</label>
+                      <input type="text" value={form.registrationNumber} onChange={e => set('registrationNumber', e.target.value)} placeholder={dict?.settings?.registrationNumberDtiPlaceholder || 'DTI / SEC / CDA'} className={inputCls} />
                     </div>
                   </div>
 
                   <div className="border-t border-gray-100 pt-5">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Locale</p>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">{dict?.settings?.localeSectionLabel || 'Locale'}</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
-                        <label className={labelCls}>Language</label>
+                        <label className={labelCls}>{dict?.settings?.language || 'Language'}</label>
                         <select value={form.language} onChange={e => set('language', e.target.value)} className={inputCls}>
-                          <option value="en">English</option>
-                          <option value="es">Spanish</option>
+                          <option value="en">{dict?.settings?.englishOption || 'English'}</option>
+                          <option value="es">{dict?.settings?.spanishOption || 'Spanish'}</option>
                         </select>
                       </div>
                       <div>
-                        <label className={labelCls}>Timezone</label>
+                        <label className={labelCls}>{dict?.settings?.timezone || 'Timezone'}</label>
                         <select value={form.timezone} onChange={e => set('timezone', e.target.value)} className={inputCls}>
                           {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
                         </select>
                       </div>
                       <div>
-                        <label className={labelCls}>Date Format</label>
+                        <label className={labelCls}>{dict?.settings?.dateFormat || 'Date Format'}</label>
                         <select value={form.dateFormat} onChange={e => set('dateFormat', e.target.value)} className={inputCls}>
                           <option value="MM/DD/YYYY">MM/DD/YYYY</option>
                           <option value="DD/MM/YYYY">DD/MM/YYYY</option>
@@ -377,33 +384,33 @@ export default function AdminSettingsPage() {
                         </select>
                       </div>
                       <div>
-                        <label className={labelCls}>Time Format</label>
+                        <label className={labelCls}>{dict?.settings?.timeFormat || 'Time Format'}</label>
                         <select value={form.timeFormat} onChange={e => set('timeFormat', e.target.value as '12h' | '24h')} className={inputCls}>
-                          <option value="12h">12-hour (AM/PM)</option>
-                          <option value="24h">24-hour</option>
+                          <option value="12h">{dict?.settings?.timeFormat12h || '12-hour (AM/PM)'}</option>
+                          <option value="24h">{dict?.settings?.timeFormat24h || '24-hour'}</option>
                         </select>
                       </div>
                     </div>
                   </div>
 
                   <div className="border-t border-gray-100 pt-5">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Currency</p>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">{dict?.settings?.currencySectionLabel || 'Currency'}</p>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div className="sm:col-span-2">
-                        <label className={labelCls}>Currency</label>
+                        <label className={labelCls}>{dict?.settings?.currencySectionLabel || 'Currency'}</label>
                         <select value={form.currency} onChange={e => set('currency', e.target.value)} className={inputCls}>
                           {CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}
                         </select>
                       </div>
                       <div>
-                        <label className={labelCls}>Symbol</label>
+                        <label className={labelCls}>{dict?.settings?.currencySymbol || 'Symbol'}</label>
                         <input type="text" value={form.currencySymbol} onChange={e => set('currencySymbol', e.target.value)} placeholder="₱" className={inputCls} />
                       </div>
                       <div>
-                        <label className={labelCls}>Symbol Position</label>
+                        <label className={labelCls}>{dict?.settings?.currencyPosition || 'Symbol Position'}</label>
                         <select value={form.currencyPosition} onChange={e => set('currencyPosition', e.target.value as 'before' | 'after')} className={inputCls}>
-                          <option value="before">Before amount (₱100)</option>
-                          <option value="after">After amount (100₱)</option>
+                          <option value="before">{dict?.settings?.currencyPositionBefore || 'Before amount (₱100)'}</option>
+                          <option value="after">{dict?.settings?.currencyPositionAfter || 'After amount (100₱)'}</option>
                         </select>
                       </div>
                     </div>

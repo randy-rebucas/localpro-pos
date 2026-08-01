@@ -1208,7 +1208,7 @@ export default function Dashboard() {
             <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span className="font-medium">Shift Active</span>
+            <span className="font-medium">{dict.pos?.shiftActive || 'Shift Active'}</span>
             <span className="text-green-600 text-xs sm:text-sm truncate">
               <span className="hidden sm:inline">| Opened: {new Date(cashDrawerSession.openingTime).toLocaleTimeString()}</span>
               <span className="sm:ml-1">| Opening: <Currency amount={cashDrawerSession.openingAmount} /></span>
@@ -1247,8 +1247,8 @@ export default function Dashboard() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
             </div>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">Start Your Shift</h2>
-            <p className="text-gray-600 mb-6">Open the cash drawer to begin processing transactions.</p>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">{dictValue('pos.startYourShift', 'Start Your Shift')}</h2>
+            <p className="text-gray-600 mb-6">{dictValue('pos.startShiftDescription', 'Open the cash drawer to begin processing transactions.')}</p>
             <button
               onClick={() => {
                 setDrawerAmount('');
@@ -1312,7 +1312,7 @@ export default function Dashboard() {
                   }}
                   className="w-full py-2 bg-gray-900 text-white font-medium hover:bg-gray-800 transition-colors"
                 >
-                  Done
+                  {dictValue('common.done', 'Done')}
                 </button>
               </div>
             ) : (
@@ -1320,7 +1320,7 @@ export default function Dashboard() {
                 <div className="space-y-4 mb-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {showCashDrawerModal === 'open' ? 'Opening Amount' : 'Actual Closing Amount'}
+                      {showCashDrawerModal === 'open' ? dictValue('admin.openingAmount', 'Opening Amount') : dictValue('pos.actualClosingAmount', 'Actual Closing Amount')}
                     </label>
                     <input
                       type="number"
@@ -1334,12 +1334,12 @@ export default function Dashboard() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Notes (optional)</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{dictValue('pos.notesOptional', 'Notes (optional)')}</label>
                     <input
                       type="text"
                       value={drawerNotes}
                       onChange={(e) => setDrawerNotes(e.target.value)}
-                      placeholder="e.g. Morning shift"
+                      placeholder={dictValue('pos.morningShiftPlaceholder', 'e.g. Morning shift')}
                       className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand"
                     />
                   </div>
@@ -1520,13 +1520,13 @@ export default function Dashboard() {
                             }`}
                           style={orderType === type ? { backgroundColor: primaryColor, borderColor: primaryColor } : {}}
                         >
-                          {type === 'dine-in' ? '🍽 Dine-in' : type === 'takeout' ? '🥡 Takeout' : '🛵 Delivery'}
+                          {type === 'dine-in' ? `🍽 ${dictValue('pos.dineIn', 'Dine-in')}` : type === 'takeout' ? `🥡 ${dictValue('pos.takeout', 'Takeout')}` : `🛵 ${dictValue('pos.delivery', 'Delivery')}`}
                         </button>
                       ))}
                     </div>
                     {orderType === 'dine-in' && (
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500 font-medium flex-shrink-0">Table #</span>
+                        <span className="text-xs text-gray-500 font-medium flex-shrink-0">{dictValue('pos.tableNumberLabel', 'Table #')}</span>
                         <input
                           type="text"
                           value={tableNumber}
@@ -1534,7 +1534,7 @@ export default function Dashboard() {
                             setTableNumber(e.target.value.slice(0, 6));
                             setSelectedTableId('');
                           }}
-                          placeholder="e.g. 5A"
+                          placeholder={dictValue('pos.tableNumberPlaceholder', 'e.g. 5A')}
                           className="w-24 px-3 py-1.5 text-sm border-2 border-gray-300 bg-white font-semibold"
                           onFocus={(e) => { e.currentTarget.style.borderColor = primaryColor; }}
                           onBlur={(e) => { e.currentTarget.style.borderColor = '#d1d5db'; }}
@@ -1564,7 +1564,7 @@ export default function Dashboard() {
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 14h18M10 3v18M14 3v18" />
                             </svg>
-                            {tableNumber || 'Select Table'}
+                            {tableNumber || dictValue('pos.selectTableBtn', 'Select Table')}
                           </button>
                           {selectedTableId && (
                             <button
@@ -1603,7 +1603,7 @@ export default function Dashboard() {
                               setTableNumber(e.target.value.slice(0, 8));
                               setSelectedTableId('');
                             }}
-                            placeholder="T/O-1"
+                            placeholder={dictValue('pos.orderNumberPlaceholder', 'T/O-1')}
                             className={`text-sm border border-orange-300 bg-white font-semibold focus:outline-none focus:border-orange-500 ${roamingMode ? 'px-1 py-0.5' : 'px-2 py-1'}`}
                           />
                         </div>
@@ -2117,7 +2117,7 @@ export default function Dashboard() {
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
               <div>
                 <h2 className="font-bold text-gray-900 text-lg">{pendingVariantProduct.name}</h2>
-                <p className="text-sm text-gray-500">Select a variant</p>
+                <p className="text-sm text-gray-500">{dictValue('pos.selectAVariant', 'Select a variant')}</p>
               </div>
               <button
                 type="button"

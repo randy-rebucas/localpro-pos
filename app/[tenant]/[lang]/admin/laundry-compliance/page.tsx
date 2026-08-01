@@ -1,10 +1,11 @@
-﻿'use client';
+'use client';
 
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { WashingMachine, AlertTriangle } from 'lucide-react';
+import { getDictionaryClient } from '../../dictionaries-client';
 
 interface LaundryCompliance {
   environmentalComplianceCertificate?: string;
@@ -28,14 +29,17 @@ function daysUntil(dateStr: string): number {
   return Math.round((targetMidnight.getTime() - todayMidnight.getTime()) / 86400000);
 }
 
-function ExpiryWarning({ dateStr }: { dateStr?: string }) {
+function ExpiryWarning({ dateStr, dict }: { dateStr?: string; dict: any }) { // eslint-disable-line @typescript-eslint/no-explicit-any
   if (!dateStr) return null;
   const days = daysUntil(dateStr);
   if (days > 30) return null;
+  const text = days < 0
+    ? (dict?.admin?.expiredDaysAgo || 'Expired {days} day(s) ago').replace('{days}', String(Math.abs(days)))
+    : (dict?.admin?.expiresInDays || 'Expires in {days} day(s)').replace('{days}', String(days));
   return (
     <p className="flex items-center gap-1 text-xs mt-1 font-medium text-amber-600">
       <AlertTriangle className="w-3 h-3" />
-      {days < 0 ? `Expired ${Math.abs(days)} day(s) ago` : `Expires in ${days} day(s)`}
+      {text}
     </p>
   );
 }
@@ -44,19 +48,24 @@ export default function LaundryCompliancePage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as string;
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
 
   const [data, setData] = useState<LaundryCompliance>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    getDictionaryClient(lang as 'en' | 'es').then(setDict);
+  }, [lang]);
 
   const fetchData = useCallback(async () => {
     try {
       const res = await fetch(`/api/tenants/${tenant}/laundry-compliance`);
       const json = await res.json();
       if (json.success) setData(json.data);
-    } catch { toast.error('Failed to load laundry compliance'); }
+    } catch { toast.error(dict?.admin?.failedToLoadLaundryCompliance || 'Failed to load laundry compliance'); }
     finally { setLoading(false); }
-  }, [tenant]);
+  }, [tenant, dict]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -71,9 +80,9 @@ export default function LaundryCompliancePage() {
         body: JSON.stringify(data),
       });
       const json = await res.json();
-      if (json.success) toast.success('Laundry compliance settings saved');
-      else toast.error(json.error || 'Failed to save');
-    } catch { toast.error('Failed to save'); }
+      if (json.success) toast.success(dict?.admin?.laundryComplianceSaved || 'Laundry compliance settings saved');
+      else toast.error(json.error || dict?.admin?.failedToSave || 'Failed to save');
+    } catch { toast.error(dict?.admin?.failedToSave || 'Failed to save'); }
     finally { setSaving(false); }
   };
 
@@ -85,8 +94,8 @@ export default function LaundryCompliancePage() {
         <div className="flex items-center gap-3">
           <WashingMachine className="w-7 h-7 text-brand flex-shrink-0" />
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Laundry Service Compliance</h1>
-            <p className="text-sm text-gray-500 mt-0.5">DENR/EMB environmental requirements for laundry and dry cleaning businesses</p>
+            <h1 className="text-2xl font-bold text-gray-900">{dict?.admin?.laundryComplianceTitle || 'Laundry Service Compliance'}</h1>
+            <p className="text-sm text-gray-500 mt-0.5">{dict?.admin?.laundryComplianceSubtitle || 'DENR/EMB environmental requirements for laundry and dry cleaning businesses'}</p>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -94,14 +103,14 @@ export default function LaundryCompliancePage() {
             href={`/${tenant}/${lang}/admin/compliance`}
             className="px-4 py-2 text-sm text-gray-600 border border-gray-300 bg-white hover:bg-gray-50 transition-colors"
           >
-            Compliance Status
+            {dict?.admin?.complianceStatus || 'Compliance Status'}
           </Link>
           <button
             onClick={handleSave}
             disabled={saving || loading}
             className="px-4 py-2 text-sm font-medium bg-brand text-white border border-brand-hover hover:bg-brand-hover disabled:opacity-50 transition-colors"
           >
-            {saving ? 'Saving...' : 'Save Settings'}
+            {saving ? (dict?.admin?.saving || 'Saving...') : (dict?.admin?.saveSettings || 'Save Settings')}
           </button>
         </div>
       </div>
@@ -110,7 +119,7 @@ export default function LaundryCompliancePage() {
         <div className="flex items-center justify-center py-24">
           <div className="text-center">
             <div className="inline-block animate-spin h-7 w-7 border-b-2 border-brand mb-3" />
-            <p className="text-sm text-gray-400">Loading...</p>
+            <p className="text-sm text-gray-400">{dict?.common?.loading || 'Loading...'}</p>
           </div>
         </div>
       ) : (
@@ -119,13 +128,13 @@ export default function LaundryCompliancePage() {
           {/* Left — info sidebar */}
           <aside className="w-52 shrink-0 sticky top-6">
             <div className="bg-white border border-gray-300 p-4">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Requirements</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">{dict?.admin?.requirements || 'Requirements'}</p>
               <ul className="space-y-2 text-xs text-gray-600">
-                <li className="flex gap-2"><span className="text-brand font-bold mt-0.5">·</span>Environmental Compliance Certificate (DENR-EMB)</li>
-                <li className="flex gap-2"><span className="text-brand font-bold mt-0.5">·</span>Wastewater Discharge Permit (DENR-EMB)</li>
-                <li className="flex gap-2"><span className="text-brand font-bold mt-0.5">·</span>Solid Waste Management Plan (RA 9003)</li>
+                <li className="flex gap-2"><span className="text-brand font-bold mt-0.5">·</span>{dict?.admin?.lcEcc || 'Environmental Compliance Certificate (DENR-EMB)'}</li>
+                <li className="flex gap-2"><span className="text-brand font-bold mt-0.5">·</span>{dict?.admin?.lcWastewater || 'Wastewater Discharge Permit (DENR-EMB)'}</li>
+                <li className="flex gap-2"><span className="text-brand font-bold mt-0.5">·</span>{dict?.admin?.lcSolidWaste || 'Solid Waste Management Plan (RA 9003)'}</li>
               </ul>
-              <p className="text-xs text-gray-400 mt-4">Set expiry dates to receive advance warnings before documents lapse.</p>
+              <p className="text-xs text-gray-400 mt-4">{dict?.admin?.lcExpiryNote || 'Set expiry dates to receive advance warnings before documents lapse.'}</p>
             </div>
           </aside>
 
@@ -135,20 +144,20 @@ export default function LaundryCompliancePage() {
             {/* ECC */}
             <div className="bg-white border border-gray-300">
               <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
-                <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Environmental Compliance Certificate (ECC)</h2>
-                <p className="text-xs text-gray-400 mt-0.5">Required for laundry businesses that discharge wastewater, issued by DENR-EMB.</p>
+                <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{dict?.admin?.eccSectionTitle || 'Environmental Compliance Certificate (ECC)'}</h2>
+                <p className="text-xs text-gray-400 mt-0.5">{dict?.admin?.eccSectionDesc || 'Required for laundry businesses that discharge wastewater, issued by DENR-EMB.'}</p>
               </div>
               <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">ECC Number</label>
-                  <input type="text" value={data.environmentalComplianceCertificate ?? ''} onChange={e => set('environmentalComplianceCertificate')(e.target.value)} placeholder="e.g. ECC-XXXXXXXX"
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{dict?.admin?.eccNumber || 'ECC Number'}</label>
+                  <input type="text" value={data.environmentalComplianceCertificate ?? ''} onChange={e => set('environmentalComplianceCertificate')(e.target.value)} placeholder={dict?.admin?.eccNumberPlaceholder || 'e.g. ECC-XXXXXXXX'}
                     className="w-full border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">ECC Expiry Date</label>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{dict?.admin?.eccExpiryDate || 'ECC Expiry Date'}</label>
                   <input type="date" value={data.eccExpiry?.split('T')[0] ?? ''} onChange={e => set('eccExpiry')(e.target.value)}
                     className="w-full border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand" />
-                  <ExpiryWarning dateStr={data.eccExpiry} />
+                  <ExpiryWarning dateStr={data.eccExpiry} dict={dict} />
                 </div>
               </div>
             </div>
@@ -156,20 +165,20 @@ export default function LaundryCompliancePage() {
             {/* Wastewater Discharge Permit */}
             <div className="bg-white border border-gray-300">
               <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
-                <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Wastewater Discharge Permit</h2>
-                <p className="text-xs text-gray-400 mt-0.5">Discharge Permit issued by DENR-EMB for businesses that release effluents to bodies of water or sewerage systems.</p>
+                <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{dict?.admin?.wastewaterPermitTitle || 'Wastewater Discharge Permit'}</h2>
+                <p className="text-xs text-gray-400 mt-0.5">{dict?.admin?.wastewaterPermitDesc || 'Discharge Permit issued by DENR-EMB for businesses that release effluents to bodies of water or sewerage systems.'}</p>
               </div>
               <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Discharge Permit Number</label>
-                  <input type="text" value={data.wastewaterDischargePermit ?? ''} onChange={e => set('wastewaterDischargePermit')(e.target.value)} placeholder="Discharge permit number"
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{dict?.admin?.dischargePermitNumber || 'Discharge Permit Number'}</label>
+                  <input type="text" value={data.wastewaterDischargePermit ?? ''} onChange={e => set('wastewaterDischargePermit')(e.target.value)} placeholder={dict?.admin?.dischargePermitNumberPlaceholder || 'Discharge permit number'}
                     className="w-full border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Permit Expiry Date</label>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{dict?.admin?.permitExpiryDate || 'Permit Expiry Date'}</label>
                   <input type="date" value={data.wastewaterPermitExpiry?.split('T')[0] ?? ''} onChange={e => set('wastewaterPermitExpiry')(e.target.value)}
                     className="w-full border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand" />
-                  <ExpiryWarning dateStr={data.wastewaterPermitExpiry} />
+                  <ExpiryWarning dateStr={data.wastewaterPermitExpiry} dict={dict} />
                 </div>
               </div>
             </div>
@@ -177,7 +186,7 @@ export default function LaundryCompliancePage() {
             {/* Solid Waste */}
             <div className="bg-white border border-gray-300">
               <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
-                <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Solid Waste Management</h2>
+                <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{dict?.admin?.solidWasteManagement || 'Solid Waste Management'}</h2>
               </div>
               <div className="p-5">
                 <label className="flex items-start gap-3 cursor-pointer">
@@ -188,8 +197,8 @@ export default function LaundryCompliancePage() {
                     className="checkbox-win8 mt-0.5"
                   />
                   <div>
-                    <span className="text-sm text-gray-700 font-medium">Solid Waste Management Plan in place (RA 9003)</span>
-                    <p className="text-xs text-gray-400 mt-0.5">Business has a solid waste management program aligned with the Ecological Solid Waste Management Act</p>
+                    <span className="text-sm text-gray-700 font-medium">{dict?.admin?.solidWastePlanInPlace || 'Solid Waste Management Plan in place (RA 9003)'}</span>
+                    <p className="text-xs text-gray-400 mt-0.5">{dict?.admin?.solidWastePlanDesc || 'Business has a solid waste management program aligned with the Ecological Solid Waste Management Act'}</p>
                   </div>
                 </label>
               </div>

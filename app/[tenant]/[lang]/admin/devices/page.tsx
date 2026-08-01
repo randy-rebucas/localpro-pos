@@ -52,14 +52,14 @@ export default function DevicesPage() {
       if (data.success) {
         setDevices(data.data || []);
       } else {
-        toast.error(data.error || 'Failed to load devices');
+        toast.error(data.error || dict?.admin?.failedToLoadDevices || 'Failed to load devices');
       }
     } catch {
-      toast.error('Failed to load devices');
+      toast.error(dict?.admin?.failedToLoadDevices || 'Failed to load devices');
     } finally {
       setLoading(false);
     }
-  }, [tenant]);
+  }, [tenant, dict]);
 
   useEffect(() => {
     fetchDevices();
@@ -100,21 +100,23 @@ export default function DevicesPage() {
       });
       const data = await res.json();
       if (data.success) {
-        toast.success(editingDevice ? 'Device updated' : 'Device registered');
+        toast.success(editingDevice ? (dict?.admin?.deviceUpdated || 'Device updated') : (dict?.admin?.deviceRegistered || 'Device registered'));
         setShowModal(false);
         fetchDevices();
       } else {
-        setError(data.error || 'Failed to save device');
+        setError(data.error || dict?.admin?.failedToSaveDevice || 'Failed to save device');
       }
     } catch {
-      setError('Failed to save device');
+      setError(dict?.admin?.failedToSaveDevice || 'Failed to save device');
     } finally {
       setSaving(false);
     }
   };
 
   const handleDeactivate = async (device: Device) => {
-    if (!confirm(`Deactivate device "${device.label}"? Past receipts will still show its serial number.`)) return;
+    const confirmMsg = (dict?.admin?.deactivateDeviceConfirm || 'Deactivate device "{label}"? Past receipts will still show its serial number.')
+      .replace('{label}', device.label);
+    if (!confirm(confirmMsg)) return;
     try {
       const res = await fetch(`/api/devices/${device._id}?tenant=${tenant}`, {
         method: 'DELETE',
@@ -122,26 +124,29 @@ export default function DevicesPage() {
       });
       const data = await res.json();
       if (data.success) {
-        toast.success('Device deactivated');
+        toast.success(dict?.admin?.deviceDeactivated || 'Device deactivated');
         fetchDevices();
       } else {
-        toast.error(data.error || 'Failed to deactivate device');
+        toast.error(data.error || dict?.admin?.failedToDeactivateDevice || 'Failed to deactivate device');
       }
     } catch {
-      toast.error('Failed to deactivate device');
+      toast.error(dict?.admin?.failedToDeactivateDevice || 'Failed to deactivate device');
     }
   };
 
   const handleAssignThisBrowser = (device: Device) => {
     setAssignedDeviceId(tenant, device._id);
     setAssignedDeviceIdState(device._id);
-    toast.success(`This browser is now assigned to "${device.label}" (${device.terminalId})`);
+    const msg = (dict?.admin?.deviceAssignedToBrowser || 'This browser is now assigned to "{label}" ({terminalId})')
+      .replace('{label}', device.label)
+      .replace('{terminalId}', device.terminalId);
+    toast.success(msg);
   };
 
   const handleUnassign = () => {
     setAssignedDeviceId(tenant, null);
     setAssignedDeviceIdState(null);
-    toast.success('This browser is no longer assigned to a device');
+    toast.success(dict?.admin?.deviceUnassignedFromBrowser || 'This browser is no longer assigned to a device');
   };
 
   if (!dict || loading) {
@@ -158,43 +163,43 @@ export default function DevicesPage() {
   return (
     <div className="px-4 sm:px-6 py-6">
       <div className="mb-6 sm:mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Registered Devices (Terminals)</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">{dict.admin?.devicesTitle || 'Registered Devices (Terminals)'}</h1>
         <p className="text-gray-600">
-          BIR requires each physical POS terminal (BYOD hardware) to be individually identified with a serial number and Terminal ID, printed on every receipt it prints. Register each device your business uses, and assign this browser to the device it runs on.
+          {dict.admin?.devicesDescription || 'BIR requires each physical POS terminal (BYOD hardware) to be individually identified with a serial number and Terminal ID, printed on every receipt it prints. Register each device your business uses, and assign this browser to the device it runs on.'}
         </p>
       </div>
 
       {assignedDeviceId && (
         <div className="mb-4 p-3 bg-brand-soft border border-brand text-sm text-gray-800 flex items-center justify-between">
           <span>
-            This browser is assigned to: <strong>{devices.find((d) => d._id === assignedDeviceId)?.label || assignedDeviceId}</strong>
+            {dict.admin?.thisBrowserAssignedTo || 'This browser is assigned to:'} <strong>{devices.find((d) => d._id === assignedDeviceId)?.label || assignedDeviceId}</strong>
           </span>
           <button onClick={handleUnassign} className="text-red-600 hover:text-red-800 font-medium">
-            Unassign
+            {dict.admin?.unassign || 'Unassign'}
           </button>
         </div>
       )}
 
       <div className="bg-white border border-gray-300 p-6">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-gray-900">Devices</h2>
+          <h2 className="text-xl font-bold text-gray-900">{dict.admin?.devicesSectionTitle || 'Devices'}</h2>
           <button
             onClick={openAddModal}
             className="px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium border border-brand-hover"
           >
-            Register Device
+            {dict.admin?.registerDevice || 'Register Device'}
           </button>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Label</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Terminal ID</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Serial Number</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">PTU/AC No.</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.deviceLabel || 'Label'}</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.deviceTerminalId || 'Terminal ID'}</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.deviceSerialNumber || 'Serial Number'}</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.devicePtuNumber || 'PTU/AC No.'}</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.status || 'Status'}</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.actions || 'Actions'}</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -210,22 +215,26 @@ export default function DevicesPage() {
                       : device.ptuStatus === 'approved' ? 'bg-green-100 text-green-800 border-green-300'
                       : 'bg-yellow-100 text-yellow-800 border-yellow-300'
                     }`}>
-                      {!device.isActive ? 'Inactive' : device.ptuStatus === 'approved' ? 'PTU Approved' : 'PTU Pending'}
+                      {!device.isActive
+                        ? (dict.admin?.deviceInactive || 'Inactive')
+                        : device.ptuStatus === 'approved'
+                          ? (dict.admin?.devicePtuApprovedBadge || 'PTU Approved')
+                          : (dict.admin?.devicePtuPendingBadge || 'PTU Pending')}
                     </span>
                   </td>
                   <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex gap-2 flex-wrap">
                       <button onClick={() => openEditModal(device)} className="text-brand hover:text-brand-navy-deep">
-                        Edit
+                        {dict.common?.edit || 'Edit'}
                       </button>
                       {device.isActive && assignedDeviceId !== device._id && (
                         <button onClick={() => handleAssignThisBrowser(device)} className="text-blue-600 hover:text-blue-900">
-                          Assign this browser
+                          {dict.admin?.assignThisBrowser || 'Assign this browser'}
                         </button>
                       )}
                       {device.isActive && (
                         <button onClick={() => handleDeactivate(device)} className="text-orange-600 hover:text-orange-900">
-                          Deactivate
+                          {dict.admin?.deactivate || 'Deactivate'}
                         </button>
                       )}
                     </div>
@@ -235,7 +244,7 @@ export default function DevicesPage() {
             </tbody>
           </table>
           {devices.length === 0 && (
-            <div className="text-center py-8 text-gray-500">No devices registered yet</div>
+            <div className="text-center py-8 text-gray-500">{dict.admin?.noDevicesRegistered || 'No devices registered yet'}</div>
           )}
         </div>
       </div>
@@ -245,64 +254,64 @@ export default function DevicesPage() {
           <div className="bg-white border border-gray-300 max-w-lg w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <h2 className="text-2xl font-bold text-gray-900 mb-4">
-                {editingDevice ? 'Edit Device' : 'Register Device'}
+                {editingDevice ? (dict.admin?.editDevice || 'Edit Device') : (dict.admin?.registerDevice || 'Register Device')}
               </h2>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Label *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{dict.admin?.deviceLabel || 'Label'} *</label>
                   <input
                     type="text"
                     required
                     value={formData.label}
                     onChange={(e) => setFormData({ ...formData, label: e.target.value })}
-                    placeholder="e.g. Front Counter iPad"
+                    placeholder={dict.admin?.deviceLabelPlaceholder || 'e.g. Front Counter iPad'}
                     className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                   />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Terminal ID *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict.admin?.deviceTerminalId || 'Terminal ID'} *</label>
                     <input
                       type="text"
                       required
                       value={formData.terminalId}
                       onChange={(e) => setFormData({ ...formData, terminalId: e.target.value })}
-                      placeholder="e.g. T-01"
+                      placeholder={dict.admin?.terminalIdPlaceholder || 'e.g. T-01'}
                       className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Serial Number *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict.admin?.deviceSerialNumber || 'Serial Number'} *</label>
                     <input
                       type="text"
                       required
                       value={formData.serialNumber}
                       onChange={(e) => setFormData({ ...formData, serialNumber: e.target.value })}
-                      placeholder="Hardware serial number"
+                      placeholder={dict.admin?.serialNumberPlaceholder || 'Hardware serial number'}
                       className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                     />
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">PTU / AC Number</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict.admin?.devicePtuNumber || 'PTU / AC Number'}</label>
                     <input
                       type="text"
                       value={formData.ptuNumber}
                       onChange={(e) => setFormData({ ...formData, ptuNumber: e.target.value })}
-                      placeholder="Issued after RDO approval"
+                      placeholder={dict.admin?.ptuNumberPlaceholder || 'Issued after RDO approval'}
                       className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">PTU Status</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{dict.admin?.ptuStatusLabel || 'PTU Status'}</label>
                     <select
                       value={formData.ptuStatus}
                       onChange={(e) => setFormData({ ...formData, ptuStatus: e.target.value as 'pending' | 'approved' })}
                       className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                     >
-                      <option value="pending">Pending</option>
-                      <option value="approved">Approved</option>
+                      <option value="pending">{dict.admin?.ptuPending || 'Pending'}</option>
+                      <option value="approved">{dict.admin?.ptuApproved || 'Approved'}</option>
                     </select>
                   </div>
                 </div>
@@ -315,14 +324,14 @@ export default function DevicesPage() {
                     onClick={() => setShowModal(false)}
                     className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
                   >
-                    Cancel
+                    {dict.common?.cancel || 'Cancel'}
                   </button>
                   <button
                     type="submit"
                     disabled={saving}
                     className="px-4 py-2 bg-brand text-white hover:bg-brand-hover border border-brand-hover disabled:opacity-50"
                   >
-                    {saving ? 'Saving...' : 'Save'}
+                    {saving ? (dict.admin?.saving || 'Saving...') : (dict.common?.save || 'Save')}
                   </button>
                 </div>
               </form>
