@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import connectDB from '@/lib/mongodb';
+import { createAuditLog, AuditActions } from '@/lib/audit';
 import { logger } from '@/lib/logger';
 import net from 'net';
 
@@ -13,7 +14,7 @@ import net from 'net';
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
-    await requireAuth(request);
+    const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
 
     if (!tenantId) {
@@ -59,6 +60,14 @@ export async function POST(request: NextRequest) {
         clearTimeout(timeout);
         reject(err);
       });
+    });
+
+    await createAuditLog(request, {
+      tenantId,
+      userId: user.userId,
+      action: AuditActions.CASH_DRAWER_KICK,
+      entityType: 'cash_drawer',
+      metadata: { printerIp, printerPort },
     });
 
     return NextResponse.json({ success: true, message: 'Cash drawer kick sent' });

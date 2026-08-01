@@ -31,6 +31,7 @@ export interface IProduct extends Document {
   variations?: IProductVariation[];
   branchStock?: IBranchStock[]; // Branch-specific stock levels
   taxExempt: boolean; // Whether the product is VAT/tax exempt
+  zeroRated?: boolean; // BIR zero-rated sales (e.g. export sales, PEZA-registered buyers) — 0% VAT, distinct from tax-exempt
   trackInventory: boolean; // Whether to track inventory for this product
   allowOutOfStockSales?: boolean; // Whether to allow sales when out of stock
   lowStockThreshold?: number; // Product-specific threshold (overrides tenant default)
@@ -169,6 +170,10 @@ const ProductSchema: Schema = new Schema(
       },
     }],
     taxExempt: {
+      type: Boolean,
+      default: false,
+    },
+    zeroRated: {
       type: Boolean,
       default: false,
     },

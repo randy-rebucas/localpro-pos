@@ -1122,6 +1122,67 @@ export default function SettingsPage() {
                         placeholder="LocalPro POS"
                       />
                     </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {settingsDict.birTerminalSN || 'Terminal SN'} <span className="text-gray-400 font-normal">(Serial No.)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={settings.birTerminalSN || ''}
+                        onChange={(e) => updateSetting('birTerminalSN', e.target.value)}
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                        placeholder="HW-XYZ-987654321"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {settingsDict.birAccreditationNo || 'Accreditation No.'}
+                      </label>
+                      <input
+                        type="text"
+                        value={settings.birAccreditationNo || ''}
+                        onChange={(e) => updateSetting('birAccreditationNo', e.target.value)}
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                        placeholder="ACC-1234567-2026-001"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {settingsDict.birAccreditationDate || 'Accreditation Date Issued'}
+                      </label>
+                      <input
+                        type="date"
+                        value={settings.birAccreditationDate ? new Date(settings.birAccreditationDate).toISOString().slice(0, 10) : ''}
+                        onChange={(e) => updateSetting('birAccreditationDate', e.target.value ? new Date(e.target.value) : undefined)}
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {settingsDict.birAccreditationValidUntil || 'Accreditation Valid Until'}
+                      </label>
+                      <input
+                        type="date"
+                        value={settings.birAccreditationValidUntil ? new Date(settings.birAccreditationValidUntil).toISOString().slice(0, 10) : ''}
+                        onChange={(e) => updateSetting('birAccreditationValidUntil', e.target.value ? new Date(e.target.value) : undefined)}
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {settingsDict.birEsalesPushUrl || 'eSales Push Endpoint'} <span className="text-gray-400 font-normal">(optional)</span>
+                      </label>
+                      <input
+                        type="url"
+                        value={settings.birEsalesPushUrl || ''}
+                        onChange={(e) => updateSetting('birEsalesPushUrl', e.target.value)}
+                        className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
+                        placeholder="https://your-endpoint.example.com/esales-webhook"
+                      />
+                      <p className="text-xs text-gray-400 mt-1">
+                        {settingsDict.birEsalesPushUrlDesc || 'If set, daily and monthly sales summaries are automatically POSTed here as JSON. Otherwise they are only saved to the server for manual upload.'}
+                      </p>
+                    </div>
                   </div>
                   <p className="text-xs text-gray-400 mt-3">
                     {settingsDict.birVatNote || 'Set Tax Label to "VAT" in General → Tax Settings to print a VAT receipt. Non-VAT receipts will show "THIS DOCUMENT IS NOT VALID FOR CLAIM OF INPUT TAX".'}

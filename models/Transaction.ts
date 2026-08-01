@@ -31,7 +31,10 @@ export interface ITransaction extends Document {
   discountCode?: string;
   discountCategory?: 'general' | 'senior' | 'pwd' | 'employee' | 'promo';
   discountAmount?: number;
+  scPwdName?: string; // Senior Citizen / PWD name (BIR requirement when discountCategory is senior/pwd)
+  scPwdId?: string; // Senior Citizen / PWD ID number (BIR requirement when discountCategory is senior/pwd)
   taxExemptAmount?: number; // Amount exempt from VAT (BIR)
+  zeroRatedAmount?: number; // Amount taxed at 0% VAT (BIR zero-rated sales, e.g. export/PEZA-registered buyers) — distinct from tax-exempt
   taxAmount?: number; // Calculated tax amount
   total: number; // Total after discount and tax
   paymentMethod: 'cash' | 'card' | 'digital' | 'tap_to_pay' | 'wallet' | 'qr_code' | 'bnpl' | 'on_account';
@@ -45,6 +48,9 @@ export interface ITransaction extends Document {
   loyaltyPointsEarned?: number;
   loyaltyPointsRedeemed?: number;
   userId?: mongoose.Types.ObjectId;
+  deviceId?: mongoose.Types.ObjectId; // Registered terminal/device that processed this sale (BYOD/multi-terminal)
+  terminalId?: string; // Denormalized snapshot of Device.terminalId at time of sale
+  deviceSerialNumber?: string; // Denormalized snapshot of Device.serialNumber at time of sale
   receiptNumber?: string;
   notes?: string;
   displayCurrency?: string; // Currency code the customer chose to view the total in
@@ -150,7 +156,20 @@ const TransactionSchema: Schema = new Schema(
       type: Number,
       min: 0,
     },
+    scPwdName: {
+      type: String,
+      trim: true,
+    },
+    scPwdId: {
+      type: String,
+      trim: true,
+    },
     taxExemptAmount: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    zeroRatedAmount: {
       type: Number,
       min: 0,
       default: 0,
@@ -211,6 +230,19 @@ const TransactionSchema: Schema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'User',
       index: true,
+    },
+    deviceId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Device',
+      index: true,
+    },
+    terminalId: {
+      type: String,
+      trim: true,
+    },
+    deviceSerialNumber: {
+      type: String,
+      trim: true,
     },
     receiptNumber: {
       type: String,

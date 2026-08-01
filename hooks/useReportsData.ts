@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
-export type ReportTab = 'sales' | 'products' | 'vat' | 'profit-loss' | 'cash-drawer' | 'sales-journal';
+export type ReportTab = 'sales' | 'products' | 'vat' | 'profit-loss' | 'cash-drawer' | 'sales-journal' | 'x-reading' | 'z-reading';
 export type ReportsStatus = 'loading' | 'ready' | 'error';
 
 export interface SalesReport {
@@ -108,6 +108,38 @@ export interface SalesJournalData {
   endDate: string;
 }
 
+export interface XReadingData {
+  startDate: string;
+  endDate: string;
+  grossSales: number;
+  vatableSales: number;
+  vatAmount: number;
+  vatExemptSales: number;
+  zeroRatedSales: number;
+  discountTotal: number;
+  transactionCount: number;
+  voidCount: number;
+  currentGrandTotal: number;
+  currentGrandTotalTransactionCount: number;
+}
+
+export interface ZReadingRecord {
+  _id: string;
+  businessDate: string;
+  beginningGT: number;
+  endingGT: number;
+  grossSales: number;
+  vatableSales: number;
+  vatAmount: number;
+  vatExemptSales: number;
+  zeroRatedSales: number;
+  discountTotal: number;
+  transactionCount: number;
+  voidCount: number;
+  generatedBy?: { name?: string; email?: string } | string;
+  generatedAt: string;
+}
+
 interface UseReportsDataOptions {
   tenant: string;
   activeTab: ReportTab;
@@ -138,6 +170,9 @@ export function useReportsData({
   const [profitLoss, setProfitLoss] = useState<ProfitLossSummary | null>(null);
   const [cashDrawerReports, setCashDrawerReports] = useState<CashDrawerReport[]>([]);
   const [salesJournal, setSalesJournal] = useState<SalesJournalData | null>(null);
+  const [xReading, setXReading] = useState<XReadingData | null>(null);
+  const [zReadings, setZReadings] = useState<ZReadingRecord[]>([]);
+  const [generatingZReading, setGeneratingZReading] = useState(false);
 
   const refetch = useCallback(async () => {
     if (!enabled || !startDate || !endDate) return;
@@ -227,6 +262,32 @@ export function useReportsData({
           }
           break;
         }
+        case 'x-reading': {
+          const params = new URLSearchParams({ tenant, ...(endDate && { date: endDate }) });
+          const data = await fetchJson(`/api/reports/x-reading?${params}`);
+          if (data.success) {
+            setXReading(data.data as XReadingData);
+            setStatus('ready');
+          } else {
+            setXReading(null);
+            setError(data.error || 'Failed to load X-Reading');
+            setStatus('error');
+          }
+          break;
+        }
+        case 'z-reading': {
+          const params = new URLSearchParams({ tenant, limit: '30' });
+          const data = await fetchJson(`/api/reports/z-reading?${params}`);
+          if (data.success) {
+            setZReadings((data.data as ZReadingRecord[]) || []);
+            setStatus('ready');
+          } else {
+            setZReadings([]);
+            setError(data.error || 'Failed to load Z-Readings');
+            setStatus('error');
+          }
+          break;
+        }
       }
     } catch (err) {
       console.error('Error loading reports:', err);
@@ -239,6 +300,30 @@ export function useReportsData({
     refetch();
   }, [refetch]);
 
+  const generateZReading = useCallback(
+    async (businessDate?: string): Promise<{ success: boolean; error?: string; reprint?: boolean }> => {
+      setGeneratingZReading(true);
+      try {
+        const res = await fetch(`/api/reports/z-reading?tenant=${encodeURIComponent(tenant)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(businessDate ? { date: businessDate } : {}),
+        });
+        const data = await res.json();
+        if (data.success) {
+          await refetch();
+          return { success: true, reprint: !!data.reprint };
+        }
+        return { success: false, error: data.error || 'Failed to generate Z-Reading' };
+      } catch {
+        return { success: false, error: 'Failed to generate Z-Reading' };
+      } finally {
+        setGeneratingZReading(false);
+      }
+    },
+    [tenant, refetch]
+  );
+
   return {
     status,
     error,
@@ -249,5 +334,9 @@ export function useReportsData({
     profitLoss,
     cashDrawerReports,
     salesJournal,
+    xReading,
+    zReadings,
+    generateZReading,
+    generatingZReading,
   };
 }

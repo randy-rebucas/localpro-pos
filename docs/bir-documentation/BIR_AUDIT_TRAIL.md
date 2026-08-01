@@ -35,6 +35,17 @@ AuditLog Document
 | `{ tenantId: 1, userId: 1, createdAt: -1 }` | Query logs by specific user |
 | `{ tenantId: 1, entityType: 1, entityId: 1 }` | Query logs for specific record |
 | `{ createdAt: -1 }` | Cleanup/retention queries |
+| `{ createdAt: 1 }, { expireAfterSeconds: 7776000 }` | TTL auto-purge after 90 days |
+
+---
+
+## 1a. Electronic Journal Export (raw dump)
+
+**Endpoint**: `GET /api/audit-logs/export?format=csv|json&startDate=&endDate=`
+
+Exports every audit log entry for a date range as a flat CSV or JSON file — the raw electronic-journal extract requested in BIR accreditation reviews, proving every transaction, void, refund, and back-end change is captured without gaps. Requires `audit_logs.export` permission (admin+ by default); the export action itself is audit-logged (`audit_log.export`). Available from the admin Audit Logs page ("Export CSV" / "Export JSON" buttons) or directly via the API.
+
+> **Retention**: audit logs auto-expire 90 days after creation (TTL index above). Export and archive periodically if a longer retention window is required for compliance.
 
 ---
 

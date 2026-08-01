@@ -10,7 +10,7 @@ import {
   UtensilsCrossed, ShoppingBag, WashingMachine, Briefcase, Pill, CalendarClock,
   Settings, Clock, Users2, GitBranch, Calculator, CreditCard, Monitor, Bell,
   Palette, ToggleLeft, ClipboardList, Database, ChevronDown, ChevronRight,
-  LogOut, Store, ShoppingCart, Code2, Sparkles, Lock
+  LogOut, Store, ShoppingCart, Code2, Sparkles, Lock, Smartphone
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
@@ -137,6 +137,7 @@ export default function AdminSidebar() {
         { label: 'Tax Rules', href: `${base}/admin/tax-rules`, icon: Calculator, permission: 'tax_rules.manage' },
         { label: 'Subscriptions', href: `${base}/admin/subscriptions`, icon: CreditCard, permission: 'subscriptions.manage' },
         { label: 'Hardware', href: `${base}/admin/hardware`, icon: Monitor, permission: 'hardware.manage' },
+        { label: 'Devices (Terminals)', href: `${base}/admin/devices`, icon: Smartphone, permission: 'devices.manage' },
         { label: 'Notifications', href: `${base}/admin/notification-templates`, icon: Bell, permission: 'notifications.manage' },
         { label: 'Branding', href: `${base}/admin/advanced-branding`, icon: Palette, permission: 'branding.manage' },
         { label: 'Multi-Currency', href: `${base}/admin/multi-currency`, icon: DollarSign, permission: 'multi_currency.manage' },

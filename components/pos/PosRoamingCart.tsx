@@ -44,6 +44,10 @@ export interface PosRoamingCartProps {
   setPromoCode: (v: string) => void;
   appliedDiscount: Discount | null;
   applyingDiscount: boolean;
+  scPwdName: string;
+  setScPwdName: (name: string) => void;
+  scPwdId: string;
+  setScPwdId: (id: string) => void;
   showDiscountSection: boolean;
   setShowDiscountSection: React.Dispatch<React.SetStateAction<boolean>>;
   sessionId: string | null;
@@ -94,6 +98,10 @@ export default function PosRoamingCart(props: PosRoamingCartProps) {
     setPromoCode,
     appliedDiscount,
     applyingDiscount,
+    scPwdName,
+    setScPwdName,
+    scPwdId,
+    setScPwdId,
     showDiscountSection,
     setShowDiscountSection,
     sessionId,
@@ -202,6 +210,10 @@ export default function PosRoamingCart(props: PosRoamingCartProps) {
                 setPromoCode={setPromoCode}
                 appliedDiscount={appliedDiscount}
                 applyingDiscount={applyingDiscount}
+                scPwdName={scPwdName}
+                setScPwdName={setScPwdName}
+                scPwdId={scPwdId}
+                setScPwdId={setScPwdId}
                 showDiscountSection={showDiscountSection}
                 setShowDiscountSection={setShowDiscountSection}
                 getSubtotal={getSubtotal}

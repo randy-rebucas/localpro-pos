@@ -51,6 +51,8 @@ export interface ReceiptData {
     price: number;
     subtotal: number;
     sku?: string;
+    /** false = VAT-exempt line item (e.g. senior/PWD, exempt goods). Defaults to the receipt's overall isVAT status. */
+    taxable?: boolean;
   }>;
   subtotal: number;
   discount?: number;
@@ -66,16 +68,28 @@ export interface ReceiptData {
   customerEmail?: string;
   customerPhone?: string;
   template?: string; // Template HTML to use
+  cashierName?: string; // Name of the cashier/user who processed the sale
   // BIR compliance fields
   tin?: string;            // BIR Tax Identification Number
   businessStyle?: string;  // Trade name / style of business
   ptuNumber?: string;      // Permit to Use number
   ptuDate?: string;        // PTU date issued (formatted string)
+  ptuValidUntil?: string;  // PTU expiry date (formatted string)
   minNumber?: string;      // Machine Identification Number
+  terminalSN?: string;     // Terminal/hardware serial number
+  terminalId?: string;     // Registered terminal/device ID (BYOD multi-terminal identification)
   systemProvider?: string; // Accredited system provider name
+  accreditationNo?: string;           // BIR accreditation number
+  accreditationDate?: string;         // Accreditation date issued (formatted string)
+  accreditationValidUntil?: string;   // Accreditation expiry date (formatted string)
   isVAT?: boolean;         // true = VAT-registered, false = NON-VAT
   taxRate?: number;        // Tax rate from tenant settings (e.g. 12 for 12%)
   customerTIN?: string;    // Customer TIN (optional)
+  zeroRatedSales?: number; // Sales taxed at 0% (e.g. export/registered enterprises)
+  // Senior Citizen / PWD discount block (BIR RA 9994 / RA 10754)
+  scPwdName?: string;
+  scPwdId?: string;
+  scPwdDiscount?: number; // 20% statutory discount amount
   openDrawerOnPrint?: boolean; // Kick cash drawer after printing (for cash payments)
 }
 
@@ -306,6 +320,9 @@ class ReceiptPrinterService {
       const discountedSubtotal = data.subtotal - (data.discount ?? 0);
       const vatableSales = isVAT && vatAmount > 0 ? discountedSubtotal - vatAmount : 0;
       const vatExemptSales = isVAT ? 0 : discountedSubtotal;
+      const zeroRatedSales = data.zeroRatedSales ?? 0;
+      const totalItemCount = data.items.reduce((sum, item) => sum + item.quantity, 0);
+      const hasScPwd = !!(data.scPwdName || data.scPwdId || data.scPwdDiscount);
       const line = '--------------------------------\n';
 
       // Header (centered)
@@ -319,14 +336,20 @@ class ReceiptPrinterService {
       if (data.address) commands.push(this.encodeText(data.address + '\n'));
       if (data.phone) commands.push(this.encodeText(data.phone + '\n'));
       if (data.tin) commands.push(this.encodeText(`TIN: ${data.tin}\n`));
-      commands.push(this.encodeText((isVAT ? 'VAT' : 'NON-VAT') + ' Registered\n'));
+      commands.push(this.setBold(true));
+      commands.push(this.encodeText((isVAT ? 'VAT REGISTERED' : 'NON-VAT REGISTERED') + '\n'));
+      commands.push(this.setBold(false));
       commands.push(this.encodeText('\n'));
       commands.push(this.setBold(true));
       commands.push(this.encodeText('OFFICIAL RECEIPT\n'));
       commands.push(this.setBold(false));
       commands.push(this.setAlign('left'));
-      commands.push(this.encodeText(`Serial No: ${data.receiptNumber}\n`));
-      commands.push(this.encodeText(`Date: ${data.date}${data.time ? ' ' + data.time : ''}\n`));
+      if (data.terminalSN) commands.push(this.encodeText(`Terminal SN: ${data.terminalSN}\n`));
+      if (data.terminalId) commands.push(this.encodeText(`Terminal ID: ${data.terminalId}\n`));
+      if (data.minNumber) commands.push(this.encodeText(`MIN: ${data.minNumber}\n`));
+      commands.push(this.encodeText(`Invoice No: ${data.receiptNumber}\n`));
+      commands.push(this.encodeText(`Date & Time: ${data.date}${data.time ? ' ' + data.time : ''}\n`));
+      if (data.cashierName) commands.push(this.encodeText(`Cashier Name: ${data.cashierName}\n`));
       if (data.customerName) {
         commands.push(this.encodeText(`Customer: ${data.customerName}\n`));
         if (data.customerTIN) commands.push(this.encodeText(`TIN: ${data.customerTIN}\n`));
@@ -335,14 +358,17 @@ class ReceiptPrinterService {
 
       // Items
       data.items.forEach((item) => {
+        const taxable = item.taxable ?? isVAT;
         const name = item.name.substring(0, 20).padEnd(20);
-        const qty = `x${item.quantity}`.padStart(4);
+        const qty = `${item.quantity}${taxable ? 'V' : 'E'}`.padStart(4);
         commands.push(this.encodeText(`${name} ${qty}\n`));
         const atPrice = `  @ ${fmt(item.price)}`.padEnd(20);
         const subtotalStr = fmt(item.subtotal).padStart(12);
         commands.push(this.encodeText(`${atPrice}${subtotalStr}\n`));
       });
 
+      commands.push(this.encodeText(line));
+      commands.push(this.encodeText(`TOTAL ITEM COUNT: ${totalItemCount}\n`));
       commands.push(this.encodeText(line));
 
       // Totals
@@ -356,8 +382,9 @@ class ReceiptPrinterService {
       } else {
         commands.push(this.encodeText(`VAT-Exempt Sales: ${fmt(vatExemptSales)}\n`));
       }
+      commands.push(this.encodeText(`Zero-Rated Sales: ${fmt(zeroRatedSales)}\n`));
       commands.push(this.setBold(true));
-      commands.push(this.encodeText(`TOTAL:            ${fmt(data.total)}\n`));
+      commands.push(this.encodeText(`GRAND TOTAL:      ${fmt(data.total)}\n`));
       commands.push(this.setBold(false));
       commands.push(this.encodeText(line));
       commands.push(this.setAlign('left'));
@@ -365,13 +392,35 @@ class ReceiptPrinterService {
       if (data.cashReceived) commands.push(this.encodeText(`Cash:     ${fmt(data.cashReceived)}\n`));
       if (data.change) commands.push(this.encodeText(`Change:   ${fmt(data.change)}\n`));
 
+      // Senior Citizen / PWD discount block
+      if (hasScPwd) {
+        const grossLessVat = discountedSubtotal - vatAmount;
+        commands.push(this.encodeText(line));
+        commands.push(this.setAlign('center'));
+        commands.push(this.setBold(true));
+        commands.push(this.encodeText('SENIOR CITIZEN / PWD\n'));
+        commands.push(this.setBold(false));
+        commands.push(this.setAlign('left'));
+        commands.push(this.encodeText(`SC/PWD Name: ${data.scPwdName || ''}\n`));
+        commands.push(this.encodeText(`SC/PWD ID:   ${data.scPwdId || ''}\n`));
+        commands.push(this.setAlign('right'));
+        commands.push(this.encodeText(`Gross Sales (Less VAT): ${fmt(grossLessVat)}\n`));
+        commands.push(this.encodeText(`20% Discount:           ${fmt(data.scPwdDiscount ?? 0)}\n`));
+        commands.push(this.setBold(true));
+        commands.push(this.encodeText(`NET AMOUNT DUE:         ${fmt(data.total)}\n`));
+        commands.push(this.setBold(false));
+      }
+
       // BIR Footer
       commands.push(this.encodeText(line));
       commands.push(this.setAlign('center'));
       if (data.ptuNumber) commands.push(this.encodeText(`PTU No: ${data.ptuNumber}\n`));
-      if (data.minNumber) commands.push(this.encodeText(`MIN: ${data.minNumber}\n`));
       if (data.systemProvider) commands.push(this.encodeText(`Accredited System Provider: ${data.systemProvider}\n`));
       if (data.ptuDate) commands.push(this.encodeText(`Date Issued: ${data.ptuDate}\n`));
+      if (data.ptuValidUntil) commands.push(this.encodeText(`Valid Until: ${data.ptuValidUntil}\n`));
+      if (data.accreditationNo) commands.push(this.encodeText(`Accreditation No: ${data.accreditationNo}\n`));
+      if (data.accreditationDate) commands.push(this.encodeText(`Date Issued: ${data.accreditationDate}\n`));
+      if (data.accreditationValidUntil) commands.push(this.encodeText(`Valid Until: ${data.accreditationValidUntil}\n`));
       commands.push(this.encodeText('\n'));
       commands.push(this.encodeText((isVAT ? 'THIS SERVES AS AN OFFICIAL RECEIPT' : 'NOT VALID FOR CLAIM OF INPUT TAX') + '\n'));
       if (data.footer) {
@@ -520,6 +569,10 @@ class ReceiptPrinterService {
     const discountedSubtotal = data.subtotal - (data.discount ?? 0);
     const vatableSales = isVAT && vatAmount > 0 ? discountedSubtotal - vatAmount : 0;
     const vatExemptSales = isVAT ? 0 : discountedSubtotal;
+    const zeroRatedSales = data.zeroRatedSales ?? 0;
+    const totalItemCount = data.items.reduce((sum, item) => sum + item.quantity, 0);
+    const hasScPwd = !!(data.scPwdName || data.scPwdId || data.scPwdDiscount);
+    const grossLessVat = discountedSubtotal - vatAmount;
 
     // Use tenant-configured tax rate; never back-calculate from amounts (rounding errors)
     const vatPct = data.taxRate ? String(data.taxRate) : '12';
@@ -557,11 +610,15 @@ class ReceiptPrinterService {
     ${data.address ? `<div>${data.address}</div>` : ''}
     ${data.phone ? `<div>${data.phone}</div>` : ''}
     ${data.tin ? `<div>TIN: ${data.tin}</div>` : ''}
-    <div>${isVAT ? 'VAT' : 'NON-VAT'} Registered</div>
+    <div><strong>${isVAT ? 'VAT REGISTERED' : 'NON-VAT REGISTERED'}</strong></div>
     <br>
     <div><strong>OFFICIAL RECEIPT</strong></div>
-    <div>Serial No: ${data.receiptNumber}</div>
-    <div>Date: ${data.date}${data.time ? ' ' + data.time : ''}</div>
+    ${data.terminalSN ? `<div>Terminal SN: ${data.terminalSN}</div>` : ''}
+    ${data.terminalId ? `<div>Terminal ID: ${data.terminalId}</div>` : ''}
+    ${data.minNumber ? `<div>MIN: ${data.minNumber}</div>` : ''}
+    <div>Invoice No: ${data.receiptNumber}</div>
+    <div>Date &amp; Time: ${data.date}${data.time ? ' ' + data.time : ''}</div>
+    ${data.cashierName ? `<div>Cashier Name: ${data.cashierName}</div>` : ''}
   </div>
 
   ${data.customerName ? `
@@ -571,14 +628,19 @@ class ReceiptPrinterService {
   </div>
   <br>` : ''}
 
-  ${data.items.map(item => `
+  ${data.items.map(item => {
+    const taxable = item.taxable ?? isVAT;
+    return `
   <div class="item">
     <div>
-      ${item.name} x${item.quantity}<br>
+      ${item.name} ${item.quantity}${taxable ? 'V' : 'E'}<br>
       <span class="small">@ ${fmt(item.price)}</span>
     </div>
     <div>${fmt(item.subtotal)}</div>
-  </div>`).join('')}
+  </div>`;
+  }).join('')}
+
+  <div class="small" style="text-align:right;margin-top:4px;">TOTAL ITEM COUNT: ${totalItemCount}</div>
 
   <div class="total">
     <div class="item"><div>Subtotal:</div><div>${fmt(data.subtotal)}</div></div>
@@ -590,17 +652,32 @@ class ReceiptPrinterService {
     ` : `
     <div class="item"><div>VAT-Exempt Sales:</div><div>${fmt(discountedSubtotal)}</div></div>
     `}
-    <div class="item"><div><strong>TOTAL:</strong></div><div>${fmt(data.total)}</div></div>
+    <div class="item"><div>Zero-Rated Sales:</div><div>${fmt(zeroRatedSales)}</div></div>
+    <div class="item"><div><strong>GRAND TOTAL:</strong></div><div>${fmt(data.total)}</div></div>
     <div class="item"><div>Payment:</div><div>${data.paymentMethod.toUpperCase()}</div></div>
     ${data.cashReceived ? `<div class="item"><div>Cash:</div><div>${fmt(data.cashReceived)}</div></div>` : ''}
     ${data.change ? `<div class="item"><div>Change:</div><div>${fmt(data.change)}</div></div>` : ''}
   </div>
 
+  ${hasScPwd ? `
+  <div class="total">
+    <div class="center"><strong>SENIOR CITIZEN / PWD</strong></div>
+    <div>SC/PWD Name: ${data.scPwdName || ''}</div>
+    <div>SC/PWD ID: ${data.scPwdId || ''}</div>
+    <div class="item"><div>Gross Sales (Less VAT):</div><div>${fmt(grossLessVat)}</div></div>
+    <div class="item"><div>20% Discount:</div><div>${fmt(data.scPwdDiscount ?? 0)}</div></div>
+    <div class="item"><div><strong>NET AMOUNT DUE:</strong></div><div>${fmt(data.total)}</div></div>
+  </div>
+  ` : ''}
+
   <div class="footer">
     ${data.ptuNumber ? `<div>PTU No: ${data.ptuNumber}</div>` : ''}
-    ${data.minNumber ? `<div>MIN: ${data.minNumber}</div>` : ''}
     ${data.systemProvider ? `<div>Accredited System Provider: ${data.systemProvider}</div>` : ''}
     ${data.ptuDate ? `<div>Date Issued: ${data.ptuDate}</div>` : ''}
+    ${data.ptuValidUntil ? `<div>Valid Until: ${data.ptuValidUntil}</div>` : ''}
+    ${data.accreditationNo ? `<div>Accreditation No: ${data.accreditationNo}</div>` : ''}
+    ${data.accreditationDate ? `<div>Date Issued: ${data.accreditationDate}</div>` : ''}
+    ${data.accreditationValidUntil ? `<div>Valid Until: ${data.accreditationValidUntil}</div>` : ''}
     <br>
     <div class="small">${isVAT ? 'THIS SERVES AS AN OFFICIAL RECEIPT' : 'THIS DOCUMENT IS NOT VALID FOR CLAIM OF INPUT TAX'}</div>
     ${data.footer ? `<br><div class="small">${data.footer}</div>` : ''}

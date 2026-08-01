@@ -17,6 +17,10 @@ interface CartDiscountSectionProps {
   setPromoCode: (code: string) => void;
   appliedDiscount: Discount | null;
   applyingDiscount: boolean;
+  scPwdName: string;
+  setScPwdName: (name: string) => void;
+  scPwdId: string;
+  setScPwdId: (id: string) => void;
   showDiscountSection: boolean;
   setShowDiscountSection: React.Dispatch<React.SetStateAction<boolean>>;
   getSubtotal: () => number;
@@ -44,6 +48,10 @@ export default function CartDiscountSection({
   setPromoCode,
   appliedDiscount,
   applyingDiscount,
+  scPwdName,
+  setScPwdName,
+  scPwdId,
+  setScPwdId,
   showDiscountSection,
   setShowDiscountSection,
   getSubtotal,
@@ -212,6 +220,24 @@ export default function CartDiscountSection({
                   </svg>
                 </button>
               </div>
+              {(appliedDiscount.code === 'SC20' || appliedDiscount.code === 'PWD20') && (
+                <div className="mt-2 pt-2 border-t border-green-200 space-y-2">
+                  <input
+                    type="text"
+                    placeholder={dict.pos?.scPwdName || 'SC/PWD Name'}
+                    value={scPwdName}
+                    onChange={(e) => setScPwdName(e.target.value)}
+                    className="w-full px-2.5 py-2 min-h-[40px] text-sm border border-gray-300 focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white transition-all placeholder:text-gray-400"
+                  />
+                  <input
+                    type="text"
+                    placeholder={dict.pos?.scPwdId || 'SC/PWD ID Number'}
+                    value={scPwdId}
+                    onChange={(e) => setScPwdId(e.target.value)}
+                    className="w-full px-2.5 py-2 min-h-[40px] text-sm border border-gray-300 focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white transition-all placeholder:text-gray-400"
+                  />
+                </div>
+              )}
             </div>
           )}
         </div>

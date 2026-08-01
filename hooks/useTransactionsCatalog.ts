@@ -16,12 +16,19 @@ export interface CatalogTransaction {
   items: CatalogTransactionItem[];
   subtotal?: number;
   discountCode?: string;
+  discountCategory?: 'general' | 'senior' | 'pwd' | 'employee' | 'promo';
   discountAmount?: number;
+  scPwdName?: string;
+  scPwdId?: string;
+  zeroRatedAmount?: number;
+  terminalId?: string;
+  deviceSerialNumber?: string;
   total: number;
   paymentMethod: 'cash' | 'card' | 'digital';
   cashReceived?: number;
   change?: number;
   status: 'completed' | 'cancelled' | 'refunded';
+  userId?: string | { name: string; email: string };
   createdAt: string;
 }
 

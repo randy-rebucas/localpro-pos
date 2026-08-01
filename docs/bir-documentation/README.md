@@ -5,8 +5,9 @@ This section covers Bureau of Internal Revenue (BIR) compliance for LocalPro POS
 ## Chapters
 
 - **BIR System Overview** — Architecture, modules, and BIR-compliant features
+- **BIR Architecture Diagrams** — Mermaid system/process flowcharts and database schema (ER) diagram
 - **BIR Process Flow** — Sales, receipt generation, void/refund, and reporting flows
-- **BIR Audit Trail** — Audit log model, tracked actions, and compliance examples
+- **BIR Audit Trail** — Audit log model, tracked actions, compliance examples, and the Electronic Journal export endpoint
 - **BIR VAT Computation** — Tax calculation algorithm, VAT-inclusive/exclusive examples, and reports
 - **BIR Sample Official Receipt** — Receipt format, required fields, and template variables
 - **BIR Data Security & Backup** — Authentication, RBAC, data protection, and backup procedures

@@ -65,6 +65,11 @@ export interface ITenantSettings {
   birMinNumber?: string;
   birBusinessStyle?: string;
   birSystemProvider?: string;
+  birTerminalSN?: string;
+  birAccreditationNo?: string;
+  birAccreditationDate?: Date;
+  birAccreditationValidUntil?: Date;
+  birEsalesPushUrl?: string;
 
   // Notification Settings
   lowStockThreshold?: number;

@@ -185,6 +185,7 @@ export async function POST(request: NextRequest) {
             productType: item.data.productType,
             trackInventory: item.data.trackInventory,
             taxExempt: item.data.taxExempt,
+            zeroRated: item.data.zeroRated,
             lowStockThreshold: item.data.lowStockThreshold,
             hasVariations: false,
             isActive: true,

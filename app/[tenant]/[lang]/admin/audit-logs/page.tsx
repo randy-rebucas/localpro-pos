@@ -75,6 +75,16 @@ export default function AuditLogsPage() {
     setCurrentPage(newPage);
   }, []);
 
+  const handleExport = useCallback((format: 'csv' | 'json') => {
+    const urlParams = new URLSearchParams({
+      format,
+      ...(format === 'json' && { download: 'true' }),
+      ...(filters.startDate && { startDate: filters.startDate }),
+      ...(filters.endDate && { endDate: filters.endDate }),
+    });
+    window.open(`/api/audit-logs/export?${urlParams}`, '_blank');
+  }, [filters.startDate, filters.endDate]);
+
   if (!dict || usersLoading) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -90,11 +100,27 @@ export default function AuditLogsPage() {
     <div className="px-4 sm:px-6 py-6">
 
       {/* Page header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">
-          {dict.admin?.auditLogs || 'Audit Logs'}
-        </h1>
-        <p className="text-sm text-gray-500 mt-0.5">{dict.admin?.auditLogsSubtitle || 'View system activity and changes'}</p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {dict.admin?.auditLogs || 'Audit Logs'}
+          </h1>
+          <p className="text-sm text-gray-500 mt-0.5">{dict.admin?.auditLogsSubtitle || 'View system activity and changes'}</p>
+        </div>
+        <div className="flex gap-2 shrink-0">
+          <button
+            onClick={() => handleExport('csv')}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
+          >
+            {dict.admin?.exportCSV || 'Export CSV'}
+          </button>
+          <button
+            onClick={() => handleExport('json')}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
+          >
+            {dict.admin?.exportJSON || 'Export JSON'}
+          </button>
+        </div>
       </div>
 
       <div className="flex gap-6 items-start">

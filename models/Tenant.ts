@@ -18,6 +18,10 @@ export interface ITenant extends Document {
   onboardingStatus: OnboardingStatus;
   notes?: string;
   createdBy?: mongoose.Types.ObjectId;
+  /** Non-resettable, all-time cumulative sales register (BIR Grand Total Accumulator). Never decremented, including on void/refund. */
+  grandTotalSales?: number;
+  /** Non-resettable, all-time completed-transaction counter, paired with grandTotalSales. */
+  grandTotalTransactionCount?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -171,6 +175,11 @@ const TenantSchema: Schema = new Schema(
       birMinNumber: { type: String, trim: true },
       birBusinessStyle: { type: String, trim: true },
       birSystemProvider: { type: String, trim: true },
+      birTerminalSN: { type: String, trim: true },
+      birAccreditationNo: { type: String, trim: true },
+      birAccreditationDate: { type: Date },
+      birAccreditationValidUntil: { type: Date },
+      birEsalesPushUrl: { type: String, trim: true }, // Optional endpoint to auto-POST daily/monthly sales summaries
 
       // Business Permits (all business types)
       businessPermits: {
@@ -541,6 +550,16 @@ const TenantSchema: Schema = new Schema(
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',
+    },
+    grandTotalSales: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    grandTotalTransactionCount: {
+      type: Number,
+      default: 0,
+      min: 0,
     },
   },
   {

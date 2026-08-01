@@ -51,6 +51,8 @@ export const PERMISSION_SECTIONS: Record<string, string> = {
 export const PERMISSIONS: PermissionDef[] = [
   { key: 'dashboard.view', label: 'Dashboard', section: 'overview', defaultMinRole: 'viewer' },
   { key: 'reports.view', label: 'Reports', section: 'overview', defaultMinRole: 'manager' },
+  { key: 'reports.x_reading', label: 'X-Reading Report', section: 'overview', defaultMinRole: 'cashier' },
+  { key: 'reports.z_reading', label: 'Z-Reading Report', section: 'overview', defaultMinRole: 'manager' },
 
   { key: 'products.manage', label: 'Products', section: 'catalog', defaultMinRole: 'manager' },
   { key: 'categories.manage', label: 'Categories', section: 'catalog', defaultMinRole: 'manager' },
@@ -104,6 +106,7 @@ export const PERMISSIONS: PermissionDef[] = [
   { key: 'users.manage', label: 'Users', section: 'configuration', defaultMinRole: 'manager' },
   { key: 'users.delete', label: 'Delete Users', section: 'configuration', defaultMinRole: 'admin' },
   { key: 'branches.manage', label: 'Branches', section: 'configuration', defaultMinRole: 'manager' },
+  { key: 'devices.manage', label: 'Registered Devices (Terminals)', section: 'configuration', defaultMinRole: 'admin' },
   { key: 'branches.delete', label: 'Delete Branches', section: 'configuration', defaultMinRole: 'admin' },
   { key: 'business_types.manage', label: 'Business Type', section: 'configuration', defaultMinRole: 'admin' },
   { key: 'business_hours.manage', label: 'Business Hours', section: 'configuration', defaultMinRole: 'manager' },
@@ -116,6 +119,7 @@ export const PERMISSIONS: PermissionDef[] = [
   { key: 'holidays.manage', label: 'Holidays', section: 'configuration', defaultMinRole: 'manager' },
   { key: 'feature_flags.manage', label: 'Feature Flags', section: 'configuration', defaultMinRole: 'admin' },
   { key: 'audit_logs.view', label: 'Audit Logs', section: 'configuration', defaultMinRole: 'manager' },
+  { key: 'audit_logs.export', label: 'Export Audit Logs (Electronic Journal)', section: 'configuration', defaultMinRole: 'admin' },
   { key: 'backup_reset.manage', label: 'Backup & Reset', section: 'configuration', defaultMinRole: 'admin' },
   { key: 'sample_data.manage', label: 'Sample Data', section: 'configuration', defaultMinRole: 'admin' },
   { key: 'api_docs.view', label: 'API Docs', section: 'configuration', defaultMinRole: 'viewer' },

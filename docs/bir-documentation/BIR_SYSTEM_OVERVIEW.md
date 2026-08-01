@@ -145,7 +145,13 @@ The system operates as a **multi-tenant SaaS platform**. Each tenant (business) 
 - VAT/Tax reports
 - Profit & Loss summaries
 - Product performance rankings
-- Cash drawer reconciliation (Z-reading equivalent)
+- Cash drawer reconciliation (cash-count only — not a BIR X/Z-reading)
+- X-Reading: repeatable shift/day sales summary, does not reset any totals (`app/api/reports/x-reading/route.ts`)
+- Z-Reading: official end-of-day sales report, once per business day, snapshots the Grand Total accumulator (`app/api/reports/z-reading/route.ts`, `models/ZReading.ts`)
+- Grand Total Accumulator: non-resettable, all-time cumulative sales register (`Tenant.grandTotalSales`), incremented atomically on every completed transaction, displayed in zero-padded 10-digit register format (`lib/bir-format.ts`)
+- Device/Terminal registry: per-terminal serial number, Terminal ID, and PTU/AC status for BYOD multi-terminal merchants (`models/Device.ts`, `app/api/devices/`, `app/[tenant]/[lang]/admin/devices`); each transaction snapshots the device that processed it (`Transaction.deviceId`/`terminalId`/`deviceSerialNumber`) so receipts print the correct machine's identity
+- Sales Summary Export / Push: scheduled daily and monthly JSON export of sales totals per tenant, saved to disk and optionally POSTed to a tenant-configured endpoint (`lib/automations/sales-summary-export.ts`, `Tenant.settings.birEsalesPushUrl`) — EIS/eSales transmission readiness
+- Electronic Journal export: on-demand CSV/JSON dump of the full audit trail (`app/api/audit-logs/export`)
 - Export to CSV, Excel (XLSX), PDF
 
 ### 4.9 User & Access Control

@@ -13,6 +13,7 @@ export const PRODUCT_IMPORT_HEADERS = [
   'product_type',
   'track_inventory',
   'tax_exempt',
+  'zero_rated',
   'low_stock_threshold',
 ] as const;
 
@@ -30,6 +31,7 @@ export interface ProductImportRow {
   productType: 'regular' | 'service';
   trackInventory: boolean;
   taxExempt: boolean;
+  zeroRated: boolean;
   lowStockThreshold?: number;
 }
 
@@ -56,6 +58,8 @@ const HEADER_ALIASES: Record<string, ProductImportHeader> = {
   trackinventory: 'track_inventory',
   tax_exempt: 'tax_exempt',
   taxexempt: 'tax_exempt',
+  zero_rated: 'zero_rated',
+  zerorated: 'zero_rated',
   low_stock_threshold: 'low_stock_threshold',
   lowstockthreshold: 'low_stock_threshold',
 };
@@ -236,6 +240,7 @@ export function mapCsvRecordToProductRow(
     productType: productType ?? 'regular',
     trackInventory: parseBoolean(record.track_inventory, true),
     taxExempt: parseBoolean(record.tax_exempt, false),
+    zeroRated: parseBoolean(record.zero_rated, false),
     lowStockThreshold,
   };
 

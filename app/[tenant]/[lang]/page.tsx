@@ -80,6 +80,7 @@ const FloorMap = dynamic(() => import('@/components/FloorMap'), {
   ),
 });
 import { hardwareService } from '@/lib/hardware';
+import { getAssignedDeviceId } from '@/lib/device-identity';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -242,6 +243,8 @@ export default function Dashboard() {
     (message: string) => showToast.error(message)
   );
   const { promoCode, setPromoCode, appliedDiscount, setAppliedDiscount, applyingDiscount, applyDiscount, removeDiscount } = useDiscount(fetchWithTimeout);
+  const [scPwdName, setScPwdName] = useState('');
+  const [scPwdId, setScPwdId] = useState('');
   const {
     paymentMethod, setPaymentMethod,
     cashReceived, setCashReceived,
@@ -731,6 +734,8 @@ export default function Dashboard() {
     hookClearCart();
     setAppliedDiscount(null);
     setPromoCode('');
+    setScPwdName('');
+    setScPwdId('');
     showToast.success(dictValue('pos.cartCleared', 'Cart cleared'));
   };
 
@@ -930,11 +935,22 @@ export default function Dashboard() {
         .filter(Boolean).join(', ')
       : undefined;
     const taxEnabled = settings.taxEnabled && settings.taxRate;
+    const isScPwd = transaction.discountCategory === 'senior' || transaction.discountCategory === 'pwd';
     const taxableBase = (transaction.subtotal || transaction.total) - (transaction.discountAmount || 0);
-    const taxAmount = taxEnabled ? taxableBase * (settings.taxRate! / 100) : undefined;
-    const isVAT = taxEnabled && (settings.taxLabel || '').toUpperCase().includes('VAT');
+    // SC/PWD transactions are fully VAT-exempt (RA 9994 / RA 10754) — never taxed
+    const taxAmount = isScPwd ? 0 : (taxEnabled ? taxableBase * (settings.taxRate! / 100) : undefined);
+    const isVAT = !isScPwd && !!(taxEnabled && (settings.taxLabel || '').toUpperCase().includes('VAT'));
     const ptuDateStr = settings.birPtuIssuedDate
       ? new Date(settings.birPtuIssuedDate).toLocaleDateString()
+      : undefined;
+    const ptuValidUntilStr = settings.birPtuExpiryDate
+      ? new Date(settings.birPtuExpiryDate).toLocaleDateString()
+      : undefined;
+    const accreditationDateStr = settings.birAccreditationDate
+      ? new Date(settings.birAccreditationDate).toLocaleDateString()
+      : undefined;
+    const accreditationValidUntilStr = settings.birAccreditationValidUntil
+      ? new Date(settings.birAccreditationValidUntil).toLocaleDateString()
       : undefined;
 
     const receiptData = {
@@ -944,12 +960,16 @@ export default function Dashboard() {
       logo: settings.receiptShowLogo !== false ? settings.logo : undefined,
       receiptNumber: transaction.receiptNumber || transaction._id?.slice(-8) || 'N/A',
       date: transaction.date || formatDateTime(new Date(transaction.createdAt || Date.now()), settings || getDefaultTenantSettings()),
-      items: transaction.items || [],
+      items: (transaction.items || []).map((item: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+        ...item,
+        taxable: isScPwd ? false : undefined,
+      })),
       subtotal: transaction.subtotal || transaction.total,
       discount: transaction.discountAmount || undefined,
       tax: taxAmount,
       taxLabel: settings.taxLabel,
       taxRate: settings.taxRate,
+      zeroRatedSales: transaction.zeroRatedAmount || 0,
       total: transaction.total,
       paymentMethod: transaction.paymentMethod,
       cashReceived: transaction.cashReceived,
@@ -957,14 +977,27 @@ export default function Dashboard() {
       footer: settings.receiptFooter,
       header: settings.receiptHeader,
       template: templateHtml,
+      cashierName: authUser?.name,
       // BIR compliance
       tin: settings.birTin,
       businessStyle: settings.birBusinessStyle,
       ptuNumber: settings.birPtuNumber,
       ptuDate: ptuDateStr,
+      ptuValidUntil: ptuValidUntilStr,
       minNumber: settings.birMinNumber,
+      // Prefer the specific device's serial number (per-terminal, BYOD-compliant) over the
+      // tenant-wide fallback, so multi-terminal merchants print the correct machine identity.
+      terminalSN: transaction.deviceSerialNumber || settings.birTerminalSN,
+      terminalId: transaction.terminalId,
       systemProvider: settings.birSystemProvider,
-      isVAT: isVAT || false,
+      accreditationNo: settings.birAccreditationNo,
+      accreditationDate: accreditationDateStr,
+      accreditationValidUntil: accreditationValidUntilStr,
+      isVAT,
+      // Senior Citizen / PWD discount block
+      scPwdName: isScPwd ? transaction.scPwdName : undefined,
+      scPwdId: isScPwd ? transaction.scPwdId : undefined,
+      scPwdDiscount: isScPwd ? transaction.discountAmount : undefined,
       // Auto-kick cash drawer on cash payments (drawer connected to printer via RJ11)
       openDrawerOnPrint: transaction.paymentMethod === 'cash' && !!cashDrawerSession,
     };
@@ -997,7 +1030,10 @@ export default function Dashboard() {
       (msg) => showToast.error(msg),
       fetchWithTimeout,
       selectedCustomer?._id,
-      restaurantMeta
+      restaurantMeta,
+      undefined,
+      { name: scPwdName || undefined, id: scPwdId || undefined },
+      getAssignedDeviceId(tenant) || undefined
     );
     if (result?.success) {
       showToast.success(dict.pos.paymentCompleted || 'Payment completed');
@@ -1094,7 +1130,9 @@ export default function Dashboard() {
       fetchWithTimeout,
       selectedCustomer?._id,
       restaurantMeta,
-      splitEntries
+      splitEntries,
+      { name: scPwdName || undefined, id: scPwdId || undefined },
+      getAssignedDeviceId(tenant) || undefined
     );
     if (result?.success) {
       showToast.success(
@@ -1418,6 +1456,10 @@ export default function Dashboard() {
                     setPromoCode={setPromoCode}
                     appliedDiscount={appliedDiscount}
                     applyingDiscount={applyingDiscount}
+                    scPwdName={scPwdName}
+                    setScPwdName={setScPwdName}
+                    scPwdId={scPwdId}
+                    setScPwdId={setScPwdId}
                     showDiscountSection={showDiscountSection}
                     setShowDiscountSection={setShowDiscountSection}
                     getSubtotal={getSubtotal}
@@ -1839,6 +1881,10 @@ export default function Dashboard() {
           setPromoCode={setPromoCode}
           appliedDiscount={appliedDiscount}
           applyingDiscount={applyingDiscount}
+          scPwdName={scPwdName}
+          setScPwdName={setScPwdName}
+          scPwdId={scPwdId}
+          setScPwdId={setScPwdId}
           showDiscountSection={showDiscountSection}
           setShowDiscountSection={setShowDiscountSection}
           sessionId={sessionId}

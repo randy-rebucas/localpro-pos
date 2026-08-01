@@ -153,5 +153,13 @@ export const AuditActions = {
   PRESCRIPTION_CANCEL: 'prescription.cancel',
   PHARMACY_SETTINGS_UPDATE: 'pharmacy_settings.update',
   EXPIRY_REPORT_VIEW: 'expiry_report.view',
+  X_READING_VIEW: 'x_reading.view',
+  Z_READING_GENERATE: 'z_reading.generate',
+  Z_READING_VIEW: 'z_reading.view',
+  CASH_DRAWER_KICK: 'cash_drawer.kick',
+  AUDIT_LOG_EXPORT: 'audit_log.export',
+  DEVICE_CREATE: 'device.create',
+  DEVICE_UPDATE: 'device.update',
+  DEVICE_DELETE: 'device.delete',
 } as const;
 

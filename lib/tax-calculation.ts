@@ -50,11 +50,12 @@ export async function calculateTax(
     productType?: 'regular' | 'bundle' | 'service';
     categoryId?: string;
     taxExempt?: boolean;
+    zeroRated?: boolean;
     subtotal?: number;
   }>,
   tenantSettings?: ITenantSettings,
   discountCategory?: string
-): Promise<{ taxAmount: number; taxRate: number; taxLabel: string; taxableAmount: number; exemptAmount: number }> {
+): Promise<{ taxAmount: number; taxRate: number; taxLabel: string; taxableAmount: number; exemptAmount: number; zeroRatedAmount: number }> {
   // Default values
   let taxAmount = 0;
   let taxRate = 0;
@@ -68,26 +69,35 @@ export async function calculateTax(
       taxLabel: `VAT Exempt (${discountCategory.toUpperCase()})`,
       taxableAmount: 0,
       exemptAmount: subtotalAfterDiscount,
+      zeroRatedAmount: 0,
     };
   }
 
-  // Calculate exempt vs taxable amounts from item-level tax exemptions
+  // Calculate exempt / zero-rated vs taxable amounts from item-level flags
   let exemptAmount = 0;
+  let zeroRatedAmount = 0;
   let taxableAmount = subtotalAfterDiscount;
 
   const hasItemSubtotals = items.some(item => item.subtotal !== undefined);
   if (hasItemSubtotals) {
     const totalItemSubtotal = items.reduce((sum, item) => sum + (item.subtotal || 0), 0);
     exemptAmount = items
-      .filter(item => item.taxExempt)
+      .filter(item => item.taxExempt && !item.zeroRated)
+      .reduce((sum, item) => sum + (item.subtotal || 0), 0);
+    zeroRatedAmount = items
+      .filter(item => item.zeroRated)
       .reduce((sum, item) => sum + (item.subtotal || 0), 0);
 
-    // Pro-rate the exempt amount against the discounted subtotal
+    // Pro-rate the exempt/zero-rated amounts against the discounted subtotal
     if (totalItemSubtotal > 0 && exemptAmount > 0) {
       const exemptRatio = exemptAmount / totalItemSubtotal;
       exemptAmount = Math.round(subtotalAfterDiscount * exemptRatio * 100) / 100;
     }
-    taxableAmount = Math.max(0, subtotalAfterDiscount - exemptAmount);
+    if (totalItemSubtotal > 0 && zeroRatedAmount > 0) {
+      const zeroRatedRatio = zeroRatedAmount / totalItemSubtotal;
+      zeroRatedAmount = Math.round(subtotalAfterDiscount * zeroRatedRatio * 100) / 100;
+    }
+    taxableAmount = Math.max(0, subtotalAfterDiscount - exemptAmount - zeroRatedAmount);
   }
 
   // Try to get tax rules from TaxRule model first
@@ -102,9 +112,9 @@ export async function calculateTax(
     for (const rule of taxRules) {
       let applies = false;
 
-      // Check if rule applies to this transaction (only non-exempt items)
-      const taxableItems = items.filter(item => !item.taxExempt);
-      if (taxableItems.length === 0) break; // All items are exempt
+      // Check if rule applies to this transaction (only non-exempt, non-zero-rated items)
+      const taxableItems = items.filter(item => !item.taxExempt && !item.zeroRated);
+      if (taxableItems.length === 0) break; // All items are exempt or zero-rated
 
       if (rule.appliesTo === 'all') {
         applies = true;
@@ -153,6 +163,7 @@ export async function calculateTax(
     taxLabel,
     taxableAmount: Math.round(taxableAmount * 100) / 100,
     exemptAmount: Math.round(exemptAmount * 100) / 100,
+    zeroRatedAmount: Math.round(zeroRatedAmount * 100) / 100,
   };
 }
 

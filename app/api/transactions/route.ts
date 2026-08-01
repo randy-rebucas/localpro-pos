@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import mongoose from 'mongoose';
 import connectDB from '@/lib/mongodb';
+import Tenant from '@/models/Tenant';
+import Device from '@/models/Device';
 import Transaction from '@/models/Transaction';
 import Payment from '@/models/Payment';
 import Product from '@/models/Product';
@@ -65,6 +67,9 @@ interface TransactionInput {
   discountCode?: string;
   branchId?: string;
   payments?: PaymentInput[];
+  scPwdName?: string;
+  scPwdId?: string;
+  deviceId?: string;
 }
 
 /** Persisted Payment.method — maps POS transaction methods to Payment enum. */
@@ -123,6 +128,7 @@ interface TransactionItemRecord {
   bundleId?: unknown;
   categoryId?: string;
   taxExempt?: boolean;
+  zeroRated?: boolean;
   modifiers?: Array<{ name: string; chosenOption: string; price: number }>;
 }
 
@@ -160,6 +166,7 @@ export async function GET(request: NextRequest) {
       .skip(skip)
       .populate('items.product', 'name')
       .populate('customerId', 'firstName lastName')
+      .populate('userId', 'name email')
       .lean();
 
     const total = await Transaction.countDocuments(txQuery);
@@ -217,7 +224,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { items, paymentMethod, cashReceived, notes, discountCode, branchId, payments } = data as unknown as TransactionInput;
+    const { items, paymentMethod, cashReceived, notes, discountCode, branchId, payments, scPwdName, scPwdId, deviceId } = data as unknown as TransactionInput;
     const customerId = body.customerId as string | undefined;
     if (customerId && !mongoose.Types.ObjectId.isValid(customerId)) {
       return NextResponse.json({ success: false, error: 'Invalid customer ID' }, { status: 400 });
@@ -508,6 +515,7 @@ export async function POST(request: NextRequest) {
           quantity: quantity,
           subtotal: itemSubtotal,
           taxExempt: product.taxExempt || false,
+          zeroRated: product.zeroRated || false,
           modifiers: itemModifiers || undefined,
         });
       }
@@ -598,13 +606,14 @@ export async function POST(request: NextRequest) {
 
     // Calculate tax (if applicable)
     let taxAmount = 0;
-    let taxResult: { taxAmount: number; taxRate: number; taxLabel: string; taxableAmount: number; exemptAmount: number } | null = null;
+    let taxResult: { taxAmount: number; taxRate: number; taxLabel: string; taxableAmount: number; exemptAmount: number; zeroRatedAmount: number } | null = null;
     if (typeof calculateTax === 'function') {
       const taxItems = transactionItems.map((item) => ({
         productId: item.product ? String(item.product) : undefined,
         productType: item.bundleId ? ('bundle' as const) : ('regular' as const),
         categoryId: item.categoryId ? item.categoryId.toString() : undefined,
         taxExempt: item.taxExempt || false,
+        zeroRated: item.zeroRated || false,
         subtotal: item.subtotal,
       }));
       taxResult = await calculateTax(tenantId, subtotalAfterDiscount, taxItems, tenantSettings ?? undefined, appliedDiscountCategory);
@@ -613,6 +622,16 @@ export async function POST(request: NextRequest) {
 
     // Calculate total after discount, tax, and loyalty redemption
     const total = Math.max(0, subtotalAfterDiscount + taxAmount - loyaltyDiscountAmount);
+
+    // Resolve the registered device/terminal (if any) and snapshot its identity onto the
+    // transaction, so receipts remain accurate even if the device is later renamed/deactivated.
+    let deviceSnapshot: { terminalId: string; deviceSerialNumber: string } | undefined;
+    if (deviceId && mongoose.Types.ObjectId.isValid(deviceId)) {
+      const device = await Device.findOne({ _id: deviceId, tenantId, isActive: true }).lean();
+      if (device) {
+        deviceSnapshot = { terminalId: device.terminalId, deviceSerialNumber: device.serialNumber };
+      }
+    }
 
     // Handle multiple payments (split payments)
     if (isMultiplePayments && effectivePayments) {
@@ -749,7 +768,10 @@ export async function POST(request: NextRequest) {
         discountCode: appliedDiscountCode,
         discountCategory: appliedDiscountCategory,
         discountAmount: discountAmount > 0 ? discountAmount : undefined,
+        scPwdName: (appliedDiscountCategory === 'senior' || appliedDiscountCategory === 'pwd') ? (scPwdName || undefined) : undefined,
+        scPwdId: (appliedDiscountCategory === 'senior' || appliedDiscountCategory === 'pwd') ? (scPwdId || undefined) : undefined,
         taxExemptAmount: taxResult?.exemptAmount || 0,
+        zeroRatedAmount: taxResult?.zeroRatedAmount || 0,
         taxAmount: taxAmount > 0 ? taxAmount : undefined,
         total,
         paymentMethod: storedPaymentMethod,
@@ -758,6 +780,9 @@ export async function POST(request: NextRequest) {
         status: 'completed' as const,
         customerId: customerId || undefined,
         userId: user.userId,
+        deviceId: deviceId && mongoose.Types.ObjectId.isValid(deviceId) ? deviceId : undefined,
+        terminalId: deviceSnapshot?.terminalId,
+        deviceSerialNumber: deviceSnapshot?.deviceSerialNumber,
         notes,
         orderType: orderType || undefined,
         tableNumber: tableNumber || undefined,
@@ -787,6 +812,14 @@ export async function POST(request: NextRequest) {
       if (!transaction) {
         throw new Error('Failed to create transaction after receipt number retries');
       }
+
+      // BIR Grand Total Accumulator: non-resettable, all-time cumulative sales register.
+      // Increments atomically with the transaction commit; never decremented on void/refund.
+      await Tenant.updateOne(
+        { _id: tenantId },
+        { $inc: { grandTotalSales: total, grandTotalTransactionCount: 1 } },
+        sessionOpts(session)
+      );
 
       for (const item of items) {
         const { productId, bundleId } = item;

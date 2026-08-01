@@ -242,8 +242,22 @@ export default function TransactionsPage() {
 
   const printReceipt = async (transaction: Transaction) => {
     if (!dict) return;
+    const settings = tenantSettings;
+    const isScPwd = transaction.discountCategory === 'senior' || transaction.discountCategory === 'pwd';
+    const taxEnabled = settings?.taxEnabled && settings?.taxRate;
+    const taxableBase = (transaction.subtotal ?? transaction.total) - (transaction.discountAmount || 0);
+    // SC/PWD transactions are fully VAT-exempt (RA 9994 / RA 10754) — never taxed
+    const taxAmount = isScPwd ? 0 : (taxEnabled ? taxableBase * (settings!.taxRate! / 100) : undefined);
+    const isVAT = !isScPwd && !!(taxEnabled && (settings?.taxLabel || '').toUpperCase().includes('VAT'));
+    const cashierName = typeof transaction.userId === 'object' ? transaction.userId?.name : undefined;
+
     const receiptData = {
-      storeName: tenantSettings?.companyName || dict.pos.receiptTitle || 'POS SYSTEM',
+      storeName: settings?.companyName || dict.pos.receiptTitle || 'POS SYSTEM',
+      address: settings?.address
+        ? [settings.address.street, settings.address.city, settings.address.state, settings.address.zipCode]
+          .filter(Boolean).join(', ')
+        : undefined,
+      phone: settings?.phone,
       receiptNumber: transaction.receiptNumber || transaction._id.slice(-8),
       date: formatDateForReceipt(transaction.createdAt),
       items: transaction.items.map((item) => ({
@@ -251,14 +265,38 @@ export default function TransactionsPage() {
         quantity: item.quantity,
         price: item.price,
         subtotal: item.subtotal,
+        taxable: isScPwd ? false : undefined,
       })),
       subtotal: transaction.subtotal ?? transaction.total,
       discount: transaction.discountAmount,
+      tax: taxAmount,
+      taxLabel: settings?.taxLabel,
+      taxRate: settings?.taxRate,
+      zeroRatedSales: transaction.zeroRatedAmount || 0,
       total: transaction.total,
       paymentMethod: transaction.paymentMethod,
       cashReceived: transaction.cashReceived,
       change: transaction.change,
       footer: dict.pos.thankYou || 'Thank you for your business!',
+      cashierName,
+      // BIR compliance
+      tin: settings?.birTin,
+      businessStyle: settings?.birBusinessStyle,
+      ptuNumber: settings?.birPtuNumber,
+      ptuDate: settings?.birPtuIssuedDate ? new Date(settings.birPtuIssuedDate).toLocaleDateString() : undefined,
+      ptuValidUntil: settings?.birPtuExpiryDate ? new Date(settings.birPtuExpiryDate).toLocaleDateString() : undefined,
+      minNumber: settings?.birMinNumber,
+      terminalSN: transaction.deviceSerialNumber || settings?.birTerminalSN,
+      terminalId: transaction.terminalId,
+      systemProvider: settings?.birSystemProvider,
+      accreditationNo: settings?.birAccreditationNo,
+      accreditationDate: settings?.birAccreditationDate ? new Date(settings.birAccreditationDate).toLocaleDateString() : undefined,
+      accreditationValidUntil: settings?.birAccreditationValidUntil ? new Date(settings.birAccreditationValidUntil).toLocaleDateString() : undefined,
+      isVAT,
+      // Senior Citizen / PWD discount block
+      scPwdName: isScPwd ? transaction.scPwdName : undefined,
+      scPwdId: isScPwd ? transaction.scPwdId : undefined,
+      scPwdDiscount: isScPwd ? transaction.discountAmount : undefined,
     };
     const success = await hardwareService.printReceipt(receiptData);
     if (!success) {

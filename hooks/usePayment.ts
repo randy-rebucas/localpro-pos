@@ -44,6 +44,9 @@ interface PaymentInputData {
   tableId?: string;
   splitCount?: number;
   splitPayments?: SplitPaymentEntry[];
+  scPwdName?: string;
+  scPwdId?: string;
+  deviceId?: string;
 }
 
 export interface PaymentResult {
@@ -74,7 +77,9 @@ interface UsePaymentReturn {
     fetchWithTimeout: (url: string, options?: RequestInit, timeoutMs?: number) => Promise<Response>,
     customerId?: string,
     restaurantMeta?: RestaurantMeta,
-    splitPayments?: SplitPaymentEntry[]
+    splitPayments?: SplitPaymentEntry[],
+    scPwd?: { name?: string; id?: string },
+    deviceId?: string
   ) => Promise<PaymentResult | null>;
 }
 
@@ -156,7 +161,9 @@ export function usePayment(): UsePaymentReturn {
       fetchWithTimeout: (url: string, options?: RequestInit, timeoutMs?: number) => Promise<Response>,
       customerId?: string,
       restaurantMeta?: RestaurantMeta,
-      splitPayments?: SplitPaymentEntry[]
+      splitPayments?: SplitPaymentEntry[],
+      scPwd?: { name?: string; id?: string },
+      deviceId?: string
     ): Promise<PaymentResult | null> => {
       // For split payments, use the first guest's method for validation; skip cash check
       const methodForValidation = splitPayments ? (splitPayments[0]?.method as PaymentMethodType ?? paymentMethod) : paymentMethod;
@@ -201,6 +208,9 @@ export function usePayment(): UsePaymentReturn {
           tableId: restaurantMeta?.tableId,
           splitCount: splitPayments ? splitPayments.length : undefined,
           splitPayments: splitPayments,
+          scPwdName: scPwd?.name || undefined,
+          scPwdId: scPwd?.id || undefined,
+          deviceId: deviceId || undefined,
         };
 
         const bodyPayload: Record<string, unknown> = { ...payload, customerId: customerId || undefined };

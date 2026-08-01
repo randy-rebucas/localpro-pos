@@ -36,6 +36,7 @@ import {
   syncMultiBranchData,
   detectSuspiciousActivity,
   analyzeSalesTrends,
+  generateSalesSummaryExport,
 } from './automations';
 import { logger } from '@/lib/logger';
 
@@ -469,6 +470,32 @@ export function initializeCronJobs() {
     timezone: 'UTC',
   });
 
+  // 31. BIR Sales Summary Export (daily) — Daily at 11 PM, after Z-Reading would typically run
+  const salesSummaryDailyJob = cron.schedule('0 23 * * *', async () => {
+    logger.info('📤 Running daily BIR sales summary export...');
+    try {
+      const result = await generateSalesSummaryExport({ period: 'daily' });
+      logger.info('✅ Daily sales summary export:' + result.message);
+    } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+      logger.error('❌ Daily sales summary export error:' + error.message);
+    }
+  }, {
+    timezone: 'UTC',
+  });
+
+  // 32. BIR Sales Summary Export (monthly) — 1st of month at 1 AM
+  const salesSummaryMonthlyJob = cron.schedule('0 1 1 * *', async () => {
+    logger.info('📤 Running monthly BIR sales summary export...');
+    try {
+      const result = await generateSalesSummaryExport({ period: 'monthly' });
+      logger.info('✅ Monthly sales summary export:' + result.message);
+    } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+      logger.error('❌ Monthly sales summary export error:' + error.message);
+    }
+  }, {
+    timezone: 'UTC',
+  });
+
   // Store jobs
   cronJobs = [
     bookingRemindersJob,
@@ -502,6 +529,8 @@ export function initializeCronJobs() {
     salesTrendDailyJob,
     salesTrendWeeklyJob,
     salesTrendMonthlyJob,
+    salesSummaryDailyJob,
+    salesSummaryMonthlyJob,
   ];
 
   // Start all jobs if enabled

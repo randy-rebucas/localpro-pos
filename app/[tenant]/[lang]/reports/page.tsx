@@ -10,8 +10,10 @@ import ReportsTabSkeleton from '@/components/reports/ReportsTabSkeleton';
 import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '../dictionaries-client';
 import Currency from '@/components/Currency';
+import { formatGrandTotalRegister } from '@/lib/bir-format';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import toast from 'react-hot-toast';
 import {
   useReportsData,
   type ReportTab,
@@ -21,6 +23,8 @@ import {
   type ProfitLossSummary,
   type CashDrawerReport,
   type SalesJournalData,
+  type XReadingData,
+  type ZReadingRecord,
 } from '@/hooks/useReportsData';
 import type { TranslationDict } from '@/types/dictionary';
 
@@ -49,6 +53,10 @@ export default function ReportsPage() {
     profitLoss,
     cashDrawerReports,
     salesJournal,
+    xReading,
+    zReadings,
+    generateZReading,
+    generatingZReading,
   } = useReportsData({
     tenant,
     activeTab,
@@ -104,6 +112,19 @@ export default function ReportsPage() {
       await downloadExcel(salesJournal.entries, headers, filename);
     } else {
       await downloadPDF(salesJournal.entries, headers, filename, 'Sales Journal');
+    }
+  };
+
+  const handleGenerateZReading = async () => {
+    const result = await generateZReading();
+    if (result.success) {
+      toast.success(
+        result.reprint
+          ? ((dict?.reports?.zReadingAlreadyGenerated as string | undefined) || 'Z-Reading already generated for today — showing existing record')
+          : ((dict?.reports?.zReadingGenerated as string | undefined) || 'Z-Reading generated')
+      );
+    } else {
+      toast.error(result.error || 'Failed to generate Z-Reading');
     }
   };
 
@@ -169,6 +190,22 @@ export default function ReportsPage() {
           <SalesJournalView data={salesJournal} dict={dict} primaryColor={primaryColor} onExport={exportSalesJournal} />
         ) : (
           renderEmptyState(reportsDict.noData || 'No sales journal data available for the selected period')
+        );
+      case 'x-reading':
+        return xReading ? (
+          <XReadingView data={xReading} dict={dict} primaryColor={primaryColor} />
+        ) : (
+          renderEmptyState(reportsDict.noData || 'No data available for the selected date')
+        );
+      case 'z-reading':
+        return (
+          <ZReadingView
+            readings={zReadings}
+            dict={dict}
+            primaryColor={primaryColor}
+            onGenerate={handleGenerateZReading}
+            generating={generatingZReading}
+          />
         );
       default:
         return null;
@@ -283,7 +320,7 @@ export default function ReportsPage() {
               <div className="bg-white border border-gray-300 overflow-hidden">
                 <div className="border-b border-gray-200">
                   <nav className="flex overflow-x-auto" aria-label={dict?.common?.tabs || 'Tabs'}>
-                    {(['sales', 'products', 'vat', 'profit-loss', 'cash-drawer', 'sales-journal'] as const).map((tab) => (
+                    {(['sales', 'products', 'vat', 'profit-loss', 'cash-drawer', 'sales-journal', 'x-reading', 'z-reading'] as const).map((tab) => (
                       <button
                         key={tab}
                         onClick={() => setActiveTab(tab)}
@@ -728,6 +765,107 @@ function CashDrawerReportView({ reports, dict }: { reports: CashDrawerReport[]; 
                 </td>
               </tr>
             ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function XReadingView({ data, dict, primaryColor }: { data: XReadingData; dict: any; primaryColor: string }) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  return (
+    <div className="space-y-6">
+      <p className="text-sm text-gray-500">
+        {dict.reports?.xReadingDesc || 'A repeatable shift/day sales summary. Does not reset or lock any totals — safe to run any time.'}
+      </p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
+        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: primaryColor }}>
+          <div className="font-semibold mb-2 uppercase tracking-wide text-xs sm:text-sm text-white/80">
+            {dict.reports?.grossSales || 'Gross Sales (Today)'}
+          </div>
+          <div className="text-2xl sm:text-3xl font-bold"><Currency amount={data.grossSales} /></div>
+        </div>
+        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: '#0f9d58' }}>
+          <div className="text-xs sm:text-sm text-white/80 font-semibold mb-2 uppercase tracking-wide">
+            {dict.reports?.totalTransactions || 'Transactions'}
+          </div>
+          <div className="text-2xl sm:text-3xl font-bold">{data.transactionCount}</div>
+        </div>
+        <div className="p-5 sm:p-6 text-white" style={{ backgroundColor: '#7a3fc9' }}>
+          <div className="text-xs sm:text-sm text-white/80 font-semibold mb-2 uppercase tracking-wide">
+            {dict.reports?.currentGrandTotal || 'Current Grand Total (all-time)'}
+          </div>
+          <div className="text-2xl sm:text-3xl font-bold"><Currency amount={data.currentGrandTotal} /></div>
+          <div className="text-xs text-white/70 font-mono mt-1">GT: {formatGrandTotalRegister(data.currentGrandTotal)}</div>
+        </div>
+      </div>
+      <div className="bg-white border border-gray-300 overflow-hidden">
+        <table className="min-w-full divide-y divide-gray-200">
+          <tbody className="divide-y divide-gray-200">
+            <tr><td className="px-6 py-3 text-sm text-gray-500">{dict.reports?.vatableSales || 'VATable Sales'}</td><td className="px-6 py-3 text-sm text-right text-gray-900"><Currency amount={data.vatableSales} /></td></tr>
+            <tr><td className="px-6 py-3 text-sm text-gray-500">{dict.reports?.vatAmount || 'VAT Amount'}</td><td className="px-6 py-3 text-sm text-right text-gray-900"><Currency amount={data.vatAmount} /></td></tr>
+            <tr><td className="px-6 py-3 text-sm text-gray-500">{dict.reports?.vatExemptSales || 'VAT-Exempt Sales'}</td><td className="px-6 py-3 text-sm text-right text-gray-900"><Currency amount={data.vatExemptSales} /></td></tr>
+            <tr><td className="px-6 py-3 text-sm text-gray-500">{dict.reports?.zeroRatedSales || 'Zero-Rated Sales'}</td><td className="px-6 py-3 text-sm text-right text-gray-900"><Currency amount={data.zeroRatedSales} /></td></tr>
+            <tr><td className="px-6 py-3 text-sm text-gray-500">{dict.reports?.totalDiscounts || 'Total Discounts'}</td><td className="px-6 py-3 text-sm text-right text-gray-900"><Currency amount={data.discountTotal} /></td></tr>
+            <tr><td className="px-6 py-3 text-sm text-gray-500">{dict.reports?.voidedTransactions || 'Voided/Refunded Transactions'}</td><td className="px-6 py-3 text-sm text-right text-gray-900">{data.voidCount}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function ZReadingView({ readings, dict, primaryColor, onGenerate, generating }: { readings: ZReadingRecord[]; dict: any; primaryColor: string; onGenerate: () => void; generating: boolean }) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  return (
+    <div className="space-y-6">
+      <div className="flex items-start justify-between gap-4">
+        <p className="text-sm text-gray-500 max-w-2xl">
+          {dict.reports?.zReadingDesc || 'The official end-of-day sales report. Generating one locks in today\'s totals against the Grand Total accumulator — only one can be generated per business day.'}
+        </p>
+        <button
+          onClick={onGenerate}
+          disabled={generating}
+          className="shrink-0 px-4 py-2 text-sm font-medium text-white transition-colors disabled:opacity-50"
+          style={{ backgroundColor: primaryColor }}
+        >
+          {generating ? (dict.common?.loading || 'Generating...') : (dict.reports?.generateZReading || 'Generate Z-Reading for Today')}
+        </button>
+      </div>
+      <div className="bg-white border border-gray-300 overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.reports?.date || 'Date'}</th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{dict.reports?.beginningGT || 'Beginning GT'}</th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{dict.reports?.endingGT || 'Ending GT'}</th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{dict.reports?.grossSales || 'Gross Sales'}</th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{dict.reports?.vatAmount || 'VAT'}</th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{dict.reports?.totalTransactions || 'Txns'}</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.reports?.generatedBy || 'Generated By'}</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {readings.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-500">
+                  {dict.reports?.noZReadings || 'No Z-Readings generated yet'}
+                </td>
+              </tr>
+            ) : (
+              readings.map((r) => (
+                <tr key={r._id}>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{new Date(r.businessDate).toLocaleDateString()}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-500"><Currency amount={r.beginningGT} /></td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900 font-medium"><Currency amount={r.endingGT} /></td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900"><Currency amount={r.grossSales} /></td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-500"><Currency amount={r.vatAmount} /></td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-500">{r.transactionCount}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                    {typeof r.generatedBy === 'object' ? r.generatedBy?.name : '-'}
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
