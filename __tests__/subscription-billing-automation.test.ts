@@ -13,10 +13,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // on the vitest thenable OOM bug).
 // ---------------------------------------------------------------------------
 
-vi.mock('@/lib/mongodb', () => ({
-  default: vi.fn().mockResolvedValue(undefined),
-}));
-
 vi.mock('@/lib/logger', () => ({
   logger: {
     error: vi.fn(),
@@ -25,35 +21,33 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-vi.mock('@/models/Subscription', () => ({
+vi.mock('@/lib/prisma', () => ({
   default: {
-    find: vi.fn(),
+    subscriptionPlan: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    subscription: {
+      findMany: vi.fn(),
+      update: vi.fn().mockResolvedValue({}),
+    },
+    tenant: {
+      findUnique: vi.fn(),
+      update: vi.fn().mockResolvedValue({}),
+    },
+    invoice: {
+      create: vi.fn().mockResolvedValue({ id: 'invoice-1' }),
+    },
+    billingEvent: {
+      create: vi.fn().mockResolvedValue({}),
+    },
   },
 }));
 
-vi.mock('@/models/SubscriptionPlan', () => ({
-  default: {
-    find: vi.fn(),
-  },
-}));
-
-vi.mock('@/models/Tenant', () => ({
-  default: {
-    findById: vi.fn(),
-    findByIdAndUpdate: vi.fn().mockResolvedValue(null),
-  },
-}));
-
-vi.mock('@/models/Invoice', () => ({
-  default: {
-    create: vi.fn().mockResolvedValue({ _id: 'invoice-1' }),
-  },
-}));
-
-vi.mock('@/models/BillingEvent', () => ({
-  default: {
-    create: vi.fn().mockResolvedValue({}),
-  },
+vi.mock('@/lib/db-transaction', () => ({
+  runInTransaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => {
+    const prisma = (await import('@/lib/prisma')).default;
+    return fn(prisma);
+  }),
 }));
 
 vi.mock('@/lib/receipt', () => ({
@@ -80,15 +74,16 @@ import { processSubscriptionBilling } from '@/lib/automations/subscription-billi
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const PLAN_DOC = {
-  _id: 'plan-1',
+  id: 'plan-1',
   name: 'Starter',
-  price: { monthly: 1000, currency: 'PHP', setupFee: 0 },
+  priceMonthly: 1000,
+  priceCurrency: 'PHP',
   reactivationFee: 500,
 };
 
 function makeSub(overrides: Record<string, unknown> = {}) {
   return {
-    _id: 'sub-1',
+    id: 'sub-1',
     tenantId: 'tenant-1',
     planId: 'plan-1',
     status: 'active',
@@ -97,28 +92,27 @@ function makeSub(overrides: Record<string, unknown> = {}) {
     nextBillingDate: new Date(),
     paymentOverdue: false,
     outstandingBalance: 0,
-    billingHistory: [] as Array<Record<string, unknown>>,
-    save: vi.fn().mockResolvedValue(undefined),
+    lastInvoiceGeneratedAt: undefined,
+    gracePeriodEndDate: undefined,
+    deactivatedAt: undefined,
+    lateFeeAppliedAt: undefined,
+    reactivationFeeAppliedAt: undefined,
     ...overrides,
   };
 }
 
 async function getMocks() {
-  const Subscription = (await import('@/models/Subscription')).default;
-  const SubscriptionPlan = (await import('@/models/SubscriptionPlan')).default;
-  const Tenant = (await import('@/models/Tenant')).default;
-  const Invoice = (await import('@/models/Invoice')).default;
-  const BillingEvent = (await import('@/models/BillingEvent')).default;
+  const prisma = (await import('@/lib/prisma')).default;
   const { sendEmail } = await import('@/lib/notifications');
-  return { Subscription, SubscriptionPlan, Tenant, Invoice, BillingEvent, sendEmail };
+  return { prisma, sendEmail };
 }
 
 /**
- * processSubscriptionBilling() calls Subscription.find() exactly 6 times in a
- * fixed sequential order (invoice generation, overdue flagging, reminder
- * window, deactivation, late fee, reactivation fee). Rather than replicate
- * Mongo's query matching semantics, we key off call order: give the step
- * under test its subscription(s), and empty arrays everywhere else.
+ * processSubscriptionBilling() calls prisma.subscription.findMany() exactly 6
+ * times in a fixed sequential order (invoice generation, overdue flagging,
+ * reminder window, deactivation, late fee, reactivation fee). Rather than
+ * replicate Prisma's query matching semantics, we key off call order: give
+ * the step under test its subscription(s), and empty arrays everywhere else.
  */
 function mockFindSequence(resultsByCallIndex: Record<number, unknown[]>) {
   let callIndex = 0;
@@ -128,21 +122,15 @@ function mockFindSequence(resultsByCallIndex: Record<number, unknown[]>) {
   });
 }
 
-function tenantFindByIdMock(name = 'Test Tenant') {
-  return vi.fn().mockReturnValue({
-    select: vi.fn().mockReturnValue({
-      lean: vi.fn().mockResolvedValue({ name }),
-    }),
-  });
+function tenantFindUniqueMock(name = 'Test Tenant') {
+  return vi.fn().mockResolvedValue({ name });
 }
 
 beforeEach(async () => {
   vi.clearAllMocks();
-  const { SubscriptionPlan, Tenant } = await getMocks();
-  vi.mocked(SubscriptionPlan.find).mockReturnValue({
-    lean: vi.fn().mockResolvedValue([PLAN_DOC]),
-  } as unknown as ReturnType<typeof SubscriptionPlan.find>);
-  vi.mocked(Tenant.findById).mockImplementation(tenantFindByIdMock());
+  const { prisma } = await getMocks();
+  vi.mocked(prisma.subscriptionPlan.findMany).mockResolvedValue([PLAN_DOC] as any);
+  vi.mocked(prisma.tenant.findUnique).mockImplementation(tenantFindUniqueMock());
 });
 
 // ---------------------------------------------------------------------------
@@ -150,43 +138,49 @@ beforeEach(async () => {
 // ---------------------------------------------------------------------------
 describe('processSubscriptionBilling — invoice generation', () => {
   it('generates an invoice and notifies the tenant when due within 3 days', async () => {
-    const { Subscription, Invoice, BillingEvent, sendEmail } = await getMocks();
+    const { prisma, sendEmail } = await getMocks();
     const sub = makeSub({
       nextBillingDate: new Date(Date.now() + 2 * DAY_MS),
       lastInvoiceGeneratedAt: undefined,
     });
-    vi.mocked(Subscription.find).mockImplementation(mockFindSequence({ 1: [sub] }));
+    vi.mocked(prisma.subscription.findMany).mockImplementation(mockFindSequence({ 1: [sub] }));
 
     const result = await processSubscriptionBilling();
 
     expect(result.details.invoicesGenerated).toBe(1);
-    expect(Invoice.create).toHaveBeenCalledTimes(1);
-    expect(Invoice.create).toHaveBeenCalledWith(
-      expect.objectContaining({ tenantId: 'tenant-1', total: 1000, status: 'sent' })
+    expect(prisma.invoice.create).toHaveBeenCalledTimes(1);
+    expect(prisma.invoice.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ tenantId: 'tenant-1', total: 1000, status: 'sent' }),
+      })
     );
-    expect(BillingEvent.create).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'invoice_generated', amount: 1000 })
+    expect(prisma.billingEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ type: 'invoice_generated', amount: 1000 }) })
     );
-    expect(sub.lastInvoiceGeneratedAt).toBeInstanceOf(Date);
-    expect(sub.save).toHaveBeenCalledTimes(1);
+    expect(prisma.subscription.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: sub.id },
+        data: expect.objectContaining({ lastInvoiceGeneratedAt: expect.any(Date) }),
+      })
+    );
     expect(sendEmail).toHaveBeenCalledWith(
       expect.objectContaining({ to: 'billing@test-tenant.com' })
     );
   });
 
   it('skips generating a second invoice for the same billing cycle', async () => {
-    const { Subscription, Invoice } = await getMocks();
+    const { prisma } = await getMocks();
     const nextBillingDate = new Date(Date.now() + 1 * DAY_MS);
     const sub = makeSub({
       nextBillingDate,
       lastInvoiceGeneratedAt: new Date(), // already generated today, within this cycle
     });
-    vi.mocked(Subscription.find).mockImplementation(mockFindSequence({ 1: [sub] }));
+    vi.mocked(prisma.subscription.findMany).mockImplementation(mockFindSequence({ 1: [sub] }));
 
     const result = await processSubscriptionBilling();
 
     expect(result.details.invoicesGenerated).toBe(0);
-    expect(Invoice.create).not.toHaveBeenCalled();
+    expect(prisma.invoice.create).not.toHaveBeenCalled();
   });
 });
 
@@ -195,22 +189,27 @@ describe('processSubscriptionBilling — invoice generation', () => {
 // ---------------------------------------------------------------------------
 describe('processSubscriptionBilling — overdue flagging', () => {
   it('flags payment overdue, starts a 7-day grace period, and notifies tenant + admin', async () => {
-    const { Subscription, BillingEvent, sendEmail } = await getMocks();
+    const { prisma, sendEmail } = await getMocks();
     const nextBillingDate = new Date(Date.now() - 1 * DAY_MS);
     const sub = makeSub({ nextBillingDate, paymentOverdue: false });
-    vi.mocked(Subscription.find).mockImplementation(mockFindSequence({ 2: [sub] }));
+    vi.mocked(prisma.subscription.findMany).mockImplementation(mockFindSequence({ 2: [sub] }));
 
     const result = await processSubscriptionBilling();
 
     expect(result.details.overdueFlagged).toBe(1);
-    expect(sub.paymentOverdue).toBe(true);
-    expect(sub.gracePeriodEndDate).toBeInstanceOf(Date);
-    expect((sub.gracePeriodEndDate as Date).getTime()).toBeCloseTo(
+    expect(prisma.subscription.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: sub.id },
+        data: expect.objectContaining({ paymentOverdue: true, gracePeriodEndDate: expect.any(Date) }),
+      })
+    );
+    const updateCall = vi.mocked(prisma.subscription.update).mock.calls[0][0] as any;
+    expect((updateCall.data.gracePeriodEndDate as Date).getTime()).toBeCloseTo(
       nextBillingDate.getTime() + 7 * DAY_MS,
       -3 // within ~1 second tolerance
     );
-    expect(BillingEvent.create).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'payment_overdue' })
+    expect(prisma.billingEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ type: 'payment_overdue' }) })
     );
 
     const emailRecipients = vi.mocked(sendEmail).mock.calls.map((call) => call[0].to);
@@ -224,18 +223,18 @@ describe('processSubscriptionBilling — overdue flagging', () => {
 // ---------------------------------------------------------------------------
 describe('processSubscriptionBilling — reminder window', () => {
   it('sends a final-notice reminder without changing subscription status', async () => {
-    const { Subscription, sendEmail } = await getMocks();
+    const { prisma, sendEmail } = await getMocks();
     const sub = makeSub({
       paymentOverdue: true,
       gracePeriodEndDate: new Date(Date.now() - 1 * DAY_MS), // within the +0..+3d reminder window
       deactivatedAt: undefined,
     });
-    vi.mocked(Subscription.find).mockImplementation(mockFindSequence({ 3: [sub] }));
+    vi.mocked(prisma.subscription.findMany).mockImplementation(mockFindSequence({ 3: [sub] }));
 
     const result = await processSubscriptionBilling();
 
     expect(result.details.remindersSent).toBe(1);
-    expect(sub.status).toBe('active'); // unchanged
+    expect(prisma.subscription.update).not.toHaveBeenCalled(); // status unchanged
     const emailRecipients = vi.mocked(sendEmail).mock.calls.map((call) => call[0].to);
     expect(emailRecipients).toContain('billing@test-tenant.com');
     expect(emailRecipients).toContain('admin@localpro.asia');
@@ -247,22 +246,29 @@ describe('processSubscriptionBilling — reminder window', () => {
 // ---------------------------------------------------------------------------
 describe('processSubscriptionBilling — deactivation', () => {
   it('suspends the subscription and deactivates the tenant after 10 days unpaid', async () => {
-    const { Subscription, Tenant, BillingEvent, sendEmail } = await getMocks();
+    const { prisma, sendEmail } = await getMocks();
     const sub = makeSub({
       paymentOverdue: true,
       gracePeriodEndDate: new Date(Date.now() - 4 * DAY_MS), // 3+ days past grace period end
       deactivatedAt: undefined,
     });
-    vi.mocked(Subscription.find).mockImplementation(mockFindSequence({ 4: [sub] }));
+    vi.mocked(prisma.subscription.findMany).mockImplementation(mockFindSequence({ 4: [sub] }));
 
     const result = await processSubscriptionBilling();
 
     expect(result.details.accountsDeactivated).toBe(1);
-    expect(sub.status).toBe('suspended');
-    expect(sub.deactivatedAt).toBeInstanceOf(Date);
-    expect(Tenant.findByIdAndUpdate).toHaveBeenCalledWith('tenant-1', { isActive: false });
-    expect(BillingEvent.create).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'account_deactivated' })
+    expect(prisma.subscription.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: sub.id },
+        data: expect.objectContaining({ status: 'suspended', deactivatedAt: expect.any(Date) }),
+      })
+    );
+    expect(prisma.tenant.update).toHaveBeenCalledWith({
+      where: { id: 'tenant-1' },
+      data: { isActive: false },
+    });
+    expect(prisma.billingEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ type: 'account_deactivated' }) })
     );
     const emailRecipients = vi.mocked(sendEmail).mock.calls.map((call) => call[0].to);
     expect(emailRecipients).toContain('billing@test-tenant.com');
@@ -275,24 +281,30 @@ describe('processSubscriptionBilling — deactivation', () => {
 // ---------------------------------------------------------------------------
 describe('processSubscriptionBilling — late fee', () => {
   it('adds a 10% late charge to the outstanding balance after 15 days unpaid', async () => {
-    const { Subscription, BillingEvent, sendEmail } = await getMocks();
+    const { prisma, sendEmail } = await getMocks();
     const sub = makeSub({
       paymentOverdue: true,
       nextBillingDate: new Date(Date.now() - 16 * DAY_MS),
       outstandingBalance: 0,
       lateFeeAppliedAt: undefined,
     });
-    vi.mocked(Subscription.find).mockImplementation(mockFindSequence({ 5: [sub] }));
+    vi.mocked(prisma.subscription.findMany).mockImplementation(mockFindSequence({ 5: [sub] }));
 
     const result = await processSubscriptionBilling();
 
     expect(result.details.lateFeesApplied).toBe(1);
-    expect(sub.outstandingBalance).toBe(100); // 10% of 1000
-    expect(sub.lateFeeAppliedAt).toBeInstanceOf(Date);
-    expect(sub.billingHistory).toHaveLength(1);
-    expect(sub.billingHistory[0]).toMatchObject({ amount: 100, status: 'pending' });
-    expect(BillingEvent.create).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'late_fee_applied', amount: 100 })
+    expect(prisma.subscription.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: sub.id },
+        data: expect.objectContaining({
+          outstandingBalance: 100, // 10% of 1000
+          lateFeeAppliedAt: expect.any(Date),
+          billingHistory: { create: expect.objectContaining({ amount: 100, status: 'pending' }) },
+        }),
+      })
+    );
+    expect(prisma.billingEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ type: 'late_fee_applied', amount: 100 }) })
     );
     // Late fee step only sends the internal admin alert, no tenant email
     const emailRecipients = vi.mocked(sendEmail).mock.calls.map((call) => call[0].to);
@@ -305,22 +317,29 @@ describe('processSubscriptionBilling — late fee', () => {
 // ---------------------------------------------------------------------------
 describe('processSubscriptionBilling — reactivation fee', () => {
   it('adds the plan reactivation fee to the outstanding balance after 30 days unpaid', async () => {
-    const { Subscription, BillingEvent, sendEmail } = await getMocks();
+    const { prisma, sendEmail } = await getMocks();
     const sub = makeSub({
       paymentOverdue: true,
       nextBillingDate: new Date(Date.now() - 31 * DAY_MS),
       outstandingBalance: 100, // e.g. a late fee already applied
       reactivationFeeAppliedAt: undefined,
     });
-    vi.mocked(Subscription.find).mockImplementation(mockFindSequence({ 6: [sub] }));
+    vi.mocked(prisma.subscription.findMany).mockImplementation(mockFindSequence({ 6: [sub] }));
 
     const result = await processSubscriptionBilling();
 
     expect(result.details.reactivationFeesApplied).toBe(1);
-    expect(sub.outstandingBalance).toBe(600); // 100 existing + 500 flat reactivation fee
-    expect(sub.reactivationFeeAppliedAt).toBeInstanceOf(Date);
-    expect(BillingEvent.create).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'reactivation_fee_applied', amount: 500 })
+    expect(prisma.subscription.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: sub.id },
+        data: expect.objectContaining({
+          outstandingBalance: 600, // 100 existing + 500 flat reactivation fee
+          reactivationFeeAppliedAt: expect.any(Date),
+        }),
+      })
+    );
+    expect(prisma.billingEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ type: 'reactivation_fee_applied', amount: 500 }) })
     );
     const emailRecipients = vi.mocked(sendEmail).mock.calls.map((call) => call[0].to);
     expect(emailRecipients).toEqual(['admin@localpro.asia']);
@@ -332,23 +351,23 @@ describe('processSubscriptionBilling — reactivation fee', () => {
 // ---------------------------------------------------------------------------
 describe('processSubscriptionBilling — per-item error isolation', () => {
   it('records an error for a failing subscription but still processes others', async () => {
-    const { Subscription, BillingEvent } = await getMocks();
+    const { prisma } = await getMocks();
     const failingSub = makeSub({
-      _id: 'sub-fail',
+      id: 'sub-fail',
       nextBillingDate: new Date(Date.now() - 1 * DAY_MS),
       paymentOverdue: false,
     });
     const okSub = makeSub({
-      _id: 'sub-ok',
+      id: 'sub-ok',
       tenantId: 'tenant-2',
       nextBillingDate: new Date(Date.now() - 1 * DAY_MS),
       paymentOverdue: false,
     });
 
-    vi.mocked(BillingEvent.create).mockImplementationOnce(() => {
+    vi.mocked(prisma.billingEvent.create).mockImplementationOnce(() => {
       throw new Error('simulated billing event failure');
     });
-    vi.mocked(Subscription.find).mockImplementation(
+    vi.mocked(prisma.subscription.findMany).mockImplementation(
       mockFindSequence({ 2: [failingSub, okSub] })
     );
 
@@ -359,6 +378,8 @@ describe('processSubscriptionBilling — per-item error isolation', () => {
     expect(result.errors.some((e) => e.includes('sub-fail'))).toBe(true);
     // The second subscription in the same batch should still be processed
     expect(result.details.overdueFlagged).toBe(1);
-    expect(okSub.paymentOverdue).toBe(true);
+    expect(prisma.subscription.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'sub-ok' }, data: expect.objectContaining({ paymentOverdue: true }) })
+    );
   });
 });

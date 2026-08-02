@@ -1,11 +1,11 @@
 /**
  * Script to create a new tenant
- * 
+ *
  * Usage:
  *   npx tsx scripts/create-tenant.ts <slug> <name> [options]
  *   npx tsx scripts/create-tenant.ts --interactive
  *   npx tsx scripts/create-tenant.ts  (runs in interactive mode automatically)
- * 
+ *
  * Options:
  *   --domain <domain>        Custom domain (optional)
  *   --subdomain <subdomain>  Subdomain (optional)
@@ -15,7 +15,7 @@
  *   --phone <phone>          Contact phone (optional)
  *   --company <name>         Company name (optional)
  *   --interactive            Interactive mode (prompts for all fields)
- * 
+ *
  * Examples:
  *   npx tsx scripts/create-tenant.ts my-store "My Store"
  *   npx tsx scripts/create-tenant.ts coffee-shop "Coffee Shop" --currency EUR --language es
@@ -31,13 +31,11 @@ dotenv.config({ path: resolve(process.cwd(), '.env.local') });
 // Also try .env as fallback
 dotenv.config({ path: resolve(process.cwd(), '.env') });
 
-import mongoose from 'mongoose';
-import Tenant from '../models/Tenant';
-import User from '../models/User';
+import prisma from '../lib/prisma';
+import { Prisma } from '@prisma/client';
+import { createUser } from '../lib/data/users';
 import { getDefaultTenantSettings } from '../lib/currency';
 import * as readline from 'readline';
-
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/pos-system';
 
 interface TenantInput {
   slug: string;
@@ -127,7 +125,7 @@ async function interactiveMode(): Promise<TenantInput> {
 // Parse command line arguments
 function parseArgs(): { input: TenantInput | null; interactive: boolean } {
   const args = process.argv.slice(2);
-  
+
   if (args.includes('--interactive') || args.includes('-i')) {
     return { input: null, interactive: true };
   }
@@ -191,16 +189,15 @@ function parseArgs(): { input: TenantInput | null; interactive: boolean } {
 // Create tenant
 async function createTenant(input: TenantInput) {
   try {
-    await mongoose.connect(MONGODB_URI);
-    console.log('✓ Connected to MongoDB\n');
-
     // Check if tenant already exists
-    const existing = await Tenant.findOne({ 
-      $or: [
-        { slug: input.slug },
-        ...(input.domain ? [{ domain: input.domain }] : []),
-        ...(input.subdomain ? [{ subdomain: input.subdomain }] : []),
-      ]
+    const existing = await prisma.tenant.findFirst({
+      where: {
+        OR: [
+          { slug: input.slug },
+          ...(input.domain ? [{ domain: input.domain }] : []),
+          ...(input.subdomain ? [{ subdomain: input.subdomain }] : []),
+        ],
+      },
     });
 
     if (existing) {
@@ -208,14 +205,12 @@ async function createTenant(input: TenantInput) {
       if (existing.slug === input.slug) console.log(`   - Slug: ${existing.slug}`);
       if (existing.domain === input.domain) console.log(`   - Domain: ${existing.domain}`);
       if (existing.subdomain === input.subdomain) console.log(`   - Subdomain: ${existing.subdomain}`);
-      await mongoose.disconnect();
       process.exit(1);
     }
 
     // Validate slug
     if (!validateSlug(input.slug)) {
       console.log('❌ Invalid slug format. Slug can only contain lowercase letters, numbers, and hyphens');
-      await mongoose.disconnect();
       process.exit(1);
     }
 
@@ -231,35 +226,37 @@ async function createTenant(input: TenantInput) {
     };
 
     // Create tenant
-    const tenantData: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
-      slug: input.slug,
-      name: input.name,
-      settings,
-      isActive: true,
-    };
-
-    if (input.domain) tenantData.domain = input.domain;
-    if (input.subdomain) tenantData.subdomain = input.subdomain;
-
-    const tenant = await Tenant.create(tenantData);
+    const tenant = await prisma.tenant.create({
+      data: {
+        slug: input.slug,
+        name: input.name,
+        settings,
+        isActive: true,
+        ...(input.domain && { domain: input.domain }),
+        ...(input.subdomain && { subdomain: input.subdomain }),
+      },
+    });
 
     // Automatically create admin user for the tenant
     const adminEmail = `admin@${tenant.slug}.local`;
     const adminPassword = `Admin${tenant.slug}123!`;
     let adminUser = null;
-    
+
     try {
-      adminUser = await User.create({
+      adminUser = await createUser({
         email: adminEmail,
         password: adminPassword,
         name: 'Administrator',
         role: 'admin',
-        tenantId: tenant._id,
+        tenantId: tenant.id,
         isActive: true,
       });
-    } catch (userError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.log('\n⚠️  Warning: Failed to create admin user:', userError.message);
+    } catch (userError) {
+      const message = userError instanceof Error ? userError.message : String(userError);
+      console.log('\n⚠️  Warning: Failed to create admin user:', message);
     }
+
+    const tenantSettings = tenant.settings as Record<string, unknown>;
 
     console.log('\n✅ Tenant created successfully!\n');
     console.log('Tenant Details:');
@@ -268,14 +265,14 @@ async function createTenant(input: TenantInput) {
     console.log(`  Name:        ${tenant.name}`);
     if (tenant.domain) console.log(`  Domain:      ${tenant.domain}`);
     if (tenant.subdomain) console.log(`  Subdomain:   ${tenant.subdomain}`);
-    console.log(`  Currency:    ${tenant.settings.currency}`);
-    console.log(`  Language:    ${tenant.settings.language}`);
-    if (tenant.settings.email) console.log(`  Email:       ${tenant.settings.email}`);
-    if (tenant.settings.phone) console.log(`  Phone:       ${tenant.settings.phone}`);
+    console.log(`  Currency:    ${tenantSettings.currency}`);
+    console.log(`  Language:    ${tenantSettings.language}`);
+    if (tenantSettings.email) console.log(`  Email:       ${tenantSettings.email}`);
+    if (tenantSettings.phone) console.log(`  Phone:       ${tenantSettings.phone}`);
     console.log(`  Active:      ${tenant.isActive ? 'Yes' : 'No'}`);
     console.log(`  Created:     ${tenant.createdAt}`);
     console.log('─────────────────────────────────────────────────\n');
-    
+
     if (adminUser) {
       console.log('✅ Admin User Created:');
       console.log('─────────────────────────────────────────────────');
@@ -285,26 +282,23 @@ async function createTenant(input: TenantInput) {
       console.log('─────────────────────────────────────────────────\n');
       console.log('⚠️  IMPORTANT: Please change the admin password after first login!\n');
     }
-    
+
     console.log('Next steps:');
-    console.log(`  1. Access your tenant at: http://localhost:3000/${tenant.slug}/${tenant.settings.language}`);
+    console.log(`  1. Access your tenant at: http://localhost:3000/${tenant.slug}/${tenantSettings.language}`);
     if (adminUser) {
       console.log(`  2. Login with admin credentials above`);
     } else {
       console.log(`  2. Create an admin user: npx tsx scripts/create-admin-user.ts ${tenant.slug} <email> <password> "<name>"`);
     }
-    console.log(`  3. Configure settings at: http://localhost:3000/${tenant.slug}/${tenant.settings.language}/settings\n`);
-
-    await mongoose.disconnect();
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('\n❌ Error creating tenant:', error.message);
-    
-    if (error.code === 11000) {
-      const field = Object.keys(error.keyPattern)[0];
-      console.error(`   Duplicate ${field}: ${error.keyValue[field]}`);
+    console.log(`  3. Configure settings at: http://localhost:3000/${tenant.slug}/${tenantSettings.language}/settings\n`);
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      const field = (error.meta?.target as string[] | undefined)?.[0] || 'field';
+      console.error(`\n❌ Error creating tenant: duplicate ${field}`);
+    } else {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('\n❌ Error creating tenant:', message);
     }
-    
-    await mongoose.disconnect();
     process.exit(1);
   }
 }
@@ -322,5 +316,4 @@ async function main() {
   }
 }
 
-main();
-
+main().finally(() => prisma.$disconnect());

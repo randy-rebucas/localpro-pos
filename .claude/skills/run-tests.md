@@ -14,7 +14,7 @@ Run the full test suite and interpret results.
 
 ## Adding a new test
 - Place file in `__tests__/` as `<name>.test.ts`
-- Import from `@/lib/...` or `@/models/...` using the `@` alias
+- Import from `@/lib/...` using the `@` alias
 - Set `process.env.*` vars at the top of the file before imports (see `__tests__/auth.test.ts` pattern)
-- Mock external services (MongoDB, JWT) with `vi.mock()`
+- Mock external services (`@/lib/prisma`, JWT) with `vi.mock()`
 - Use `describe/it/expect` — globals are enabled in `vitest.config.ts`

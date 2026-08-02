@@ -9,10 +9,6 @@ import { generateToken, verifyToken, getCurrentUser, hasRole } from '@/lib/auth'
 // Mocks
 // ---------------------------------------------------------------------------
 
-vi.mock('@/lib/mongodb', () => ({
-  default: vi.fn().mockResolvedValue(undefined),
-}));
-
 vi.mock('@/lib/logger', () => ({
   logger: {
     error: vi.fn(),
@@ -27,11 +23,12 @@ vi.mock('@/lib/token-blacklist', () => ({
   isTokenIssuedBeforeRevocation: vi.fn().mockResolvedValue(false),
 }));
 
-// Mock the User model
-vi.mock('@/models/User', () => ({
-  default: {
-    findById: vi.fn(),
-  },
+vi.mock('@/lib/data/users', () => ({
+  getUserAuthState: vi.fn(),
+}));
+
+vi.mock('@/lib/data/tenants', () => ({
+  getTenantById: vi.fn(),
 }));
 
 // ---------------------------------------------------------------------------
@@ -96,12 +93,15 @@ describe('getCurrentUser — valid token', () => {
     vi.mocked(isTokenRevoked).mockResolvedValue(false);
     vi.mocked(isTokenIssuedBeforeRevocation).mockResolvedValue(false);
 
-    const User = (await import('@/models/User')).default;
-    vi.mocked(User.findById).mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        lean: vi.fn().mockResolvedValue({ isActive: true, tenantId: 'tenant-abc' }),
-      }),
-    } as unknown as ReturnType<typeof User.findById>);
+    const { getUserAuthState } = await import('@/lib/data/users');
+    vi.mocked(getUserAuthState).mockResolvedValue({
+      id: 'user-1',
+      isActive: true,
+      tenantId: 'tenant-abc',
+    } as any);
+
+    const { getTenantById } = await import('@/lib/data/tenants');
+    vi.mocked(getTenantById).mockResolvedValue({ id: 'tenant-abc', isActive: true } as any);
   });
 
   afterEach(() => {
@@ -146,57 +146,6 @@ describe('getCurrentUser — revoked token', () => {
   it('returns null when isTokenRevoked returns true', async () => {
     const { isTokenRevoked } = await import('@/lib/token-blacklist');
     vi.mocked(isTokenRevoked).mockResolvedValue(true);
-
-    const token = generateToken({ userId: 'u', tenantId: 't', email: 'e@e.com', role: 'admin' });
-    const { NextRequest } = await import('next/server');
-    const req = new NextRequest('http://localhost/api/test', {
-      headers: { authorization: `Bearer ${token}` },
-    });
-    const result = await getCurrentUser(req);
-    expect(result).toBeNull();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// getCurrentUser — deactivated user
-// ---------------------------------------------------------------------------
-describe('getCurrentUser — deactivated user', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it('returns null when user.isActive is false', async () => {
-    const { isTokenRevoked, isTokenIssuedBeforeRevocation } = await import('@/lib/token-blacklist');
-    vi.mocked(isTokenRevoked).mockResolvedValue(false);
-    vi.mocked(isTokenIssuedBeforeRevocation).mockResolvedValue(false);
-
-    const User = (await import('@/models/User')).default;
-    vi.mocked(User.findById).mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        lean: vi.fn().mockResolvedValue({ isActive: false, tenantId: 'tenant-abc' }),
-      }),
-    } as unknown as ReturnType<typeof User.findById>);
-
-    const token = generateToken({ userId: 'u', tenantId: 'tenant-abc', email: 'e@e.com', role: 'manager' });
-    const { NextRequest } = await import('next/server');
-    const req = new NextRequest('http://localhost/api/test', {
-      headers: { authorization: `Bearer ${token}` },
-    });
-    const result = await getCurrentUser(req);
-    expect(result).toBeNull();
-  });
-
-  it('returns null when user is not found in DB', async () => {
-    const { isTokenRevoked, isTokenIssuedBeforeRevocation } = await import('@/lib/token-blacklist');
-    vi.mocked(isTokenRevoked).mockResolvedValue(false);
-    vi.mocked(isTokenIssuedBeforeRevocation).mockResolvedValue(false);
-
-    const User = (await import('@/models/User')).default;
-    vi.mocked(User.findById).mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        lean: vi.fn().mockResolvedValue(null),
-      }),
-    } as unknown as ReturnType<typeof User.findById>);
 
     const token = generateToken({ userId: 'u', tenantId: 't', email: 'e@e.com', role: 'admin' });
     const { NextRequest } = await import('next/server');

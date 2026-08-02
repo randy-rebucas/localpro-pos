@@ -75,35 +75,32 @@ import { resolve } from 'path';
 dotenv.config({ path: resolve(process.cwd(), '.env.local') });
 dotenv.config({ path: resolve(process.cwd(), '.env') });
 
-import mongoose from 'mongoose';
-import User from '../models/User';
-import Tenant from '../models/Tenant';
+import prisma from '../lib/prisma';
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/pos-system';
 const tenantSlug = process.argv[2] || 'default';
 
 async function resetAdminUsers() {
   try {
-    await mongoose.connect(MONGODB_URI);
-    console.log('Connected to MongoDB');
-    
-    const tenant = await Tenant.findOne({ slug: tenantSlug });
+    const tenant = await prisma.tenant.findFirst({ where: { slug: tenantSlug } });
     if (!tenant) {
       console.log('Tenant "' + tenantSlug + '" not found');
-      await mongoose.disconnect();
       process.exit(0);
     }
-    
-    const result = await User.deleteMany({ 
-      tenantId: tenant._id, 
-      role: { $in: ['admin', 'owner'] } 
+
+    const result = await prisma.user.deleteMany({
+      where: {
+        tenantId: tenant.id,
+        role: { in: ['admin', 'owner'] },
+      },
     });
-    
-    console.log('Deleted ' + result.deletedCount + ' admin user(s) for tenant "' + tenantSlug + '"');
-    await mongoose.disconnect();
-  } catch (error: any) {
-    console.error('Error resetting admin users:', error.message);
+
+    console.log('Deleted ' + result.count + ' admin user(s) for tenant "' + tenantSlug + '"');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('Error resetting admin users:', message);
     process.exit(1);
+  } finally {
+    await prisma.$disconnect();
   }
 }
 
@@ -221,8 +218,8 @@ async function install() {
         logInfo('Using .env.example as template');
       } else {
         // Create default .env.local
-        envContent = `# MongoDB Connection String
-MONGODB_URI=mongodb://localhost:27017/pos-system
+        envContent = `# PostgreSQL Connection String
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/localpro_pos?schema=public
 
 # JWT Authentication Secret (CHANGE THIS IN PRODUCTION!)
 JWT_SECRET=${generateJWTSecret()}
@@ -357,7 +354,7 @@ DEFAULT_TENANT_SLUG=default
     log('═══════════════════════════════════════════════════════', 'bright');
     console.log('');
     log('Next steps:', 'bright');
-    logInfo('1. Update .env.local with your MongoDB connection string');
+    logInfo('1. Update .env.local with your PostgreSQL connection string');
     logInfo('2. Create default tenant: npx tsx scripts/create-default-tenant.ts');
     logInfo('3. Create admin user (automatically resets existing admins):');
     logInfo('   node scripts/install.js --create-admin --email=admin@example.com --password=Admin123!');

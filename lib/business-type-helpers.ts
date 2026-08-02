@@ -6,7 +6,36 @@
 
 import { getBusinessTypeConfig, BusinessType, getAllowedProductTypes } from './business-types'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { ITenantSettings } from '@/types/tenant';
-import { IProduct } from '@/models/Product';
+
+export interface IProduct {
+  _id?: string;
+  name: string;
+  description?: string;
+  price: number;
+  productType: 'regular' | 'bundle' | 'service';
+  image?: string;
+  categoryId?: string;
+  sku?: string;
+  stock?: number | string;
+  trackInventory?: boolean;
+  allowOutOfStockSales?: boolean;
+  variations?: unknown;
+  branchStock?: unknown;
+  modifiers?: Array<{
+    name: string;
+    options: Array<{ name: string; price: number }>;
+    required: boolean;
+  }>;
+  allergens?: string[];
+  nutritionInfo?: { calories?: number; protein?: number; carbs?: number; fat?: number };
+  serviceType?: 'wash' | 'dry-clean' | 'press' | 'repair' | 'other';
+  weightBased?: boolean;
+  pickupDelivery?: boolean;
+  estimatedDuration?: number;
+  serviceDuration?: number;
+  staffRequired?: number;
+  equipmentRequired?: string[];
+}
 
 /**
  * Get business type from tenant settings

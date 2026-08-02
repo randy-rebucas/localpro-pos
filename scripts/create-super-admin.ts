@@ -15,10 +15,7 @@ import { resolve } from 'path';
 dotenv.config({ path: resolve(process.cwd(), '.env.local') });
 dotenv.config({ path: resolve(process.cwd(), '.env') });
 
-import mongoose from 'mongoose';
-import User from '../models/User';
-
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/pos-system';
+import prisma from '../lib/prisma';
 
 function parseArgs(): { email: string; password: string; name: string } {
   const args = process.argv.slice(2);
@@ -58,38 +55,39 @@ async function main() {
   console.log('  Create Super Admin');
   console.log('═══════════════════════════════════════\n');
 
-  await mongoose.connect(MONGODB_URI);
-  console.log('✓ Connected to MongoDB');
-
   // Check if super_admin with this email already exists
-  const existing = await User.findOne({ email: email.toLowerCase(), role: 'super_admin' });
+  const existing = await prisma.user.findFirst({
+    where: { email: email.toLowerCase(), role: 'super_admin' },
+  });
   if (existing) {
     console.error(`\n❌ A super_admin with email "${email}" already exists.`);
-    await mongoose.disconnect();
     process.exit(1);
   }
 
   // Create the super_admin user (no tenantId)
-  const user = new User({
-    email: email.toLowerCase(),
-    password,
-    name,
-    role: 'super_admin',
-    isActive: true,
-  });
+  const bcrypt = await import('bcryptjs');
+  const hashed = await bcrypt.hash(password, 10);
 
-  await user.save();
+  await prisma.user.create({
+    data: {
+      email: email.toLowerCase(),
+      password: hashed,
+      name,
+      role: 'super_admin',
+      isActive: true,
+    },
+  });
 
   console.log(`✓ Super admin created`);
   console.log(`  Email : ${email.toLowerCase()}`);
   console.log(`  Name  : ${name}`);
   console.log(`  Role  : super_admin`);
   console.log(`\n  Login URL: http://localhost:3000/super-admin/login\n`);
-
-  await mongoose.disconnect();
 }
 
-main().catch(err => {
-  console.error('Error:', err.message);
-  process.exit(1);
-});
+main()
+  .catch((err) => {
+    console.error('Error:', err.message);
+    process.exit(1);
+  })
+  .finally(() => prisma.$disconnect());

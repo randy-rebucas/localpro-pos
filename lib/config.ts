@@ -3,11 +3,6 @@
  */
 
 export const config = {
-  // Database
-  mongodb: {
-    uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/pos-system',
-  },
-
   // JWT
   jwt: {
     get secret() {
@@ -57,7 +52,7 @@ export function validateConfig(): void {
     return;
   }
 
-  const required = ['MONGODB_URI'];
+  const required = ['DATABASE_URL'];
   if (process.env.NODE_ENV === 'production') {
     required.push('JWT_SECRET', 'ALLOWED_ORIGINS');
   }

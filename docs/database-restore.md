@@ -1,6 +1,6 @@
 # Database Restore
 
-Full documentation for restoring a MongoDB database from a backup file — CLI, API, and the super-admin UI.
+Full documentation for restoring a PostgreSQL database (via Prisma) from a backup file — CLI, API, and the super-admin UI.
 
 See [database-backup.md](database-backup.md) for how backups are created and scheduled.
 
@@ -8,14 +8,14 @@ See [database-backup.md](database-backup.md) for how backups are created and sch
 
 ## Overview
 
-The restore system reads a JSON backup file (produced by `db:backup` or the automated nightly job) and inserts its documents back into MongoDB.
+The restore system reads a JSON backup file (produced by `db:backup` or the automated nightly job) and inserts its rows back into PostgreSQL via `prisma.<model>.createMany()`, one Prisma model at a time, ordered parent-before-child for foreign-key integrity (tenants and users first, join/detail tables last).
 
 **Two restore modes:**
 
 | Mode | Behaviour |
 |---|---|
-| **Merge** (default) | Backup documents are inserted alongside existing data. Documents whose `_id` already exists are silently skipped. |
-| **Clear + restore** (`--clear` / `clearExisting`) | Each target collection is emptied with `deleteMany({})` before inserting. The result is an exact copy of the backup. |
+| **Merge** (default) | Backup rows are inserted alongside existing data via `createMany({ skipDuplicates: true })`. Rows whose primary key already exists are silently skipped. |
+| **Clear + restore** (`--clear` / `clearExisting`) | Each target table is emptied with `deleteMany({})` before inserting. The result is an exact copy of the backup. |
 
 **Dry run** is available in all modes — it parses the file and shows what would be inserted without touching the database.
 
@@ -24,9 +24,9 @@ The restore system reads a JSON backup file (produced by `db:backup` or the auto
 ## Before You Restore
 
 1. **Create a fresh backup first.** If you are restoring to fix bad data, back up the current state before overwriting it so you have a fallback.
-2. **Use dry run.** Run with `--dry-run` to see how many documents would be inserted per collection before committing.
+2. **Use dry run.** Run with `--dry-run` to see how many rows would be inserted per table before committing.
 3. **Consider `--clear` carefully.** Clear mode permanently deletes live data. It is appropriate for a point-in-time rollback; merge mode is safer for partial recovery.
-4. **Check the backup file format.** The restore script supports both the flat format `{ collectionName: [...] }` and the wrapped format `{ collections: { ... } }` produced by newer versions of the backup system.
+4. **Check the backup file format.** The restore engine supports both the flat format `{ modelName: [...] }` and the wrapped format `{ collections: { ... } }` produced by newer versions of the backup system.
 
 ---
 
@@ -41,9 +41,9 @@ npm run db:restore -- --file=<path> [options]
 | Flag | Description |
 |---|---|
 | `--file=<path>` | Path to the backup JSON file. Required. Relative to the project root or absolute. |
-| `--clear` | Delete all documents in each restored collection before inserting. |
-| `--collections=<names>` | Comma-separated list of collections to restore. Omit to restore all. |
-| `--dry-run` | Parse the file and print document counts. No database writes. |
+| `--clear` | Delete all rows in each restored table before inserting. |
+| `--collections=<names>` | Comma-separated list of models (Prisma accessor names, e.g. `product`, `offlineTransaction`) to restore. Omit to restore all. |
+| `--dry-run` | Parse the file and print row counts. No database writes. |
 | `--force` | Skip the confirmation prompt. Useful in CI/CD pipelines. |
 
 ### Examples
@@ -52,13 +52,13 @@ npm run db:restore -- --file=<path> [options]
 # Restore everything (prompts for confirmation)
 npm run db:restore -- --file=backups/backup-2026-06-16T02-00-00-000Z.json
 
-# Clean restore — wipe collections, then insert backup
+# Clean restore — wipe tables, then insert backup
 npm run db:restore -- --file=backups/backup-2026-06-16T02-00-00-000Z.json --clear
 
 # Preview what would be restored (no writes)
 npm run db:restore -- --file=backups/backup-2026-06-16T02-00-00-000Z.json --dry-run
 
-# Restore only specific collections
+# Restore only specific models
 npm run db:restore -- \
   --file=backups/backup-2026-06-16T02-00-00-000Z.json \
   --collections=products,customers,categories
@@ -77,7 +77,7 @@ Database Restore
 File:        /app/backups/backup-2026-06-16T02-00-00-000Z.json
 Size:        12.45 MB
 Clear first: No (merge/upsert)
-Collections: all
+Models:      all
 Dry run:     No
 
 Proceed with restore? (yes/no): yes
@@ -85,7 +85,7 @@ Proceed with restore? (yes/no): yes
 Connecting to database...
 Connected.
 
-Restoring 18 collection(s)...
+Restoring 18 model(s)...
 
   products                       1,234 inserted
   transactions                  18,903 inserted
@@ -126,7 +126,7 @@ Use this when the backup file is already on the server (i.e., it appears in the 
 {
   "filename": "backup-2026-06-16T02-00-00-000Z.json",
   "clearExisting": false,
-  "collections": ["products", "customers"],
+  "collections": ["product", "customer"],
   "dryRun": false
 }
 ```
@@ -134,8 +134,8 @@ Use this when the backup file is already on the server (i.e., it appears in the 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `filename` | string | Yes | Name of the file in the `./backups/` directory. Path traversal is blocked. |
-| `clearExisting` | boolean | No | Delete collection documents before inserting. Default: `false`. |
-| `collections` | string[] | No | Restore only these collections. Omit to restore all. |
+| `clearExisting` | boolean | No | Delete table rows before inserting. Default: `false`. |
+| `collections` | string[] | No | Restore only these models (Prisma accessor names). Omit to restore all. |
 | `dryRun` | boolean | No | Count without writing. Default: `false`. |
 
 ### Mode 2 — restore from an uploaded file
@@ -148,7 +148,7 @@ Use this when you have a backup file on your local machine that is not on the se
 |---|---|---|---|
 | `file` | File | Yes | The `.json` backup file. |
 | `clearExisting` | string | No | `"true"` or `"false"`. Default: `"false"`. |
-| `collections` | string | No | Comma-separated collection names. |
+| `collections` | string | No | Comma-separated model (Prisma accessor) names. |
 | `dryRun` | string | No | `"true"` or `"false"`. Default: `"false"`. |
 
 ```sh
@@ -165,13 +165,13 @@ curl -X POST https://your-domain.com/api/super-admin/backups/restore \
 ```json
 {
   "success": true,
-  "message": "Restored 38471 documents across 18 collection(s)",
+  "message": "Restored 38471 record(s) across 18 model(s)",
   "dryRun": false,
   "collections": {
-    "products":     { "inserted": 1234,  "cleared": 0 },
-    "transactions": { "inserted": 18903, "cleared": 0 },
-    "customers":    { "inserted": 3201,  "cleared": 0 },
-    "auditlogs":    { "inserted": 0,     "cleared": 0, "skipped": true }
+    "product":     { "inserted": 1234,  "cleared": 0 },
+    "transaction": { "inserted": 18903, "cleared": 0 },
+    "customer":    { "inserted": 3201,  "cleared": 0 },
+    "auditLog":    { "inserted": 0,     "cleared": 0, "skipped": true }
   },
   "errors": []
 }
@@ -181,10 +181,10 @@ curl -X POST https://your-domain.com/api/super-admin/backups/restore \
 |---|---|
 | `success` | `false` if a fatal error occurred before any writes. Partial success returns `true` with entries in `errors`. |
 | `dryRun` | Mirrors the request flag. |
-| `collections[name].inserted` | Documents inserted (or that would be inserted in dry-run mode). |
-| `collections[name].cleared` | Documents deleted before insert (only non-zero when `clearExisting: true`). |
-| `collections[name].skipped` | `true` if the collection was not present in the backup file. |
-| `errors` | Per-chunk insert warnings (e.g., duplicate key errors when merging). Does not abort the operation. |
+| `collections[name].inserted` | Rows inserted (or that would be inserted in dry-run mode). |
+| `collections[name].cleared` | Rows deleted before insert (only non-zero when `clearExisting: true`). |
+| `collections[name].skipped` | `true` if the model was not present in the backup file, or is unknown. |
+| `errors` | Per-chunk insert warnings (e.g., unique constraint conflicts when merging). Does not abort the operation. |
 
 **Error response (fatal):**
 

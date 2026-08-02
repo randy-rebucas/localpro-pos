@@ -21,24 +21,13 @@ import { resolve } from 'path';
 dotenv.config({ path: resolve(process.cwd(), '.env.local') });
 dotenv.config({ path: resolve(process.cwd(), '.env') });
 
-import mongoose from 'mongoose';
-import Tenant          from '../models/Tenant';
-import User            from '../models/User';
-import Branch          from '../models/Branch';
-import Category        from '../models/Category';
-import Product         from '../models/Product';
-import Customer        from '../models/Customer';
-import Discount        from '../models/Discount';
-import Transaction     from '../models/Transaction';
-import StockMovement   from '../models/StockMovement';
-import CashDrawerSession from '../models/CashDrawerSession';
-import Expense         from '../models/Expense';
-import Attendance      from '../models/Attendance';
+import prisma from '../lib/prisma';
+import { Prisma } from '@prisma/client';
+import { createUser } from '../lib/data/users';
 import { getDefaultTenantSettings } from '../lib/currency';
 import { applyBusinessTypeDefaults } from '../lib/business-types';
 
 // ── Config ──────────────────────────────────────────────────────────────────
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/pos-system';
 const FORCE       = process.argv.includes('--force');
 const TYPE_ARG    = process.argv.find(a => a.startsWith('--type='))?.split('=')[1];
 const TENANT_ARG  = process.argv.find(a => a.startsWith('--tenant='))?.split('=')[1];
@@ -71,7 +60,7 @@ interface SeedTenantConfig {
   adminEmail:   string;
   adminPassword:string;
   categories:   { name: string; description: string }[];
-  products:     Partial<mongoose.Document & Record<string, any>>[]; // eslint-disable-line @typescript-eslint/no-explicit-any
+  products:     Record<string, any>[]; // eslint-disable-line @typescript-eslint/no-explicit-any
   customers:    { firstName: string; lastName: string; email?: string; phone?: string; tags?: string[] }[];
   discounts:    {
     code: string; name: string; type: 'percentage' | 'fixed';
@@ -332,23 +321,23 @@ const SEED_CONFIGS: SeedTenantConfig[] = [
 //  Seeder Functions
 // ════════════════════════════════════════════════════════════════════════════
 
-async function seedTenant(cfg: SeedTenantConfig, existingTenantId?: mongoose.Types.ObjectId) {
+async function seedTenant(cfg: SeedTenantConfig, existingTenantId?: string) {
   hdr(`▶  ${cfg.businessType.toUpperCase()}  —  ${cfg.companyName}`);
 
-  let tenantId: mongoose.Types.ObjectId;
+  let tenantId: string;
 
   // ── Tenant ───────────────────────────────────────────────────────────────
   if (existingTenantId) {
     tenantId = existingTenantId;
     ok(`Using existing tenant  (${cfg.slug})`);
   } else {
-    const existing = await Tenant.findOne({ slug: cfg.slug });
+    const existing = await prisma.tenant.findFirst({ where: { slug: cfg.slug } });
     if (existing) {
       if (!FORCE) {
         skip(`Tenant "${cfg.slug}" already exists — skipping (use --force to re-seed)`);
         return;
       }
-      tenantId = existing._id as mongoose.Types.ObjectId;
+      tenantId = existing.id;
       warn(`Tenant "${cfg.slug}" exists — will overwrite data (--force)`);
     } else {
       const baseSettings = getDefaultTenantSettings();
@@ -363,22 +352,26 @@ async function seedTenant(cfg: SeedTenantConfig, existingTenantId?: mongoose.Typ
         cfg.businessType,
       );
 
-      const tenant = await Tenant.create({
-        slug:     cfg.slug,
-        name:     cfg.name,
-        isActive: true,
-        settings,
+      const tenant = await prisma.tenant.create({
+        data: {
+          slug:     cfg.slug,
+          name:     cfg.name,
+          isActive: true,
+          settings,
+        },
       });
-      tenantId = tenant._id as mongoose.Types.ObjectId;
+      tenantId = tenant.id;
       ok(`Created tenant  "${cfg.slug}"`);
     }
   }
 
   // ── Admin User ───────────────────────────────────────────────────────────
-  const existingAdmin = await User.findOne({ email: cfg.adminEmail.toLowerCase(), tenantId });
+  const existingAdmin = await prisma.user.findFirst({
+    where: { email: cfg.adminEmail.toLowerCase(), tenantId },
+  });
   if (!existingAdmin) {
-    await User.create({
-      email:    cfg.adminEmail.toLowerCase(),
+    await createUser({
+      email:    cfg.adminEmail,
       password: cfg.adminPassword,
       name:     'Admin',
       role:     'admin',
@@ -391,13 +384,15 @@ async function seedTenant(cfg: SeedTenantConfig, existingTenantId?: mongoose.Typ
   }
 
   // ── Branch ───────────────────────────────────────────────────────────────
-  const existingBranch = await Branch.findOne({ tenantId });
+  const existingBranch = await prisma.branch.findFirst({ where: { tenantId } });
   if (!existingBranch) {
-    await Branch.create({
-      tenantId,
-      name:   'Main Branch',
-      code:   'BR001',
-      isActive: true,
+    await prisma.branch.create({
+      data: {
+        tenantId,
+        name:   'Main Branch',
+        code:   'BR001',
+        isActive: true,
+      },
     });
     ok('Created branch  "Main Branch"');
   } else {
@@ -405,16 +400,16 @@ async function seedTenant(cfg: SeedTenantConfig, existingTenantId?: mongoose.Typ
   }
 
   // ── Categories ───────────────────────────────────────────────────────────
-  const categoryMap: Record<string, mongoose.Types.ObjectId> = {};
+  const categoryMap: Record<string, string> = {};
   let catCreated = 0;
 
   for (const catDef of cfg.categories) {
-    const existing = await Category.findOne({ tenantId, name: catDef.name });
+    const existing = await prisma.category.findFirst({ where: { tenantId, name: catDef.name } });
     if (existing) {
-      categoryMap[catDef.name] = existing._id as mongoose.Types.ObjectId;
+      categoryMap[catDef.name] = existing.id;
     } else {
-      const cat = await Category.create({ ...catDef, tenantId, isActive: true });
-      categoryMap[catDef.name] = cat._id as mongoose.Types.ObjectId;
+      const cat = await prisma.category.create({ data: { ...catDef, tenantId, isActive: true } });
+      categoryMap[catDef.name] = cat.id;
       catCreated++;
     }
   }
@@ -424,17 +419,20 @@ async function seedTenant(cfg: SeedTenantConfig, existingTenantId?: mongoose.Typ
   let prodCreated = 0;
   for (const prodDef of cfg.products) {
     const catName = prodDef.category as string;
-    const { category: _catName, ...rest } = prodDef;
+    const { category: _catName, stock, ...rest } = prodDef;
 
-    const existingProd = await Product.findOne({ tenantId, name: rest.name });
+    const existingProd = await prisma.product.findFirst({ where: { tenantId, name: rest.name } });
     if (existingProd && !FORCE) continue;
-    if (existingProd && FORCE) await Product.deleteOne({ _id: existingProd._id });
+    if (existingProd && FORCE) await prisma.product.delete({ where: { id: existingProd.id } });
 
-    await Product.create({
-      ...rest,
-      tenantId,
-      categoryId: categoryMap[catName],
-      category:   catName,
+    await prisma.product.create({
+      data: {
+        ...rest,
+        stock: BigInt(stock ?? 0),
+        tenantId,
+        categoryId: categoryMap[catName],
+        category:   catName,
+      } as Prisma.ProductUncheckedCreateInput,
     });
     prodCreated++;
   }
@@ -443,15 +441,13 @@ async function seedTenant(cfg: SeedTenantConfig, existingTenantId?: mongoose.Typ
   // ── Customers ────────────────────────────────────────────────────────────
   let custCreated = 0;
   for (const cust of cfg.customers) {
-    const existing = await Customer.findOne({
-      tenantId,
-      firstName: cust.firstName,
-      lastName:  cust.lastName,
+    const existing = await prisma.customer.findFirst({
+      where: { tenantId, firstName: cust.firstName, lastName: cust.lastName },
     });
     if (existing && !FORCE) continue;
-    if (existing && FORCE) await Customer.deleteOne({ _id: existing._id });
+    if (existing && FORCE) await prisma.customer.delete({ where: { id: existing.id } });
 
-    await Customer.create({ ...cust, tenantId, isActive: true });
+    await prisma.customer.create({ data: { ...cust, tenantId, isActive: true } });
     custCreated++;
   }
   ok(`Customers   — ${custCreated} created`);
@@ -462,46 +458,49 @@ async function seedTenant(cfg: SeedTenantConfig, existingTenantId?: mongoose.Typ
   const oneYear = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate());
 
   for (const discDef of cfg.discounts) {
-    const existing = await Discount.findOne({ tenantId, code: discDef.code.toUpperCase() });
+    const code = discDef.code.toUpperCase();
+    const existing = await prisma.discount.findFirst({ where: { tenantId, code } });
     if (existing && !FORCE) continue;
-    if (existing && FORCE) await Discount.deleteOne({ _id: existing._id });
+    if (existing && FORCE) await prisma.discount.delete({ where: { id: existing.id } });
 
-    await Discount.create({
-      ...discDef,
-      tenantId,
-      code:       discDef.code.toUpperCase(),
-      usageCount: 0,
-      isActive:   true,
-      validFrom:  now,
-      validUntil: oneYear,
+    await prisma.discount.create({
+      data: {
+        ...discDef,
+        tenantId,
+        code,
+        usageCount: 0,
+        isActive:   true,
+        validFrom:  now,
+        validUntil: oneYear,
+      },
     });
     discCreated++;
   }
   ok(`Discounts   — ${discCreated} created`);
 
   // ── Gather seeded IDs for relational data ────────────────────────────────
-  const branch = await Branch.findOne({ tenantId });
-  const branchId = branch?._id as mongoose.Types.ObjectId | undefined;
-  const adminUser = await User.findOne({ tenantId });
-  const userId = adminUser?._id as mongoose.Types.ObjectId;
-  const allProducts = await Product.find({ tenantId }).lean();
-  const trackedProducts = allProducts.filter((p: any) => p.trackInventory); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const branch = await prisma.branch.findFirst({ where: { tenantId } });
+  const branchId = branch?.id;
+  const adminUser = await prisma.user.findFirst({ where: { tenantId } });
+  const userId = adminUser?.id;
+  const allProducts = await prisma.product.findMany({ where: { tenantId } });
+  const trackedProducts = allProducts.filter((p) => p.trackInventory);
 
   // ── Transactions ─────────────────────────────────────────────────────────
-  const existingTxCount = await Transaction.countDocuments({ tenantId });
+  const existingTxCount = await prisma.transaction.count({ where: { tenantId } });
   if (existingTxCount > 0 && !FORCE) {
     skip(`Transactions  — ${existingTxCount} already exist`);
   } else {
-    if (FORCE) await Transaction.deleteMany({ tenantId });
+    if (FORCE) await prisma.transaction.deleteMany({ where: { tenantId } });
 
     const paymentMethods: ('cash' | 'card' | 'digital')[] = ['cash', 'card', 'digital'];
-    const now = new Date();
+    const nowTx = new Date();
     let txCreated = 0;
 
     // Generate 15 transactions spread over the last 30 days
     for (let i = 0; i < 15; i++) {
       const daysAgo = Math.floor(Math.random() * 30);
-      const txDate = new Date(now);
+      const txDate = new Date(nowTx);
       txDate.setDate(txDate.getDate() - daysAgo);
       txDate.setHours(9 + Math.floor(Math.random() * 9), Math.floor(Math.random() * 60));
 
@@ -510,37 +509,38 @@ async function seedTenant(cfg: SeedTenantConfig, existingTenantId?: mongoose.Typ
       const picked = [...allProducts].sort(() => 0.5 - Math.random()).slice(0, Math.min(itemCount, allProducts.length));
       if (picked.length === 0) break;
 
-      const items = picked.map((p: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+      const items = picked.map((p) => {
         const qty = 1 + Math.floor(Math.random() * 3);
-        const price = p.price as number;
+        const price = Number(p.price);
         return {
-          productId: p._id,
+          productId: p.id,
           name:      p.name,
           price,
           quantity:  qty,
-          total:     price * qty,
+          subtotal:  price * qty,
         };
       });
 
-      const subtotal = items.reduce((s: number, it: any) => s + it.total, 0); // eslint-disable-line @typescript-eslint/no-explicit-any
+      const subtotal = items.reduce((s, it) => s + it.subtotal, 0);
       const tax      = Math.round(subtotal * 0.12 * 100) / 100;
       const total    = Math.round((subtotal + tax) * 100) / 100;
       const payment  = paymentMethods[i % 3];
 
-      await Transaction.create({
-        tenantId,
-        branchId,
-        items,
-        subtotal,
-        tax,
-        discount: 0,
-        total,
-        paymentMethod: payment,
-        amountPaid:    total,
-        change:        0,
-        status:        'completed',
-        userId,
-        createdAt:     txDate,
+      await prisma.transaction.create({
+        data: {
+          tenantId,
+          branchId,
+          subtotal,
+          taxAmount: tax,
+          total,
+          paymentMethod: payment,
+          cashReceived:  total,
+          change:        0,
+          status:        'completed',
+          userId,
+          createdAt:     txDate,
+          items: { create: items },
+        },
       });
       txCreated++;
     }
@@ -548,42 +548,46 @@ async function seedTenant(cfg: SeedTenantConfig, existingTenantId?: mongoose.Typ
   }
 
   // ── Stock Movements ───────────────────────────────────────────────────────
-  const existingSmCount = await StockMovement.countDocuments({ tenantId });
+  const existingSmCount = await prisma.stockMovement.count({ where: { tenantId } });
   if (existingSmCount > 0 && !FORCE) {
     skip(`Stock Movements — ${existingSmCount} already exist`);
   } else {
-    if (FORCE) await StockMovement.deleteMany({ tenantId });
+    if (FORCE) await prisma.stockMovement.deleteMany({ where: { tenantId } });
     let smCreated = 0;
 
-    for (const p of trackedProducts as any[]) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      const initialStock = (p.stock as number) || 50;
+    for (const p of trackedProducts) {
+      const initialStock = Number(p.stock) || 50;
 
       // Opening purchase movement
-      await StockMovement.create({
-        productId:     p._id,
-        tenantId,
-        branchId,
-        type:          'purchase',
-        quantity:      initialStock,
-        previousStock: 0,
-        newStock:      initialStock,
-        reason:        'Initial stock purchase',
-        userId,
+      await prisma.stockMovement.create({
+        data: {
+          productId:     p.id,
+          tenantId,
+          branchId,
+          type:          'purchase',
+          quantity:      initialStock,
+          previousStock: 0,
+          newStock:      initialStock,
+          reason:        'Initial stock purchase',
+          userId,
+        },
       });
       smCreated++;
 
       // A few sale reductions
       const salesQty = 1 + Math.floor(Math.random() * 5);
-      await StockMovement.create({
-        productId:     p._id,
-        tenantId,
-        branchId,
-        type:          'sale',
-        quantity:      salesQty,
-        previousStock: initialStock,
-        newStock:      initialStock - salesQty,
-        reason:        'Sample sale',
-        userId,
+      await prisma.stockMovement.create({
+        data: {
+          productId:     p.id,
+          tenantId,
+          branchId,
+          type:          'sale',
+          quantity:      salesQty,
+          previousStock: initialStock,
+          newStock:      initialStock - salesQty,
+          reason:        'Sample sale',
+          userId,
+        },
       });
       smCreated++;
     }
@@ -591,101 +595,109 @@ async function seedTenant(cfg: SeedTenantConfig, existingTenantId?: mongoose.Typ
   }
 
   // ── Cash Drawer Sessions ──────────────────────────────────────────────────
-  const existingCdCount = await CashDrawerSession.countDocuments({ tenantId });
-  if (existingCdCount > 0 && !FORCE) {
-    skip(`Cash Drawer   — ${existingCdCount} sessions already exist`);
-  } else {
-    if (FORCE) await CashDrawerSession.deleteMany({ tenantId });
-    const today = new Date();
+  if (userId) {
+    const existingCdCount = await prisma.cashDrawerSession.count({ where: { tenantId } });
+    if (existingCdCount > 0 && !FORCE) {
+      skip(`Cash Drawer   — ${existingCdCount} sessions already exist`);
+    } else {
+      if (FORCE) await prisma.cashDrawerSession.deleteMany({ where: { tenantId } });
+      const today = new Date();
 
-    // Last 5 days — closed sessions + 1 open today
-    for (let d = 4; d >= 0; d--) {
-      const day = new Date(today);
-      day.setDate(day.getDate() - d);
-      const openedAt  = new Date(day.setHours(8, 0, 0, 0));
-      const closedAt  = d === 0 ? undefined : new Date(new Date(openedAt).setHours(18, 0, 0, 0));
-      const opening   = 1000 + Math.round(Math.random() * 1000);
-      const cashSales = 500  + Math.round(Math.random() * 2000);
-      const closing   = closedAt ? opening + cashSales - Math.round(Math.random() * 200) : undefined;
+      // Last 5 days — closed sessions + 1 open today
+      for (let d = 4; d >= 0; d--) {
+        const day = new Date(today);
+        day.setDate(day.getDate() - d);
+        const openingTime = new Date(day.setHours(8, 0, 0, 0));
+        const closingTime = d === 0 ? undefined : new Date(new Date(openingTime).setHours(18, 0, 0, 0));
+        const opening   = 1000 + Math.round(Math.random() * 1000);
+        const cashSales = 500  + Math.round(Math.random() * 2000);
+        const closing   = closingTime ? opening + cashSales - Math.round(Math.random() * 200) : undefined;
 
-      await CashDrawerSession.create({
-        tenantId,
-        branchId,
-        userId,
-        openingAmount:  opening,
-        closingAmount:  closing,
-        cashSales,
-        openedAt,
-        closedAt,
-        status: closedAt ? 'closed' : 'open',
-      });
+        await prisma.cashDrawerSession.create({
+          data: {
+            tenantId,
+            userId,
+            openingAmount:  opening,
+            closingAmount:  closing,
+            openingTime,
+            closingTime,
+            status: closingTime ? 'closed' : 'open',
+          },
+        });
+      }
+      ok(`Cash Drawer   — 5 sessions created (4 closed, 1 open)`);
     }
-    ok(`Cash Drawer   — 5 sessions created (4 closed, 1 open)`);
   }
 
   // ── Expenses ──────────────────────────────────────────────────────────────
-  const existingExpCount = await Expense.countDocuments({ tenantId });
-  if (existingExpCount > 0 && !FORCE) {
-    skip(`Expenses      — ${existingExpCount} already exist`);
-  } else {
-    if (FORCE) await Expense.deleteMany({ tenantId });
-    const expenseTemplates = [
-      { name: 'Electricity Bill',   description: 'Monthly electricity utility bill',   amount: 4500, category: 'Utilities',  paymentMethod: 'digital' as const },
-      { name: 'Water Bill',         description: 'Monthly water utility',               amount: 850,  category: 'Utilities',  paymentMethod: 'cash'    as const },
-      { name: 'Internet & Phone',   description: 'Monthly internet and landline',       amount: 2200, category: 'Utilities',  paymentMethod: 'digital' as const },
-      { name: 'Cleaning Supplies',  description: 'Monthly cleaning consumables',        amount: 650,  category: 'Supplies',   paymentMethod: 'cash'    as const },
-      { name: 'Staff Meal Allowance', description: 'Weekly staff meal allowance',       amount: 1200, category: 'Staff',      paymentMethod: 'cash'    as const },
-      { name: 'Equipment Repair',   description: 'POS terminal maintenance service',    amount: 1800, category: 'Maintenance', paymentMethod: 'card'   as const },
-    ];
-    const baseDate = new Date();
-    for (let i = 0; i < expenseTemplates.length; i++) {
-      const expDate = new Date(baseDate);
-      expDate.setDate(expDate.getDate() - i * 5);
-      await Expense.create({
-        ...expenseTemplates[i],
-        tenantId,
-        branchId,
-        userId,
-        date: expDate,
-      });
+  if (userId) {
+    const existingExpCount = await prisma.expense.count({ where: { tenantId } });
+    if (existingExpCount > 0 && !FORCE) {
+      skip(`Expenses      — ${existingExpCount} already exist`);
+    } else {
+      if (FORCE) await prisma.expense.deleteMany({ where: { tenantId } });
+      const expenseTemplates = [
+        { name: 'Electricity Bill',   description: 'Monthly electricity utility bill',   amount: 4500, category: 'Utilities',  paymentMethod: 'digital' as const },
+        { name: 'Water Bill',         description: 'Monthly water utility',               amount: 850,  category: 'Utilities',  paymentMethod: 'cash'    as const },
+        { name: 'Internet & Phone',   description: 'Monthly internet and landline',       amount: 2200, category: 'Utilities',  paymentMethod: 'digital' as const },
+        { name: 'Cleaning Supplies',  description: 'Monthly cleaning consumables',        amount: 650,  category: 'Supplies',   paymentMethod: 'cash'    as const },
+        { name: 'Staff Meal Allowance', description: 'Weekly staff meal allowance',       amount: 1200, category: 'Staff',      paymentMethod: 'cash'    as const },
+        { name: 'Equipment Repair',   description: 'POS terminal maintenance service',    amount: 1800, category: 'Maintenance', paymentMethod: 'card'   as const },
+      ];
+      const baseDate = new Date();
+      for (let i = 0; i < expenseTemplates.length; i++) {
+        const expDate = new Date(baseDate);
+        expDate.setDate(expDate.getDate() - i * 5);
+        await prisma.expense.create({
+          data: {
+            ...expenseTemplates[i],
+            tenantId,
+            userId,
+            date: expDate,
+          },
+        });
+      }
+      ok(`Expenses      — ${expenseTemplates.length} created`);
     }
-    ok(`Expenses      — ${expenseTemplates.length} created`);
   }
 
   // ── Attendance ────────────────────────────────────────────────────────────
-  const existingAttCount = await Attendance.countDocuments({ tenantId });
-  if (existingAttCount > 0 && !FORCE) {
-    skip(`Attendance    — ${existingAttCount} records already exist`);
-  } else {
-    if (FORCE) await Attendance.deleteMany({ tenantId });
-    const today = new Date();
-    let attCreated = 0;
+  if (userId) {
+    const existingAttCount = await prisma.attendance.count({ where: { tenantId } });
+    if (existingAttCount > 0 && !FORCE) {
+      skip(`Attendance    — ${existingAttCount} records already exist`);
+    } else {
+      if (FORCE) await prisma.attendance.deleteMany({ where: { tenantId } });
+      const today = new Date();
+      let attCreated = 0;
 
-    for (let d = 13; d >= 0; d--) {
-      const day = new Date(today);
-      day.setDate(day.getDate() - d);
-      // Skip weekends
-      if (day.getDay() === 0 || day.getDay() === 6) continue;
+      for (let d = 13; d >= 0; d--) {
+        const day = new Date(today);
+        day.setDate(day.getDate() - d);
+        // Skip weekends
+        if (day.getDay() === 0 || day.getDay() === 6) continue;
 
-      const clockIn  = new Date(day.setHours(8, Math.floor(Math.random() * 15), 0, 0));
-      const clockOut = d === 0
-        ? undefined
-        : new Date(new Date(clockIn).setHours(17, Math.floor(Math.random() * 30), 0, 0));
-      const totalHours = clockOut
-        ? Math.round(((clockOut.getTime() - clockIn.getTime()) / 3600000) * 10) / 10
-        : undefined;
+        const clockIn  = new Date(day.setHours(8, Math.floor(Math.random() * 15), 0, 0));
+        const clockOut = d === 0
+          ? undefined
+          : new Date(new Date(clockIn).setHours(17, Math.floor(Math.random() * 30), 0, 0));
+        const totalHours = clockOut
+          ? Math.round(((clockOut.getTime() - clockIn.getTime()) / 3600000) * 10) / 10
+          : undefined;
 
-      await Attendance.create({
-        userId,
-        tenantId,
-        clockIn,
-        clockOut,
-        totalHours,
-        overtime: totalHours && totalHours > 8 ? totalHours - 8 : 0,
-      });
-      attCreated++;
+        await prisma.attendance.create({
+          data: {
+            userId,
+            tenantId,
+            clockIn,
+            clockOut,
+            totalHours,
+          },
+        });
+        attCreated++;
+      }
+      ok(`Attendance    — ${attCreated} records created`);
     }
-    ok(`Attendance    — ${attCreated} records created`);
   }
 
   console.log(`  ${c.grey}Login: ${cfg.adminEmail}  /  ${cfg.adminPassword}${c.reset}`);
@@ -699,13 +711,10 @@ async function main() {
   console.log(`║   1POS — Sample Data Seeder     ║`);
   console.log(`╚══════════════════════════════════════════╝${c.reset}`);
 
-  await mongoose.connect(MONGODB_URI);
-  ok('Connected to MongoDB');
-
   // Filter to specific type if requested
   let configs = SEED_CONFIGS;
   if (TYPE_ARG) {
-    const matched = SEED_CONFIGS.filter(c => c.businessType === TYPE_ARG);
+    const matched = SEED_CONFIGS.filter(cfg => cfg.businessType === TYPE_ARG);
     if (matched.length === 0) {
       err(`Unknown business type "${TYPE_ARG}". Valid: retail, restaurant, laundry, service, general`);
       process.exit(1);
@@ -715,21 +724,21 @@ async function main() {
 
   // Target an existing tenant if requested
   if (TENANT_ARG) {
-    const tenant = await Tenant.findOne({ slug: TENANT_ARG });
+    const tenant = await prisma.tenant.findFirst({ where: { slug: TENANT_ARG } });
     if (!tenant) {
       err(`Tenant "${TENANT_ARG}" not found`);
       process.exit(1);
     }
-    const tenantSettings = (tenant as any).settings; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const tenantSettings = tenant.settings as Record<string, unknown>;
     const bizType = (tenantSettings?.businessType ?? 'general') as BizType;
-    const matchedCfg = SEED_CONFIGS.find(c => c.businessType === bizType);
+    const matchedCfg = SEED_CONFIGS.find(cfg => cfg.businessType === bizType);
     if (!matchedCfg) {
       err(`No seed config for business type "${bizType}"`);
       process.exit(1);
     }
     await seedTenant(
       { ...matchedCfg, slug: TENANT_ARG, name: tenant.name },
-      tenant._id as mongoose.Types.ObjectId,
+      tenant.id,
     );
   } else {
     for (const cfg of configs) {
@@ -738,10 +747,11 @@ async function main() {
   }
 
   console.log(`\n${c.bold}${c.green}✔  All done!${c.reset}\n`);
-  await mongoose.disconnect();
 }
 
-main().catch(e => {
-  err(String(e));
-  process.exit(1);
-});
+main()
+  .catch(e => {
+    err(String(e));
+    process.exit(1);
+  })
+  .finally(() => prisma.$disconnect());

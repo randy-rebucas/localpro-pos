@@ -1,45 +1,43 @@
 /**
  * Migration Script: Apply Business Type Defaults
- * 
+ *
  * This script applies business type defaults to existing tenants.
  * Run this after setting business types for tenants.
- * 
+ *
  * Usage:
  *   npx tsx scripts/apply-business-type-defaults.ts [tenant-slug] [business-type]
- * 
+ *
  * Examples:
  *   npx tsx scripts/apply-business-type-defaults.ts my-tenant restaurant
  *   npx tsx scripts/apply-business-type-defaults.ts  # Apply to all tenants
  */
 
-import connectDB from '../lib/mongodb';
-import Tenant from '../models/Tenant';
+import prisma from '../lib/prisma';
 import { applyBusinessTypeDefaults } from '../lib/business-types';
 
 async function applyDefaultsToTenant(tenantSlug: string, businessType?: string) {
   try {
-    await connectDB();
-    
-    const tenant = await Tenant.findOne({ slug: tenantSlug });
+    const tenant = await prisma.tenant.findFirst({ where: { slug: tenantSlug } });
     if (!tenant) {
       console.error(`Tenant "${tenantSlug}" not found`);
       return false;
     }
 
-    const targetBusinessType = businessType || tenant.settings.businessType;
+    const settings = tenant.settings as Record<string, unknown>;
+    const targetBusinessType = businessType || (settings.businessType as string | undefined);
     if (!targetBusinessType) {
       console.error(`No business type specified for tenant "${tenantSlug}"`);
       return false;
     }
 
     console.log(`Applying business type defaults for "${tenantSlug}" (${targetBusinessType})...`);
-    
-    const updatedSettings = applyBusinessTypeDefaults(tenant.settings, targetBusinessType);
-    
-    await Tenant.updateOne(
-      { _id: tenant._id },
-      { $set: { settings: updatedSettings } }
-    );
+
+    const updatedSettings = applyBusinessTypeDefaults(settings, targetBusinessType);
+
+    await prisma.tenant.update({
+      where: { id: tenant.id },
+      data: { settings: updatedSettings },
+    });
 
     console.log(`✅ Successfully applied defaults for "${tenantSlug}"`);
     console.log(`   Features enabled:`, {
@@ -50,47 +48,48 @@ async function applyDefaultsToTenant(tenantSlug: string, businessType?: string) 
       customers: updatedSettings.enableCustomerManagement,
       booking: updatedSettings.enableBookingScheduling,
     });
-    
+
     return true;
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error(`Error applying defaults to "${tenantSlug}":`, error.message);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`Error applying defaults to "${tenantSlug}":`, message);
     return false;
   }
 }
 
 async function applyDefaultsToAllTenants() {
   try {
-    await connectDB();
-    
-    const tenants = await Tenant.find({ isActive: true });
+    const tenants = await prisma.tenant.findMany({ where: { isActive: true } });
     console.log(`Found ${tenants.length} active tenants`);
-    
+
     let successCount = 0;
     let skipCount = 0;
-    
+
     for (const tenant of tenants) {
-      if (!tenant.settings.businessType) {
+      const settings = tenant.settings as Record<string, unknown>;
+      if (!settings.businessType) {
         console.log(`⏭️  Skipping "${tenant.slug}" - no business type set`);
         skipCount++;
         continue;
       }
 
-      const success = await applyDefaultsToTenant(tenant.slug, tenant.settings.businessType);
+      const success = await applyDefaultsToTenant(tenant.slug, settings.businessType as string);
       if (success) {
         successCount++;
       }
     }
-    
+
     console.log(`\n✅ Completed: ${successCount} tenants updated, ${skipCount} skipped`);
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    console.error('Error applying defaults:', error.message);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('Error applying defaults:', message);
     process.exit(1);
   }
 }
 
 async function main() {
   const args = process.argv.slice(2);
-  
+
   if (args.length === 0) {
     // Apply to all tenants
     console.log('Applying business type defaults to all tenants...\n');
@@ -113,7 +112,8 @@ async function main() {
     console.error('  npx tsx scripts/apply-business-type-defaults.ts my-tenant restaurant');
     process.exit(1);
   }
-  
+
+  await prisma.$disconnect();
   process.exit(0);
 }
 

@@ -1,7 +1,6 @@
 // Set env vars before any imports
 process.env.JWT_SECRET = 'test-secret-for-table-api-tests-32chars!!';
 process.env.NODE_ENV = 'test';
-process.env.MONGODB_URI = 'mongodb://test:test@localhost:27017/localpro-pos-test';
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
@@ -10,10 +9,6 @@ import { generateToken } from '@/lib/auth';
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
-
-vi.mock('@/lib/mongodb', () => ({
-  default: vi.fn().mockResolvedValue(undefined),
-}));
 
 vi.mock('@/lib/logger', () => ({
   logger: {
@@ -28,12 +23,6 @@ vi.mock('@/lib/token-blacklist', () => ({
   isTokenIssuedBeforeRevocation: vi.fn().mockResolvedValue(false),
 }));
 
-vi.mock('@/models/User', () => ({
-  default: {
-    findById: vi.fn(),
-  },
-}));
-
 vi.mock('@/lib/rate-limit', () => ({
   checkRateLimit: vi.fn().mockReturnValue({ allowed: true, retryAfter: 0 }),
 }));
@@ -44,20 +33,6 @@ vi.mock('@/lib/audit', () => ({
     CREATE: 'CREATE',
     UPDATE: 'UPDATE',
     DELETE: 'DELETE',
-  },
-}));
-
-// Mock the Table model
-const mockTableFind = vi.fn();
-const mockTableFindOne = vi.fn();
-const mockTableCreate = vi.fn();
-
-vi.mock('@/models/Table', () => ({
-  default: {
-    find: mockTableFind,
-    findOne: mockTableFindOne,
-    create: mockTableCreate,
-    findByIdAndUpdate: vi.fn(),
   },
 }));
 

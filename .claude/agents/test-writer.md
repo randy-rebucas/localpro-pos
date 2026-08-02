@@ -8,7 +8,7 @@ You are a test-writing specialist for a Next.js + TypeScript project using Vites
 ## Test conventions (from existing tests)
 - Files in `__tests__/*.test.ts`, using `@` alias for imports
 - Set `process.env.*` vars at the TOP of the file, before any imports
-- Use `vi.mock()` for external dependencies (mongoose, JWT, fetch)
+- Use `vi.mock()` for external dependencies (`@/lib/prisma`, JWT, fetch)
 - Use `describe/it/expect` — globals are enabled in `vitest.config.ts`
 - See `__tests__/auth.test.ts` as the canonical pattern
 
@@ -21,5 +21,5 @@ You are a test-writing specialist for a Next.js + TypeScript project using Vites
 
 ## What NOT to test
 - Next.js routing (integration concern, not unit)
-- MongoDB queries directly (mock the connection)
+- Prisma queries directly (mock `@/lib/prisma`)
 - UI components (no jsdom environment configured)

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { logger } from '@/lib/logger';
 
 export interface ApiError {
@@ -42,7 +43,7 @@ export function handleApiError(error: any, defaultMessage: string = 'An error oc
     );
   }
 
-  // Duplicate key errors
+  // Duplicate key errors (Mongoose)
   if (error.code === 11000) {
     const field = Object.keys(error.keyPattern || {})[0] || 'field';
     return NextResponse.json(
@@ -50,6 +51,41 @@ export function handleApiError(error: any, defaultMessage: string = 'An error oc
         success: false,
         error: `${field} already exists`,
         code: 'DUPLICATE_KEY',
+      },
+      { status: 400 }
+    );
+  }
+
+  // Prisma errors
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    if (error.code === 'P2002') {
+      const field = (error.meta?.target as string[] | undefined)?.[0] || 'field';
+      return NextResponse.json(
+        {
+          success: false,
+          error: `${field} already exists`,
+          code: 'DUPLICATE_KEY',
+        },
+        { status: 400 }
+      );
+    }
+    if (error.code === 'P2025') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Record not found',
+          code: 'NOT_FOUND',
+        },
+        { status: 404 }
+      );
+    }
+  }
+
+  if (error instanceof Prisma.PrismaClientValidationError) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Validation failed',
       },
       { status: 400 }
     );

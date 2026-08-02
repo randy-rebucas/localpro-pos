@@ -6,7 +6,7 @@ Create a new Next.js App Router API route following project conventions.
 
 ```typescript
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
+import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { handleApiError } from '@/lib/error-handler';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -22,10 +22,9 @@ export async function POST(request: NextRequest) {
   const user = await getCurrentUser(request);
   if (!user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
 
-  // 3. DB + tenant-scoped query (ALWAYS filter by user.tenantId)
+  // 3. DB + tenant-scoped query (ALWAYS filter by tenantId: user.tenantId)
   try {
-    await connectDB();
-    // ... query with { tenantId: user.tenantId }
+    // ... e.g. await prisma.model.findMany({ where: { tenantId: user.tenantId } })
 
     // 4. Audit log for mutations
     await createAuditLog(request, { action: 'CREATE', entityType: 'EntityName', tenantId: user.tenantId });

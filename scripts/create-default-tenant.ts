@@ -10,23 +10,16 @@ dotenv.config({ path: resolve(process.cwd(), '.env.local') });
 // Also try .env as fallback
 dotenv.config({ path: resolve(process.cwd(), '.env') });
 
-import mongoose from 'mongoose';
-import Tenant from '../models/Tenant';
-import User from '../models/User';
+import prisma from '../lib/prisma';
+import { createUser } from '../lib/data/users';
 import { getDefaultTenantSettings } from '../lib/currency';
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/pos-system';
-console.log(MONGODB_URI);
 async function createDefaultTenant() {
   try {
-    await mongoose.connect(MONGODB_URI);
-    console.log('Connected to MongoDB');
-
     // Check if default tenant already exists
-    const existing = await Tenant.findOne({ slug: 'default' });
+    const existing = await prisma.tenant.findFirst({ where: { slug: 'default' } });
     if (existing) {
       console.log('Default tenant already exists');
-      await mongoose.disconnect();
       return;
     }
 
@@ -42,27 +35,27 @@ async function createDefaultTenant() {
     };
 
     // Create tenant first (following tenant signup route hierarchy)
-    const tenantData = {
-      slug: 'default',
-      name: 'Default Store',
-      settings,
-      isActive: true,
-    };
-
-    const tenant = await Tenant.create(tenantData);
+    const tenant = await prisma.tenant.create({
+      data: {
+        slug: 'default',
+        name: 'Default Store',
+        settings,
+        isActive: true,
+      },
+    });
 
     // Create admin user for the tenant (after tenant is created)
     const adminEmail = 'admin@default.local';
     const adminPassword = 'Admindefault123!';
     const adminName = 'Administrator';
-    
+
     try {
-      await User.create({
-        email: adminEmail.toLowerCase(),
+      await createUser({
+        email: adminEmail,
         password: adminPassword,
         name: adminName,
         role: 'admin',
-        tenantId: tenant._id,
+        tenantId: tenant.id,
         isActive: true,
       });
       console.log('Default tenant created:', tenant);
@@ -71,7 +64,7 @@ async function createDefaultTenant() {
       console.log(`  Password:    ${adminPassword}`);
       console.log(`  Role:        admin`);
       console.log(`  Tenant:      ${tenant.name} (${tenant.slug})`);
-      console.log(`  Tenant ID:   ${tenant._id}`);
+      console.log(`  Tenant ID:   ${tenant.id}`);
       console.log('\n⚠️  IMPORTANT: Please change the admin password after first login!');
     } catch (userError: unknown) {
       console.log('Default tenant created:', tenant);
@@ -81,13 +74,10 @@ async function createDefaultTenant() {
         console.log('\n⚠️  Warning: Failed to create admin user:', userError);
       }
     }
-    
-    await mongoose.disconnect();
   } catch (error) {
     console.error('Error creating default tenant:', error);
     process.exit(1);
   }
 }
 
-createDefaultTenant();
-
+createDefaultTenant().finally(() => prisma.$disconnect());

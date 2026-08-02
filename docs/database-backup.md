@@ -6,9 +6,9 @@ Full documentation for the database backup system — automated scheduling, manu
 
 ## Overview
 
-The backup system exports every MongoDB collection to a timestamped JSON file. It runs automatically every night and can also be triggered manually via the CLI, a cron-protected API endpoint, or the super-admin dashboard.
+The backup system exports every Prisma model (table) to a timestamped JSON file. It runs automatically every night and can also be triggered manually via the CLI, a cron-protected API endpoint, or the super-admin dashboard.
 
-**What gets backed up:** All collections (products, transactions, customers, tenants, users, audit logs, etc.) up to 50,000 documents per collection. System collections (`system.*`) are skipped.
+**What gets backed up:** All tenant-scoped and global tables (products, transactions, customers, tenants, users, audit logs, etc.) up to 50,000 rows per table. System/audit tables (`RevokedToken`, `UserRevocation`, `SuperAdminAction`, `Counter`, `MigrationIdMap`) are intentionally excluded.
 
 **Retention:** The last 7 backups are kept automatically; older ones are deleted on each run.
 
@@ -37,9 +37,6 @@ The cron job is registered in `lib/cron.ts` and initialized at server startup. N
 # Full database backup (local)
 npm run db:backup
 
-# Full backup + upload to cloud storage
-npm run db:backup:cloud
-
 # List existing backup files
 npm run db:backup:list
 ```
@@ -49,11 +46,8 @@ npm run db:backup:list
 Flags are passed after `--`:
 
 ```sh
-# Backup only one tenant (by ObjectId)
-npm run db:backup -- --tenant=64abc123def456
-
-# Upload to cloud
-npm run db:backup -- --cloud
+# Backup only one tenant (by tenant UUID)
+npm run db:backup -- --tenant=<tenant-uuid>
 
 # Custom output directory
 npm run db:backup -- --out=/mnt/backups
@@ -68,7 +62,7 @@ npm run db:backup -- --delete=backup-2026-01-01T02-00-00-000Z.json
 All flags can be combined:
 
 ```sh
-npm run db:backup -- --tenant=64abc123 --cloud --keep=30 --out=/mnt/backups
+npm run db:backup -- --tenant=<tenant-uuid> --keep=30 --out=/mnt/backups
 ```
 
 ### Output
@@ -77,16 +71,16 @@ npm run db:backup -- --tenant=64abc123 --cloud --keep=30 --out=/mnt/backups
 Connecting to database...
 Connected.
 
-Exporting 24 collection(s)...
+Exporting 24 table(s)...
 
-  products                       1,234 documents
-  transactions                  18,903 documents
-  customers                      3,201 documents
+  products                       1,234 rows
+  transactions                  18,903 rows
+  customers                      3,201 rows
   ...
 
 Writing backup to: /path/to/backups/backup-2026-06-16T02-00-00-000Z.json
 Backup size: 12.45 MB
-Total documents: 38,471
+Total rows: 38,471
 
 Rotating old backups (keeping 7, deleting 1)...
   Deleted: backup-2026-06-09T02-00-00-000Z.json
@@ -121,7 +115,7 @@ Optional body/query parameters:
 | Parameter | Type | Description |
 |---|---|---|
 | `secret` | string | Required. Must match `CRON_SECRET`. |
-| `tenantId` | string | Backup only this tenant's documents. |
+| `tenantId` | string | Backup only this tenant's rows. |
 | `uploadToCloud` | boolean | Upload to S3 after backup. Default: `false`. |
 
 **Response:**
@@ -168,7 +162,7 @@ POST /api/super-admin/backups
 Content-Type: application/json
 
 {
-  "tenantId": "64abc123def456",   // optional
+  "tenantId": "<tenant-uuid>",    // optional
   "uploadToCloud": true            // optional
 }
 ```
@@ -213,7 +207,7 @@ Store admins can back up and restore their own data from the tenant admin panel 
 /{tenant}/{lang}/admin/backup-reset
 ```
 
-This allows collection-level selection — for example, backing up only `products` and `customers` — and restoring from a previously downloaded JSON file. It does **not** have access to other tenants' data.
+This allows table-level selection — for example, backing up only `products` and `customers` — and restoring from a previously downloaded JSON file. It does **not** have access to other tenants' data.
 
 ---
 
@@ -258,16 +252,16 @@ backups/<tenantId>/<filename>    # single-tenant backups
   "tenantId": null,
   "totalDocuments": 38471,
   "collections": {
-    "products": [ { "_id": "...", "name": "...", ... } ],
+    "products": [ { "id": "...", "name": "...", ... } ],
     "transactions": [ ... ],
     "customers": [ ... ]
   }
 }
 ```
 
-- `tenantId` is `null` for full backups; set to an ObjectId string for tenant-scoped backups.
-- Documents are stored as-is from MongoDB, including `_id` and all references.
-- Arrays of up to 50,000 documents per collection (CLI) / 10,000 (automated API) to avoid memory exhaustion.
+- `tenantId` is `null` for full backups; set to a tenant UUID for tenant-scoped backups.
+- The top-level `collections` key name is preserved for on-disk/format compatibility, but each entry is a Prisma model's rows (keyed by the client's camelCase accessor, e.g. `offlineTransaction`), including its `id` and all foreign keys.
+- Arrays of up to 50,000 rows per table (CLI) / 10,000 (automated API) to avoid memory exhaustion.
 
 ---
 
@@ -275,14 +269,14 @@ backups/<tenantId>/<filename>    # single-tenant backups
 
 | File | Purpose |
 |---|---|
-| `scripts/backup-database.ts` | CLI script |
-| `lib/automations/database-backups.ts` | Core backup + S3 upload logic |
+| `scripts/backup-database-postgres.ts` | CLI script |
+| `lib/automations/database-backups.ts` | Core backup + S3 upload logic (Prisma-based) |
 | `lib/cron.ts` | Nightly cron job registration (job #17) |
 | `app/api/automations/backups/create/route.ts` | Cron-protected HTTP trigger |
 | `app/api/super-admin/backups/route.ts` | Super-admin list + create API |
 | `app/api/super-admin/backups/[filename]/route.ts` | Super-admin download + delete API |
 | `app/api/super-admin/backups/restore/route.ts` | Super-admin restore API (server file or upload) |
-| `scripts/restore-database.ts` | CLI restore script |
+| `scripts/restore-database-postgres.ts` | CLI restore script |
 | `app/super-admin/backups/page.tsx` | Super-admin backup management UI |
 | `app/[tenant]/[lang]/admin/backup-reset/page.tsx` | Per-tenant backup/restore/reset UI |
 | `app/api/tenants/[slug]/reset-collections/route.ts` | Per-tenant backup/reset/restore API |
