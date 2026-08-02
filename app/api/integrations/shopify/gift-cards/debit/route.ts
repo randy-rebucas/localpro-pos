@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import TenantEcommerceIntegration from '@/models/TenantEcommerceIntegration';
+import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { handleApiError } from '@/lib/error-handler';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -24,18 +23,15 @@ export async function POST(request: NextRequest) {
     }
 
     await requireEcommerceIntegrationFeature(user.tenantId);
-    await connectDB();
 
-    const integration = await TenantEcommerceIntegration.findOne({
-      tenantId: user.tenantId,
-      provider: 'shopify',
-      isActive: true,
+    const integration = await prisma.tenantEcommerceIntegration.findFirst({
+      where: { tenantId: user.tenantId, provider: 'shopify', isActive: true },
     });
     if (!integration?.shopDomain) {
       return NextResponse.json({ success: false, error: 'No active Shopify integration' }, { status: 400 });
     }
 
-    const accessToken = await getShopifyAccessTokenForIntegration(integration);
+    const accessToken = await getShopifyAccessTokenForIntegration({ _id: integration.id, credentialsEncrypted: integration.credentialsEncrypted, shopDomain: integration.shopDomain });
 
     // Validate first to ensure sufficient balance
     const card = await shopifyValidateGiftCard(integration.shopDomain, accessToken, code);

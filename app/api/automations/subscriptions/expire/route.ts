@@ -10,8 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyCronAuth } from '@/lib/automation-auth';
 import { logger } from '@/lib/logger';
 import { positiveInt, validTenantId } from '@/lib/automation-validation';
-import connectDB from '@/lib/mongodb';
-import Subscription from '@/models/Subscription';
+import prisma from '@/lib/prisma';
 
 interface ExpireResult {
   success: boolean;
@@ -30,8 +29,6 @@ async function expireSubscriptions(options?: {
   tenantId?: string;
   gracePeriodDays?: number;
 }): Promise<ExpireResult> {
-  await connectDB();
-
   const now = new Date();
   const gracePeriodDays = positiveInt(options?.gracePeriodDays, 3, 30);
   const graceDate = new Date(now.getTime() - gracePeriodDays * 24 * 60 * 60 * 1000);
@@ -44,53 +41,47 @@ async function expireSubscriptions(options?: {
 
   try {
     // 1. Expire trial subscriptions past trialEndDate
-    const expiredTrials = await Subscription.updateMany(
-      {
+    const expiredTrials = await prisma.subscription.updateMany({
+      where: {
         ...tenantFilter,
         status: 'trial',
         isTrial: true,
-        trialEndDate: { $lte: now },
+        trialEndDate: { lte: now },
       },
-      {
-        $set: {
-          status: 'inactive',
-          isTrial: false,
-        },
-      }
-    );
-    trialsExpired = expiredTrials.modifiedCount;
+      data: {
+        status: 'inactive',
+        isTrial: false,
+      },
+    });
+    trialsExpired = expiredTrials.count;
 
     // 2. Expire active subscriptions past their endDate
-    const expiredSubs = await Subscription.updateMany(
-      {
+    const expiredSubs = await prisma.subscription.updateMany({
+      where: {
         ...tenantFilter,
         status: 'active',
-        endDate: { $exists: true, $lte: now },
+        endDate: { lte: now },
         autoRenew: false,
       },
-      {
-        $set: { status: 'inactive' },
-      }
-    );
-    subscriptionsExpired = expiredSubs.modifiedCount;
+      data: { status: 'inactive' },
+    });
+    subscriptionsExpired = expiredSubs.count;
 
     // 3. Suspend auto-renew subscriptions past billing date (grace period)
     //    These haven't been billed — likely payment failure
-    const suspendedSubs = await Subscription.updateMany(
-      {
+    const suspendedSubs = await prisma.subscription.updateMany({
+      where: {
         ...tenantFilter,
         status: 'active',
         autoRenew: true,
-        nextBillingDate: { $lte: graceDate },
+        nextBillingDate: { lte: graceDate },
       },
-      {
-        $set: {
-          status: 'suspended',
-          suspendedAt: now,
-        },
-      }
-    );
-    subscriptionsSuspended = suspendedSubs.modifiedCount;
+      data: {
+        status: 'suspended',
+        suspendedAt: now,
+      },
+    });
+    subscriptionsSuspended = suspendedSubs.count;
 
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);

@@ -1,9 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import mongoose from 'mongoose';
-import type { Types } from 'mongoose';
-import connectDB from '@/lib/mongodb';
-import Customer from '@/models/Customer';
-import CustomerBalancePayment from '@/models/CustomerBalancePayment';
+import prisma from '@/lib/prisma';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -19,7 +15,6 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const { id: customerId } = await params;
 
     let tenantId: string;
@@ -40,7 +35,7 @@ export async function GET(
       throw authError;
     }
 
-    const customer = await Customer.findOne({ _id: customerId, tenantId }).select('_id').lean();
+    const customer = await prisma.customer.findFirst({ where: { id: customerId, tenantId }, select: { id: true } });
     if (!customer) {
       return NextResponse.json({ success: false, error: 'Customer not found' }, { status: 404 });
     }
@@ -48,12 +43,16 @@ export async function GET(
     const rawLimit = parseInt(request.nextUrl.searchParams.get('limit') || '20', 10);
     const limit = Math.min(Math.max(1, rawLimit), 100);
 
-    const payments = await CustomerBalancePayment.find({ tenantId, customerId })
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .lean();
+    const payments = await prisma.customerBalancePayment.findMany({
+      where: { tenantId, customerId },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
 
-    return NextResponse.json({ success: true, data: payments });
+    return NextResponse.json({
+      success: true,
+      data: payments.map(({ id, amount, ...rest }) => ({ _id: id, ...rest, amount: Number(amount) })),
+    });
   } catch (error: unknown) {
     logger.error('balance-payments GET:', error);
     const message = error instanceof Error ? error.message : 'Failed to fetch balance payments';
@@ -66,7 +65,6 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const { id: customerId } = await params;
     const t = await getValidationTranslatorFromRequest(request);
 
@@ -121,70 +119,65 @@ export async function POST(
       );
     }
 
-    const session = await mongoose.startSession();
-    let record;
+    let record: { id: string } | null = null;
     let balanceBefore = 0;
     let balanceAfter = 0;
-    try {
-      session.startTransaction();
 
-      const customer = await Customer.findOne({ _id: customerId, tenantId, isActive: true }).session(session);
+    await prisma.$transaction(async (tx) => {
+      const customer = await tx.customer.findFirst({ where: { id: customerId, tenantId, isActive: true } });
       if (!customer) {
-        await session.abortTransaction();
-        return NextResponse.json(
-          { success: false, error: t('validation.customerNotFound', 'Customer not found or inactive') },
-          { status: 404 }
-        );
+        throw Object.assign(new Error('CUSTOMER_NOT_FOUND'), { code: 'CUSTOMER_NOT_FOUND' });
       }
 
-      balanceBefore = customer.accountBalance ?? 0;
+      balanceBefore = Number(customer.accountBalance ?? 0);
       if (amount - balanceBefore > 0.01) {
-        await session.abortTransaction();
-        return NextResponse.json(
-          {
-            success: false,
-            error: t('validation.paymentExceedsBalance', "Amount cannot exceed the customer's outstanding balance"),
-          },
-          { status: 400 }
-        );
+        throw Object.assign(new Error('EXCEEDS_BALANCE'), { code: 'EXCEEDS_BALANCE' });
       }
 
-      const [created] = await CustomerBalancePayment.create(
-        [
-          {
-            tenantId,
-            customerId: customer._id,
-            amount,
-            method: method as (typeof VALID_METHODS)[number],
-            notes,
-            recordedBy: new mongoose.Types.ObjectId(userId) as Types.ObjectId,
-          },
-        ],
-        { session }
-      );
+      const created = await tx.customerBalancePayment.create({
+        data: {
+          tenantId,
+          customerId: customer.id,
+          amount,
+          method: method as (typeof VALID_METHODS)[number],
+          notes,
+          recordedBy: userId,
+        },
+      });
       record = created;
 
-      await Customer.updateOne(
-        { _id: customerId, tenantId },
-        { $inc: { accountBalance: -amount } },
-        { session }
-      );
       balanceAfter = balanceBefore - amount;
 
-      await session.commitTransaction();
-    } catch (e) {
-      await session.abortTransaction();
+      await tx.customer.update({
+        where: { id: customerId },
+        data: { accountBalance: { decrement: amount } },
+      });
+    }).catch((e: unknown) => {
+      if (e instanceof Error && e.message === 'CUSTOMER_NOT_FOUND') {
+        throw { status: 404, message: t('validation.customerNotFound', 'Customer not found or inactive') };
+      }
+      if (e instanceof Error && e.message === 'EXCEEDS_BALANCE') {
+        throw {
+          status: 400,
+          message: t('validation.paymentExceedsBalance', "Amount cannot exceed the customer's outstanding balance"),
+        };
+      }
       throw e;
-    } finally {
-      session.endSession();
+    });
+
+    if (!record) {
+      // Should be unreachable, but guards TypeScript narrowing
+      return NextResponse.json({ success: false, error: 'Failed to record payment' }, { status: 500 });
     }
+
+    const createdRecord = record as { id: string };
 
     await createAuditLog(request, {
       tenantId,
       userId,
       action: AuditActions.PAYMENT_CREATE,
       entityType: 'customer_balance_payment',
-      entityId: record._id.toString(),
+      entityId: createdRecord.id,
       changes: {
         customerId,
         amount,
@@ -194,8 +187,15 @@ export async function POST(
       },
     });
 
-    return NextResponse.json({ success: true, data: record }, { status: 201 });
+    return NextResponse.json(
+      { success: true, data: { _id: createdRecord.id, tenantId, customerId, amount, method, notes, recordedBy: userId } },
+      { status: 201 }
+    );
   } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'status' in error && 'message' in error) {
+      const e = error as { status: number; message: string };
+      return NextResponse.json({ success: false, error: e.message }, { status: e.status });
+    }
     logger.error('balance-payments POST:', error);
     const message = error instanceof Error ? error.message : 'Failed to record payment';
     return NextResponse.json({ success: false, error: message }, { status: 500 });

@@ -1,19 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { getProductPerformance } from '@/lib/analytics';
-import Product from '@/models/Product'; // Ensure Product model is registered
-import Transaction from '@/models/Transaction'; // Ensure Transaction model is registered
-import mongoose from 'mongoose';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkFeatureAccess } from '@/lib/subscription';
 import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
@@ -29,24 +24,11 @@ export async function GET(request: NextRequest) {
     // Check if reports feature is enabled in subscription
     try {
       await checkFeatureAccess(tenantId.toString(), 'enableReports');
-    } catch (featureError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+    } catch (featureError: unknown) {
       return NextResponse.json(
-        { success: false, error: featureError.message },
+        { success: false, error: (featureError as Error).message },
         { status: 403 }
       );
-    }
-
-    // Ensure models are registered by checking mongoose.models
-    // This is necessary for populate to work in Next.js serverless functions
-    // Accessing the models ensures their registration code has executed
-    if (!mongoose.models.Product) {
-      // Force model registration by accessing the model's modelName property
-      // This ensures the Product module's registration code has run
-      const _productName = Product.modelName;
-    }
-    if (!mongoose.models.Transaction) {
-      // Force model registration by accessing the model's modelName property
-      const _transactionName = Transaction.modelName;
     }
 
     const searchParams = request.nextUrl.searchParams;
@@ -63,9 +45,9 @@ export async function GET(request: NextRequest) {
     const performance = await getProductPerformance(tenantId, startDate, endDate, limit);
 
     return NextResponse.json({ success: true, data: performance });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  } catch (error: unknown) {
     logger.error('Error fetching product performance:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Failed to fetch product performance';
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
-

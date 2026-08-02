@@ -2,11 +2,7 @@
  * Analytics and Reporting Utilities
  */
 
-import mongoose from 'mongoose';
-import Transaction from '@/models/Transaction';
-import Expense from '@/models/Expense';
-import CashDrawerSession from '@/models/CashDrawerSession';
-import Product from '@/models/Product';
+import prisma from '@/lib/prisma';
 import { ITenantSettings } from '@/types/tenant';
 
 export interface SalesReport {
@@ -116,25 +112,37 @@ export async function getSalesReport(
     }
   }
 
-  const transactions = await Transaction.find({
-    tenantId,
-    createdAt: { $gte: start, $lte: end },
-    status: 'completed',
-    isActive: { $ne: false },
-  }).lean();
+  const transactions = await prisma.transaction.findMany({
+    where: {
+      tenantId,
+      createdAt: { gte: start, lte: end },
+      status: 'completed',
+    },
+    select: {
+      total: true,
+      paymentMethod: true,
+      createdAt: true,
+    },
+  });
 
-  const totalSales = transactions.reduce((sum, t) => sum + t.total, 0);
-  const totalTransactions = transactions.length;
+  const totals = transactions.map((t) => ({
+    total: Number(t.total),
+    paymentMethod: t.paymentMethod,
+    createdAt: t.createdAt,
+  }));
+
+  const totalSales = totals.reduce((sum, t) => sum + t.total, 0);
+  const totalTransactions = totals.length;
   const averageTransaction = totalTransactions > 0 ? totalSales / totalTransactions : 0;
 
   const digitalLike = ['digital', 'tap_to_pay', 'wallet', 'qr_code', 'bnpl'] as const;
   const salesByPaymentMethod = {
-    cash: transactions.filter((t) => t.paymentMethod === 'cash').reduce((sum, t) => sum + t.total, 0),
-    card: transactions.filter((t) => t.paymentMethod === 'card').reduce((sum, t) => sum + t.total, 0),
-    digital: transactions
+    cash: totals.filter((t) => t.paymentMethod === 'cash').reduce((sum, t) => sum + t.total, 0),
+    card: totals.filter((t) => t.paymentMethod === 'card').reduce((sum, t) => sum + t.total, 0),
+    digital: totals
       .filter((t) => digitalLike.includes(t.paymentMethod as (typeof digitalLike)[number]))
       .reduce((sum, t) => sum + t.total, 0),
-    on_account: transactions
+    on_account: totals
       .filter((t) => t.paymentMethod === 'on_account')
       .reduce((sum, t) => sum + t.total, 0),
   };
@@ -143,8 +151,8 @@ export async function getSalesReport(
   const salesByDay: Array<{ date: string; sales: number; transactions: number }> = [];
   if (period === 'daily' || period === 'weekly') {
     const dayMap = new Map<string, { sales: number; transactions: number }>();
-    
-    transactions.forEach(t => {
+
+    totals.forEach(t => {
       const dateStr = new Date(t.createdAt).toISOString().split('T')[0];
       const existing = dayMap.get(dateStr) || { sales: 0, transactions: 0 };
       dayMap.set(dateStr, {
@@ -178,21 +186,21 @@ export async function getProductPerformance(
   endDate: Date,
   limit: number = 10
 ): Promise<ProductPerformance[]> {
-  // Ensure Product model is registered before using populate
-  // This is necessary in Next.js serverless functions where models might not be registered yet
-  // Accessing the model ensures its registration code has executed
-  if (!mongoose.models.Product) {
-    // The Product model should be registered when imported, but if it's not,
-    // we need to ensure it's registered. Accessing Product.modelName forces evaluation.
-    const _ = Product.modelName;
-  }
-  
-  const transactions = await Transaction.find({
-    tenantId,
-    createdAt: { $gte: startDate, $lte: endDate },
-    status: 'completed',
-    isActive: { $ne: false },
-  }).populate('items.product', 'name').lean();
+  const items = await prisma.transactionItem.findMany({
+    where: {
+      transaction: {
+        tenantId,
+        createdAt: { gte: startDate, lte: endDate },
+        status: 'completed',
+      },
+    },
+    select: {
+      productId: true,
+      name: true,
+      subtotal: true,
+      quantity: true,
+    },
+  });
 
   const productMap = new Map<string, {
     productId: string;
@@ -202,25 +210,23 @@ export async function getProductPerformance(
     transactions: number;
   }>();
 
-  transactions.forEach(transaction => {
-    transaction.items.forEach((item: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-      const productId = item.product?._id?.toString() || item.product?.toString();
-      const productName = item.product?.name || item.name || 'Unknown';
-      
-      const existing = productMap.get(productId) || {
-        productId,
-        productName,
-        totalRevenue: 0,
-        quantitySold: 0,
-        transactions: 0,
-      };
+  items.forEach(item => {
+    const productId = item.productId || 'unknown';
+    const productName = item.name || 'Unknown';
 
-      existing.totalRevenue += item.subtotal;
-      existing.quantitySold += item.quantity;
-      existing.transactions += 1;
+    const existing = productMap.get(productId) || {
+      productId,
+      productName,
+      totalRevenue: 0,
+      quantitySold: 0,
+      transactions: 0,
+    };
 
-      productMap.set(productId, existing);
-    });
+    existing.totalRevenue += Number(item.subtotal);
+    existing.quantitySold += item.quantity;
+    existing.transactions += 1;
+
+    productMap.set(productId, existing);
   });
 
   const performances: ProductPerformance[] = Array.from(productMap.values())
@@ -246,29 +252,24 @@ export async function getVATReport(
   endDate: Date,
   settings: ITenantSettings
 ): Promise<VATReport> {
-  const transactions = await Transaction.find({
-    tenantId,
-    createdAt: { $gte: startDate, $lte: endDate },
-    status: 'completed',
-    isActive: { $ne: false },
-  }).lean();
+  const agg = await prisma.transaction.aggregate({
+    where: {
+      tenantId,
+      createdAt: { gte: startDate, lte: endDate },
+      status: 'completed',
+    },
+    _sum: { total: true },
+  });
 
   const vatRate = settings.taxEnabled && settings.taxRate ? settings.taxRate / 100 : 0;
-  
-  // For simplicity, we'll assume all sales are VAT sales if tax is enabled
-  // In a real system, you'd have a flag on products/transactions
-  const totalSales = transactions.reduce((sum, t) => sum + t.total, 0);
-  
-  let vatSales = 0;
-  const nonVatSales = 0; // eslint-disable-line @typescript-eslint/no-unused-vars
-  
+
+  const totalSales = Number(agg._sum.total || 0);
+
   if (vatRate > 0) {
-    // Calculate VAT sales (total includes VAT)
-    vatSales = totalSales; // eslint-disable-line @typescript-eslint/no-unused-vars
     // Calculate base amount (without VAT)
     const baseAmount = totalSales / (1 + vatRate);
     const vatAmount = totalSales - baseAmount;
-    
+
     return {
       vatSales: baseAmount,
       nonVatSales: 0,
@@ -292,30 +293,44 @@ export async function getProfitLossSummary(
   startDate: Date,
   endDate: Date
 ): Promise<ProfitLossSummary> {
-  const transactions = await Transaction.find({
-    tenantId,
-    createdAt: { $gte: startDate, $lte: endDate },
-    status: 'completed',
-    isActive: { $ne: false },
-  }).lean();
+  const transactions = await prisma.transaction.findMany({
+    where: {
+      tenantId,
+      createdAt: { gte: startDate, lte: endDate },
+      status: 'completed',
+    },
+    select: {
+      total: true,
+      paymentMethod: true,
+    },
+  });
 
-  const expenses = await Expense.find({
-    tenantId,
-    date: { $gte: startDate, $lte: endDate },
-    isActive: { $ne: false },
-  }).lean();
+  const expenses = await prisma.expense.findMany({
+    where: {
+      tenantId,
+      date: { gte: startDate, lte: endDate },
+      isActive: true,
+    },
+    select: {
+      name: true,
+      amount: true,
+    },
+  });
+
+  const totals = transactions.map((t) => ({ total: Number(t.total), paymentMethod: t.paymentMethod }));
 
   const revenue = {
-    total: transactions.reduce((sum, t) => sum + t.total, 0),
-    cash: transactions.filter(t => t.paymentMethod === 'cash').reduce((sum, t) => sum + t.total, 0),
-    card: transactions.filter(t => t.paymentMethod === 'card').reduce((sum, t) => sum + t.total, 0),
-    digital: transactions.filter(t => t.paymentMethod === 'digital').reduce((sum, t) => sum + t.total, 0),
+    total: totals.reduce((sum, t) => sum + t.total, 0),
+    cash: totals.filter(t => t.paymentMethod === 'cash').reduce((sum, t) => sum + t.total, 0),
+    card: totals.filter(t => t.paymentMethod === 'card').reduce((sum, t) => sum + t.total, 0),
+    digital: totals.filter(t => t.paymentMethod === 'digital').reduce((sum, t) => sum + t.total, 0),
   };
 
-  const expenseTotal = expenses.reduce((sum, e) => sum + e.amount, 0);
-  
+  const expenseAmounts = expenses.map((e) => ({ name: e.name, amount: Number(e.amount) }));
+  const expenseTotal = expenseAmounts.reduce((sum, e) => sum + e.amount, 0);
+
   const expenseByCategory = new Map<string, number>();
-  expenses.forEach(expense => {
+  expenseAmounts.forEach(expense => {
     // Use expense name as category since Expense model doesn't have a category field
     const category = expense.name || 'Other';
     const existing = expenseByCategory.get(category) || 0;
@@ -351,52 +366,62 @@ export async function getCashDrawerReports(
   startDate: Date,
   endDate: Date
 ): Promise<CashDrawerReport[]> {
-  const sessions = await CashDrawerSession.find({
-    tenantId,
-    openingTime: { $gte: startDate, $lte: endDate },
-  })
-    .populate('userId', 'name email')
-    .sort({ openingTime: -1 })
-    .lean();
+  const sessions = await prisma.cashDrawerSession.findMany({
+    where: {
+      tenantId,
+      openingTime: { gte: startDate, lte: endDate },
+    },
+    include: {
+      user: { select: { name: true, email: true } },
+    },
+    orderBy: { openingTime: 'desc' },
+  });
 
   const reports: CashDrawerReport[] = [];
 
   for (const session of sessions) {
     // Get cash sales for this session period
     const sessionEnd = session.closingTime || new Date();
-    const cashTransactions = await Transaction.find({
-      tenantId,
-      paymentMethod: 'cash',
-      createdAt: { $gte: session.openingTime, $lte: sessionEnd },
-      status: 'completed',
-      isActive: { $ne: false },
-    }).lean();
+    const cashTransactions = await prisma.transaction.findMany({
+      where: {
+        tenantId,
+        paymentMethod: 'cash',
+        createdAt: { gte: session.openingTime, lte: sessionEnd },
+        status: 'completed',
+      },
+      select: { total: true },
+    });
 
-    const cashSales = cashTransactions.reduce((sum, t) => sum + t.total, 0);
+    const cashSales = cashTransactions.reduce((sum, t) => sum + Number(t.total), 0);
 
     // Get cash expenses for this session period
-    const cashExpenses = await Expense.find({
-      tenantId,
-      paymentMethod: 'cash',
-      date: { $gte: session.openingTime, $lte: sessionEnd },
-      isActive: { $ne: false },
-    }).lean();
+    const cashExpenses = await prisma.expense.findMany({
+      where: {
+        tenantId,
+        paymentMethod: 'cash',
+        date: { gte: session.openingTime, lte: sessionEnd },
+        isActive: true,
+      },
+      select: { amount: true },
+    });
 
-    const cashExpensesTotal = cashExpenses.reduce((sum, e) => sum + e.amount, 0);
+    const cashExpensesTotal = cashExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
 
-    const netCash = session.openingAmount + cashSales - cashExpensesTotal - (session.closingAmount || 0);
+    const openingAmount = Number(session.openingAmount);
+    const closingAmount = session.closingAmount !== null ? Number(session.closingAmount) : undefined;
+    const netCash = openingAmount + cashSales - cashExpensesTotal - (closingAmount || 0);
 
     reports.push({
-      sessionId: session._id.toString(),
-      userId: session.userId.toString(),
-      userName: (session.userId as any)?.name || 'Unknown', // eslint-disable-line @typescript-eslint/no-explicit-any
+      sessionId: session.id,
+      userId: session.userId,
+      userName: session.user?.name || 'Unknown',
       openingTime: session.openingTime,
-      closingTime: session.closingTime,
-      openingAmount: session.openingAmount,
-      closingAmount: session.closingAmount,
-      expectedAmount: session.expectedAmount,
-      shortage: session.shortage,
-      overage: session.overage,
+      closingTime: session.closingTime || undefined,
+      openingAmount,
+      closingAmount,
+      expectedAmount: session.expectedAmount !== null ? Number(session.expectedAmount) : undefined,
+      shortage: session.shortage !== null ? Number(session.shortage) : undefined,
+      overage: session.overage !== null ? Number(session.overage) : undefined,
       status: session.status,
       cashSales,
       cashExpenses: cashExpensesTotal,
@@ -406,4 +431,3 @@ export async function getCashDrawerReports(
 
   return reports;
 }
-

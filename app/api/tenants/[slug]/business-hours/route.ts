@@ -4,10 +4,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { logger } from '@/lib/logger';
+import { getTenantBySlugAny } from '@/lib/data/tenants';
 
 export async function GET(
   request: NextRequest,
@@ -20,20 +20,20 @@ export async function GET(
     }
 
     const { slug } = await params;
-    await connectDB();
 
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await getTenantBySlugAny(slug);
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
+    const settings = (tenant.settings as Record<string, unknown>) || {};
     return NextResponse.json({
       success: true,
-      data: tenant.settings.businessHours || {},
+      data: settings.businessHours || {},
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Error fetching business hours:', error);
@@ -59,30 +59,29 @@ export async function PUT(
     const body = await request.json();
     const { schedule, specialHours, timezone } = body;
 
-    await connectDB();
-
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await getTenantBySlugAny(slug);
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    tenant.settings.businessHours = {
-      ...tenant.settings.businessHours,
+    const existingSettings = (tenant.settings as Record<string, any>) || {}; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const businessHours = {
+      ...existingSettings.businessHours,
       ...(timezone !== undefined && { timezone }),
       ...(schedule !== undefined && { schedule }),
       ...(specialHours !== undefined && { specialHours }),
     };
 
-    tenant.markModified('settings.businessHours');
-    await tenant.save();
+    const settings = { ...existingSettings, businessHours };
+    await prisma.tenant.update({ where: { id: tenant.id }, data: { settings } });
 
     return NextResponse.json({
       success: true,
-      data: tenant.settings.businessHours,
+      data: businessHours,
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Error updating business hours:', error);

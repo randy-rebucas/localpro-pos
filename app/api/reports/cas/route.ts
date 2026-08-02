@@ -5,17 +5,15 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
+import prisma from '@/lib/prisma';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
-import Transaction from '@/models/Transaction';
 import { checkBirFeatureAccess } from '@/lib/subscription';
 import { arrayToCSV } from '@/lib/export';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
 
@@ -54,35 +52,23 @@ export async function GET(request: NextRequest) {
       ? new Date(startDateParam)
       : new Date(new Date().setDate(new Date().getDate() - 30));
     const endDate = endDateParam ? new Date(endDateParam) : new Date();
-    // A bare "YYYY-MM-DD" endDate parses to UTC midnight (start of that day),
-    // which would make createdAt $lte exclude nearly the entire end day's
-    // transactions from what should be an inclusive BIR filing period —
-    // extend to end-of-day, matching the other /api/reports/* routes.
     if (endDateParam) endDate.setHours(23, 59, 59, 999);
 
-    const transactions = await Transaction.find({
-      tenantId,
-      status: 'completed',
-      createdAt: { $gte: startDate, $lte: endDate },
-    })
-      .sort({ createdAt: 1 })
-      .lean();
-
-    type TransactionDoc = {
-      createdAt: Date;
-      receiptNumber?: string;
-      paymentMethod?: string;
-      subtotal?: number;
-      total?: number;
-      taxAmount?: number;
-      taxExemptAmount?: number;
-    };
+    const transactions = await prisma.transaction.findMany({
+      where: {
+        tenantId,
+        status: 'completed',
+        createdAt: { gte: startDate, lte: endDate },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
 
     // CAS format: BIR-compatible accounting ledger entries
-    const casEntries = (transactions as TransactionDoc[]).map((txn) => {
-      const subtotal = txn.subtotal ?? txn.total ?? 0;
-      const taxAmount = txn.taxAmount ?? 0;
-      const taxExemptAmount = txn.taxExemptAmount ?? 0;
+    const casEntries = transactions.map((txn) => {
+      const total = Number(txn.total);
+      const subtotal = txn.subtotal != null ? Number(txn.subtotal) : total;
+      const taxAmount = Number(txn.taxAmount ?? 0);
+      const taxExemptAmount = Number(txn.taxExemptAmount ?? 0);
       const vatableSales = subtotal - taxExemptAmount - taxAmount > 0
         ? subtotal - taxExemptAmount - taxAmount
         : 0;
@@ -91,12 +77,12 @@ export async function GET(request: NextRequest) {
         date: new Date(txn.createdAt).toISOString().split('T')[0],
         receiptNumber: txn.receiptNumber || '',
         description: `Sales - ${txn.paymentMethod || 'unknown'}`,
-        debit: txn.total ?? 0,
+        debit: total,
         credit: 0,
         vatableSales,
         vatAmount: taxAmount,
         vatExemptSales: taxExemptAmount,
-        total: txn.total ?? 0,
+        total,
       };
     });
 

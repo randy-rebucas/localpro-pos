@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Attendance from '@/models/Attendance';
+import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -12,22 +11,15 @@ import { logger } from '@/lib/logger';
 export async function GET(request: NextRequest) {
   try {
     const user = await requireAuth(request);
-    await connectDB();
 
-    // Manager+ can look up another employee's active session (e.g. the admin
-    // attendance page polling every employee's current clock-in status);
-    // everyone else can only ever see their own.
     const requestedUserId = new URL(request.url).searchParams.get('userId');
     const isManagerPlus = await hasTenantPermission(user.role, user.tenantId, 'attendance.manage');
     const targetUserId = requestedUserId && isManagerPlus ? requestedUserId : user.userId;
 
-    const activeSession = await Attendance.findOne({
-      userId: targetUserId,
-      tenantId: user.tenantId,
-      clockOut: null,
-    })
-      .sort({ clockIn: -1 })
-      .lean();
+    const activeSession = await prisma.attendance.findFirst({
+      where: { userId: targetUserId, tenantId: user.tenantId, clockOut: null },
+      orderBy: { clockIn: 'desc' },
+    });
 
     if (!activeSession) {
       return NextResponse.json({
@@ -36,15 +28,17 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Calculate current hours worked
     const now = new Date();
     const hoursWorked = (now.getTime() - new Date(activeSession.clockIn).getTime()) / (1000 * 60 * 60);
     const roundedHours = Math.round(hoursWorked * 100) / 100;
 
+    const { id, ...rest } = activeSession;
+
     return NextResponse.json({
       success: true,
       data: {
-        ...activeSession,
+        _id: id,
+        ...rest,
         currentHours: roundedHours,
       },
     });
@@ -57,4 +51,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-

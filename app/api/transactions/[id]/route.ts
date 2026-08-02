@@ -1,17 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Transaction from '@/models/Transaction';
-import Product from '@/models/Product';
-import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import prisma from '@/lib/prisma';
+import { requireTenantAccess } from '@/lib/api-tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { requireAuth } from '@/lib/auth'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { updateStock } from '@/lib/stock';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function serializeTransaction(t: any): Record<string, unknown> {
+  const { id, items, user, ...rest } = t;
+  const out: Record<string, unknown> = { _id: id, ...rest };
+  for (const key of ['subtotal', 'discountAmount', 'taxExemptAmount', 'zeroRatedAmount', 'taxAmount', 'total', 'cashReceived', 'change', 'displayTotal']) {
+    if (out[key] !== null && out[key] !== undefined) out[key] = Number(out[key]);
+  }
+  if (items) {
+    out.items = items.map((item: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+      ...item,
+      _id: item.id,
+      product: item.product ? { _id: item.productId, name: item.product.name, sku: item.product.sku } : item.productId,
+      price: Number(item.price),
+      subtotal: Number(item.subtotal),
+    }));
+  }
+  if (user) out.userId = { _id: t.userId, name: user.name, email: user.email };
+  return out;
+}
+
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await connectDB();
     // SECURITY: Validate tenant access for authenticated requests
     let tenantId: string;
     try {
@@ -29,17 +46,20 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
-    
-    const transaction = await Transaction.findOne({ _id: id, tenantId, isActive: { $ne: false } })
-      .populate('items.product', 'name sku')
-      .populate('userId', 'name email')
-      .lean();
-    
+
+    const transaction = await prisma.transaction.findFirst({
+      where: { id, tenantId, isActive: true },
+      include: {
+        items: { include: { product: { select: { name: true, sku: true } } } },
+        user: { select: { name: true, email: true } },
+      },
+    });
+
     if (!transaction) {
       return NextResponse.json({ success: false, error: t('validation.transactionNotFound', 'Transaction not found') }, { status: 404 });
     }
-    
-    return NextResponse.json({ success: true, data: transaction });
+
+    return NextResponse.json({ success: true, data: serializeTransaction(transaction) });
   } catch (error: unknown) {
     const t = await getValidationTranslatorFromRequest(request);
     const msg = error instanceof Error ? error.message : 'Internal server error';
@@ -52,7 +72,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await connectDB();
     // SECURITY: Validate tenant access for authenticated requests
     let tenantId: string;
     try {
@@ -76,7 +95,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const body = await request.json();
     const t = await getValidationTranslatorFromRequest(request);
 
-    const transaction = await Transaction.findOne({ _id: id, tenantId });
+    const transaction = await prisma.transaction.findFirst({ where: { id, tenantId }, include: { items: true } });
     if (!transaction) {
       return NextResponse.json({ success: false, error: t('validation.transactionNotFound', 'Transaction not found') }, { status: 404 });
     }
@@ -94,26 +113,26 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     // Only allow status updates (void/refund) on completed transactions
     if (body.status && ['cancelled', 'refunded'].includes(body.status)) {
       const oldStatus = transaction.status;
-      transaction.status = body.status;
-      await transaction.save();
+      const updated = await prisma.transaction.update({ where: { id: transaction.id }, data: { status: body.status } });
 
       // If refunding, restore stock (only if product tracks inventory)
       if (body.status === 'refunded' && oldStatus === 'completed') {
         const restoredIds: string[] = [];
         for (const item of transaction.items) {
-          const product = await Product.findOne({ _id: item.product.toString(), tenantId });
+          if (!item.productId) continue;
+          const product = await prisma.product.findFirst({ where: { id: item.productId, tenantId } });
           if (product && product.trackInventory !== false) {
             await updateStock(
-              item.product.toString(),
+              item.productId,
               tenantId,
               item.quantity, // Positive to restore
               'return',
               {
-                transactionId: transaction._id.toString(),
+                transactionId: transaction.id,
                 reason: 'Transaction refund',
               }
             );
-            restoredIds.push(item.product.toString());
+            restoredIds.push(item.productId);
           }
         }
         if (restoredIds.length) {
@@ -130,7 +149,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         changes: { status: { old: oldStatus, new: body.status } },
       });
 
-      return NextResponse.json({ success: true, data: transaction });
+      return NextResponse.json({ success: true, data: serializeTransaction({ ...updated, items: transaction.items }) });
     }
 
     // Reject any other modifications to completed transactions
@@ -141,7 +160,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       );
     }
 
-    return NextResponse.json({ success: true, data: transaction });
+    return NextResponse.json({ success: true, data: serializeTransaction(transaction) });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'Internal server error';
     if (msg === 'Unauthorized' || msg.includes('Forbidden')) {
@@ -150,4 +169,3 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ success: false, error: msg }, { status: 400 });
   }
 }
-

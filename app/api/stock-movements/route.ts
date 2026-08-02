@@ -1,17 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import StockMovement from '@/models/StockMovement';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { findStockMovements } from '@/lib/data/stock-movements';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
-    
+
     if (!tenantId) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
@@ -24,24 +22,11 @@ export async function GET(request: NextRequest) {
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
     const skip = (page - 1) * limit;
 
-    const query: any = { tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (productId) {
-      query.productId = productId;
-    }
-    if (type) {
-      query.type = type;
-    }
-
-    const movements = await StockMovement.find(query)
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .skip(skip)
-      .populate('productId', 'name sku')
-      .populate('userId', 'name email')
-      .populate('transactionId', 'receiptNumber')
-      .lean();
-
-    const total = await StockMovement.countDocuments(query);
+    const { movements, total } = await findStockMovements(
+      tenantId,
+      { productId: productId || undefined, type: type || undefined },
+      { skip, limit }
+    );
 
     return NextResponse.json({
       success: true,
@@ -57,4 +42,3 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
-

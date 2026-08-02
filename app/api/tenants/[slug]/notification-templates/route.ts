@@ -4,11 +4,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/prisma';
 import { validateNotificationTemplate } from '@/lib/notification-templates';
 import { getCurrentUser } from '@/lib/auth';
 import { logger } from '@/lib/logger';
+import { getTenantBySlugAny } from '@/lib/data/tenants';
 
 export async function GET(
   request: NextRequest,
@@ -21,20 +21,20 @@ export async function GET(
     }
 
     const { slug } = await params;
-    await connectDB();
 
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await getTenantBySlugAny(slug);
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
+    const settings = (tenant.settings as Record<string, unknown>) || {};
     return NextResponse.json({
       success: true,
-      data: tenant.settings.notificationTemplates || {},
+      data: settings.notificationTemplates || {},
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Error fetching notification templates:', error);
@@ -70,36 +70,36 @@ export async function PUT(
       return NextResponse.json({ success: false, error: validation.error }, { status: 400 });
     }
 
-    await connectDB();
-
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await getTenantBySlugAny(slug);
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    const templates = tenant.settings.notificationTemplates || {};
+    const existingSettings = (tenant.settings as Record<string, any>) || {}; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const templates = existingSettings.notificationTemplates || {};
     const key = subcategory || category;
 
     if (type === 'email') {
       templates.email = templates.email || {};
       if (subject) {
         // Store subject and body together
-        templates.email[key as keyof typeof templates.email] = `${subject}|${templateBody}`;
+        templates.email[key] = `${subject}|${templateBody}`;
       } else {
-        templates.email[key as keyof typeof templates.email] = templateBody;
+        templates.email[key] = templateBody;
       }
     } else if (type === 'sms') {
       templates.sms = templates.sms || {};
-      templates.sms[key as keyof typeof templates.sms] = templateBody;
+      templates.sms[key] = templateBody;
     }
 
-    tenant.settings.notificationTemplates = templates;
-    tenant.markModified('settings.notificationTemplates');
-    await tenant.save();
+    await prisma.tenant.update({
+      where: { id: tenant.id },
+      data: { settings: { ...existingSettings, notificationTemplates: templates } },
+    });
 
     return NextResponse.json({
       success: true,

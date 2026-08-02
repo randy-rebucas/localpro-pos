@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import TenantEcommerceIntegration from '@/models/TenantEcommerceIntegration';
+import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
@@ -21,12 +20,9 @@ export async function GET(request: NextRequest) {
     if (!rl.allowed) return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
 
     await requireEcommerceIntegrationFeature(user.tenantId);
-    await connectDB();
 
-    const integration = await TenantEcommerceIntegration.findOne({
-      tenantId: user.tenantId,
-      provider: 'shopify',
-      isActive: true,
+    const integration = await prisma.tenantEcommerceIntegration.findFirst({
+      where: { tenantId: user.tenantId, provider: 'shopify', isActive: true },
     });
     if (!integration?.shopDomain) {
       return NextResponse.json({ success: false, error: 'No active Shopify integration' }, { status: 400 });
@@ -37,7 +33,7 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(parseInt(sp.get('limit') || '20'), 50);
     const pageInfo = sp.get('page_info') || undefined;
 
-    const accessToken = await getShopifyAccessTokenForIntegration(integration);
+    const accessToken = await getShopifyAccessTokenForIntegration({ _id: integration.id, credentialsEncrypted: integration.credentialsEncrypted, shopDomain: integration.shopDomain });
 
     const query: Record<string, string> = {
       financial_status: 'paid',

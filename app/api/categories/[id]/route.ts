@@ -1,18 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Category from '@/models/Category';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateAndSanitize, validateCategory } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { getCategoryById, updateCategory } from '@/lib/data/categories';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
 
@@ -20,13 +18,14 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    const category = await Category.findOne({ _id: id, tenantId }).lean();
+    const category = await getCategoryById(tenantId, id);
 
     if (!category) {
       return NextResponse.json({ success: false, error: 'Category not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, data: category });
+    const { id: catId, ...rest } = category;
+    return NextResponse.json({ success: true, data: { _id: catId, ...rest } });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -37,7 +36,6 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
@@ -46,7 +44,7 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    const category = await Category.findOne({ _id: id, tenantId });
+    const category = await getCategoryById(tenantId, id);
     if (!category) {
       return NextResponse.json({ success: false, error: 'Category not found' }, { status: 404 });
     }
@@ -62,25 +60,27 @@ export async function PUT(
       );
     }
 
-    const oldData = category.toObject();
+    const oldData = category;
 
-    if (Object.prototype.hasOwnProperty.call(data, 'name') && typeof data.name === 'string') category.name = data.name;
-    if (Object.prototype.hasOwnProperty.call(data, 'description') && (typeof data.description === 'string' || typeof data.description === 'undefined')) category.description = data.description;
-    if (Object.prototype.hasOwnProperty.call(data, 'isActive') && typeof data.isActive === 'boolean') category.isActive = data.isActive;
+    const updates: Partial<{ name: string; description: string | undefined; isActive: boolean }> = {};
+    if (Object.prototype.hasOwnProperty.call(data, 'name') && typeof data.name === 'string') updates.name = data.name;
+    if (Object.prototype.hasOwnProperty.call(data, 'description') && (typeof data.description === 'string' || typeof data.description === 'undefined')) updates.description = data.description;
+    if (Object.prototype.hasOwnProperty.call(data, 'isActive') && typeof data.isActive === 'boolean') updates.isActive = data.isActive;
 
-    await category.save();
+    const updated = await updateCategory(tenantId, id, updates);
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.UPDATE,
       entityType: 'category',
-      entityId: category._id.toString(),
-      changes: { before: oldData, after: category.toObject() },
+      entityId: id,
+      changes: { before: oldData, after: updated },
     });
 
-    return NextResponse.json({ success: true, data: category });
+    const { id: catId, ...rest } = updated;
+    return NextResponse.json({ success: true, data: { _id: catId, ...rest } });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (error.code === 11000) {
+    if (error.code === 'P2002') {
       return NextResponse.json(
         { success: false, error: 'Category with this name already exists' },
         { status: 400 }
@@ -95,7 +95,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
@@ -104,21 +103,19 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    const category = await Category.findOne({ _id: id, tenantId });
+    const category = await getCategoryById(tenantId, id);
     if (!category) {
       return NextResponse.json({ success: false, error: 'Category not found' }, { status: 404 });
     }
 
     // Soft delete - set isActive to false
-    const oldData = category.toObject(); // eslint-disable-line @typescript-eslint/no-unused-vars
-    category.isActive = false;
-    await category.save();
+    await updateCategory(tenantId, id, { isActive: false });
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.DELETE,
       entityType: 'category',
-      entityId: category._id.toString(),
+      entityId: id,
       changes: { name: category.name },
     });
 
@@ -127,4 +124,3 @@ export async function DELETE(
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
-

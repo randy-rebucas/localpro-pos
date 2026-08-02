@@ -3,9 +3,7 @@
  * Automatically generate purchase orders when stock hits reorder point
  */
 
-import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product'; // eslint-disable-line @typescript-eslint/no-unused-vars
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/prisma';
 import { getLowStockProducts } from '@/lib/stock';
 import { sendEmail } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
@@ -23,8 +21,6 @@ export interface PurchaseOrderOptions {
 export async function generatePurchaseOrders(
   options: PurchaseOrderOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -37,10 +33,10 @@ export async function generatePurchaseOrders(
     // Get tenants to process
     let tenants;
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await prisma.tenant.findUnique({ where: { id: options.tenantId } });
       tenants = tenant ? [tenant] : [];
     } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
+      tenants = await prisma.tenant.findMany({ where: { isActive: true } });
     }
 
     if (tenants.length === 0) {
@@ -53,7 +49,7 @@ export async function generatePurchaseOrders(
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
+        const tenantId = tenant.id;
         const tenantSettings = await getTenantSettingsById(tenantId);
 
         // Get products that need reordering
@@ -77,14 +73,15 @@ export async function generatePurchaseOrders(
           // Calculate reorder quantity (if reorderQuantity field exists, use it; otherwise suggest threshold * 2)
           const reorderQuantity = product.reorderQuantity || ((product.threshold || 10) * 2);
           
+          const unitPrice = Number(product.price || 0);
           return {
-            productId: product._id,
+            productId: product.id,
             name: product.name,
             sku: product.sku || 'N/A',
             currentStock: product.currentStock || 0,
             reorderQuantity,
-            unitPrice: product.price || 0,
-            subtotal: (product.price || 0) * reorderQuantity,
+            unitPrice,
+            subtotal: unitPrice * reorderQuantity,
           };
         });
 

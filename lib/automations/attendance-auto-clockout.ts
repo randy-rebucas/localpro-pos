@@ -3,10 +3,7 @@
  * Auto-clock-out employees who forgot to clock out
  */
 
-import connectDB from '@/lib/mongodb';
-import Attendance from '@/models/Attendance';
-import Tenant from '@/models/Tenant';
-import User from '@/models/User'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import prisma from '@/lib/prisma';
 import { sendEmail } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { AutomationResult } from './types';
@@ -22,8 +19,6 @@ export interface AutoClockOutOptions {
 export async function autoClockOutForgottenSessions(
   options: AutoClockOutOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -38,11 +33,11 @@ export async function autoClockOutForgottenSessions(
     // Get tenants to process
     let tenants;
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await prisma.tenant.findUnique({ where: { id: options.tenantId } });
       tenants = tenant ? [tenant] : [];
     } else {
       // Get all active tenants
-      tenants = await Tenant.find({ status: 'active' }).lean();
+      tenants = await prisma.tenant.findMany({ where: { isActive: true } });
     }
 
     if (tenants.length === 0) {
@@ -56,7 +51,7 @@ export async function autoClockOutForgottenSessions(
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
+        const tenantId = tenant.id;
         const tenantSettings = await getTenantSettingsById(tenantId);
 
         // Check if attendance notifications are enabled
@@ -65,12 +60,15 @@ export async function autoClockOutForgottenSessions(
         }
 
         // Find all open attendance sessions
-        const openSessions = await Attendance.find({
-          tenantId,
-          clockOut: null,
-        })
-          .populate('userId', 'name email')
-          .lean();
+        const openSessions = await prisma.attendance.findMany({
+          where: {
+            tenantId,
+            clockOut: null,
+          },
+          include: {
+            user: { select: { name: true, email: true } },
+          },
+        });
 
         for (const session of openSessions) {
           try {
@@ -84,7 +82,7 @@ export async function autoClockOutForgottenSessions(
                   const [hours, minutes] = tenantSettings.attendanceNotifications.expectedStartTime.split(':').map(Number);
                   const expectedStart = new Date(clockInTime);
                   expectedStart.setHours(hours, minutes || 0, 0, 0);
-                  
+
                   // If clock-in was before expected start, use expected start
                   if (clockInTime < expectedStart) {
                     const expectedEnd = new Date(expectedStart);
@@ -126,16 +124,19 @@ export async function autoClockOutForgottenSessions(
               const totalHours = Math.round((totalMs / (1000 * 60 * 60)) * 100) / 100;
 
               // Update attendance record
-              await Attendance.findByIdAndUpdate(session._id, {
-                clockOut: clockOutTime,
-                totalHours,
-                notes: (session.notes || '') + (session.notes ? '\n' : '') + `[AUTO] Automatically clocked out after grace period.`,
+              await prisma.attendance.update({
+                where: { id: session.id },
+                data: {
+                  clockOut: clockOutTime,
+                  totalHours,
+                  notes: (session.notes || '') + (session.notes ? '\n' : '') + `[AUTO] Automatically clocked out after grace period.`,
+                },
               });
 
               totalProcessed++;
 
               // Send notification to employee and manager
-              const user = session.userId as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+              const user = session.user;
               if (user?.email && tenantSettings?.emailNotifications) {
                 const companyName = tenantSettings?.companyName || tenant.name || 'Business';
                 await sendEmail({
@@ -181,7 +182,7 @@ Please review this attendance record.`,
             }
           } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             totalFailed++;
-            results.errors?.push(`Session ${session._id}: ${error.message}`);
+            results.errors?.push(`Session ${session.id}: ${error.message}`);
           }
         }
       } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any

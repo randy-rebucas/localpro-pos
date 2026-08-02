@@ -3,10 +3,7 @@
  * Auto-detect and log breaks based on inactivity
  */
 
-import connectDB from '@/lib/mongodb';
-import Attendance from '@/models/Attendance';
-import Transaction from '@/models/Transaction';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/prisma';
 import { AutomationResult } from './types';
 
 export interface BreakDetectionOptions {
@@ -20,8 +17,6 @@ export interface BreakDetectionOptions {
 export async function detectBreaks(
   options: BreakDetectionOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -37,10 +32,10 @@ export async function detectBreaks(
     // Get tenants to process
     let tenants;
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await prisma.tenant.findUnique({ where: { id: options.tenantId } });
       tenants = tenant ? [tenant] : [];
     } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
+      tenants = await prisma.tenant.findMany({ where: { isActive: true } });
     }
 
     if (tenants.length === 0) {
@@ -53,26 +48,29 @@ export async function detectBreaks(
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
+        const tenantId = tenant.id;
 
         // Find active attendance sessions
-        const activeSessions = await Attendance.find({
-          tenantId,
-          clockOut: null,
-        }).lean();
+        const activeSessions = await prisma.attendance.findMany({
+          where: {
+            tenantId,
+            clockOut: null,
+          },
+        });
 
         for (const session of activeSessions) {
           try {
             const clockInTime = new Date(session.clockIn);
-            
+
             // Get last transaction for this user during this session
-            const lastTransaction = await Transaction.findOne({
-              tenantId,
-              userId: session.userId,
-              createdAt: { $gte: clockInTime },
-            })
-              .sort({ createdAt: -1 })
-              .lean();
+            const lastTransaction = await prisma.transaction.findFirst({
+              where: {
+                tenantId,
+                userId: session.userId,
+                createdAt: { gte: clockInTime },
+              },
+              orderBy: { createdAt: 'desc' },
+            });
 
             if (!lastTransaction) {
               // No transactions yet, can't detect break
@@ -84,21 +82,23 @@ export async function detectBreaks(
 
             // If no activity for X minutes and no break started, start break
             if (minutesSinceActivity >= inactivityMinutes && !session.breakStart) {
-              await Attendance.findByIdAndUpdate(session._id, {
-                breakStart: lastActivityTime, // Use last activity time as break start
+              await prisma.attendance.update({
+                where: { id: session.id },
+                data: { breakStart: lastActivityTime }, // Use last activity time as break start
               });
               totalBreaksDetected++;
             }
             // If break started and activity resumed, end break
             else if (session.breakStart && minutesSinceActivity < inactivityMinutes && !session.breakEnd) {
-              await Attendance.findByIdAndUpdate(session._id, {
-                breakEnd: now,
+              await prisma.attendance.update({
+                where: { id: session.id },
+                data: { breakEnd: now },
               });
               totalBreaksDetected++;
             }
           } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             totalFailed++;
-            results.errors?.push(`Session ${session._id}: ${error.message}`);
+            results.errors?.push(`Session ${session.id}: ${error.message}`);
           }
         }
       } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any

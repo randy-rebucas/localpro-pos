@@ -3,7 +3,7 @@
  * Supports multiple providers via environment variables
  */
 
-import { ITenantSettings } from '@/models/Tenant';
+import type { ITenantSettings } from '@/types/tenant';
 import { formatDate, formatTime } from '@/lib/formatting';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { renderNotificationTemplate, getDefaultTemplate } from '@/lib/notification-templates';

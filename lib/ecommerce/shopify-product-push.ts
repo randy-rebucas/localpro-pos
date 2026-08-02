@@ -1,6 +1,5 @@
 import { shopifyAdminFetch } from '@/lib/ecommerce/shopify-api';
 import { shopifySetInventoryLevel } from '@/lib/ecommerce/shopify-catalog';
-import type { IProduct } from '@/models/Product';
 
 interface ShopifyVariantResponse {
   id: number;
@@ -12,10 +11,18 @@ interface ShopifyProductResponse {
   variants: ShopifyVariantResponse[];
 }
 
+interface ProductLike {
+  name: string;
+  description?: string | null;
+  price: number | string;
+  sku?: string | null;
+  allowOutOfStockSales?: boolean | null;
+}
+
 export async function shopifyCreateProduct(
   shopDomain: string,
   accessToken: string,
-  product: IProduct
+  product: ProductLike
 ): Promise<{ externalProductId: string; externalVariantId: string; inventoryItemId: string }> {
   const data = await shopifyAdminFetch<{ product: ShopifyProductResponse }>(
     shopDomain,

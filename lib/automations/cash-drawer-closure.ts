@@ -3,11 +3,7 @@
  * Automatically close cash drawers at end of business day
  */
 
-import connectDB from '@/lib/mongodb';
-import CashDrawerSession from '@/models/CashDrawerSession';
-import Tenant from '@/models/Tenant';
-import Transaction from '@/models/Transaction';
-import Expense from '@/models/Expense';
+import prisma from '@/lib/prisma';
 import { sendEmail } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { AutomationResult } from './types';
@@ -23,8 +19,6 @@ export interface CashDrawerClosureOptions {
 export async function autoCloseCashDrawers(
   options: CashDrawerClosureOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -37,11 +31,11 @@ export async function autoCloseCashDrawers(
     // Get tenants to process
     let tenants;
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await prisma.tenant.findUnique({ where: { id: options.tenantId } });
       tenants = tenant ? [tenant] : [];
     } else {
       // Get all active tenants
-      tenants = await Tenant.find({ status: 'active' }).lean();
+      tenants = await prisma.tenant.findMany({ where: { isActive: true } });
     }
 
     if (tenants.length === 0) {
@@ -56,7 +50,7 @@ export async function autoCloseCashDrawers(
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
+        const tenantId = tenant.id;
         const tenantSettings = await getTenantSettingsById(tenantId);
 
         // Get business hours (if configured)
@@ -70,12 +64,10 @@ export async function autoCloseCashDrawers(
         }
 
         // Find all open cash drawer sessions
-        const openSessions = await CashDrawerSession.find({
-          tenantId,
-          status: 'open',
-        })
-          .populate('userId', 'name email')
-          .lean();
+        const openSessions = await prisma.cashDrawerSession.findMany({
+          where: { tenantId, status: 'open' },
+          include: { user: { select: { id: true, name: true, email: true } } },
+        });
 
         for (const session of openSessions) {
           try {
@@ -84,26 +76,31 @@ export async function autoCloseCashDrawers(
             const sessionEnd = now;
 
             // Get cash transactions for this session
-            const cashTransactions = await Transaction.find({
-              tenantId,
-              paymentMethod: 'cash',
-              createdAt: { $gte: sessionStart, $lte: sessionEnd },
-              status: 'completed',
-            }).lean();
+            const cashTransactions = await prisma.transaction.findMany({
+              where: {
+                tenantId,
+                paymentMethod: 'cash',
+                createdAt: { gte: sessionStart, lte: sessionEnd },
+                status: 'completed',
+              },
+            });
 
-            const cashSales = cashTransactions.reduce((sum, t) => sum + t.total, 0);
+            const cashSales = cashTransactions.reduce((sum, t) => sum + Number(t.total), 0);
 
             // Get cash expenses for this session
-            const cashExpenses = await Expense.find({
-              tenantId,
-              paymentMethod: 'cash',
-              date: { $gte: sessionStart, $lte: sessionEnd },
-            }).lean();
+            const cashExpenses = await prisma.expense.findMany({
+              where: {
+                tenantId,
+                paymentMethod: 'cash',
+                date: { gte: sessionStart, lte: sessionEnd },
+              },
+            });
 
-            const cashExpensesTotal = cashExpenses.reduce((sum, e) => sum + e.amount, 0);
+            const cashExpensesTotal = cashExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
 
             // Calculate expected amount
-            const expectedAmount = session.openingAmount + cashSales - cashExpensesTotal;
+            const openingAmount = Number(session.openingAmount);
+            const expectedAmount = openingAmount + cashSales - cashExpensesTotal;
 
             // For auto-closure, we'll set closing amount to expected (no physical count)
             // In production, you might want to flag these for review
@@ -115,14 +112,20 @@ export async function autoCloseCashDrawers(
             const overage = actualDifference > 0 ? actualDifference : 0;
 
             // Update session
-            await CashDrawerSession.findByIdAndUpdate(session._id, {
-              status: 'closed',
-              closingTime: sessionEnd,
-              closingAmount,
-              expectedAmount,
-              shortage: shortage > 0 ? shortage : undefined,
-              overage: overage > 0 ? overage : undefined,
-              notes: (session.notes || '') + (session.notes ? '\n' : '') + '[AUTO] Automatically closed at end of business day.',
+            await prisma.cashDrawerSession.update({
+              where: { id: session.id },
+              data: {
+                status: 'closed',
+                closingTime: sessionEnd,
+                closingAmount,
+                expectedAmount,
+                shortage: shortage > 0 ? shortage : undefined,
+                overage: overage > 0 ? overage : undefined,
+                notes:
+                  (session.notes || '') +
+                  (session.notes ? '\n' : '') +
+                  '[AUTO] Automatically closed at end of business day.',
+              },
             });
 
             totalProcessed++;
@@ -132,15 +135,15 @@ export async function autoCloseCashDrawers(
               shortage: 10, // $10
               overage: 20, // $20
             };
-            
+
             const hasDiscrepancy = shortage > discrepancyThreshold.shortage || overage > discrepancyThreshold.overage;
             const isLargeDiscrepancy = shortage > 50 || overage > 100; // Large discrepancies need immediate attention
 
             // Send summary report to managers
             if (tenantSettings?.emailNotifications && tenantSettings?.email) {
               const companyName = tenantSettings?.companyName || tenant.name || 'Business';
-              const user = session.userId as any; // eslint-disable-line @typescript-eslint/no-explicit-any
-              
+              const user = session.user;
+
               const reportHtml = `
 <!DOCTYPE html>
 <html>
@@ -171,7 +174,7 @@ export async function autoCloseCashDrawers(
       </div>
       <div class="summary-item">
         <span><strong>Opening Amount:</strong></span>
-        <span>$${session.openingAmount.toFixed(2)}</span>
+        <span>$${openingAmount.toFixed(2)}</span>
       </div>
       <div class="summary-item">
         <span><strong>Cash Sales:</strong></span>
@@ -228,7 +231,7 @@ export async function autoCloseCashDrawers(
                   message: `URGENT: Large Cash Drawer Discrepancy Detected
 
 Cashier: ${user?.name || 'Unknown'}
-Session ID: ${session._id.toString().slice(-8)}
+Session ID: ${session.id.slice(-8)}
 Time: ${sessionEnd.toLocaleString()}
 
 ${shortage > 50 ? `SHORTAGE: $${shortage.toFixed(2)}` : ''}
@@ -248,7 +251,7 @@ This is an automated security alert from your POS system.`,
             }
           } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             totalFailed++;
-            results.errors?.push(`Session ${session._id}: ${error.message}`);
+            results.errors?.push(`Session ${session.id}: ${error.message}`);
           }
         }
       } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any

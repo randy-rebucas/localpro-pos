@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Transaction from '@/models/Transaction';
+import prisma from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 import { requireCustomerAuth } from '@/lib/auth-customer';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
@@ -19,9 +19,8 @@ export async function GET(
   { params }: { params: Promise<{ customerId: string }> }
 ) {
   try {
-    await connectDB();
     const t = await getValidationTranslatorFromRequest(request);
-    
+
     // Verify customer authentication
     const customer = await requireCustomerAuth(request);
     const { customerId } = await params;
@@ -42,45 +41,67 @@ export async function GET(
     const limit = Math.min(parseInt(searchParams.get('limit') || '20', 10), 100);
 
     // Build query
-    const query: Record<string, unknown> = {
+    const where: Prisma.TransactionWhereInput = {
       tenantId: customer.tenantId,
       customerId: customer.customerId,
     };
 
-    // Add status filter
     if (status) {
-      query.status = status;
+      where.status = status as never;
     }
 
-    // Add date range filter
     if (startDate || endDate) {
-      const dateFilter: Record<string, Date> = {};
+      const dateFilter: { gte?: Date; lte?: Date } = {};
       if (startDate) {
         const d = new Date(startDate);
         if (isNaN(d.getTime())) return NextResponse.json({ success: false, error: 'Invalid startDate' }, { status: 400 });
-        dateFilter.$gte = d;
+        dateFilter.gte = d;
       }
       if (endDate) {
         const d = new Date(endDate);
         if (isNaN(d.getTime())) return NextResponse.json({ success: false, error: 'Invalid endDate' }, { status: 400 });
-        dateFilter.$lte = d;
+        dateFilter.lte = d;
       }
-      query.createdAt = dateFilter;
+      where.createdAt = dateFilter;
     }
 
-    // Get total count for pagination
-    const total = await Transaction.countDocuments(query);
+    const [total, transactions] = await Promise.all([
+      prisma.transaction.count({ where }),
+      prisma.transaction.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+        include: { items: true },
+      }),
+    ]);
 
-    // Get transactions with pagination
-    const transactions = await Transaction.find(query)
-      .sort({ createdAt: -1 }) // Most recent first
-      .skip((page - 1) * limit)
-      .limit(limit)
-      .lean();
+    const data = transactions.map((tx) => {
+      const { id, items, ...rest } = tx;
+      return {
+        _id: id,
+        ...rest,
+        subtotal: Number(rest.subtotal),
+        discountAmount: rest.discountAmount !== null ? Number(rest.discountAmount) : null,
+        taxExemptAmount: Number(rest.taxExemptAmount),
+        zeroRatedAmount: Number(rest.zeroRatedAmount),
+        taxAmount: Number(rest.taxAmount),
+        total: Number(rest.total),
+        cashReceived: rest.cashReceived !== null ? Number(rest.cashReceived) : null,
+        change: rest.change !== null ? Number(rest.change) : null,
+        items: items.map((item) => ({
+          ...item,
+          _id: item.id,
+          product: item.productId,
+          price: Number(item.price),
+          subtotal: Number(item.subtotal),
+        })),
+      };
+    });
 
     return NextResponse.json({
       success: true,
-      data: transactions,
+      data,
       pagination: {
         page,
         limit,

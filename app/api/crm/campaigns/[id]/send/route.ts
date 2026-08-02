@@ -1,16 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Campaign from '@/models/Campaign';
-import Customer from '@/models/Customer';
-import Transaction from '@/models/Transaction';
+import prisma from '@/lib/prisma';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
 import { sendEmail, sendSMS } from '@/lib/notifications';
-import mongoose from 'mongoose';
 
 const SEND_BATCH_SIZE = 25;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Segment filter helpers (mirrors the /api/crm/segments logic)
 const LAPSED_DAYS = 90;
@@ -20,7 +17,7 @@ const VIP_POINTS = 500;
 
 function matchesSegment(
   segment: string,
-  c: { lastPurchaseDate?: Date; loyaltyPointsBalance?: number; totalSpent?: number },
+  c: { lastPurchaseDate?: Date | null; loyaltyPointsBalance?: number; totalSpent?: number },
   orderCount: number
 ): boolean {
   if (segment === 'all') return true;
@@ -49,8 +46,6 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
-
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId, user } = authResult;
@@ -59,39 +54,43 @@ export async function POST(
     }
 
     const { id } = await params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!UUID_RE.test(id)) {
       return NextResponse.json({ success: false, error: 'Invalid campaign ID' }, { status: 400 });
     }
 
-    const campaign = await Campaign.findOne({ _id: id, tenantId });
+    const campaign = await prisma.campaign.findFirst({ where: { id, tenantId } });
     if (!campaign) return NextResponse.json({ success: false, error: 'Campaign not found' }, { status: 404 });
     if (campaign.status === 'sent') {
       return NextResponse.json({ success: false, error: 'Campaign already sent' }, { status: 409 });
     }
 
     // Resolve recipients — fetch all active customers with contact info
-    const contactField = campaign.channel === 'email' ? { email: { $exists: true, $ne: '' } } : { phone: { $exists: true, $ne: '' } };
-    const candidates = await Customer.find(
-      { tenantId, isActive: true, ...contactField },
-      { _id: 1, email: 1, phone: 1, lastPurchaseDate: 1, loyaltyPointsBalance: 1, totalSpent: 1 }
-    ).lean();
+    const candidates = await prisma.customer.findMany({
+      where: {
+        tenantId,
+        isActive: true,
+        ...(campaign.channel === 'email'
+          ? { email: { not: null, notIn: [''] } }
+          : { phone: { not: null, notIn: [''] } }),
+      },
+      select: { id: true, email: true, phone: true, lastPurchaseDate: true, loyaltyPointsBalance: true, totalSpent: true },
+    });
 
     // Real order counts per customer — must match the same logic /api/crm/segments
     // uses, so who actually receives a segment's campaign matches who the admin
-    // saw in that segment when composing it. (aggregate() requires an explicit
-    // ObjectId cast — tenantId here is a string, unlike the auto-cast .find() above.)
-    const tenantObjectId = new mongoose.Types.ObjectId(tenantId);
-    const orderStats = await Transaction.aggregate([
-      { $match: { tenantId: tenantObjectId, status: 'completed' } },
-      { $group: { _id: '$customerId', orderCount: { $sum: 1 } } },
-    ]);
+    // saw in that segment when composing it.
+    const orderStats = await prisma.transaction.groupBy({
+      by: ['customerId'],
+      where: { tenantId, status: 'completed' },
+      _count: { _all: true },
+    });
     const orderCountMap = new Map<string, number>(
-      orderStats.filter((s) => s._id != null).map((s) => [String(s._id), s.orderCount])
+      orderStats.filter((s) => s.customerId != null).map((s) => [s.customerId as string, s._count._all])
     );
 
     const recipients = candidates.filter((c) => {
-      const orderCount = orderCountMap.get(String(c._id)) ?? 0;
-      return matchesSegment(campaign.segment, c, orderCount);
+      const orderCount = orderCountMap.get(c.id) ?? 0;
+      return matchesSegment(campaign.segment, { ...c, totalSpent: Number(c.totalSpent) }, orderCount);
     });
 
     // Deliver via the existing multi-provider notification layer (lib/notifications.ts),
@@ -104,7 +103,7 @@ export async function POST(
       const results = await Promise.allSettled(
         batch.map((recipient) =>
           campaign.channel === 'email'
-            ? sendEmail({ to: recipient.email as string, subject: campaign.subject, message: campaign.body, type: 'email' })
+            ? sendEmail({ to: recipient.email as string, subject: campaign.subject ?? undefined, message: campaign.body, type: 'email' })
             : sendSMS({ to: recipient.phone as string, message: campaign.body, type: 'sms' })
         )
       );
@@ -117,22 +116,26 @@ export async function POST(
       }
     }
 
-    campaign.status = sentCount > 0 ? 'sent' : 'failed';
-    campaign.sentCount = sentCount;
-    campaign.sentAt = new Date();
-    await campaign.save();
+    const updatedCampaign = await prisma.campaign.update({
+      where: { id: campaign.id },
+      data: {
+        status: sentCount > 0 ? 'sent' : 'failed',
+        sentCount,
+        sentAt: new Date(),
+      },
+    });
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.UPDATE,
       entityType: 'campaign',
-      entityId: String(campaign._id),
-      changes: { action: 'send', sentCount, failedCount, channel: campaign.channel, segment: campaign.segment },
+      entityId: campaign.id,
+      changes: { action: 'send', sentCount, failedCount, channel: updatedCampaign.channel, segment: updatedCampaign.segment },
     });
 
     return NextResponse.json({
       success: true,
-      data: { sentCount, failedCount, channel: campaign.channel, segment: campaign.segment },
+      data: { sentCount, failedCount, channel: updatedCampaign.channel, segment: updatedCampaign.segment },
     });
   } catch (error) {
     return handleApiError(error, 'Failed to send campaign');

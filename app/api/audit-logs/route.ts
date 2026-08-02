@@ -1,16 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import AuditLog from '@/models/AuditLog';
+import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
-import User from '@/models/User'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
+import type { Prisma } from '@prisma/client';
 
 export async function GET(request: NextRequest) {
   try {
     const user = await requireAuth(request);
-    await connectDB();
 
     // Get translation function
     const t = await getValidationTranslatorFromRequest(request);
@@ -37,44 +35,51 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get('endDate');
 
     // Build query
-    const query: any = { tenantId: user.tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const where: Prisma.AuditLogWhereInput = { tenantId: user.tenantId };
 
     if (action) {
-      query.action = action;
+      where.action = action;
     }
 
     if (entityType) {
-      query.entityType = entityType;
+      where.entityType = entityType;
     }
 
     if (userId) {
-      query.userId = userId;
+      where.userId = userId;
     }
 
     if (startDate || endDate) {
-      query.createdAt = {};
+      where.createdAt = {};
       if (startDate) {
-        query.createdAt.$gte = new Date(startDate);
+        (where.createdAt as Prisma.DateTimeFilter).gte = new Date(startDate);
       }
       if (endDate) {
-        query.createdAt.$lte = new Date(endDate);
+        (where.createdAt as Prisma.DateTimeFilter).lte = new Date(endDate);
       }
     }
 
     // Fetch audit logs with pagination
     const [auditLogs, total] = await Promise.all([
-      AuditLog.find(query)
-        .populate('userId', 'name email')
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-      AuditLog.countDocuments(query),
+      prisma.auditLog.findMany({
+        where,
+        include: { user: { select: { name: true, email: true } } },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.auditLog.count({ where }),
     ]);
+
+    const data = auditLogs.map(({ id, userId: uid, user: userRel, ...rest }) => ({
+      _id: id,
+      userId: userRel ? { _id: uid, name: userRel.name, email: userRel.email } : uid,
+      ...rest,
+    }));
 
     return NextResponse.json({
       success: true,
-      data: auditLogs,
+      data,
       pagination: {
         page,
         limit,
@@ -91,4 +96,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-

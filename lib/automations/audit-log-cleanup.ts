@@ -4,10 +4,8 @@
  * When archive=false, logs are deleted directly without archiving.
  */
 
-import connectDB from '@/lib/mongodb';
-import AuditLog from '@/models/AuditLog';
-import ArchivedAuditLog from '@/models/ArchivedAuditLog';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/prisma';
+import { runInTransaction } from '@/lib/db-transaction';
 import { AutomationResult } from './types';
 
 export interface AuditLogCleanupOptions {
@@ -20,13 +18,11 @@ export interface AuditLogCleanupOptions {
 /**
  * Clean up old audit logs based on retention policy.
  * When archive=true (default), expired logs are copied to the archived_audit_logs
- * collection before being removed from the live audit_logs collection.
+ * table before being removed from the live audit_logs table.
  */
 export async function cleanupAuditLogs(
   options: AuditLogCleanupOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const retentionYears = options.retentionYears ?? 2;
   const archive = options.archive ?? true;
   const batchSize = options.batchSize ?? 500;
@@ -44,51 +40,59 @@ export async function cleanupAuditLogs(
 
   try {
     // Get tenants to process
-    let tenants: { _id: { toString(): string }; name?: string }[];
+    let tenants: { id: string; name?: string }[];
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).select('_id name').lean();
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: options.tenantId },
+        select: { id: true, name: true },
+      });
       tenants = tenant ? [tenant] : [];
     } else {
-      tenants = await Tenant.find({ status: 'active' }).select('_id name').lean();
+      tenants = await prisma.tenant.findMany({
+        where: { isActive: true },
+        select: { id: true, name: true },
+      });
     }
 
     for (const tenant of tenants) {
-      const tenantId = tenant._id.toString();
+      const tenantId = tenant.id;
 
       try {
-        const expiredLogs = await AuditLog.find({
-          tenantId,
-          createdAt: { $lt: cutoffDate },
-        })
-          .limit(batchSize)
-          .lean();
+        const expiredLogs = await prisma.auditLog.findMany({
+          where: { tenantId, createdAt: { lt: cutoffDate } },
+          take: batchSize,
+        });
 
         if (expiredLogs.length === 0) continue;
 
-        if (archive) {
-          // Build archive documents, preserving the original createdAt
-          const archiveDocs = expiredLogs.map(log => ({
-            tenantId: log.tenantId,
-            userId: log.userId,
-            action: log.action,
-            entityType: log.entityType,
-            entityId: log.entityId,
-            changes: log.changes,
-            ipAddress: log.ipAddress,
-            userAgent: log.userAgent,
-            metadata: log.metadata,
-            createdAt: log.createdAt,
-            archivedAt: new Date(),
-          }));
+        const ids = expiredLogs.map(l => l.id);
 
-          // Insert archive batch (ordered:false continues on partial failures)
-          await ArchivedAuditLog.insertMany(archiveDocs, { ordered: false });
-        }
+        await runInTransaction(async (tx) => {
+          if (archive) {
+            // Build archive documents, preserving the original createdAt
+            const archiveDocs = expiredLogs.map(log => ({
+              tenantId: log.tenantId,
+              userId: log.userId,
+              action: log.action,
+              entityType: log.entityType,
+              entityId: log.entityId,
+              changes: log.changes as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+              ipAddress: log.ipAddress,
+              userAgent: log.userAgent,
+              metadata: log.metadata as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+              createdAt: log.createdAt,
+              archivedAt: new Date(),
+            }));
 
-        // Delete the expired logs from the live collection
-        const ids = expiredLogs.map(l => l._id);
-        const deleteResult = await AuditLog.deleteMany({ _id: { $in: ids } });
-        results.processed += deleteResult.deletedCount ?? 0;
+            // Insert archive batch; continue even if some rows fail individually
+            await tx.archivedAuditLog.createMany({ data: archiveDocs, skipDuplicates: true });
+          }
+
+          // Delete the expired logs from the live table
+          await tx.auditLog.deleteMany({ where: { id: { in: ids } } });
+        });
+
+        results.processed += ids.length;
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
         results.failed++;

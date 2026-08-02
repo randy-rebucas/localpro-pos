@@ -1,13 +1,10 @@
 /**
  * Recurring Booking Generation
- * Reads RecurringBookingTemplate documents and creates Booking records
+ * Reads RecurringBookingTemplate rows and creates Booking records
  * for each upcoming slot within the look-ahead window.
  */
 
-import connectDB from '@/lib/mongodb';
-import Booking from '@/models/Booking';
-import RecurringBookingTemplate from '@/models/RecurringBookingTemplate';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/prisma';
 import { AutomationResult } from './types';
 
 export interface RecurringBookingOptions {
@@ -23,9 +20,9 @@ function getOccurrenceDates(
   template: {
     recurrenceType: 'daily' | 'weekly' | 'monthly';
     daysOfWeek?: number[];
-    dayOfMonth?: number;
+    dayOfMonth?: number | null;
     effectiveFrom: Date;
-    effectiveTo?: Date;
+    effectiveTo?: Date | null;
   },
   daysAhead: number
 ): Date[] {
@@ -77,8 +74,6 @@ function getOccurrenceDates(
 export async function generateRecurringBookings(
   options: RecurringBookingOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const daysAhead = options.daysAhead ?? 30;
 
   const results: AutomationResult = {
@@ -93,28 +88,32 @@ export async function generateRecurringBookings(
     // Get tenants to process
     let tenantIds: string[];
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).select('_id').lean();
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: options.tenantId },
+        select: { id: true },
+      });
       if (!tenant) {
         results.message = `Tenant ${options.tenantId} not found`;
         return results;
       }
       tenantIds = [options.tenantId];
     } else {
-      const tenants = await Tenant.find({ status: 'active' }).select('_id').lean();
-      tenantIds = tenants.map(t => t._id.toString());
+      const tenants = await prisma.tenant.findMany({
+        where: { isActive: true },
+        select: { id: true },
+      });
+      tenantIds = tenants.map(t => t.id);
     }
 
     for (const tenantId of tenantIds) {
-      const templates = await RecurringBookingTemplate.find({
-        tenantId,
-        isActive: true,
-        effectiveFrom: { $lte: new Date() },
-        $or: [
-          { effectiveTo: { $exists: false } },
-          { effectiveTo: null },
-          { effectiveTo: { $gte: new Date() } },
-        ],
-      }).lean();
+      const templates = await prisma.recurringBookingTemplate.findMany({
+        where: {
+          tenantId,
+          isActive: true,
+          effectiveFrom: { lte: new Date() },
+          OR: [{ effectiveTo: null }, { effectiveTo: { gte: new Date() } }],
+        },
+      });
 
       for (const template of templates) {
         const occurrences = getOccurrenceDates(template, daysAhead);
@@ -126,32 +125,36 @@ export async function generateRecurringBookings(
 
           try {
             // Check if a booking for this slot already exists (avoid duplicates)
-            const existing = await Booking.findOne({
-              tenantId,
-              staffId: template.staffId ?? null,
-              startTime,
-              status: { $nin: ['cancelled'] },
-            }).lean();
+            const existing = await prisma.booking.findFirst({
+              where: {
+                tenantId,
+                staffId: template.staffId ?? null,
+                startTime,
+                status: { not: 'cancelled' },
+              },
+            });
 
             if (existing) continue;
 
-            await Booking.create({
-              tenantId,
-              customerName: template.customerName,
-              customerEmail: template.customerEmail,
-              customerPhone: template.customerPhone,
-              serviceName: template.serviceName,
-              serviceDescription: template.serviceDescription,
-              staffId: template.staffId,
-              staffName: template.staffName,
-              startTime,
-              endTime,
-              duration: template.duration,
-              status: 'pending',
-              notes: template.notes
-                ? `[Recurring] ${template.notes}`
-                : '[Recurring booking]',
-              isActive: true,
+            await prisma.booking.create({
+              data: {
+                tenantId,
+                customerName: template.customerName,
+                customerEmail: template.customerEmail,
+                customerPhone: template.customerPhone,
+                serviceName: template.serviceName,
+                serviceDescription: template.serviceDescription,
+                staffId: template.staffId,
+                staffName: template.staffName,
+                startTime,
+                endTime,
+                duration: template.duration,
+                status: 'pending',
+                notes: template.notes
+                  ? `[Recurring] ${template.notes}`
+                  : '[Recurring booking]',
+                isActive: true,
+              },
             });
 
             results.processed++;
@@ -159,7 +162,7 @@ export async function generateRecurringBookings(
             const message = err instanceof Error ? err.message : String(err);
             results.failed++;
             results.errors?.push(
-              `Template ${template._id.toString()} on ${date.toISOString().slice(0, 10)}: ${message}`
+              `Template ${template.id} on ${date.toISOString().slice(0, 10)}: ${message}`
             );
           }
         }

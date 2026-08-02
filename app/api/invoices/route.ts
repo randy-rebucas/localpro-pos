@@ -1,16 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Invoice from '@/models/Invoice';
-import Transaction from '@/models/Transaction';
-import Customer from '@/models/Customer';
+import prisma from '@/lib/prisma';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { generateInvoiceNumber } from '@/lib/receipt';
+import { serializeInvoice } from '@/lib/data/invoices';
+import { Prisma } from '@prisma/client';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     let tenantId: string;
     try {
       const tenantAccess = await requireTenantAccess(request);
@@ -32,34 +30,38 @@ export async function GET(request: NextRequest) {
     const customerId = searchParams.get('customerId');
     const overdue = searchParams.get('overdue') === 'true';
 
-    const query: any = { tenantId, isActive: { $ne: false } }; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const where: Prisma.InvoiceWhereInput = { tenantId, isActive: true };
 
     if (status) {
-      query.status = status;
+      where.status = status as Prisma.InvoiceWhereInput['status'];
     }
-    
+
     if (customerId) {
-      query.customerId = customerId;
+      where.customerId = customerId;
     }
-    
+
     if (overdue) {
-      query.status = { $in: ['sent', 'draft'] };
-      query.dueDate = { $lt: new Date() };
+      where.status = { in: ['sent', 'draft'] };
+      where.dueDate = { lt: new Date() };
     }
 
-    const invoices = await Invoice.find(query)
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .skip(skip)
-      .populate('transactionId', 'receiptNumber total')
-      .populate('customerId', 'name email phone')
-      .lean();
-
-    const total = await Invoice.countDocuments(query);
+    const [invoices, total] = await Promise.all([
+      prisma.invoice.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip,
+        include: {
+          transaction: { select: { id: true, receiptNumber: true, total: true } },
+          customer: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
+        },
+      }),
+      prisma.invoice.count({ where }),
+    ]);
 
     return NextResponse.json({
       success: true,
-      data: invoices || [],
+      data: invoices.map(serializeInvoice),
       pagination: {
         total,
         page,
@@ -67,14 +69,14 @@ export async function GET(request: NextRequest) {
         pages: Math.ceil(total / limit),
       },
     });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Internal server error';
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const tenantAccess = await requireTenantAccess(request);
     const { tenantId, user } = tenantAccess;
     if (!(await hasTenantPermission(user.role, tenantId, 'invoices.manage'))) {
@@ -86,17 +88,16 @@ export async function POST(request: NextRequest) {
       transactionId,
       customerId,
       items,
-      subtotal, 
-      discountAmount, 
-      taxAmount, 
-      total, 
-      dueDate, 
-      paymentTerms, 
+      subtotal,
+      discountAmount,
+      taxAmount,
+      total,
+      dueDate,
+      paymentTerms,
       notes,
-      customerInfo 
+      customerInfo,
     } = body;
 
-    // Validate required fields
     if (!items || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json(
         { success: false, error: 'Invoice items are required' },
@@ -111,11 +112,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // If transactionId provided, verify it exists and belongs to tenant
     if (transactionId) {
-      const transaction = await Transaction.findOne({
-        _id: transactionId,
-        tenantId,
+      const transaction = await prisma.transaction.findFirst({
+        where: { id: transactionId, tenantId },
       });
 
       if (!transaction) {
@@ -126,54 +125,50 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // If customerId provided, get customer info
     let finalCustomerInfo = customerInfo;
     if (customerId && !customerInfo) {
-      const customer = await Customer.findOne({
-        _id: customerId,
-        tenantId,
-      }).lean();
+      const customer = await prisma.customer.findFirst({
+        where: { id: customerId, tenantId },
+      });
 
       if (customer) {
+        const addresses = Array.isArray(customer.addresses) ? (customer.addresses as Array<{ isDefault?: boolean }>) : [];
         finalCustomerInfo = {
           name: `${customer.firstName} ${customer.lastName}`.trim(),
           email: customer.email,
           phone: customer.phone,
-          address: customer.addresses && customer.addresses.length > 0 
-            ? customer.addresses.find((addr: any) => addr.isDefault) || customer.addresses[0] // eslint-disable-line @typescript-eslint/no-explicit-any
-            : undefined,
+          address: addresses.length > 0 ? (addresses.find((addr) => addr.isDefault) || addresses[0]) : undefined,
         };
       }
     }
 
-    // Generate invoice number
     const invoiceNumber = await generateInvoiceNumber(tenantId);
 
-    // Create invoice
-    const invoice = await Invoice.create({
-      tenantId,
-      invoiceNumber,
-      transactionId: transactionId || undefined,
-      customerId: customerId || undefined,
-      customerInfo: finalCustomerInfo,
-      items,
-      subtotal,
-      discountAmount: discountAmount || undefined,
-      taxAmount,
-      total,
-      dueDate: new Date(dueDate),
-      paymentTerms: paymentTerms || 'Due on receipt',
-      status: 'draft',
-      notes: notes || undefined,
+    const invoice = await prisma.invoice.create({
+      data: {
+        tenantId,
+        invoiceNumber,
+        transactionId: transactionId || undefined,
+        customerId: customerId || undefined,
+        customerInfo: finalCustomerInfo ?? undefined,
+        items,
+        subtotal,
+        discountAmount: discountAmount || undefined,
+        taxAmount,
+        total,
+        dueDate: new Date(dueDate),
+        paymentTerms: paymentTerms || 'Due on receipt',
+        status: 'draft',
+        notes: notes || undefined,
+      },
     });
 
-    // Create audit log
     await createAuditLog(request, {
       tenantId,
       userId: user.userId,
       action: AuditActions.INVOICE_CREATE,
       entityType: 'invoice',
-      entityId: invoice._id.toString(),
+      entityId: invoice.id,
       changes: {
         invoiceNumber,
         customerId: customerId?.toString(),
@@ -182,8 +177,9 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ success: true, data: invoice }, { status: 201 });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+    return NextResponse.json({ success: true, data: serializeInvoice(invoice) }, { status: 201 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to create invoice';
+    return NextResponse.json({ success: false, error: message }, { status: 400 });
   }
 }

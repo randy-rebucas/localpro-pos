@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
+import { getTenantBySlug } from '@/lib/data/tenants';
+import { getUserByEmailForLogin, updateLastLogin } from '@/lib/data/users';
 import { generateToken } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateEmail } from '@/lib/validation';
@@ -22,7 +22,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await connectDB();
     const body = await request.json();
     const { email, password, tenantSlug } = body;
     t = await getValidationTranslatorFromRequest(request);
@@ -43,9 +42,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Get tenant ID from slug
-    const Tenant = (await import('@/models/Tenant')).default;
-    const tenant = await Tenant.findOne({ slug: tenantSlug || 'default', isActive: true }).lean();
-    
+    const tenant = await getTenantBySlug(tenantSlug || 'default');
+
     if (!tenant) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFoundOrInactive', 'Tenant not found or inactive') },
@@ -54,12 +52,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Find user with password field in the requested tenant
-    const user = await User.findOne({ email: email.toLowerCase(), tenantId: tenant._id })
-      .select('+password');
+    const user = await getUserByEmailForLogin(tenant.id, email);
 
     if (!user || !user.isActive) {
       await createAuditLog(request, {
-        tenantId: tenant._id,
+        tenantId: tenant.id,
         action: AuditActions.LOGIN,
         entityType: 'user',
         metadata: { success: false, reason: 'user_not_found', email: email.toLowerCase() },
@@ -73,7 +70,7 @@ export async function POST(request: NextRequest) {
 
     // Check if password exists and is a string
     if (!user.password || typeof user.password !== 'string') {
-      logger.error('User password is missing or invalid', { userId: user._id, passwordType: typeof user.password });
+      logger.error('User password is missing or invalid', { userId: user.id, passwordType: typeof user.password });
       return NextResponse.json(
         { success: false, error: t('validation.invalidCredentials', 'Invalid credentials') },
         { status: 401 }
@@ -94,10 +91,10 @@ export async function POST(request: NextRequest) {
     
     if (!isPasswordValid) {
       await createAuditLog(request, {
-        tenantId: tenant._id,
+        tenantId: tenant.id,
         action: AuditActions.LOGIN,
         entityType: 'user',
-        entityId: user._id.toString(),
+        entityId: user.id,
         metadata: { success: false, reason: 'invalid_password' },
       });
       return NextResponse.json(
@@ -107,22 +104,22 @@ export async function POST(request: NextRequest) {
     }
 
     // Update last login
-    await User.findByIdAndUpdate(user._id, { lastLogin: new Date() });
+    await updateLastLogin(user.id);
 
     // Generate token
     const token = generateToken({
-      userId: user._id.toString(),
-      tenantId: tenant._id.toString(),
+      userId: user.id,
+      tenantId: tenant.id,
       email: user.email,
       role: user.role,
     });
 
     // Create audit log
     await createAuditLog(request, {
-      tenantId: tenant._id,
+      tenantId: tenant.id,
       action: AuditActions.LOGIN,
       entityType: 'user',
-      entityId: user._id.toString(),
+      entityId: user.id,
       metadata: { success: true },
     });
 
@@ -131,7 +128,7 @@ export async function POST(request: NextRequest) {
       success: true,
       data: {
         user: {
-          _id: user._id,
+          _id: user.id,
           email: user.email,
           name: user.name,
           role: user.role,

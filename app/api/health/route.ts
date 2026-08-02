@@ -1,22 +1,19 @@
 import { NextResponse } from 'next/server';
-import mongoose from 'mongoose';
-import connectDB from '@/lib/mongodb';
+import prisma from '@/lib/prisma';
 
 export async function GET() {
   const start = Date.now();
 
   try {
-    await connectDB();
-    const dbState = mongoose.connection.readyState;
-    const dbOk = dbState === 1; // 1 = connected
+    await prisma.$queryRaw`SELECT 1`;
 
     return NextResponse.json({
-      status: dbOk ? 'healthy' : 'degraded',
+      status: 'healthy',
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
-      database: dbOk ? 'connected' : 'disconnected',
+      database: 'connected',
       responseTime: `${Date.now() - start}ms`,
-    }, { status: dbOk ? 200 : 503 });
+    }, { status: 200 });
   } catch (error: unknown) {
     return NextResponse.json({
       status: 'unhealthy',

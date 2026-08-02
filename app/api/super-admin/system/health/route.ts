@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
+import prisma from '@/lib/prisma';
 import { requireRole } from '@/lib/auth';
-import mongoose from 'mongoose';
 
-const KEY_COLLECTIONS = [
+const KEY_TABLES = [
   'tenants',
   'users',
   'subscriptions',
-  'subscriptionplans',
-  'auditlogs',
+  'subscription_plans',
+  'audit_logs',
   'products',
-  'orders',
+  'transactions',
   'customers',
   'categories',
   'branches',
@@ -18,43 +17,38 @@ const KEY_COLLECTIONS = [
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     await requireRole(request, ['super_admin']);
 
     const start = Date.now();
-    const db = mongoose.connection.db;
-
-    if (!db) {
-      return NextResponse.json({ success: false, error: 'Database not connected' }, { status: 503 });
-    }
 
     // Ping
-    await db.admin().ping();
+    await prisma.$queryRaw`SELECT 1`;
     const latencyMs = Date.now() - start;
 
-    // Collection stats
-    const allCollections = await db.listCollections().toArray();
-    const collectionNames = allCollections.map(c => c.name);
+    // Approximate row counts (fast — reads Postgres's planner statistics
+    // rather than scanning each table, same tradeoff as Mongo's
+    // estimatedDocumentCount() this replaces).
+    const rows = await prisma.$queryRaw<Array<{ relname: string; n_live_tup: bigint }>>`
+      SELECT relname, n_live_tup
+      FROM pg_stat_user_tables
+      WHERE relname = ANY(${KEY_TABLES})
+    `;
+    const countByTable = new Map(rows.map((r) => [r.relname, Number(r.n_live_tup)]));
 
-    const statsPromises = KEY_COLLECTIONS
-      .filter(name => collectionNames.includes(name))
-      .map(async name => {
-        try {
-          const stats = await db.collection(name).estimatedDocumentCount();
-          return { name, count: stats };
-        } catch {
-          return { name, count: -1 };
-        }
-      });
+    const allTables = await prisma.$queryRaw<Array<{ table_name: string }>>`
+      SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'
+    `;
 
-    const collections = await Promise.all(statsPromises);
+    const collections = KEY_TABLES
+      .filter((name) => countByTable.has(name))
+      .map((name) => ({ name, count: countByTable.get(name) ?? -1 }));
 
     return NextResponse.json({
       success: true,
       data: {
         status: 'ok',
         latencyMs,
-        totalCollections: allCollections.length,
+        totalCollections: allTables.length,
         collections,
       },
     });

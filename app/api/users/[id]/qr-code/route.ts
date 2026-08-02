@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
 import { requireAuth, getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
+import { getUserQrInfo, setUserQrToken } from '@/lib/data/users';
 
 /**
  * GET - Get QR code token for a user (admin/manager only)
@@ -17,7 +16,6 @@ export async function GET(
 ) {
   let t: (key: string, fallback: string) => string;
   try {
-    await connectDB();
     const authUser = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
@@ -34,8 +32,8 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
-    const user = await User.findOne({ _id: id, tenantId }).select('qrToken name email');
-    
+    const user = await getUserQrInfo(id, tenantId);
+
     if (!user) {
       return NextResponse.json(
         { success: false, error: t('validation.userNotFound', 'User not found') },
@@ -45,8 +43,8 @@ export async function GET(
 
     if (!user.qrToken) {
       // Generate QR token if it doesn't exist
-      const newQrToken = user._id.toString() + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 15);
-      await User.findByIdAndUpdate(id, { qrToken: newQrToken });
+      const newQrToken = user.id + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 15);
+      await setUserQrToken(id, newQrToken);
       return NextResponse.json({
         success: true,
         data: {
@@ -84,7 +82,6 @@ export async function POST(
 ) {
   let t: (key: string, fallback: string) => string;
   try {
-    await connectDB();
     const authUser = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
@@ -103,7 +100,7 @@ export async function POST(
     }
 
     // Verify user exists and belongs to same tenant
-    const user = await User.findOne({ _id: id, tenantId });
+    const user = await getUserQrInfo(id, tenantId);
     if (!user) {
       return NextResponse.json(
         { success: false, error: t('validation.userNotFound', 'User not found') },
@@ -112,9 +109,9 @@ export async function POST(
     }
 
     // Generate new QR token
-    const newQrToken = user._id.toString() + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 15);
-    
-    await User.findByIdAndUpdate(id, { qrToken: newQrToken });
+    const newQrToken = user.id + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 15);
+
+    await setUserQrToken(id, newQrToken);
 
     await createAuditLog(request, {
       tenantId,
@@ -141,4 +138,3 @@ export async function POST(
     );
   }
 }
-

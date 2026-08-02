@@ -1,14 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
-import Category from '@/models/Category';
-import Product from '@/models/Product';
-import Customer from '@/models/Customer';
-import Discount from '@/models/Discount';
+import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { logger } from '@/lib/logger';
+import { getTenantBySlug } from '@/lib/data/tenants';
+
+// Mongo used dash-separated values ('dry-clean'); Prisma's LaundryServiceType
+// enum client value is `dry_clean` (mapped to the DB value 'dry-clean').
+const LAUNDRY_SERVICE_TYPE_MAP: Record<string, string> = {
+  wash: 'wash',
+  'dry-clean': 'dry_clean',
+  press: 'press',
+  repair: 'repair',
+  other: 'other',
+};
 
 // ── Sample data per business type ────────────────────────────────────────────
 
@@ -201,32 +207,31 @@ export async function GET(
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const { slug } = await params;
 
-    const tenant = await Tenant.findOne({ slug, isActive: true }).lean();
+    const tenant = await getTenantBySlug(slug);
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    if (!(await hasTenantPermission(user.role, tenant._id.toString(), 'sample_data.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenant.id, 'sample_data.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
-    const settings = (tenant as any).settings; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const settings = tenant.settings as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
     const bizType: BizType = (settings?.businessType ?? 'general') as BizType;
     const config = SAMPLE_DATA[bizType] ?? SAMPLE_DATA.general;
 
     // Count what already exists
-    const existingCategories = await Category.countDocuments({ tenantId: tenant._id });
-    const existingProducts   = await Product.countDocuments({ tenantId: tenant._id });
-    const existingCustomers  = await Customer.countDocuments({ tenantId: tenant._id });
-    const existingDiscounts  = await Discount.countDocuments({ tenantId: tenant._id });
+    const existingCategories = await prisma.category.count({ where: { tenantId: tenant.id } });
+    const existingProducts   = await prisma.product.count({ where: { tenantId: tenant.id } });
+    const existingCustomers  = await prisma.customer.count({ where: { tenantId: tenant.id } });
+    const existingDiscounts  = await prisma.discount.count({ where: { tenantId: tenant.id } });
 
     return NextResponse.json({
       success: true,
@@ -265,28 +270,27 @@ export async function POST(
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const { slug } = await params;
 
     const body = await request.json().catch(() => ({}));
     const skipExisting: boolean = body.skipExisting !== false; // default: true
 
-    const tenant = await Tenant.findOne({ slug, isActive: true });
+    const tenant = await getTenantBySlug(slug);
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    if (!(await hasTenantPermission(user.role, tenant._id.toString(), 'sample_data.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenant.id, 'sample_data.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
-    const tenantId = tenant._id;
-    const settings = (tenant as any).settings; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const tenantId = tenant.id;
+    const settings = tenant.settings as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
     const bizType: BizType = (settings?.businessType ?? 'general') as BizType;
     const config = SAMPLE_DATA[bizType] ?? SAMPLE_DATA.general;
 
@@ -298,15 +302,15 @@ export async function POST(
     };
 
     // ── Categories ──────────────────────────────────────────────────────────
-    const categoryMap: Record<string, any> = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const categoryMap: Record<string, string> = {};
     for (const catDef of config.categories) {
-      const existing = await Category.findOne({ tenantId, name: catDef.name });
+      const existing = await prisma.category.findFirst({ where: { tenantId, name: catDef.name } });
       if (existing) {
-        categoryMap[catDef.name] = existing._id;
+        categoryMap[catDef.name] = existing.id;
         results.categories.skipped++;
       } else {
-        const cat = await Category.create({ ...catDef, tenantId, isActive: true });
-        categoryMap[catDef.name] = cat._id;
+        const cat = await prisma.category.create({ data: { ...catDef, tenantId, isActive: true } });
+        categoryMap[catDef.name] = cat.id;
         results.categories.created++;
       }
     }
@@ -314,29 +318,37 @@ export async function POST(
     // ── Products ────────────────────────────────────────────────────────────
     for (const prodDef of config.products) {
       const { category: catName, ...rest } = prodDef;
-      const existing = await Product.findOne({ tenantId, name: rest.name });
+      const existing = await prisma.product.findFirst({ where: { tenantId, name: rest.name } });
       if (existing && skipExisting) {
         results.products.skipped++;
         continue;
       }
 
-      await Product.create({
-        ...rest,
-        tenantId,
-        categoryId: categoryMap[catName],
-        category:   catName,
+      const { stock, serviceType, ...productRest } = rest;
+
+      await prisma.product.create({
+        data: {
+          ...productRest,
+          ...(stock !== undefined ? { stock: BigInt(stock) } : {}),
+          ...(serviceType !== undefined
+            ? { serviceType: LAUNDRY_SERVICE_TYPE_MAP[serviceType] ?? serviceType }
+            : {}),
+          tenantId,
+          categoryId: categoryMap[catName],
+          category:   catName,
+        } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
       });
       results.products.created++;
     }
 
     // ── Customers ───────────────────────────────────────────────────────────
     for (const cust of config.customers) {
-      const existing = await Customer.findOne({ tenantId, firstName: cust.firstName, lastName: cust.lastName });
+      const existing = await prisma.customer.findFirst({ where: { tenantId, firstName: cust.firstName, lastName: cust.lastName } });
       if (existing && skipExisting) {
         results.customers.skipped++;
         continue;
       }
-      await Customer.create({ ...cust, tenantId, isActive: true });
+      await prisma.customer.create({ data: { ...cust, tenantId, isActive: true } });
       results.customers.created++;
     }
 
@@ -345,19 +357,21 @@ export async function POST(
     const oneYear = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate());
 
     for (const discDef of config.discounts) {
-      const existing = await Discount.findOne({ tenantId, code: discDef.code.toUpperCase() });
+      const existing = await prisma.discount.findFirst({ where: { tenantId, code: discDef.code.toUpperCase() } });
       if (existing && skipExisting) {
         results.discounts.skipped++;
         continue;
       }
-      await Discount.create({
-        ...discDef,
-        tenantId,
-        code:       discDef.code.toUpperCase(),
-        usageCount: 0,
-        isActive:   true,
-        validFrom:  now,
-        validUntil: oneYear,
+      await prisma.discount.create({
+        data: {
+          ...discDef,
+          tenantId,
+          code:       discDef.code.toUpperCase(),
+          usageCount: 0,
+          isActive:   true,
+          validFrom:  now,
+          validUntil: oneYear,
+        },
       });
       results.discounts.created++;
     }

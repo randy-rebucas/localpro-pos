@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
-import User from '@/models/User';
+import prisma from '@/lib/prisma';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { validateEmail, validatePassword, validateTenant } from '@/lib/validation';
 import { getValidationTranslator } from '@/lib/validation-translations';
@@ -9,6 +7,8 @@ import { applyBusinessTypeDefaults } from '@/lib/business-types';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { SubscriptionService } from '@/lib/subscription';
 import { logger } from '@/lib/logger';
+import { createUser } from '@/lib/data/users';
+import { Prisma } from '@prisma/client';
 
 /**
  * Public endpoint for tenant signup
@@ -27,13 +27,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await connectDB();
-
     const body = await request.json();
-    const { 
+    const {
       // Tenant info
-      slug, 
-      name, 
+      slug,
+      name,
       companyName,
       businessType,
       // Admin user info
@@ -92,10 +90,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if tenant already exists
-    const existingTenant = await Tenant.findOne({
-      $or: [
-        { slug: slug.toLowerCase() },
-      ]
+    const existingTenant = await prisma.tenant.findFirst({
+      where: { slug: slug.toLowerCase() },
     });
 
     if (existingTenant) {
@@ -106,7 +102,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if admin email already exists
-    const existingUser = await User.findOne({ email: adminEmail.toLowerCase() });
+    const existingUser = await prisma.user.findFirst({ where: { email: adminEmail.toLowerCase() } });
     if (existingUser) {
       return NextResponse.json(
         { success: false, error: t('validation.emailExists', 'An account with this email already exists') },
@@ -127,38 +123,38 @@ export async function POST(request: NextRequest) {
     };
 
     // Apply business type defaults if business type is provided
-    const settings = businessType 
+    const settings = businessType
       ? applyBusinessTypeDefaults(baseSettings, businessType)
       : baseSettings;
 
     // Create tenant
-    const tenantData: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
-      slug: slug.toLowerCase(),
-      name,
-      settings,
-      isActive: true,
-    };
-
-    const tenant = await Tenant.create(tenantData);
+    const tenant = await prisma.tenant.create({
+      data: {
+        slug: slug.toLowerCase(),
+        name,
+        settings,
+        isActive: true,
+      },
+    });
 
     // Create admin user for the tenant
-    const adminUser = await User.create({
+    const adminUser = await createUser({
       email: adminEmail.toLowerCase(),
       password: adminPassword,
       name: adminName,
       role: 'admin',
-      tenantId: tenant._id,
+      tenantId: tenant.id,
       isActive: true,
     });
 
     try {
-      await SubscriptionService.ensureTrialSubscription(tenant._id.toString());
+      await SubscriptionService.ensureTrialSubscription(tenant.id);
     } catch (subscriptionError) {
       logger.error('Failed to create trial subscription during signup:', subscriptionError);
     }
 
-    return NextResponse.json({ 
-      success: true, 
+    return NextResponse.json({
+      success: true,
       data: {
         tenant: {
           slug: tenant.slug,
@@ -172,8 +168,8 @@ export async function POST(request: NextRequest) {
       }
     }, { status: 201 });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (error.code === 11000) {
-      const field = Object.keys(error.keyPattern)[0];
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      const field = (error.meta?.target as string[] | undefined)?.[0] || 'field';
       return NextResponse.json(
         { success: false, error: `${field} already exists` },
         { status: 400 }
@@ -181,10 +177,9 @@ export async function POST(request: NextRequest) {
     }
     logger.error('Signup error:', error);
     const errorMessage = error.message || 'Failed to create store. Please try again.';
-    return NextResponse.json({ 
-      success: false, 
+    return NextResponse.json({
+      success: false,
       error: errorMessage
     }, { status: 400 });
   }
 }
-

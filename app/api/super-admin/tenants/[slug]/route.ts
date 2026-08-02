@@ -1,23 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/prisma';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
 import { applyBusinessTypeDefaults } from '@/lib/business-types';
+import { getTenantBySlugAny } from '@/lib/data/tenants';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
-    await connectDB();
     await requireRole(request, ['super_admin']);
     const { slug } = await params;
 
-    const tenant = await Tenant.findOne({ slug }).lean();
+    const tenant = await getTenantBySlugAny(slug);
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, data: tenant });
+    return NextResponse.json({ success: true, data: { ...tenant, _id: tenant.id } });
   } catch (error: unknown) {
     if (error instanceof Error && (error.message === 'Unauthorized' || error.message.includes('Forbidden'))) {
       return NextResponse.json(
@@ -31,11 +30,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
-    await connectDB();
     const user = await requireRole(request, ['super_admin']);
     const { slug } = await params;
 
-    const oldTenant = await Tenant.findOne({ slug }).lean();
+    const oldTenant = await getTenantBySlugAny(slug);
     if (!oldTenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
@@ -58,16 +56,25 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (notes !== undefined) updateData.notes = notes;
 
     if (settings !== undefined) {
-      const currentBusinessType = oldTenant.settings?.businessType;
+      const oldSettings = (oldTenant.settings as Record<string, unknown>) || {};
+      const currentBusinessType = oldSettings.businessType;
       const newBusinessType = settings.businessType;
-      let mergedSettings = { ...oldTenant.settings, ...settings };
+      let mergedSettings = { ...oldSettings, ...settings };
       if (newBusinessType && newBusinessType !== currentBusinessType) {
         mergedSettings = applyBusinessTypeDefaults(mergedSettings, newBusinessType);
       }
       updateData.settings = mergedSettings;
     }
 
-    const tenant = await Tenant.findOneAndUpdate({ slug }, updateData, { new: true, runValidators: true });
+    let tenant;
+    try {
+      tenant = await prisma.tenant.update({ where: { slug }, data: updateData });
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === 'P2002') {
+        return NextResponse.json({ success: false, error: 'Domain or subdomain already exists' }, { status: 400 });
+      }
+      throw err;
+    }
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
@@ -75,22 +82,22 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const changes: Record<string, unknown> = {};
     Object.keys(updateData).forEach(key => {
       if (key !== 'settings') {
-        changes[key] = { old: oldTenant[key as keyof typeof oldTenant], new: updateData[key] };
+        changes[key] = { old: (oldTenant as Record<string, unknown>)[key], new: updateData[key] };
       }
     });
     if (settings) changes.settings = { updated: true };
 
     await createAuditLog(request, {
-      tenantId: tenant._id,
+      tenantId: tenant.id,
       userId: user.userId,
       action: AuditActions.UPDATE,
       entityType: 'tenant',
-      entityId: tenant._id.toString(),
+      entityId: tenant.id,
       changes,
       metadata: { updatedBy: user.userId, role: 'super_admin' },
     });
 
-    return NextResponse.json({ success: true, data: tenant });
+    return NextResponse.json({ success: true, data: { ...tenant, _id: tenant.id } });
   } catch (error: unknown) {
     if (error instanceof Error) {
       if (error.message === 'Unauthorized' || error.message.includes('Forbidden')) {
@@ -98,9 +105,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           { success: false, error: error.message },
           { status: error.message === 'Unauthorized' ? 401 : 403 }
         );
-      }
-      if ((error as NodeJS.ErrnoException).code === '11000') {
-        return NextResponse.json({ success: false, error: 'Domain or subdomain already exists' }, { status: 400 });
       }
     }
     return handleApiError(error);

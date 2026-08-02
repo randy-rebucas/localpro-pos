@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
-import Tenant from '@/models/Tenant';
+import { getTenantBySlug } from '@/lib/data/tenants';
+import { getUserByEmailForLogin, updateLastLogin } from '@/lib/data/users';
 import { generateToken } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateEmail } from '@/lib/validation';
@@ -29,8 +28,6 @@ export async function POST(request: NextRequest) {
         { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.resetAfterMs / 1000)) } }
       );
     }
-
-    await connectDB();
 
     const body = await request.json();
     const { email, password, tenantSlug } = body as {
@@ -60,7 +57,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const tenant = await Tenant.findOne({ slug: tenantSlug, isActive: true }).lean();
+    const tenant = await getTenantBySlug(tenantSlug);
     if (!tenant) {
       return NextResponse.json(
         { success: false, error: 'Store not found or inactive' },
@@ -68,14 +65,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const user = await User.findOne({
-      email: email.toLowerCase(),
-      tenantId: tenant._id,
-    }).select('+password');
+    const user = await getUserByEmailForLogin(tenant.id, email);
 
     const failedLogin = async (reason: string) => {
       await createAuditLog(request, {
-        tenantId: tenant._id,
+        tenantId: tenant.id,
         action: AuditActions.LOGIN,
         entityType: 'user',
         metadata: { success: false, reason, channel: 'mobile' },
@@ -88,7 +82,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!user.password || typeof user.password !== 'string') {
-      logger.error('Mobile login: password field missing', { userId: user._id });
+      logger.error('Mobile login: password field missing', { userId: user.id });
       return NextResponse.json({ success: false, error: 'Invalid credentials' }, { status: 401 });
     }
 
@@ -108,20 +102,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await User.findByIdAndUpdate(user._id, { lastLogin: new Date() });
+    await updateLastLogin(user.id);
 
     const token = generateToken({
-      userId: user._id.toString(),
-      tenantId: tenant._id.toString(),
+      userId: user.id,
+      tenantId: tenant.id,
       email: user.email,
       role: user.role,
     });
 
     await createAuditLog(request, {
-      tenantId: tenant._id,
+      tenantId: tenant.id,
       action: AuditActions.LOGIN,
       entityType: 'user',
-      entityId: user._id.toString(),
+      entityId: user.id,
       metadata: { success: true, channel: 'mobile' },
     });
 
@@ -131,13 +125,13 @@ export async function POST(request: NextRequest) {
         token,
         access_token: token, // alias for clients that expect this key
         user: {
-          id: user._id.toString(),
+          id: user.id,
           email: user.email,
           name: user.name,
           role: user.role,
         },
         tenant: {
-          id: tenant._id.toString(),
+          id: tenant.id,
           name: tenant.name,
           slug: tenant.slug,
         },

@@ -4,8 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/prisma';
 import { validateTemplate } from '@/lib/receipt-templates';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -13,6 +12,16 @@ import { handleApiError } from '@/lib/error-handler';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { checkBirFeatureAccess } from '@/lib/subscription';
+import { getTenantBySlug, getTenantBySlugAny } from '@/lib/data/tenants';
+
+interface ReceiptTemplate {
+  id: string;
+  name: string;
+  html: string;
+  isDefault: boolean;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+}
 
 export async function GET(
   request: NextRequest,
@@ -25,20 +34,20 @@ export async function GET(
     }
 
     const { slug } = await params;
-    await connectDB();
 
-    const tenant = await Tenant.findOne({ slug }).lean();
+    const tenant = await getTenantBySlugAny(slug);
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
     // Tenant isolation
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    const templates = tenant.settings.receiptTemplates?.templates || [];
-    const defaultTemplateId = tenant.settings.receiptTemplates?.default;
+    const settings = (tenant.settings as Record<string, any>) || {}; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const templates: ReceiptTemplate[] = settings.receiptTemplates?.templates || [];
+    const defaultTemplateId = settings.receiptTemplates?.default;
 
     return NextResponse.json({
       success: true,
@@ -73,21 +82,20 @@ export async function POST(
     }
 
     const { slug } = await params;
-    await connectDB();
 
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await getTenantBySlugAny(slug);
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
     // Tenant isolation
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
     // Feature gate
     try {
-      await checkBirFeatureAccess(tenant._id.toString(), 'receiptFormatting');
+      await checkBirFeatureAccess(tenant.id, 'receiptFormatting');
     } catch (featureError: unknown) {
       return NextResponse.json(
         { success: false, error: (featureError as Error).message },
@@ -107,8 +115,9 @@ export async function POST(
       return NextResponse.json({ success: false, error: validation.error }, { status: 400 });
     }
 
-    const templates = tenant.settings.receiptTemplates?.templates || [];
-    const newTemplate = {
+    const existingSettings = (tenant.settings as Record<string, any>) || {}; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const templates: ReceiptTemplate[] = existingSettings.receiptTemplates?.templates || [];
+    const newTemplate: ReceiptTemplate = {
       id: `template_${Date.now()}`,
       name,
       html,
@@ -117,28 +126,28 @@ export async function POST(
       updatedAt: new Date(),
     };
 
+    let defaultTemplateId = existingSettings.receiptTemplates?.default;
     if (isDefault) {
       templates.forEach((t) => {
         t.isDefault = false;
       });
-      tenant.settings.receiptTemplates = {
-        ...tenant.settings.receiptTemplates,
-        default: newTemplate.id,
-      };
+      defaultTemplateId = newTemplate.id;
     }
 
     templates.push(newTemplate);
 
-    tenant.settings.receiptTemplates = {
-      ...tenant.settings.receiptTemplates,
-      templates,
+    const settings = {
+      ...existingSettings,
+      receiptTemplates: {
+        ...existingSettings.receiptTemplates,
+        templates,
+        default: defaultTemplateId,
+      },
     };
-
-    tenant.markModified('settings.receiptTemplates');
-    await tenant.save();
+    await prisma.tenant.update({ where: { id: tenant.id }, data: { settings } });
 
     await createAuditLog(request, {
-      tenantId: tenant._id,
+      tenantId: tenant.id,
       userId: user.userId,
       action: AuditActions.CREATE,
       entityType: 'receipt_template',
@@ -190,19 +199,18 @@ export async function PUT(
       }
     }
 
-    await connectDB();
-
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await getTenantBySlugAny(slug);
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
     // Tenant isolation
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    const templates = tenant.settings.receiptTemplates?.templates || [];
+    const existingSettings = (tenant.settings as Record<string, any>) || {}; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const templates: ReceiptTemplate[] = existingSettings.receiptTemplates?.templates || [];
     const templateIndex = templates.findIndex((t) => t.id === id);
 
     if (templateIndex === -1) {
@@ -213,36 +221,34 @@ export async function PUT(
     if (html) templates[templateIndex].html = html;
     templates[templateIndex].updatedAt = new Date();
 
+    let defaultTemplateId = existingSettings.receiptTemplates?.default;
     if (isDefault !== undefined) {
       if (isDefault) {
         templates.forEach((t) => {
           t.isDefault = false;
         });
         templates[templateIndex].isDefault = true;
-        tenant.settings.receiptTemplates = {
-          ...tenant.settings.receiptTemplates,
-          default: id,
-        };
+        defaultTemplateId = id;
       } else {
         templates[templateIndex].isDefault = false;
-        if (tenant.settings.receiptTemplates?.default === id) {
-          if (tenant.settings.receiptTemplates) {
-            tenant.settings.receiptTemplates.default = undefined;
-          }
+        if (defaultTemplateId === id) {
+          defaultTemplateId = undefined;
         }
       }
     }
 
-    tenant.settings.receiptTemplates = {
-      ...tenant.settings.receiptTemplates,
-      templates,
+    const settings = {
+      ...existingSettings,
+      receiptTemplates: {
+        ...existingSettings.receiptTemplates,
+        templates,
+        default: defaultTemplateId,
+      },
     };
-
-    tenant.markModified('settings.receiptTemplates');
-    await tenant.save();
+    await prisma.tenant.update({ where: { id: tenant.id }, data: { settings } });
 
     await createAuditLog(request, {
-      tenantId: tenant._id,
+      tenantId: tenant.id,
       userId: user.userId,
       action: AuditActions.UPDATE,
       entityType: 'receipt_template',
@@ -287,39 +293,41 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'Template ID is required' }, { status: 400 });
     }
 
-    await connectDB();
-
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await getTenantBySlugAny(slug);
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
     // Tenant isolation
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    const templates = tenant.settings.receiptTemplates?.templates || [];
+    const existingSettings = (tenant.settings as Record<string, any>) || {}; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const templates: ReceiptTemplate[] = existingSettings.receiptTemplates?.templates || [];
     const filtered = templates.filter((t) => t.id !== id);
 
     if (filtered.length === templates.length) {
       return NextResponse.json({ success: false, error: 'Template not found' }, { status: 404 });
     }
 
-    if (tenant.settings.receiptTemplates?.default === id) {
-      tenant.settings.receiptTemplates.default = undefined;
+    let defaultTemplateId = existingSettings.receiptTemplates?.default;
+    if (defaultTemplateId === id) {
+      defaultTemplateId = undefined;
     }
 
-    tenant.settings.receiptTemplates = {
-      ...tenant.settings.receiptTemplates,
-      templates: filtered,
+    const settings = {
+      ...existingSettings,
+      receiptTemplates: {
+        ...existingSettings.receiptTemplates,
+        templates: filtered,
+        default: defaultTemplateId,
+      },
     };
-
-    tenant.markModified('settings.receiptTemplates');
-    await tenant.save();
+    await prisma.tenant.update({ where: { id: tenant.id }, data: { settings } });
 
     await createAuditLog(request, {
-      tenantId: tenant._id,
+      tenantId: tenant.id,
       userId: user.userId,
       action: AuditActions.DELETE,
       entityType: 'receipt_template',

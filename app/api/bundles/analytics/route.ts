@@ -1,16 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import ProductBundle from '@/models/ProductBundle';
-import Transaction from '@/models/Transaction';
+import prisma from '@/lib/prisma';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { logger } from '@/lib/logger';
 
 /**
  * Get bundle analytics - sales performance metrics
+ *
+ * TODO(postgres-migration): The original Mongoose TransactionItem schema stored an
+ * ad-hoc, not-officially-modeled `bundleId` field on each cart item to mark "this line
+ * item was sold as part of bundle X". The Prisma TransactionItem model (prisma/schema.prisma)
+ * has no such column — it was never a first-class field, so it wasn't carried over.
+ * As a best-effort substitute, a transaction item is now attributed to a bundle if its
+ * productId matches one of that bundle's component products. This is an approximation:
+ * a product sold standalone (not as part of a bundle) will also be counted here if it
+ * happens to also be a bundle component. If precise bundle-attribution is needed, add a
+ * `bundleId` column to TransactionItem and stamp it at checkout time.
  */
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const tenantId = await getTenantIdFromRequest(request);
 
     if (!tenantId) {
@@ -22,64 +29,78 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get('endDate');
     const bundleId = searchParams.get('bundleId');
 
-    // Build date query
-    const dateQuery: any = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (startDate) dateQuery.$gte = new Date(startDate);
+    const createdAt: { gte?: Date; lte?: Date } = {};
+    if (startDate) createdAt.gte = new Date(startDate);
     if (endDate) {
       const end = new Date(endDate);
       end.setHours(23, 59, 59, 999);
-      dateQuery.$lte = end;
+      createdAt.lte = end;
     }
 
-    // Get all transactions in the date range
-    const transactionQuery: any = { tenantId, status: 'completed' }; // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (Object.keys(dateQuery).length > 0) {
-      transactionQuery.createdAt = dateQuery;
+    const bundles = await prisma.productBundle.findMany({
+      where: { tenantId, ...(bundleId ? { id: bundleId } : {}) },
+      select: {
+        id: true,
+        name: true,
+        price: true,
+        items: { select: { productId: true } },
+      },
+    });
+
+    const allProductIds = [...new Set(bundles.flatMap((b) => b.items.map((i) => i.productId)))];
+
+    const transactionItems = allProductIds.length
+      ? await prisma.transactionItem.findMany({
+          where: {
+            productId: { in: allProductIds },
+            transaction: {
+              tenantId,
+              status: 'completed',
+              ...(Object.keys(createdAt).length ? { createdAt } : {}),
+            },
+          },
+          select: { productId: true, transactionId: true, quantity: true, subtotal: true },
+        })
+      : [];
+
+    const itemsByProduct = new Map<string, typeof transactionItems>();
+    for (const item of transactionItems) {
+      if (!item.productId) continue;
+      const list = itemsByProduct.get(item.productId) ?? [];
+      list.push(item);
+      itemsByProduct.set(item.productId, list);
     }
 
-    const transactions = await Transaction.find(transactionQuery)
-      .select('items createdAt total')
-      .lean();
+    const bundleTransactionIds = new Set<string>();
 
-    // Get all bundles
-    const bundleQuery: any = { tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (bundleId) bundleQuery._id = bundleId;
-    const bundles = await ProductBundle.find(bundleQuery)
-      .select('_id name price')
-      .lean();
-
-    // Calculate analytics for each bundle
-    const analytics = bundles.map(bundle => {
+    const analytics = bundles.map((bundle) => {
       let totalSales = 0;
       let totalQuantity = 0;
       let transactionCount = 0;
 
-      // Filter transactions that include this bundle
-      transactions.forEach(transaction => {
-        transaction.items.forEach((item: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-          // Check if item has bundleId (stored but not in schema)
-          const itemBundleId = (item as any).bundleId; // eslint-disable-line @typescript-eslint/no-explicit-any
-          if (itemBundleId && itemBundleId.toString() === bundle._id.toString()) {
-            totalSales += item.subtotal;
-            totalQuantity += item.quantity;
-            transactionCount++;
-          }
-        });
-      });
+      for (const bundleItem of bundle.items) {
+        const items = itemsByProduct.get(bundleItem.productId) ?? [];
+        for (const item of items) {
+          totalSales += Number(item.subtotal);
+          totalQuantity += item.quantity;
+          transactionCount++;
+          bundleTransactionIds.add(item.transactionId);
+        }
+      }
 
       const averageOrderValue = transactionCount > 0 ? totalSales / transactionCount : 0;
       const averageQuantity = transactionCount > 0 ? totalQuantity / transactionCount : 0;
 
       return {
-        bundleId: bundle._id,
+        bundleId: bundle.id,
         bundleName: bundle.name,
-        bundlePrice: bundle.price,
+        bundlePrice: Number(bundle.price),
         totalSales,
         totalQuantity,
         transactionCount,
         averageOrderValue,
         averageQuantity,
-        revenuePerUnit: totalQuantity > 0 ? totalSales / totalQuantity : bundle.price,
+        revenuePerUnit: totalQuantity > 0 ? totalSales / totalQuantity : Number(bundle.price),
       };
     });
 
@@ -91,13 +112,7 @@ export async function GET(request: NextRequest) {
       totalBundles: analytics.length,
       totalSales: analytics.reduce((sum, a) => sum + a.totalSales, 0),
       totalQuantity: analytics.reduce((sum, a) => sum + a.totalQuantity, 0),
-      totalTransactions: new Set(
-        transactions.flatMap(t => 
-          t.items
-            .filter((item: any) => (item as any).bundleId) // eslint-disable-line @typescript-eslint/no-explicit-any
-            .map((_item: any) => t._id.toString()) // eslint-disable-line @typescript-eslint/no-explicit-any
-        )
-      ).size,
+      totalTransactions: bundleTransactionIds.size,
     };
 
     return NextResponse.json({

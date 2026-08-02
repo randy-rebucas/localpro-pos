@@ -12,21 +12,32 @@
     "tenant:create": "tsx scripts/create-tenant.ts",
     "tenant:default": "tsx scripts/create-default-tenant.ts",
     "reset:collections": "tsx scripts/reset-collections.ts",
+    "reset:tables:postgres": "tsx scripts/reset-tables-postgres.ts",
     "db:backup": "tsx scripts/backup-database.ts",
     "db:backup:cloud": "tsx scripts/backup-database.ts --cloud",
     "db:backup:list": "tsx scripts/backup-database.ts --list",
     "db:restore": "tsx scripts/restore-database.ts",
+    "db:backup:postgres": "tsx scripts/backup-database-postgres.ts",
+    "db:backup:postgres:list": "tsx scripts/backup-database-postgres.ts --list",
+    "db:restore:postgres": "tsx scripts/restore-database-postgres.ts",
     "test:automations": "tsx scripts/test-automations.ts",
     "test:customer-auth": "tsx scripts/test-customer-auth.ts",
     "seed:subscription-plans": "tsx scripts/create-subscription-plans.ts",
     "seed:sample-data": "tsx scripts/seed-sample-data.ts",
     "health:check": "tsx scripts/health-check.ts",
     "health:check:verbose": "tsx scripts/health-check.ts --verbose",
+    "health:check:postgres": "tsx scripts/health-check-postgres.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "security:audit": "npm audit --omit=dev && echo '--- Full audit (including dev) ---' && npm audit",
     "tenant:set-plan": "tsx scripts/set-tenant-plan.ts",
+    "migrate:export": "tsx scripts/migrations/01-export.ts",
+    "migrate:id-map": "tsx scripts/migrations/02-id-map.ts",
+    "migrate:transform-import": "tsx scripts/migrations/03-transform-import.ts",
+    "migrate:validate": "tsx scripts/migrations/05-validate.ts",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:studio": "prisma studio",
     "load:test:api": "k6 run load-tests/api-endpoints.js",
     "load:test:auth": "k6 run load-tests/auth.js",
     "load:test:transactions": "k6 run load-tests/transactions.js",
@@ -49,6 +60,7 @@
     "@aws-sdk/client-s3": "^3.1014.0",
     "@formatjs/intl-localematcher": "^0.6.2",
     "@paypal/paypal-server-sdk": "^2.1.0",
+    "@prisma/client": "^6.19.3",
     "@tailwindcss/typography": "^0.5.19",
     "@types/jsbarcode": "^3.11.4",
     "bcryptjs": "^3.0.3",
@@ -93,6 +105,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
     "jsdom": "^29.0.1",
+    "prisma": "^6.19.3",
     "tailwindcss": "^4",
     "tsx": "^4.20.6",
     "typescript": "^5",
@@ -105,5 +118,12 @@
     "resend": "^6.6.0",
     "twilio": "^5.11.1"
   },
-  "packageManager": "pnpm@10.33.0+sha512.10568bb4a6afb58c9eb3630da90cc9516417abebd3fabbe6739f0ae795728da1491e9db5a544c76ad8eb7570f5c4bb3d6c637b2cb41bfdcdb47fa823c8649319"
+  "packageManager": "pnpm@10.33.0+sha512.10568bb4a6afb58c9eb3630da90cc9516417abebd3fabbe6739f0ae795728da1491e9db5a544c76ad8eb7570f5c4bb3d6c637b2cb41bfdcdb47fa823c8649319",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma"
+    ]
+  }
 }

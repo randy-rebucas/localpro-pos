@@ -1,4 +1,4 @@
-import type { ITenantSettings } from '@/models/Tenant';
+import type { ITenantSettings } from '@/types/tenant';
 
 export function hasValidBusinessHours(settings: ITenantSettings | null): boolean {
   if (!settings?.businessHours?.schedule) return false;

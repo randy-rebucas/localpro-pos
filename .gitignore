@@ -26,6 +26,7 @@
 
 # database backups — never commit
 /backups/
+/backups-postgres/
 
 # uploaded files — stored at runtime
 /public/uploads/
@@ -50,3 +51,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# DB migration export dumps (contain real tenant data)
+scripts/migrations/exports/

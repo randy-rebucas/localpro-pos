@@ -1,16 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Subscription from '@/models/Subscription';
-import SubscriptionPlan from '@/models/SubscriptionPlan';
-import Tenant from '@/models/Tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { logger } from '@/lib/logger';
+import { getSubscriptionByTenantId } from '@/lib/data/subscriptions';
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
-
     // Require authentication for upgrade requests
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
@@ -33,7 +29,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify the requested plan exists and is active
-    const requestedPlanDoc = await SubscriptionPlan.findOne({ _id: planId, isActive: true });
+    const requestedPlanDoc = await prisma.subscriptionPlan.findFirst({ where: { id: planId, isActive: true } });
     if (!requestedPlanDoc) {
       return NextResponse.json(
         { success: false, error: 'Requested plan not found or not available' },
@@ -42,9 +38,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get current subscription
-    const currentSubscription = await Subscription.findOne({ tenantId })
-      .populate('planId', 'name tier')
-      .lean();
+    const currentSubscription = await getSubscriptionByTenantId(tenantId);
 
     if (!currentSubscription) {
       return NextResponse.json(
@@ -54,7 +48,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if already on this plan
-    if (currentSubscription.planId._id.toString() === planId) {
+    if (currentSubscription.planId === planId) {
       return NextResponse.json(
         { success: false, error: 'You are already on this plan' },
         { status: 400 }

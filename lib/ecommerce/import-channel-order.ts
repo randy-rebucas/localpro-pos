@@ -1,10 +1,6 @@
-import mongoose from 'mongoose';
-import connectDB from '@/lib/mongodb';
-import Transaction from '@/models/Transaction';
-import Payment from '@/models/Payment';
-import Customer from '@/models/Customer';
-import ProductChannelListing from '@/models/ProductChannelListing';
-import StockMovement from '@/models/StockMovement';
+import prisma from '@/lib/prisma';
+import { runInTransaction } from '@/lib/db-transaction';
+import { Prisma } from '@prisma/client';
 import { generateReceiptNumber } from '@/lib/receipt';
 import { updateStock } from '@/lib/stock';
 import type { NormalizedPaidOrder } from '@/lib/ecommerce/types';
@@ -20,23 +16,24 @@ export async function importPaidChannelOrder(
   tenantId: string,
   order: NormalizedPaidOrder
 ): Promise<{ ok: true; transactionId: string } | { ok: false; duplicate?: boolean; reason: string }> {
-  await connectDB();
   const key = channelSyncKey(order);
-  const existing = await Transaction.findOne({ tenantId, channelSyncKey: key }).lean();
+  const existing = await prisma.transaction.findFirst({ where: { tenantId, channelSyncKey: key } });
   if (existing) {
     return { ok: false, duplicate: true, reason: 'already_imported' };
   }
 
-  const listings = await ProductChannelListing.find({
-    tenantId,
-    provider: order.provider,
-    externalVariantId: { $in: order.lines.map((l) => l.externalVariantId) },
-  }).lean();
+  const listings = await prisma.productChannelListing.findMany({
+    where: {
+      tenantId,
+      provider: order.provider,
+      externalVariantId: { in: order.lines.map((l) => l.externalVariantId) },
+    },
+  });
 
   const listingByVariant = new Map(listings.map((l) => [l.externalVariantId, l]));
 
   type BuiltItem = {
-    productId: mongoose.Types.ObjectId;
+    productId: string;
     name: string;
     price: number;
     quantity: number;
@@ -49,7 +46,7 @@ export async function importPaidChannelOrder(
     const list = listingByVariant.get(line.externalVariantId);
     if (!list?.productId) continue;
     items.push({
-      productId: list.productId as mongoose.Types.ObjectId,
+      productId: list.productId,
       name: line.name,
       price: line.unitPrice,
       quantity: line.quantity,
@@ -63,72 +60,78 @@ export async function importPaidChannelOrder(
   }
 
   // Auto-link or create customer from order snapshot
-  let customerId: mongoose.Types.ObjectId | undefined;
+  let customerId: string | undefined;
   const cs = order.customerSnapshot;
   if (cs?.email) {
     try {
-      let cust = await Customer.findOne({ tenantId, email: cs.email });
+      const cust = await prisma.customer.findFirst({ where: { tenantId, email: cs.email } });
       if (!cust) {
-        cust = await Customer.create({
-          tenantId,
-          firstName: cs.firstName || '',
-          lastName: cs.lastName || '',
-          email: cs.email,
-          phone: cs.phone,
-          tags: [order.provider],
-          shopifyCustomerId: cs.shopifyCustomerId,
+        const created = await prisma.customer.create({
+          data: {
+            tenantId,
+            firstName: cs.firstName || '',
+            lastName: cs.lastName || '',
+            email: cs.email,
+            phone: cs.phone,
+            tags: [order.provider],
+            shopifyCustomerId: cs.shopifyCustomerId,
+          },
         });
-      } else if (cs.shopifyCustomerId && !cust.shopifyCustomerId) {
-        cust.shopifyCustomerId = cs.shopifyCustomerId;
-        await cust.save();
+        customerId = created.id;
+      } else {
+        if (cs.shopifyCustomerId && !cust.shopifyCustomerId) {
+          await prisma.customer.update({
+            where: { id: cust.id },
+            data: { shopifyCustomerId: cs.shopifyCustomerId },
+          });
+        }
+        customerId = cust.id;
       }
-      customerId = cust._id as mongoose.Types.ObjectId;
     } catch (err) {
       logger.warn('importPaidChannelOrder: customer auto-link failed', { err });
     }
   }
 
-  const session = await mongoose.startSession();
   let transactionId = '';
 
   try {
-    session.startTransaction();
+    transactionId = await runInTransaction(async (tx) => {
+      const syncNote = `channelSyncKey:${key}`;
 
-    const syncNote = `channelSyncKey:${key}`;
-
-    for (const item of items) {
-      await updateStock(
-        item.productId.toString(),
-        tenantId,
-        -item.quantity,
-        'sale',
-        {
-          reason: STOCK_REASON_CHANNEL_SALE,
-          notes: syncNote,
-          variation: item.variation,
-        },
-        session
-      );
-    }
-
-    const receiptNumber = await generateReceiptNumber(tenantId);
-    const subtotal = items.reduce((s, i) => s + i.subtotal, 0);
-    const taxAmount = order.taxTotal > 0 ? order.taxTotal : Math.max(0, order.total - subtotal);
-    const total = order.total > 0 ? order.total : subtotal + taxAmount;
-
-    const [txn] = await Transaction.create(
-      [
-        {
+      for (const item of items) {
+        await updateStock(
+          item.productId,
           tenantId,
-          items: items.map((i) => ({
-            product: i.productId,
-            name: i.name,
-            price: i.price,
-            quantity: i.quantity,
-            subtotal: i.subtotal,
-          })),
+          -item.quantity,
+          'sale',
+          {
+            reason: STOCK_REASON_CHANNEL_SALE,
+            notes: syncNote,
+            variation: item.variation,
+          },
+          tx
+        );
+      }
+
+      const receiptNumber = await generateReceiptNumber(tenantId);
+      const subtotal = items.reduce((s, i) => s + i.subtotal, 0);
+      const taxAmount = order.taxTotal > 0 ? order.taxTotal : Math.max(0, order.total - subtotal);
+      const total = order.total > 0 ? order.total : subtotal + taxAmount;
+
+      const txn = await tx.transaction.create({
+        data: {
+          tenantId,
+          items: {
+            create: items.map((i) => ({
+              productId: i.productId,
+              name: i.name,
+              price: i.price,
+              quantity: i.quantity,
+              subtotal: i.subtotal,
+            })),
+          },
           subtotal,
-          taxAmount: taxAmount > 0 ? taxAmount : undefined,
+          taxAmount: taxAmount > 0 ? taxAmount : 0,
           total,
           paymentMethod: 'digital',
           paymentProvider: order.provider,
@@ -142,26 +145,21 @@ export async function importPaidChannelOrder(
           channelImportedAt: new Date(),
           ...(customerId ? { customerId } : {}),
         },
-      ],
-      { session }
-    );
-    transactionId = txn._id.toString();
+      });
 
-    await StockMovement.updateMany(
-      {
-        tenantId,
-        notes: syncNote,
-        transactionId: { $exists: false },
-      },
-      { $set: { transactionId: txn._id } },
-      { session }
-    );
-
-    await Payment.create(
-      [
-        {
+      await tx.stockMovement.updateMany({
+        where: {
           tenantId,
-          transactionId: txn._id,
+          notes: syncNote,
+          transactionId: null,
+        },
+        data: { transactionId: txn.id },
+      });
+
+      await tx.payment.create({
+        data: {
+          tenantId,
+          transactionId: txn.id,
           method: 'digital',
           amount: total,
           status: 'completed',
@@ -172,29 +170,28 @@ export async function importPaidChannelOrder(
           },
           processedAt: new Date(),
         },
-      ],
-      { session }
-    );
+      });
 
-    await session.commitTransaction();
+      return txn.id;
+    });
   } catch (e: unknown) {
-    await session.abortTransaction();
-    const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes('E11000') || msg.includes('duplicate')) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
       return { ok: false, duplicate: true, reason: 'duplicate_key' };
     }
+    const msg = e instanceof Error ? e.message : String(e);
     logger.error('importPaidChannelOrder', e);
     return { ok: false, reason: msg };
-  } finally {
-    session.endSession();
   }
 
   try {
-    const count = await Transaction.countDocuments({
-      tenantId,
-      createdAt: {
-        $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-        $lt: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1),
+    const now = new Date();
+    const count = await prisma.transaction.count({
+      where: {
+        tenantId,
+        createdAt: {
+          gte: new Date(now.getFullYear(), now.getMonth(), 1),
+          lt: new Date(now.getFullYear(), now.getMonth() + 1, 1),
+        },
       },
     });
     await SubscriptionService.updateUsage(tenantId, { transactions: count });

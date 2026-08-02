@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Booking from '@/models/Booking';
+import prisma from '@/lib/prisma';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -18,7 +17,6 @@ import { logger } from '@/lib/logger';
  */
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const user = await getCurrentUser(request);
     const t = await getValidationTranslatorFromRequest(request);
     if (!user) {
@@ -62,15 +60,17 @@ export async function POST(request: NextRequest) {
     // 1. Are in the reminder window
     // 2. Are pending or confirmed
     // 3. Haven't had a reminder sent yet
-    const bookingsToRemind = await Booking.find({
-      tenantId,
-      startTime: {
-        $gte: reminderWindowStart,
-        $lte: reminderWindowEnd,
+    const bookingsToRemind = await prisma.booking.findMany({
+      where: {
+        tenantId,
+        startTime: {
+          gte: reminderWindowStart,
+          lte: reminderWindowEnd,
+        },
+        status: { in: ['pending', 'confirmed'] },
+        reminderSent: { not: true },
       },
-      status: { $in: ['pending', 'confirmed'] },
-      reminderSent: { $ne: true },
-    }).lean();
+    });
 
     const tenantSettings = await getTenantSettingsById(tenantId);
     const results = {
@@ -84,27 +84,27 @@ export async function POST(request: NextRequest) {
       try {
         await sendBookingReminder({
           customerName: booking.customerName,
-          customerEmail: booking.customerEmail,
-          customerPhone: booking.customerPhone,
+          customerEmail: booking.customerEmail ?? undefined,
+          customerPhone: booking.customerPhone ?? undefined,
           serviceName: booking.serviceName,
           startTime: booking.startTime,
           endTime: booking.endTime,
-          staffName: booking.staffName,
-          notes: booking.notes,
-          bookingId: booking._id.toString(),
+          staffName: booking.staffName ?? undefined,
+          notes: booking.notes ?? undefined,
+          bookingId: booking.id,
         }, tenantSettings || undefined);
 
         // Mark reminder as sent
-        await Booking.findByIdAndUpdate(booking._id, { reminderSent: true });
+        await prisma.booking.update({ where: { id: booking.id }, data: { reminderSent: true } });
         results.sent++;
         results.details.push({
-          bookingId: booking._id.toString(),
+          bookingId: booking.id,
           success: true,
         });
       } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         results.failed++;
         results.details.push({
-          bookingId: booking._id.toString(),
+          bookingId: booking.id,
           success: false,
           error: error.message,
         });
@@ -125,4 +125,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

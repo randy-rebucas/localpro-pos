@@ -1,7 +1,6 @@
 import { NextRequest } from 'next/server';
 import jwt from 'jsonwebtoken';
-import connectDB from './mongodb';
-import Customer from '@/models/Customer';
+import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 
 export interface CustomerJWTPayload {
@@ -67,12 +66,12 @@ export async function getCurrentCustomer(request: NextRequest): Promise<{
     }
 
     // Verify customer still exists and is active
-    await connectDB();
-    const customer = await Customer.findById(payload.customerId)
-      .select('isActive tenantId')
-      .lean();
-    
-    if (!customer || !customer.isActive || customer.tenantId.toString() !== payload.tenantId) {
+    const customer = await prisma.customer.findUnique({
+      where: { id: payload.customerId },
+      select: { isActive: true, tenantId: true },
+    });
+
+    if (!customer || !customer.isActive || customer.tenantId !== payload.tenantId) {
       return null;
     }
 

@@ -1,26 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Campaign from '@/models/Campaign';
+import prisma from '@/lib/prisma';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
+import type { Prisma } from '@prisma/client';
+
+function toApi(campaign: any) {
+  const { id, ...rest } = campaign;
+  return { _id: id, ...rest };
+}
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
-
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId } = authResult;
 
-    const campaigns = await Campaign.find({ tenantId })
-      .sort({ createdAt: -1 })
-      .limit(50)
-      .lean();
+    const campaigns = await prisma.campaign.findMany({
+      where: { tenantId },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
 
-    return NextResponse.json({ success: true, data: campaigns });
+    return NextResponse.json({ success: true, data: campaigns.map(toApi) });
   } catch (error) {
     return handleApiError(error, 'Failed to fetch campaigns');
   }
@@ -28,8 +32,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
-
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId, user } = authResult;
@@ -56,15 +58,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Subject is required for email campaigns' }, { status: 400 });
     }
 
-    const campaign = await Campaign.create({
-      tenantId,
-      name: name.trim(),
-      channel,
-      segment,
-      subject: subject?.trim(),
-      body: messageBody.trim(),
-      status: 'draft',
-      createdBy: userId,
+    const campaign = await prisma.campaign.create({
+      data: {
+        tenantId,
+        name: name.trim(),
+        channel: channel as Prisma.CampaignCreateInput['channel'],
+        segment: segment as Prisma.CampaignCreateInput['segment'],
+        subject: subject?.trim(),
+        body: messageBody.trim(),
+        status: 'draft',
+        createdBy: userId,
+      },
     });
 
     await createAuditLog(request, {
@@ -72,11 +76,11 @@ export async function POST(request: NextRequest) {
       userId: user.userId,
       action: AuditActions.CREATE,
       entityType: 'campaign',
-      entityId: String(campaign._id),
+      entityId: campaign.id,
       changes: { name, channel, segment },
     });
 
-    return NextResponse.json({ success: true, data: campaign }, { status: 201 });
+    return NextResponse.json({ success: true, data: toApi(campaign) }, { status: 201 });
   } catch (error) {
     return handleApiError(error, 'Failed to create campaign');
   }

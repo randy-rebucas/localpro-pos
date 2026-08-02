@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
 import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getRoleRank } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -9,10 +7,16 @@ import { validateEmail, validatePassword } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkSubscriptionLimit, SubscriptionService } from '@/lib/subscription';
 import { logger } from '@/lib/logger';
+import { listTenantUsers, countActiveUsers, createUser } from '@/lib/data/users';
+import { Prisma } from '@prisma/client';
+
+function serializeUser(user: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const { id, password: _password, ...rest } = user;
+  return { _id: id, ...rest };
+}
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     // SECURITY: Validate tenant access for authenticated requests
     let tenantId: string;
     try {
@@ -33,16 +37,11 @@ export async function GET(request: NextRequest) {
     }
 
     const isActiveParam = request.nextUrl.searchParams.get('isActive');
-    const query: Record<string, unknown> = { tenantId };
-    if (isActiveParam === 'true') query.isActive = { $ne: false };
-    else if (isActiveParam === 'false') query.isActive = false;
+    const isActiveFilter = isActiveParam === 'true' ? true : isActiveParam === 'false' ? false : undefined;
 
-    const users = await User.find(query)
-      .select('-password')
-      .sort({ createdAt: -1 })
-      .lean();
+    const users = await listTenantUsers(tenantId, isActiveFilter);
 
-    return NextResponse.json({ success: true, data: users });
+    return NextResponse.json({ success: true, data: users.map(serializeUser) });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     if (error.message === 'Unauthorized' || error.message.includes('Forbidden')) {
       return NextResponse.json(
@@ -57,7 +56,6 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   let t: (key: string, fallback: string) => string;
   try {
-    await connectDB();
     // SECURITY: Validate tenant access for authenticated requests
     let tenantId: string;
     let actingUser: { userId: string; role: string };
@@ -133,7 +131,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check subscription limits
-    const currentUserCount = await User.countDocuments({ tenantId, isActive: true });
+    const currentUserCount = await countActiveUsers(tenantId);
     try {
       await checkSubscriptionLimit(tenantId.toString(), 'maxUsers', currentUserCount);
     } catch (limitError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -143,19 +141,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const user = await User.create({
-      email: email.toLowerCase(),
-      password,
-      name,
-      role: role || 'cashier',
-      tenantId,
-    });
+    let user;
+    try {
+      user = await createUser({
+        email: email.toLowerCase(),
+        password,
+        name,
+        role: role || 'cashier',
+        tenantId,
+      });
+    } catch (createErr: unknown) {
+      if (createErr instanceof Prisma.PrismaClientKnownRequestError && createErr.code === 'P2002') {
+        return NextResponse.json(
+          { success: false, error: 'User with this email already exists' },
+          { status: 400 }
+        );
+      }
+      throw createErr;
+    }
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.CREATE,
       entityType: 'user',
-      entityId: user._id.toString(),
+      entityId: user.id,
       changes: { email, name, role: user.role },
     });
 
@@ -169,12 +178,9 @@ export async function POST(request: NextRequest) {
       // Don't fail the request if usage update fails
     }
 
-    const userResponse = user.toObject();
-    const { password: _, ...userWithoutPassword } = userResponse;
-
-    return NextResponse.json({ success: true, data: userWithoutPassword }, { status: 201 });
+    return NextResponse.json({ success: true, data: serializeUser(user) }, { status: 201 });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (error.code === 11000) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       return NextResponse.json(
         { success: false, error: 'User with this email already exists' },
         { status: 400 }
@@ -189,4 +195,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: error.message }, { status: 400 });
   }
 }
-

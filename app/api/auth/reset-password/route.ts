@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
+import { getUserById, updatePassword } from '@/lib/data/users';
 import { validateEmail, validatePassword } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
@@ -33,7 +32,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await connectDB();
     t = await getValidationTranslatorFromRequest(request);
     const body = await request.json();
 
@@ -77,7 +75,7 @@ async function handleAuthenticatedReset(
     );
   }
 
-  const user = await User.findById(currentUser.userId).select('+password');
+  const user = await getUserById(currentUser.userId);
   if (!user) {
     return NextResponse.json(
       { success: false, error: t('validation.userNotFound', 'User not found') },
@@ -94,9 +92,8 @@ async function handleAuthenticatedReset(
     );
   }
 
-  // Update password (pre-save hook will hash it)
-  user.password = newPassword;
-  await user.save();
+  // Update password (hashed inside updatePassword)
+  await updatePassword(currentUser.userId, newPassword);
 
   await createAuditLog(request, {
     tenantId: currentUser.tenantId,
@@ -113,6 +110,12 @@ async function handleAuthenticatedReset(
   });
 }
 
+// TODO(postgres-migration): The Prisma User model does not yet have
+// resetToken/resetTokenExpiry columns (the Mongoose model had them). This
+// token-based (forgot-password-email) reset flow is left non-functional
+// (always returns "invalid or expired reset token") until those columns are
+// added to prisma/schema.prisma — flagging rather than guessing at a schema
+// change outside this route-conversion batch's scope.
 async function handleTokenReset(
   request: NextRequest,
   body: { email?: string; tenantId?: string; resetToken?: string; newPassword?: string },
@@ -142,67 +145,10 @@ async function handleTokenReset(
     );
   }
 
-  // Find tenant
-  const Tenant = (await import('@/models/Tenant')).default;
-  const tenant = await Tenant.findOne({
-    $or: [{ slug: tenantId }, { _id: tenantId }],
-    isActive: true,
-  });
-
-  if (!tenant) {
-    return NextResponse.json(
-      { success: false, error: t('validation.tenantNotFound', 'Tenant not found or inactive') },
-      { status: 404 }
-    );
-  }
-
-  const user = await User.findOne({
-    email: email.toLowerCase(),
-    tenantId: tenant._id,
-  }).select('+password +resetToken +resetTokenExpiry');
-
-  if (!user) {
-    return NextResponse.json(
-      { success: false, error: t('validation.invalidCredentials', 'Invalid credentials') },
-      { status: 400 }
-    );
-  }
-
-  // Verify reset token and expiry
-  const storedToken = (user as any).resetToken; // eslint-disable-line @typescript-eslint/no-explicit-any
-  const tokenExpiry = (user as any).resetTokenExpiry; // eslint-disable-line @typescript-eslint/no-explicit-any
-
-  if (!storedToken || !tokenExpiry) {
-    return NextResponse.json(
-      { success: false, error: t('validation.invalidResetToken', 'Invalid or expired reset token') },
-      { status: 400 }
-    );
-  }
-
-  const isTokenValid = await bcrypt.compare(resetToken, storedToken);
-  if (!isTokenValid || new Date() > new Date(tokenExpiry)) {
-    return NextResponse.json(
-      { success: false, error: t('validation.invalidResetToken', 'Invalid or expired reset token') },
-      { status: 400 }
-    );
-  }
-
-  // Update password and clear reset token
-  user.password = newPassword;
-  (user as any).resetToken = undefined; // eslint-disable-line @typescript-eslint/no-explicit-any
-  (user as any).resetTokenExpiry = undefined; // eslint-disable-line @typescript-eslint/no-explicit-any
-  await user.save();
-
-  await createAuditLog(request, {
-    tenantId: tenant._id.toString(),
-    action: AuditActions.UPDATE,
-    entityType: 'user',
-    entityId: user._id.toString(),
-    changes: { passwordReset: true, method: 'token' },
-  });
-
-  return NextResponse.json({
-    success: true,
-    message: t('validation.passwordResetSuccess', 'Password has been reset successfully'),
-  });
+  // No resetToken/resetTokenExpiry column exists on the Prisma User model —
+  // this mode cannot be completed. See TODO above.
+  return NextResponse.json(
+    { success: false, error: t('validation.invalidResetToken', 'Invalid or expired reset token') },
+    { status: 400 }
+  );
 }

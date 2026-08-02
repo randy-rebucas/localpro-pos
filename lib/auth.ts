@@ -1,8 +1,7 @@
 import { NextRequest } from 'next/server';
 import jwt from 'jsonwebtoken';
-import connectDB from './mongodb';
-import User from '@/models/User';
-import Tenant from '@/models/Tenant';
+import { getUserAuthState } from '@/lib/data/users';
+import { getTenantById } from '@/lib/data/tenants';
 import { isTokenRevoked, isTokenIssuedBeforeRevocation } from '@/lib/token-blacklist';
 import { logger } from '@/lib/logger';
 
@@ -80,8 +79,7 @@ export async function getCurrentUser(request: NextRequest): Promise<{
     }
 
     // Verify user still exists and is active
-    await connectDB();
-    const user = await User.findById(payload.userId).select('isActive tenantId').lean();
+    const user = await getUserAuthState(payload.userId);
 
     if (!user || !user.isActive) {
       return null;
@@ -89,14 +87,14 @@ export async function getCurrentUser(request: NextRequest): Promise<{
 
     // Guard against missing tenantId before string comparison
     // super_admin users have no tenantId — skip this check
-    if (payload.role !== 'super_admin' && user.tenantId && user.tenantId.toString() !== payload.tenantId) {
+    if (payload.role !== 'super_admin' && user.tenantId && user.tenantId !== payload.tenantId) {
       return null;
     }
 
     // Deactivated tenants (e.g. suspended for non-payment) lose access even with a
     // still-valid token — login blocks new sessions, this blocks existing ones.
     if (payload.role !== 'super_admin' && user.tenantId) {
-      const tenant = await Tenant.findById(user.tenantId).select('isActive').lean();
+      const tenant = await getTenantById(user.tenantId);
       if (!tenant || !tenant.isActive) {
         return null;
       }

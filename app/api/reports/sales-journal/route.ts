@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
+import prisma from '@/lib/prisma';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
-import Transaction from '@/models/Transaction';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkFeatureAccess } from '@/lib/subscription';
 import { arrayToCSV } from '@/lib/export';
@@ -11,7 +10,6 @@ import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
@@ -27,9 +25,9 @@ export async function GET(request: NextRequest) {
     // Check if reports feature is enabled in subscription
     try {
       await checkFeatureAccess(tenantId.toString(), 'enableReports');
-    } catch (featureError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+    } catch (featureError: unknown) {
       return NextResponse.json(
-        { success: false, error: featureError.message },
+        { success: false, error: (featureError as Error).message },
         { status: 403 }
       );
     }
@@ -46,26 +44,28 @@ export async function GET(request: NextRequest) {
     const format = searchParams.get('format') || 'json'; // json, csv
 
     // Query transactions for the date range
-    const transactions = await Transaction.find({
-      tenantId,
-      createdAt: { $gte: startDate, $lte: endDate },
-    })
-      .sort({ createdAt: -1 })
-      .lean();
+    const transactions = await prisma.transaction.findMany({
+      where: {
+        tenantId,
+        createdAt: { gte: startDate, lte: endDate },
+      },
+      include: { items: { select: { name: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
 
     // Map to sales journal format
-    const journalEntries = transactions.map((txn: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+    const journalEntries = transactions.map((txn) => ({
       receiptNumber: txn.receiptNumber || '',
       date: new Date(txn.createdAt).toISOString().split('T')[0],
       time: new Date(txn.createdAt).toLocaleTimeString('en-PH', { hour12: false }),
-      items: txn.items?.map((item: any) => item.name).join('; ') || '', // eslint-disable-line @typescript-eslint/no-explicit-any
-      itemCount: txn.items?.length || 0,
-      subtotal: txn.subtotal || 0,
+      items: txn.items.map((item) => item.name).join('; ') || '',
+      itemCount: txn.items.length || 0,
+      subtotal: Number(txn.subtotal ?? 0),
       discountCategory: txn.discountCategory || '',
-      discountAmount: txn.discountAmount || 0,
-      taxExemptAmount: txn.taxExemptAmount || 0,
-      taxAmount: txn.taxAmount || 0,
-      total: txn.total || 0,
+      discountAmount: Number(txn.discountAmount ?? 0),
+      taxExemptAmount: Number(txn.taxExemptAmount ?? 0),
+      taxAmount: Number(txn.taxAmount ?? 0),
+      total: Number(txn.total ?? 0),
       paymentMethod: txn.paymentMethod || '',
       status: txn.status || '',
     }));
@@ -91,17 +91,18 @@ export async function GET(request: NextRequest) {
         entries: journalEntries,
         summary: {
           totalTransactions: journalEntries.length,
-          totalSales: journalEntries.reduce((sum: number, e: any) => sum + e.total, 0), // eslint-disable-line @typescript-eslint/no-explicit-any
-          totalTax: journalEntries.reduce((sum: number, e: any) => sum + e.taxAmount, 0), // eslint-disable-line @typescript-eslint/no-explicit-any
-          totalDiscounts: journalEntries.reduce((sum: number, e: any) => sum + e.discountAmount, 0), // eslint-disable-line @typescript-eslint/no-explicit-any
-          totalTaxExempt: journalEntries.reduce((sum: number, e: any) => sum + e.taxExemptAmount, 0), // eslint-disable-line @typescript-eslint/no-explicit-any
+          totalSales: journalEntries.reduce((sum, e) => sum + e.total, 0),
+          totalTax: journalEntries.reduce((sum, e) => sum + e.taxAmount, 0),
+          totalDiscounts: journalEntries.reduce((sum, e) => sum + e.discountAmount, 0),
+          totalTaxExempt: journalEntries.reduce((sum, e) => sum + e.taxExemptAmount, 0),
         },
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
       },
     });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  } catch (error: unknown) {
     logger.error('Error fetching sales journal:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Failed to fetch sales journal';
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }

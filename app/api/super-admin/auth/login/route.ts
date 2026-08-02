@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
+import prisma from '@/lib/prisma';
 import { generateToken } from '@/lib/auth';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
@@ -18,7 +17,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await connectDB();
     const body = await request.json();
     const { email, password } = body;
 
@@ -36,9 +34,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find super_admin user by email only (no tenant scope)
-    const user = await User.findOne({ email: email.toLowerCase(), role: 'super_admin' })
-      .select('+password');
+    // Find super_admin user by email only (no tenant scope — super_admin users have tenantId: null)
+    const user = await prisma.user.findFirst({
+      where: { email: email.toLowerCase(), role: 'super_admin' },
+    });
 
     if (!user || !user.isActive) {
       return NextResponse.json(
@@ -48,7 +47,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!user.password || typeof user.password !== 'string') {
-      logger.error('Super admin password missing', { userId: user._id });
+      logger.error('Super admin password missing', { userId: user.id });
       return NextResponse.json(
         { success: false, error: 'Invalid credentials' },
         { status: 401 }
@@ -64,11 +63,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Update last login
-    await User.findByIdAndUpdate(user._id, { lastLogin: new Date() });
+    await prisma.user.update({ where: { id: user.id }, data: { lastLogin: new Date() } });
 
     // Generate token — tenantId is empty string for super_admin
     const token = generateToken({
-      userId: user._id.toString(),
+      userId: user.id,
       tenantId: '',
       email: user.email,
       role: 'super_admin',
@@ -78,7 +77,7 @@ export async function POST(request: NextRequest) {
       success: true,
       data: {
         user: {
-          _id: user._id,
+          _id: user.id,
           email: user.email,
           name: user.name,
           role: user.role,

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import AuditLog from '@/models/AuditLog';
+import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -21,7 +20,6 @@ import { logger } from '@/lib/logger';
  */
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const t = await getValidationTranslatorFromRequest(request);
 
@@ -48,27 +46,23 @@ export async function GET(request: NextRequest) {
     if (searchParams.get('endDate')) endDate.setHours(23, 59, 59, 999);
     const format = searchParams.get('format') || 'json'; // json, csv
 
-    const query = {
-      tenantId: user.tenantId,
-      createdAt: { $gte: startDate, $lte: endDate },
-    };
-
-    const logs = await AuditLog.find(query)
-      .populate('userId', 'name email')
-      .sort({ createdAt: 1 }) // chronological, matching an electronic journal's expected order
-      .lean();
+    const logs = await prisma.auditLog.findMany({
+      where: {
+        tenantId: user.tenantId,
+        createdAt: { gte: startDate, lte: endDate },
+      },
+      include: { user: { select: { name: true, email: true } } },
+      orderBy: { createdAt: 'asc' }, // chronological, matching an electronic journal's expected order
+    });
 
     const entries = logs.map((log) => {
-      const actor = log.userId && typeof log.userId === 'object'
-        ? (log.userId as unknown as { name?: string; email?: string })
-        : undefined;
       return {
         timestamp: new Date(log.createdAt).toISOString(),
         action: log.action,
         entityType: log.entityType,
         entityId: log.entityId || '',
-        userName: actor?.name || '',
-        userEmail: actor?.email || '',
+        userName: log.user?.name || '',
+        userEmail: log.user?.email || '',
         ipAddress: log.ipAddress || '',
         userAgent: log.userAgent || '',
         changes: log.changes ? JSON.stringify(log.changes) : '',

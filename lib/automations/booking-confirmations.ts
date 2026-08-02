@@ -3,9 +3,7 @@
  * Auto-confirm bookings based on rules (e.g., no conflicts, payment received)
  */
 
-import connectDB from '@/lib/mongodb';
-import Booking from '@/models/Booking';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/prisma';
 import { sendBookingConfirmation } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { AutomationResult } from './types';
@@ -21,8 +19,6 @@ export interface BookingConfirmationOptions {
 export async function autoConfirmBookings(
   options: BookingConfirmationOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -35,10 +31,10 @@ export async function autoConfirmBookings(
     // Get tenants to process
     let tenants;
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await prisma.tenant.findUnique({ where: { id: options.tenantId } });
       tenants = tenant ? [tenant] : [];
     } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
+      tenants = await prisma.tenant.findMany({ where: { isActive: true } });
     }
 
     if (tenants.length === 0) {
@@ -51,51 +47,54 @@ export async function autoConfirmBookings(
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
+        const tenantId = tenant.id;
         const tenantSettings = await getTenantSettingsById(tenantId);
 
         // Find pending bookings that can be auto-confirmed
         // Rules: no conflicts, within business hours (if configured), status is pending
-        const pendingBookings = await Booking.find({
-          tenantId,
-          status: 'pending',
-          confirmationSent: { $ne: true },
-        }).lean();
+        const pendingBookings = await prisma.booking.findMany({
+          where: {
+            tenantId,
+            status: 'pending',
+            confirmationSent: { not: true },
+          },
+        });
 
         for (const booking of pendingBookings) {
           try {
             // Check for conflicts (bookings that overlap)
-            const conflictingBookings = await Booking.find({
-              tenantId,
-              _id: { $ne: booking._id },
-              status: { $in: ['pending', 'confirmed'] },
-              $or: [
-                {
-                  startTime: { $lt: booking.endTime },
-                  endTime: { $gt: booking.startTime },
-                },
-              ],
-            }).lean();
+            const conflictingBookings = await prisma.booking.findMany({
+              where: {
+                tenantId,
+                id: { not: booking.id },
+                status: { in: ['pending', 'confirmed'] },
+                startTime: { lt: booking.endTime },
+                endTime: { gt: booking.startTime },
+              },
+            });
 
             // If no conflicts, auto-confirm
             if (conflictingBookings.length === 0) {
-              await Booking.findByIdAndUpdate(booking._id, {
-                status: 'confirmed',
-                confirmationSent: true,
+              await prisma.booking.update({
+                where: { id: booking.id },
+                data: {
+                  status: 'confirmed',
+                  confirmationSent: true,
+                },
               });
 
               // Send confirmation email/SMS
               await sendBookingConfirmation(
                 {
                   customerName: booking.customerName,
-                  customerEmail: booking.customerEmail,
-                  customerPhone: booking.customerPhone,
+                  customerEmail: booking.customerEmail ?? undefined,
+                  customerPhone: booking.customerPhone ?? undefined,
                   serviceName: booking.serviceName,
                   startTime: booking.startTime,
                   endTime: booking.endTime,
-                  staffName: booking.staffName,
-                  notes: booking.notes,
-                  bookingId: booking._id.toString(),
+                  staffName: booking.staffName ?? undefined,
+                  notes: booking.notes ?? undefined,
+                  bookingId: booking.id,
                 },
                 tenantSettings || undefined
               );
@@ -104,7 +103,7 @@ export async function autoConfirmBookings(
             }
           } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             totalFailed++;
-            results.errors?.push(`Booking ${booking._id}: ${error.message}`);
+            results.errors?.push(`Booking ${booking.id}: ${error.message}`);
           }
         }
       } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any

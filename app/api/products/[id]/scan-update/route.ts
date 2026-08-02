@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import mongoose from 'mongoose';
-import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
+import prisma from '@/lib/prisma';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
 import { logger } from '@/lib/logger';
+import { getProductById, productSkuExists, serializeProduct } from '@/lib/data/products';
 
 const SKU_CHARSET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 const SKU_LENGTH = 8;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function generateSkuCandidate(): string {
   let result = 'SKU-';
@@ -22,7 +22,7 @@ function generateSkuCandidate(): string {
 async function generateUniqueSku(tenantId: string): Promise<string> {
   for (let attempt = 0; attempt < 10; attempt++) {
     const candidate = generateSkuCandidate();
-    const exists = await Product.exists({ tenantId, sku: candidate });
+    const exists = await productSkuExists(tenantId, candidate);
     if (!exists) return candidate;
   }
   // Fallback: timestamp-based to guarantee uniqueness
@@ -34,8 +34,6 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
-
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId } = authResult;
@@ -47,7 +45,7 @@ export async function PATCH(
     }
 
     const { id } = await params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!UUID_RE.test(id)) {
       return NextResponse.json({ success: false, error: 'Invalid product ID' }, { status: 400 });
     }
 
@@ -74,11 +72,7 @@ export async function PATCH(
       sessionId?: string;
     };
 
-    const product = await Product.findOne({
-      _id: id,
-      tenantId,
-      isActive: { $ne: false },
-    });
+    const product = await getProductById(tenantId, id, true);
 
     if (!product) {
       return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
@@ -92,11 +86,7 @@ export async function PATCH(
       skuGenerated = true;
     } else {
       // Ensure provided SKU is unique within tenant (excluding this product)
-      const conflict = await Product.exists({
-        tenantId,
-        sku: resolvedSku,
-        _id: { $ne: id },
-      });
+      const conflict = await productSkuExists(tenantId, resolvedSku, id);
       if (conflict) {
         return NextResponse.json(
           { success: false, error: 'SKU already in use by another product' },
@@ -109,32 +99,31 @@ export async function PATCH(
     if (barcode !== undefined) updates.barcode = barcode.trim();
     if (name !== undefined && name.trim()) updates.name = name.trim();
     if (price !== undefined && price >= 0) updates.price = price;
-    if (stock !== undefined && stock >= 0) updates.stock = stock;
-    if (categoryId && mongoose.Types.ObjectId.isValid(categoryId)) {
-      updates.categoryId = new mongoose.Types.ObjectId(categoryId);
+    if (stock !== undefined && stock >= 0) updates.stock = BigInt(stock);
+    if (categoryId && UUID_RE.test(categoryId)) {
+      updates.categoryId = categoryId;
     }
     if (imageUrl !== undefined) updates.image = imageUrl;
     if (notes !== undefined) updates.description = notes;
 
-    const updatedProduct = await Product.findOneAndUpdate(
-      { _id: id, tenantId },
-      { $set: updates },
-      { new: true, lean: true }
-    );
+    const updatedProduct = await prisma.product.update({
+      where: { id },
+      data: updates,
+    });
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.UPDATE,
       entityType: 'product',
       entityId: id,
-      changes: { ...updates, sessionId, skuGenerated },
+      changes: { ...updates, stock: updates.stock !== undefined ? Number(updates.stock as bigint) : undefined, sessionId, skuGenerated },
     });
 
     logger.info(`scan-update: product ${id} updated in session ${sessionId ?? 'unknown'}`);
 
     return NextResponse.json({
       success: true,
-      data: { product: updatedProduct, skuGenerated },
+      data: { product: serializeProduct(updatedProduct), skuGenerated },
     });
   } catch (error) {
     return handleApiError(error, 'Failed to update product');

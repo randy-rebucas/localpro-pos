@@ -1,16 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import SavedCart from '@/models/SavedCart';
-import Product from '@/models/Product';
+import prisma from '@/lib/prisma';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
-import mongoose from 'mongoose';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
 
+function savedCartToApi(cart: { id: string; subtotal: unknown; discountAmount: unknown; total: unknown; [key: string]: unknown }) {
+  const { id, subtotal, discountAmount, total, ...rest } = cart;
+  return {
+    _id: id,
+    ...rest,
+    subtotal: Number(subtotal),
+    discountAmount: discountAmount !== null && discountAmount !== undefined ? Number(discountAmount) : discountAmount,
+    total: Number(total),
+  };
+}
+
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
 
@@ -18,17 +25,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    const tenantObjectId = new mongoose.Types.ObjectId(tenantId);
-    
-    const savedCarts = await SavedCart.find({
-      tenantId: tenantObjectId,
-      userId: user.userId,
-      isActive: { $ne: false },
-    })
-      .sort({ createdAt: -1 })
-      .lean();
+    const savedCarts = await prisma.savedCart.findMany({
+      where: {
+        tenantId,
+        userId: user.userId,
+        isActive: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
 
-    return NextResponse.json({ success: true, data: savedCarts });
+    return NextResponse.json({ success: true, data: savedCarts.map(savedCartToApi) });
   } catch (error: unknown) {
     logger.error('Error fetching saved carts:', error);
     return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Failed to fetch saved carts' }, { status: 500 });
@@ -37,7 +43,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
@@ -74,17 +79,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const tenantObjectId = new mongoose.Types.ObjectId(tenantId);
-
     // Validate all product IDs belong to this tenant and use DB-authoritative price/stock
     const productIds = items.map((item: { productId: string }) => item.productId);
-    const dbProducts = await Product.find({
-      _id: { $in: productIds },
-      tenantId: tenantObjectId,
-    }).lean();
-    const dbProductMap = new Map(dbProducts.map(p => [p._id.toString(), p]));
+    const dbProducts = await prisma.product.findMany({
+      where: { id: { in: productIds }, tenantId },
+    });
+    const dbProductMap = new Map(dbProducts.map((p) => [p.id, p]));
 
-    const validatedItems: Array<{ productId: mongoose.Types.ObjectId; name: string; price: number; quantity: number; stock: number }> = [];
+    const validatedItems: Array<{ productId: string; name: string; price: number; quantity: number; stock: number }> = [];
     for (const item of items as Array<{ productId: string; quantity: unknown }>) {
       const dbProduct = dbProductMap.get(item.productId);
       if (!dbProduct) {
@@ -94,32 +96,33 @@ export async function POST(request: NextRequest) {
         );
       }
       validatedItems.push({
-        productId: new mongoose.Types.ObjectId(item.productId),
+        productId: item.productId,
         name: dbProduct.name,
-        price: dbProduct.price,
+        price: Number(dbProduct.price),
         quantity: parseInt(String(item.quantity)),
-        stock: dbProduct.stock ?? 0,
+        stock: Number(dbProduct.stock ?? 0),
       });
     }
 
     // Recalculate subtotal from DB prices
     const dbSubtotal = validatedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
-    const savedCart = await SavedCart.create({
-      tenantId: tenantObjectId,
-      name: name.trim(),
-      items: validatedItems,
-      subtotal: Math.round(dbSubtotal * 100) / 100,
-      discountCode: discountCode?.trim().toUpperCase() || undefined,
-      discountAmount: discountAmount ? parseFloat(discountAmount) : undefined,
-      total: parseFloat(total) || 0,
-      userId: user.userId,
+    const savedCart = await prisma.savedCart.create({
+      data: {
+        tenantId,
+        name: name.trim(),
+        items: validatedItems,
+        subtotal: Math.round(dbSubtotal * 100) / 100,
+        discountCode: discountCode?.trim().toUpperCase() || undefined,
+        discountAmount: discountAmount ? parseFloat(discountAmount) : undefined,
+        total: parseFloat(total) || 0,
+        userId: user.userId,
+      },
     });
 
-    return NextResponse.json({ success: true, data: savedCart }, { status: 201 });
+    return NextResponse.json({ success: true, data: savedCartToApi(savedCart) }, { status: 201 });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Error saving cart:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
-

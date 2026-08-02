@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import TenantEcommerceIntegration from '@/models/TenantEcommerceIntegration';
+import prisma from '@/lib/prisma';
 import { verifyWooCommerceWebhookSignature } from '@/lib/ecommerce/webhook-verify';
 import { getWooWebhookSecretPlain } from '@/lib/ecommerce/integration-credentials';
 import { handleWooCommerceWebhook } from '@/lib/ecommerce/process-channel-webhook';
 
 export const runtime = 'nodejs';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function POST(
   request: NextRequest,
@@ -15,12 +16,11 @@ export async function POST(
   const sig = request.headers.get('x-wc-webhook-signature') || request.headers.get('X-WC-Webhook-Signature');
 
   const { integrationId } = await params;
-  if (!integrationId || !/^[a-f0-9]{24}$/i.test(integrationId)) {
+  if (!integrationId || !UUID_RE.test(integrationId)) {
     return new NextResponse('Not Found', { status: 404 });
   }
 
-  await connectDB();
-  const integration = await TenantEcommerceIntegration.findById(integrationId).lean();
+  const integration = await prisma.tenantEcommerceIntegration.findUnique({ where: { id: integrationId } });
   if (!integration || integration.provider !== 'woocommerce' || !integration.isActive) {
     return new NextResponse('Not Found', { status: 404 });
   }

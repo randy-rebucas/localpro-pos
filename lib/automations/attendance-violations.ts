@@ -3,10 +3,7 @@
  * Alert managers for attendance issues (late arrivals, missing clock-ins)
  */
 
-import connectDB from '@/lib/mongodb';
-import Attendance from '@/models/Attendance';
-import Tenant from '@/models/Tenant';
-import User from '@/models/User'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import prisma from '@/lib/prisma';
 import { sendEmail } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { AutomationResult } from './types';
@@ -22,8 +19,6 @@ export interface AttendanceViolationOptions {
 export async function detectAttendanceViolations(
   options: AttendanceViolationOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -40,10 +35,10 @@ export async function detectAttendanceViolations(
     // Get tenants to process
     let tenants;
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await prisma.tenant.findUnique({ where: { id: options.tenantId } });
       tenants = tenant ? [tenant] : [];
     } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
+      tenants = await prisma.tenant.findMany({ where: { isActive: true } });
     }
 
     if (tenants.length === 0) {
@@ -56,7 +51,7 @@ export async function detectAttendanceViolations(
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
+        const tenantId = tenant.id;
         const tenantSettings = await getTenantSettingsById(tenantId);
 
         // Skip if attendance notifications disabled
@@ -75,15 +70,18 @@ export async function detectAttendanceViolations(
         expectedStart.setHours(expectedHour, expectedMinute || 0, 0, 0);
 
         // Find attendance records for today
-        const todayAttendance = await Attendance.find({
-          tenantId,
-          clockIn: {
-            $gte: today,
-            $lt: new Date(today.getTime() + 24 * 60 * 60 * 1000),
+        const todayAttendance = await prisma.attendance.findMany({
+          where: {
+            tenantId,
+            clockIn: {
+              gte: today,
+              lt: new Date(today.getTime() + 24 * 60 * 60 * 1000),
+            },
           },
-        })
-          .populate('userId', 'name email')
-          .lean();
+          include: {
+            user: { select: { name: true, email: true } },
+          },
+        });
 
         // Check for late arrivals
         for (const attendance of todayAttendance) {
@@ -92,13 +90,13 @@ export async function detectAttendanceViolations(
             const minutesLate = (clockInTime.getTime() - expectedStart.getTime()) / (1000 * 60);
 
             if (minutesLate > lateThresholdMinutes) {
-              const user = attendance.userId as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+              const user = attendance.user;
               if (!user) continue;
 
               // Send alert to manager
               if (tenantSettings?.emailNotifications && tenantSettings?.email) {
                 const companyName = tenantSettings?.companyName || tenant.name || 'Business';
-                
+
                 await sendEmail({
                   to: tenantSettings.email,
                   subject: `Attendance Violation: Late Arrival - ${user.name || 'Employee'}`,
@@ -123,7 +121,7 @@ This is an automated alert from your POS system.`,
             }
           } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             totalFailed++;
-            results.errors?.push(`Attendance ${attendance._id}: ${error.message}`);
+            results.errors?.push(`Attendance ${attendance.id}: ${error.message}`);
           }
         }
 

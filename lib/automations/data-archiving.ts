@@ -3,11 +3,8 @@
  * Automatically archive old data to reduce database size
  */
 
-import connectDB from '@/lib/mongodb';
-import Transaction from '@/models/Transaction'; // eslint-disable-line @typescript-eslint/no-unused-vars
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/prisma';
 import { AutomationResult } from './types';
-import mongoose from 'mongoose';
 
 export interface DataArchivingOptions {
   tenantId?: string;
@@ -15,14 +12,31 @@ export interface DataArchivingOptions {
   collections?: string[]; // Collections to archive (default: ['transactions'])
 }
 
+// TODO(postgres-migration): The original Mongo implementation archived
+// arbitrary collections generically by copying documents into a sibling
+// `${collection}_archive` Mongo collection created on the fly, then deleting
+// the originals. Postgres has no equivalent of creating an ad-hoc table at
+// runtime from an unvalidated caller-supplied name (and doing so via raw SQL
+// with an externally-supplied identifier would be a SQL-injection risk).
+// `prisma/schema.prisma` currently only has a cold-storage table for audit
+// logs (`ArchivedAuditLog`, see its doc-comment) — there is no
+// `ArchivedTransaction` model. Until one is added (mirroring the
+// ArchivedAuditLog pattern: same shape + archivedAt, FK to Tenant), this
+// automation intentionally does NOT delete any live Transaction rows — BIR
+// requires 10-year retention of transaction records, and deleting without a
+// verified archive destination would be a compliance/data-loss risk. For now
+// it only reports how many records are eligible for archiving so operators
+// know when the ArchivedTransaction table needs to be added.
+const SUPPORTED_COLLECTIONS = ['transactions'];
+
 /**
- * Archive old data to reduce database size
+ * Report on old data eligible for archiving to reduce database size.
+ * Only the `transactions` collection is currently recognized (see TODO
+ * above); other collection names are reported as unsupported.
  */
 export async function archiveOldData(
   options: DataArchivingOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -40,10 +54,10 @@ export async function archiveOldData(
     // Get tenants to process
     let tenants;
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await prisma.tenant.findUnique({ where: { id: options.tenantId } });
       tenants = tenant ? [tenant] : [];
     } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
+      tenants = await prisma.tenant.findMany({ where: { isActive: true } });
     }
 
     if (tenants.length === 0) {
@@ -51,47 +65,28 @@ export async function archiveOldData(
       return results;
     }
 
-    let totalArchived = 0;
+    let totalEligible = 0;
     let totalFailed = 0;
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
-        const db = mongoose.connection.db;
-        if (!db) continue;
-
-        // Create archive collection if it doesn't exist
-        const archiveCollectionName = `${collections[0]}_archive`; // eslint-disable-line @typescript-eslint/no-unused-vars
+        const tenantId = tenant.id;
 
         for (const collectionName of collections) {
           try {
-            const collection = db.collection(collectionName);
-            
-            // Find old documents
-            const oldDocuments = await collection.find({
-              tenantId: new mongoose.Types.ObjectId(tenantId),
-              createdAt: { $lt: cutoffDate },
-            }).limit(1000).toArray(); // Process in batches
-
-            if (oldDocuments.length === 0) {
+            if (!SUPPORTED_COLLECTIONS.includes(collectionName)) {
+              totalFailed++;
+              results.errors?.push(`Collection ${collectionName}: not supported (no archive table defined)`);
               continue;
             }
 
-            // Move to archive collection
-            const archiveCollection = db.collection(`${collectionName}_archive`);
-            await archiveCollection.insertMany(oldDocuments.map(doc => ({
-              ...doc,
-              archivedAt: new Date(),
-              originalCollection: collectionName,
-            })));
-
-            // Delete from original collection
-            const ids = oldDocuments.map(doc => doc._id);
-            await collection.deleteMany({
-              _id: { $in: ids },
+            const eligibleCount = await prisma.transaction.count({
+              where: { tenantId, createdAt: { lt: cutoffDate } },
             });
 
-            totalArchived += oldDocuments.length;
+            if (eligibleCount === 0) continue;
+
+            totalEligible += eligibleCount;
           } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             totalFailed++;
             results.errors?.push(`Collection ${collectionName}: ${error.message}`);
@@ -103,9 +98,9 @@ export async function archiveOldData(
       }
     }
 
-    results.processed = totalArchived;
+    results.processed = totalEligible;
     results.failed = totalFailed;
-    results.message = `Archived ${totalArchived} records${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
+    results.message = `${totalEligible} record(s) eligible for archiving (not archived — ArchivedTransaction table not yet implemented, see TODO in data-archiving.ts)${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`;
 
     return results;
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any

@@ -7,8 +7,7 @@
  * generates a per-tenant sales-summary JSON file for a given period and,
  * if the tenant has configured a push endpoint, POSTs it there.
  */
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/prisma';
 import { getDailySalesAggregate, startOfBusinessDay } from '@/lib/bir-readings';
 import { formatGrandTotalRegister } from '@/lib/bir-format';
 import { logger } from '@/lib/logger';
@@ -78,8 +77,6 @@ async function aggregateMonth(tenantId: string, monthStart: Date) {
 export async function generateSalesSummaryExport(
   options: SalesSummaryExportOptions
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -90,8 +87,8 @@ export async function generateSalesSummaryExport(
 
   try {
     const tenants = options.tenantId
-      ? await Tenant.find({ _id: options.tenantId, isActive: true }).lean()
-      : await Tenant.find({ isActive: true }).lean();
+      ? await prisma.tenant.findMany({ where: { id: options.tenantId, isActive: true } })
+      : await prisma.tenant.findMany({ where: { isActive: true } });
 
     if (tenants.length === 0) {
       results.message = 'No active tenants found to export';
@@ -104,7 +101,7 @@ export async function generateSalesSummaryExport(
     await fs.mkdir(exportDir, { recursive: true }).catch(() => {});
 
     for (const tenant of tenants) {
-      const tenantId = tenant._id.toString();
+      const tenantId = tenant.id;
       try {
         let aggregate: { grossSales: number; vatableSales: number; vatAmount: number; vatExemptSales: number; zeroRatedSales: number; discountTotal: number; transactionCount: number; voidCount: number; startDate: Date; endDate: Date };
 
@@ -139,8 +136,8 @@ export async function generateSalesSummaryExport(
           discountTotal: aggregate.discountTotal,
           transactionCount: aggregate.transactionCount,
           voidCount: aggregate.voidCount,
-          grandTotalSales: tenant.grandTotalSales || 0,
-          grandTotalRegister: formatGrandTotalRegister(tenant.grandTotalSales || 0),
+          grandTotalSales: Number(tenant.grandTotalSales || 0),
+          grandTotalRegister: formatGrandTotalRegister(Number(tenant.grandTotalSales || 0)),
           generatedAt: new Date().toISOString(),
         };
 
@@ -148,7 +145,8 @@ export async function generateSalesSummaryExport(
         await fs.writeFile(path.join(exportDir, fileName), JSON.stringify(payload, null, 2), 'utf-8');
 
         // Push to tenant-configured endpoint, if any (best-effort — local file is the source of truth).
-        const pushUrl = tenant.settings?.birEsalesPushUrl;
+        const tenantSettings = tenant.settings as { birEsalesPushUrl?: string } | null;
+        const pushUrl = tenantSettings?.birEsalesPushUrl;
         if (pushUrl) {
           try {
             const controller = new AbortController();

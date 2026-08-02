@@ -1,17 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Subscription from '@/models/Subscription';
-import SubscriptionPlan from '@/models/SubscriptionPlan';
-import Tenant from '@/models/Tenant';
 import { requireAuth } from '@/lib/auth';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { capturePayment } from '@/lib/paypal';
 import { logger } from '@/lib/logger';
+import { runInTransaction } from '@/lib/db-transaction';
+import { getSubscriptionByTenantId } from '@/lib/data/subscriptions';
+import prisma from '@/lib/prisma';
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
-
     // Require authentication
     const user = await requireAuth(request); // eslint-disable-line @typescript-eslint/no-unused-vars
     const tenantId = await getTenantIdFromRequest(request);
@@ -59,7 +56,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get the subscription plan
-    const plan = await SubscriptionPlan.findOne({ _id: planId, isActive: true });
+    const plan = await prisma.subscriptionPlan.findFirst({ where: { id: planId, isActive: true } });
     if (!plan) {
       return NextResponse.json(
         { success: false, error: 'Subscription plan not found' },
@@ -68,10 +65,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Find any existing subscription for this tenant (any status)
-    const existingSubscription = await Subscription.findOne({ tenantId });
+    const existingSubscription = await getSubscriptionByTenantId(tenantId);
 
     const now = new Date();
-    let subscriptionData: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
     const nextBillingDate = new Date(now);
     if (billingCycle === 'yearly') {
@@ -81,62 +77,77 @@ export async function POST(request: NextRequest) {
     }
     const endDate = nextBillingDate;
 
-    const billingEntry = {
-      date: now,
-      amount: billingCycle === 'yearly' ? plan.price.monthly * 12 * 0.9 : plan.price.monthly,
-      currency: plan.price.currency,
-      status: 'paid',
-      transactionId: paypalOrderId || undefined,
-    };
+    const priceMonthly = Number(plan.priceMonthly);
+    const billingAmount = billingCycle === 'yearly' ? priceMonthly * 12 * 0.9 : priceMonthly;
+
+    let resultSubscription;
 
     if (existingSubscription) {
-      // Update existing subscription (upgrade, re-activate, or trial conversion)
-      subscriptionData = {
-        planId: plan._id,
-        status: 'active',
-        billingCycle,
-        endDate,
-        nextBillingDate: endDate,
-        isTrial: false,
-        autoRenew: true,
-        $push: { billingHistory: billingEntry },
-      };
-
-      await Subscription.findByIdAndUpdate(existingSubscription._id, subscriptionData);
+      resultSubscription = await runInTransaction(async (tx) => {
+        const updated = await tx.subscription.update({
+          where: { id: existingSubscription.id },
+          data: {
+            planId: plan.id,
+            status: 'active',
+            billingCycle,
+            endDate,
+            nextBillingDate: endDate,
+            isTrial: false,
+            autoRenew: true,
+          },
+        });
+        await tx.subscriptionBillingHistoryEntry.create({
+          data: {
+            subscriptionId: updated.id,
+            date: now,
+            amount: billingAmount,
+            currency: plan.priceCurrency,
+            status: 'paid',
+            transactionId: paypalOrderId || null,
+          },
+        });
+        return updated;
+      });
     } else {
-      // Create brand-new subscription
-      subscriptionData = {
-        tenantId,
-        planId: plan._id,
-        status: 'active',
-        billingCycle,
-        startDate: now,
-        endDate,
-        nextBillingDate: endDate,
-        isTrial: false,
-        autoRenew: true,
-        usage: {
-          currentUsers: 1, // Admin user
-          currentBranches: 1,
-          currentProducts: 0,
-          currentTransactions: 0,
-          lastResetDate: now,
-        },
-        billingHistory: [billingEntry],
-      };
-
-      const subscription = await Subscription.create(subscriptionData);
-
-      // Update tenant with subscription reference
-      await Tenant.findByIdAndUpdate(tenantId, {
-        subscriptionId: subscription._id
+      resultSubscription = await runInTransaction(async (tx) => {
+        const created = await tx.subscription.create({
+          data: {
+            tenantId,
+            planId: plan.id,
+            status: 'active',
+            billingCycle,
+            startDate: now,
+            endDate,
+            nextBillingDate: endDate,
+            isTrial: false,
+            autoRenew: true,
+            usage: {
+              currentUsers: 1, // Admin user
+              currentBranches: 1,
+              currentProducts: 0,
+              currentTransactions: 0,
+              lastResetDate: now,
+            },
+          },
+        });
+        await tx.subscriptionBillingHistoryEntry.create({
+          data: {
+            subscriptionId: created.id,
+            date: now,
+            amount: billingAmount,
+            currency: plan.priceCurrency,
+            status: 'paid',
+            transactionId: paypalOrderId || null,
+          },
+        });
+        return created;
       });
     }
 
     return NextResponse.json({
       success: true,
       message: 'Subscription activated successfully',
-      data: subscriptionData,
+      data: { _id: resultSubscription.id, ...resultSubscription },
     });
 
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any

@@ -3,14 +3,10 @@
  * Predict future stock needs based on historical sales patterns
  */
 
-import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
-import Transaction from '@/models/Transaction';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/prisma';
 import { sendEmail } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { AutomationResult } from './types';
-import mongoose from 'mongoose';
 
 export interface PredictiveStockOptions {
   tenantId?: string;
@@ -24,8 +20,6 @@ export interface PredictiveStockOptions {
 export async function predictStockNeeds(
   options: PredictiveStockOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -42,10 +36,10 @@ export async function predictStockNeeds(
     // Get tenants to process
     let tenants;
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await prisma.tenant.findUnique({ where: { id: options.tenantId } });
       tenants = tenant ? [tenant] : [];
     } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
+      tenants = await prisma.tenant.findMany({ where: { isActive: true } });
     }
 
     if (tenants.length === 0) {
@@ -58,67 +52,48 @@ export async function predictStockNeeds(
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
+        const tenantId = tenant.id;
         const tenantSettings = await getTenantSettingsById(tenantId);
 
         // Get all products with inventory tracking
-        const products = await Product.find({
-          tenantId,
-          trackInventory: true,
-        }).lean();
+        const products = await prisma.product.findMany({
+          where: { tenantId, trackInventory: true },
+        });
 
         const predictions: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
 
         for (const product of products) {
           try {
-            // Get sales history for this product
-            const salesHistory = await Transaction.aggregate([
-              {
-                $match: {
-                  tenantId: new mongoose.Types.ObjectId(tenantId),
-                  createdAt: { $gte: analysisStartDate },
-                  status: 'completed',
-                  'items.product': product._id,
-                },
-              },
-              {
-                $unwind: '$items',
-              },
-              {
-                $match: {
-                  'items.product': product._id,
-                },
-              },
-              {
-                $group: {
-                  _id: {
-                    $dateToString: { format: '%Y-%m-%d', date: '$createdAt' },
-                  },
-                  quantity: { $sum: '$items.quantity' },
-                },
-              },
-              {
-                $sort: { _id: 1 },
-              },
-            ]);
+            // Get daily sales history for this product
+            const salesHistory = await prisma.$queryRaw<{ day: string; quantity: bigint | number }[]>`
+              SELECT to_char(t.created_at, 'YYYY-MM-DD') as day, SUM(ti.quantity)::int as quantity
+              FROM transaction_items ti
+              JOIN transactions t ON t.id = ti.transaction_id
+              WHERE t.tenant_id = ${tenantId}::uuid
+                AND ti.product_id = ${product.id}::uuid
+                AND t.created_at >= ${analysisStartDate}
+                AND t.status = 'completed'
+              GROUP BY day
+              ORDER BY day ASC
+            `;
 
             if (salesHistory.length === 0) {
               continue; // No sales history
             }
 
             // Calculate average daily sales
-            const totalQuantity = salesHistory.reduce((sum, day) => sum + day.quantity, 0);
+            const totalQuantity = salesHistory.reduce((sum, day) => sum + Number(day.quantity), 0);
             const avgDailySales = totalQuantity / analysisDays;
 
             // Predict future needs
             const predictedNeeds = avgDailySales * predictionDays;
 
             // Get current stock
-            const currentStock = product.stock || 0;
+            const currentStock = Number(product.stock ?? 0);
             const threshold = product.lowStockThreshold || tenantSettings?.lowStockThreshold || 10;
 
             // Predict when stock will hit threshold
-            const daysUntilThreshold = currentStock > threshold
+            const daysUntilThreshold = currentStock > threshold && avgDailySales > 0
               ? Math.floor((currentStock - threshold) / avgDailySales)
               : 0;
 
@@ -127,7 +102,7 @@ export async function predictStockNeeds(
               const suggestedReorderQuantity = Math.ceil(predictedNeeds + threshold - currentStock);
 
               predictions.push({
-                productId: product._id,
+                productId: product.id,
                 productName: product.name,
                 sku: product.sku,
                 currentStock,
@@ -144,8 +119,8 @@ export async function predictStockNeeds(
 
         if (predictions.length > 0 && tenantSettings?.emailNotifications && tenantSettings?.email) {
           const companyName = tenantSettings?.companyName || tenant.name || 'Business';
-          
-          const predictionsList = predictions.slice(0, 20).map(p => 
+
+          const predictionsList = predictions.slice(0, 20).map(p =>
             `- ${p.productName}${p.sku ? ` (SKU: ${p.sku})` : ''}
   Current Stock: ${p.currentStock}
   Avg Daily Sales: ${p.avgDailySales}

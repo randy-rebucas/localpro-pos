@@ -1,14 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
-import FeatureFlagOverride from '@/models/FeatureFlagOverride';
-import SuperAdminAction from '@/models/SuperAdminAction';
+import prisma from '@/lib/prisma';
 import { requireRole } from '@/lib/auth';
 import { handleApiError } from '@/lib/error-handler';
-
-async function resolveTenant(slug: string) {
-  return Tenant.findOne({ slug }).select('_id slug name').lean() as Promise<{ _id: unknown; slug: string; name: string } | null>;
-}
+import { getTenantBySlugAny } from '@/lib/data/tenants';
 
 // GET /api/super-admin/feature-flags/[tenantSlug]
 export async function GET(
@@ -16,20 +10,22 @@ export async function GET(
   { params }: { params: Promise<{ tenantSlug: string }> }
 ) {
   try {
-    await connectDB();
     await requireRole(request, ['super_admin']);
 
     const { tenantSlug } = await params;
-    const tenant = await resolveTenant(tenantSlug);
+    const tenant = await getTenantBySlugAny(tenantSlug);
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    const overrides = await FeatureFlagOverride.find({ tenantId: tenant._id })
-      .sort({ createdAt: -1 })
-      .lean();
+    const overrides = await prisma.featureFlagOverride.findMany({
+      where: { tenantId: tenant.id },
+      orderBy: { createdAt: 'desc' },
+    });
 
-    return NextResponse.json({ success: true, data: overrides });
+    const data = overrides.map(({ id, ...rest }) => ({ _id: id, ...rest }));
+
+    return NextResponse.json({ success: true, data });
   } catch (error: unknown) {
     if (error instanceof Error && (error.message === 'Unauthorized' || error.message.includes('Forbidden'))) {
       return NextResponse.json({ success: false, error: error.message }, { status: error.message === 'Unauthorized' ? 401 : 403 });
@@ -45,11 +41,10 @@ export async function POST(
   { params }: { params: Promise<{ tenantSlug: string }> }
 ) {
   try {
-    await connectDB();
     const adminUser = await requireRole(request, ['super_admin']);
 
     const { tenantSlug } = await params;
-    const tenant = await resolveTenant(tenantSlug);
+    const tenant = await getTenantBySlugAny(tenantSlug);
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
@@ -61,32 +56,40 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'feature and enabled are required' }, { status: 400 });
     }
 
-    const override = await FeatureFlagOverride.findOneAndUpdate(
-      { tenantId: tenant._id, feature },
-      {
-        tenantId: tenant._id,
+    const override = await prisma.featureFlagOverride.upsert({
+      where: { tenantId_feature: { tenantId: tenant.id, feature } },
+      create: {
+        tenantId: tenant.id,
         feature,
         enabled,
-        reason: reason || undefined,
-        expiresAt: expiresAt ? new Date(expiresAt) : undefined,
+        reason: reason || null,
+        expiresAt: expiresAt ? new Date(expiresAt) : null,
         grantedBy: adminUser.userId,
       },
-      { upsert: true, new: true }
-    );
-
-    const ip = request.headers.get('x-forwarded-for') || '';
-    await SuperAdminAction.create({
-      adminUserId: adminUser.userId,
-      action: 'feature_flag.override',
-      targetType: 'Tenant',
-      targetId: String(tenant._id),
-      description: `Set feature "${feature}" to ${enabled} for tenant ${tenantSlug}`,
-      changes: { feature, enabled, reason, expiresAt },
-      ipAddress: ip,
-      userAgent: request.headers.get('user-agent') || '',
+      update: {
+        enabled,
+        reason: reason || null,
+        expiresAt: expiresAt ? new Date(expiresAt) : null,
+        grantedBy: adminUser.userId,
+      },
     });
 
-    return NextResponse.json({ success: true, data: override });
+    const ip = request.headers.get('x-forwarded-for') || '';
+    await prisma.superAdminAction.create({
+      data: {
+        adminUserId: adminUser.userId,
+        action: 'feature_flag.override',
+        targetType: 'Tenant',
+        targetId: tenant.id,
+        description: `Set feature "${feature}" to ${enabled} for tenant ${tenantSlug}`,
+        changes: { feature, enabled, reason, expiresAt },
+        ipAddress: ip,
+        userAgent: request.headers.get('user-agent') || '',
+      },
+    });
+
+    const { id, ...rest } = override;
+    return NextResponse.json({ success: true, data: { _id: id, ...rest } });
   } catch (error: unknown) {
     if (error instanceof Error && (error.message === 'Unauthorized' || error.message.includes('Forbidden'))) {
       return NextResponse.json({ success: false, error: error.message }, { status: error.message === 'Unauthorized' ? 401 : 403 });
@@ -101,11 +104,10 @@ export async function DELETE(
   { params }: { params: Promise<{ tenantSlug: string }> }
 ) {
   try {
-    await connectDB();
     const adminUser = await requireRole(request, ['super_admin']);
 
     const { tenantSlug } = await params;
-    const tenant = await resolveTenant(tenantSlug);
+    const tenant = await getTenantBySlugAny(tenantSlug);
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
@@ -115,17 +117,19 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'feature query param is required' }, { status: 400 });
     }
 
-    await FeatureFlagOverride.deleteOne({ tenantId: tenant._id, feature });
+    await prisma.featureFlagOverride.deleteMany({ where: { tenantId: tenant.id, feature } });
 
     const ip = request.headers.get('x-forwarded-for') || '';
-    await SuperAdminAction.create({
-      adminUserId: adminUser.userId,
-      action: 'feature_flag.remove',
-      targetType: 'Tenant',
-      targetId: String(tenant._id),
-      description: `Removed feature flag override "${feature}" for tenant ${tenantSlug}`,
-      ipAddress: ip,
-      userAgent: request.headers.get('user-agent') || '',
+    await prisma.superAdminAction.create({
+      data: {
+        adminUserId: adminUser.userId,
+        action: 'feature_flag.remove',
+        targetType: 'Tenant',
+        targetId: tenant.id,
+        description: `Removed feature flag override "${feature}" for tenant ${tenantSlug}`,
+        ipAddress: ip,
+        userAgent: request.headers.get('user-agent') || '',
+      },
     });
 
     return NextResponse.json({ success: true });

@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { getTenantBySlug, getTenantBySlugAny } from '@/lib/data/tenants';
 
 export async function GET(
   request: NextRequest,
@@ -16,16 +16,16 @@ export async function GET(
     if (!user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
 
     const { slug } = await params;
-    await connectDB();
 
-    const tenant = await Tenant.findOne({ slug, isActive: true }).lean();
+    const tenant = await getTenantBySlug(slug);
     if (!tenant) return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    return NextResponse.json({ success: true, data: tenant.settings?.retailCompliance ?? {} });
+    const settings = (tenant.settings as Record<string, any>) || {}; // eslint-disable-line @typescript-eslint/no-explicit-any
+    return NextResponse.json({ success: true, data: settings.retailCompliance ?? {} });
   } catch (error: unknown) {
     return handleApiError(error, 'Failed to fetch retail compliance');
   }
@@ -47,12 +47,11 @@ export async function PUT(
     if (!rl.allowed) return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
 
     const { slug } = await params;
-    await connectDB();
 
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await getTenantBySlugAny(slug);
     if (!tenant) return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
@@ -60,19 +59,19 @@ export async function PUT(
     const stringFields = ['dtiBusinessNameRegistration', 'btiAccreditation'];
     const boolFields = ['priceTaggingCompliant', 'weightsAndMeasuresCompliant', 'productLabelsCompliant'];
 
-    if (!tenant.settings.retailCompliance) tenant.settings.retailCompliance = {} as never;
-    const rc = tenant.settings.retailCompliance as Record<string, unknown>;
+    const existingSettings = (tenant.settings as Record<string, any>) || {}; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const rc: Record<string, any> = { ...(existingSettings.retailCompliance || {}) }; // eslint-disable-line @typescript-eslint/no-explicit-any
 
     for (const f of stringFields) { if (body[f] !== undefined) rc[f] = body[f] || undefined; }
     for (const f of boolFields) { if (body[f] !== undefined) rc[f] = body[f]; }
 
-    tenant.markModified('settings');
-    await tenant.save();
+    const settings = { ...existingSettings, retailCompliance: rc };
+    await prisma.tenant.update({ where: { id: tenant.id }, data: { settings } });
 
     await createAuditLog(request, {
-      tenantId: tenant._id, userId: user.userId,
+      tenantId: tenant.id, userId: user.userId,
       action: AuditActions.UPDATE, entityType: 'retail_compliance',
-      entityId: tenant._id.toString(), changes: body,
+      entityId: tenant.id, changes: body,
     });
 
     return NextResponse.json({ success: true });

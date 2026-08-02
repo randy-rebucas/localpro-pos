@@ -4,11 +4,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/prisma';
 import { fetchExchangeRates } from '@/lib/multi-currency';
 import { getCurrentUser } from '@/lib/auth';
 import { logger } from '@/lib/logger';
+import { getTenantBySlugAny } from '@/lib/data/tenants';
 
 export async function GET(
   request: NextRequest,
@@ -21,18 +21,18 @@ export async function GET(
     }
 
     const { slug } = await params;
-    await connectDB();
 
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await getTenantBySlugAny(slug);
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    const multiCurrency = tenant.settings.multiCurrency;
+    const settings = (tenant.settings as Record<string, any>) || {}; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const multiCurrency = settings.multiCurrency;
     if (!multiCurrency?.enabled) {
       return NextResponse.json({ success: false, error: 'Multi-currency not enabled' }, { status: 400 });
     }
@@ -69,20 +69,21 @@ export async function POST(
     const body = await request.json();
     const { action } = body;
 
-    await connectDB();
-    console.log(`Received exchange rate update request for tenant ${slug} with action: ${action}`);
-    const tenant = await Tenant.findOne({ slug });
+    logger.info(`Received exchange rate update request for tenant ${slug} with action: ${action}`);
+    const tenant = await getTenantBySlugAny(slug);
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
+    const existingSettings = (tenant.settings as Record<string, any>) || {}; // eslint-disable-line @typescript-eslint/no-explicit-any
+
     if (action === 'fetch') {
       // Fetch fresh rates from API
-      const multiCurrency = tenant.settings.multiCurrency;
+      const multiCurrency = existingSettings.multiCurrency;
       if (!multiCurrency?.enabled) {
         return NextResponse.json({ success: false, error: 'Multi-currency not enabled' }, { status: 400 });
       }
@@ -90,7 +91,7 @@ export async function POST(
         return NextResponse.json({ success: false, error: 'No display currencies configured' }, { status: 400 });
       }
 
-      const baseCurrency = tenant.settings.currency;
+      const baseCurrency = existingSettings.currency;
       if (!baseCurrency) {
         return NextResponse.json({ success: false, error: 'Base currency not set in tenant settings' }, { status: 400 });
       }
@@ -100,7 +101,7 @@ export async function POST(
         multiCurrency.displayCurrencies,
         multiCurrency.exchangeRateApiKey
       );
-      console.log(`Fetched exchange rates for tenant ${slug}:`, rates);
+      logger.info(`Fetched exchange rates for tenant ${slug}`);
       if (!rates) {
         logger.error(`Exchange rate fetch failed for tenant ${slug} (base: ${baseCurrency})`);
         return NextResponse.json(
@@ -109,21 +110,18 @@ export async function POST(
         );
       }
 
-      // Use toObject() so spreading a Mongoose subdocument works correctly
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mcObj = typeof (multiCurrency as any).toObject === 'function' ? (multiCurrency as any).toObject() : { ...multiCurrency };
-      tenant.settings.multiCurrency = {
-        ...mcObj,
+      const lastUpdated = new Date();
+      const newMultiCurrency = {
+        ...multiCurrency,
         exchangeRates: rates,
-        lastUpdated: new Date(),
+        lastUpdated,
       };
-
-      tenant.markModified('settings.multiCurrency');
-      await tenant.save();
+      const settings = { ...existingSettings, multiCurrency: newMultiCurrency };
+      await prisma.tenant.update({ where: { id: tenant.id }, data: { settings } });
 
       return NextResponse.json({
         success: true,
-        data: { exchangeRates: rates, lastUpdated: new Date() },
+        data: { exchangeRates: rates, lastUpdated },
       });
     } else if (action === 'update') {
       // Manually update rates
@@ -142,21 +140,19 @@ export async function POST(
         }
       }
 
-      const multiCurrency = tenant.settings.multiCurrency;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mcObj = multiCurrency && typeof (multiCurrency as any).toObject === 'function' ? (multiCurrency as any).toObject() : { ...(multiCurrency || { enabled: false }) };
-      tenant.settings.multiCurrency = {
-        ...mcObj,
+      const multiCurrency = existingSettings.multiCurrency;
+      const lastUpdated = new Date();
+      const newMultiCurrency = {
+        ...(multiCurrency || { enabled: false }),
         exchangeRates,
-        lastUpdated: new Date(),
+        lastUpdated,
       };
-
-      tenant.markModified('settings.multiCurrency');
-      await tenant.save();
+      const settings = { ...existingSettings, multiCurrency: newMultiCurrency };
+      await prisma.tenant.update({ where: { id: tenant.id }, data: { settings } });
 
       return NextResponse.json({
         success: true,
-        data: { exchangeRates, lastUpdated: new Date() },
+        data: { exchangeRates, lastUpdated },
       });
     }
 

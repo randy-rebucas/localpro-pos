@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Customer from '@/models/Customer';
+import prisma from '@/lib/prisma';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -8,13 +7,13 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
 import { parseCreditLimitInput } from '@/lib/customer-credit';
+import { customerToApi } from '@/lib/data/customers';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const { id } = await params;
 
     // Require authentication to prevent unauthenticated customer lookups
@@ -26,13 +25,13 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Tenant not found or access denied' }, { status: 403 });
     }
 
-    const customer = await Customer.findOne({ _id: id, tenantId, isActive: { $ne: false } }).lean();
+    const customer = await prisma.customer.findFirst({ where: { id, tenantId, isActive: true } });
 
     if (!customer) {
       return NextResponse.json({ success: false, error: 'Customer not found' }, { status: 404 });
     }
-    
-    return NextResponse.json({ success: true, data: customer });
+
+    return NextResponse.json({ success: true, data: customerToApi(customer) });
   } catch (error) {
     return handleApiError(error, 'Failed to fetch customer');
   }
@@ -43,7 +42,6 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const { id } = await params;
     // SECURITY: Validate tenant access for authenticated requests
     let tenantId: string;
@@ -74,7 +72,7 @@ export async function PATCH(
       return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
-    const customer = await Customer.findOne({ _id: id, tenantId });
+    const customer = await prisma.customer.findFirst({ where: { id, tenantId } });
 
     if (!customer) {
       return NextResponse.json({ success: false, error: t('validation.customerNotFound', 'Customer not found') }, { status: 404 });
@@ -85,15 +83,17 @@ export async function PATCH(
       firstName: customer.firstName,
       lastName: customer.lastName,
       email: customer.email,
-      creditLimit: customer.creditLimit ?? null,
+      creditLimit: customer.creditLimit ? Number(customer.creditLimit) : null,
     };
-    
-    if (body.firstName !== undefined) customer.firstName = body.firstName.trim();
-    if (body.lastName !== undefined) customer.lastName = body.lastName.trim();
+
+    const updates: Record<string, any> = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+    if (body.firstName !== undefined) updates.firstName = body.firstName.trim();
+    if (body.lastName !== undefined) updates.lastName = body.lastName.trim();
     if (body.email !== undefined) {
       const email = body.email.toLowerCase().trim();
       if (email && email !== customer.email) {
-        const existingCustomer = await Customer.findOne({ tenantId, email, _id: { $ne: id } });
+        const existingCustomer = await prisma.customer.findFirst({ where: { tenantId, email, id: { not: id } } });
         if (existingCustomer) {
           return NextResponse.json(
             { success: false, error: t('validation.emailAlreadyExists', 'Email already exists') },
@@ -101,14 +101,14 @@ export async function PATCH(
           );
         }
       }
-      customer.email = email;
+      updates.email = email;
     }
-    if (body.phone !== undefined) customer.phone = body.phone?.trim();
-    if (body.addresses !== undefined) customer.addresses = body.addresses;
-    if (body.dateOfBirth !== undefined) customer.dateOfBirth = body.dateOfBirth ? new Date(body.dateOfBirth) : undefined;
-    if (body.notes !== undefined) customer.notes = body.notes?.trim();
-    if (body.tags !== undefined) customer.tags = body.tags;
-    if (body.isActive !== undefined) customer.isActive = body.isActive;
+    if (body.phone !== undefined) updates.phone = body.phone?.trim();
+    if (body.addresses !== undefined) updates.addresses = body.addresses;
+    if (body.dateOfBirth !== undefined) updates.dateOfBirth = body.dateOfBirth ? new Date(body.dateOfBirth) : null;
+    if (body.notes !== undefined) updates.notes = body.notes?.trim();
+    if (body.tags !== undefined) updates.tags = body.tags;
+    if (body.isActive !== undefined) updates.isActive = body.isActive;
     if (body.creditLimit !== undefined) {
       const cl = parseCreditLimitInput(body.creditLimit);
       if (cl === undefined) {
@@ -119,31 +119,31 @@ export async function PATCH(
           { status: 400 }
         );
       } else if (cl === null) {
-        customer.set('creditLimit', undefined);
+        updates.creditLimit = null;
       } else {
-        customer.creditLimit = cl;
+        updates.creditLimit = cl;
       }
     }
 
-    await customer.save();
-    
+    const updatedCustomer = await prisma.customer.update({ where: { id }, data: updates });
+
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.UPDATE,
       entityType: 'customer',
-      entityId: customer._id.toString(),
+      entityId: updatedCustomer.id,
       changes: {
         old: oldData,
         new: {
-          firstName: customer.firstName,
-          lastName: customer.lastName,
-          email: customer.email,
-          creditLimit: customer.creditLimit ?? null,
+          firstName: updatedCustomer.firstName,
+          lastName: updatedCustomer.lastName,
+          email: updatedCustomer.email,
+          creditLimit: updatedCustomer.creditLimit ? Number(updatedCustomer.creditLimit) : null,
         },
       },
     });
-    
-    return NextResponse.json({ success: true, data: customer });
+
+    return NextResponse.json({ success: true, data: customerToApi(updatedCustomer) });
   } catch (error) {
     return handleApiError(error, 'Failed to update customer');
   }
@@ -154,7 +154,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const { id } = await params;
     // SECURITY: Validate tenant access for authenticated requests
     let tenantId: string;
@@ -186,15 +185,14 @@ export async function DELETE(
     }
 
     // Soft delete - set isActive to false
-    const customer = await Customer.findOne({ _id: id, tenantId });
-    
+    const customer = await prisma.customer.findFirst({ where: { id, tenantId } });
+
     if (!customer) {
       return NextResponse.json({ success: false, error: t('validation.customerNotFound', 'Customer not found') }, { status: 404 });
     }
-    
-    customer.isActive = false;
-    await customer.save();
-    
+
+    await prisma.customer.update({ where: { id }, data: { isActive: false } });
+
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.DELETE,
@@ -202,7 +200,7 @@ export async function DELETE(
       entityId: id,
       changes: { name: `${customer.firstName} ${customer.lastName}` },
     });
-    
+
     return NextResponse.json({ success: true, message: 'Customer deleted' });
   } catch (error) {
     return handleApiError(error, 'Failed to delete customer');

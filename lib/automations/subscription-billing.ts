@@ -10,12 +10,9 @@
  *   +30d      still unpaid -> apply the plan's flat reactivation fee
  */
 
-import connectDB from '@/lib/mongodb';
-import Subscription from '@/models/Subscription';
-import SubscriptionPlan, { ISubscriptionPlan } from '@/models/SubscriptionPlan';
-import Tenant from '@/models/Tenant';
-import Invoice from '@/models/Invoice';
-import BillingEvent from '@/models/BillingEvent';
+import prisma from '@/lib/prisma';
+import { runInTransaction } from '@/lib/db-transaction';
+import type { SubscriptionPlan } from '@prisma/client';
 import { generateInvoiceNumber } from '@/lib/receipt';
 import { sendEmail } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
@@ -80,8 +77,6 @@ async function notifyAdmin(subject: string, message: string): Promise<void> {
 export async function processSubscriptionBilling(
   options?: BillingOptions
 ): Promise<SubscriptionBillingResult> {
-  await connectDB();
-
   const now = new Date();
   const errors: string[] = [];
   const details = {
@@ -95,19 +90,19 @@ export async function processSubscriptionBilling(
 
   const tenantFilter = options?.tenantId ? { tenantId: options.tenantId } : {};
 
-  const plans = await SubscriptionPlan.find().lean();
-  const planMap = new Map<string, ISubscriptionPlan>(
-    plans.map((p) => [String(p._id), p as unknown as ISubscriptionPlan])
-  );
+  const plans = await prisma.subscriptionPlan.findMany();
+  const planMap = new Map<string, SubscriptionPlan>(plans.map((p) => [p.id, p]));
 
   try {
     // 1. Generate invoice 3 days before due date
     const upcomingDue = new Date(now.getTime() + 3 * DAY_MS);
-    const dueSoonSubs = await Subscription.find({
-      ...tenantFilter,
-      status: 'active',
-      autoRenew: true,
-      nextBillingDate: { $lte: upcomingDue, $gte: now },
+    const dueSoonSubs = await prisma.subscription.findMany({
+      where: {
+        ...tenantFilter,
+        status: 'active',
+        autoRenew: true,
+        nextBillingDate: { lte: upcomingDue, gte: now },
+      },
     });
 
     for (const sub of dueSoonSubs) {
@@ -117,39 +112,48 @@ export async function processSubscriptionBilling(
           continue; // already generated for this billing cycle
         }
 
-        const plan = planMap.get(String(sub.planId));
+        const plan = planMap.get(sub.planId);
         if (!plan) continue;
 
-        const tenantId = String(sub.tenantId);
-        const tenant = await Tenant.findById(tenantId).select('name').lean();
+        const tenantId = sub.tenantId;
+        const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } });
         const invoiceNumber = await generateInvoiceNumber(tenantId);
-        const amount = plan.price.monthly;
+        const amount = Number(plan.priceMonthly);
+        const currency = plan.priceCurrency || 'PHP';
 
-        const invoice = await Invoice.create({
-          tenantId,
-          invoiceNumber,
-          items: [{ name: `${plan.name} subscription`, quantity: 1, price: amount, subtotal: amount }],
-          subtotal: amount,
-          taxAmount: 0,
-          total: amount,
-          dueDate: sub.nextBillingDate,
-          paymentTerms: 'Due on receipt',
-          status: 'sent',
-          notes: 'Auto-generated subscription billing invoice',
+        await runInTransaction(async (tx) => {
+          const invoice = await tx.invoice.create({
+            data: {
+              tenantId,
+              invoiceNumber,
+              items: [{ name: `${plan.name} subscription`, quantity: 1, price: amount, subtotal: amount }],
+              subtotal: amount,
+              taxAmount: 0,
+              total: amount,
+              dueDate: sub.nextBillingDate!,
+              paymentTerms: 'Due on receipt',
+              status: 'sent',
+              notes: 'Auto-generated subscription billing invoice',
+            },
+          });
+
+          await tx.billingEvent.create({
+            data: {
+              tenantId,
+              subscriptionId: sub.id,
+              type: 'invoice_generated',
+              amount,
+              currency,
+              description: `Invoice ${invoiceNumber} generated for upcoming billing`,
+              invoiceUrl: `/invoices/${invoice.id}`,
+            },
+          });
+
+          await tx.subscription.update({
+            where: { id: sub.id },
+            data: { lastInvoiceGeneratedAt: now },
+          });
         });
-
-        await BillingEvent.create({
-          tenantId,
-          subscriptionId: sub._id,
-          type: 'invoice_generated',
-          amount,
-          currency: plan.price.currency || 'PHP',
-          description: `Invoice ${invoiceNumber} generated for upcoming billing`,
-          invoiceUrl: `/invoices/${invoice._id}`,
-        });
-
-        sub.lastInvoiceGeneratedAt = now;
-        await sub.save();
 
         await notifyTenant(tenantId, tenant?.name || 'your business', 'email_invoice_generated', {
           invoiceNumber,
@@ -160,246 +164,300 @@ export async function processSubscriptionBilling(
         details.invoicesGenerated++;
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
-        errors.push(`Invoice generation for subscription ${sub._id}: ${msg}`);
+        errors.push(`Invoice generation for subscription ${sub.id}: ${msg}`);
       }
     }
 
     // 2. Flag overdue + start grace period (due date passed, unpaid)
-    const overdueSubs = await Subscription.find({
-      ...tenantFilter,
-      status: 'active',
-      autoRenew: true,
-      nextBillingDate: { $lte: now },
-      paymentOverdue: false,
+    const overdueSubs = await prisma.subscription.findMany({
+      where: {
+        ...tenantFilter,
+        status: 'active',
+        autoRenew: true,
+        nextBillingDate: { lte: now },
+        paymentOverdue: false,
+      },
     });
 
     for (const sub of overdueSubs) {
       try {
-        sub.paymentOverdue = true;
-        sub.gracePeriodEndDate = new Date(sub.nextBillingDate!.getTime() + GRACE_PERIOD_DAYS * DAY_MS);
-        await sub.save();
+        const plan = planMap.get(sub.planId);
+        const amount = Number(plan?.priceMonthly || 0);
+        const currency = plan?.priceCurrency || 'PHP';
+        const gracePeriodEndDate = new Date(sub.nextBillingDate!.getTime() + GRACE_PERIOD_DAYS * DAY_MS);
 
-        const plan = planMap.get(String(sub.planId));
-        await BillingEvent.create({
-          tenantId: sub.tenantId,
-          subscriptionId: sub._id,
-          type: 'payment_overdue',
-          amount: plan?.price.monthly || 0,
-          currency: plan?.price.currency || 'PHP',
-          description: `Payment overdue, grace period until ${sub.gracePeriodEndDate.toDateString()}`,
+        await runInTransaction(async (tx) => {
+          await tx.subscription.update({
+            where: { id: sub.id },
+            data: { paymentOverdue: true, gracePeriodEndDate },
+          });
+
+          await tx.billingEvent.create({
+            data: {
+              tenantId: sub.tenantId,
+              subscriptionId: sub.id,
+              type: 'payment_overdue',
+              amount,
+              currency,
+              description: `Payment overdue, grace period until ${gracePeriodEndDate.toDateString()}`,
+            },
+          });
         });
 
-        const tenant = await Tenant.findById(sub.tenantId).select('name').lean();
-        await notifyTenant(String(sub.tenantId), tenant?.name || 'your business', 'email_payment_reminder', {
-          invoiceNumber: `SUB-${String(sub._id).slice(-8).toUpperCase()}`,
-          amount: plan?.price.monthly || 0,
+        const tenant = await prisma.tenant.findUnique({ where: { id: sub.tenantId }, select: { name: true } });
+        await notifyTenant(sub.tenantId, tenant?.name || 'your business', 'email_payment_reminder', {
+          invoiceNumber: `SUB-${sub.id.slice(-8).toUpperCase()}`,
+          amount,
           dueDate: sub.nextBillingDate!.toDateString(),
-          gracePeriodEndDate: sub.gracePeriodEndDate.toDateString(),
+          gracePeriodEndDate: gracePeriodEndDate.toDateString(),
         });
 
         try {
           await notifyAdmin(
             `[Billing] Payment overdue: ${tenant?.name || sub.tenantId}`,
-            `Tenant: ${tenant?.name || sub.tenantId} (${sub.tenantId})\nSubscription: ${sub._id}\nAmount due: ${plan?.price.monthly || 0} ${plan?.price.currency || 'PHP'}\nDue date: ${sub.nextBillingDate!.toDateString()}\nGrace period ends: ${sub.gracePeriodEndDate.toDateString()}`
+            `Tenant: ${tenant?.name || sub.tenantId} (${sub.tenantId})\nSubscription: ${sub.id}\nAmount due: ${amount} ${currency}\nDue date: ${sub.nextBillingDate!.toDateString()}\nGrace period ends: ${gracePeriodEndDate.toDateString()}`
           );
         } catch (adminError) {
           const adminMsg = adminError instanceof Error ? adminError.message : String(adminError);
-          errors.push(`Admin notify (overdue) for subscription ${sub._id}: ${adminMsg}`);
+          errors.push(`Admin notify (overdue) for subscription ${sub.id}: ${adminMsg}`);
         }
 
         details.overdueFlagged++;
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
-        errors.push(`Overdue flagging for subscription ${sub._id}: ${msg}`);
+        errors.push(`Overdue flagging for subscription ${sub.id}: ${msg}`);
       }
     }
 
     // 3. Redirect/reminder window: grace period passed but not yet at deactivation threshold
     const reminderWindowStart = new Date(now.getTime() - DEACTIVATION_BUFFER_DAYS * DAY_MS);
-    const remindSubs = await Subscription.find({
-      ...tenantFilter,
-      status: 'active',
-      paymentOverdue: true,
-      gracePeriodEndDate: { $lte: now, $gte: reminderWindowStart },
-      deactivatedAt: { $exists: false },
+    const remindSubs = await prisma.subscription.findMany({
+      where: {
+        ...tenantFilter,
+        status: 'active',
+        paymentOverdue: true,
+        gracePeriodEndDate: { lte: now, gte: reminderWindowStart },
+        deactivatedAt: null,
+      },
     });
 
     for (const sub of remindSubs) {
       try {
-        const plan = planMap.get(String(sub.planId));
-        const tenant = await Tenant.findById(sub.tenantId).select('name').lean();
+        const plan = planMap.get(sub.planId);
+        const amount = Number(plan?.priceMonthly || 0);
+        const tenant = await prisma.tenant.findUnique({ where: { id: sub.tenantId }, select: { name: true } });
         const deactivationDate = new Date(sub.gracePeriodEndDate!.getTime() + DEACTIVATION_BUFFER_DAYS * DAY_MS);
 
-        await notifyTenant(String(sub.tenantId), tenant?.name || 'your business', 'email_payment_overdue_final_notice', {
-          invoiceNumber: `SUB-${String(sub._id).slice(-8).toUpperCase()}`,
-          amount: plan?.price.monthly || 0,
+        await notifyTenant(sub.tenantId, tenant?.name || 'your business', 'email_payment_overdue_final_notice', {
+          invoiceNumber: `SUB-${sub.id.slice(-8).toUpperCase()}`,
+          amount,
           deactivationDate: deactivationDate.toDateString(),
         });
 
         try {
           await notifyAdmin(
             `[Billing] Final notice sent: ${tenant?.name || sub.tenantId}`,
-            `Tenant: ${tenant?.name || sub.tenantId} (${sub.tenantId})\nSubscription: ${sub._id}\nAmount due: ${plan?.price.monthly || 0} ${plan?.price.currency || 'PHP'}\nAccount will be deactivated on: ${deactivationDate.toDateString()}`
+            `Tenant: ${tenant?.name || sub.tenantId} (${sub.tenantId})\nSubscription: ${sub.id}\nAmount due: ${amount} ${plan?.priceCurrency || 'PHP'}\nAccount will be deactivated on: ${deactivationDate.toDateString()}`
           );
         } catch (adminError) {
           const adminMsg = adminError instanceof Error ? adminError.message : String(adminError);
-          errors.push(`Admin notify (reminder) for subscription ${sub._id}: ${adminMsg}`);
+          errors.push(`Admin notify (reminder) for subscription ${sub.id}: ${adminMsg}`);
         }
 
         details.remindersSent++;
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
-        errors.push(`Reminder for subscription ${sub._id}: ${msg}`);
+        errors.push(`Reminder for subscription ${sub.id}: ${msg}`);
       }
     }
 
     // 4. Deactivate accounts still unpaid after grace period + buffer (10 days past due)
     const deactivationCutoff = new Date(now.getTime() - DEACTIVATION_BUFFER_DAYS * DAY_MS);
-    const toDeactivate = await Subscription.find({
-      ...tenantFilter,
-      status: 'active',
-      paymentOverdue: true,
-      gracePeriodEndDate: { $lte: deactivationCutoff },
-      deactivatedAt: { $exists: false },
+    const toDeactivate = await prisma.subscription.findMany({
+      where: {
+        ...tenantFilter,
+        status: 'active',
+        paymentOverdue: true,
+        gracePeriodEndDate: { lte: deactivationCutoff },
+        deactivatedAt: null,
+      },
     });
 
     for (const sub of toDeactivate) {
       try {
-        sub.status = 'suspended';
-        sub.suspendedAt = now;
-        sub.deactivatedAt = now;
-        await sub.save();
+        const plan = planMap.get(sub.planId);
+        const amount = Number(plan?.priceMonthly || 0);
+        const currency = plan?.priceCurrency || 'PHP';
 
-        await Tenant.findByIdAndUpdate(sub.tenantId, { isActive: false });
+        await runInTransaction(async (tx) => {
+          await tx.subscription.update({
+            where: { id: sub.id },
+            data: { status: 'suspended', suspendedAt: now, deactivatedAt: now },
+          });
 
-        const plan = planMap.get(String(sub.planId));
-        await BillingEvent.create({
-          tenantId: sub.tenantId,
-          subscriptionId: sub._id,
-          type: 'account_deactivated',
-          amount: plan?.price.monthly || 0,
-          currency: plan?.price.currency || 'PHP',
-          description: 'Account deactivated after 10 days of non-payment',
+          await tx.tenant.update({
+            where: { id: sub.tenantId },
+            data: { isActive: false },
+          });
+
+          await tx.billingEvent.create({
+            data: {
+              tenantId: sub.tenantId,
+              subscriptionId: sub.id,
+              type: 'account_deactivated',
+              amount,
+              currency,
+              description: 'Account deactivated after 10 days of non-payment',
+            },
+          });
         });
 
-        const tenant = await Tenant.findById(sub.tenantId).select('name').lean();
-        await notifyTenant(String(sub.tenantId), tenant?.name || 'your business', 'email_account_deactivated', {
-          invoiceNumber: `SUB-${String(sub._id).slice(-8).toUpperCase()}`,
-          amount: plan?.price.monthly || 0,
+        const tenant = await prisma.tenant.findUnique({ where: { id: sub.tenantId }, select: { name: true } });
+        await notifyTenant(sub.tenantId, tenant?.name || 'your business', 'email_account_deactivated', {
+          invoiceNumber: `SUB-${sub.id.slice(-8).toUpperCase()}`,
+          amount,
         });
 
         try {
           await notifyAdmin(
             `[Billing] Account deactivated: ${tenant?.name || sub.tenantId}`,
-            `Tenant: ${tenant?.name || sub.tenantId} (${sub.tenantId})\nSubscription: ${sub._id}\nAmount due: ${plan?.price.monthly || 0} ${plan?.price.currency || 'PHP'}\nDeactivated after 10 days of non-payment.`
+            `Tenant: ${tenant?.name || sub.tenantId} (${sub.tenantId})\nSubscription: ${sub.id}\nAmount due: ${amount} ${currency}\nDeactivated after 10 days of non-payment.`
           );
         } catch (adminError) {
           const adminMsg = adminError instanceof Error ? adminError.message : String(adminError);
-          errors.push(`Admin notify (deactivation) for subscription ${sub._id}: ${adminMsg}`);
+          errors.push(`Admin notify (deactivation) for subscription ${sub.id}: ${adminMsg}`);
         }
 
         details.accountsDeactivated++;
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
-        errors.push(`Deactivation for subscription ${sub._id}: ${msg}`);
+        errors.push(`Deactivation for subscription ${sub.id}: ${msg}`);
       }
     }
 
     // 5. Late fee (15 days past due)
     const lateFeeCutoff = new Date(now.getTime() - LATE_FEE_DAYS * DAY_MS);
-    const toLateFee = await Subscription.find({
-      ...tenantFilter,
-      paymentOverdue: true,
-      nextBillingDate: { $lte: lateFeeCutoff },
-      lateFeeAppliedAt: { $exists: false },
+    const toLateFee = await prisma.subscription.findMany({
+      where: {
+        ...tenantFilter,
+        paymentOverdue: true,
+        nextBillingDate: { lte: lateFeeCutoff },
+        lateFeeAppliedAt: null,
+      },
     });
 
     for (const sub of toLateFee) {
       try {
-        const plan = planMap.get(String(sub.planId));
+        const plan = planMap.get(sub.planId);
         if (!plan) continue;
 
-        const lateFeeAmount = plan.price.monthly * LATE_FEE_PERCENT;
-        sub.outstandingBalance = (sub.outstandingBalance || 0) + lateFeeAmount;
-        sub.lateFeeAppliedAt = now;
-        sub.billingHistory.push({
-          date: now,
-          amount: lateFeeAmount,
-          currency: plan.price.currency || 'PHP',
-          status: 'pending',
-        });
-        await sub.save();
+        const currency = plan.priceCurrency || 'PHP';
+        const lateFeeAmount = Number(plan.priceMonthly) * LATE_FEE_PERCENT;
+        const newOutstandingBalance = Number(sub.outstandingBalance || 0) + lateFeeAmount;
 
-        await BillingEvent.create({
-          tenantId: sub.tenantId,
-          subscriptionId: sub._id,
-          type: 'late_fee_applied',
-          amount: lateFeeAmount,
-          currency: plan.price.currency || 'PHP',
-          description: `10% late charge applied after ${LATE_FEE_DAYS} days of non-payment`,
+        await runInTransaction(async (tx) => {
+          await tx.subscription.update({
+            where: { id: sub.id },
+            data: {
+              outstandingBalance: newOutstandingBalance,
+              lateFeeAppliedAt: now,
+              billingHistory: {
+                create: {
+                  date: now,
+                  amount: lateFeeAmount,
+                  currency,
+                  status: 'pending',
+                },
+              },
+            },
+          });
+
+          await tx.billingEvent.create({
+            data: {
+              tenantId: sub.tenantId,
+              subscriptionId: sub.id,
+              type: 'late_fee_applied',
+              amount: lateFeeAmount,
+              currency,
+              description: `10% late charge applied after ${LATE_FEE_DAYS} days of non-payment`,
+            },
+          });
         });
 
         try {
-          const tenant = await Tenant.findById(sub.tenantId).select('name').lean();
+          const tenant = await prisma.tenant.findUnique({ where: { id: sub.tenantId }, select: { name: true } });
           await notifyAdmin(
             `[Billing] Late fee applied: ${tenant?.name || sub.tenantId}`,
-            `Tenant: ${tenant?.name || sub.tenantId} (${sub.tenantId})\nSubscription: ${sub._id}\nLate fee: ${lateFeeAmount} ${plan.price.currency || 'PHP'}\nOutstanding balance: ${sub.outstandingBalance} ${plan.price.currency || 'PHP'}`
+            `Tenant: ${tenant?.name || sub.tenantId} (${sub.tenantId})\nSubscription: ${sub.id}\nLate fee: ${lateFeeAmount} ${currency}\nOutstanding balance: ${newOutstandingBalance} ${currency}`
           );
         } catch (adminError) {
           const adminMsg = adminError instanceof Error ? adminError.message : String(adminError);
-          errors.push(`Admin notify (late fee) for subscription ${sub._id}: ${adminMsg}`);
+          errors.push(`Admin notify (late fee) for subscription ${sub.id}: ${adminMsg}`);
         }
 
         details.lateFeesApplied++;
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
-        errors.push(`Late fee for subscription ${sub._id}: ${msg}`);
+        errors.push(`Late fee for subscription ${sub.id}: ${msg}`);
       }
     }
 
     // 6. Reactivation fee (30 days past due)
     const reactivationCutoff = new Date(now.getTime() - REACTIVATION_FEE_DAYS * DAY_MS);
-    const toReactivationFee = await Subscription.find({
-      ...tenantFilter,
-      paymentOverdue: true,
-      nextBillingDate: { $lte: reactivationCutoff },
-      reactivationFeeAppliedAt: { $exists: false },
+    const toReactivationFee = await prisma.subscription.findMany({
+      where: {
+        ...tenantFilter,
+        paymentOverdue: true,
+        nextBillingDate: { lte: reactivationCutoff },
+        reactivationFeeAppliedAt: null,
+      },
     });
 
     for (const sub of toReactivationFee) {
       try {
-        const plan = planMap.get(String(sub.planId));
+        const plan = planMap.get(sub.planId);
         if (!plan) continue;
 
-        const fee = plan.reactivationFee || 0;
-        sub.outstandingBalance = (sub.outstandingBalance || 0) + fee;
-        sub.reactivationFeeAppliedAt = now;
-        await sub.save();
+        const currency = plan.priceCurrency || 'PHP';
+        const fee = Number(plan.reactivationFee || 0);
+        const newOutstandingBalance = Number(sub.outstandingBalance || 0) + fee;
 
-        await BillingEvent.create({
-          tenantId: sub.tenantId,
-          subscriptionId: sub._id,
-          type: 'reactivation_fee_applied',
-          amount: fee,
-          currency: plan.price.currency || 'PHP',
-          description: `Reactivation fee applied after ${REACTIVATION_FEE_DAYS} days of non-payment`,
+        await runInTransaction(async (tx) => {
+          await tx.subscription.update({
+            where: { id: sub.id },
+            data: {
+              outstandingBalance: newOutstandingBalance,
+              reactivationFeeAppliedAt: now,
+            },
+          });
+
+          await tx.billingEvent.create({
+            data: {
+              tenantId: sub.tenantId,
+              subscriptionId: sub.id,
+              type: 'reactivation_fee_applied',
+              amount: fee,
+              currency,
+              description: `Reactivation fee applied after ${REACTIVATION_FEE_DAYS} days of non-payment`,
+            },
+          });
         });
 
         try {
-          const tenant = await Tenant.findById(sub.tenantId).select('name').lean();
+          const tenant = await prisma.tenant.findUnique({ where: { id: sub.tenantId }, select: { name: true } });
           await notifyAdmin(
             `[Billing] Reactivation fee applied: ${tenant?.name || sub.tenantId}`,
-            `Tenant: ${tenant?.name || sub.tenantId} (${sub.tenantId})\nSubscription: ${sub._id}\nReactivation fee: ${fee} ${plan.price.currency || 'PHP'}\nOutstanding balance: ${sub.outstandingBalance} ${plan.price.currency || 'PHP'}`
+            `Tenant: ${tenant?.name || sub.tenantId} (${sub.tenantId})\nSubscription: ${sub.id}\nReactivation fee: ${fee} ${currency}\nOutstanding balance: ${newOutstandingBalance} ${currency}`
           );
         } catch (adminError) {
           const adminMsg = adminError instanceof Error ? adminError.message : String(adminError);
-          errors.push(`Admin notify (reactivation fee) for subscription ${sub._id}: ${adminMsg}`);
+          errors.push(`Admin notify (reactivation fee) for subscription ${sub.id}: ${adminMsg}`);
         }
 
         details.reactivationFeesApplied++;
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
-        errors.push(`Reactivation fee for subscription ${sub._id}: ${msg}`);
+        errors.push(`Reactivation fee for subscription ${sub.id}: ${msg}`);
       }
     }
   } catch (error) {

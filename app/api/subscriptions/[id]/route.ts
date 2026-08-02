@@ -1,23 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Subscription from '@/models/Subscription';
+import prisma from '@/lib/prisma';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
+import { getSubscriptionById, subscriptionToApi } from '@/lib/data/subscriptions';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     // Cross-tenant subscription lookup by id — super_admin only
     await requireRole(request, ['super_admin']);
     const { id } = await params;
 
-    const subscription = await Subscription.findById(id)
-      .populate('tenantId', 'slug name settings')
-      .populate('planId', 'name tier price features birCompliance isCustom')
-      .lean();
+    const subscription = await getSubscriptionById(id);
 
     if (!subscription) {
       return NextResponse.json(
@@ -26,7 +22,7 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({ success: true, data: subscription });
+    return NextResponse.json({ success: true, data: subscriptionToApi(subscription) });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -37,7 +33,6 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     // Cross-tenant subscription mutation by id — super_admin only
     await requireRole(request, ['super_admin']);
     const { id } = await params;
@@ -45,7 +40,7 @@ export async function PUT(
     const body = await request.json();
     const { status, billingCycle, autoRenew, planId } = body;
 
-    const subscription = await Subscription.findById(id);
+    const subscription = await prisma.subscription.findUnique({ where: { id } });
     if (!subscription) {
       return NextResponse.json(
         { success: false, error: 'Subscription not found' },
@@ -86,8 +81,7 @@ export async function PUT(
     // Update plan if provided
     if (planId) {
       // Verify plan exists
-      const SubscriptionPlan = (await import('@/models/SubscriptionPlan')).default;
-      const plan = await SubscriptionPlan.findById(planId);
+      const plan = await prisma.subscriptionPlan.findUnique({ where: { id: planId } });
       if (!plan || !plan.isActive) {
         return NextResponse.json(
           { success: false, error: 'Subscription plan not found or inactive' },
@@ -97,22 +91,21 @@ export async function PUT(
       changes.planId = planId;
     }
 
-    const updatedSubscription = await Subscription.findByIdAndUpdate(
-      id,
-      changes,
-      { new: true }
-    ).populate('tenantId', 'slug name')
-     .populate('planId', 'name tier price features birCompliance isCustom');
+    await prisma.subscription.update({ where: { id }, data: changes });
+    const updatedSubscription = await prisma.subscription.findUnique({
+      where: { id },
+      include: { tenant: true, plan: true },
+    });
 
     await createAuditLog(request, {
       tenantId: subscription.tenantId,
       action: AuditActions.UPDATE,
       entityType: 'subscription',
-      entityId: subscription._id.toString(),
+      entityId: subscription.id,
       changes,
     });
 
-    return NextResponse.json({ success: true, data: updatedSubscription });
+    return NextResponse.json({ success: true, data: subscriptionToApi(updatedSubscription!) });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return NextResponse.json({ success: false, error: error.message }, { status: 400 });
   }
@@ -123,28 +116,28 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     // Cross-tenant subscription cancellation by id — super_admin only
     await requireRole(request, ['super_admin']);
     const { id } = await params;
 
-    const subscription = await Subscription.findOneAndUpdate(
-      { _id: id, isActive: true },
-      { isActive: false, status: 'cancelled', cancelledAt: new Date() },
-      { new: true }
-    );
-    if (!subscription) {
+    const existing = await prisma.subscription.findUnique({ where: { id } });
+    if (!existing || !existing.isActive) {
       return NextResponse.json(
         { success: false, error: 'Subscription not found' },
         { status: 404 }
       );
     }
 
+    const subscription = await prisma.subscription.update({
+      where: { id },
+      data: { isActive: false, status: 'cancelled', cancelledAt: new Date() },
+    });
+
     await createAuditLog(request, {
       tenantId: subscription.tenantId,
       action: AuditActions.DELETE,
       entityType: 'subscription',
-      entityId: subscription._id.toString(),
+      entityId: subscription.id,
       changes: { softDeleted: true },
     });
 

@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Address from '@/models/Address';
+import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 interface RouteParams {
   params: Promise<{ addressId: string }>;
+}
+
+function toApi(address: any) {
+  const { id, ...rest } = address;
+  return { _id: id, ...rest };
 }
 
 /**
@@ -17,7 +21,6 @@ interface RouteParams {
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   let t: (key: string, fallback: string) => string;
   try {
-    await connectDB();
     t = await getValidationTranslatorFromRequest(request);
 
     const currentUser = await requireAuth(request);
@@ -25,7 +28,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const body = await request.json();
 
     // Find the address and verify ownership
-    const address = await Address.findById(addressId);
+    const address = await prisma.address.findUnique({ where: { id: addressId } });
     if (!address) {
       return NextResponse.json(
         { success: false, error: t('validation.addressNotFound', 'Address not found') },
@@ -33,7 +36,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    if (address.userId.toString() !== currentUser.userId) {
+    if (address.userId !== currentUser.userId) {
       return NextResponse.json(
         { success: false, error: t('validation.forbidden', 'You can only update your own addresses') },
         { status: 403 }
@@ -52,10 +55,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     // Handle default flag
     if (isDefault === true) {
-      await Address.updateMany(
-        { userId: currentUser.userId, tenantId: address.tenantId, isDefault: true, _id: { $ne: addressId } },
-        { $set: { isDefault: false } }
-      );
+      await prisma.address.updateMany({
+        where: { userId: currentUser.userId, tenantId: address.tenantId, isDefault: true, id: { not: addressId } },
+        data: { isDefault: false },
+      });
       updates.isDefault = true;
     } else if (isDefault === false) {
       updates.isDefault = false;
@@ -68,14 +71,13 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const updatedAddress = await Address.findByIdAndUpdate(
-      addressId,
-      { $set: updates },
-      { new: true }
-    ).lean();
+    const updatedAddress = await prisma.address.update({
+      where: { id: addressId },
+      data: updates,
+    });
 
     await createAuditLog(request, {
-      tenantId: address.tenantId.toString(),
+      tenantId: address.tenantId,
       userId: currentUser.userId,
       action: AuditActions.UPDATE,
       entityType: 'address',
@@ -83,7 +85,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       changes: updates,
     });
 
-    return NextResponse.json({ success: true, data: updatedAddress });
+    return NextResponse.json({ success: true, data: toApi(updatedAddress) });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     if (error.message === 'Unauthorized') {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
@@ -102,13 +104,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   let t: (key: string, fallback: string) => string;
   try {
-    await connectDB();
     t = await getValidationTranslatorFromRequest(request);
 
     const currentUser = await requireAuth(request);
     const { addressId } = await params;
 
-    const address = await Address.findOne({ _id: addressId, isActive: true });
+    const address = await prisma.address.findFirst({ where: { id: addressId, isActive: true } });
     if (!address) {
       return NextResponse.json(
         { success: false, error: t('validation.addressNotFound', 'Address not found') },
@@ -116,7 +117,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    if (address.userId.toString() !== currentUser.userId) {
+    if (address.userId !== currentUser.userId) {
       return NextResponse.json(
         { success: false, error: t('validation.forbidden', 'You can only delete your own addresses') },
         { status: 403 }
@@ -126,25 +127,22 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const wasDefault = address.isDefault;
     const tenantId = address.tenantId;
 
-    address.isActive = false;
-    await address.save();
+    await prisma.address.update({ where: { id: addressId }, data: { isActive: false } });
 
     // If we deleted the default address, promote the most recent remaining one
     if (wasDefault) {
-      const nextDefault = await Address.findOne({
-        userId: currentUser.userId,
-        tenantId,
-        isActive: true,
-      }).sort({ createdAt: -1 });
+      const nextDefault = await prisma.address.findFirst({
+        where: { userId: currentUser.userId, tenantId, isActive: true },
+        orderBy: { createdAt: 'desc' },
+      });
 
       if (nextDefault) {
-        nextDefault.isDefault = true;
-        await nextDefault.save();
+        await prisma.address.update({ where: { id: nextDefault.id }, data: { isDefault: true } });
       }
     }
 
     await createAuditLog(request, {
-      tenantId: tenantId.toString(),
+      tenantId,
       userId: currentUser.userId,
       action: AuditActions.DELETE,
       entityType: 'address',

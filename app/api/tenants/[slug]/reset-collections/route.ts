@@ -1,68 +1,46 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
-import Product from '@/models/Product';
-import Transaction from '@/models/Transaction';
-import Category from '@/models/Category';
-import StockMovement from '@/models/StockMovement';
-import Expense from '@/models/Expense';
-import Discount from '@/models/Discount';
-import Branch from '@/models/Branch';
-import CashDrawerSession from '@/models/CashDrawerSession';
-import ProductBundle from '@/models/ProductBundle';
-import Attendance from '@/models/Attendance';
-import Booking from '@/models/Booking';
-import SavedCart from '@/models/SavedCart';
-import AuditLog from '@/models/AuditLog';
-import Customer from '@/models/Customer';
-import Address from '@/models/Address';
-import Invoice from '@/models/Invoice';
-import Payment from '@/models/Payment';
-import LoyaltyConfig from '@/models/LoyaltyConfig';
-import LoyaltyTransaction from '@/models/LoyaltyTransaction';
-import TaxRule from '@/models/TaxRule';
-import CustomerOTP from '@/models/CustomerOTP';
-import mongoose from 'mongoose';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
+import { getTenantBySlug } from '@/lib/data/tenants';
 
-// Map collection names to their models
+// Map collection names to their Prisma delegates
 const COLLECTION_MODELS: Record<string, any> = { // eslint-disable-line @typescript-eslint/no-explicit-any
   // Products & Inventory
-  products: Product,
-  productBundles: ProductBundle,
-  categories: Category,
-  stockMovements: StockMovement,
+  products: prisma.product,
+  productBundles: prisma.productBundle,
+  categories: prisma.category,
+  stockMovements: prisma.stockMovement,
   // Sales & Transactions
-  transactions: Transaction,
-  payments: Payment,
-  invoices: Invoice,
+  transactions: prisma.transaction,
+  payments: prisma.payment,
+  invoices: prisma.invoice,
   // Customer Management
-  customers: Customer,
-  addresses: Address,
-  customerOTPs: CustomerOTP,
+  customers: prisma.customer,
+  addresses: prisma.address,
+  customerOTPs: prisma.customerOTP,
   // Discounts & Promotions
-  discounts: Discount,
-  savedCarts: SavedCart,
+  discounts: prisma.discount,
+  savedCarts: prisma.savedCart,
   // Loyalty Program
-  loyaltyConfigs: LoyaltyConfig,
-  loyaltyTransactions: LoyaltyTransaction,
+  loyaltyConfigs: prisma.loyaltyConfig,
+  loyaltyTransactions: prisma.loyaltyTransaction,
   // Tax & Compliance
-  taxRules: TaxRule,
+  taxRules: prisma.taxRule,
   // Organizational
-  branches: Branch,
-  expenses: Expense,
+  branches: prisma.branch,
+  expenses: prisma.expense,
   // Cash Management
-  cashDrawerSessions: CashDrawerSession,
+  cashDrawerSessions: prisma.cashDrawerSession,
   // Staff & Operations
-  attendance: Attendance,
+  attendance: prisma.attendance,
   // Bookings & Services
-  bookings: Booking,
+  bookings: prisma.booking,
   // Audit & Compliance
-  auditLogs: AuditLog,
+  auditLogs: prisma.auditLog,
 };
 
 // Backup endpoint - GET
@@ -71,12 +49,11 @@ export async function GET(
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const { slug } = await params;
     const t = await getValidationTranslatorFromRequest(request);
-    
-    const tenant = await Tenant.findOne({ slug, isActive: true });
+
+    const tenant = await getTenantBySlug(slug);
     if (!tenant) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
@@ -85,14 +62,14 @@ export async function GET(
     }
 
     // Verify user owns this tenant (unless super_admin)
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json(
         { success: false, error: t('validation.forbidden', 'You do not have access to this tenant') },
         { status: 403 }
       );
     }
 
-    if (!(await hasTenantPermission(user.role, tenant._id.toString(), 'reset_collections.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenant.id, 'reset_collections.manage'))) {
       return NextResponse.json(
         { success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') },
         { status: 403 }
@@ -119,8 +96,8 @@ export async function GET(
 
     // Export data from each collection
     for (const collectionName of collections) {
-      const Model = COLLECTION_MODELS[collectionName];
-      const documents = await Model.find({ tenantId: tenant._id }).lean();
+      const model = COLLECTION_MODELS[collectionName];
+      const documents = await model.findMany({ where: { tenantId: tenant.id } });
       backup[collectionName] = documents;
       counts[collectionName] = documents.length;
     }
@@ -136,7 +113,7 @@ export async function GET(
 
     // Create audit log
     await createAuditLog(request, {
-      tenantId: tenant._id,
+      tenantId: tenant.id,
       userId: user.userId,
       action: AuditActions.VIEW,
       entityType: 'collections',
@@ -176,11 +153,10 @@ export async function POST(
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const { slug } = await params;
-    
-    const tenant = await Tenant.findOne({ slug, isActive: true });
+
+    const tenant = await getTenantBySlug(slug);
     const t = await getValidationTranslatorFromRequest(request);
     if (!tenant) {
       return NextResponse.json(
@@ -190,14 +166,14 @@ export async function POST(
     }
 
     // Verify user owns this tenant (unless super_admin)
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json(
         { success: false, error: t('validation.forbidden', 'You do not have access to this tenant') },
         { status: 403 }
       );
     }
 
-    if (!(await hasTenantPermission(user.role, tenant._id.toString(), 'reset_collections.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenant.id, 'reset_collections.manage'))) {
       return NextResponse.json(
         { success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') },
         { status: 403 }
@@ -229,14 +205,14 @@ export async function POST(
 
     // Delete documents for each collection
     for (const collectionName of collections) {
-      const Model = COLLECTION_MODELS[collectionName];
-      const result = await Model.deleteMany({ tenantId: tenant._id });
-      results[collectionName] = { deleted: result.deletedCount || 0 };
+      const model = COLLECTION_MODELS[collectionName];
+      const result = await model.deleteMany({ where: { tenantId: tenant.id } });
+      results[collectionName] = { deleted: result.count || 0 };
     }
 
     // Create audit log
     await createAuditLog(request, {
-      tenantId: tenant._id,
+      tenantId: tenant.id,
       userId: user.userId,
       action: AuditActions.DELETE,
       entityType: 'collections',
@@ -276,11 +252,10 @@ export async function PUT(
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const { slug } = await params;
-    
-    const tenant = await Tenant.findOne({ slug, isActive: true });
+
+    const tenant = await getTenantBySlug(slug);
     const t = await getValidationTranslatorFromRequest(request);
     if (!tenant) {
       return NextResponse.json(
@@ -290,14 +265,14 @@ export async function PUT(
     }
 
     // Verify user owns this tenant (unless super_admin)
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json(
         { success: false, error: t('validation.forbidden', 'You do not have access to this tenant') },
         { status: 403 }
       );
     }
 
-    if (!(await hasTenantPermission(user.role, tenant._id.toString(), 'reset_collections.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenant.id, 'reset_collections.manage'))) {
       return NextResponse.json(
         { success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') },
         { status: 403 }
@@ -322,52 +297,40 @@ export async function PUT(
         continue; // Skip invalid collections
       }
 
-      const Model = COLLECTION_MODELS[collectionName];
+      const model = COLLECTION_MODELS[collectionName];
       let cleared = 0;
 
       // Clear existing data if requested
       if (clearExisting) {
-        const deleteResult = await Model.deleteMany({ tenantId: tenant._id });
-        cleared = deleteResult.deletedCount || 0;
+        const deleteResult = await model.deleteMany({ where: { tenantId: tenant.id } });
+        cleared = deleteResult.count || 0;
       }
 
       // Restore documents
+      let restored = 0;
       if (Array.isArray(documents) && documents.length > 0) {
-        // Replace tenantId with current tenant's ID and convert _id strings to ObjectIds
-        const documentsToInsert = documents.map((doc: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+        for (const doc of documents as any[]) { // eslint-disable-line @typescript-eslint/no-explicit-any
           const newDoc = { ...doc };
-          // Remove _id to let MongoDB create new ones (or keep if you want to preserve IDs)
+          // Remove id to let the database assign a new one; ensure tenantId matches current tenant
+          delete newDoc.id;
           delete newDoc._id;
-          // Ensure tenantId is set correctly
-          newDoc.tenantId = tenant._id;
-          // Convert any ObjectId strings to ObjectIds
-          Object.keys(newDoc).forEach(key => {
-            if (typeof newDoc[key] === 'string' && mongoose.Types.ObjectId.isValid(newDoc[key]) && key.endsWith('Id')) {
-              newDoc[key] = new mongoose.Types.ObjectId(newDoc[key]);
-            }
-          });
-          // Handle nested ObjectIds in arrays (like items.product in transactions)
-          if (newDoc.items && Array.isArray(newDoc.items)) {
-            newDoc.items = newDoc.items.map((item: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-              if (item.product && typeof item.product === 'string' && mongoose.Types.ObjectId.isValid(item.product)) {
-                item.product = new mongoose.Types.ObjectId(item.product);
-              }
-              return item;
-            });
-          }
-          return newDoc;
-        });
+          newDoc.tenantId = tenant.id;
 
-        await Model.insertMany(documentsToInsert, { ordered: false });
-        results[collectionName] = { restored: documentsToInsert.length, cleared };
-      } else {
-        results[collectionName] = { restored: 0, cleared };
+          try {
+            await model.create({ data: newDoc });
+            restored++;
+          } catch (createError) {
+            // Best-effort restore, matching the previous insertMany({ ordered: false }) behavior
+            logger.error(`Failed to restore document in ${collectionName}:`, createError);
+          }
+        }
       }
+      results[collectionName] = { restored, cleared };
     }
 
     // Create audit log
     await createAuditLog(request, {
-      tenantId: tenant._id,
+      tenantId: tenant.id,
       userId: user.userId,
       action: AuditActions.UPDATE,
       entityType: 'collections',
@@ -401,4 +364,3 @@ export async function PUT(
     );
   }
 }
-

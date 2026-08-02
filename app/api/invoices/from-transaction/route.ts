@@ -1,21 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Invoice from '@/models/Invoice';
-import Transaction from '@/models/Transaction';
-import Customer from '@/models/Customer';
+import prisma from '@/lib/prisma';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { generateInvoiceNumber } from '@/lib/receipt';
+import { serializeInvoice } from '@/lib/data/invoices';
 
 /**
  * Create an invoice from an existing transaction (for B2B scenarios)
  */
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const tenantAccess = await requireTenantAccess(request);
-    const { tenantId, user } = tenantAccess; // eslint-disable-line @typescript-eslint/no-unused-vars
-    
+    const { tenantId, user } = tenantAccess;
+
     const body = await request.json();
     const { transactionId, customerId, dueDate, paymentTerms, notes } = body;
 
@@ -26,11 +23,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get transaction
-    const transaction = await Transaction.findOne({
-      _id: transactionId,
-      tenantId,
-    }).lean();
+    const transaction = await prisma.transaction.findFirst({
+      where: { id: transactionId, tenantId },
+      include: { items: { include: { product: { select: { name: true } } } } },
+    });
 
     if (!transaction) {
       return NextResponse.json(
@@ -39,79 +35,74 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get customer info if customerId provided
     let customerInfo = null;
     if (customerId) {
-      const customer = await Customer.findOne({
-        _id: customerId,
-        tenantId,
-      }).lean();
+      const customer = await prisma.customer.findFirst({
+        where: { id: customerId, tenantId },
+      });
 
       if (customer) {
+        const addresses = Array.isArray(customer.addresses) ? (customer.addresses as Array<{ isDefault?: boolean }>) : [];
         customerInfo = {
           name: `${customer.firstName} ${customer.lastName}`.trim(),
           email: customer.email,
           phone: customer.phone,
-          address: customer.addresses && customer.addresses.length > 0 
-            ? customer.addresses.find((addr: any) => addr.isDefault) || customer.addresses[0] // eslint-disable-line @typescript-eslint/no-explicit-any
-            : undefined,
+          address: addresses.length > 0 ? (addresses.find((addr) => addr.isDefault) || addresses[0]) : undefined,
         };
       }
     }
 
-    // Convert transaction items to invoice items
-    const invoiceItems = transaction.items.map((item: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+    const invoiceItems = transaction.items.map((item) => ({
       name: item.name,
       description: item.product?.name || '',
       quantity: item.quantity,
-      price: item.price,
-      subtotal: item.subtotal,
+      price: Number(item.price),
+      subtotal: Number(item.subtotal),
     }));
 
-    // Calculate due date (default to 30 days if not provided)
     const invoiceDueDate = dueDate ? new Date(dueDate) : new Date();
     if (!dueDate) {
       invoiceDueDate.setDate(invoiceDueDate.getDate() + 30);
     }
 
-    // Generate invoice number
     const invoiceNumber = await generateInvoiceNumber(tenantId);
 
-    // Create invoice
-    const invoice = await Invoice.create({
-      tenantId,
-      invoiceNumber,
-      transactionId: transaction._id,
-      customerId: customerId || undefined,
-      customerInfo,
-      items: invoiceItems,
-      subtotal: transaction.subtotal,
-      discountAmount: transaction.discountAmount || undefined,
-      taxAmount: transaction.taxAmount || 0,
-      total: transaction.total,
-      dueDate: invoiceDueDate,
-      paymentTerms: paymentTerms || 'Net 30',
-      status: 'draft',
-      notes: notes || undefined,
+    const invoice = await prisma.invoice.create({
+      data: {
+        tenantId,
+        invoiceNumber,
+        transactionId: transaction.id,
+        customerId: customerId || undefined,
+        customerInfo: customerInfo ?? undefined,
+        items: invoiceItems,
+        subtotal: transaction.subtotal,
+        discountAmount: transaction.discountAmount || undefined,
+        taxAmount: transaction.taxAmount || 0,
+        total: transaction.total,
+        dueDate: invoiceDueDate,
+        paymentTerms: paymentTerms || 'Net 30',
+        status: 'draft',
+        notes: notes || undefined,
+      },
     });
 
-    // Create audit log
     await createAuditLog(request, {
       tenantId,
       userId: user.userId,
       action: AuditActions.INVOICE_CREATE,
       entityType: 'invoice',
-      entityId: invoice._id.toString(),
+      entityId: invoice.id,
       changes: {
         invoiceNumber,
-        transactionId: transactionId.toString(),
+        transactionId: String(transactionId),
         customerId: customerId?.toString(),
-        total: transaction.total,
+        total: Number(transaction.total),
       },
     });
 
-    return NextResponse.json({ success: true, data: invoice }, { status: 201 });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+    return NextResponse.json({ success: true, data: serializeInvoice(invoice) }, { status: 201 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to create invoice';
+    return NextResponse.json({ success: false, error: message }, { status: 400 });
   }
 }

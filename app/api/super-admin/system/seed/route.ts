@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import SubscriptionPlan from '@/models/SubscriptionPlan';
+import prisma from '@/lib/prisma';
 import { requireRole } from '@/lib/auth';
 import { handleApiError } from '@/lib/error-handler';
+import type { SubscriptionTier } from '@prisma/client';
 
 const DEFAULT_PLANS = [
   {
@@ -145,7 +145,6 @@ const DEFAULT_PLANS = [
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     await requireRole(request, ['super_admin']);
 
     const body = await request.json();
@@ -162,11 +161,19 @@ export async function POST(request: NextRequest) {
 
     if (target === 'plans' || target === 'all') {
       for (const planData of DEFAULT_PLANS) {
-        await SubscriptionPlan.findOneAndUpdate(
-          { tier: planData.tier },
-          { $set: planData },
-          { upsert: true, new: true, runValidators: true }
-        );
+        const { tier, price, ...rest } = planData;
+        const data = {
+          ...rest,
+          tier: tier as SubscriptionTier,
+          priceMonthly: price.monthly,
+          priceSetupFee: price.setupFee,
+          priceCurrency: price.currency,
+        };
+        await prisma.subscriptionPlan.upsert({
+          where: { tier: tier as SubscriptionTier },
+          create: data,
+          update: data,
+        });
         seeded.push(`plan:${planData.tier}`);
       }
     }

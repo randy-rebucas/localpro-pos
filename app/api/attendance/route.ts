@@ -1,11 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Attendance from '@/models/Attendance';
+import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
+import type { Prisma } from '@prisma/client';
+
+function toApi(attendance: any) {
+  const { id, user, ...rest } = attendance;
+  return {
+    _id: id,
+    ...rest,
+    userId: user ? { _id: user.id, name: user.name, email: user.email } : rest.userId,
+  };
+}
 
 /**
  * GET - Get attendance records for current user or all users (if manager+)
@@ -13,7 +22,6 @@ import { logger } from '@/lib/logger';
 export async function GET(request: NextRequest) {
   try {
     const user = await requireAuth(request);
-    await connectDB();
 
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
@@ -22,42 +30,38 @@ export async function GET(request: NextRequest) {
     const rawLimit = parseInt(searchParams.get('limit') || '50');
     const limit = Math.min(Math.max(1, rawLimit), 200);
 
-    // Build query
-    const query: any = { tenantId: user.tenantId, isActive: { $ne: false } }; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const where: Prisma.AttendanceWhereInput = { tenantId: user.tenantId, isActive: true };
 
     const isManagerPlus = await hasTenantPermission(user.role, user.tenantId, 'attendance.manage');
 
     if (userId && isManagerPlus) {
-      // Manager+ viewing a specific employee
-      query.userId = userId;
+      where.userId = userId;
     } else if (!isManagerPlus) {
-      // Non-managers can only see their own records
-      query.userId = user.userId;
+      where.userId = user.userId;
     }
-    // Manager+ with no userId filter: show all tenant records (no userId constraint)
 
-    // Date range filter
     if (startDate || endDate) {
-      query.clockIn = {};
+      where.clockIn = {};
       if (startDate) {
-        query.clockIn.$gte = new Date(startDate);
+        (where.clockIn as Prisma.DateTimeFilter).gte = new Date(startDate);
       }
       if (endDate) {
         const endOfDay = new Date(endDate);
         endOfDay.setHours(23, 59, 59, 999);
-        query.clockIn.$lte = endOfDay;
+        (where.clockIn as Prisma.DateTimeFilter).lte = endOfDay;
       }
     }
 
-    const attendances = await Attendance.find(query)
-      .populate('userId', 'name email')
-      .sort({ clockIn: -1 })
-      .limit(limit)
-      .lean();
+    const attendances = await prisma.attendance.findMany({
+      where,
+      include: { user: { select: { id: true, name: true, email: true } } },
+      orderBy: { clockIn: 'desc' },
+      take: limit,
+    });
 
     return NextResponse.json({
       success: true,
-      data: attendances,
+      data: attendances.map(toApi),
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Get attendance error:', error);
@@ -75,7 +79,6 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const user = await requireAuth(request);
-    await connectDB();
 
     const body = await request.json();
     const { action, notes, location } = body; // action: 'clock-in' | 'clock-out'
@@ -89,11 +92,8 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'clock-in') {
-      // Check if user already has an active session (clocked in but not out)
-      const activeSession = await Attendance.findOne({
-        userId: user.userId,
-        tenantId: user.tenantId,
-        clockOut: null,
+      const activeSession = await prisma.attendance.findFirst({
+        where: { userId: user.userId, tenantId: user.tenantId, clockOut: null },
       });
 
       if (activeSession) {
@@ -103,13 +103,14 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Create new attendance record
-      const attendance = await Attendance.create({
-        userId: user.userId,
-        tenantId: user.tenantId,
-        clockIn: new Date(),
-        notes,
-        location,
+      const attendance = await prisma.attendance.create({
+        data: {
+          userId: user.userId,
+          tenantId: user.tenantId,
+          clockIn: new Date(),
+          notes,
+          location,
+        },
       });
 
       await createAuditLog(request, {
@@ -117,21 +118,19 @@ export async function POST(request: NextRequest) {
         userId: user.userId,
         action: AuditActions.ATTENDANCE_CLOCK_IN,
         entityType: 'attendance',
-        entityId: attendance._id.toString(),
+        entityId: attendance.id,
         metadata: { action: 'clock-in' },
       });
 
       return NextResponse.json({
         success: true,
-        data: attendance,
+        data: toApi(attendance),
       });
     } else {
-      // Clock out
-      const activeSession = await Attendance.findOne({
-        userId: user.userId,
-        tenantId: user.tenantId,
-        clockOut: null,
-      }).sort({ clockIn: -1 });
+      const activeSession = await prisma.attendance.findFirst({
+        where: { userId: user.userId, tenantId: user.tenantId, clockOut: null },
+        orderBy: { clockIn: 'desc' },
+      });
 
       if (!activeSession) {
         return NextResponse.json(
@@ -140,25 +139,27 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Update attendance with clock out time
-      activeSession.clockOut = new Date();
-      if (notes) {
-        activeSession.notes = (activeSession.notes || '') + (activeSession.notes ? '\n' : '') + notes;
-      }
-      await activeSession.save();
+      const newNotes = notes
+        ? (activeSession.notes || '') + (activeSession.notes ? '\n' : '') + notes
+        : activeSession.notes;
+
+      const updated = await prisma.attendance.update({
+        where: { id: activeSession.id },
+        data: { clockOut: new Date(), notes: newNotes },
+      });
 
       await createAuditLog(request, {
         tenantId: user.tenantId,
         userId: user.userId,
         action: AuditActions.ATTENDANCE_CLOCK_OUT,
         entityType: 'attendance',
-        entityId: activeSession._id.toString(),
+        entityId: updated.id,
         metadata: { action: 'clock-out' },
       });
 
       return NextResponse.json({
         success: true,
-        data: activeSession,
+        data: toApi(updated),
       });
     }
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -170,4 +171,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

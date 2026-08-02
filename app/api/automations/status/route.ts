@@ -6,27 +6,19 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyCronAuth } from '@/lib/automation-auth';
-import connectDB from '@/lib/mongodb';
-import Discount from '@/models/Discount';
-import Attendance from '@/models/Attendance';
-import CashDrawerSession from '@/models/CashDrawerSession';
-import Transaction from '@/models/Transaction';
+import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
-
     const searchParams = request.nextUrl.searchParams;
     const authError = verifyCronAuth(request, searchParams.get('secret'));
     if (authError) return authError;
 
     // Optional tenantId scoping: when provided, stats are restricted to that tenant.
     // Without it this endpoint aggregates across all tenants (cron system-health use only).
-    const tenantFilter = searchParams.get('tenantId')
-      ? { tenantId: searchParams.get('tenantId') }
-      : {};
+    const tenantId = searchParams.get('tenantId') || undefined;
 
     const now = new Date();
     const stats = {
@@ -37,63 +29,79 @@ export async function GET(request: NextRequest) {
     };
 
     // Get discount stats
-    stats.discounts.active = await Discount.countDocuments({
-      ...tenantFilter,
-      isActive: true,
-      validFrom: { $lte: now },
-      validUntil: { $gte: now },
+    stats.discounts.active = await prisma.discount.count({
+      where: {
+        ...(tenantId ? { tenantId } : {}),
+        isActive: true,
+        validFrom: { lte: now },
+        validUntil: { gte: now },
+      },
     });
 
     const expiringSoon = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-    stats.discounts.expiringSoon = await Discount.countDocuments({
-      ...tenantFilter,
-      isActive: true,
-      validUntil: { $gte: now, $lte: expiringSoon },
+    stats.discounts.expiringSoon = await prisma.discount.count({
+      where: {
+        ...(tenantId ? { tenantId } : {}),
+        isActive: true,
+        validUntil: { gte: now, lte: expiringSoon },
+      },
     });
 
-    stats.discounts.needsActivation = await Discount.countDocuments({
-      ...tenantFilter,
-      validFrom: { $lte: now },
-      validUntil: { $gte: now },
-      isActive: false,
+    stats.discounts.needsActivation = await prisma.discount.count({
+      where: {
+        ...(tenantId ? { tenantId } : {}),
+        validFrom: { lte: now },
+        validUntil: { gte: now },
+        isActive: false,
+      },
     });
 
-    stats.discounts.needsDeactivation = await Discount.countDocuments({
-      ...tenantFilter,
-      $or: [
-        { validUntil: { $lt: now } },
-      ],
-      isActive: true,
+    stats.discounts.needsDeactivation = await prisma.discount.count({
+      where: {
+        ...(tenantId ? { tenantId } : {}),
+        validUntil: { lt: now },
+        isActive: true,
+      },
     });
 
     // Get attendance stats
-    stats.attendance.openSessions = await Attendance.countDocuments({
-      ...tenantFilter,
-      clockOut: null,
+    stats.attendance.openSessions = await prisma.attendance.count({
+      where: {
+        ...(tenantId ? { tenantId } : {}),
+        clockOut: null,
+      },
     });
 
     // Count forgotten sessions (open for more than 12 hours)
     const forgottenThreshold = new Date(now.getTime() - 12 * 60 * 60 * 1000);
-    stats.attendance.forgottenSessions = await Attendance.countDocuments({
-      ...tenantFilter,
-      clockOut: null,
-      clockIn: { $lt: forgottenThreshold },
+    stats.attendance.forgottenSessions = await prisma.attendance.count({
+      where: {
+        ...(tenantId ? { tenantId } : {}),
+        clockOut: null,
+        clockIn: { lt: forgottenThreshold },
+      },
     });
 
     // Get cash drawer stats
-    stats.cashDrawer.openSessions = await CashDrawerSession.countDocuments({
-      ...tenantFilter,
-      status: 'open',
+    stats.cashDrawer.openSessions = await prisma.cashDrawerSession.count({
+      where: {
+        ...(tenantId ? { tenantId } : {}),
+        status: 'open',
+      },
     });
 
     // Get transaction stats (transactions with email in notes from last 24h)
     const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    const recentTransactions = await Transaction.find({
-      ...tenantFilter,
-      createdAt: { $gte: last24h },
-      status: 'completed',
-      notes: { $regex: /email/i },
-    }).limit(100).lean();
+    const recentTransactions = await prisma.transaction.findMany({
+      where: {
+        ...(tenantId ? { tenantId } : {}),
+        createdAt: { gte: last24h },
+        status: 'completed',
+        notes: { contains: 'email', mode: 'insensitive' },
+      },
+      select: { notes: true },
+      take: 100,
+    });
 
     stats.transactions.pendingReceipts = recentTransactions.filter(t => {
       const emailMatch = t.notes?.match(/email[:\s]+([^\s]+)/i);

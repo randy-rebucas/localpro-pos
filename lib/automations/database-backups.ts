@@ -1,10 +1,22 @@
 /**
  * Automated Database Backups
  * Scheduled automatic backups with optional S3 cloud upload
+ *
+ * Postgres port note: the original Mongo implementation dumped every
+ * collection via the driver's raw `db.listCollections()`. Prisma has no
+ * equivalent "list all tables and read them generically" API, so this
+ * enumerates the app's Prisma models explicitly (kept in sync with
+ * prisma/schema.prisma) and reads each via `prisma.<model>.findMany()`.
+ * The on-disk format is preserved: a single JSON file of
+ * `{ [modelName]: record[] }`, written to the same `backups/` directory
+ * consumed by app/api/super-admin/backups/* and
+ * app/api/automations/backups/create. `modelName` is now the Prisma
+ * client's camelCase accessor (e.g. `offlineTransaction`) rather than the
+ * old Mongo collection name — restore only relies on these names being
+ * self-consistent between backup and restore, not on any external format.
  */
 
-import connectDB from '@/lib/mongodb';
-import mongoose from 'mongoose';
+import prisma from '@/lib/prisma';
 import { AutomationResult } from './types';
 
 // Lazy-load Node.js modules to prevent Turbopack from tracing the entire project.
@@ -20,14 +32,46 @@ export interface DatabaseBackupOptions {
   uploadToCloud?: boolean; // Upload to cloud storage (S3-compatible)
 }
 
+// Prisma model accessor name -> whether it has a tenantId column (for
+// per-tenant backup filtering). Kept in sync with prisma/schema.prisma.
+// System/audit trail tables (RevokedToken, UserRevocation, SuperAdminAction,
+// Counter, MigrationIdMap) are intentionally excluded — not tenant business
+// data, not useful/safe to restore blindly.
+const TENANT_SCOPED_MODELS = [
+  'taxRule', 'featureFlagOverride', 'address', 'file', 'user', 'branch',
+  'device', 'table', 'auditLog', 'archivedAuditLog', 'category', 'product',
+  'productBundle', 'productChannelListing', 'discount', 'loyaltyConfig',
+  'campaign', 'tenantEcommerceIntegration', 'customer', 'customerOTP',
+  'customerBalancePayment', 'booking', 'recurringBookingTemplate',
+  'prescription', 'savedCart', 'cashDrawerSession', 'transaction', 'payment',
+  'invoice', 'stockMovement', 'expense', 'offlineTransaction', 'zReading',
+  'loyaltyTransaction', 'billingEvent', 'subscription', 'attendance',
+] as const;
+
+// Non-tenant-scoped models (or joined via a tenant-scoped parent) that are
+// still part of a full (non-per-tenant) backup.
+const GLOBAL_MODELS = [
+  'tenant', 'subscriptionPlan', 'coupon', 'productBranchStock',
+  'productBundleItem', 'prescriptionItem', 'transactionItem',
+  'transactionSplitPayment', 'subscriptionBillingHistoryEntry', 'posSession',
+] as const;
+
+type PrismaDelegate = {
+  findMany: (args?: any) => Promise<any[]>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  deleteMany: (args?: any) => Promise<{ count: number }>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  createMany: (args: any) => Promise<{ count: number }>; // eslint-disable-line @typescript-eslint/no-explicit-any
+};
+
+function getDelegate(modelName: string): PrismaDelegate {
+  return (prisma as unknown as Record<string, PrismaDelegate>)[modelName];
+}
+
 /**
  * Create database backup
  */
 export async function createDatabaseBackup(
   options: DatabaseBackupOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -52,42 +96,35 @@ export async function createDatabaseBackup(
       // Directory might already exist
     }
 
-    // Get database connection
-    const db = mongoose.connection.db;
-    if (!db) {
-      throw new Error('Database connection not available');
-    }
-
-    // Get all collections
-    const collections = await db.listCollections().toArray();
     const backupData: Record<string, any[]> = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-    // Export each collection
-    for (const collectionInfo of collections) {
-      const collectionName = collectionInfo.name;
-      
-      // Skip system collections
-      if (collectionName.startsWith('system.')) {
-        continue;
-      }
+    if (options.tenantId) {
+      // Per-tenant backup: only tenant-scoped models, filtered by tenantId,
+      // plus the Tenant row itself.
+      const tenant = await getDelegate('tenant').findMany({ where: { id: options.tenantId } });
+      if (tenant.length > 0) backupData['tenant'] = tenant;
 
-      // If tenantId specified, filter by tenant
-      if (options.tenantId) {
-        const collection = db.collection(collectionName);
-        const documents = await collection.find({ tenantId: new mongoose.Types.ObjectId(options.tenantId) }).toArray();
-        if (documents.length > 0) {
-          backupData[collectionName] = documents;
+      for (const modelName of TENANT_SCOPED_MODELS) {
+        try {
+          const docs = await getDelegate(modelName).findMany({ where: { tenantId: options.tenantId }, take: 10000 });
+          if (docs.length > 0) backupData[modelName] = docs;
+        } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+          results.errors?.push(`Model ${modelName}: ${err.message}`);
         }
-      } else {
-        const collection = db.collection(collectionName);
-        const documents = await collection.find({}).limit(10000).toArray(); // Limit to prevent memory issues
-        if (documents.length > 0) {
-          backupData[collectionName] = documents;
+      }
+    } else {
+      // Full backup: every known model, limited to prevent memory issues.
+      for (const modelName of [...TENANT_SCOPED_MODELS, ...GLOBAL_MODELS]) {
+        try {
+          const docs = await getDelegate(modelName).findMany({ take: 10000 });
+          if (docs.length > 0) backupData[modelName] = docs;
+        } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+          results.errors?.push(`Model ${modelName}: ${err.message}`);
         }
       }
     }
 
-    // Write backup to file
+    // Write backup to file (Decimal/Date instances -> JSON via toString/ISO)
     await fs.writeFile(backupFilePath, JSON.stringify(backupData, null, 2), 'utf-8');
 
     // Rotate old backups (keep last 7)
@@ -136,8 +173,8 @@ export async function createDatabaseBackup(
 
 export interface DatabaseRestoreOptions {
   backupFilePath: string; // Absolute path to the JSON backup file
-  clearExisting?: boolean; // Drop each collection's documents before inserting (default: false)
-  collections?: string[]; // Restore only these collections; omit to restore all
+  clearExisting?: boolean; // Delete each model's rows before inserting (default: false)
+  collections?: string[]; // Restore only these models (by Prisma accessor name); omit to restore all
   dryRun?: boolean; // Parse and count without writing to the database
 }
 
@@ -155,14 +192,31 @@ export interface DatabaseRestoreResult {
   errors: string[];
 }
 
+// Restore order matters for FK integrity: parents before children.
+// Anything not listed here is restored last, in file order.
+const RESTORE_ORDER = [
+  'tenant', 'user', 'branch', 'device', 'table', 'category', 'product',
+  'productBranchStock', 'productBundle', 'productBundleItem',
+  'productChannelListing', 'discount', 'coupon', 'loyaltyConfig', 'campaign',
+  'customer', 'customerOTP', 'customerBalancePayment', 'booking',
+  'recurringBookingTemplate', 'prescription', 'prescriptionItem',
+  'savedCart', 'cashDrawerSession', 'transaction', 'transactionItem',
+  'transactionSplitPayment', 'payment', 'invoice', 'stockMovement',
+  'expense', 'offlineTransaction', 'zReading', 'loyaltyTransaction',
+  'billingEvent', 'subscription', 'subscriptionBillingHistoryEntry',
+  'attendance', 'taxRule', 'featureFlagOverride', 'address', 'file',
+  'auditLog', 'archivedAuditLog', 'tenantEcommerceIntegration',
+  'subscriptionPlan', 'posSession',
+];
+
 /**
- * Restore database from a JSON backup file produced by createDatabaseBackup
+ * Restore database from a JSON backup file produced by createDatabaseBackup.
+ * `collectionsMap` keys are Prisma model accessor names (e.g. `product`,
+ * `offlineTransaction`), matching what createDatabaseBackup wrote.
  */
 export async function restoreDatabaseBackup(
   options: DatabaseRestoreOptions
 ): Promise<DatabaseRestoreResult> {
-  await connectDB();
-
   const result: DatabaseRestoreResult = {
     success: true,
     message: '',
@@ -176,71 +230,81 @@ export async function restoreDatabaseBackup(
     const raw = await fs.readFile(options.backupFilePath, 'utf-8');
     const backupData = JSON.parse(raw);
 
-    // Support both formats: flat { collectionName: [...] } and wrapped { collections: { ... } }
+    // Support both formats: flat { modelName: [...] } and wrapped { collections: { ... } }
     const collectionsMap: Record<string, unknown[]> =
       backupData.collections ?? backupData;
 
-    const db = mongoose.connection.db;
-    if (!db) throw new Error('Database connection not available');
-
-    const targetCollections = options.collections
+    const requested = options.collections
       ? options.collections
       : Object.keys(collectionsMap);
 
-    for (const collectionName of targetCollections) {
-      const docs = collectionsMap[collectionName];
+    // Order requested models by RESTORE_ORDER (parents first), unknowns last.
+    const targetModels = [...requested].sort((a, b) => {
+      const ia = RESTORE_ORDER.indexOf(a);
+      const ib = RESTORE_ORDER.indexOf(b);
+      if (ia === -1 && ib === -1) return 0;
+      if (ia === -1) return 1;
+      if (ib === -1) return -1;
+      return ia - ib;
+    });
+
+    for (const modelName of targetModels) {
+      const docs = collectionsMap[modelName];
       if (!Array.isArray(docs)) {
-        result.collections[collectionName] = { inserted: 0, cleared: 0, skipped: true };
+        result.collections[modelName] = { inserted: 0, cleared: 0, skipped: true };
+        continue;
+      }
+
+      let delegate: PrismaDelegate;
+      try {
+        delegate = getDelegate(modelName);
+        if (!delegate || typeof delegate.findMany !== 'function') {
+          throw new Error(`Unknown model "${modelName}"`);
+        }
+      } catch (err: unknown) {
+        result.collections[modelName] = { inserted: 0, cleared: 0, skipped: true };
+        result.errors.push(`${modelName}: ${err instanceof Error ? err.message : String(err)}`);
         continue;
       }
 
       if (options.dryRun) {
-        result.collections[collectionName] = { inserted: docs.length, cleared: 0 };
+        result.collections[modelName] = { inserted: docs.length, cleared: 0 };
         continue;
       }
 
-      const collection = db.collection(collectionName);
       let cleared = 0;
-
       if (options.clearExisting) {
-        const del = await collection.deleteMany({});
-        cleared = del.deletedCount ?? 0;
+        try {
+          const del = await delegate.deleteMany({});
+          cleared = del.count ?? 0;
+        } catch (err: unknown) {
+          result.errors.push(`${modelName} clear: ${err instanceof Error ? err.message : String(err)}`);
+        }
       }
 
       let inserted = 0;
       if (docs.length > 0) {
-        // Re-hydrate _id fields that were serialised as strings or plain objects
-        const hydrated = docs.map((doc: unknown) => {
-          const d = { ...(doc as Record<string, unknown>) };
-          if (d._id && typeof d._id === 'string' && mongoose.Types.ObjectId.isValid(d._id as string)) {
-            d._id = new mongoose.Types.ObjectId(d._id as string);
-          } else if (d._id && typeof d._id === 'object' && (d._id as Record<string, unknown>).$oid) {
-            d._id = new mongoose.Types.ObjectId((d._id as Record<string, unknown>).$oid as string);
-          }
-          return d;
-        });
-
-        // Insert in chunks to avoid hitting the 16 MB BSON limit per batch
+        // Insert in chunks; skipDuplicates so re-running a restore is idempotent.
         const CHUNK = 500;
-        for (let i = 0; i < hydrated.length; i += CHUNK) {
+        for (let i = 0; i < docs.length; i += CHUNK) {
           try {
-            const res = await collection.insertMany(hydrated.slice(i, i + CHUNK), { ordered: false });
-            inserted += res.insertedCount;
+            const res = await delegate.createMany({
+              data: docs.slice(i, i + CHUNK),
+              skipDuplicates: true,
+            });
+            inserted += res.count ?? 0;
           } catch (err: unknown) {
-            // ordered:false — count what succeeded, record the rest as errors
-            const bulkErr = err as { result?: { insertedCount?: number }; message?: string };
-            inserted += bulkErr.result?.insertedCount ?? 0;
-            result.errors.push(`${collectionName} chunk ${i / CHUNK + 1}: ${bulkErr.message ?? err}`);
+            result.errors.push(`${modelName} chunk ${i / CHUNK + 1}: ${err instanceof Error ? err.message : String(err)}`);
           }
         }
       }
 
-      result.collections[collectionName] = { inserted, cleared };
+      result.collections[modelName] = { inserted, cleared };
     }
 
     const totalInserted = Object.values(result.collections).reduce((s, c) => s + c.inserted, 0);
     const prefix = options.dryRun ? '[DRY RUN] Would restore' : 'Restored';
-    result.message = `${prefix} ${totalInserted} documents across ${Object.keys(result.collections).length} collection(s)`;
+    result.message = `${prefix} ${totalInserted} record(s) across ${Object.keys(result.collections).length} model(s)`;
 
     return result;
   } catch (err: unknown) {

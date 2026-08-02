@@ -1,6 +1,4 @@
-import connectDB from '@/lib/mongodb';
-import TenantEcommerceIntegration from '@/models/TenantEcommerceIntegration';
-import ProductChannelListing from '@/models/ProductChannelListing';
+import prisma from '@/lib/prisma';
 import { parseShopifyOrderWebhook } from '@/lib/ecommerce/parse-shopify-order';
 import { parseShopifyRefundWebhook } from '@/lib/ecommerce/parse-shopify-refund';
 import { parseWooCommerceOrderWebhook } from '@/lib/ecommerce/parse-woo-order';
@@ -15,20 +13,17 @@ export async function handleShopifyWebhook(
   rawBody: string,
   payload: unknown
 ): Promise<{ status: number; body: string }> {
-  await connectDB();
   const shop = (shopDomainHeader || '').toLowerCase().trim();
   if (!shop) return { status: 401, body: 'missing shop' };
 
-  const integration = await TenantEcommerceIntegration.findOne({
-    provider: 'shopify',
-    shopDomain: shop,
-    isActive: true,
+  const integration = await prisma.tenantEcommerceIntegration.findFirst({
+    where: { provider: 'shopify', shopDomain: shop, isActive: true },
   });
   if (!integration) {
     return { status: 404, body: 'unknown shop' };
   }
 
-  const tenantId = integration.tenantId.toString();
+  const tenantId = integration.tenantId;
 
   if (topic?.startsWith('orders/')) {
     const order = parseShopifyOrderWebhook(payload);
@@ -44,13 +39,11 @@ export async function handleShopifyWebhook(
       // Restock each refunded line — look up productId via ProductChannelListing
       for (const line of refund.lines) {
         try {
-          const listing = await ProductChannelListing.findOne({
-            tenantId,
-            provider: 'shopify',
-            externalVariantId: line.externalVariantId,
-          }).lean();
+          const listing = await prisma.productChannelListing.findFirst({
+            where: { tenantId, provider: 'shopify', externalVariantId: line.externalVariantId },
+          });
           if (!listing) continue;
-          await updateStock(listing.productId.toString(), tenantId, line.quantity, 'return', {
+          await updateStock(listing.productId, tenantId, line.quantity, 'return', {
             reason: STOCK_REASON_CHANNEL_REFUND,
             notes: `Shopify refund on order ${refund.externalOrderId}`,
           });
@@ -69,17 +62,14 @@ export async function handleWooCommerceWebhook(
   rawBody: string,
   payload: unknown
 ): Promise<{ status: number; body: string }> {
-  await connectDB();
-  const integration = await TenantEcommerceIntegration.findOne({
-    _id: integrationId,
-    provider: 'woocommerce',
-    isActive: true,
+  const integration = await prisma.tenantEcommerceIntegration.findFirst({
+    where: { id: integrationId, provider: 'woocommerce', isActive: true },
   });
   if (!integration) return { status: 404, body: 'unknown integration' };
 
   const order = parseWooCommerceOrderWebhook(payload);
   if (order) {
-    const r = await importPaidChannelOrder(integration.tenantId.toString(), order);
+    const r = await importPaidChannelOrder(integration.tenantId, order);
     if (!r.ok && !r.duplicate) {
       logger.warn('Woo order import skipped', { reason: r.reason, integrationId });
     }

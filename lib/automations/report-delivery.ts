@@ -3,8 +3,7 @@
  * Automatically generates and emails reports on schedule
  */
 
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/prisma';
 import { sendEmail } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { getSalesReport } from '@/lib/analytics';
@@ -22,8 +21,6 @@ export interface ReportDeliveryOptions {
 export async function sendSalesReport(
   options: ReportDeliveryOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -38,11 +35,11 @@ export async function sendSalesReport(
     // Get tenants to process
     let tenants;
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await prisma.tenant.findUnique({ where: { id: options.tenantId } });
       tenants = tenant ? [tenant] : [];
     } else {
       // Get all active tenants
-      tenants = await Tenant.find({ status: 'active' }).lean();
+      tenants = await prisma.tenant.findMany({ where: { isActive: true } });
     }
 
     if (tenants.length === 0) {
@@ -55,7 +52,7 @@ export async function sendSalesReport(
 
     for (const tenant of tenants) {
       try {
-        const tenantSettings = await getTenantSettingsById(tenant._id.toString());
+        const tenantSettings = await getTenantSettingsById(tenant.id);
 
         // Skip if email notifications disabled
         if (!tenantSettings?.emailNotifications) {
@@ -92,7 +89,7 @@ export async function sendSalesReport(
 
         // Generate report
         const report = await getSalesReport(
-          tenant._id.toString(),
+          tenant.id,
           period,
           startDate,
           endDate

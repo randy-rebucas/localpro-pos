@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/prisma';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import type { Prisma } from '@prisma/client';
+
+const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
 /**
  * GET /api/services?tenantId={{tenantId}}
@@ -11,7 +12,6 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 export async function GET(request: NextRequest) {
   let t: (key: string, fallback: string) => string;
   try {
-    await connectDB();
     t = await getValidationTranslatorFromRequest(request);
 
     const tenantId = request.nextUrl.searchParams.get('tenantId');
@@ -22,11 +22,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Resolve tenant (accept slug or ObjectId)
-    const tenant = await Tenant.findOne({
-      $or: [{ slug: tenantId }, ...(tenantId.match(/^[0-9a-fA-F]{24}$/) ? [{ _id: tenantId }] : [])],
-      isActive: true,
-    }).lean();
+    // Resolve tenant (accept slug or UUID)
+    const tenant = await prisma.tenant.findFirst({
+      where: {
+        isActive: true,
+        OR: [{ slug: tenantId }, ...(UUID_RE.test(tenantId) ? [{ id: tenantId }] : [])],
+      },
+    });
 
     if (!tenant) {
       return NextResponse.json(
@@ -38,28 +40,32 @@ export async function GET(request: NextRequest) {
     const categoryId = request.nextUrl.searchParams.get('categoryId');
     const search = request.nextUrl.searchParams.get('search');
 
-    const filter: Record<string, any> = { // eslint-disable-line @typescript-eslint/no-explicit-any
-      tenantId: tenant._id,
+    const where: Prisma.ProductWhereInput = {
+      tenantId: tenant.id,
       productType: 'service',
     };
 
     if (categoryId) {
-      filter.categoryId = categoryId;
+      where.categoryId = categoryId;
     }
 
     if (search) {
-      filter.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
       ];
     }
 
-    const services = await Product.find(filter)
-      .select('name description price image category categoryId')
-      .sort({ name: 1 })
-      .lean();
+    const services = await prisma.product.findMany({
+      where,
+      select: { id: true, name: true, description: true, price: true, image: true, category: true, categoryId: true },
+      orderBy: { name: 'asc' },
+    });
 
-    return NextResponse.json({ success: true, data: services });
+    return NextResponse.json({
+      success: true,
+      data: services.map(({ id, price, ...rest }) => ({ _id: id, ...rest, price: Number(price) })),
+    });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return NextResponse.json(
       { success: false, error: error.message || 'Failed to fetch services' },

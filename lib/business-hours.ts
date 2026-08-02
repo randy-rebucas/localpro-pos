@@ -3,7 +3,7 @@
  * Handles business hours, special hours, and holiday checking
  */
 
-import { ITenantSettings } from '@/models/Tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import type { ITenantSettings } from '@/types/tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
 
 export interface BusinessHours {
   timezone?: string;

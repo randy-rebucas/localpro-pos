@@ -1,26 +1,58 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import SubscriptionPlan from '@/models/SubscriptionPlan';
-import Subscription from '@/models/Subscription';
+import prisma from '@/lib/prisma';
 import { requireRole } from '@/lib/auth';
 import { handleApiError } from '@/lib/error-handler';
 
+function toPlanResponse(plan: {
+  id: string;
+  priceMonthly: unknown;
+  priceSetupFee: unknown;
+  priceCurrency: string;
+  reactivationFee: unknown;
+  yearlyDiscount: unknown;
+  [key: string]: unknown;
+}) {
+  const {
+    id,
+    priceMonthly,
+    priceSetupFee,
+    priceCurrency,
+    reactivationFee,
+    yearlyDiscount,
+    ...rest
+  } = plan;
+  return {
+    _id: id,
+    ...rest,
+    price: {
+      monthly: Number(priceMonthly),
+      setupFee: Number(priceSetupFee),
+      currency: priceCurrency,
+    },
+    reactivationFee: Number(reactivationFee),
+    yearlyDiscount: Number(yearlyDiscount),
+  };
+}
+
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     await requireRole(request, ['super_admin']);
 
-    const plans = await SubscriptionPlan.find({})
-      .sort({ 'price.monthly': 1 })
-      .lean();
+    const plans = await prisma.subscriptionPlan.findMany({
+      orderBy: { priceMonthly: 'asc' },
+    });
 
     // Attach active subscriber count to each plan
-    const counts = await Subscription.aggregate([
-      { $match: { status: { $in: ['active', 'trial'] } } },
-      { $group: { _id: '$planId', count: { $sum: 1 } } },
-    ]);
-    const countMap = Object.fromEntries(counts.map(c => [String(c._id), c.count]));
-    const plansWithCounts = plans.map(p => ({ ...p, subscriberCount: countMap[String(p._id)] || 0 }));
+    const counts = await prisma.subscription.groupBy({
+      by: ['planId'],
+      where: { status: { in: ['active', 'trial'] } },
+      _count: { _all: true },
+    });
+    const countMap = Object.fromEntries(counts.map(c => [c.planId, c._count._all]));
+    const plansWithCounts = plans.map(p => ({
+      ...toPlanResponse(p),
+      subscriberCount: countMap[p.id] || 0,
+    }));
 
     return NextResponse.json({ success: true, data: plansWithCounts });
   } catch (error: unknown) {
@@ -36,7 +68,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     await requireRole(request, ['super_admin']);
 
     const body = await request.json();
@@ -49,7 +80,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const existing = await SubscriptionPlan.findOne({ tier });
+    const existing = await prisma.subscriptionPlan.findUnique({ where: { tier } });
     if (existing) {
       return NextResponse.json(
         { success: false, error: `A plan with tier '${tier}' already exists` },
@@ -57,20 +88,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const plan = await SubscriptionPlan.create({
-      name,
-      tier,
-      description,
-      price,
-      features,
-      birCompliance,
-      isActive: isActive !== undefined ? isActive : true,
-      isCustom: isCustom || false,
-      availableToNewTenants: availableToNewTenants !== undefined ? availableToNewTenants : true,
-      yearlyDiscount: yearlyDiscount || 0,
+    const plan = await prisma.subscriptionPlan.create({
+      data: {
+        name,
+        tier,
+        description,
+        priceMonthly: price.monthly,
+        priceSetupFee: price.setupFee ?? 0,
+        priceCurrency: price.currency ?? 'PHP',
+        features: features ?? {},
+        birCompliance: birCompliance ?? {},
+        isActive: isActive !== undefined ? isActive : true,
+        isCustom: isCustom || false,
+        availableToNewTenants: availableToNewTenants !== undefined ? availableToNewTenants : true,
+        yearlyDiscount: yearlyDiscount || 0,
+      },
     });
 
-    return NextResponse.json({ success: true, data: plan }, { status: 201 });
+    return NextResponse.json({ success: true, data: toPlanResponse(plan) }, { status: 201 });
   } catch (error: unknown) {
     if (error instanceof Error && (error.message === 'Unauthorized' || error.message.includes('Forbidden'))) {
       return NextResponse.json(

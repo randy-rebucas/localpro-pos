@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
+import { getUserById, updatePassword } from '@/lib/data/users';
 import { validatePassword } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -15,7 +14,6 @@ import bcrypt from 'bcryptjs';
 export async function POST(request: NextRequest) {
   let t: (key: string, fallback: string) => string;
   try {
-    await connectDB();
     t = await getValidationTranslatorFromRequest(request);
 
     const currentUser = await requireAuth(request);
@@ -37,7 +35,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const user = await User.findById(currentUser.userId).select('+password');
+    const user = await getUserById(currentUser.userId);
     if (!user) {
       return NextResponse.json(
         { success: false, error: t('validation.userNotFound', 'User not found') },
@@ -63,9 +61,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Update password (pre-save hook will hash it)
-    user.password = newPassword;
-    await user.save();
+    // Update password (hashed inside updatePassword)
+    await updatePassword(currentUser.userId, newPassword);
 
     await createAuditLog(request, {
       tenantId: currentUser.tenantId,

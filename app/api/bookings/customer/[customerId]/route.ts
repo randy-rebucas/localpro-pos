@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Booking from '@/models/Booking';
+import prisma from '@/lib/prisma';
 import { requireCustomerAuth } from '@/lib/auth-customer';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { requireBookingSchedulingAccess } from '@/lib/booking-scheduling-access';
 import { logger } from '@/lib/logger';
+import { bookingToApi } from '@/lib/data/bookings';
+import type { Prisma } from '@prisma/client';
 
 /**
  * GET - Get all bookings for a customer
@@ -18,9 +19,8 @@ export async function GET(
   { params }: { params: Promise<{ customerId: string }> }
 ) {
   try {
-    await connectDB();
     const t = await getValidationTranslatorFromRequest(request);
-    
+
     // Verify customer authentication
     const customer = await requireCustomerAuth(request);
     const { customerId } = await params;
@@ -46,9 +46,9 @@ export async function GET(
     const endDate = searchParams.get('endDate');
 
     // Build query
-    const query: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
+    const where: Prisma.BookingWhereInput = {
       tenantId: customer.tenantId,
-      $or: [
+      OR: [
         { customerEmail: customer.email },
         { customerPhone: customer.phone },
       ],
@@ -56,32 +56,33 @@ export async function GET(
 
     // Add status filter
     if (status) {
-      query.status = status;
+      where.status = status as Prisma.EnumBookingStatusFilter['equals'];
     }
 
     // Add date range filter
     if (startDate || endDate) {
-      query.startTime = {};
+      where.startTime = {};
       if (startDate) {
-        query.startTime.$gte = new Date(startDate);
+        (where.startTime as Prisma.DateTimeFilter).gte = new Date(startDate);
       }
       if (endDate) {
-        query.startTime.$lte = new Date(endDate);
+        (where.startTime as Prisma.DateTimeFilter).lte = new Date(endDate);
       }
     }
 
-    const bookings = await Booking.find(query)
-      .populate('staffId', 'name email')
-      .sort({ startTime: -1 }) // Most recent first
-      .lean();
+    const bookings = await prisma.booking.findMany({
+      where,
+      include: { staff: { select: { id: true, name: true, email: true } } },
+      orderBy: { startTime: 'desc' }, // Most recent first
+    });
 
     return NextResponse.json({
       success: true,
-      data: bookings,
+      data: bookings.map(bookingToApi),
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Get customer bookings error:', error);
-    
+
     if (error.message === 'Unauthorized') {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },

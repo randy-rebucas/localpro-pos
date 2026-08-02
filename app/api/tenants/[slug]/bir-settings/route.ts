@@ -4,13 +4,14 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/prisma';
+import type { Prisma } from '@prisma/client';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { getTenantBySlug, getTenantBySlugAny } from '@/lib/data/tenants';
 
 export async function GET(
   request: NextRequest,
@@ -23,25 +24,26 @@ export async function GET(
     }
 
     const { slug } = await params;
-    await connectDB();
 
-    const tenant = await Tenant.findOne({ slug, isActive: true }).lean();
+    const tenant = await getTenantBySlug(slug);
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
     // Tenant isolation
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
+
+    const settings = (tenant.settings as Record<string, unknown>) || {};
 
     return NextResponse.json({
       success: true,
       data: {
-        birTin: tenant.settings?.birTin ?? '',
-        birPtuNumber: tenant.settings?.birPtuNumber ?? '',
-        birPtuIssuedDate: tenant.settings?.birPtuIssuedDate ?? null,
-        birPtuExpiryDate: tenant.settings?.birPtuExpiryDate ?? null,
+        birTin: settings.birTin ?? '',
+        birPtuNumber: settings.birPtuNumber ?? '',
+        birPtuIssuedDate: settings.birPtuIssuedDate ?? null,
+        birPtuExpiryDate: settings.birPtuExpiryDate ?? null,
       },
     });
   } catch (error: unknown) {
@@ -66,19 +68,18 @@ export async function PUT(
     }
 
     const { slug } = await params;
-    await connectDB();
 
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await getTenantBySlugAny(slug);
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
     // Tenant isolation
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    if (!(await hasTenantPermission(user.role, tenant._id.toString(), 'bir_compliance.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenant.id, 'bir_compliance.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
@@ -93,24 +94,24 @@ export async function PUT(
       );
     }
 
-    if (birTin !== undefined) tenant.settings.birTin = birTin || undefined;
-    if (birPtuNumber !== undefined) tenant.settings.birPtuNumber = birPtuNumber || undefined;
+    const settings = { ...(tenant.settings as Record<string, unknown>) };
+    if (birTin !== undefined) settings.birTin = birTin || undefined;
+    if (birPtuNumber !== undefined) settings.birPtuNumber = birPtuNumber || undefined;
     if (birPtuIssuedDate !== undefined) {
-      tenant.settings.birPtuIssuedDate = birPtuIssuedDate ? new Date(birPtuIssuedDate) : undefined;
+      settings.birPtuIssuedDate = birPtuIssuedDate ? new Date(birPtuIssuedDate).toISOString() : undefined;
     }
     if (birPtuExpiryDate !== undefined) {
-      tenant.settings.birPtuExpiryDate = birPtuExpiryDate ? new Date(birPtuExpiryDate) : undefined;
+      settings.birPtuExpiryDate = birPtuExpiryDate ? new Date(birPtuExpiryDate).toISOString() : undefined;
     }
 
-    tenant.markModified('settings');
-    await tenant.save();
+    await prisma.tenant.update({ where: { id: tenant.id }, data: { settings: settings as Prisma.InputJsonValue } });
 
     await createAuditLog(request, {
-      tenantId: tenant._id,
+      tenantId: tenant.id,
       userId: user.userId,
       action: AuditActions.UPDATE,
       entityType: 'bir_settings',
-      entityId: tenant._id.toString(),
+      entityId: tenant.id,
       changes: { birTin, birPtuNumber, birPtuIssuedDate, birPtuExpiryDate },
     });
 

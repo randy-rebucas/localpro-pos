@@ -1,17 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Payment from '@/models/Payment';
-import Transaction from '@/models/Transaction';
+import prisma from '@/lib/prisma';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { serializePayment } from '@/lib/data/payments';
+import { Prisma } from '@prisma/client';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const tenantAccess = await requireTenantAccess(request);
     const { tenantId } = tenantAccess;
-    
+
     const searchParams = request.nextUrl.searchParams;
     const rawLimit = parseInt(searchParams.get('limit') || '50');
     const limit = Math.min(Math.max(1, rawLimit), 200);
@@ -21,33 +20,37 @@ export async function GET(request: NextRequest) {
     const method = searchParams.get('method');
     const transactionId = searchParams.get('transactionId');
 
-    const query: any = { tenantId, isActive: { $ne: false } }; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const where: Prisma.PaymentWhereInput = { tenantId, isActive: true };
 
     if (status) {
-      query.status = status;
+      where.status = status as Prisma.PaymentWhereInput['status'];
     }
-    
+
     if (method) {
-      query.method = method;
+      where.method = method as Prisma.PaymentWhereInput['method'];
     }
-    
+
     if (transactionId) {
-      query.transactionId = transactionId;
+      where.transactionId = transactionId;
     }
 
-    const payments = await Payment.find(query)
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .skip(skip)
-      .populate('transactionId', 'receiptNumber total')
-      .populate('processedBy', 'name email')
-      .lean();
-
-    const total = await Payment.countDocuments(query);
+    const [payments, total] = await Promise.all([
+      prisma.payment.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip,
+        include: {
+          transaction: { select: { id: true, receiptNumber: true, total: true } },
+          processedByUser: { select: { id: true, name: true, email: true } },
+        },
+      }),
+      prisma.payment.count({ where }),
+    ]);
 
     return NextResponse.json({
       success: true,
-      data: payments || [],
+      data: payments.map(serializePayment),
       pagination: {
         total,
         page,
@@ -66,7 +69,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const tenantAccess = await requireTenantAccess(request);
     const { tenantId, user } = tenantAccess;
 
@@ -74,11 +76,10 @@ export async function POST(request: NextRequest) {
     if (!rl.allowed) {
       return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
-    
+
     const body = await request.json();
     const { transactionId, method, amount, details } = body;
 
-    // Validate required fields
     if (!transactionId || !method || !amount) {
       return NextResponse.json(
         { success: false, error: 'Transaction ID, payment method, and amount are required' },
@@ -86,7 +87,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate payment method
     const validMethods = ['cash', 'card', 'digital', 'check', 'other'];
     if (!validMethods.includes(method)) {
       return NextResponse.json(
@@ -95,10 +95,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify transaction exists and belongs to tenant
-    const transaction = await Transaction.findOne({
-      _id: transactionId,
-      tenantId,
+    const transaction = await prisma.transaction.findFirst({
+      where: { id: transactionId, tenantId },
     });
 
     if (!transaction) {
@@ -108,33 +106,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create payment record
-    const payment = await Payment.create({
-      tenantId,
-      transactionId,
-      method,
-      amount,
-      details,
-      status: 'completed',
-      processedBy: user.userId,
-      processedAt: new Date(),
+    const payment = await prisma.payment.create({
+      data: {
+        tenantId,
+        transactionId,
+        method,
+        amount,
+        details: details ?? undefined,
+        status: 'completed',
+        processedBy: user.userId,
+        processedAt: new Date(),
+      },
     });
 
-    // Create audit log
     await createAuditLog(request, {
       tenantId,
       userId: user.userId,
       action: AuditActions.PAYMENT_CREATE,
       entityType: 'payment',
-      entityId: payment._id.toString(),
+      entityId: payment.id,
       changes: {
-        transactionId: transactionId.toString(),
+        transactionId: String(transactionId),
         method,
         amount,
       },
     });
 
-    return NextResponse.json({ success: true, data: payment }, { status: 201 });
+    return NextResponse.json({ success: true, data: serializePayment(payment) }, { status: 201 });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'Failed to create payment';
     if (msg.includes('Unauthorized') || msg.includes('Forbidden')) {

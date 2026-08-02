@@ -1,14 +1,22 @@
 import { shopifyAdminFetch } from '@/lib/ecommerce/shopify-api';
-import type { ICustomer } from '@/models/Customer';
 
 interface ShopifyCustomerResponse {
   customer: { id: number };
 }
 
+interface CustomerLike {
+  firstName: string;
+  lastName: string;
+  email?: string | null;
+  phone?: string | null;
+  tags?: string[];
+  shopifyCustomerId?: string | null;
+}
+
 export async function shopifyUpsertCustomer(
   shopDomain: string,
   accessToken: string,
-  customer: ICustomer
+  customer: CustomerLike
 ): Promise<{ shopifyCustomerId: string }> {
   const payload = {
     customer: {

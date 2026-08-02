@@ -1,19 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
-import User from '@/models/User';
+import prisma from '@/lib/prisma';
 import { requireRole } from '@/lib/auth';
 import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     await requireRole(request, ['super_admin']);
 
     const [totalTenants, activeTenants, totalUsers] = await Promise.all([
-      Tenant.countDocuments(),
-      Tenant.countDocuments({ isActive: true }),
-      User.countDocuments({ role: { $ne: 'super_admin' } }),
+      prisma.tenant.count(),
+      prisma.tenant.count({ where: { isActive: true } }),
+      prisma.user.count({ where: { role: { not: 'super_admin' } } }),
     ]);
 
     return NextResponse.json({

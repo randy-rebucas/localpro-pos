@@ -1,25 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { applyBusinessTypeDefaults } from '@/lib/business-types';
+import { getTenantBySlugAny } from '@/lib/data/tenants';
+import { Prisma } from '@prisma/client';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
-    await connectDB();
     const { slug } = await params;
     const t = await getValidationTranslatorFromRequest(request);
-    const tenant = await Tenant.findOne({ slug }).lean();
-    
+    const tenant = await getTenantBySlugAny(slug);
+
     if (!tenant) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
-    
-    return NextResponse.json({ success: true, data: tenant });
+
+    return NextResponse.json({ success: true, data: { _id: tenant.id, ...tenant } });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -27,7 +27,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const { slug } = await params;
     const t = await getValidationTranslatorFromRequest(request);
@@ -35,21 +34,21 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const body = await request.json();
     const { name, domain, subdomain, isActive, settings } = body;
 
-    const oldTenant = await Tenant.findOne({ slug }).lean();
+    const oldTenant = await getTenantBySlugAny(slug);
     if (!oldTenant) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== oldTenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== oldTenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    if (!(await hasTenantPermission(user.role, oldTenant._id.toString(), 'tenant_profile.manage'))) {
+    if (!(await hasTenantPermission(user.role, oldTenant.id, 'tenant_profile.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
     const updateData: any = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
-    
+
     if (name !== undefined) {
       if (!name.trim()) {
         return NextResponse.json(
@@ -59,52 +58,52 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       }
       updateData.name = name.trim();
     }
-    
+
     if (domain !== undefined) {
       updateData.domain = domain.trim() || null;
     }
-    
+
     if (subdomain !== undefined) {
       updateData.subdomain = subdomain.trim().toLowerCase() || null;
     }
-    
+
     if (isActive !== undefined) {
       updateData.isActive = isActive;
     }
-    
+
     if (settings !== undefined) {
       // Check if business type is being changed
-      const currentBusinessType = oldTenant.settings?.businessType;
+      const currentBusinessType = (oldTenant.settings as Record<string, unknown> | null)?.businessType;
       const newBusinessType = settings.businessType;
-      
+
       // Merge settings first
-      let mergedSettings = { ...oldTenant.settings, ...settings };
-      
+      let mergedSettings = { ...(oldTenant.settings as Record<string, unknown>), ...settings };
+
       // Apply business type defaults if business type is being set or changed
       if (newBusinessType && newBusinessType !== currentBusinessType) {
         mergedSettings = applyBusinessTypeDefaults(mergedSettings, newBusinessType);
       }
-      
+
       updateData.settings = mergedSettings;
     }
 
-    const tenant = await Tenant.findOneAndUpdate(
-      { slug },
-      updateData,
-      { new: true, runValidators: true }
-    );
-    
-    if (!tenant) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+    let tenant;
+    try {
+      tenant = await prisma.tenant.update({ where: { id: oldTenant.id }, data: updateData });
+    } catch (updateErr: unknown) {
+      if (updateErr instanceof Prisma.PrismaClientKnownRequestError && updateErr.code === 'P2025') {
+        return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      }
+      throw updateErr;
     }
 
     // Track changes
     const changes: Record<string, any> = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
     Object.keys(updateData).forEach(key => {
-      if (key !== 'settings' && oldTenant[key as keyof typeof oldTenant] !== updateData[key]) {
+      if (key !== 'settings' && (oldTenant as any)[key] !== (updateData as any)[key]) { // eslint-disable-line @typescript-eslint/no-explicit-any
         changes[key] = {
-          old: oldTenant[key as keyof typeof oldTenant],
-          new: updateData[key],
+          old: (oldTenant as any)[key], // eslint-disable-line @typescript-eslint/no-explicit-any
+          new: (updateData as any)[key], // eslint-disable-line @typescript-eslint/no-explicit-any
         };
       }
     });
@@ -113,18 +112,18 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     await createAuditLog(request, {
-      tenantId: tenant._id,
+      tenantId: tenant.id,
       action: AuditActions.UPDATE,
       entityType: 'tenant',
-      entityId: tenant._id.toString(),
+      entityId: tenant.id,
       changes,
     });
-    
-    return NextResponse.json({ success: true, data: tenant });
+
+    return NextResponse.json({ success: true, data: { _id: tenant.id, ...tenant } });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     const t = await getValidationTranslatorFromRequest(request);
-    if (error.code === 11000) {
-      const field = Object.keys(error.keyPattern)[0];
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      const field = (error.meta?.target as string[] | undefined)?.[0] || 'field';
       const errorMsg = t('validation.fieldAlreadyExists', '{field} already exists').replace('{field}', field);
       return NextResponse.json(
         { success: false, error: errorMsg },
@@ -143,35 +142,34 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const { slug } = await params;
     const t = await getValidationTranslatorFromRequest(request);
 
-    const tenant = await Tenant.findOne({ slug }).lean();
+    const tenant = await getTenantBySlugAny(slug);
     if (!tenant) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    if (!(await hasTenantPermission(user.role, tenant._id.toString(), 'tenant_profile.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenant.id, 'tenant_profile.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
     // Soft delete - set isActive to false
-    await Tenant.findOneAndUpdate({ slug }, { isActive: false });
+    await prisma.tenant.update({ where: { id: tenant.id }, data: { isActive: false } });
 
     await createAuditLog(request, {
-      tenantId: tenant._id,
+      tenantId: tenant.id,
       action: AuditActions.DELETE,
       entityType: 'tenant',
-      entityId: tenant._id.toString(),
+      entityId: tenant.id,
       changes: { slug: tenant.slug, name: tenant.name },
     });
-    
+
     return NextResponse.json({ success: true, data: {} });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     if (error.message === 'Unauthorized' || error.message.includes('Forbidden')) {
@@ -183,4 +181,3 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     return handleApiError(error);
   }
 }
-

@@ -1,17 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import ProductBundle from '@/models/ProductBundle';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { logger } from '@/lib/logger';
+import { bulkSetBundlesActive } from '@/lib/data/bundles';
 
 /**
  * Bulk operations for bundles (activate/deactivate)
  */
 export async function PUT(request: NextRequest) {
   try {
-    await connectDB();
     await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
 
@@ -38,10 +36,7 @@ export async function PUT(request: NextRequest) {
 
     const isActive = action === 'activate';
 
-    const result = await ProductBundle.updateMany(
-      { _id: { $in: bundleIds }, tenantId },
-      { $set: { isActive } }
-    );
+    const modifiedCount = await bulkSetBundlesActive(tenantId, bundleIds, isActive);
 
     // Create audit log for bulk operation
     await createAuditLog(request, {
@@ -52,14 +47,14 @@ export async function PUT(request: NextRequest) {
       changes: {
         bundleIds,
         action,
-        count: result.modifiedCount,
+        count: modifiedCount,
       },
     });
 
     return NextResponse.json({
       success: true,
-      message: `${result.modifiedCount} bundle(s) ${action}d successfully`,
-      modifiedCount: result.modifiedCount,
+      message: `${modifiedCount} bundle(s) ${action}d successfully`,
+      modifiedCount,
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Error in bulk bundle operation:', error);

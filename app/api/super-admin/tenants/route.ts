@@ -1,21 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
-import Subscription from '@/models/Subscription';
-import SubscriptionPlan from '@/models/SubscriptionPlan';
-import User from '@/models/User';
-import BillingEvent from '@/models/BillingEvent';
-import SuperAdminAction from '@/models/SuperAdminAction';
+import prisma from '@/lib/prisma';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { applyBusinessTypeDefaults } from '@/lib/business-types';
+import { createUser } from '@/lib/data/users';
 import crypto from 'crypto';
+import type { Prisma } from '@prisma/client';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     await requireRole(request, ['super_admin']);
 
     const { searchParams } = new URL(request.url);
@@ -24,30 +19,42 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '20', 10);
 
-    const query: Record<string, unknown> = {};
+    const where: Prisma.TenantWhereInput = {};
     if (search) {
-      query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { slug: { $regex: search, $options: 'i' } },
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { slug: { contains: search, mode: 'insensitive' } },
       ];
     }
-    if (activeFilter === 'true') query.isActive = true;
-    if (activeFilter === 'false') query.isActive = false;
+    if (activeFilter === 'true') where.isActive = true;
+    if (activeFilter === 'false') where.isActive = false;
 
-    const total = await Tenant.countDocuments(query);
+    const total = await prisma.tenant.count({ where });
     const pages = Math.ceil(total / limit);
     const skip = (page - 1) * limit;
 
-    const tenants = await Tenant.find(query)
-      .select('slug name settings.businessType settings.currency settings.language settings.email isActive onboardingStatus notes createdAt')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .lean();
+    const tenants = await prisma.tenant.findMany({
+      where,
+      select: {
+        id: true,
+        slug: true,
+        name: true,
+        settings: true,
+        isActive: true,
+        onboardingStatus: true,
+        notes: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
+    });
+
+    const data = tenants.map(({ id, ...rest }) => ({ _id: id, ...rest }));
 
     return NextResponse.json({
       success: true,
-      data: tenants,
+      data,
       pagination: {
         page,
         limit,
@@ -68,7 +75,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const user = await requireRole(request, ['super_admin']);
 
     const body = await request.json();
@@ -88,7 +94,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const existing = await Tenant.findOne({ slug }).lean();
+    const existing = await prisma.tenant.findUnique({ where: { slug } });
     if (existing) {
       return NextResponse.json(
         { success: false, error: 'A tenant with this slug already exists' },
@@ -102,38 +108,44 @@ export async function POST(request: NextRequest) {
     if (email) settings = { ...settings, email };
     if (businessType) settings = applyBusinessTypeDefaults(settings, businessType);
 
-    const tenant = await Tenant.create({
-      slug,
-      name,
-      settings,
-      isActive: true,
-      onboardingStatus: 'in_progress',
-      createdBy: user.userId,
+    const tenant = await prisma.tenant.create({
+      data: {
+        slug,
+        name,
+        settings: settings as unknown as Prisma.InputJsonValue,
+        isActive: true,
+        onboardingStatus: 'in_progress',
+        createdBy: user.userId,
+      },
     });
 
     // Auto-provision: find starter plan and create a trial subscription
-    const starterPlan = await SubscriptionPlan.findOne({ tier: 'starter', isActive: true }).lean();
+    const starterPlan = await prisma.subscriptionPlan.findFirst({ where: { tier: 'starter', isActive: true } });
     let subscription = null;
     if (starterPlan) {
       const trialEnd = new Date();
       trialEnd.setDate(trialEnd.getDate() + trialDays);
-      subscription = await Subscription.create({
-        tenantId: tenant._id,
-        planId: starterPlan._id,
-        status: 'trial',
-        isTrial: true,
-        trialEndDate: trialEnd,
-        nextBillingDate: trialEnd,
-        billingCycle: 'monthly',
+      subscription = await prisma.subscription.create({
+        data: {
+          tenantId: tenant.id,
+          planId: starterPlan.id,
+          status: 'trial',
+          isTrial: true,
+          trialEndDate: trialEnd,
+          nextBillingDate: trialEnd,
+          billingCycle: 'monthly',
+        },
       });
-      await BillingEvent.create({
-        tenantId: tenant._id,
-        subscriptionId: subscription._id,
-        type: 'trial_started',
-        amount: 0,
-        currency: currency || 'PHP',
-        description: `Trial started for ${trialDays} days on ${(starterPlan as { name: string }).name} plan`,
-        recordedBy: user.userId,
+      await prisma.billingEvent.create({
+        data: {
+          tenantId: tenant.id,
+          subscriptionId: subscription.id,
+          type: 'trial_started',
+          amount: 0,
+          currency: currency || 'PHP',
+          description: `Trial started for ${trialDays} days on ${starterPlan.name} plan`,
+          recordedBy: user.userId,
+        },
       });
     }
 
@@ -141,48 +153,50 @@ export async function POST(request: NextRequest) {
     let ownerUser = null;
     let tempPassword = null;
     if (ownerEmail) {
-      const existingUser = await User.findOne({ email: ownerEmail.toLowerCase() }).lean();
+      const existingUser = await prisma.user.findFirst({ where: { email: ownerEmail.toLowerCase() } });
       if (!existingUser) {
         tempPassword = crypto.randomBytes(8).toString('hex');
-        ownerUser = await User.create({
+        ownerUser = await createUser({
           email: ownerEmail.toLowerCase(),
           password: tempPassword,
           name: ownerName || name,
           role: 'owner',
-          tenantId: tenant._id,
+          tenantId: tenant.id,
           isActive: true,
         });
       }
     }
 
     await createAuditLog(request, {
-      tenantId: tenant._id,
+      tenantId: tenant.id,
       userId: user.userId,
       action: AuditActions.CREATE,
       entityType: 'tenant',
-      entityId: tenant._id.toString(),
+      entityId: tenant.id,
       changes: { slug, name },
       metadata: { createdBy: user.userId, role: 'super_admin' },
     });
 
     const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '';
-    await SuperAdminAction.create({
-      adminUserId: user.userId,
-      action: 'tenant.create',
-      targetType: 'Tenant',
-      targetId: tenant._id.toString(),
-      description: `Created tenant "${name}" (${slug})`,
-      changes: { slug, name, ownerEmail: ownerEmail || null },
-      ipAddress: ip,
-      userAgent: request.headers.get('user-agent') || '',
+    await prisma.superAdminAction.create({
+      data: {
+        adminUserId: user.userId,
+        action: 'tenant.create',
+        targetType: 'Tenant',
+        targetId: tenant.id,
+        description: `Created tenant "${name}" (${slug})`,
+        changes: { slug, name, ownerEmail: ownerEmail || null },
+        ipAddress: ip,
+        userAgent: request.headers.get('user-agent') || '',
+      },
     });
 
     return NextResponse.json({
       success: true,
-      data: tenant,
+      data: { ...tenant, _id: tenant.id },
       provisioned: {
-        subscription: subscription ? { id: subscription._id, planTier: 'starter', trialDays } : null,
-        ownerUser: ownerUser ? { id: ownerUser._id, email: ownerEmail, tempPassword } : null,
+        subscription: subscription ? { id: subscription.id, planTier: 'starter', trialDays } : null,
+        ownerUser: ownerUser ? { id: ownerUser.id, email: ownerEmail, tempPassword } : null,
       },
     }, { status: 201 });
   } catch (error: unknown) {

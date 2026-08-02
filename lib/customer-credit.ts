@@ -1,5 +1,4 @@
-import Payment from '@/models/Payment';
-import type { Types } from 'mongoose';
+import prisma from '@/lib/prisma';
 
 export function wouldExceedCreditLimit(
   currentBalance: number,
@@ -21,22 +20,18 @@ export function calculateOnAccountRefundAmount(
 }
 
 export async function getOnAccountTotalForTransaction(
-  tenantId: string | Types.ObjectId,
-  transactionId: string | Types.ObjectId,
+  tenantId: string,
+  transactionId: string,
   transactionTotal: number,
   paymentMethod: string
 ): Promise<number> {
-  const onAccountPayments = await Payment.find({
-    tenantId,
-    transactionId,
-    method: 'on_account',
-    status: 'completed',
-  })
-    .select('amount')
-    .lean();
+  const onAccountPayments = await prisma.payment.findMany({
+    where: { tenantId, transactionId, method: 'on_account', status: 'completed' },
+    select: { amount: true },
+  });
 
   if (onAccountPayments.length > 0) {
-    return onAccountPayments.reduce((sum, payment) => sum + (payment.amount || 0), 0);
+    return onAccountPayments.reduce((sum, payment) => sum + Number(payment.amount), 0);
   }
 
   if (paymentMethod === 'on_account') {

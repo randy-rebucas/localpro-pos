@@ -1,35 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
-import mongoose from 'mongoose';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
-import Device from '@/models/Device';
-import Transaction from '@/models/Transaction';
-import Payment from '@/models/Payment';
-import Product from '@/models/Product';
-import Discount from '@/models/Discount';
+import { Prisma } from '@prisma/client';
+import prisma from '@/lib/prisma';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateAndSanitize, validateTransaction } from '@/lib/validation';
 import { generateReceiptNumber, isDuplicateReceiptNumberError } from '@/lib/receipt';
 import { updateStock, updateBundleStock, getProductStock } from '@/lib/stock';
-import ProductBundle from '@/models/ProductBundle';
-import StockMovement from '@/models/StockMovement';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { checkSubscriptionLimit, SubscriptionService, checkFeatureAccess } from '@/lib/subscription';
 import { logger } from '@/lib/logger';
 import { calculateTax } from '@/lib/tax-calculation';
-import Customer from '@/models/Customer';
-import LoyaltyConfig from '@/models/LoyaltyConfig';
-import LoyaltyTransaction from '@/models/LoyaltyTransaction';
-import Table from '@/models/Table';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { wouldExceedCreditLimit } from '@/lib/customer-credit';
-import {
-  runWithOptionalMongoTransaction,
-  sessionOpts,
-  withOptionalSession,
-} from '@/lib/mongo-session';
+import { runInTransaction, type PrismaTx } from '@/lib/db-transaction';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface VariationInput {
   size?: string;
@@ -94,12 +80,15 @@ function normalizeTransactionPaymentMethod(m: string): string {
   throw new Error(`Invalid payment method: ${m}`);
 }
 
+/** OrderType's Prisma client value uses underscores (dine_in), the API contract uses hyphens (dine-in). */
+function toOrderTypeEnum(v?: string): 'dine_in' | 'takeout' | 'delivery' | undefined {
+  if (v === 'dine-in') return 'dine_in';
+  if (v === 'takeout' || v === 'delivery') return v;
+  return undefined;
+}
+
 function getTransactionErrorStatus(error: unknown): number {
-  if (error && typeof error === 'object') {
-    const err = error as { name?: string; code?: number; message?: string };
-    if (err.name === 'ValidationError' || err.name === 'CastError') return 400;
-    if (err.code === 11000) return 400;
-  }
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return 400;
   const message = error instanceof Error ? error.message.toLowerCase() : '';
   const businessPatterns = [
     'insufficient stock',
@@ -120,12 +109,12 @@ function getTransactionErrorStatus(error: unknown): number {
 }
 
 interface TransactionItemRecord {
-  product: unknown;
+  product?: string;
   name: string;
   price: number;
   quantity: number;
   subtotal: number;
-  bundleId?: unknown;
+  bundleId?: string;
   categoryId?: string;
   taxExempt?: boolean;
   zeroRated?: boolean;
@@ -134,7 +123,6 @@ interface TransactionItemRecord {
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     // Require authentication — financial data must not be public
     let tenantId: string;
     try {
@@ -155,25 +143,31 @@ export async function GET(request: NextRequest) {
     const skip = (page - 1) * limit;
     const customerIdFilter = searchParams.get('customerId');
 
-    const txQuery: Record<string, unknown> = { tenantId, isActive: { $ne: false } };
+    const where: Prisma.TransactionWhereInput = { tenantId, isActive: true };
     if (customerIdFilter) {
-      txQuery.customerId = customerIdFilter;
+      where.customerId = customerIdFilter;
     }
 
-    const transactions = await Transaction.find(txQuery)
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .skip(skip)
-      .populate('items.product', 'name')
-      .populate('customerId', 'firstName lastName')
-      .populate('userId', 'name email')
-      .lean();
+    const [transactions, total] = await Promise.all([
+      prisma.transaction.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip,
+        include: {
+          items: { include: { product: { select: { name: true } } } },
+          customer: { select: { firstName: true, lastName: true } },
+          user: { select: { name: true, email: true } },
+        },
+      }),
+      prisma.transaction.count({ where }),
+    ]);
 
-    const total = await Transaction.countDocuments(txQuery);
+    const data = transactions.map((t) => serializeTransaction(t));
 
     return NextResponse.json({
       success: true,
-      data: transactions || [],
+      data,
       pagination: {
         total,
         page,
@@ -187,9 +181,34 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// Converts Decimal/BigInt fields to plain numbers and maps `id` -> `_id` for
+// API-contract compatibility with the frontend (which expects `_id`).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function serializeTransaction(t: any): Record<string, unknown> {
+  const { id, items, customer, user, ...rest } = t;
+  const out: Record<string, unknown> = { _id: id, ...rest };
+  for (const key of [
+    'subtotal', 'discountAmount', 'taxExemptAmount', 'zeroRatedAmount', 'taxAmount',
+    'total', 'cashReceived', 'change', 'displayTotal',
+  ]) {
+    if (out[key] !== null && out[key] !== undefined) out[key] = Number(out[key]);
+  }
+  if (items) {
+    out.items = items.map((item: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+      ...item,
+      _id: item.id,
+      product: item.product ? { _id: item.productId, name: item.product.name } : item.productId,
+      price: Number(item.price),
+      subtotal: Number(item.subtotal),
+    }));
+  }
+  if (customer) out.customerId = { _id: t.customerId, firstName: customer.firstName, lastName: customer.lastName };
+  if (user) out.userId = { _id: t.userId, name: user.name, email: user.email };
+  return out;
+}
+
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     // SECURITY: Validate tenant access for authenticated requests
     let tenantId: string;
     let user: { userId: string; tenantId: string; email: string; role: string };
@@ -226,7 +245,7 @@ export async function POST(request: NextRequest) {
 
     const { items, paymentMethod, cashReceived, notes, discountCode, branchId, payments, scPwdName, scPwdId, deviceId } = data as unknown as TransactionInput;
     const customerId = body.customerId as string | undefined;
-    if (customerId && !mongoose.Types.ObjectId.isValid(customerId)) {
+    if (customerId && !UUID_RE.test(customerId)) {
       return NextResponse.json({ success: false, error: 'Invalid customer ID' }, { status: 400 });
     }
     const loyaltyPointsToRedeem = typeof body.loyaltyPointsToRedeem === 'number' ? Math.floor(body.loyaltyPointsToRedeem) : 0;
@@ -243,15 +262,13 @@ export async function POST(request: NextRequest) {
     const splitPayments = Array.isArray(body.splitPayments) ? body.splitPayments : undefined;
 
     // Check subscription transaction limits
-    const currentTransactionCount = await Transaction.countDocuments({
-      tenantId,
-      createdAt: {
-        $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-        $lt: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1)
-      }
+    const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const nextMonthStart = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1);
+    const currentTransactionCount = await prisma.transaction.count({
+      where: { tenantId, createdAt: { gte: monthStart, lt: nextMonthStart } },
     });
     try {
-      await checkSubscriptionLimit(tenantId.toString(), 'maxTransactions', currentTransactionCount);
+      await checkSubscriptionLimit(tenantId, 'maxTransactions', currentTransactionCount);
     } catch (limitError: unknown) {
       return NextResponse.json(
         { success: false, error: (limitError as Error).message },
@@ -262,34 +279,40 @@ export async function POST(request: NextRequest) {
     // ─── Loyalty: pre-validate customer and redemption ───
     let loyaltyEnabled = false;
     let loyaltyConfig: { pointsPerPeso: number; pesoPerPoint: number; minRedemption: number; isEnabled: boolean } | null = null;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let loyaltyCustomer: any = null;
+    let loyaltyCustomer: { id: string; loyaltyPointsBalance: number } | null = null;
     let loyaltyDiscountAmount = 0;
 
     try {
-      await checkFeatureAccess(tenantId.toString(), 'enableLoyaltyProgram');
+      await checkFeatureAccess(tenantId, 'enableLoyaltyProgram');
       loyaltyEnabled = true;
     } catch {
       // Feature not available for this plan — loyalty is silently skipped
     }
 
     if (loyaltyEnabled && customerId) {
-      const foundConfig = await LoyaltyConfig.findOne({ tenantId }).lean();
-      loyaltyConfig = foundConfig ?? { pointsPerPeso: 1, pesoPerPoint: 0.10, minRedemption: 100, isEnabled: true };
+      const foundConfig = await prisma.loyaltyConfig.findUnique({ where: { tenantId } });
+      loyaltyConfig = foundConfig
+        ? {
+            pointsPerPeso: Number(foundConfig.pointsPerPeso),
+            pesoPerPoint: Number(foundConfig.pesoPerPoint),
+            minRedemption: foundConfig.minRedemption,
+            isEnabled: foundConfig.isEnabled,
+          }
+        : { pointsPerPeso: 1, pesoPerPoint: 0.10, minRedemption: 100, isEnabled: true };
 
       if (!loyaltyConfig.isEnabled) {
         loyaltyEnabled = false;
       }
 
       if (loyaltyEnabled) {
-        const customer = await Customer.findOne({ _id: customerId, tenantId });
+        const customer = await prisma.customer.findFirst({ where: { id: customerId, tenantId } });
         if (!customer) {
           return NextResponse.json({ success: false, error: 'Customer not found' }, { status: 404 });
         }
-        loyaltyCustomer = customer;
+        loyaltyCustomer = { id: customer.id, loyaltyPointsBalance: customer.loyaltyPointsBalance ?? 0 };
 
         if (loyaltyPointsToRedeem > 0) {
-          const balance = customer.loyaltyPointsBalance ?? 0;
+          const balance = loyaltyCustomer.loyaltyPointsBalance;
           if (loyaltyPointsToRedeem < loyaltyConfig.minRedemption) {
             return NextResponse.json(
               { success: false, error: `Minimum ${loyaltyConfig.minRedemption} points required for redemption` },
@@ -331,7 +354,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Support for multiple payment methods (split payments)
-    // Prefer `payments`; map restaurant `splitPayments` from body when present.
     const paymentsFromSplit: PaymentInput[] | undefined =
       Array.isArray(splitPayments) && splitPayments.length > 0
         ? splitPayments.map((sp: { method: string; amount: number; reference?: string }) => ({
@@ -364,35 +386,37 @@ export async function POST(request: NextRequest) {
     let subtotal = 0;
 
     // Batch-load all products and bundles upfront to avoid N+1 queries
-    const productIds = items.filter(i => i.productId && !i.bundleId).map(i => i.productId);
-    const bundleIds = items.filter(i => i.bundleId).map(i => i.bundleId);
+    const productIds = items.filter((i) => i.productId && !i.bundleId).map((i) => i.productId as string);
+    const bundleIds = items.filter((i) => i.bundleId).map((i) => i.bundleId as string);
 
     const [productsArray, bundlesArray] = await Promise.all([
       productIds.length > 0
-        ? Product.find({ _id: { $in: productIds }, tenantId }).lean()
+        ? prisma.product.findMany({ where: { id: { in: productIds }, tenantId } })
         : Promise.resolve([]),
       bundleIds.length > 0
-        ? ProductBundle.find({ _id: { $in: bundleIds }, tenantId, isActive: true }).lean()
+        ? prisma.productBundle.findMany({ where: { id: { in: bundleIds }, tenantId, isActive: true }, include: { items: true } })
         : Promise.resolve([]),
     ]);
 
-    const productMap = new Map(productsArray.map(p => [p._id.toString(), p]));
-    const bundleMap = new Map(bundlesArray.map(b => [b._id.toString(), b]));
+    const productMap = new Map(productsArray.map((p) => [p.id, p]));
+    const bundleMap = new Map(bundlesArray.map((b) => [b.id, b]));
 
     // Also batch-load all products referenced by bundles
-    const bundleProductIds = bundlesArray.flatMap(b => b.items.map((bi: any) => bi.productId)); // eslint-disable-line @typescript-eslint/no-explicit-any
+    const bundleProductIds = bundlesArray.flatMap((b) => b.items.map((bi) => bi.productId));
     if (bundleProductIds.length > 0) {
-      const bundleProducts = await Product.find({ _id: { $in: bundleProductIds }, tenantId }).lean();
+      const bundleProducts = await prisma.product.findMany({ where: { id: { in: bundleProductIds }, tenantId } });
       for (const bp of bundleProducts) {
-        if (!productMap.has(bp._id.toString())) {
-          productMap.set(bp._id.toString(), bp);
+        if (!productMap.has(bp.id)) {
+          productMap.set(bp.id, bp);
         }
       }
     }
 
     for (const item of items) {
       const { productId, quantity, variation, bundleId } = item;
-      const itemModifiers = Array.isArray((item as any).modifiers) ? (item as any).modifiers : undefined; // eslint-disable-line @typescript-eslint/no-explicit-any
+      const itemModifiers = Array.isArray((item as unknown as Record<string, unknown>).modifiers)
+        ? ((item as unknown as Record<string, unknown>).modifiers as Array<{ name: string; chosenOption: string; price: number }>)
+        : undefined;
 
       // Handle bundles
       if (bundleId) {
@@ -403,21 +427,21 @@ export async function POST(request: NextRequest) {
 
         // Check stock for all bundle items - but respect allowOutOfStockSales and trackInventory
         for (const bundleItem of bundle.items) {
-          const bundleProduct = productMap.get(bundleItem.productId.toString());
+          const bundleProduct = productMap.get(bundleItem.productId);
           if (!bundleProduct) {
             continue; // Skip if product not found (shouldn't happen, but safety check)
           }
 
-          const trackInventory = bundleProduct.trackInventory !== false; // Default to true if not set
+          const trackInventory = bundleProduct.trackInventory !== false;
           const allowOutOfStockSales = bundleProduct.allowOutOfStockSales === true;
 
           if (trackInventory && !allowOutOfStockSales) {
             const availableStock = await getProductStock(
-              bundleItem.productId.toString(),
+              bundleItem.productId,
               tenantId,
               {
                 branchId: typeof branchId === 'string' ? branchId : undefined,
-                variation: bundleItem.variation,
+                variation: (bundleItem.variation as VariationInput | null) ?? undefined,
               }
             );
 
@@ -438,35 +462,36 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        const itemSubtotal = bundle.price * quantity;
+        const bundlePrice = Number(bundle.price);
+        const itemSubtotal = bundlePrice * quantity;
         subtotal += itemSubtotal;
 
         transactionItems.push({
-          product: bundle._id,
+          product: undefined,
+          bundleId: bundle.id,
           name: bundle.name,
-          price: bundle.price,
+          price: bundlePrice,
           quantity: quantity,
           subtotal: itemSubtotal,
-          bundleId: bundle._id,
         });
       }
       // Handle regular products
       else {
-        const product = productId ? productMap.get(productId as string) : undefined;
+        const product = productId ? productMap.get(productId) : undefined;
         if (!product) {
           const errorMsg = t('validation.productNotFoundInTransaction', 'Product {productId} not found').replace('{productId}', String(productId));
           return NextResponse.json({ success: false, error: errorMsg }, { status: 404 });
         }
 
         // Check stock (considering variations and branches) - but respect allowOutOfStockSales and trackInventory
-        const trackInventory = product.trackInventory !== false; // Default to true if not set
+        const trackInventory = product.trackInventory !== false;
         const allowOutOfStockSales = product.allowOutOfStockSales === true;
 
         if (trackInventory && !allowOutOfStockSales) {
           if (!productId) {
             return NextResponse.json({ success: false, error: t('validation.productIdMissing', 'Product ID is missing') }, { status: 400 });
           }
-          const availableStock = await getProductStock(productId as string, tenantId, {
+          const availableStock = await getProductStock(productId, tenantId, {
             branchId: typeof branchId === 'string' ? branchId : undefined,
             variation,
           });
@@ -487,9 +512,10 @@ export async function POST(request: NextRequest) {
         }
 
         // Get price (variation price override or base price)
-        let itemPrice = product.price;
+        let itemPrice = Number(product.price);
         if (variation && product.hasVariations && product.variations) {
-          const variationData = product.variations.find((v: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+          const variations = product.variations as unknown as Array<{ size?: string; color?: string; type?: string; price?: number }>;
+          const variationData = variations.find((v) => {
             const matchSize = !variation.size || v.size === variation.size;
             const matchColor = !variation.color || v.color === variation.color;
             const matchType = !variation.type || v.type === variation.type;
@@ -502,18 +528,19 @@ export async function POST(request: NextRequest) {
 
         // Add modifier surcharge to item price
         const modifierSurcharge = itemModifiers
-          ? (itemModifiers as Array<{ price: number }>).reduce((s, m) => s + (m.price || 0), 0)
+          ? itemModifiers.reduce((s, m) => s + (m.price || 0), 0)
           : 0;
         const effectiveItemPrice = itemPrice + modifierSurcharge;
         const itemSubtotal = effectiveItemPrice * quantity;
         subtotal += itemSubtotal;
 
         transactionItems.push({
-          product: product._id,
+          product: product.id,
           name: product.name,
           price: effectiveItemPrice,
           quantity: quantity,
           subtotal: itemSubtotal,
+          categoryId: product.categoryId ?? undefined,
           taxExempt: product.taxExempt || false,
           zeroRated: product.zeroRated || false,
           modifiers: itemModifiers || undefined,
@@ -528,34 +555,31 @@ export async function POST(request: NextRequest) {
 
     if (discountCode) {
       const now = new Date();
+      const code = typeof discountCode === 'string' ? discountCode.toUpperCase() : '';
 
-      // Atomic check + increment: find the discount and increment usage in one operation.
-      // The query filter ensures validity, active status, and usage limit in the same step,
+      // Atomic check + increment: a single UPDATE...WHERE...RETURNING guarantees
+      // the validity/active/usage-limit check and the increment happen together,
       // preventing race conditions where two transactions pass the check simultaneously.
-      const discount = await Discount.findOneAndUpdate(
-        {
-          tenantId,
-          code: typeof discountCode === 'string' ? discountCode.toUpperCase() : '',
-          isActive: true,
-          validFrom: { $lte: now },
-          validUntil: { $gte: now },
-          $or: [
-            { usageLimit: { $exists: false } },
-            { usageLimit: null },
-            { usageLimit: 0 },
-            { $expr: { $lt: ['$usageCount', '$usageLimit'] } },
-          ],
-        },
-        { $inc: { usageCount: 1 } },
-        { new: false } // return pre-increment doc for calculations
-      );
+      const updated = await prisma.$queryRaw<Array<{
+        id: string; code: string; type: string; value: string; category: string;
+        min_purchase_amount: string | null; max_discount_amount: string | null;
+      }>>`
+        UPDATE discounts
+        SET usage_count = usage_count + 1
+        WHERE tenant_id = ${tenantId}::uuid
+          AND code = ${code}
+          AND is_active = true
+          AND valid_from <= ${now}
+          AND valid_until >= ${now}
+          AND (usage_limit IS NULL OR usage_count < usage_limit)
+        RETURNING id, code, type, value, category, min_purchase_amount, max_discount_amount
+      `;
+
+      const discount = updated[0];
 
       if (!discount) {
         // Lookup without filters to give a specific error message
-        const rawDiscount = await Discount.findOne({
-          tenantId,
-          code: typeof discountCode === 'string' ? discountCode.toUpperCase() : '',
-        });
+        const rawDiscount = await prisma.discount.findFirst({ where: { tenantId, code } });
 
         if (!rawDiscount || !rawDiscount.isActive) {
           return NextResponse.json(
@@ -576,11 +600,14 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      const minPurchaseAmount = discount.min_purchase_amount ? Number(discount.min_purchase_amount) : null;
+      const maxDiscountAmount = discount.max_discount_amount ? Number(discount.max_discount_amount) : null;
+      const discountValue = Number(discount.value);
+
       // Check minimum purchase amount (rollback usage if not met)
-      if (discount.minPurchaseAmount && subtotal < discount.minPurchaseAmount) {
-        // Rollback the usage increment
-        await Discount.findByIdAndUpdate(discount._id, { $inc: { usageCount: -1 } });
-        const errorMsg = t('validation.minimumPurchaseAmount', 'Minimum purchase amount of {amount} required').replace('{amount}', discount.minPurchaseAmount.toString());
+      if (minPurchaseAmount && subtotal < minPurchaseAmount) {
+        await prisma.discount.update({ where: { id: discount.id }, data: { usageCount: { decrement: 1 } } });
+        const errorMsg = t('validation.minimumPurchaseAmount', 'Minimum purchase amount of {amount} required').replace('{amount}', minPurchaseAmount.toString());
         return NextResponse.json(
           { success: false, error: errorMsg },
           { status: 400 }
@@ -589,12 +616,12 @@ export async function POST(request: NextRequest) {
 
       // Calculate discount amount using integer math to avoid floating point
       if (discount.type === 'percentage') {
-        discountAmount = Math.round((subtotal * discount.value) / 100 * 100) / 100;
-        if (discount.maxDiscountAmount) {
-          discountAmount = Math.min(discountAmount, discount.maxDiscountAmount);
+        discountAmount = Math.round((subtotal * discountValue) / 100 * 100) / 100;
+        if (maxDiscountAmount) {
+          discountAmount = Math.min(discountAmount, maxDiscountAmount);
         }
       } else {
-        discountAmount = Math.min(discount.value, subtotal);
+        discountAmount = Math.min(discountValue, subtotal);
       }
 
       appliedDiscountCode = discount.code;
@@ -626,8 +653,8 @@ export async function POST(request: NextRequest) {
     // Resolve the registered device/terminal (if any) and snapshot its identity onto the
     // transaction, so receipts remain accurate even if the device is later renamed/deactivated.
     let deviceSnapshot: { terminalId: string; deviceSerialNumber: string } | undefined;
-    if (deviceId && mongoose.Types.ObjectId.isValid(deviceId)) {
-      const device = await Device.findOne({ _id: deviceId, tenantId, isActive: true }).lean();
+    if (deviceId && UUID_RE.test(deviceId)) {
+      const device = await prisma.device.findFirst({ where: { id: deviceId, tenantId, isActive: true } });
       if (device) {
         deviceSnapshot = { terminalId: device.terminalId, deviceSerialNumber: device.serialNumber };
       }
@@ -703,9 +730,9 @@ export async function POST(request: NextRequest) {
 
     const storedPaymentMethod = normalizeTransactionPaymentMethod(finalPaymentMethod);
 
-    // ─── Atomic section: stock + transaction + payments (transaction when DB supports it) ───
-    const checkoutResult = await runWithOptionalMongoTransaction(async (session) => {
-      const paymentRecords: Array<{ _id: unknown; method: string; amount: number; status: string }> = [];
+    // ─── Atomic section: stock + transaction + payments (Serializable Postgres transaction) ───
+    const checkoutResult = await runInTransaction(async (tx: PrismaTx) => {
+      const paymentRecords: Array<{ id: string; method: string; amount: number; status: string }> = [];
       let onAccountCreditChange: {
         customerId: string;
         amount: number;
@@ -733,13 +760,10 @@ export async function POST(request: NextRequest) {
               branchId: typeof branchId === 'string' ? branchId : undefined,
               reason: 'Transaction sale - bundle',
             },
-            session
+            tx
           );
         } else if (productId) {
-          const product = await withOptionalSession(
-            Product.findOne({ _id: productId, tenantId }),
-            session
-          );
+          const product = await tx.product.findFirst({ where: { id: productId, tenantId } });
           if (product && product.trackInventory !== false) {
             await updateStock(
               productId,
@@ -752,53 +776,69 @@ export async function POST(request: NextRequest) {
                 variation,
                 reason: 'Transaction sale',
               },
-              session
+              tx
             );
           }
         }
       }
 
-      let transaction;
+      let transaction: Awaited<ReturnType<typeof tx.transaction.create>> | undefined;
       let receiptNumber = '';
-      const txPayloadBase = {
-        tenantId,
-        branchId: branchId || undefined,
-        items: transactionItems,
-        subtotal,
-        discountCode: appliedDiscountCode,
-        discountCategory: appliedDiscountCategory,
-        discountAmount: discountAmount > 0 ? discountAmount : undefined,
-        scPwdName: (appliedDiscountCategory === 'senior' || appliedDiscountCategory === 'pwd') ? (scPwdName || undefined) : undefined,
-        scPwdId: (appliedDiscountCategory === 'senior' || appliedDiscountCategory === 'pwd') ? (scPwdId || undefined) : undefined,
-        taxExemptAmount: taxResult?.exemptAmount || 0,
-        zeroRatedAmount: taxResult?.zeroRatedAmount || 0,
-        taxAmount: taxAmount > 0 ? taxAmount : undefined,
-        total,
-        paymentMethod: storedPaymentMethod,
-        cashReceived: storedPaymentMethod === 'cash' ? finalCashReceived : undefined,
-        change: storedPaymentMethod === 'cash' ? finalChange : undefined,
-        status: 'completed' as const,
-        customerId: customerId || undefined,
-        userId: user.userId,
-        deviceId: deviceId && mongoose.Types.ObjectId.isValid(deviceId) ? deviceId : undefined,
-        terminalId: deviceSnapshot?.terminalId,
-        deviceSerialNumber: deviceSnapshot?.deviceSerialNumber,
-        notes,
-        orderType: orderType || undefined,
-        tableNumber: tableNumber || undefined,
-        tableId: tableId || undefined,
-        splitCount: splitCount || undefined,
-        splitPayments: splitPayments || undefined,
-      };
 
       for (let receiptAttempt = 0; receiptAttempt < 3; receiptAttempt++) {
         receiptNumber = await generateReceiptNumber(tenantId);
         try {
-          const [txn] = await Transaction.create(
-            [{ ...txPayloadBase, receiptNumber }],
-            sessionOpts(session)
-          );
-          transaction = txn;
+          transaction = await tx.transaction.create({
+            data: {
+              tenantId,
+              branchId: branchId || undefined,
+              subtotal,
+              discountCode: appliedDiscountCode,
+              discountCategory: appliedDiscountCategory as never,
+              discountAmount: discountAmount > 0 ? discountAmount : undefined,
+              scPwdName: (appliedDiscountCategory === 'senior' || appliedDiscountCategory === 'pwd') ? (scPwdName || undefined) : undefined,
+              scPwdId: (appliedDiscountCategory === 'senior' || appliedDiscountCategory === 'pwd') ? (scPwdId || undefined) : undefined,
+              taxExemptAmount: taxResult?.exemptAmount || 0,
+              zeroRatedAmount: taxResult?.zeroRatedAmount || 0,
+              taxAmount: taxAmount > 0 ? taxAmount : undefined,
+              total,
+              paymentMethod: storedPaymentMethod as never,
+              cashReceived: storedPaymentMethod === 'cash' ? finalCashReceived : undefined,
+              change: storedPaymentMethod === 'cash' ? finalChange : undefined,
+              status: 'completed',
+              customerId: customerId || undefined,
+              userId: user.userId,
+              deviceId: deviceId && UUID_RE.test(deviceId) ? deviceId : undefined,
+              terminalId: deviceSnapshot?.terminalId,
+              deviceSerialNumber: deviceSnapshot?.deviceSerialNumber,
+              notes,
+              orderType: toOrderTypeEnum(orderType),
+              tableNumber: tableNumber || undefined,
+              tableId: tableId || undefined,
+              splitCount: splitCount || undefined,
+              receiptNumber,
+              items: {
+                create: transactionItems.map((item) => ({
+                  productId: item.product,
+                  name: item.name,
+                  price: item.price,
+                  quantity: item.quantity,
+                  subtotal: item.subtotal,
+                  modifiers: item.modifiers ?? undefined,
+                })),
+              },
+              splitPayments: splitPayments
+                ? {
+                    create: (splitPayments as Array<{ guestIndex: number; method: string; amount: number; reference?: string }>).map((sp) => ({
+                      guestIndex: sp.guestIndex,
+                      method: sp.method,
+                      amount: sp.amount,
+                      reference: sp.reference,
+                    })),
+                  }
+                : undefined,
+            },
+          });
           break;
         } catch (createErr) {
           if (isDuplicateReceiptNumberError(createErr) && receiptAttempt < 2) {
@@ -815,46 +855,46 @@ export async function POST(request: NextRequest) {
 
       // BIR Grand Total Accumulator: non-resettable, all-time cumulative sales register.
       // Increments atomically with the transaction commit; never decremented on void/refund.
-      await Tenant.updateOne(
-        { _id: tenantId },
-        { $inc: { grandTotalSales: total, grandTotalTransactionCount: 1 } },
-        sessionOpts(session)
-      );
+      await tx.tenant.update({
+        where: { id: tenantId },
+        data: { grandTotalSales: { increment: total }, grandTotalTransactionCount: { increment: 1 } },
+      });
 
       for (const item of items) {
         const { productId, bundleId } = item;
         if (productId || bundleId) {
-          await StockMovement.updateOne(
-            {
+          await tx.stockMovement.updateMany({
+            where: {
               productId: productId || undefined,
               tenantId,
               reason: productId ? 'Transaction sale' : 'Transaction sale - bundle',
-              transactionId: { $exists: false },
+              transactionId: null,
             },
-            { $set: { transactionId: transaction._id } },
-            sessionOpts(session)
-          );
+            data: { transactionId: transaction.id },
+          });
         }
       }
 
       if (loyaltyEnabled && loyaltyCustomer && loyaltyConfig) {
-        const currentBalance = loyaltyCustomer.loyaltyPointsBalance ?? 0;
+        const currentBalance = loyaltyCustomer.loyaltyPointsBalance;
         let newBalance = currentBalance;
         const loyaltyUpdate: Record<string, number> = {};
 
         if (loyaltyPointsToRedeem > 0) {
           const balanceAfterRedeem = Math.max(0, newBalance - loyaltyPointsToRedeem);
-          await LoyaltyTransaction.create([{
-            tenantId,
-            customerId: loyaltyCustomer._id,
-            transactionId: transaction._id,
-            type: 'redeem',
-            points: -loyaltyPointsToRedeem,
-            balanceBefore: newBalance,
-            balanceAfter: balanceAfterRedeem,
-            description: `Redeemed ${loyaltyPointsToRedeem} points (₱${loyaltyDiscountAmount.toFixed(2)} discount)`,
-            createdBy: user.userId,
-          }], sessionOpts(session));
+          await tx.loyaltyTransaction.create({
+            data: {
+              tenantId,
+              customerId: loyaltyCustomer.id,
+              transactionId: transaction.id,
+              type: 'redeem',
+              points: -loyaltyPointsToRedeem,
+              balanceBefore: newBalance,
+              balanceAfter: balanceAfterRedeem,
+              description: `Redeemed ${loyaltyPointsToRedeem} points (₱${loyaltyDiscountAmount.toFixed(2)} discount)`,
+              createdBy: user.userId,
+            },
+          });
           newBalance = balanceAfterRedeem;
           loyaltyUpdate.loyaltyPointsRedeemed = loyaltyPointsToRedeem;
         }
@@ -862,30 +902,28 @@ export async function POST(request: NextRequest) {
         const pointsEarned = Math.floor(total * loyaltyConfig.pointsPerPeso);
         if (pointsEarned > 0) {
           const balanceAfterEarn = newBalance + pointsEarned;
-          await LoyaltyTransaction.create([{
-            tenantId,
-            customerId: loyaltyCustomer._id,
-            transactionId: transaction._id,
-            type: 'earn',
-            points: pointsEarned,
-            balanceBefore: newBalance,
-            balanceAfter: balanceAfterEarn,
-            description: `Earned ${pointsEarned} points from receipt #${transaction.receiptNumber}`,
-            createdBy: user.userId,
-          }], sessionOpts(session));
+          await tx.loyaltyTransaction.create({
+            data: {
+              tenantId,
+              customerId: loyaltyCustomer.id,
+              transactionId: transaction.id,
+              type: 'earn',
+              points: pointsEarned,
+              balanceBefore: newBalance,
+              balanceAfter: balanceAfterEarn,
+              description: `Earned ${pointsEarned} points from receipt #${transaction.receiptNumber}`,
+              createdBy: user.userId,
+            },
+          });
           newBalance = balanceAfterEarn;
           loyaltyUpdate.loyaltyPointsEarned = pointsEarned;
         }
 
         if (Object.keys(loyaltyUpdate).length > 0) {
-          await Transaction.updateOne({ _id: transaction._id }, { $set: loyaltyUpdate }, sessionOpts(session));
+          await tx.transaction.update({ where: { id: transaction.id }, data: loyaltyUpdate });
         }
 
-        await Customer.updateOne(
-          { _id: loyaltyCustomer._id },
-          { $set: { loyaltyPointsBalance: newBalance } },
-          sessionOpts(session)
-        );
+        await tx.customer.update({ where: { id: loyaltyCustomer.id }, data: { loyaltyPointsBalance: newBalance } });
       }
 
       if (body.createPaymentRecord !== false) {
@@ -910,17 +948,19 @@ export async function POST(request: NextRequest) {
               paymentDetails.notes = payment.notes;
             }
 
-            const [paymentRecord] = await Payment.create([{
-              tenantId,
-              transactionId: transaction._id,
-              method: toPaymentRecordMethod(payment.method),
-              amount: payment.amount,
-              status: 'completed',
-              details: Object.keys(paymentDetails).length > 0 ? paymentDetails : undefined,
-              processedBy: user.userId,
-              processedAt: new Date(),
-            }], sessionOpts(session));
-            paymentRecords.push(paymentRecord);
+            const paymentRecord = await tx.payment.create({
+              data: {
+                tenantId,
+                transactionId: transaction.id,
+                method: toPaymentRecordMethod(payment.method),
+                amount: payment.amount,
+                status: 'completed',
+                details: Object.keys(paymentDetails).length > 0 ? (paymentDetails as Prisma.InputJsonValue) : undefined,
+                processedBy: user.userId,
+                processedAt: new Date(),
+              },
+            });
+            paymentRecords.push({ id: paymentRecord.id, method: paymentRecord.method, amount: Number(paymentRecord.amount), status: paymentRecord.status });
           }
         } else {
           const paymentDetails: Record<string, unknown> = {};
@@ -937,42 +977,44 @@ export async function POST(request: NextRequest) {
             paymentDetails.notes = 'On-account (customer balance)';
           }
 
-          const [paymentRecord] = await Payment.create([{
-            tenantId,
-            transactionId: transaction._id,
-            method: toPaymentRecordMethod(finalPaymentMethod),
-            amount: total,
-            status: 'completed',
-            details: Object.keys(paymentDetails).length > 0 ? paymentDetails : undefined,
-            processedBy: user.userId,
-            processedAt: new Date(),
-          }], sessionOpts(session));
-          paymentRecords.push(paymentRecord);
+          const paymentRecord = await tx.payment.create({
+            data: {
+              tenantId,
+              transactionId: transaction.id,
+              method: toPaymentRecordMethod(finalPaymentMethod),
+              amount: total,
+              status: 'completed',
+              details: Object.keys(paymentDetails).length > 0 ? (paymentDetails as Prisma.InputJsonValue) : undefined,
+              processedBy: user.userId,
+              processedAt: new Date(),
+            },
+          });
+          paymentRecords.push({ id: paymentRecord.id, method: paymentRecord.method, amount: Number(paymentRecord.amount), status: paymentRecord.status });
         }
       }
 
       if (onAccountAmountToBill > 0.009 && customerId) {
-        const creditCustomer = await withOptionalSession(
-          Customer.findOne({ _id: customerId, tenantId, isActive: true }).select('accountBalance creditLimit'),
-          session
-        );
+        const creditCustomer = await tx.customer.findFirst({
+          where: { id: customerId, tenantId, isActive: true },
+          select: { accountBalance: true, creditLimit: true },
+        });
 
         if (!creditCustomer) {
           throw new Error(t('validation.customerNotFound', 'Customer not found or inactive'));
         }
 
-        const balanceBefore = creditCustomer.accountBalance ?? 0;
-        if (wouldExceedCreditLimit(balanceBefore, onAccountAmountToBill, creditCustomer.creditLimit)) {
+        const balanceBefore = Number(creditCustomer.accountBalance ?? 0);
+        const creditLimit = creditCustomer.creditLimit !== null ? Number(creditCustomer.creditLimit) : null;
+        if (wouldExceedCreditLimit(balanceBefore, onAccountAmountToBill, creditLimit)) {
           throw new Error(
             t('validation.creditLimitExceeded', "Sale would exceed this customer's credit limit")
           );
         }
 
-        await Customer.updateOne(
-          { _id: customerId, tenantId },
-          { $inc: { accountBalance: onAccountAmountToBill } },
-          sessionOpts(session)
-        );
+        await tx.customer.update({
+          where: { id: customerId },
+          data: { accountBalance: { increment: onAccountAmountToBill } },
+        });
 
         onAccountCreditChange = {
           customerId: String(customerId),
@@ -993,7 +1035,7 @@ export async function POST(request: NextRequest) {
         .filter((id): id is string => Boolean(id));
       if (productIdsForChannel.length) {
         const { pushChannelInventoryForProducts } = await import('@/lib/ecommerce/inventory-push');
-        void pushChannelInventoryForProducts(tenantId.toString(), productIdsForChannel, {
+        void pushChannelInventoryForProducts(tenantId, productIdsForChannel, {
           branchId: typeof branchId === 'string' ? branchId : undefined,
           stockReason: 'Transaction sale',
         });
@@ -1003,10 +1045,10 @@ export async function POST(request: NextRequest) {
     // Reset table status to 'open' after dine-in payment completes
     if (tableId && orderType === 'dine-in') {
       try {
-        await Table.findOneAndUpdate(
-          { _id: tableId, tenantId },
-          { status: 'open', currentOrderId: undefined }
-        );
+        await prisma.table.updateMany({
+          where: { id: tableId, tenantId },
+          data: { status: 'open', currentOrderId: null },
+        });
       } catch (tableErr) {
         logger.error('Failed to reset table status:', tableErr);
         // Non-critical — don't fail the response
@@ -1019,13 +1061,13 @@ export async function POST(request: NextRequest) {
       userId: user.userId,
       action: AuditActions.TRANSACTION_CREATE,
       entityType: 'transaction',
-      entityId: transaction._id.toString(),
+      entityId: transaction.id,
       changes: {
         receiptNumber: transaction.receiptNumber,
         total,
         itemsCount: transactionItems.length,
         paymentCount: paymentRecords.length,
-        paymentIds: paymentRecords.map((p) => String(p._id)),
+        paymentIds: paymentRecords.map((p) => String(p.id)),
         isMultiplePayments: isMultiplePayments,
         onAccountCreditChange,
       },
@@ -1033,15 +1075,11 @@ export async function POST(request: NextRequest) {
 
     // Update subscription usage
     try {
-      const currentTransactionCount = await Transaction.countDocuments({
-        tenantId,
-        createdAt: {
-          $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1), // Start of current month
-          $lt: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1) // Start of next month
-        }
+      const currentTransactionCount = await prisma.transaction.count({
+        where: { tenantId, createdAt: { gte: monthStart, lt: nextMonthStart } },
       });
-      await SubscriptionService.updateUsage(tenantId.toString(), {
-        transactions: currentTransactionCount
+      await SubscriptionService.updateUsage(tenantId, {
+        transactions: currentTransactionCount,
       });
     } catch (usageError) {
       logger.error('Failed to update subscription usage:', usageError);
@@ -1049,10 +1087,21 @@ export async function POST(request: NextRequest) {
     }
 
     // Include payment records in response if created
-    const responseData = transaction.toObject ? transaction.toObject() : transaction;
+    const responseData: Record<string, unknown> = {
+      _id: transaction.id,
+      ...transaction,
+      subtotal: Number(transaction.subtotal),
+      discountAmount: transaction.discountAmount !== null ? Number(transaction.discountAmount) : null,
+      taxExemptAmount: Number(transaction.taxExemptAmount),
+      zeroRatedAmount: Number(transaction.zeroRatedAmount),
+      taxAmount: Number(transaction.taxAmount),
+      total: Number(transaction.total),
+      cashReceived: transaction.cashReceived !== null ? Number(transaction.cashReceived) : null,
+      change: transaction.change !== null ? Number(transaction.change) : null,
+    };
     if (paymentRecords.length > 0) {
-      (responseData as unknown as Record<string, unknown>).payments = paymentRecords.map((p: { _id: unknown; method: string; amount: number; status: string }) => ({
-        _id: p._id,
+      responseData.payments = paymentRecords.map((p) => ({
+        _id: p.id,
         method: p.method,
         amount: p.amount,
         status: p.status,
@@ -1067,4 +1116,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: message }, { status });
   }
 }
-

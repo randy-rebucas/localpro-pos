@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Address from '@/models/Address';
+import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+
+function toApi(address: any) {
+  const { id, ...rest } = address;
+  return { _id: id, ...rest };
+}
 
 /**
  * POST /api/client/address
@@ -13,7 +17,6 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 export async function POST(request: NextRequest) {
   let t: (key: string, fallback: string) => string;
   try {
-    await connectDB();
     t = await getValidationTranslatorFromRequest(request);
 
     const currentUser = await requireAuth(request);
@@ -28,11 +31,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Resolve tenant
-    const Tenant = (await import('@/models/Tenant')).default;
-    const tenant = await Tenant.findOne({
-      $or: [{ slug: tenantId }, ...(tenantId.match(/^[0-9a-fA-F]{24}$/) ? [{ _id: tenantId }] : [])],
-      isActive: true,
-    }).lean();
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tenantId);
+    const tenant = await prisma.tenant.findFirst({
+      where: {
+        isActive: true,
+        OR: [{ slug: tenantId }, ...(isUuid ? [{ id: tenantId }] : [])],
+      },
+    });
 
     if (!tenant) {
       return NextResponse.json(
@@ -43,37 +48,39 @@ export async function POST(request: NextRequest) {
 
     // If this is the default address, unset previous default
     if (isDefault) {
-      await Address.updateMany(
-        { userId: currentUser.userId, tenantId: tenant._id, isDefault: true },
-        { $set: { isDefault: false } }
-      );
+      await prisma.address.updateMany({
+        where: { userId: currentUser.userId, tenantId: tenant.id, isDefault: true },
+        data: { isDefault: false },
+      });
     }
 
     // If user has no addresses, make this the default
-    const existingCount = await Address.countDocuments({ userId: currentUser.userId, tenantId: tenant._id });
+    const existingCount = await prisma.address.count({ where: { userId: currentUser.userId, tenantId: tenant.id } });
 
-    const address = await Address.create({
-      userId: currentUser.userId,
-      tenantId: tenant._id,
-      label: label || 'Home',
-      street,
-      city,
-      state,
-      zipCode,
-      country,
-      isDefault: isDefault || existingCount === 0,
+    const address = await prisma.address.create({
+      data: {
+        userId: currentUser.userId,
+        tenantId: tenant.id,
+        label: label || 'Home',
+        street,
+        city,
+        state,
+        zipCode,
+        country,
+        isDefault: isDefault || existingCount === 0,
+      },
     });
 
     await createAuditLog(request, {
-      tenantId: tenant._id.toString(),
+      tenantId: tenant.id,
       userId: currentUser.userId,
       action: AuditActions.CREATE,
       entityType: 'address',
-      entityId: address._id.toString(),
+      entityId: address.id,
       metadata: { userId: currentUser.userId },
     });
 
-    return NextResponse.json({ success: true, data: address }, { status: 201 });
+    return NextResponse.json({ success: true, data: toApi(address) }, { status: 201 });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     if (error.message === 'Unauthorized') {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });

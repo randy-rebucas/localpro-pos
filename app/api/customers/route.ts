@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import type { FilterQuery } from 'mongoose';
-import connectDB from '@/lib/mongodb';
-import Customer, { type ICustomer } from '@/models/Customer';
+import prisma from '@/lib/prisma';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -11,11 +9,11 @@ import { checkFeatureAccess } from '@/lib/subscription';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
 import { parseCreditLimitInput } from '@/lib/customer-credit';
+import { customerToApi } from '@/lib/data/customers';
+import type { Prisma } from '@prisma/client';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
-
     // Require authentication to prevent unauthenticated customer enumeration
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
@@ -33,31 +31,32 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search');
     const isActive = searchParams.get('isActive');
 
-    const query: FilterQuery<ICustomer> = { tenantId };
+    const where: Prisma.CustomerWhereInput = { tenantId };
     if (searchParams.has('isActive')) {
-      query.isActive = isActive === 'true';
+      where.isActive = isActive === 'true';
     }
     if (search) {
-      const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      query.$or = [
-        { firstName: { $regex: escapedSearch, $options: 'i' } },
-        { lastName: { $regex: escapedSearch, $options: 'i' } },
-        { email: { $regex: escapedSearch, $options: 'i' } },
-        { phone: { $regex: escapedSearch, $options: 'i' } },
+      where.OR = [
+        { firstName: { contains: search, mode: 'insensitive' } },
+        { lastName: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { phone: { contains: search, mode: 'insensitive' } },
       ];
     }
-    
-    const customers = await Customer.find(query)
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .skip(skip)
-      .lean();
-    
-    const total = await Customer.countDocuments(query);
-    
+
+    const [customers, total] = await Promise.all([
+      prisma.customer.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip,
+      }),
+      prisma.customer.count({ where }),
+    ]);
+
     return NextResponse.json({
       success: true,
-      data: customers,
+      data: customers.map(customerToApi),
       pagination: {
         total,
         page,
@@ -72,7 +71,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     // SECURITY: Validate tenant access for authenticated requests
     let tenantId: string;
     try {
@@ -122,17 +120,17 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    
+
     if (!lastName || !lastName.trim()) {
       return NextResponse.json(
         { success: false, error: t('validation.lastNameRequired', 'Last name is required') },
         { status: 400 }
       );
     }
-    
+
     // Check email uniqueness if provided
     if (email) {
-      const existingCustomer = await Customer.findOne({ tenantId, email: email.toLowerCase() });
+      const existingCustomer = await prisma.customer.findFirst({ where: { tenantId, email: email.toLowerCase() } });
       if (existingCustomer) {
         return NextResponse.json(
           { success: false, error: t('validation.emailAlreadyExists', 'Email already exists') },
@@ -140,7 +138,7 @@ export async function POST(request: NextRequest) {
         );
       }
     }
-    
+
     let parsedCreditLimit: number | undefined;
     if (creditLimit !== undefined) {
       const cl = parseCreditLimitInput(creditLimit);
@@ -155,26 +153,28 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const customer = await Customer.create({
-      tenantId,
-      firstName: firstName.trim(),
-      lastName: lastName.trim(),
-      email: email?.toLowerCase().trim(),
-      phone: phone?.trim(),
-      addresses: addresses || [],
-      dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
-      notes: notes?.trim(),
-      tags: tags || [],
-      creditLimit: parsedCreditLimit,
-      isActive: true,
+    const customer = await prisma.customer.create({
+      data: {
+        tenantId,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        email: email?.toLowerCase().trim(),
+        phone: phone?.trim(),
+        addresses: addresses || [],
+        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
+        notes: notes?.trim(),
+        tags: tags || [],
+        creditLimit: parsedCreditLimit,
+        isActive: true,
+      },
     });
-    
+
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.CREATE,
       entityType: 'customer',
-      entityId: customer._id.toString(),
-      changes: { firstName, lastName, email, creditLimit: customer.creditLimit ?? null },
+      entityId: customer.id,
+      changes: { firstName, lastName, email, creditLimit: customer.creditLimit ? Number(customer.creditLimit) : null },
     });
 
     // Send welcome email (#22 - New Customer Welcome Emails)
@@ -182,7 +182,7 @@ export async function POST(request: NextRequest) {
       try {
         const { sendCustomerWelcomeEmail } = await import('@/lib/automations/customer-welcome');
         sendCustomerWelcomeEmail({
-          customerId: customer._id.toString(),
+          customerId: customer.id,
           tenantId,
         }).catch((error) => {
           // Log error but don't fail customer creation
@@ -193,8 +193,8 @@ export async function POST(request: NextRequest) {
         logger.error('Error importing welcome email automation:', error);
       }
     }
-    
-    return NextResponse.json({ success: true, data: customer }, { status: 201 });
+
+    return NextResponse.json({ success: true, data: customerToApi(customer) }, { status: 201 });
   } catch (error) {
     return handleApiError(error, 'Failed to create customer');
   }

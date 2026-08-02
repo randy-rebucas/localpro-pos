@@ -4,10 +4,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { logger } from '@/lib/logger';
+import { getTenantBySlugAny } from '@/lib/data/tenants';
 
 export async function GET(
   request: NextRequest,
@@ -20,20 +20,20 @@ export async function GET(
     }
 
     const { slug } = await params;
-    await connectDB();
 
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await getTenantBySlugAny(slug);
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
+    const settings = (tenant.settings as Record<string, unknown>) || {};
     return NextResponse.json({
       success: true,
-      data: tenant.settings.holidays || [],
+      data: settings.holidays || [],
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Error fetching holidays:', error);
@@ -85,18 +85,17 @@ export async function POST(
       }
     }
 
-    await connectDB();
-
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await getTenantBySlugAny(slug);
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    const holidays = tenant.settings.holidays || [];
+    const existingSettings = (tenant.settings as Record<string, any>) || {}; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const holidays = existingSettings.holidays || [];
     const newHoliday: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
       id: `holiday_${Date.now()}`,
       name,
@@ -111,24 +110,24 @@ export async function POST(
     } else if (type === 'recurring') {
       newHoliday.recurring = recurring;
       // For recurring holidays, we can use a placeholder date or pattern-based date
-      newHoliday.date = recurring?.month && recurring?.dayOfMonth 
+      newHoliday.date = recurring?.month && recurring?.dayOfMonth
         ? `${new Date().getFullYear()}-${String(recurring.month).padStart(2, '0')}-${String(recurring.dayOfMonth).padStart(2, '0')}`
         : '';
     }
 
     holidays.push(newHoliday);
 
-    tenant.settings.holidays = holidays;
-    tenant.markModified('settings.holidays');
-    
     try {
-      await tenant.save();
+      await prisma.tenant.update({
+        where: { id: tenant.id },
+        data: { settings: { ...existingSettings, holidays } },
+      });
       logger.info('Holiday saved successfully:', newHoliday);
     } catch (saveError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       logger.error('Error saving holiday to database:', saveError);
-      return NextResponse.json({ 
-        success: false, 
-        error: `Failed to save holiday: ${saveError.message || 'Database error'}` 
+      return NextResponse.json({
+        success: false,
+        error: `Failed to save holiday: ${saveError.message || 'Database error'}`
       }, { status: 500 });
     }
 
@@ -164,18 +163,17 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'Holiday ID is required' }, { status: 400 });
     }
 
-    await connectDB();
-
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await getTenantBySlugAny(slug);
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    const holidays = tenant.settings.holidays || [];
+    const existingSettings = (tenant.settings as Record<string, any>) || {}; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const holidays = existingSettings.holidays || [];
     const holidayIndex = holidays.findIndex((h: any) => h.id === id); // eslint-disable-line @typescript-eslint/no-explicit-any
 
     if (holidayIndex === -1) {
@@ -184,17 +182,17 @@ export async function PUT(
 
     holidays[holidayIndex] = { ...holidays[holidayIndex], ...updates };
 
-    tenant.settings.holidays = holidays;
-    tenant.markModified('settings.holidays');
-    
     try {
-      await tenant.save();
+      await prisma.tenant.update({
+        where: { id: tenant.id },
+        data: { settings: { ...existingSettings, holidays } },
+      });
       logger.info('Holiday updated successfully:', holidays[holidayIndex]);
     } catch (saveError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       logger.error('Error saving holiday update to database:', saveError);
-      return NextResponse.json({ 
-        success: false, 
-        error: `Failed to update holiday: ${saveError.message || 'Database error'}` 
+      return NextResponse.json({
+        success: false,
+        error: `Failed to update holiday: ${saveError.message || 'Database error'}`
       }, { status: 500 });
     }
 
@@ -230,35 +228,34 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'Holiday ID is required' }, { status: 400 });
     }
 
-    await connectDB();
-
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await getTenantBySlugAny(slug);
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    const holidays = tenant.settings.holidays || [];
+    const existingSettings = (tenant.settings as Record<string, any>) || {}; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const holidays = existingSettings.holidays || [];
     const filtered = holidays.filter((h: any) => h.id !== id); // eslint-disable-line @typescript-eslint/no-explicit-any
 
     if (filtered.length === holidays.length) {
       return NextResponse.json({ success: false, error: 'Holiday not found' }, { status: 404 });
     }
 
-    tenant.settings.holidays = filtered;
-    tenant.markModified('settings.holidays');
-    
     try {
-      await tenant.save();
+      await prisma.tenant.update({
+        where: { id: tenant.id },
+        data: { settings: { ...existingSettings, holidays: filtered } },
+      });
       logger.info('Holiday deleted successfully');
     } catch (saveError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       logger.error('Error saving holiday deletion to database:', saveError);
-      return NextResponse.json({ 
-        success: false, 
-        error: `Failed to delete holiday: ${saveError.message || 'Database error'}` 
+      return NextResponse.json({
+        success: false,
+        error: `Failed to delete holiday: ${saveError.message || 'Database error'}`
       }, { status: 500 });
     }
 

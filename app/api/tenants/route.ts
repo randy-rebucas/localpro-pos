@@ -1,18 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
-import User from '@/models/User';
+import prisma from '@/lib/prisma';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getDefaultTenantSettings } from '@/lib/currency';
+import { createUser } from '@/lib/data/users';
 import { logger } from '@/lib/logger';
-import { TENANT_IS_ACTIVE_FILTER } from '@/lib/tenant-active-query';
+import { Prisma } from '@prisma/client';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
-
     // Check if admin credentials are provided; if so, return full info
     // Otherwise return limited public info for store selector (no auth required)
     let isAdmin = false;
@@ -25,25 +22,54 @@ export async function GET(request: NextRequest) {
     }
 
     if (isAdmin) {
-      const tenants = await Tenant.find(TENANT_IS_ACTIVE_FILTER).select('slug name settings isActive createdAt').lean();
-      return NextResponse.json({ success: true, data: tenants });
+      const tenants = await prisma.tenant.findMany({
+        where: { isActive: { not: false } },
+        select: { id: true, slug: true, name: true, settings: true, isActive: true, createdAt: true },
+      });
+      return NextResponse.json({
+        success: true,
+        data: tenants.map(({ id, ...rest }) => ({ _id: id, ...rest })),
+      });
     }
 
     // Public store directory (web + mobile): enough to pick a tenant by category and name.
     // Omits full street address and theme colors; includes businessType for filtering and city/country for display.
     const businessTypeFilter = request.nextUrl.searchParams.get('businessType')?.trim();
-    const query: Record<string, unknown> = { ...TENANT_IS_ACTIVE_FILTER };
-    if (businessTypeFilter) {
-      const escaped = businessTypeFilter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      query['settings.businessType'] = new RegExp(`^${escaped}$`, 'i');
-    }
 
-    const tenants = await Tenant.find(query)
-      .select(
-        'slug name settings.companyName settings.logo settings.currency settings.language settings.businessType settings.address.city settings.address.country'
-      )
-      .lean();
-    return NextResponse.json({ success: true, data: tenants });
+    const where: Prisma.TenantWhereInput = { isActive: { not: false } };
+    const tenants = await prisma.tenant.findMany({
+      where,
+      select: { id: true, slug: true, name: true, settings: true },
+    });
+
+    // businessType / companyName / logo / currency / language / address live inside
+    // the settings jsonb blob — filter and project in application code.
+    const filtered = businessTypeFilter
+      ? tenants.filter((t) => {
+          const s = t.settings as Record<string, unknown> | null;
+          const bt = s?.businessType;
+          return typeof bt === 'string' && bt.toLowerCase() === businessTypeFilter.toLowerCase();
+        })
+      : tenants;
+
+    const data = filtered.map((t) => {
+      const s = (t.settings as Record<string, any>) || {}; // eslint-disable-line @typescript-eslint/no-explicit-any
+      return {
+        _id: t.id,
+        slug: t.slug,
+        name: t.name,
+        settings: {
+          companyName: s.companyName,
+          logo: s.logo,
+          currency: s.currency,
+          language: s.language,
+          businessType: s.businessType,
+          address: { city: s.address?.city, country: s.address?.country },
+        },
+      };
+    });
+
+    return NextResponse.json({ success: true, data });
   } catch (error: unknown) {
     return NextResponse.json({ success: false, error: 'Failed to fetch tenants' }, { status: 500 });
   }
@@ -51,7 +77,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     // Creating a brand-new tenant is a platform-level action — super_admin only
     await requireRole(request, ['super_admin']);
 
@@ -74,12 +99,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if tenant already exists
-    const existing = await Tenant.findOne({
-      $or: [
-        { slug: slug.toLowerCase() },
-        ...(domain ? [{ domain }] : []),
-        ...(subdomain ? [{ subdomain: subdomain.toLowerCase() }] : []),
-      ]
+    const existing = await prisma.tenant.findFirst({
+      where: {
+        OR: [
+          { slug: slug.toLowerCase() },
+          ...(domain ? [{ domain }] : []),
+          ...(subdomain ? [{ subdomain: subdomain.toLowerCase() }] : []),
+        ],
+      },
     });
 
     if (existing) {
@@ -100,37 +127,48 @@ export async function POST(request: NextRequest) {
       ...(companyName && { companyName }),
     };
 
-    const tenantData: Record<string, unknown> = {
-      slug: slug.toLowerCase(),
-      name,
-      settings,
-      isActive: true,
-    };
-
-    if (domain) tenantData.domain = domain;
-    if (subdomain) tenantData.subdomain = subdomain.toLowerCase();
-
-    const tenant = await Tenant.create(tenantData);
+    let tenant;
+    try {
+      tenant = await prisma.tenant.create({
+        data: {
+          slug: slug.toLowerCase(),
+          name,
+          settings,
+          isActive: true,
+          domain: domain || undefined,
+          subdomain: subdomain ? subdomain.toLowerCase() : undefined,
+        },
+      });
+    } catch (createErr: unknown) {
+      if (createErr instanceof Prisma.PrismaClientKnownRequestError && createErr.code === 'P2002') {
+        const field = (createErr.meta?.target as string[] | undefined)?.[0] || 'field';
+        return NextResponse.json(
+          { success: false, error: `${field} already exists` },
+          { status: 400 }
+        );
+      }
+      throw createErr;
+    }
 
     // Automatically create admin user for the tenant
     const adminEmail = `admin@${tenant.slug}.local`;
     const adminPassword = crypto.randomBytes(16).toString('base64url');
-    
+
     try {
-      const adminUser = await User.create({
+      const adminUser = await createUser({
         email: adminEmail,
         password: adminPassword,
         name: 'Administrator',
         role: 'admin',
-        tenantId: tenant._id,
+        tenantId: tenant.id,
         isActive: true,
       });
 
       await createAuditLog(request, {
-        tenantId: tenant._id,
+        tenantId: tenant.id,
         action: AuditActions.CREATE,
         entityType: 'user',
-        entityId: adminUser._id.toString(),
+        entityId: adminUser.id,
         changes: { email: adminUser.email, role: adminUser.role },
       });
     } catch (userError: unknown) {
@@ -139,16 +177,16 @@ export async function POST(request: NextRequest) {
     }
 
     await createAuditLog(request, {
-      tenantId: tenant._id,
+      tenantId: tenant.id,
       action: AuditActions.CREATE,
       entityType: 'tenant',
-      entityId: tenant._id.toString(),
+      entityId: tenant.id,
       changes: { slug: tenant.slug, name: tenant.name },
     });
 
-    return NextResponse.json({ 
-      success: true, 
-      data: tenant,
+    return NextResponse.json({
+      success: true,
+      data: { _id: tenant.id, ...tenant },
       adminUser: {
         email: adminEmail,
         password: adminPassword,
@@ -156,8 +194,8 @@ export async function POST(request: NextRequest) {
       }
     }, { status: 201 });
   } catch (error: unknown) {
-    if ((error as Record<string, unknown>).code === 11000) {
-      const field = Object.keys((error as Record<string, Record<string, unknown>>).keyPattern)[0];
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      const field = (error.meta?.target as string[] | undefined)?.[0] || 'field';
       return NextResponse.json(
         { success: false, error: `${field} already exists` },
         { status: 400 }
@@ -172,4 +210,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: (error as Error).message }, { status: 400 });
   }
 }
-

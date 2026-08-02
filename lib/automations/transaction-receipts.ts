@@ -3,9 +3,7 @@
  * Automatically emails receipts for transactions
  */
 
-import connectDB from '@/lib/mongodb';
-import Transaction from '@/models/Transaction';
-import Tenant from '@/models/Tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import prisma from '@/lib/prisma';
 import { sendEmail } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { formatDate, formatTime } from '@/lib/formatting';
@@ -24,8 +22,6 @@ export interface TransactionReceiptOptions {
 export async function sendTransactionReceipt(
   options: TransactionReceiptOptions
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -41,9 +37,10 @@ export async function sendTransactionReceipt(
       return results;
     }
 
-    const transaction = await Transaction.findById(options.transactionId)
-      .populate('tenantId')
-      .lean();
+    const transaction = await prisma.transaction.findUnique({
+      where: { id: options.transactionId },
+      include: { items: true },
+    });
 
     if (!transaction) {
       results.success = false;
@@ -51,7 +48,7 @@ export async function sendTransactionReceipt(
       return results;
     }
 
-    const tenantId = transaction.tenantId.toString();
+    const tenantId = transaction.tenantId;
     const tenantSettings = await getTenantSettingsById(tenantId);
 
     // Check if email notifications are enabled
@@ -70,7 +67,7 @@ export async function sendTransactionReceipt(
 
     // Generate receipt content
     const companyName = tenantSettings?.companyName || 'Business';
-    const receiptNumber = transaction.receiptNumber || transaction._id.toString().slice(-8);
+    const receiptNumber = transaction.receiptNumber || transaction.id.slice(-8);
     const formattedDate = formatDate(transaction.createdAt, tenantSettings);
     const formattedTime = formatTime(transaction.createdAt, tenantSettings);
 
@@ -81,8 +78,8 @@ export async function sendTransactionReceipt(
           `  <tr>
     <td>${item.name}</td>
     <td style="text-align: center;">${item.quantity}</td>
-    <td style="text-align: right;">${formatCurrency(item.price, tenantSettings)}</td>
-    <td style="text-align: right;">${formatCurrency(item.subtotal, tenantSettings)}</td>
+    <td style="text-align: right;">${formatCurrency(Number(item.price), tenantSettings)}</td>
+    <td style="text-align: right;">${formatCurrency(Number(item.subtotal), tenantSettings)}</td>
   </tr>`
       )
       .join('\n');
@@ -134,13 +131,13 @@ ${itemsList}
     </table>
 
     <div class="total">
-      <p><strong>Subtotal:</strong> ${formatCurrency(transaction.subtotal, tenantSettings)}</p>
-      ${transaction.discountAmount ? `<p><strong>Discount:</strong> -${formatCurrency(transaction.discountAmount, tenantSettings)}</p>` : ''}
-      ${transaction.taxAmount ? `<p><strong>${tenantSettings?.taxLabel || 'Tax'}:</strong> ${formatCurrency(transaction.taxAmount, tenantSettings)}</p>` : ''}
-      <p class="total-row"><strong>Total:</strong> ${formatCurrency(transaction.total, tenantSettings)}</p>
+      <p><strong>Subtotal:</strong> ${formatCurrency(Number(transaction.subtotal), tenantSettings)}</p>
+      ${transaction.discountAmount ? `<p><strong>Discount:</strong> -${formatCurrency(Number(transaction.discountAmount), tenantSettings)}</p>` : ''}
+      ${transaction.taxAmount ? `<p><strong>${tenantSettings?.taxLabel || 'Tax'}:</strong> ${formatCurrency(Number(transaction.taxAmount), tenantSettings)}</p>` : ''}
+      <p class="total-row"><strong>Total:</strong> ${formatCurrency(Number(transaction.total), tenantSettings)}</p>
       <p><strong>Payment Method:</strong> ${transaction.paymentMethod.toUpperCase()}</p>
-      ${transaction.cashReceived ? `<p><strong>Cash Received:</strong> ${formatCurrency(transaction.cashReceived, tenantSettings)}</p>` : ''}
-      ${transaction.change ? `<p><strong>Change:</strong> ${formatCurrency(transaction.change, tenantSettings)}</p>` : ''}
+      ${transaction.cashReceived ? `<p><strong>Cash Received:</strong> ${formatCurrency(Number(transaction.cashReceived), tenantSettings)}</p>` : ''}
+      ${transaction.change ? `<p><strong>Change:</strong> ${formatCurrency(Number(transaction.change), tenantSettings)}</p>` : ''}
     </div>
 
     <div class="footer">
@@ -180,8 +177,6 @@ ${itemsList}
 export async function sendPendingReceipts(
   options: { tenantId?: string; hoursAgo?: number } = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -197,19 +192,15 @@ export async function sendPendingReceipts(
     // Find transactions without receipt email sent
     // Note: We'll need to add a field to track if receipt was sent
     // For now, we'll check transactions with customer email in notes
-    const query: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
-      createdAt: { $gte: since },
-      status: 'completed',
-    };
-
-    if (options.tenantId) {
-      query.tenantId = options.tenantId;
-    }
-
-    const transactions = await Transaction.find(query)
-      .sort({ createdAt: -1 })
-      .limit(100)
-      .lean();
+    const transactions = await prisma.transaction.findMany({
+      where: {
+        createdAt: { gte: since },
+        status: 'completed',
+        ...(options.tenantId ? { tenantId: options.tenantId } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
 
     let processed = 0;
     let failed = 0;
@@ -223,7 +214,7 @@ export async function sendPendingReceipts(
         }
 
         const result = await sendTransactionReceipt({
-          transactionId: transaction._id.toString(),
+          transactionId: transaction.id,
           customerEmail: emailMatch[1],
         });
 
@@ -234,7 +225,7 @@ export async function sendPendingReceipts(
         }
       } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         failed++;
-        results.errors?.push(`Transaction ${transaction._id}: ${error.message}`);
+        results.errors?.push(`Transaction ${transaction.id}: ${error.message}`);
       }
     }
 

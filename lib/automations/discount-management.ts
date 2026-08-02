@@ -3,9 +3,7 @@
  * Auto-activate and deactivate discounts based on dates and conditions
  */
 
-import connectDB from '@/lib/mongodb';
-import Discount from '@/models/Discount';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/prisma';
 import { sendEmail } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { AutomationResult } from './types';
@@ -20,8 +18,6 @@ export interface DiscountManagementOptions {
 export async function manageDiscountStatus(
   options: DiscountManagementOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -34,11 +30,11 @@ export async function manageDiscountStatus(
     // Get tenants to process
     let tenants;
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await prisma.tenant.findUnique({ where: { id: options.tenantId } });
       tenants = tenant ? [tenant] : [];
     } else {
       // Get all active tenants
-      tenants = await Tenant.find({ status: 'active' }).lean();
+      tenants = await prisma.tenant.findMany({ where: { isActive: true } });
     }
 
     if (tenants.length === 0) {
@@ -53,23 +49,27 @@ export async function manageDiscountStatus(
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
+        const tenantId = tenant.id;
         const tenantSettings = await getTenantSettingsById(tenantId);
 
         // Find discounts that need activation (validFrom has arrived, but not active)
-        const discountsToActivate = await Discount.find({
-          tenantId,
-          validFrom: { $lte: now },
-          validUntil: { $gte: now },
-          isActive: false,
-        }).lean();
+        const discountsToActivate = await prisma.discount.findMany({
+          where: {
+            tenantId,
+            validFrom: { lte: now },
+            validUntil: { gte: now },
+            isActive: false,
+          },
+        });
 
         // Find discounts that need deactivation (validUntil has passed, but still active)
         // First, get all active discounts
-        const allActiveDiscounts = await Discount.find({
-          tenantId,
-          isActive: true,
-        }).lean();
+        const allActiveDiscounts = await prisma.discount.findMany({
+          where: {
+            tenantId,
+            isActive: true,
+          },
+        });
 
         // Filter discounts that need deactivation
         const discountsToDeactivate = allActiveDiscounts.filter((discount) => {
@@ -87,7 +87,7 @@ export async function manageDiscountStatus(
         // Activate discounts
         for (const discount of discountsToActivate) {
           try {
-            await Discount.findByIdAndUpdate(discount._id, { isActive: true });
+            await prisma.discount.update({ where: { id: discount.id }, data: { isActive: true } });
             totalActivated++;
 
             // Send notification if enabled
@@ -111,7 +111,7 @@ export async function manageDiscountStatus(
         // Deactivate discounts
         for (const discount of discountsToDeactivate) {
           try {
-            await Discount.findByIdAndUpdate(discount._id, { isActive: false });
+            await prisma.discount.update({ where: { id: discount.id }, data: { isActive: false } });
             totalDeactivated++;
 
             // Send notification if enabled
@@ -120,7 +120,7 @@ export async function manageDiscountStatus(
               const reason = discount.validUntil < now
                 ? 'expired (validUntil date passed)'
                 : 'reached usage limit';
-              
+
               await sendEmail({
                 to: tenantSettings.email,
                 subject: `Discount Deactivated: ${discount.code}`,
@@ -137,18 +137,20 @@ export async function manageDiscountStatus(
         }
 
         // Check for discounts approaching usage limits (#10 - Discount Usage Limit Alerts)
-        const activeDiscounts = await Discount.find({
-          tenantId,
-          isActive: true,
-          usageLimit: { $exists: true, $ne: null },
-        }).lean();
+        const activeDiscounts = await prisma.discount.findMany({
+          where: {
+            tenantId,
+            isActive: true,
+            usageLimit: { not: null },
+          },
+        });
 
         for (const discount of activeDiscounts) {
           if (!discount.usageLimit) continue;
-          
+
           const usagePercent = (discount.usageCount / discount.usageLimit) * 100;
           const alertThresholds = [80, 90, 100];
-          
+
           // Check if we should send an alert (80%, 90%, or 100%)
           const shouldAlert = alertThresholds.some(threshold => {
             return usagePercent >= threshold && usagePercent < threshold + 5; // 5% window to avoid duplicate alerts
@@ -157,7 +159,7 @@ export async function manageDiscountStatus(
           if (shouldAlert && tenantSettings?.emailNotifications && tenantSettings?.email) {
             const threshold = Math.floor(usagePercent / 10) * 10; // Round to nearest 10
             const companyName = tenantSettings?.companyName || tenant.name || 'Business';
-            
+
             await sendEmail({
               to: tenantSettings.email,
               subject: `Discount Usage Alert: ${discount.code} - ${threshold}% Used`,

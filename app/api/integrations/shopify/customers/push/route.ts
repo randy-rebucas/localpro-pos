@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Customer from '@/models/Customer';
-import TenantEcommerceIntegration from '@/models/TenantEcommerceIntegration';
+import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
@@ -26,11 +24,9 @@ export async function POST(request: NextRequest) {
     const { customerId } = await request.json() as { customerId: string };
     if (!customerId) return NextResponse.json({ success: false, error: 'customerId required' }, { status: 400 });
 
-    await connectDB();
-
     const [customer, integration] = await Promise.all([
-      Customer.findOne({ _id: customerId, tenantId: user.tenantId }),
-      TenantEcommerceIntegration.findOne({ tenantId: user.tenantId, provider: 'shopify', isActive: true }),
+      prisma.customer.findFirst({ where: { id: customerId, tenantId: user.tenantId } }),
+      prisma.tenantEcommerceIntegration.findFirst({ where: { tenantId: user.tenantId, provider: 'shopify', isActive: true } }),
     ]);
 
     if (!customer) return NextResponse.json({ success: false, error: 'Customer not found' }, { status: 404 });
@@ -38,12 +34,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'No active Shopify integration' }, { status: 400 });
     }
 
-    const accessToken = await getShopifyAccessTokenForIntegration(integration);
+    const accessToken = await getShopifyAccessTokenForIntegration({ _id: integration.id, credentialsEncrypted: integration.credentialsEncrypted, shopDomain: integration.shopDomain });
     const { shopifyCustomerId } = await shopifyUpsertCustomer(integration.shopDomain, accessToken, customer);
 
     if (!customer.shopifyCustomerId) {
-      customer.shopifyCustomerId = shopifyCustomerId;
-      await customer.save();
+      await prisma.customer.update({ where: { id: customer.id }, data: { shopifyCustomerId } });
     }
 
     return NextResponse.json({ success: true, data: { shopifyCustomerId } });

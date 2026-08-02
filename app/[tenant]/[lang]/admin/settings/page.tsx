@@ -424,30 +424,30 @@ export default function AdminSettingsPage() {
             {activeSection === 'branding' && (
               <div className="bg-white border border-gray-300">
                 <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
-                  <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Branding</h2>
-                  <p className="text-xs text-gray-400 mt-0.5">Colors and logo used across your store and receipts</p>
+                  <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{dict?.settings?.tabs?.branding || 'Branding'}</h2>
+                  <p className="text-xs text-gray-400 mt-0.5">{dict?.settings?.brandingSectionDesc || 'Colors and logo used across your store and receipts'}</p>
                 </div>
                 <div className="p-5 space-y-4">
                   <div>
-                    <label className={labelCls}>Logo URL</label>
+                    <label className={labelCls}>{dict?.settings?.logoUrl || 'Logo URL'}</label>
                     <input type="url" value={form.logo} onChange={e => set('logo', e.target.value)} placeholder="https://..." className={inputCls} />
                     {form.logo && (
                       <div className="mt-3 border border-gray-200 p-3 inline-block">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={form.logo} alt="Logo preview" className="h-16 object-contain" />
+                        <img src={form.logo} alt={dict?.settings?.logoPreviewAlt || 'Logo preview'} className="h-16 object-contain" />
                       </div>
                     )}
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className={labelCls}>Primary Color</label>
+                      <label className={labelCls}>{dict?.settings?.primaryColor || 'Primary Color'}</label>
                       <div className="flex gap-2">
                         <input type="color" value={form.primaryColor} onChange={e => set('primaryColor', e.target.value)} className="h-9 w-14 border border-gray-300 bg-white p-0.5 cursor-pointer" />
                         <input type="text" value={form.primaryColor} onChange={e => set('primaryColor', e.target.value)} placeholder="#35979c" className={`${inputCls} flex-1`} />
                       </div>
                     </div>
                     <div>
-                      <label className={labelCls}>Secondary Color</label>
+                      <label className={labelCls}>{dict?.settings?.secondaryColor || 'Secondary Color'}</label>
                       <div className="flex gap-2">
                         <input type="color" value={form.secondaryColor || '#000000'} onChange={e => set('secondaryColor', e.target.value)} className="h-9 w-14 border border-gray-300 bg-white p-0.5 cursor-pointer" />
                         <input type="text" value={form.secondaryColor} onChange={e => set('secondaryColor', e.target.value)} placeholder="#000000" className={`${inputCls} flex-1`} />
@@ -455,7 +455,7 @@ export default function AdminSettingsPage() {
                     </div>
                   </div>
                   <div className="mt-2">
-                    <p className="text-xs text-gray-400">For advanced branding (fonts, themes, custom CSS), go to <span className="text-brand font-medium">Advanced Branding</span> in the sidebar.</p>
+                    <p className="text-xs text-gray-400">{dict?.settings?.advancedBrandingHintPrefix || 'For advanced branding (fonts, themes, custom CSS), go to'} <span className="text-brand font-medium">{dict?.settings?.advancedBrandingHintLink || 'Advanced Branding'}</span> {dict?.settings?.advancedBrandingHintSuffix || 'in the sidebar.'}</p>
                   </div>
                 </div>
               </div>
@@ -465,47 +465,47 @@ export default function AdminSettingsPage() {
             {activeSection === 'contact' && (
               <div className="bg-white border border-gray-300">
                 <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
-                  <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Contact Information</h2>
-                  <p className="text-xs text-gray-400 mt-0.5">Displayed on receipts and customer-facing documents</p>
+                  <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{dict?.settings?.contactInformation || 'Contact Information'}</h2>
+                  <p className="text-xs text-gray-400 mt-0.5">{dict?.settings?.contactSectionDesc || 'Displayed on receipts and customer-facing documents'}</p>
                 </div>
                 <div className="p-5 space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className={labelCls}>Email Address</label>
+                      <label className={labelCls}>{dict?.settings?.emailAddressLabel || 'Email Address'}</label>
                       <input type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="store@example.com" className={inputCls} />
                     </div>
                     <div>
-                      <label className={labelCls}>Phone Number</label>
+                      <label className={labelCls}>{dict?.settings?.phoneNumberLabel || 'Phone Number'}</label>
                       <input type="tel" value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="+63 9XX XXX XXXX" className={inputCls} />
                     </div>
                     <div className="sm:col-span-2">
-                      <label className={labelCls}>Website</label>
+                      <label className={labelCls}>{dict?.settings?.website || 'Website'}</label>
                       <input type="url" value={form.website} onChange={e => set('website', e.target.value)} placeholder="https://yourstore.com" className={inputCls} />
                     </div>
                   </div>
 
                   <div className="border-t border-gray-100 pt-4">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Address</p>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">{dict?.settings?.addressSectionLabel || 'Address'}</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="sm:col-span-2">
-                        <label className={labelCls}>Street</label>
-                        <input type="text" value={form.addressStreet} onChange={e => set('addressStreet', e.target.value)} placeholder="123 Main St." className={inputCls} />
+                        <label className={labelCls}>{dict?.settings?.streetLabel || 'Street'}</label>
+                        <input type="text" value={form.addressStreet} onChange={e => set('addressStreet', e.target.value)} placeholder={dict?.settings?.streetPlaceholder || '123 Main St.'} className={inputCls} />
                       </div>
                       <div>
-                        <label className={labelCls}>City / Municipality</label>
-                        <input type="text" value={form.addressCity} onChange={e => set('addressCity', e.target.value)} placeholder="City" className={inputCls} />
+                        <label className={labelCls}>{dict?.settings?.cityMunicipalityLabel || 'City / Municipality'}</label>
+                        <input type="text" value={form.addressCity} onChange={e => set('addressCity', e.target.value)} placeholder={dict?.settings?.cityPlaceholder || 'City'} className={inputCls} />
                       </div>
                       <div>
-                        <label className={labelCls}>Province / State</label>
-                        <input type="text" value={form.addressState} onChange={e => set('addressState', e.target.value)} placeholder="Province" className={inputCls} />
+                        <label className={labelCls}>{dict?.settings?.provinceStateLabel || 'Province / State'}</label>
+                        <input type="text" value={form.addressState} onChange={e => set('addressState', e.target.value)} placeholder={dict?.settings?.provincePlaceholder || 'Province'} className={inputCls} />
                       </div>
                       <div>
-                        <label className={labelCls}>ZIP Code</label>
-                        <input type="text" value={form.addressZipCode} onChange={e => set('addressZipCode', e.target.value)} placeholder="1234" className={inputCls} />
+                        <label className={labelCls}>{dict?.settings?.zipCodeLabel || 'ZIP Code'}</label>
+                        <input type="text" value={form.addressZipCode} onChange={e => set('addressZipCode', e.target.value)} placeholder={dict?.settings?.zipPlaceholder || '1234'} className={inputCls} />
                       </div>
                       <div>
-                        <label className={labelCls}>Country</label>
-                        <input type="text" value={form.addressCountry} onChange={e => set('addressCountry', e.target.value)} placeholder="Philippines" className={inputCls} />
+                        <label className={labelCls}>{dict?.settings?.country || 'Country'}</label>
+                        <input type="text" value={form.addressCountry} onChange={e => set('addressCountry', e.target.value)} placeholder={dict?.settings?.countryPlaceholder || 'Philippines'} className={inputCls} />
                       </div>
                     </div>
                   </div>

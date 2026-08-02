@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
-import TenantEcommerceIntegration from '@/models/TenantEcommerceIntegration';
+import prisma from '@/lib/prisma';
+import { getTenantById } from '@/lib/data/tenants';
 import { verifyShopifyOAuthQuery } from '@/lib/ecommerce/webhook-verify';
 import { verifyShopifyOAuthState } from '@/lib/ecommerce/shopify-oauth-state';
 import { shopifyExchangeCodeForToken, shopifyCredentialsFromTokenResponse } from '@/lib/ecommerce/shopify-oauth';
@@ -11,7 +10,6 @@ import { registerShopifyWebhooksForIntegration } from '@/lib/ecommerce/register-
 import { getPublicAppUrl } from '@/lib/ecommerce/public-url';
 import { requireEcommerceProviderConnectAllowed } from '@/lib/ecommerce/tenant-integration-policy';
 import { normalizeShopifyShopDomain } from '@/lib/ecommerce/shopify-shop-domain';
-import mongoose from 'mongoose';
 
 export async function GET(request: NextRequest) {
   try {
@@ -58,35 +56,41 @@ export async function GET(request: NextRequest) {
       }),
     } as Record<string, unknown>);
 
-    await connectDB();
-    const tenantObjectId = new mongoose.Types.ObjectId(st.tenantId);
     const locId = await shopifyGetPrimaryLocationId(shopNorm, credBlob.accessToken);
 
-    const integration = await TenantEcommerceIntegration.findOneAndUpdate(
-      { tenantId: tenantObjectId, provider: 'shopify' },
-      {
-        $set: {
-          shopDomain: shopNorm,
-          credentialsEncrypted: enc,
-          scopes: tokenData.scope ? tokenData.scope.split(/[,\s]+/).map((s) => s.trim()).filter(Boolean) : [],
-          shopifyLocationId: locId || undefined,
-          isActive: true,
-          lastError: undefined,
-        },
-        $setOnInsert: { tenantId: tenantObjectId, provider: 'shopify' },
+    const integration = await prisma.tenantEcommerceIntegration.upsert({
+      where: { tenantId_provider: { tenantId: st.tenantId, provider: 'shopify' } },
+      create: {
+        tenantId: st.tenantId,
+        provider: 'shopify',
+        shopDomain: shopNorm,
+        credentialsEncrypted: enc,
+        scopes: tokenData.scope ? tokenData.scope.split(/[,\s]+/).map((s) => s.trim()).filter(Boolean) : [],
+        shopifyLocationId: locId || undefined,
+        isActive: true,
       },
-      { upsert: true, new: true }
-    );
+      update: {
+        shopDomain: shopNorm,
+        credentialsEncrypted: enc,
+        scopes: tokenData.scope ? tokenData.scope.split(/[,\s]+/).map((s) => s.trim()).filter(Boolean) : [],
+        shopifyLocationId: locId || undefined,
+        isActive: true,
+        lastError: null,
+      },
+    });
 
     try {
       await registerShopifyWebhooksForIntegration(integration, {
         publicAppBaseUrl: getPublicAppUrl(request),
       });
     } catch {
-      await integration.updateOne({ $set: { lastError: 'webhook_registration_failed' } });
+      await prisma.tenantEcommerceIntegration.update({
+        where: { id: integration.id },
+        data: { lastError: 'webhook_registration_failed' },
+      });
     }
 
-    const tenant = await Tenant.findById(st.tenantId).select('slug').lean();
+    const tenant = await getTenantById(st.tenantId);
     const slug = tenant?.slug || st.tenantSlug || 'default';
     const redirect = new URL(`/${slug}/${st.lang}/settings`, request.nextUrl.origin);
     redirect.searchParams.set('tab', 'ecommerce');

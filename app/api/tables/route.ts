@@ -1,49 +1,51 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Table from '@/models/Table';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
+import { listTables, createTable, fromPrismaTableStatus } from '@/lib/data/tables';
+
+function serializeTable(table: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const { id, ...rest } = table;
+  return { _id: id, ...rest, status: fromPrismaTableStatus(rest.status) };
+}
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId } = authResult;
 
     const searchParams = request.nextUrl.searchParams;
-    const isActive = searchParams.get('isActive');
+    const isActiveParam = searchParams.get('isActive');
     const branchId = searchParams.get('branchId');
     const status = searchParams.get('status');
 
-    const query: Record<string, unknown> = { tenantId };
-    
-    // Filter by active status (default to active only)
-    if (isActive === null || isActive === undefined) {
-      query.isActive = true;
-    } else if (isActive === 'all') {
-      // No filter
+    let isActive: boolean | undefined;
+    if (isActiveParam === null || isActiveParam === undefined) {
+      isActive = true;
+    } else if (isActiveParam === 'all') {
+      isActive = undefined;
     } else {
-      query.isActive = isActive === 'true';
+      isActive = isActiveParam === 'true';
     }
 
-    if (branchId) {
-      query.branchId = branchId;
-    }
-
+    let statusFilter: string | undefined;
     if (status) {
       const validStatuses = ['open', 'occupied', 'check-requested'];
       if (validStatuses.includes(status)) {
-        query.status = status;
+        statusFilter = status;
       }
     }
 
-    const tables = await Table.find(query).sort({ name: 1 }).lean();
+    const tables = await listTables(tenantId, {
+      isActive,
+      branchId: branchId || undefined,
+      status: statusFilter,
+    });
 
-    return NextResponse.json({ success: true, data: tables });
+    return NextResponse.json({ success: true, data: tables.map(serializeTable) });
   } catch (error) {
     return handleApiError(error, 'Failed to fetch tables');
   }
@@ -51,7 +53,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId, user } = authResult;
@@ -87,24 +88,22 @@ export async function POST(request: NextRequest) {
       capacity = cap;
     }
 
-    const table = await Table.create({
+    const table = await createTable({
       tenantId,
       name,
       capacity: capacity || undefined,
       branchId: branchId || undefined,
-      status: 'open',
-      isActive: true,
     });
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.CREATE,
       entityType: 'table',
-      entityId: table._id.toString(),
+      entityId: table.id,
       changes: { name: table.name, capacity: table.capacity },
     });
 
-    return NextResponse.json({ success: true, data: table }, { status: 201 });
+    return NextResponse.json({ success: true, data: serializeTable(table) }, { status: 201 });
   } catch (error) {
     return handleApiError(error, 'Failed to create table');
   }

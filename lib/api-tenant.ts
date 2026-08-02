@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getTenantBySlug, getTenantFromHost, getTenantId } from './tenant';
 import { getCurrentUser } from './auth';
-import connectDB from './mongodb';
+import { getTenantById } from '@/lib/data/tenants';
 
 /**
  * Custom error class for tenant access violations
@@ -50,20 +50,16 @@ export async function getTenantIdFromRequest(request: NextRequest): Promise<stri
             tenantSlug = requestedTenantSlug;
           } else {
             // If we can't get the slug from request, get it from the tenant ID
-            const Tenant = (await import('@/models/Tenant')).default;
-            await connectDB();
-            const tenant = await Tenant.findById(requestTenantId).select('slug').lean();
-            if (tenant && tenant.slug) {
+            const tenant = requestTenantId ? await getTenantById(requestTenantId) : null;
+            if (tenant?.slug) {
               tenantSlug = tenant.slug;
             }
           }
         } catch (e) {
           // If we can't get the slug, try to get it from the tenant ID
           try {
-            const Tenant = (await import('@/models/Tenant')).default;
-            await connectDB();
-            const tenant = await Tenant.findById(requestTenantId).select('slug').lean();
-            if (tenant && tenant.slug) {
+            const tenant = requestTenantId ? await getTenantById(requestTenantId) : null;
+            if (tenant?.slug) {
               tenantSlug = tenant.slug;
             }
           } catch (err) {
@@ -140,8 +136,8 @@ async function getTenantIdFromRequestParams(request: NextRequest): Promise<strin
   // Try custom header (if client sends it)
   const tenantHeader = request.headers.get('x-tenant-slug') || request.headers.get('x-tenant-id');
   if (tenantHeader) {
-    // If it's already an ID (ObjectId format), return it
-    if (/^[0-9a-fA-F]{24}$/.test(tenantHeader)) {
+    // If it's already an ID (UUID format), return it
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tenantHeader)) {
       return tenantHeader;
     }
     // Otherwise treat it as a slug
@@ -231,10 +227,8 @@ export async function requireTenantAccess(request: NextRequest): Promise<{
     // Get the tenant slug for redirect
     let tenantSlug = 'default';
     try {
-      const Tenant = (await import('@/models/Tenant')).default;
-      await connectDB();
-      const tenant = await Tenant.findById(requestTenantId).select('slug').lean();
-      if (tenant && tenant.slug) {
+      const tenant = requestTenantId ? await getTenantById(requestTenantId) : null;
+      if (tenant?.slug) {
         tenantSlug = tenant.slug;
       }
     } catch (err) {

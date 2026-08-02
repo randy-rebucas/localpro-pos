@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
+import prisma from '@/lib/prisma';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
-import TenantEcommerceIntegration from '@/models/TenantEcommerceIntegration';
 import { runCatalogSync } from '@/lib/ecommerce/sync-catalog';
-import mongoose from 'mongoose';
 import { requireEcommerceIntegrationFeature } from '@/lib/ecommerce/require-ecommerce-feature';
 import { checkRateLimit } from '@/lib/rate-limit';
 import type { EcommerceProvider } from '@/lib/ecommerce/constants';
@@ -14,7 +12,6 @@ export async function POST(request: NextRequest) {
   let syncProvider: EcommerceProvider | null = null;
 
   try {
-    await connectDB();
     const { tenantId, user } = await requireTenantAccess(request);
     syncTenantId = tenantId;
     if (!(await hasTenantPermission(user.role, tenantId, 'integrations.manage'))) {
@@ -36,10 +33,8 @@ export async function POST(request: NextRequest) {
     }
     syncProvider = provider;
 
-    const integration = await TenantEcommerceIntegration.findOne({
-      tenantId,
-      provider,
-      isActive: true,
+    const integration = await prisma.tenantEcommerceIntegration.findFirst({
+      where: { tenantId, provider, isActive: true },
     });
     if (!integration) {
       return NextResponse.json({ success: false, error: 'Integration not connected' }, { status: 404 });
@@ -51,11 +46,10 @@ export async function POST(request: NextRequest) {
     const msg = e instanceof Error ? e.message : 'Sync failed';
     if (syncTenantId && syncProvider) {
       try {
-        await connectDB();
-        await TenantEcommerceIntegration.updateOne(
-          { tenantId: new mongoose.Types.ObjectId(syncTenantId), provider: syncProvider },
-          { $set: { lastError: msg.slice(0, 500) } }
-        );
+        await prisma.tenantEcommerceIntegration.updateMany({
+          where: { tenantId: syncTenantId, provider: syncProvider },
+          data: { lastError: msg.slice(0, 500) },
+        });
       } catch {
         /* ignore */
       }

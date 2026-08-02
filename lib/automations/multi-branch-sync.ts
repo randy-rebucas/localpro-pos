@@ -3,12 +3,7 @@
  * Automatically sync relevant data across branches
  */
 
-import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
-import Customer from '@/models/Customer'; // eslint-disable-line @typescript-eslint/no-unused-vars
-import Discount from '@/models/Discount'; // eslint-disable-line @typescript-eslint/no-unused-vars
-import Branch from '@/models/Branch';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/prisma';
 import { AutomationResult } from './types';
 
 export interface MultiBranchSyncOptions {
@@ -25,8 +20,6 @@ export interface MultiBranchSyncOptions {
 export async function syncMultiBranchData(
   options: MultiBranchSyncOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -44,10 +37,10 @@ export async function syncMultiBranchData(
     // Get tenants to process
     let tenants;
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await prisma.tenant.findUnique({ where: { id: options.tenantId } });
       tenants = tenant ? [tenant] : [];
     } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
+      tenants = await prisma.tenant.findMany({ where: { isActive: true } });
     }
 
     if (tenants.length === 0) {
@@ -60,30 +53,30 @@ export async function syncMultiBranchData(
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
+        const tenantId = tenant.id;
 
         // Get all branches
-        const branches = await Branch.find({ tenantId, isActive: true }).lean();
-        
+        const branches = await prisma.branch.findMany({ where: { tenantId, isActive: true } });
+
         if (branches.length < 2) {
           continue; // Need at least 2 branches to sync
         }
 
         // Sync products (pricing, descriptions, etc.)
         if (syncProducts) {
-          // Get master product data (from first branch or tenant-level)
-          const masterProducts = await Product.find({ tenantId }).lean();
+          // Get master product data (tenant-level)
+          const masterProducts = await prisma.product.findMany({ where: { tenantId } });
 
           // For each product, sync pricing and basic info across branches
-          // Note: Stock levels are branch-specific and shouldn't be synced
+          // Note: Stock levels are branch-specific (ProductBranchStock) and shouldn't be synced
           for (const product of masterProducts) {
             try {
               // Product updates are already tenant-level, so no sync needed
-              // Branch stock is intentionally separate
+              // Branch stock (ProductBranchStock) is intentionally separate
               totalSynced++;
             } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
               totalFailed++;
-              results.errors?.push(`Product ${product._id}: ${error.message}`);
+              results.errors?.push(`Product ${product.id}: ${error.message}`);
             }
           }
         }

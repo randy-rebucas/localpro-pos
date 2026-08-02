@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Booking from '@/models/Booking';
-import User from '@/models/User';
+import prisma from '@/lib/prisma';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -12,6 +10,7 @@ import { getTenantSettingsById } from '@/lib/tenant';
 import { requireBookingSchedulingAccess } from '@/lib/booking-scheduling-access';
 import { getClosedHolidayForDate } from '@/lib/holidays';
 import { logger } from '@/lib/logger';
+import { findOverlappingBookings, bookingToApi } from '@/lib/data/bookings';
 
 /**
  * GET - Get a single booking by ID
@@ -21,7 +20,6 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const user = await getCurrentUser(request);
     const t = await getValidationTranslatorFromRequest(request);
     if (!user) {
@@ -40,9 +38,10 @@ export async function GET(
     }
 
     const { id } = await params;
-    const booking = await Booking.findOne({ _id: id, tenantId })
-      .populate('staffId', 'name email')
-      .lean();
+    const booking = await prisma.booking.findFirst({
+      where: { id, tenantId },
+      include: { staff: { select: { id: true, name: true, email: true } } },
+    });
 
     if (!booking) {
       return NextResponse.json(
@@ -51,7 +50,7 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({ success: true, data: booking });
+    return NextResponse.json({ success: true, data: bookingToApi(booking) });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Get booking error:', error);
     const t = await getValidationTranslatorFromRequest(request);
@@ -70,7 +69,6 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const user = await getCurrentUser(request);
     const t = await getValidationTranslatorFromRequest(request);
     if (!user) {
@@ -101,7 +99,7 @@ export async function PUT(
     }
 
     const { id } = await params;
-    const existingBooking = await Booking.findOne({ _id: id, tenantId });
+    const existingBooking = await prisma.booking.findFirst({ where: { id, tenantId } });
 
     if (!existingBooking) {
       return NextResponse.json(
@@ -159,29 +157,21 @@ export async function PUT(
 
     // Check for conflicts if time changed
     if (startTime || duration) {
-      const conflictingBookings = await Booking.find({
-        tenantId,
-        _id: { $ne: id },
-        status: { $in: ['pending', 'confirmed'] },
-        $or: [
-          {
-            startTime: { $lt: newEndTime },
-            endTime: { $gt: newStartTime },
-          },
-        ],
-      });
-
       const checkStaffId = staffId || existingBooking.staffId;
       if (checkStaffId) {
-        const staffConflicts = conflictingBookings.filter(
-          (booking) => booking.staffId?.toString() === checkStaffId.toString()
-        );
+        const staffConflicts = await findOverlappingBookings({
+          tenantId,
+          startTime: newStartTime,
+          endTime: newEndTime,
+          staffId: checkStaffId,
+          excludeId: id,
+        });
         if (staffConflicts.length > 0) {
           return NextResponse.json(
             {
               success: false,
               error: t('validation.staffBookingConflict', 'Staff member already has a booking at this time'),
-              conflicts: staffConflicts,
+              conflicts: staffConflicts.map(bookingToApi),
             },
             { status: 409 }
           );
@@ -191,7 +181,7 @@ export async function PUT(
 
     // Verify staff exists if provided
     if (staffId) {
-      const staff = await User.findOne({ _id: staffId, tenantId, isActive: true });
+      const staff = await prisma.user.findFirst({ where: { id: staffId, tenantId, isActive: true } });
       if (!staff) {
         return NextResponse.json(
           { success: false, error: t('validation.staffNotFound', 'Staff member not found or inactive') },
@@ -214,11 +204,11 @@ export async function PUT(
     if (notes !== undefined) updateData.notes = notes;
     if (status !== undefined) updateData.status = status;
 
-    const updatedBooking = await Booking.findByIdAndUpdate(
-      id,
-      { $set: updateData },
-      { new: true }
-    ).populate('staffId', 'name email');
+    const updatedBooking = await prisma.booking.update({
+      where: { id },
+      data: updateData,
+      include: { staff: { select: { id: true, name: true, email: true } } },
+    });
 
     // Send notifications based on status changes
     if (status && status !== oldStatus) {
@@ -226,27 +216,27 @@ export async function PUT(
         const tenantSettings = await getTenantSettingsById(tenantId);
         if (status === 'confirmed' && !existingBooking.confirmationSent) {
           await sendBookingConfirmation({
-            customerName: updatedBooking!.customerName,
-            customerEmail: updatedBooking!.customerEmail,
-            customerPhone: updatedBooking!.customerPhone,
-            serviceName: updatedBooking!.serviceName,
-            startTime: updatedBooking!.startTime,
-            endTime: updatedBooking!.endTime,
-            staffName: updatedBooking!.staffName,
-            notes: updatedBooking!.notes,
+            customerName: updatedBooking.customerName,
+            customerEmail: updatedBooking.customerEmail ?? undefined,
+            customerPhone: updatedBooking.customerPhone ?? undefined,
+            serviceName: updatedBooking.serviceName,
+            startTime: updatedBooking.startTime,
+            endTime: updatedBooking.endTime,
+            staffName: updatedBooking.staffName ?? undefined,
+            notes: updatedBooking.notes ?? undefined,
             bookingId: id,
           }, tenantSettings || undefined);
-          await Booking.findByIdAndUpdate(id, { confirmationSent: true });
+          await prisma.booking.update({ where: { id }, data: { confirmationSent: true } });
         } else if (status === 'cancelled') {
           await sendBookingCancellation({
-            customerName: updatedBooking!.customerName,
-            customerEmail: updatedBooking!.customerEmail,
-            customerPhone: updatedBooking!.customerPhone,
-            serviceName: updatedBooking!.serviceName,
+            customerName: updatedBooking.customerName,
+            customerEmail: updatedBooking.customerEmail ?? undefined,
+            customerPhone: updatedBooking.customerPhone ?? undefined,
+            serviceName: updatedBooking.serviceName,
             startTime: oldStartTime,
             endTime: existingBooking.endTime,
-            staffName: existingBooking.staffName,
-            notes: existingBooking.notes,
+            staffName: existingBooking.staffName ?? undefined,
+            notes: existingBooking.notes ?? undefined,
             bookingId: id,
           }, tenantSettings || undefined);
         }
@@ -265,7 +255,7 @@ export async function PUT(
       changes: updateData,
     });
 
-    return NextResponse.json({ success: true, data: updatedBooking });
+    return NextResponse.json({ success: true, data: bookingToApi(updatedBooking) });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Update booking error:', error);
     const t = await getValidationTranslatorFromRequest(request);
@@ -284,7 +274,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const user = await getCurrentUser(request);
     const t = await getValidationTranslatorFromRequest(request);
     if (!user) {
@@ -308,7 +297,7 @@ export async function DELETE(
     }
 
     const { id } = await params;
-    const booking = await Booking.findOne({ _id: id, tenantId });
+    const booking = await prisma.booking.findFirst({ where: { id, tenantId } });
 
     if (!booking) {
       return NextResponse.json(
@@ -322,13 +311,13 @@ export async function DELETE(
       try {
         await sendBookingCancellation({
           customerName: booking.customerName,
-          customerEmail: booking.customerEmail,
-          customerPhone: booking.customerPhone,
+          customerEmail: booking.customerEmail ?? undefined,
+          customerPhone: booking.customerPhone ?? undefined,
           serviceName: booking.serviceName,
           startTime: booking.startTime,
           endTime: booking.endTime,
-          staffName: booking.staffName,
-          notes: booking.notes,
+          staffName: booking.staffName ?? undefined,
+          notes: booking.notes ?? undefined,
           bookingId: id,
         });
       } catch (notificationError) {
@@ -336,9 +325,10 @@ export async function DELETE(
       }
     }
 
-    booking.isActive = false;
-    booking.status = 'cancelled';
-    await booking.save();
+    await prisma.booking.update({
+      where: { id },
+      data: { isActive: false, status: 'cancelled' },
+    });
 
     await createAuditLog(request, {
       tenantId,
@@ -359,4 +349,3 @@ export async function DELETE(
     );
   }
 }
-

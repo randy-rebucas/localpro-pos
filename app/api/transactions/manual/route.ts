@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Transaction from '@/models/Transaction';
+import prisma from '@/lib/prisma';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -16,8 +15,6 @@ interface ManualItem {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
-
     let tenantId: string;
     try {
       tenantId = (await getTenantIdFromRequest(request)) as string;
@@ -89,27 +86,44 @@ export async function POST(request: NextRequest) {
       // non-fatal
     }
 
-    const transaction = await Transaction.create({
-      tenantId,
-      items: transactionItems,
-      subtotal: total,
-      total,
-      paymentMethod,
-      ...(paymentMethod === 'cash' && cashReceived != null ? { cashReceived, change } : {}),
-      status: 'completed',
-      notes: notes?.trim() || undefined,
-      ...(receiptNumber ? { receiptNumber } : {}),
+    const transaction = await prisma.transaction.create({
+      data: {
+        tenantId,
+        subtotal: total,
+        total,
+        paymentMethod: paymentMethod as never,
+        ...(paymentMethod === 'cash' && cashReceived != null ? { cashReceived, change } : {}),
+        status: 'completed',
+        notes: notes?.trim() || undefined,
+        ...(receiptNumber ? { receiptNumber } : {}),
+        items: { create: transactionItems },
+      },
+      include: { items: true },
     });
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.TRANSACTION_CREATE,
       entityType: 'transaction',
-      entityId: transaction._id.toString(),
+      entityId: transaction.id,
       changes: { receiptNumber: transaction.receiptNumber, total, itemsCount: transactionItems.length },
     });
 
-    return NextResponse.json({ success: true, data: transaction }, { status: 201 });
+    const { id, items: createdItems, ...rest } = transaction;
+    const data = {
+      _id: id,
+      ...rest,
+      subtotal: Number(rest.subtotal),
+      total: Number(rest.total),
+      cashReceived: rest.cashReceived !== null ? Number(rest.cashReceived) : null,
+      change: rest.change !== null ? Number(rest.change) : null,
+      taxExemptAmount: Number(rest.taxExemptAmount),
+      zeroRatedAmount: Number(rest.zeroRatedAmount),
+      taxAmount: Number(rest.taxAmount),
+      items: createdItems.map((item) => ({ ...item, _id: item.id, price: Number(item.price), subtotal: Number(item.subtotal) })),
+    };
+
+    return NextResponse.json({ success: true, data }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal server error';
     return NextResponse.json({ success: false, error: message }, { status: 500 });

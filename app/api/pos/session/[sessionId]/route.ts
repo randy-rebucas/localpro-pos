@@ -1,43 +1,47 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import mongoose from 'mongoose';
+import { Prisma } from '@prisma/client';
+import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 
-// MongoDB-backed POS session for serverless compatibility
-const posSessionSchema = new mongoose.Schema({
-  sessionId: { type: String, required: true, unique: true, index: true },
-  tenant: { type: String, required: true },
-  cart: { type: Array, default: [] },
-  subtotal: { type: Number, default: 0 },
-  discount: { type: mongoose.Schema.Types.Mixed, default: null },
-  taxAmount: { type: Number },
-  taxRate: { type: Number },
-  taxLabel: { type: String },
-  tip: { type: Number, default: 0 },
-  total: { type: Number, default: 0 },
-  paymentMethod: { type: String, default: null },
-  paymentStatus: { type: String, enum: ['pending', 'processing', 'completed', 'failed'], default: 'pending' },
-  lastUpdate: { type: Number, default: Date.now },
-}, {
-  timestamps: true,
-  // TTL index: auto-delete sessions older than 1 hour
-  expireAfterSeconds: 3600,
-});
-
-// Add TTL index on createdAt
-posSessionSchema.index({ lastUpdate: 1 }, { expireAfterSeconds: 3600 });
-
-const PosSession = mongoose.models.PosSession || mongoose.model('PosSession', posSessionSchema);
+// Mongo stored lastUpdate as an epoch-ms number; Postgres uses a real DateTime
+// column. Convert at the API boundary so the response shape (and the frontend
+// that reads it) doesn't change.
+function serialize(session: {
+  cart: unknown;
+  subtotal: Prisma.Decimal;
+  discount: unknown;
+  taxAmount: Prisma.Decimal | null;
+  taxRate: Prisma.Decimal | null;
+  taxLabel: string | null;
+  tip: Prisma.Decimal;
+  total: Prisma.Decimal;
+  paymentMethod: string | null;
+  paymentStatus: string;
+  lastUpdate: Date;
+}, sessionId: string) {
+  return {
+    sessionId,
+    cart: session.cart,
+    subtotal: Number(session.subtotal),
+    discount: session.discount,
+    taxAmount: session.taxAmount !== null ? Number(session.taxAmount) : undefined,
+    taxRate: session.taxRate !== null ? Number(session.taxRate) : undefined,
+    taxLabel: session.taxLabel ?? undefined,
+    tip: Number(session.tip),
+    total: Number(session.total),
+    paymentMethod: session.paymentMethod,
+    paymentStatus: session.paymentStatus,
+    lastUpdate: session.lastUpdate.getTime(),
+  };
+}
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ sessionId: string }> }
 ) {
   try {
-    await connectDB();
     const { sessionId } = await params;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const session = await PosSession.findOne({ sessionId }).lean() as any;
+    const session = await prisma.posSession.findUnique({ where: { sessionId } });
 
     if (!session) {
       return NextResponse.json(
@@ -48,20 +52,7 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
-      data: {
-        sessionId,
-        cart: session.cart,
-        subtotal: session.subtotal,
-        discount: session.discount,
-        taxAmount: session.taxAmount,
-        taxRate: session.taxRate,
-        taxLabel: session.taxLabel,
-        tip: session.tip,
-        total: session.total,
-        paymentMethod: session.paymentMethod,
-        paymentStatus: session.paymentStatus,
-        lastUpdate: session.lastUpdate,
-      },
+      data: serialize(session, sessionId),
     }, {
       headers: {
         'Cache-Control': 'no-store, must-revalidate',
@@ -82,7 +73,6 @@ export async function POST(
   { params }: { params: Promise<{ sessionId: string }> }
 ) {
   try {
-    await connectDB();
     const { sessionId } = await params;
 
     let body: { tenant?: string; action?: string; data?: Record<string, unknown> };
@@ -104,89 +94,111 @@ export async function POST(
       );
     }
 
-    let session = await PosSession.findOne({ sessionId });
+    let session = await prisma.posSession.findUnique({ where: { sessionId } });
 
     if (action === 'init') {
       // Upsert: create or reset session
-      session = await PosSession.findOneAndUpdate(
-        { sessionId },
-        {
+      session = await prisma.posSession.upsert({
+        where: { sessionId },
+        create: {
           sessionId,
           tenant,
-          cart: data?.cart || [],
-          subtotal: data?.subtotal || 0,
-          discount: data?.discount || null,
-          taxAmount: data?.taxAmount,
-          taxRate: data?.taxRate,
-          taxLabel: data?.taxLabel,
-          tip: data?.tip || 0,
-          total: data?.total || 0,
-          paymentMethod: data?.paymentMethod || null,
+          cart: (data?.cart ?? []) as Prisma.InputJsonValue,
+          subtotal: (data?.subtotal as number) || 0,
+          discount: (data?.discount ?? null) as Prisma.InputJsonValue | undefined,
+          taxAmount: data?.taxAmount as number | undefined,
+          taxRate: data?.taxRate as number | undefined,
+          taxLabel: data?.taxLabel as string | undefined,
+          tip: (data?.tip as number) || 0,
+          total: (data?.total as number) || 0,
+          paymentMethod: (data?.paymentMethod as string) || null,
           paymentStatus: 'pending',
-          lastUpdate: Date.now(),
+          lastUpdate: new Date(),
         },
-        { upsert: true, new: true }
-      );
+        update: {
+          tenant,
+          cart: (data?.cart ?? []) as Prisma.InputJsonValue,
+          subtotal: (data?.subtotal as number) || 0,
+          discount: (data?.discount ?? null) as Prisma.InputJsonValue | undefined,
+          taxAmount: data?.taxAmount as number | undefined,
+          taxRate: data?.taxRate as number | undefined,
+          taxLabel: data?.taxLabel as string | undefined,
+          tip: (data?.tip as number) || 0,
+          total: (data?.total as number) || 0,
+          paymentMethod: (data?.paymentMethod as string) || null,
+          paymentStatus: 'pending',
+          lastUpdate: new Date(),
+        },
+      });
     } else if (action === 'update-cart' && !session) {
       // Auto-create session if it doesn't exist (handles race condition where cart syncs before init completes)
-      session = await PosSession.findOneAndUpdate(
-        { sessionId },
-        {
+      session = await prisma.posSession.upsert({
+        where: { sessionId },
+        create: {
           sessionId,
           tenant,
-          cart: data?.cart || [],
-          subtotal: data?.subtotal || 0,
-          discount: null,
-          taxAmount: data?.taxAmount || 0,
-          taxRate: data?.taxRate || 0,
-          taxLabel: data?.taxLabel || 'Tax',
+          cart: (data?.cart ?? []) as Prisma.InputJsonValue,
+          subtotal: (data?.subtotal as number) || 0,
+          discount: Prisma.JsonNull,
+          taxAmount: (data?.taxAmount as number) || 0,
+          taxRate: (data?.taxRate as number) || 0,
+          taxLabel: (data?.taxLabel as string) || 'Tax',
           tip: 0,
-          total: data?.total || 0,
+          total: (data?.total as number) || 0,
           paymentMethod: null,
           paymentStatus: 'pending',
-          lastUpdate: Date.now(),
+          lastUpdate: new Date(),
         },
-        { upsert: true, new: true }
-      );
+        update: {
+          tenant,
+          cart: (data?.cart ?? []) as Prisma.InputJsonValue,
+          subtotal: (data?.subtotal as number) || 0,
+          discount: Prisma.JsonNull,
+          taxAmount: (data?.taxAmount as number) || 0,
+          taxRate: (data?.taxRate as number) || 0,
+          taxLabel: (data?.taxLabel as string) || 'Tax',
+          tip: 0,
+          total: (data?.total as number) || 0,
+          paymentMethod: null,
+          paymentStatus: 'pending',
+          lastUpdate: new Date(),
+        },
+      });
     } else if (session) {
-      const updates: Record<string, unknown> = { lastUpdate: Date.now() };
+      const updates: Prisma.PosSessionUpdateInput = { lastUpdate: new Date() };
 
       if (action === 'update-cart' && data) {
-        if (data.cart) updates.cart = data.cart;
-        if (data.subtotal != null) updates.subtotal = data.subtotal;
-        if (data.taxAmount != null) updates.taxAmount = data.taxAmount;
-        if (data.taxRate != null) updates.taxRate = data.taxRate;
-        if (data.taxLabel != null) updates.taxLabel = data.taxLabel;
-        if (data.total != null) updates.total = data.total;
+        if (data.cart) updates.cart = data.cart as Prisma.InputJsonValue;
+        if (data.subtotal != null) updates.subtotal = data.subtotal as number;
+        if (data.taxAmount != null) updates.taxAmount = data.taxAmount as number;
+        if (data.taxRate != null) updates.taxRate = data.taxRate as number;
+        if (data.taxLabel != null) updates.taxLabel = data.taxLabel as string;
+        if (data.total != null) updates.total = data.total as number;
       } else if (action === 'update-discount' && data) {
-        updates.discount = data.discount;
-        if (data.taxAmount != null) updates.taxAmount = data.taxAmount;
-        if (data.total != null) updates.total = data.total;
+        updates.discount = (data.discount ?? Prisma.JsonNull) as Prisma.InputJsonValue;
+        if (data.taxAmount != null) updates.taxAmount = data.taxAmount as number;
+        if (data.total != null) updates.total = data.total as number;
       } else if (action === 'update-tip' && data) {
-        updates.tip = data.tip ?? 0;
-        if (data.total != null) updates.total = data.total;
+        updates.tip = (data.tip as number) ?? 0;
+        if (data.total != null) updates.total = data.total as number;
       } else if (action === 'update-payment-method' && data) {
-        updates.paymentMethod = data.paymentMethod || null;
+        updates.paymentMethod = (data.paymentMethod as string) || null;
       } else if (action === 'update-payment-status' && data) {
-        updates.paymentStatus = data.status || 'pending';
+        updates.paymentStatus = ((data.status as string) || 'pending') as never;
       } else if (action === 'clear') {
         updates.cart = [];
         updates.subtotal = 0;
-        updates.discount = null;
-        updates.taxAmount = 0;
-        updates.taxRate = undefined;
-        updates.taxLabel = undefined;
+        updates.discount = Prisma.JsonNull;
+        updates.taxAmount = null;
+        updates.taxRate = null;
+        updates.taxLabel = null;
         updates.tip = 0;
         updates.total = 0;
         updates.paymentMethod = null;
         updates.paymentStatus = 'pending';
       }
 
-      session = await PosSession.findOneAndUpdate(
-        { sessionId },
-        { $set: updates },
-        { new: true }
-      );
+      session = await prisma.posSession.update({ where: { sessionId }, data: updates });
     } else {
       return NextResponse.json(
         { success: false, error: 'Session not found. Please reinitialize.' },
@@ -196,19 +208,7 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
-      data: {
-        sessionId,
-        cart: session.cart,
-        subtotal: session.subtotal,
-        discount: session.discount,
-        taxAmount: session.taxAmount,
-        taxRate: session.taxRate,
-        taxLabel: session.taxLabel,
-        tip: session.tip,
-        total: session.total,
-        paymentMethod: session.paymentMethod,
-        paymentStatus: session.paymentStatus,
-      },
+      data: serialize(session, sessionId),
     });
   } catch (error) {
     logger.error('POST /api/pos/session/[sessionId] error:', error);

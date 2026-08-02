@@ -1,17 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Discount from '@/models/Discount';
 import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { requireAuth } from '@/lib/auth'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkFeatureAccess } from '@/lib/subscription';
-import { ensureLegalDiscounts } from '@/lib/discount-seeds';
+import { ensureLegalDiscounts, findDiscounts, findDiscountByCode, createDiscount } from '@/lib/data/discounts';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     // SECURITY: Validate tenant access for authenticated requests
     let tenantId: string;
     try {
@@ -28,7 +25,7 @@ export async function GET(request: NextRequest) {
       throw authError;
     }
     const t = await getValidationTranslatorFromRequest(request); // eslint-disable-line @typescript-eslint/no-unused-vars
-    
+
     // Auto-seed legal discounts (SC20, PWD20) for this tenant
     await ensureLegalDiscounts(tenantId);
 
@@ -36,21 +33,15 @@ export async function GET(request: NextRequest) {
     const code = searchParams.get('code');
     const activeOnly = searchParams.get('activeOnly') === 'true';
 
-    const query: any = { tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
-    
-    if (code) {
-      query.code = code.toUpperCase();
-    }
-    
-    if (activeOnly) {
-      query.isActive = true;
-      query.validFrom = { $lte: new Date() };
-      query.validUntil = { $gte: new Date() };
-    }
+    const discounts = await findDiscounts(tenantId, {
+      code: code ? code.toUpperCase() : undefined,
+      activeOnly,
+    });
 
-    const discounts = await Discount.find(query).sort({ createdAt: -1 });
-
-    return NextResponse.json({ success: true, data: discounts });
+    return NextResponse.json({
+      success: true,
+      data: discounts.map(({ id, ...rest }) => ({ _id: id, ...rest, value: Number(rest.value), minPurchaseAmount: rest.minPurchaseAmount != null ? Number(rest.minPurchaseAmount) : rest.minPurchaseAmount, maxDiscountAmount: rest.maxDiscountAmount != null ? Number(rest.maxDiscountAmount) : rest.maxDiscountAmount })),
+    });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -58,7 +49,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     // SECURITY: Validate tenant access for authenticated requests
     let tenantId: string;
     try {
@@ -151,7 +141,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if code already exists for this tenant
-    const existing = await Discount.findOne({ tenantId, code: code.toUpperCase() });
+    const existing = await findDiscountByCode(tenantId, code.toUpperCase());
     if (existing) {
       return NextResponse.json(
         { success: false, error: t('validation.discountCodeExists', 'Discount code already exists') },
@@ -159,8 +149,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const discount = await Discount.create({
-      tenantId,
+    const discount = await createDiscount(tenantId, {
       code: code.toUpperCase(),
       name,
       description,
@@ -181,14 +170,15 @@ export async function POST(request: NextRequest) {
       tenantId,
       action: AuditActions.DISCOUNT_CREATE,
       entityType: 'discount',
-      entityId: discount._id.toString(),
+      entityId: discount.id,
       changes: { code, type, value },
     });
 
-    return NextResponse.json({ success: true, data: discount }, { status: 201 });
+    const { id, ...rest } = discount;
+    return NextResponse.json({ success: true, data: { _id: id, ...rest, value: Number(rest.value) } }, { status: 201 });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     const t = await getValidationTranslatorFromRequest(request);
-    if (error.code === 11000) {
+    if (error.code === 'P2002') {
       return NextResponse.json(
         { success: false, error: t('validation.discountCodeExists', 'Discount code already exists') },
         { status: 400 }
@@ -197,4 +187,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: error.message }, { status: 400 });
   }
 }
-

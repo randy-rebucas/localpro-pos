@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import mongoose from 'mongoose';
-import connectDB from '@/lib/mongodb';
-import Prescription from '@/models/Prescription';
-import Product from '@/models/Product';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
+
+function prescriptionToApi(p: { id: string; items?: Array<{ id: string; [key: string]: unknown }>; [key: string]: unknown }) {
+  const { id, items, ...rest } = p;
+  return {
+    _id: id,
+    ...rest,
+    ...(items ? { items: items.map(({ id: itemId, ...itemRest }) => ({ _id: itemId, ...itemRest })) } : {}),
+  };
+}
 
 export async function POST(
   request: NextRequest,
@@ -30,9 +35,11 @@ export async function POST(
     }
 
     const { id } = await params;
-    await connectDB();
 
-    const prescription = await Prescription.findOne({ _id: id, tenantId: user.tenantId });
+    const prescription = await prisma.prescription.findFirst({
+      where: { id, tenantId: user.tenantId },
+      include: { items: true },
+    });
     if (!prescription) {
       return NextResponse.json({ success: false, error: 'Prescription not found' }, { status: 404 });
     }
@@ -46,8 +53,7 @@ export async function POST(
 
     // Auto-expire check
     if (prescription.validUntil < new Date()) {
-      prescription.status = 'expired';
-      await prescription.save();
+      await prisma.prescription.update({ where: { id }, data: { status: 'expired' } });
       return NextResponse.json(
         { success: false, error: 'Prescription has expired' },
         { status: 409 }
@@ -75,13 +81,13 @@ export async function POST(
     }
 
     // Load tenant to check PDEA license for dangerous drugs
-    const tenant = await Tenant.findOne({ _id: user.tenantId }).lean();
+    const tenant = await prisma.tenant.findUnique({ where: { id: user.tenantId }, select: { settings: true } });
 
     // Validate per-item requirements
     for (const idx of itemIndexes) {
       const item = prescription.items[idx];
       if (item.productId) {
-        const product = await Product.findOne({ _id: item.productId, tenantId: user.tenantId }).lean();
+        const product = await prisma.product.findFirst({ where: { id: item.productId, tenantId: user.tenantId } });
         if (!product) {
           return NextResponse.json(
             { success: false, error: `Product not found for item: ${item.drugName}` },
@@ -89,7 +95,8 @@ export async function POST(
           );
         }
         if (product.drugSchedule === 'dangerous') {
-          const pdeaLicense = tenant?.settings?.pharmacyCompliance?.pdeaLicense;
+          const settings = tenant?.settings as { pharmacyCompliance?: { pdeaLicense?: string } } | null;
+          const pdeaLicense = settings?.pharmacyCompliance?.pdeaLicense;
           if (!pdeaLicense) {
             return NextResponse.json(
               { success: false, error: `PDEA license is required to dispense dangerous drugs (${item.drugName})` },
@@ -97,7 +104,7 @@ export async function POST(
             );
           }
         }
-        if (product.trackInventory && !product.allowOutOfStockSales && product.stock < item.quantity) {
+        if (product.trackInventory && !product.allowOutOfStockSales && product.stock < BigInt(item.quantity)) {
           return NextResponse.json(
             { success: false, error: `Insufficient stock for ${item.drugName}` },
             { status: 409 }
@@ -106,29 +113,38 @@ export async function POST(
       }
     }
 
-    // Atomic stock deduction using MongoDB session
-    const session = await mongoose.startSession();
-    await session.withTransaction(async () => {
-      const now = new Date();
+    // Atomic stock deduction
+    const now = new Date();
+    let newStatus: 'dispensed' | 'partially_dispensed';
+    await prisma.$transaction(async (tx) => {
       for (const idx of itemIndexes) {
         const item = prescription.items[idx];
         if (item.productId) {
-          await Product.findOneAndUpdate(
-            { _id: item.productId, tenantId: user.tenantId },
-            { $inc: { stock: -item.quantity } },
-            { session }
-          );
+          await tx.product.update({
+            where: { id: item.productId },
+            data: { stock: { decrement: item.quantity } },
+          });
         }
-        prescription.items[idx].dispensed = true;
-        prescription.items[idx].dispensedAt = now;
-        prescription.items[idx].dispensedBy = new mongoose.Types.ObjectId(user.userId);
+        await tx.prescriptionItem.update({
+          where: { id: item.id },
+          data: {
+            dispensed: true,
+            dispensedAt: now,
+            dispensedBy: user.userId,
+          },
+        });
       }
 
-      const allDispensed = prescription.items.every(i => i.dispensed);
-      prescription.status = allDispensed ? 'dispensed' : 'partially_dispensed';
-      await prescription.save({ session });
+      const dispensedIdxSet = new Set(itemIndexes);
+      const allDispensed = prescription.items.every((i, idx) => i.dispensed || dispensedIdxSet.has(idx));
+      newStatus = allDispensed ? 'dispensed' : 'partially_dispensed';
+      await tx.prescription.update({ where: { id }, data: { status: newStatus } });
     });
-    session.endSession();
+
+    const updated = await prisma.prescription.findFirst({
+      where: { id, tenantId: user.tenantId },
+      include: { items: true },
+    });
 
     await createAuditLog(request, {
       tenantId: user.tenantId,
@@ -136,10 +152,10 @@ export async function POST(
       action: AuditActions.PRESCRIPTION_DISPENSE,
       entityType: 'prescription',
       entityId: id,
-      changes: { itemIndexes, dispensedBy: user.userId, status: prescription.status },
+      changes: { itemIndexes, dispensedBy: user.userId, status: newStatus! },
     });
 
-    return NextResponse.json({ success: true, data: prescription });
+    return NextResponse.json({ success: true, data: prescriptionToApi(updated!) });
   } catch (error: unknown) {
     return handleApiError(error, 'Failed to dispense prescription');
   }

@@ -3,11 +3,7 @@
  * Remind staff to count and close drawers at shift end
  */
 
-import connectDB from '@/lib/mongodb';
-import Attendance from '@/models/Attendance';
-import CashDrawerSession from '@/models/CashDrawerSession';
-import Tenant from '@/models/Tenant';
-import User from '@/models/User'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import prisma from '@/lib/prisma';
 import { sendEmail, sendSMS } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { AutomationResult } from './types';
@@ -23,8 +19,6 @@ export interface CashCountReminderOptions {
 export async function sendCashCountReminders(
   options: CashCountReminderOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -42,10 +36,10 @@ export async function sendCashCountReminders(
     // Get tenants to process
     let tenants;
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await prisma.tenant.findUnique({ where: { id: options.tenantId } });
       tenants = tenant ? [tenant] : [];
     } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
+      tenants = await prisma.tenant.findMany({ where: { isActive: true } });
     }
 
     if (tenants.length === 0) {
@@ -58,7 +52,7 @@ export async function sendCashCountReminders(
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
+        const tenantId = tenant.id;
         const tenantSettings = await getTenantSettingsById(tenantId);
 
         // Skip if notifications disabled
@@ -67,16 +61,14 @@ export async function sendCashCountReminders(
         }
 
         // Find active attendance sessions (clocked in but not out)
-        const activeSessions = await Attendance.find({
-          tenantId,
-          clockOut: null,
-        })
-          .populate('userId', 'name email')
-          .lean();
+        const activeSessions = await prisma.attendance.findMany({
+          where: { tenantId, clockOut: null },
+          include: { user: { select: { id: true, name: true, email: true } } },
+        });
 
         for (const session of activeSessions) {
           try {
-            const user = session.userId as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+            const user = session.user;
             if (!user) continue;
 
             // Estimate shift end time (8 hours from clock-in, or use tenant settings)
@@ -86,18 +78,16 @@ export async function sendCashCountReminders(
             // Check if shift end is within reminder window
             if (estimatedShiftEnd >= reminderWindowStart && estimatedShiftEnd <= reminderWindowEnd) {
               // Check if user has an open cash drawer
-              const openDrawer = await CashDrawerSession.findOne({
-                tenantId,
-                userId: user._id,
-                status: 'open',
-              }).lean();
+              const openDrawer = await prisma.cashDrawerSession.findFirst({
+                where: { tenantId, userId: user.id, status: 'open' },
+              });
 
               if (openDrawer) {
                 const companyName = tenantSettings?.companyName || tenant.name || 'Business';
                 const reminderMessage = `Reminder: Your shift is ending soon. Please count and close your cash drawer before leaving.
 
 Shift End: ${estimatedShiftEnd.toLocaleTimeString()}
-Cash Drawer Session: ${openDrawer._id.toString().slice(-8)}
+Cash Drawer Session: ${openDrawer.id.slice(-8)}
 
 Thank you,
 ${companyName}`;
@@ -130,7 +120,7 @@ ${companyName}`;
             }
           } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             totalFailed++;
-            results.errors?.push(`Session ${session._id}: ${error.message}`);
+            results.errors?.push(`Session ${session.id}: ${error.message}`);
           }
         }
       } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any

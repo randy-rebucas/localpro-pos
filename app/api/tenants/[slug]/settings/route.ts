@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -9,18 +8,18 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 import { applyBusinessTypeDefaults } from '@/lib/business-types';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
+import { getTenantBySlug, getTenantBySlugAny } from '@/lib/data/tenants';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
-    await connectDB();
     // Settings are public per tenant (no sensitive data exposed)
     const { slug } = await params;
     const t = await getValidationTranslatorFromRequest(request);
-    
-    const tenant = await Tenant.findOne({ slug, isActive: true }).lean();
+
+    const tenant = await getTenantBySlug(slug);
     if (!tenant) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
@@ -42,7 +41,6 @@ export async function PUT(
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
-    await connectDB();
     const { slug } = await params;
 
     const user = await getCurrentUser(request);
@@ -70,13 +68,13 @@ export async function PUT(
     // (taxRules, businessHours, holidays, receiptTemplates, notificationTemplates,
     //  advancedBranding, hardwareConfig, birTin, etc.) are preserved when the
     // main settings page saves only its own tabs.
-    const existingTenant = await Tenant.findOne({ slug }).lean();
-    const existingSettings = existingTenant?.settings || {};
+    const existingTenant = await getTenantBySlugAny(slug);
+    const existingSettings = (existingTenant?.settings as Record<string, any>) || {}; // eslint-disable-line @typescript-eslint/no-explicit-any
 
     // Three-way merge: defaults → existing → incoming (incoming wins on conflict)
     const mergedSettings = { ...defaultSettings, ...existingSettings, ...settings };
 
-    const currentBusinessType = existingTenant?.settings?.businessType;
+    const currentBusinessType = existingSettings?.businessType;
     const newBusinessType = settings.businessType;
 
     // Apply business type defaults if business type is being set or changed
@@ -114,30 +112,29 @@ export async function PUT(
       }
     }
 
-    // Tenant isolation: verify the authenticated user belongs to this tenant (reuse existingTenant)
-    if (existingTenant && user && user.role !== 'super_admin' && user.tenantId !== existingTenant._id.toString()) {
-      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
-    }
-
-    const tenant = await Tenant.findOneAndUpdate(
-      { slug },
-      { $set: { settings: updatedSettings } },
-      { new: true, runValidators: true }
-    );
-
-    if (!tenant) {
+    if (!existingTenant) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
         { status: 404 }
       );
     }
 
+    // Tenant isolation: verify the authenticated user belongs to this tenant (reuse existingTenant)
+    if (user.role !== 'super_admin' && user.tenantId !== existingTenant.id) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
+
+    const tenant = await prisma.tenant.update({
+      where: { id: existingTenant.id },
+      data: { settings: updatedSettings },
+    });
+
     await createAuditLog(request, {
-      tenantId: tenant._id,
+      tenantId: tenant.id,
       userId: user?.userId,
       action: AuditActions.UPDATE,
       entityType: 'tenant',
-      entityId: tenant._id.toString(),
+      entityId: tenant.id,
       changes: { settings: updatedSettings },
     });
 
@@ -149,4 +146,3 @@ export async function PUT(
     return NextResponse.json({ success: false, error: message || t('validation.failedToUpdateSettings', 'Failed to update settings') }, { status: 400 });
   }
 }
-

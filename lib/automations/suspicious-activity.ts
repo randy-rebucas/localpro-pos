@@ -3,11 +3,7 @@
  * Detect and alert on suspicious patterns
  */
 
-import connectDB from '@/lib/mongodb';
-import Transaction from '@/models/Transaction';
-import CashDrawerSession from '@/models/CashDrawerSession';
-import AuditLog from '@/models/AuditLog';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/prisma';
 import { sendEmail } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { AutomationResult } from './types';
@@ -26,8 +22,6 @@ export interface SuspiciousActivityOptions {
 export async function detectSuspiciousActivity(
   options: SuspiciousActivityOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -48,10 +42,10 @@ export async function detectSuspiciousActivity(
     // Get tenants to process
     let tenants;
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await prisma.tenant.findUnique({ where: { id: options.tenantId } });
       tenants = tenant ? [tenant] : [];
     } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
+      tenants = await prisma.tenant.findMany({ where: { isActive: true } });
     }
 
     if (tenants.length === 0) {
@@ -64,16 +58,18 @@ export async function detectSuspiciousActivity(
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
+        const tenantId = tenant.id;
         const tenantSettings = await getTenantSettingsById(tenantId);
 
         const suspiciousActivities: string[] = [];
 
         // Check for excessive refunds
-        const refundsToday = await Transaction.countDocuments({
-          tenantId,
-          status: 'refunded',
-          updatedAt: { $gte: today },
+        const refundsToday = await prisma.transaction.count({
+          where: {
+            tenantId,
+            status: 'refunded',
+            updatedAt: { gte: today },
+          },
         });
 
         if (refundsToday >= refundThreshold) {
@@ -81,10 +77,12 @@ export async function detectSuspiciousActivity(
         }
 
         // Check for excessive voids/cancellations
-        const voidsToday = await Transaction.countDocuments({
-          tenantId,
-          status: 'cancelled',
-          createdAt: { $gte: today },
+        const voidsToday = await prisma.transaction.count({
+          where: {
+            tenantId,
+            status: 'cancelled',
+            createdAt: { gte: today },
+          },
         });
 
         if (voidsToday >= voidThreshold) {
@@ -92,22 +90,26 @@ export async function detectSuspiciousActivity(
         }
 
         // Check for large discounts
-        const largeDiscounts = await Transaction.find({
-          tenantId,
-          discountAmount: { $gte: discountThreshold },
-          createdAt: { $gte: today },
-        }).lean();
+        const largeDiscountsCount = await prisma.transaction.count({
+          where: {
+            tenantId,
+            discountAmount: { gte: discountThreshold },
+            createdAt: { gte: today },
+          },
+        });
 
-        if (largeDiscounts.length > 0) {
-          suspiciousActivities.push(`Large discounts detected: ${largeDiscounts.length} transactions with discounts >= $${discountThreshold}`);
+        if (largeDiscountsCount > 0) {
+          suspiciousActivities.push(`Large discounts detected: ${largeDiscountsCount} transactions with discounts >= $${discountThreshold}`);
         }
 
         // Check for failed login attempts
-        const failedLogins = await AuditLog.countDocuments({
-          tenantId,
-          action: 'LOGIN',
-          'metadata.success': false,
-          createdAt: { $gte: today },
+        const failedLogins = await prisma.auditLog.count({
+          where: {
+            tenantId,
+            action: 'LOGIN',
+            metadata: { path: ['success'], equals: false },
+            createdAt: { gte: today },
+          },
         });
 
         if (failedLogins >= failedLoginThreshold) {
@@ -115,23 +117,25 @@ export async function detectSuspiciousActivity(
         }
 
         // Check for cash drawer discrepancies
-        const drawersWithDiscrepancies = await CashDrawerSession.find({
-          tenantId,
-          closingTime: { $gte: today },
-          $or: [
-            { shortage: { $gte: 50 } },
-            { overage: { $gte: 100 } },
-          ],
-        }).lean();
+        const drawersWithDiscrepanciesCount = await prisma.cashDrawerSession.count({
+          where: {
+            tenantId,
+            closingTime: { gte: today },
+            OR: [
+              { shortage: { gte: 50 } },
+              { overage: { gte: 100 } },
+            ],
+          },
+        });
 
-        if (drawersWithDiscrepancies.length > 0) {
-          suspiciousActivities.push(`Cash drawer discrepancies: ${drawersWithDiscrepancies.length} drawers with significant shortages/overages`);
+        if (drawersWithDiscrepanciesCount > 0) {
+          suspiciousActivities.push(`Cash drawer discrepancies: ${drawersWithDiscrepanciesCount} drawers with significant shortages/overages`);
         }
 
         // Send alert if suspicious activities found
         if (suspiciousActivities.length > 0 && tenantSettings?.emailNotifications && tenantSettings?.email) {
           const companyName = tenantSettings?.companyName || tenant.name || 'Business';
-          
+
           await sendEmail({
             to: tenantSettings.email,
             subject: `🚨 Suspicious Activity Alert - ${companyName}`,

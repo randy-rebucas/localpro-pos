@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Transaction from '@/models/Transaction';
-import Payment from '@/models/Payment';
-import Product from '@/models/Product';
-import Customer from '@/models/Customer';
+import { Prisma } from '@prisma/client';
+import prisma from '@/lib/prisma';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth, getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -11,6 +8,7 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { updateStock } from '@/lib/stock';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
+import { runInTransaction, type PrismaTx } from '@/lib/db-transaction';
 import {
   calculateOnAccountRefundAmount,
   getOnAccountTotalForTransaction,
@@ -18,7 +16,6 @@ import {
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await connectDB();
     const authUser = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
@@ -33,7 +30,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
-    const transaction = await Transaction.findOne({ _id: id, tenantId });
+    const transaction = await prisma.transaction.findFirst({ where: { id, tenantId }, include: { items: true } });
     if (!transaction) {
       return NextResponse.json({ success: false, error: t('validation.transactionNotFound', 'Transaction not found') }, { status: 404 });
     }
@@ -55,19 +52,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { items, reason, notes } = body;
 
     // If no items specified, refund all items (full refund)
-    const itemsToRefund = items || transaction.items.map((item: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
-      productId: item.product.toString(),
+    const itemsToRefund = items || transaction.items.map((item) => ({
+      productId: item.productId,
       quantity: item.quantity,
     }));
 
     // Validate items to refund
-    const refundItems = [];
+    const refundItems: Array<{ productId: string; quantity: number; price: number; subtotal: number; name: string }> = [];
     let refundAmount = 0;
 
     for (const refundItem of itemsToRefund) {
-      const originalItem = transaction.items.find(
-        (item: any) => item.product.toString() === refundItem.productId // eslint-disable-line @typescript-eslint/no-explicit-any
-      );
+      const originalItem = transaction.items.find((item) => item.productId === refundItem.productId);
 
       if (!originalItem) {
         const errorMsg = t('validation.itemNotFoundInTransaction', 'Item {productId} not found in transaction').replace('{productId}', refundItem.productId);
@@ -84,58 +79,158 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         );
       }
 
+      const price = Number(originalItem.price);
       refundItems.push({
         productId: refundItem.productId,
         quantity: refundItem.quantity,
-        price: originalItem.price,
-        subtotal: originalItem.price * refundItem.quantity,
+        price,
+        subtotal: price * refundItem.quantity,
+        name: originalItem.name,
       });
 
-      refundAmount += originalItem.price * refundItem.quantity;
+      refundAmount += price * refundItem.quantity;
     }
 
     // Calculate proportional discount refund if applicable
-    if (transaction.discountAmount && transaction.discountAmount > 0 && transaction.subtotal > 0) {
-      const discountRatio = refundAmount / transaction.subtotal;
-      const refundDiscount = Math.round(transaction.discountAmount * discountRatio * 100) / 100;
+    const originalDiscountAmount = transaction.discountAmount ? Number(transaction.discountAmount) : 0;
+    const originalSubtotal = Number(transaction.subtotal);
+    if (originalDiscountAmount > 0 && originalSubtotal > 0) {
+      const discountRatio = refundAmount / originalSubtotal;
+      const refundDiscount = Math.round(originalDiscountAmount * discountRatio * 100) / 100;
       refundAmount = Math.round((refundAmount - refundDiscount) * 100) / 100;
     }
 
-    // Create refund transaction
-    const refundTransaction = await Transaction.create({
-      tenantId,
-      items: refundItems.map((item: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
-        product: item.productId,
-        name: transaction.items.find((i: any) => i.product.toString() === item.productId)?.name || '', // eslint-disable-line @typescript-eslint/no-explicit-any
-        price: item.price,
-        quantity: item.quantity,
-        subtotal: item.subtotal,
-      })),
-      subtotal: refundAmount,
-      total: refundAmount,
-      paymentMethod: transaction.paymentMethod,
-      status: 'refunded',
-      receiptNumber: `REF-${transaction.receiptNumber || transaction._id.toString().slice(-8)}`,
-      notes: notes || reason || 'Refund',
-    });
+    const isFullRefund = refundItems.length === transaction.items.length &&
+      refundItems.every((item) => {
+        const original = transaction.items.find((i) => i.productId === item.productId);
+        return original && item.quantity === original.quantity;
+      });
 
-    // Restore stock for refunded items (only if product tracks inventory)
-    for (const refundItem of refundItems) {
-      const product = await Product.findOne({ _id: refundItem.productId, tenantId });
-      if (product && product.trackInventory !== false) {
-        await updateStock(
-          refundItem.productId,
+    let refundPayment: { id: string } | null = null;
+    let paymentRefundWarning: string | undefined;
+    let onAccountRefundAmount = 0;
+    let accountBalanceBefore: number | undefined;
+    let accountBalanceAfter: number | undefined;
+
+    const { refundTransaction } = await runInTransaction(async (tx: PrismaTx) => {
+      // Create refund transaction
+      const refundTx = await tx.transaction.create({
+        data: {
           tenantId,
-          refundItem.quantity, // Positive to restore
-          'return',
-          {
-            transactionId: refundTransaction._id.toString(),
-            reason: reason || 'Transaction refund',
-            notes: notes,
-          }
-        );
+          subtotal: refundAmount,
+          total: refundAmount,
+          paymentMethod: transaction.paymentMethod,
+          status: 'refunded',
+          receiptNumber: `REF-${transaction.receiptNumber || transaction.id.slice(-8)}`,
+          notes: notes || reason || 'Refund',
+          items: {
+            create: refundItems.map((item) => ({
+              productId: item.productId,
+              name: item.name,
+              price: item.price,
+              quantity: item.quantity,
+              subtotal: item.subtotal,
+            })),
+          },
+        },
+      });
+
+      // Restore stock for refunded items (only if product tracks inventory)
+      for (const refundItem of refundItems) {
+        const product = await tx.product.findFirst({ where: { id: refundItem.productId, tenantId } });
+        if (product && product.trackInventory !== false) {
+          await updateStock(
+            refundItem.productId,
+            tenantId,
+            refundItem.quantity, // Positive to restore
+            'return',
+            {
+              transactionId: refundTx.id,
+              reason: reason || 'Transaction refund',
+              notes: notes,
+            },
+            tx
+          );
+        }
       }
-    }
+
+      // Mark original transaction as refunded if full refund
+      if (isFullRefund) {
+        await tx.transaction.update({ where: { id: transaction.id }, data: { status: 'refunded' } });
+      }
+
+      // Create Payment refund record if original payment exists
+      try {
+        const originalPayment = await tx.payment.findFirst({
+          where: { tenantId, transactionId: transaction.id, status: 'completed' },
+        });
+
+        if (originalPayment) {
+          const user = await getCurrentUser(request);
+          const created = await tx.payment.create({
+            data: {
+              tenantId,
+              transactionId: refundTx.id,
+              method: originalPayment.method,
+              amount: refundAmount,
+              status: 'refunded',
+              details: originalPayment.details as Prisma.InputJsonValue | undefined,
+              processedBy: user?.userId,
+              processedAt: new Date(),
+              refundedAt: new Date(),
+              refundReason: body.reason || body.notes || 'Transaction refund',
+            },
+          });
+          refundPayment = { id: created.id };
+
+          // Mark original payment as refunded
+          await tx.payment.update({
+            where: { id: originalPayment.id },
+            data: {
+              status: 'refunded',
+              refundedAt: new Date(),
+              refundReason: body.reason || body.notes || 'Transaction refund',
+            },
+          });
+        }
+      } catch (paymentError) {
+        logger.error('Failed to create payment refund record:', paymentError);
+        paymentRefundWarning = 'Refund recorded but payment record could not be updated. Please update the payment manually.';
+      }
+
+      if (transaction.customerId && refundAmount > 0) {
+        const onAccountTotal = await getOnAccountTotalForTransaction(
+          tenantId,
+          transaction.id,
+          Number(transaction.total),
+          transaction.paymentMethod
+        );
+
+        if (onAccountTotal > 0) {
+          onAccountRefundAmount = calculateOnAccountRefundAmount(
+            refundAmount,
+            Number(transaction.total),
+            onAccountTotal
+          );
+
+          if (onAccountRefundAmount > 0) {
+            const cust = await tx.customer.findFirst({ where: { id: transaction.customerId, tenantId }, select: { id: true, accountBalance: true } });
+            if (cust) {
+              accountBalanceBefore = Number(cust.accountBalance ?? 0);
+              accountBalanceAfter = Math.max(0, accountBalanceBefore - onAccountRefundAmount);
+              if (accountBalanceAfter < 0.01) {
+                await tx.customer.update({ where: { id: cust.id }, data: { accountBalance: 0 } });
+                accountBalanceAfter = 0;
+              } else {
+                await tx.customer.update({ where: { id: cust.id }, data: { accountBalance: { decrement: onAccountRefundAmount } } });
+              }
+            }
+          }
+        }
+      }
+
+      return { refundTransaction: refundTx };
+    });
 
     {
       const ids = refundItems.map((x) => x.productId);
@@ -147,15 +242,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     // If this was a Shopify-imported order, mirror the refund on Shopify
     if (transaction.salesChannel === 'shopify' && transaction.externalOrderId) {
-      const integration = await (await import('@/models/TenantEcommerceIntegration')).default.findOne({
-        tenantId,
-        provider: 'shopify',
-        isActive: true,
-      }).lean();
+      const integration = await prisma.tenantEcommerceIntegration.findFirst({
+        where: { tenantId, provider: 'shopify', isActive: true },
+      });
       if (integration?.shopDomain) {
         const { getShopifyAccessTokenForIntegration } = await import('@/lib/ecommerce/shopify-token');
         const { createShopifyRefund } = await import('@/lib/ecommerce/shopify-refund');
-        const accessToken = await getShopifyAccessTokenForIntegration(integration);
+        const accessToken = await getShopifyAccessTokenForIntegration({
+          _id: integration.id,
+          shopDomain: integration.shopDomain,
+          credentialsEncrypted: integration.credentialsEncrypted,
+        });
         void createShopifyRefund(
           integration.shopDomain,
           accessToken,
@@ -167,118 +264,32 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       }
     }
 
-    // Mark original transaction as refunded if full refund
-    const isFullRefund = refundItems.length === transaction.items.length &&
-      refundItems.every((item: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-        const original = transaction.items.find((i: any) => i.product.toString() === item.productId); // eslint-disable-line @typescript-eslint/no-explicit-any
-        return original && item.quantity === original.quantity;
-      });
-
-    if (isFullRefund) {
-      transaction.status = 'refunded';
-      await transaction.save();
-    }
-
-    // Create Payment refund record if original payment exists
-    let refundPayment = null;
-    let paymentRefundWarning: string | undefined;
-    try {
-      const originalPayment = await Payment.findOne({
-        tenantId,
-        transactionId: transaction._id,
-        status: 'completed',
-      });
-
-      if (originalPayment) {
-        const user = await getCurrentUser(request);
-        refundPayment = await Payment.create({
-          tenantId,
-          transactionId: refundTransaction._id,
-          method: originalPayment.method,
-          amount: refundAmount,
-          status: 'refunded',
-          details: originalPayment.details,
-          processedBy: user?.userId,
-          processedAt: new Date(),
-          refundedAt: new Date(),
-          refundReason: body.reason || body.notes || 'Transaction refund',
-        });
-
-        // Mark original payment as refunded
-        originalPayment.status = 'refunded';
-        originalPayment.refundedAt = new Date();
-        originalPayment.refundReason = body.reason || body.notes || 'Transaction refund';
-        await originalPayment.save();
-      }
-    } catch (paymentError) {
-      logger.error('Failed to create payment refund record:', paymentError);
-      paymentRefundWarning = 'Refund recorded but payment record could not be updated. Please update the payment manually.';
-    }
-
-    let onAccountRefundAmount = 0;
-    let accountBalanceBefore: number | undefined;
-    let accountBalanceAfter: number | undefined;
-
-    if (transaction.customerId && refundAmount > 0) {
-      const onAccountTotal = await getOnAccountTotalForTransaction(
-        tenantId,
-        transaction._id,
-        transaction.total,
-        transaction.paymentMethod
-      );
-
-      if (onAccountTotal > 0) {
-        onAccountRefundAmount = calculateOnAccountRefundAmount(
-          refundAmount,
-          transaction.total,
-          onAccountTotal
-        );
-
-        if (onAccountRefundAmount > 0) {
-          const cust = await Customer.findOne({ _id: transaction.customerId, tenantId }).select('accountBalance');
-          if (cust) {
-            accountBalanceBefore = cust.accountBalance ?? 0;
-            accountBalanceAfter = Math.max(0, accountBalanceBefore - onAccountRefundAmount);
-            await Customer.updateOne(
-              { _id: cust._id },
-              { $inc: { accountBalance: -onAccountRefundAmount } }
-            );
-            // Clamp negative balances from rounding edge cases
-            if (accountBalanceAfter < 0.01) {
-              await Customer.updateOne({ _id: cust._id }, { $set: { accountBalance: 0 } });
-              accountBalanceAfter = 0;
-            }
-          }
-        }
-      }
-    }
-
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.TRANSACTION_REFUND,
       entityType: 'transaction',
       entityId: id,
       changes: {
-        refundTransactionId: refundTransaction._id.toString(),
+        refundTransactionId: refundTransaction.id,
         refundAmount,
         onAccountRefundAmount,
-        customerId: transaction.customerId?.toString(),
+        customerId: transaction.customerId ?? undefined,
         accountBalanceBefore,
         accountBalanceAfter,
         itemsRefunded: refundItems.length,
         isFullRefund,
-        refundPaymentId: refundPayment?._id.toString(),
+        refundPaymentId: refundPayment ? (refundPayment as { id: string }).id : undefined,
       },
     });
 
     return NextResponse.json({
       success: true,
       data: {
-        refundTransaction,
-        originalTransaction: transaction,
+        refundTransaction: { _id: refundTransaction.id, ...refundTransaction },
+        originalTransaction: { _id: transaction.id, ...transaction },
         refundAmount,
         isFullRefund,
-        refundPayment,
+        refundPayment: refundPayment ? { _id: (refundPayment as { id: string }).id } : null,
       },
       ...(paymentRefundWarning ? { warning: paymentRefundWarning } : {}),
     }, { status: 201 });
@@ -294,4 +305,3 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ success: false, error: message }, { status: 400 });
   }
 }
-

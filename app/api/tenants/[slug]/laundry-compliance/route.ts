@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/prisma';
+import type { Prisma } from '@prisma/client';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { getTenantBySlug, getTenantBySlugAny } from '@/lib/data/tenants';
 
 export async function GET(
   request: NextRequest,
@@ -16,16 +17,16 @@ export async function GET(
     if (!user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
 
     const { slug } = await params;
-    await connectDB();
 
-    const tenant = await Tenant.findOne({ slug, isActive: true }).lean();
+    const tenant = await getTenantBySlug(slug);
     if (!tenant) return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    return NextResponse.json({ success: true, data: tenant.settings?.laundryCompliance ?? {} });
+    const settings = (tenant.settings as Record<string, unknown>) || {};
+    return NextResponse.json({ success: true, data: settings.laundryCompliance ?? {} });
   } catch (error: unknown) {
     return handleApiError(error, 'Failed to fetch laundry compliance');
   }
@@ -47,12 +48,11 @@ export async function PUT(
     if (!rl.allowed) return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
 
     const { slug } = await params;
-    await connectDB();
 
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await getTenantBySlugAny(slug);
     if (!tenant) return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
@@ -60,20 +60,22 @@ export async function PUT(
     const dateFields = ['eccExpiry', 'wastewaterPermitExpiry'];
     const stringFields = ['environmentalComplianceCertificate', 'wastewaterDischargePermit'];
 
-    if (!tenant.settings.laundryCompliance) tenant.settings.laundryCompliance = {} as never;
-    const lc = tenant.settings.laundryCompliance as Record<string, unknown>;
+    const existingSettings = (tenant.settings as Record<string, unknown>) || {};
+    const lc = { ...(existingSettings.laundryCompliance as Record<string, unknown> || {}) };
 
     for (const f of stringFields) { if (body[f] !== undefined) lc[f] = body[f] || undefined; }
-    for (const f of dateFields) { if (body[f] !== undefined) lc[f] = body[f] ? new Date(body[f]) : undefined; }
+    for (const f of dateFields) { if (body[f] !== undefined) lc[f] = body[f] ? new Date(body[f]).toISOString() : undefined; }
     if (body.solidWasteManagementPlan !== undefined) lc.solidWasteManagementPlan = body.solidWasteManagementPlan;
 
-    tenant.markModified('settings');
-    await tenant.save();
+    await prisma.tenant.update({
+      where: { id: tenant.id },
+      data: { settings: { ...existingSettings, laundryCompliance: lc } as Prisma.InputJsonValue },
+    });
 
     await createAuditLog(request, {
-      tenantId: tenant._id, userId: user.userId,
+      tenantId: tenant.id, userId: user.userId,
       action: AuditActions.UPDATE, entityType: 'laundry_compliance',
-      entityId: tenant._id.toString(), changes: body,
+      entityId: tenant.id, changes: body,
     });
 
     return NextResponse.json({ success: true });

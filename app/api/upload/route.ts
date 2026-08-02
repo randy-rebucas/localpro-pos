@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, getCurrentUser } from '@/lib/auth';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
-import connectDB from '@/lib/mongodb';
+import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { uploadToCloudinary, deleteFromCloudinary } from '@/lib/cloudinary';
-import File from '@/models/File';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { createAuditLog } from '@/lib/audit';
 
@@ -71,16 +70,17 @@ export async function POST(request: NextRequest) {
     const fileBuffer = Buffer.from(await file.arrayBuffer());
     const cloudinaryResult = await uploadToCloudinary(fileBuffer, file.name, tenantId, file.type);
 
-    // Connect to database and save file record
-    await connectDB();
-    const fileDoc = await File.create({
-      tenantId,
-      name: file.name,
-      filename: cloudinaryResult.public_id,
-      size: file.size,
-      type: file.type,
-      url: cloudinaryResult.secure_url,
-      uploadedBy: user.userId,
+    // Save file record
+    const fileDoc = await prisma.file.create({
+      data: {
+        tenantId,
+        name: file.name,
+        filename: cloudinaryResult.public_id,
+        size: file.size,
+        type: file.type,
+        url: cloudinaryResult.secure_url,
+        uploadedBy: user.userId,
+      },
     });
 
     // Create audit log for file upload
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
       userId: user.userId,
       action: 'upload_file',
       entityType: 'File',
-      entityId: fileDoc._id.toString(),
+      entityId: fileDoc.id,
       metadata: {
         fileName: file.name,
         fileSize: file.size,
@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: {
-        id: fileDoc._id,
+        id: fileDoc.id,
         url: cloudinaryResult.secure_url,
         filename: cloudinaryResult.public_id,
         size: file.size,
@@ -128,18 +128,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 403 });
     }
 
-    await connectDB();
-
-    const files = await File.find({ tenantId })
-      .select('_id name filename size type url uploadedAt uploadedBy')
-      .sort({ uploadedAt: -1 })
-      .limit(100)
-      .lean();
+    const files = await prisma.file.findMany({
+      where: { tenantId },
+      select: { id: true, name: true, filename: true, size: true, type: true, url: true, uploadedAt: true, uploadedBy: true },
+      orderBy: { uploadedAt: 'desc' },
+      take: 100,
+    });
 
     return NextResponse.json({
       success: true,
       data: files.map(file => ({
-        id: file._id,
+        id: file.id,
         name: file.name,
         size: file.size,
         type: file.type,
@@ -175,17 +174,15 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'File ID is required' }, { status: 400 });
     }
 
-    await connectDB();
-
     // Fetch the file to get cloudinary public_id
-    const file = await File.findById(fileId);
+    const file = await prisma.file.findUnique({ where: { id: fileId } });
 
     if (!file) {
       return NextResponse.json({ success: false, error: 'File not found' }, { status: 404 });
     }
 
     // Ensure file belongs to authenticated tenant (security check)
-    if (file.tenantId.toString() !== tenantId) {
+    if (file.tenantId !== tenantId) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized: File does not belong to your tenant' },
         { status: 403 }
@@ -201,7 +198,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Delete from database
-    await File.deleteOne({ _id: fileId });
+    await prisma.file.delete({ where: { id: fileId } });
 
     // Create audit log for file deletion
     await createAuditLog(request, {
@@ -231,4 +228,3 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ success: false, error: 'Failed to delete file' }, { status: 500 });
   }
 }
-

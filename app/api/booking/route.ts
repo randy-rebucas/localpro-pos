@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Booking from '@/models/Booking';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { validateEmail } from '@/lib/validation'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { findOverlappingBookings, bookingToApi } from '@/lib/data/bookings';
+import type { Prisma } from '@prisma/client';
 
 /**
  * POST /api/booking
@@ -15,7 +15,6 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 export async function POST(request: NextRequest) {
   let t: (key: string, fallback: string) => string;
   try {
-    await connectDB();
     t = await getValidationTranslatorFromRequest(request);
 
     const currentUser = await requireAuth(request);
@@ -30,10 +29,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Resolve tenant
-    const tenant = await Tenant.findOne({
-      $or: [{ slug: tenantId }, ...(tenantId.match(/^[0-9a-fA-F]{24}$/) ? [{ _id: tenantId }] : [])],
-      isActive: true,
-    }).lean();
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tenantId);
+    const tenant = await prisma.tenant.findFirst({
+      where: {
+        isActive: true,
+        OR: [{ slug: tenantId }, ...(isUuid ? [{ id: tenantId }] : [])],
+      },
+    });
 
     if (!tenant) {
       return NextResponse.json(
@@ -43,8 +45,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get user details for customer info
-    const User = (await import('@/models/User')).default;
-    const user = await User.findById(currentUser.userId).lean();
+    const user = await prisma.user.findUnique({ where: { id: currentUser.userId } });
     if (!user) {
       return NextResponse.json(
         { success: false, error: t('validation.userNotFound', 'User not found') },
@@ -79,19 +80,13 @@ export async function POST(request: NextRequest) {
     const bookingEndTime = new Date(bookingStartTime.getTime() + durationMinutes * 60000);
 
     // Check for time conflicts
-    const conflictQuery: Record<string, any> = { // eslint-disable-line @typescript-eslint/no-explicit-any
-      tenantId: tenant._id,
-      status: { $in: ['pending', 'confirmed'] },
-      $or: [
-        { startTime: { $lt: bookingEndTime }, endTime: { $gt: bookingStartTime } },
-      ],
-    };
-
-    if (staffId) {
-      conflictQuery.staffId = staffId;
-    }
-
-    const conflict = await Booking.findOne(conflictQuery).lean();
+    const conflicts = await findOverlappingBookings({
+      tenantId: tenant.id,
+      startTime: bookingStartTime,
+      endTime: bookingEndTime,
+      staffId: staffId || undefined,
+    });
+    const conflict = conflicts[0];
     if (conflict) {
       return NextResponse.json(
         { success: false, error: t('validation.timeSlotConflict', 'This time slot is not available') },
@@ -99,30 +94,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const booking = await Booking.create({
-      tenantId: tenant._id,
-      customerName: user.name,
-      customerEmail: user.email,
-      serviceName,
-      serviceDescription,
-      startTime: bookingStartTime,
-      endTime: bookingEndTime,
-      duration: durationMinutes,
-      staffId: staffId || undefined,
-      notes,
-      status: 'pending',
+    const booking = await prisma.booking.create({
+      data: {
+        tenantId: tenant.id,
+        customerName: user.name,
+        customerEmail: user.email,
+        serviceName,
+        serviceDescription,
+        startTime: bookingStartTime,
+        endTime: bookingEndTime,
+        duration: durationMinutes,
+        staffId: staffId || undefined,
+        notes,
+        status: 'pending',
+      },
     });
 
     await createAuditLog(request, {
-      tenantId: tenant._id.toString(),
+      tenantId: tenant.id,
       userId: currentUser.userId,
       action: AuditActions.CREATE,
       entityType: 'booking',
-      entityId: booking._id.toString(),
+      entityId: booking.id,
       metadata: { source: 'client', userId: currentUser.userId },
     });
 
-    return NextResponse.json({ success: true, data: booking }, { status: 201 });
+    return NextResponse.json({ success: true, data: bookingToApi(booking) }, { status: 201 });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     if (error.message === 'Unauthorized') {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
@@ -141,7 +138,6 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   let t: (key: string, fallback: string) => string;
   try {
-    await connectDB();
     t = await getValidationTranslatorFromRequest(request);
 
     const currentUser = await requireAuth(request);
@@ -165,10 +161,13 @@ export async function GET(request: NextRequest) {
     }
 
     // Resolve tenant
-    const tenant = await Tenant.findOne({
-      $or: [{ slug: tenantIdParam }, ...(tenantIdParam.match(/^[0-9a-fA-F]{24}$/) ? [{ _id: tenantIdParam }] : [])],
-      isActive: true,
-    }).lean();
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tenantIdParam);
+    const tenant = await prisma.tenant.findFirst({
+      where: {
+        isActive: true,
+        OR: [{ slug: tenantIdParam }, ...(isUuid ? [{ id: tenantIdParam }] : [])],
+      },
+    });
 
     if (!tenant) {
       return NextResponse.json(
@@ -178,8 +177,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get user email to match bookings
-    const User = (await import('@/models/User')).default;
-    const user = await User.findById(userId).lean();
+    const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
       return NextResponse.json(
         { success: false, error: t('validation.userNotFound', 'User not found') },
@@ -188,20 +186,21 @@ export async function GET(request: NextRequest) {
     }
 
     const status = searchParams.get('status');
-    const filter: Record<string, any> = { // eslint-disable-line @typescript-eslint/no-explicit-any
-      tenantId: tenant._id,
+    const where: Prisma.BookingWhereInput = {
+      tenantId: tenant.id,
       customerEmail: user.email,
     };
 
     if (status) {
-      filter.status = status;
+      where.status = status as Prisma.EnumBookingStatusFilter['equals'];
     }
 
-    const bookings = await Booking.find(filter)
-      .sort({ startTime: -1 })
-      .lean();
+    const bookings = await prisma.booking.findMany({
+      where,
+      orderBy: { startTime: 'desc' },
+    });
 
-    return NextResponse.json({ success: true, data: bookings });
+    return NextResponse.json({ success: true, data: bookings.map(bookingToApi) });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     if (error.message === 'Unauthorized') {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });

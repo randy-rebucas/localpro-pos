@@ -1,15 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
+import prisma from '@/lib/prisma';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
-import TenantEcommerceIntegration from '@/models/TenantEcommerceIntegration';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { SubscriptionService } from '@/lib/subscription';
 import { getTenantEcommerceIntegrationPolicy } from '@/lib/ecommerce/tenant-integration-policy';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const { tenantId, user } = await requireTenantAccess(request);
     if (!(await hasTenantPermission(user.role, tenantId, 'integrations.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
@@ -24,7 +22,7 @@ export async function GET(request: NextRequest) {
       process.env.NODE_ENV !== 'production' ||
       (await SubscriptionService.checkFeature(tenantId, 'customIntegrations'));
 
-    const rows = await TenantEcommerceIntegration.find({ tenantId, isActive: true }).lean();
+    const rows = await prisma.tenantEcommerceIntegration.findMany({ where: { tenantId, isActive: true } });
     const data = rows.map((r) => ({
       provider: r.provider,
       shopDomain: r.shopDomain || null,

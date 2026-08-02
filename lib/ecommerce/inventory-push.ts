@@ -1,6 +1,4 @@
-import connectDB from '@/lib/mongodb';
-import ProductChannelListing from '@/models/ProductChannelListing';
-import TenantEcommerceIntegration from '@/models/TenantEcommerceIntegration';
+import prisma from '@/lib/prisma';
 import { getProductStock } from '@/lib/stock';
 import { getWooCommerceCredentials } from '@/lib/ecommerce/integration-credentials';
 import { getShopifyAccessTokenForIntegration } from '@/lib/ecommerce/shopify-token';
@@ -27,16 +25,12 @@ export async function pushChannelInventoryForProduct(
 ): Promise<void> {
   if (shouldSkipOutboundChannelPush(options?.stockReason)) return;
 
-  await connectDB();
-
-  const listings = await ProductChannelListing.find({ tenantId, productId }).lean();
+  const listings = await prisma.productChannelListing.findMany({ where: { tenantId, productId } });
   if (!listings.length) return;
 
-  const integrations = await TenantEcommerceIntegration.find({
-    tenantId,
-    isActive: true,
-    provider: { $in: ['shopify', 'woocommerce'] },
-  }).lean();
+  const integrations = await prisma.tenantEcommerceIntegration.findMany({
+    where: { tenantId, isActive: true, provider: { in: ['shopify', 'woocommerce'] } },
+  });
 
   const byProvider = new Map(integrations.map((i) => [i.provider, i]));
 
@@ -45,9 +39,10 @@ export async function pushChannelInventoryForProduct(
     if (!integration) continue;
 
     try {
+      const variation = list.variation as { size?: string; color?: string; type?: string } | null;
       const available = await getProductStock(productId, tenantId, {
-        branchId: integration.defaultBranchId?.toString() || options?.branchId,
-        variation: list.variation || options?.variation,
+        branchId: integration.defaultBranchId || options?.branchId,
+        variation: variation || options?.variation,
       });
 
       if (list.provider === 'shopify') {
@@ -56,7 +51,7 @@ export async function pushChannelInventoryForProduct(
           logger.warn('Shopify push skipped: missing location or inventoryItemId', { productId });
           continue;
         }
-        const accessToken = await getShopifyAccessTokenForIntegration(integration);
+        const accessToken = await getShopifyAccessTokenForIntegration({ _id: integration.id, credentialsEncrypted: integration.credentialsEncrypted, shopDomain: integration.shopDomain });
         await shopifySetInventoryLevel(
           integration.shopDomain,
           accessToken,

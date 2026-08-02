@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
-import connectDB from '@/lib/mongodb';
+import prisma from '@/lib/prisma';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
-import TenantEcommerceIntegration from '@/models/TenantEcommerceIntegration';
 import { encryptCredentialsPayload } from '@/lib/ecommerce/crypto';
 import { wooFetchJson, normalizeWooCommerceSiteUrl } from '@/lib/ecommerce/woocommerce-api';
 import { registerWooCommerceWebhooks } from '@/lib/ecommerce/register-woo-webhooks';
@@ -11,11 +10,9 @@ import { getPublicAppUrl } from '@/lib/ecommerce/public-url';
 import { requireEcommerceIntegrationFeature } from '@/lib/ecommerce/require-ecommerce-feature';
 import { requireEcommerceProviderConnectAllowed } from '@/lib/ecommerce/tenant-integration-policy';
 import { checkRateLimit } from '@/lib/rate-limit';
-import mongoose from 'mongoose';
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const { tenantId, user } = await requireTenantAccess(request);
     if (!(await hasTenantPermission(user.role, tenantId, 'integrations.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
@@ -50,28 +47,34 @@ export async function POST(request: NextRequest) {
     const credEnc = encryptCredentialsPayload({ consumerKey, consumerSecret });
     const whEnc = encryptCredentialsPayload({ secret: signingSecret });
 
-    const tenantObjectId = new mongoose.Types.ObjectId(tenantId);
-    const integration = await TenantEcommerceIntegration.findOneAndUpdate(
-      { tenantId: tenantObjectId, provider: 'woocommerce' },
-      {
-        $set: {
-          siteUrl: normalized,
-          credentialsEncrypted: credEnc,
-          webhookSecretEncrypted: whEnc,
-          isActive: true,
-          lastError: undefined,
-        },
-        $setOnInsert: { tenantId: tenantObjectId, provider: 'woocommerce' },
+    const integration = await prisma.tenantEcommerceIntegration.upsert({
+      where: { tenantId_provider: { tenantId, provider: 'woocommerce' } },
+      create: {
+        tenantId,
+        provider: 'woocommerce',
+        siteUrl: normalized,
+        credentialsEncrypted: credEnc,
+        webhookSecretEncrypted: whEnc,
+        isActive: true,
       },
-      { upsert: true, new: true }
-    );
+      update: {
+        siteUrl: normalized,
+        credentialsEncrypted: credEnc,
+        webhookSecretEncrypted: whEnc,
+        isActive: true,
+        lastError: null,
+      },
+    });
 
     try {
       await registerWooCommerceWebhooks(integration, signingSecret, {
         publicAppBaseUrl: getPublicAppUrl(request),
       });
     } catch {
-      await integration.updateOne({ $set: { lastError: 'webhook_registration_failed' } });
+      await prisma.tenantEcommerceIntegration.update({
+        where: { id: integration.id },
+        data: { lastError: 'webhook_registration_failed' },
+      });
     }
 
     return NextResponse.json({ success: true });

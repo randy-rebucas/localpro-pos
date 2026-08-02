@@ -1,16 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import { getLowStockProducts } from '@/lib/stock';
+import prisma from '@/lib/prisma';
+import { getLowStockProducts } from '@/lib/data/inventory';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
-import Tenant from '@/models/Tenant';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
 import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const user = await requireAuth(request); // eslint-disable-line @typescript-eslint/no-unused-vars
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
@@ -24,8 +22,9 @@ export async function GET(request: NextRequest) {
     const threshold = searchParams.get('threshold') ? parseInt(searchParams.get('threshold')!) : undefined;
 
     // Get tenant settings for default threshold
-    const tenant = await Tenant.findById(tenantId);
-    const defaultThreshold = tenant?.settings?.lowStockThreshold || 10;
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { settings: true } });
+    const settings = tenant?.settings as { lowStockThreshold?: number } | null;
+    const defaultThreshold = settings?.lowStockThreshold || 10;
     const finalThreshold = threshold || defaultThreshold;
 
     const lowStockProducts = await getLowStockProducts(tenantId, branchId, finalThreshold);
@@ -41,4 +40,3 @@ export async function GET(request: NextRequest) {
     return handleApiError(error, 'Failed to fetch low stock products');
   }
 }
-

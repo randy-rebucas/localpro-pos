@@ -3,9 +3,7 @@
  * Sends welcome emails when new customers are added
  */
 
-import connectDB from '@/lib/mongodb';
-import Customer from '@/models/Customer';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/prisma';
 import { sendEmail } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { AutomationResult } from './types';
@@ -21,8 +19,6 @@ export interface CustomerWelcomeOptions {
 export async function sendCustomerWelcomeEmail(
   options: CustomerWelcomeOptions
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -32,7 +28,7 @@ export async function sendCustomerWelcomeEmail(
   };
 
   try {
-    const customer = await Customer.findById(options.customerId).lean();
+    const customer = await prisma.customer.findUnique({ where: { id: options.customerId } });
     if (!customer) {
       results.success = false;
       results.message = 'Customer not found';
@@ -44,7 +40,7 @@ export async function sendCustomerWelcomeEmail(
       return results;
     }
 
-    const tenant = await Tenant.findById(options.tenantId).lean();
+    const tenant = await prisma.tenant.findUnique({ where: { id: options.tenantId } });
     if (!tenant) {
       results.success = false;
       results.message = 'Tenant not found';

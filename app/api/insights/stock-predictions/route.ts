@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import StockMovement from '@/models/StockMovement';
-import Product from '@/models/Product';
+import prisma from '@/lib/prisma';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { handleApiError } from '@/lib/error-handler';
 
@@ -12,8 +10,6 @@ const ALERT_HORIZON_DAYS = 14;
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
-
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId } = authResult;
@@ -23,57 +19,59 @@ export async function GET(request: NextRequest) {
     const since = new Date();
     since.setDate(since.getDate() - VELOCITY_WINDOW_DAYS);
 
-    // Aggregate sales quantity per product over the window, scoped to the
-    // selected branch when provided so it matches the other branch-scoped
-    // panels on the inventory page (LowStockAlerts, RealTimeStockTracker).
-    const salesMatch: Record<string, unknown> = {
-      tenantId,
-      type: 'sale',
-      createdAt: { $gte: since },
-    };
-    if (branchId) salesMatch.branchId = branchId;
-
-    const salesByProduct = await StockMovement.aggregate([
-      { $match: salesMatch },
-      {
-        $group: {
-          _id: '$productId',
-          totalSold: { $sum: { $abs: '$quantity' } },
-        },
+    const salesByProduct = await prisma.stockMovement.groupBy({
+      by: ['productId'],
+      where: {
+        tenantId,
+        type: 'sale',
+        createdAt: { gte: since },
+        ...(branchId ? { branchId } : {}),
       },
-    ]);
+      _sum: { quantity: true },
+    });
 
     if (salesByProduct.length === 0) {
       return NextResponse.json({ success: true, data: [] });
     }
 
-    const productIds = salesByProduct.map((s) => s._id);
+    const productIds = salesByProduct
+      .map((s) => s.productId)
+      .filter((id): id is string => Boolean(id));
 
-    const products = await Product.find(
-      { _id: { $in: productIds }, tenantId, isActive: { $ne: false }, trackInventory: { $ne: false } },
-      { _id: 1, name: 1, stock: 1, image: 1, category: 1, branchStock: 1 }
-    ).lean();
+    const products = await prisma.product.findMany({
+      where: { id: { in: productIds }, tenantId, isActive: true, trackInventory: true },
+      select: {
+        id: true,
+        name: true,
+        stock: true,
+        image: true,
+        category: true,
+        branchStock: branchId ? { where: { branchId } } : false,
+      },
+    });
 
-    const stockMap = new Map(products.map((p) => [String(p._id), p]));
+    const stockMap = new Map(products.map((p) => [p.id, p]));
 
     const getStock = (product: (typeof products)[number]) => {
-      if (!branchId) return product.stock;
-      const branchEntry = product.branchStock?.find((b) => String(b.branchId) === branchId);
-      return branchEntry ? branchEntry.stock : product.stock;
+      if (!branchId) return Number(product.stock);
+      const branchEntry = product.branchStock?.[0];
+      return branchEntry ? branchEntry.stock : Number(product.stock);
     };
 
     const predictions = salesByProduct
       .map((s) => {
-        const product = stockMap.get(String(s._id));
+        if (!s.productId) return null;
+        const product = stockMap.get(s.productId);
         if (!product) return null;
 
         const currentStock = getStock(product);
-        const avgDailySales = s.totalSold / VELOCITY_WINDOW_DAYS;
+        const totalSold = Math.abs(s._sum?.quantity ?? 0);
+        const avgDailySales = totalSold / VELOCITY_WINDOW_DAYS;
         const daysUntilStockout =
           avgDailySales > 0 ? Math.floor(currentStock / avgDailySales) : null;
 
         return {
-          productId: String(s._id),
+          productId: s.productId,
           name: product.name,
           image: product.image ?? null,
           category: product.category ?? null,

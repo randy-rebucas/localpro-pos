@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Booking from '@/models/Booking';
-import User from '@/models/User';
+import prisma from '@/lib/prisma';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth, getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -13,6 +11,8 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 import { requireBookingSchedulingAccess } from '@/lib/booking-scheduling-access';
 import { getClosedHolidayForDate } from '@/lib/holidays';
 import { logger } from '@/lib/logger';
+import { findOverlappingBookings, bookingToApi } from '@/lib/data/bookings';
+import type { Prisma } from '@prisma/client';
 
 /**
  * GET - Get all bookings for a tenant
@@ -24,7 +24,6 @@ import { logger } from '@/lib/logger';
  */
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     let user;
     try {
       user = await requireAuth(request);
@@ -53,33 +52,33 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const staffId = searchParams.get('staffId');
 
-    // Build query
-    const query: any = { tenantId, isActive: { $ne: false } }; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const where: Prisma.BookingWhereInput = { tenantId, isActive: true };
 
     if (startDate || endDate) {
-      query.startTime = {};
+      where.startTime = {};
       if (startDate) {
-        query.startTime.$gte = new Date(startDate);
+        (where.startTime as Prisma.DateTimeFilter).gte = new Date(startDate);
       }
       if (endDate) {
-        query.startTime.$lte = new Date(endDate);
+        (where.startTime as Prisma.DateTimeFilter).lte = new Date(endDate);
       }
     }
 
     if (status) {
-      query.status = status;
+      where.status = status as Prisma.EnumBookingStatusFilter['equals'];
     }
 
     if (staffId) {
-      query.staffId = staffId;
+      where.staffId = staffId;
     }
 
-    const bookings = await Booking.find(query)
-      .populate('staffId', 'name email')
-      .sort({ startTime: 1 })
-      .lean();
+    const bookings = await prisma.booking.findMany({
+      where,
+      include: { staff: { select: { id: true, name: true, email: true } } },
+      orderBy: { startTime: 'asc' },
+    });
 
-    return NextResponse.json({ success: true, data: bookings });
+    return NextResponse.json({ success: true, data: bookings.map(bookingToApi) });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Get bookings error:', error);
     return NextResponse.json(
@@ -94,14 +93,13 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const t = await getValidationTranslatorFromRequest(request);
-    
+
     // Allow cashiers and above OR authenticated customers to create bookings
     let tenantId: string | null = null;
     let isCustomer = false;
     let customerAuth: any = null; // eslint-disable-line @typescript-eslint/no-explicit-any
-    
+
     try {
       // Try customer authentication first
       const { requireCustomerAuth } = await import('@/lib/auth-customer');
@@ -125,7 +123,7 @@ export async function POST(request: NextRequest) {
       }
       tenantId = await getTenantIdFromRequest(request);
     }
-    
+
     if (!tenantId) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
@@ -164,8 +162,7 @@ export async function POST(request: NextRequest) {
 
     // If customer is authenticated, use their information
     if (isCustomer && customerAuth) {
-      const Customer = (await import('@/models/Customer')).default;
-      const customer = await Customer.findById(customerAuth.customerId).lean();
+      const customer = await prisma.customer.findUnique({ where: { id: customerAuth.customerId } });
       if (customer) {
         customerName = customerName || `${customer.firstName} ${customer.lastName}`;
         customerEmail = customerEmail || customer.email;
@@ -199,40 +196,27 @@ export async function POST(request: NextRequest) {
     }
 
     // Check for conflicts with existing bookings
-    const conflictingBookings = await Booking.find({
-      tenantId,
-      status: { $in: ['pending', 'confirmed'] },
-      $or: [
-        {
-          startTime: { $lt: end },
-          endTime: { $gt: start },
-        },
-      ],
-    });
-
-    // If staff is assigned, check for conflicts with that staff member
     if (staffId) {
-      const staffConflicts = conflictingBookings.filter(
-        (booking) => booking.staffId?.toString() === staffId
-      );
+      const staffConflicts = await findOverlappingBookings({ tenantId, startTime: start, endTime: end, staffId });
       if (staffConflicts.length > 0) {
         return NextResponse.json(
           {
             success: false,
             error: t('validation.staffBookingConflict', 'Staff member already has a booking at this time'),
-            conflicts: staffConflicts,
+            conflicts: staffConflicts.map(bookingToApi),
           },
           { status: 409 }
         );
       }
     } else {
       // If no staff assigned, check for any conflicts
+      const conflictingBookings = await findOverlappingBookings({ tenantId, startTime: start, endTime: end });
       if (conflictingBookings.length > 0) {
         return NextResponse.json(
           {
             success: false,
             error: t('validation.timeSlotBooked', 'Time slot is already booked'),
-            conflicts: conflictingBookings,
+            conflicts: conflictingBookings.map(bookingToApi),
           },
           { status: 409 }
         );
@@ -241,7 +225,7 @@ export async function POST(request: NextRequest) {
 
     // Verify staff exists if provided (only for staff-created bookings, not customer bookings)
     if (staffId && !isCustomer) {
-      const staff = await User.findOne({ _id: staffId, tenantId, isActive: true });
+      const staff = await prisma.user.findFirst({ where: { id: staffId, tenantId, isActive: true } });
       if (!staff) {
         return NextResponse.json(
           { success: false, error: t('validation.staffNotFound', 'Staff member not found or inactive') },
@@ -251,19 +235,21 @@ export async function POST(request: NextRequest) {
     }
 
     // Create booking
-    const booking = await Booking.create({
-      tenantId,
-      customerName,
-      customerEmail,
-      customerPhone,
-      serviceName,
-      serviceDescription,
-      startTime: start,
-      endTime: end,
-      duration,
-      staffId,
-      notes,
-      status,
+    const booking = await prisma.booking.create({
+      data: {
+        tenantId,
+        customerName,
+        customerEmail,
+        customerPhone,
+        serviceName,
+        serviceDescription,
+        startTime: start,
+        endTime: end,
+        duration,
+        staffId: staffId || undefined,
+        notes,
+        status,
+      },
     });
 
     // Send confirmation if status is confirmed and contact info is provided
@@ -277,11 +263,11 @@ export async function POST(request: NextRequest) {
           serviceName,
           startTime: start,
           endTime: end,
-          staffName: booking.staffName,
+          staffName: booking.staffName ?? undefined,
           notes,
-          bookingId: booking._id.toString(),
+          bookingId: booking.id,
         }, tenantSettings || undefined);
-        await Booking.findByIdAndUpdate(booking._id, { confirmationSent: true });
+        await prisma.booking.update({ where: { id: booking.id }, data: { confirmationSent: true } });
       } catch (notificationError) {
         logger.error('Failed to send booking confirmation:', notificationError);
         // Don't fail the booking creation if notification fails
@@ -292,7 +278,7 @@ export async function POST(request: NextRequest) {
       tenantId,
       action: AuditActions.CREATE,
       entityType: 'booking',
-      entityId: booking._id.toString(),
+      entityId: booking.id,
       changes: {
         customerName,
         serviceName,
@@ -301,18 +287,19 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    const bookingData = await Booking.findById(booking._id)
-      .populate('staffId', 'name email')
-      .lean();
+    const bookingData = await prisma.booking.findUnique({
+      where: { id: booking.id },
+      include: { staff: { select: { id: true, name: true, email: true } } },
+    });
 
     return NextResponse.json(
-      { success: true, data: bookingData },
+      { success: true, data: bookingData ? bookingToApi(bookingData) : null },
       { status: 201 }
     );
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Create booking error:', error);
     const t = await getValidationTranslatorFromRequest(request);
-    if (error.code === 11000) {
+    if (error.code === 'P2002') {
       return NextResponse.json(
         { success: false, error: t('validation.bookingExists', 'Booking already exists') },
         { status: 400 }
@@ -324,4 +311,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

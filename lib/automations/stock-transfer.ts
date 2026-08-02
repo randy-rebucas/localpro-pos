@@ -3,15 +3,11 @@
  * Automatically transfer stock from well-stocked branches to low-stock branches
  */
 
-import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
-import Branch from '@/models/Branch';
-import StockMovement from '@/models/StockMovement';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/prisma';
+import { updateStock } from '@/lib/stock';
 import { sendEmail } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { AutomationResult } from './types';
-import mongoose from 'mongoose';
 
 export interface StockTransferOptions {
   tenantId?: string;
@@ -25,8 +21,6 @@ export interface StockTransferOptions {
 export async function detectStockImbalances(
   options: StockTransferOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -42,10 +36,10 @@ export async function detectStockImbalances(
     // Get tenants to process
     let tenants;
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await prisma.tenant.findUnique({ where: { id: options.tenantId } });
       tenants = tenant ? [tenant] : [];
     } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
+      tenants = await prisma.tenant.findMany({ where: { isActive: true } });
     }
 
     if (tenants.length === 0) {
@@ -58,22 +52,21 @@ export async function detectStockImbalances(
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
+        const tenantId = tenant.id;
         const tenantSettings = await getTenantSettingsById(tenantId);
 
         // Get all branches for this tenant
-        const branches = await Branch.find({ tenantId, isActive: true }).lean();
-        
+        const branches = await prisma.branch.findMany({ where: { tenantId, isActive: true } });
+
         if (branches.length < 2) {
           continue; // Need at least 2 branches for transfers
         }
 
-        // Get all products with branch stock
-        const products = await Product.find({
-          tenantId,
-          trackInventory: true,
-          branchStock: { $exists: true, $ne: [] },
-        }).lean();
+        // Get all products with branch stock records
+        const products = await prisma.product.findMany({
+          where: { tenantId, trackInventory: true },
+          include: { branchStock: true },
+        });
 
         for (const product of products) {
           try {
@@ -82,8 +75,8 @@ export async function detectStockImbalances(
             }
 
             // Find branches with low stock and high stock
-            const branchStocks = product.branchStock.map((bs: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
-              branchId: bs.branchId.toString(),
+            const branchStocks = product.branchStock.map((bs) => ({
+              branchId: bs.branchId,
               stock: bs.stock || 0,
             }));
 
@@ -100,7 +93,7 @@ export async function detectStockImbalances(
             // Create transfer requests
             for (const lowStock of lowStockBranches.slice(0, 2)) { // Limit to 2 transfers per product
               const highStock = highStockBranches[highStockBranches.length - 1]; // Use highest stock branch
-              
+
               const transferQuantity = Math.min(
                 Math.ceil((minStockThreshold * 2 - lowStock.stock) / 2), // Transfer enough to bring to 2x threshold
                 Math.floor(highStock.stock / 2) // Don't take more than half from source
@@ -111,66 +104,37 @@ export async function detectStockImbalances(
               }
 
               // Get branch names
-              const fromBranch = branches.find(b => b._id.toString() === highStock.branchId);
-              const toBranch = branches.find(b => b._id.toString() === lowStock.branchId);
+              const fromBranch = branches.find(b => b.id === highStock.branchId);
+              const toBranch = branches.find(b => b.id === lowStock.branchId);
 
               if (!fromBranch || !toBranch) {
                 continue;
               }
 
               if (autoApprove) {
-                // Auto-transfer (update stock)
-                const productDoc = await Product.findById(product._id);
-                if (productDoc && productDoc.branchStock) {
-                  // Update source branch stock
-                  const fromBranchStock = productDoc.branchStock.find(
-                    (bs: any) => bs.branchId.toString() === highStock.branchId // eslint-disable-line @typescript-eslint/no-explicit-any
-                  );
-                  if (fromBranchStock) {
-                    fromBranchStock.stock -= transferQuantity;
-                  }
+                // Auto-transfer: decrement source branch stock, increment destination branch stock,
+                // and record stock movements via lib/stock.ts's updateStock (branch-scoped).
+                await updateStock(
+                  product.id,
+                  tenantId,
+                  -transferQuantity,
+                  'transfer',
+                  { branchId: fromBranch.id, reason: `Auto-transfer to ${toBranch.name}` }
+                );
 
-                  // Update destination branch stock
-                  const toBranchStock = productDoc.branchStock.find(
-                    (bs: any) => bs.branchId.toString() === lowStock.branchId // eslint-disable-line @typescript-eslint/no-explicit-any
-                  );
-                  if (toBranchStock) {
-                    toBranchStock.stock += transferQuantity;
-                  } else {
-                    // Add new branch stock entry
-                    productDoc.branchStock.push({
-                      branchId: new mongoose.Types.ObjectId(lowStock.branchId),
-                      stock: transferQuantity,
-                    });
-                  }
-
-                  await productDoc.save();
-
-                  // Create stock movement records
-                  await StockMovement.create({
-                    productId: product._id,
-                    tenantId,
-                    branchId: fromBranch._id,
-                    quantity: -transferQuantity,
-                    reason: `Auto-transfer to ${toBranch.name}`,
-                    type: 'transfer-out',
-                  });
-
-                  await StockMovement.create({
-                    productId: product._id,
-                    tenantId,
-                    branchId: toBranch._id,
-                    quantity: transferQuantity,
-                    reason: `Auto-transfer from ${fromBranch.name}`,
-                    type: 'transfer-in',
-                  });
-                }
+                await updateStock(
+                  product.id,
+                  tenantId,
+                  transferQuantity,
+                  'transfer',
+                  { branchId: toBranch.id, reason: `Auto-transfer from ${fromBranch.name}` }
+                );
               } else {
                 // Create transfer request (notification only for now)
-                // In production, you might want a TransferRequest model
+                // In production, you might want a dedicated TransferRequest model
                 if (tenantSettings?.emailNotifications && tenantSettings?.email) {
                   const companyName = tenantSettings?.companyName || tenant.name || 'Business';
-                  
+
                   await sendEmail({
                     to: tenantSettings.email,
                     subject: `Stock Transfer Request: ${product.name}`,
@@ -200,7 +164,7 @@ This is an automated stock transfer request from your POS system.`,
             }
           } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             totalFailed++;
-            results.errors?.push(`Product ${product._id}: ${error.message}`);
+            results.errors?.push(`Product ${product.id}: ${error.message}`);
           }
         }
       } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any

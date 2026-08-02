@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth, getRoleRank } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -9,10 +7,16 @@ import { validateEmail, validatePassword } from '@/lib/validation';
 import { handleApiError } from '@/lib/error-handler';
 import { revokeAllUserTokens } from '@/lib/token-blacklist';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { getUserByIdForTenant, updateTenantUser, deleteTenantUser, countActiveAdmins } from '@/lib/data/users';
+import { Prisma } from '@prisma/client';
+
+function serializeUser(user: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const { id, password: _password, ...rest } = user;
+  return { _id: id, ...rest };
+}
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await connectDB();
     const authUser = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
@@ -26,15 +30,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
-    const user = await User.findOne({ _id: id, tenantId })
-      .select('-password')
-      .lean();
-    
+    const user = await getUserByIdForTenant(id, tenantId);
+
     if (!user) {
       return NextResponse.json({ success: false, error: t('validation.userNotFound', 'User not found') }, { status: 404 });
     }
-    
-    return NextResponse.json({ success: true, data: user });
+
+    return NextResponse.json({ success: true, data: serializeUser(user) });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     if (error.message === 'Unauthorized' || error.message.includes('Forbidden')) {
       return NextResponse.json(
@@ -49,7 +51,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   let t: (key: string, fallback: string) => string;
   try {
-    await connectDB();
     const actingUser = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
@@ -66,7 +67,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const body = await request.json();
     const { email, password, name, role, isActive } = body;
 
-    const oldUser = await User.findOne({ _id: id, tenantId }).lean();
+    const oldUser = await getUserByIdForTenant(id, tenantId);
     if (!oldUser) {
       return NextResponse.json({ success: false, error: t('validation.userNotFound', 'User not found') }, { status: 404 });
     }
@@ -106,12 +107,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     // SECURITY: prevent a tenant from being left with no active owner/admin.
     if (isActive === false && oldUser.isActive !== false && ['owner', 'admin'].includes(oldUser.role)) {
-      const remainingActiveAdmins = await User.countDocuments({
-        tenantId,
-        _id: { $ne: id },
-        isActive: { $ne: false },
-        role: { $in: ['owner', 'admin'] },
-      });
+      const remainingActiveAdmins = await countActiveAdmins(tenantId, id);
       if (remainingActiveAdmins === 0) {
         return NextResponse.json(
           { success: false, error: t('validation.cannotDeactivateLastAdmin', 'Cannot deactivate the last active owner/admin for this tenant') },
@@ -132,7 +128,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       }
       updateData.email = email.toLowerCase();
     }
-    
+
     if (name !== undefined) {
       if (!name.trim()) {
         return NextResponse.json(
@@ -142,7 +138,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       }
       updateData.name = name.trim();
     }
-    
+
     if (role !== undefined) {
       if (!['owner', 'admin', 'manager', 'cashier', 'viewer'].includes(role)) {
         return NextResponse.json(
@@ -152,11 +148,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       }
       updateData.role = role;
     }
-    
+
     if (isActive !== undefined) {
       updateData.isActive = isActive;
     }
-    
+
     if (password !== undefined && password) {
       const passwordValidation = validatePassword(password, t);
       if (!passwordValidation.valid) {
@@ -168,11 +164,18 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       updateData.password = password;
     }
 
-    const user = await User.findOneAndUpdate(
-      { _id: id, tenantId },
-      updateData,
-      { new: true, runValidators: true }
-    ).select('-password');
+    let user;
+    try {
+      user = await updateTenantUser(id, tenantId, updateData);
+    } catch (updateErr: unknown) {
+      if (updateErr instanceof Prisma.PrismaClientKnownRequestError && updateErr.code === 'P2002') {
+        return NextResponse.json(
+          { success: false, error: 'User with this email already exists' },
+          { status: 400 }
+        );
+      }
+      throw updateErr;
+    }
 
     if (!user) {
       return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
@@ -186,10 +189,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     // Track changes
     const changes: Record<string, any> = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
     Object.keys(updateData).forEach(key => {
-      if (key !== 'password' && oldUser[key as keyof typeof oldUser] !== updateData[key]) {
+      if (key !== 'password' && (oldUser as any)[key] !== (updateData as any)[key]) { // eslint-disable-line @typescript-eslint/no-explicit-any
         changes[key] = {
-          old: oldUser[key as keyof typeof oldUser],
-          new: updateData[key],
+          old: (oldUser as any)[key], // eslint-disable-line @typescript-eslint/no-explicit-any
+          new: (updateData as any)[key], // eslint-disable-line @typescript-eslint/no-explicit-any
         };
       }
     });
@@ -204,10 +207,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       entityId: id,
       changes,
     });
-    
-    return NextResponse.json({ success: true, data: user });
+
+    return NextResponse.json({ success: true, data: serializeUser(user) });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (error.code === 11000) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       return NextResponse.json(
         { success: false, error: 'User with this email already exists' },
         { status: 400 }
@@ -225,7 +228,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await connectDB();
     const actingUser = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
@@ -238,7 +240,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
-    const user = await User.findOne({ _id: id, tenantId }).lean();
+    const user = await getUserByIdForTenant(id, tenantId);
     if (!user) {
       return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
     }
@@ -257,12 +259,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     // SECURITY: prevent a tenant from being left with no active owner/admin.
     if (user.isActive !== false && ['owner', 'admin'].includes(user.role)) {
-      const remainingActiveAdmins = await User.countDocuments({
-        tenantId,
-        _id: { $ne: id },
-        isActive: { $ne: false },
-        role: { $in: ['owner', 'admin'] },
-      });
+      const remainingActiveAdmins = await countActiveAdmins(tenantId, id);
       if (remainingActiveAdmins === 0) {
         return NextResponse.json(
           { success: false, error: 'Cannot delete the last active owner/admin for this tenant' },
@@ -272,7 +269,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     }
 
     // Hard delete - actually remove the user from the database
-    await User.findOneAndDelete({ _id: id, tenantId });
+    await deleteTenantUser(id, tenantId);
 
     await createAuditLog(request, {
       tenantId,
@@ -281,7 +278,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       entityId: id,
       changes: { email: user.email, name: user.name },
     });
-    
+
     return NextResponse.json({ success: true, data: {} });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     if (error.message === 'Unauthorized' || error.message.includes('Forbidden')) {
@@ -293,4 +290,3 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     return handleApiError(error);
   }
 }
-

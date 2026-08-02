@@ -1,7 +1,5 @@
-import TaxRule from '@/models/TaxRule';
-import Tenant, { ITenantSettings } from '@/models/Tenant';
-import Product from '@/models/Product'; // eslint-disable-line @typescript-eslint/no-unused-vars
-import { ITenant } from '@/models/Tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import prisma from '@/lib/prisma';
+import type { ITenantSettings } from '@/types/tenant';
 
 /**
  * BIR (Bureau of Internal Revenue) Philippines discount rates
@@ -101,10 +99,10 @@ export async function calculateTax(
   }
 
   // Try to get tax rules from TaxRule model first
-  const taxRules = await TaxRule.find({
-    tenantId,
-    isActive: true,
-  }).sort({ priority: -1 }).lean();
+  const taxRules = await prisma.taxRule.findMany({
+    where: { tenantId, isActive: true },
+    orderBy: { priority: 'desc' },
+  });
 
   // Only calculate tax on the taxable portion (excludes VAT-exempt items)
   if (taxRules.length > 0) {
@@ -125,7 +123,7 @@ export async function calculateTax(
       } else if (rule.appliesTo === 'categories') {
         if (rule.categoryIds && rule.categoryIds.length > 0) {
           applies = taxableItems.some(item =>
-            item.categoryId && rule.categoryIds?.some(catId => catId.toString() === item.categoryId)
+            item.categoryId && rule.categoryIds.includes(item.categoryId)
           );
         }
         // If no categoryIds specified on a category rule, skip to next rule
@@ -134,12 +132,12 @@ export async function calculateTax(
       // Product-specific rules override appliesTo (only if productIds are specified)
       if (rule.productIds && rule.productIds.length > 0) {
         applies = taxableItems.some(item =>
-          item.productId && rule.productIds?.some(prodId => prodId.toString() === item.productId)
+          item.productId && rule.productIds.includes(item.productId)
         );
       }
 
       if (applies) {
-        taxRate = Math.min(Math.max(rule.rate, 0), 100); // Clamp rate 0-100
+        taxRate = Math.min(Math.max(Number(rule.rate), 0), 100); // Clamp rate 0-100
         taxLabel = rule.label;
         taxAmount = (taxableAmount * taxRate) / 100;
         // Ensure tax doesn't exceed taxable amount
@@ -176,10 +174,10 @@ export async function getProductTaxRate(
   productType: 'regular' | 'bundle' | 'service',
   categoryId?: string
 ): Promise<number> {
-  const taxRules = await TaxRule.find({
-    tenantId,
-    isActive: true,
-  }).sort({ priority: -1 }).lean();
+  const taxRules = await prisma.taxRule.findMany({
+    where: { tenantId, isActive: true },
+    orderBy: { priority: 'desc' },
+  });
 
   if (taxRules.length > 0) {
     for (const rule of taxRules) {
@@ -192,23 +190,24 @@ export async function getProductTaxRate(
       } else if (rule.appliesTo === 'services' && productType === 'service') {
         applies = true;
       } else if (rule.appliesTo === 'categories' && categoryId) {
-        applies = rule.categoryIds?.some(catId => catId.toString() === categoryId) || false;
+        applies = rule.categoryIds?.includes(categoryId) || false;
       }
 
       if (rule.productIds && rule.productIds.length > 0) {
-        applies = rule.productIds.some(prodId => prodId.toString() === productId);
+        applies = rule.productIds.includes(productId);
       }
 
       if (applies) {
-        return rule.rate;
+        return Number(rule.rate);
       }
     }
   }
 
   // Fall back to tenant settings
-  const tenant = await Tenant.findById(tenantId).lean();
-  if (tenant?.settings?.taxEnabled && tenant.settings.taxRate) {
-    return tenant.settings.taxRate;
+  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+  const settings = tenant?.settings as ITenantSettings | undefined;
+  if (settings?.taxEnabled && settings.taxRate) {
+    return settings.taxRate;
   }
 
   return 0;

@@ -1,18 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import SavedCart from '@/models/SavedCart';
+import prisma from '@/lib/prisma';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
-import mongoose from 'mongoose';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
+
+function savedCartToApi(cart: { id: string; subtotal: unknown; discountAmount: unknown; total: unknown; [key: string]: unknown }) {
+  const { id, subtotal, discountAmount, total, ...rest } = cart;
+  return {
+    _id: id,
+    ...rest,
+    subtotal: Number(subtotal),
+    discountAmount: discountAmount !== null && discountAmount !== undefined ? Number(discountAmount) : discountAmount,
+    total: Number(total),
+  };
+}
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
@@ -22,19 +30,19 @@ export async function GET(
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
-    const tenantObjectId = new mongoose.Types.ObjectId(tenantId);
-
-    const savedCart = await SavedCart.findOne({
-      _id: id,
-      tenantId: tenantObjectId,
-      userId: user.userId,
-    }).lean();
+    const savedCart = await prisma.savedCart.findFirst({
+      where: {
+        id,
+        tenantId,
+        userId: user.userId,
+      },
+    });
 
     if (!savedCart) {
       return NextResponse.json({ success: false, error: t('validation.savedCartNotFound', 'Saved cart not found') }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, data: savedCart });
+    return NextResponse.json({ success: true, data: savedCartToApi(savedCart) });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Error fetching saved cart:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
@@ -46,7 +54,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
@@ -56,15 +63,12 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
-    const tenantObjectId = new mongoose.Types.ObjectId(tenantId);
+    const result = await prisma.savedCart.updateMany({
+      where: { id, tenantId, userId: user.userId, isActive: true },
+      data: { isActive: false },
+    });
 
-    const savedCart = await SavedCart.findOneAndUpdate(
-      { _id: id, tenantId: tenantObjectId, userId: user.userId, isActive: true },
-      { isActive: false },
-      { new: true }
-    );
-
-    if (!savedCart) {
+    if (result.count === 0) {
       return NextResponse.json({ success: false, error: t('validation.savedCartNotFound', 'Saved cart not found') }, { status: 404 });
     }
 
@@ -74,4 +78,3 @@ export async function DELETE(
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
-

@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -9,11 +7,10 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 import { handleApiError } from '@/lib/error-handler';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { validateProductForBusiness } from '@/lib/business-type-helpers';
+import { getProductById, updateProductById, softDeleteProduct, serializeProduct } from '@/lib/data/products';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await connectDB();
-
     // Require authentication to prevent unauthenticated product lookups
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
@@ -24,7 +21,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ success: false, error: 'Tenant not found or access denied' }, { status: 403 });
     }
 
-    const product = await Product.findOne({ _id: id, tenantId, isActive: { $ne: false } }).lean();
+    const product = await getProductById(tenantId, id, true);
 
     if (!product) {
       return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
@@ -32,7 +29,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     // Ensure boolean fields are properly set
     const productData = {
-      ...product,
+      ...serializeProduct(product),
       trackInventory: product.trackInventory !== undefined ? Boolean(product.trackInventory) : true,
       allowOutOfStockSales: product.allowOutOfStockSales !== undefined ? Boolean(product.allowOutOfStockSales) : false,
     };
@@ -45,7 +42,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await connectDB();
     // SECURITY: Validate tenant access for authenticated requests
     let tenantId: string;
     try {
@@ -67,7 +63,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       throw authError;
     }
     const { id } = await params;
-    
+
     const body = await request.json();
     const t = await getValidationTranslatorFromRequest(request);
     const { data, errors } = validateAndSanitize(body, validateProduct, t);
@@ -81,62 +77,41 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     // Get tenant settings for business type validation
     const tenantSettings = await getTenantSettingsById(tenantId);
-    if (tenantSettings) {
-      // Merge with existing product data for validation
-      const oldProduct = await Product.findOne({ _id: id, tenantId }).lean();
-      if (oldProduct) {
-        const mergedData = { ...oldProduct, ...data };
-        // Remove Mongoose internals before validation
-        const {
-          _id,
-          tenantId,
-          __v,
-          createdAt,
-          updatedAt,
-          collection,
-          db,
-          isNew,
-          errors: docErrors,
-          ...plainProduct
-        } = mergedData as any; // eslint-disable-line @typescript-eslint/no-explicit-any
-        const businessValidation = validateProductForBusiness(plainProduct, tenantSettings);
-        if (!businessValidation.valid) {
-          return NextResponse.json(
-            {
-              success: false,
-              errors: businessValidation.errors.map(error => ({
-                field: 'businessType',
-                message: error,
-                code: 'businessTypeValidation',
-              })),
-            },
-            { status: 400 }
-          );
-        }
-      }
-    }
-
-    const oldProduct = await Product.findOne({ _id: id, tenantId }).lean();
+    const oldProduct = await getProductById(tenantId, id);
     if (!oldProduct) {
       return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
     }
-    const product = await Product.findOneAndUpdate(
-      { _id: id, tenantId },
-      data,
-      { new: true, runValidators: true }
-    );
-    
-    if (!product) {
-      return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
+
+    if (tenantSettings) {
+      // Merge with existing product data for validation
+      const mergedData = { ...serializeProduct(oldProduct), ...data };
+      const { _id, tenantId: _tenantId, createdAt, updatedAt, ...plainProduct } = mergedData as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+      const businessValidation = validateProductForBusiness(plainProduct, tenantSettings);
+      if (!businessValidation.valid) {
+        return NextResponse.json(
+          {
+            success: false,
+            errors: businessValidation.errors.map(error => ({
+              field: 'businessType',
+              message: error,
+              code: 'businessTypeValidation',
+            })),
+          },
+          { status: 400 }
+        );
+      }
     }
 
+    const product = await updateProductById(tenantId, id, data);
+
     // Track changes
+    const oldSerialized = serializeProduct(oldProduct) as Record<string, unknown>;
     const changes: Record<string, any> = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
     Object.keys(data).forEach(key => {
-      if (oldProduct[key as keyof typeof oldProduct] !== data[key]) {
+      if (oldSerialized[key] !== (data as Record<string, unknown>)[key]) {
         changes[key] = {
-          old: oldProduct[key as keyof typeof oldProduct],
-          new: data[key],
+          old: oldSerialized[key],
+          new: (data as Record<string, unknown>)[key],
         };
       }
     });
@@ -148,8 +123,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       entityId: id,
       changes,
     });
-    
-    return NextResponse.json({ success: true, data: product });
+
+    return NextResponse.json({ success: true, data: serializeProduct(product) });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return handleApiError(error);
   }
@@ -157,7 +132,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await connectDB();
     // SECURITY: Validate tenant access for authenticated requests
     let tenantId: string;
     try {
@@ -179,12 +153,8 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       throw authError;
     }
     const { id } = await params;
-    
-    const product = await Product.findOneAndUpdate(
-      { _id: id, tenantId, isActive: true },
-      { isActive: false },
-      { new: true }
-    );
+
+    const product = await softDeleteProduct(tenantId, id);
 
     if (!product) {
       return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
@@ -203,4 +173,3 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     return handleApiError(error);
   }
 }
-

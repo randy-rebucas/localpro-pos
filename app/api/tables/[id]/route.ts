@@ -1,28 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Table from '@/models/Table';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
+import { getTableById, updateTable, toPrismaTableStatus, fromPrismaTableStatus } from '@/lib/data/tables';
+
+function serializeTable(table: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const { id, ...rest } = table;
+  return { _id: id, ...rest, status: fromPrismaTableStatus(rest.status) };
+}
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId } = authResult;
     const { id } = await params;
 
-    const table = await Table.findOne({ _id: id, tenantId }).lean();
+    const table = await getTableById(id, tenantId);
     if (!table) {
       return NextResponse.json({ success: false, error: 'Table not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, data: table });
+    return NextResponse.json({ success: true, data: serializeTable(table) });
   } catch (error) {
     return handleApiError(error, 'Failed to fetch table');
   }
@@ -33,7 +36,6 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId } = authResult;
@@ -45,8 +47,8 @@ export async function PATCH(
       return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
-    const table = await Table.findOne({ _id: id, tenantId });
-    if (!table) {
+    const oldTable = await getTableById(id, tenantId);
+    if (!oldTable) {
       return NextResponse.json({ success: false, error: 'Table not found' }, { status: 404 });
     }
 
@@ -80,25 +82,27 @@ export async function PATCH(
       }
     }
 
-    const oldData = table.toObject();
+    const updateData: Record<string, unknown> = {};
+    if (name !== undefined) updateData.name = name;
+    if (capacity !== undefined) updateData.capacity = capacity;
+    if (status !== undefined) updateData.status = toPrismaTableStatus(status);
+    if (isActive !== undefined) updateData.isActive = isActive;
+    if (currentOrderId !== undefined) updateData.currentOrderId = currentOrderId || null;
 
-    if (name !== undefined) table.name = name;
-    if (capacity !== undefined) table.capacity = capacity;
-    if (status !== undefined) table.status = status;
-    if (isActive !== undefined) table.isActive = isActive;
-    if (currentOrderId !== undefined) table.currentOrderId = currentOrderId || undefined;
-
-    await table.save();
+    const table = await updateTable(id, tenantId, updateData);
+    if (!table) {
+      return NextResponse.json({ success: false, error: 'Table not found' }, { status: 404 });
+    }
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.UPDATE,
       entityType: 'table',
-      entityId: table._id.toString(),
-      changes: { before: oldData, after: table.toObject() },
+      entityId: table.id,
+      changes: { before: oldTable, after: table },
     });
 
-    return NextResponse.json({ success: true, data: table });
+    return NextResponse.json({ success: true, data: serializeTable(table) });
   } catch (error) {
     return handleApiError(error, 'Failed to update table');
   }
@@ -109,7 +113,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId } = authResult;
@@ -121,20 +124,19 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
-    const table = await Table.findOne({ _id: id, tenantId });
-    if (!table) {
+    const existing = await getTableById(id, tenantId);
+    if (!existing) {
       return NextResponse.json({ success: false, error: 'Table not found' }, { status: 404 });
     }
 
-    table.isActive = false;
-    await table.save();
+    const table = await updateTable(id, tenantId, { isActive: false });
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.DELETE,
       entityType: 'table',
-      entityId: table._id.toString(),
-      changes: { name: table.name },
+      entityId: id,
+      changes: { name: table?.name },
     });
 
     return NextResponse.json({ success: true, message: 'Table deactivated' });

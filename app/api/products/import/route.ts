@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
-import Category from '@/models/Category';
+import prisma from '@/lib/prisma';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -41,28 +39,26 @@ async function resolveCategoryId(
     return { categoryId: cached, category: categoryName.trim() };
   }
 
-  let category = await Category.findOne({
-    tenantId,
-    name: { $regex: new RegExp(`^${categoryName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+  let category = await prisma.category.findFirst({
+    where: { tenantId, name: { equals: categoryName.trim(), mode: 'insensitive' } },
   });
 
   if (!category) {
-    category = await Category.create({
-      tenantId,
-      name: categoryName.trim(),
-      isActive: true,
+    category = await prisma.category.create({
+      data: {
+        tenantId,
+        name: categoryName.trim(),
+        isActive: true,
+      },
     });
   }
 
-  const id = category._id.toString();
-  categoryCache.set(key, id);
-  return { categoryId: id, category: category.name };
+  categoryCache.set(key, category.id);
+  return { categoryId: category.id, category: category.name };
 }
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
-
     let tenantId: string;
     try {
       const tenantAccess = await requireTenantAccess(request);
@@ -105,11 +101,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const existingProducts = await Product.find({ tenantId })
-      .select('sku barcode variations.sku')
-      .lean();
+    const existingProducts = await prisma.product.findMany({
+      where: { tenantId },
+      select: { sku: true, barcode: true, variations: true },
+    });
 
-    const tenantSkus = collectTenantSkus(existingProducts);
+    const tenantSkus = collectTenantSkus(
+      existingProducts.map((p) => ({
+        sku: p.sku,
+        variations: p.variations as Array<{ sku?: string | null }> | null,
+      }))
+    );
     const existingBarcodes = new Set(
       existingProducts.filter((p) => p.barcode).map((p) => (p.barcode as string).toLowerCase())
     );
@@ -138,7 +140,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const currentProductCount = await Product.countDocuments({ tenantId, isActive: true });
+    const currentProductCount = await prisma.product.count({ where: { tenantId, isActive: true } });
     try {
       await checkSubscriptionLimit(
         tenantId.toString(),
@@ -171,32 +173,34 @@ export async function POST(request: NextRequest) {
         }
 
         const createProduct = () =>
-          Product.create({
-            tenantId,
-            name: item.data.name,
-            description: item.data.description,
-            price: item.data.price,
-            stock: item.data.stock,
-            sku,
-            barcode: item.data.barcode,
-            category,
-            categoryId,
-            image: item.data.image,
-            productType: item.data.productType,
-            trackInventory: item.data.trackInventory,
-            taxExempt: item.data.taxExempt,
-            zeroRated: item.data.zeroRated,
-            lowStockThreshold: item.data.lowStockThreshold,
-            hasVariations: false,
-            isActive: true,
+          prisma.product.create({
+            data: {
+              tenantId,
+              name: item.data.name,
+              description: item.data.description,
+              price: item.data.price,
+              stock: BigInt(item.data.stock ?? 0),
+              sku,
+              barcode: item.data.barcode,
+              category,
+              categoryId,
+              image: item.data.image,
+              productType: item.data.productType,
+              trackInventory: item.data.trackInventory,
+              taxExempt: item.data.taxExempt,
+              zeroRated: item.data.zeroRated,
+              lowStockThreshold: item.data.lowStockThreshold,
+              hasVariations: false,
+              isActive: true,
+            },
           });
 
         let product;
         try {
           product = await createProduct();
         } catch (err: unknown) {
-          const dup = err as { code?: number; keyPattern?: Record<string, unknown> };
-          if (dup.code === 11000 && !dup.keyPattern?.barcode) {
+          const dup = err as { code?: string; meta?: { target?: string[] } };
+          if (dup.code === 'P2002' && !dup.meta?.target?.includes('barcode')) {
             sku = generateUniqueProductSKU(item.data.name, tenantSkus);
             item.data.sku = sku;
             product = await createProduct();
@@ -207,12 +211,12 @@ export async function POST(request: NextRequest) {
 
         tenantSkus.add(sku.toLowerCase());
 
-        created.push({ row: item.row, name: product.name, id: product._id.toString() });
+        created.push({ row: item.row, name: product.name, id: product.id });
       } catch (err: unknown) {
-        const error = err as { code?: number; keyPattern?: Record<string, unknown>; message?: string };
+        const error = err as { code?: string; meta?: { target?: string[] }; message?: string };
         let message = error.message || 'Failed to create product';
-        if (error.code === 11000) {
-          if (error.keyPattern?.barcode) message = 'Barcode already exists';
+        if (error.code === 'P2002') {
+          if (error.meta?.target?.includes('barcode')) message = 'Barcode already exists';
           else message = 'SKU already exists';
         }
         failed.push({ row: item.row, name: item.data.name, error: message });

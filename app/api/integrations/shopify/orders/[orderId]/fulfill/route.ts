@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Transaction from '@/models/Transaction';
-import TenantEcommerceIntegration from '@/models/TenantEcommerceIntegration';
+import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
@@ -31,18 +29,14 @@ export async function POST(
     const body = await request.json().catch(() => ({}));
     const { trackingNumber, trackingCompany } = body as { trackingNumber?: string; trackingCompany?: string };
 
-    await connectDB();
-
-    const integration = await TenantEcommerceIntegration.findOne({
-      tenantId: user.tenantId,
-      provider: 'shopify',
-      isActive: true,
+    const integration = await prisma.tenantEcommerceIntegration.findFirst({
+      where: { tenantId: user.tenantId, provider: 'shopify', isActive: true },
     });
     if (!integration?.shopDomain) {
       return NextResponse.json({ success: false, error: 'No active Shopify integration' }, { status: 400 });
     }
 
-    const accessToken = await getShopifyAccessTokenForIntegration(integration);
+    const accessToken = await getShopifyAccessTokenForIntegration({ _id: integration.id, credentialsEncrypted: integration.credentialsEncrypted, shopDomain: integration.shopDomain });
     const { fulfillmentId } = await createShopifyFulfillment(
       integration.shopDomain,
       accessToken,
@@ -52,10 +46,10 @@ export async function POST(
     );
 
     // Record fulfillment on local transaction if it exists
-    await Transaction.updateOne(
-      { tenantId: user.tenantId, externalOrderId: orderId, salesChannel: 'shopify' },
-      { $set: { shopifyFulfilledAt: new Date(), shopifyFulfillmentId: fulfillmentId } }
-    );
+    await prisma.transaction.updateMany({
+      where: { tenantId: user.tenantId, externalOrderId: orderId, salesChannel: 'shopify' },
+      data: { shopifyFulfilledAt: new Date(), shopifyFulfillmentId: fulfillmentId },
+    });
 
     await createAuditLog(request, {
       tenantId: user.tenantId,

@@ -3,13 +3,9 @@
  * Automatically adjust prices based on demand, time, or stock levels
  */
 
-import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
-import Transaction from '@/models/Transaction';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/prisma';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { AutomationResult } from './types';
-import mongoose from 'mongoose'; // eslint-disable-line @typescript-eslint/no-unused-vars
 
 export interface DynamicPricingOptions {
   tenantId?: string;
@@ -25,8 +21,6 @@ export interface DynamicPricingOptions {
 export async function applyDynamicPricing(
   options: DynamicPricingOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -39,10 +33,10 @@ export async function applyDynamicPricing(
     // Get tenants to process
     let tenants;
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await prisma.tenant.findUnique({ where: { id: options.tenantId } });
       tenants = tenant ? [tenant] : [];
     } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
+      tenants = await prisma.tenant.findMany({ where: { isActive: true } });
     }
 
     if (tenants.length === 0) {
@@ -55,58 +49,65 @@ export async function applyDynamicPricing(
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
-        const tenantSettings = await getTenantSettingsById(tenantId); // eslint-disable-line @typescript-eslint/no-unused-vars
+        const tenantId = tenant.id;
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const tenantSettings = await getTenantSettingsById(tenantId);
 
         // Get products
-        const products = await Product.find({ tenantId }).lean();
+        const products = await prisma.product.findMany({ where: { tenantId } });
 
         for (const product of products) {
           try {
-            let newPrice = product.price;
+            const basePrice = Number(product.price);
+            let newPrice = basePrice;
             let priceChanged = false;
             const now = new Date();
             const currentHour = now.getHours();
 
             // Time-based pricing (e.g., happy hour 2-4 PM: 10% discount)
             if (options.enableTimeBased && currentHour >= 14 && currentHour < 16) {
-              newPrice = product.price * 0.9; // 10% discount
+              newPrice = basePrice * 0.9; // 10% discount
               priceChanged = true;
             }
 
             // Stock-based pricing (clearance: 20% discount if stock > 50)
-            if (options.enableStockBased && product.stock > 50) {
-              newPrice = product.price * 0.8; // 20% discount for clearance
+            if (options.enableStockBased && Number(product.stock ?? 0) > 50) {
+              newPrice = basePrice * 0.8; // 20% discount for clearance
               priceChanged = true;
             }
 
             // Demand-based pricing (increase price if high demand)
             if (options.enableDemandBased) {
               const last7Days = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-              const recentSales = await Transaction.countDocuments({
-                tenantId,
-                'items.product': product._id,
-                createdAt: { $gte: last7Days },
-                status: 'completed',
+              const recentSales = await prisma.transactionItem.count({
+                where: {
+                  productId: product.id,
+                  transaction: {
+                    tenantId,
+                    createdAt: { gte: last7Days },
+                    status: 'completed',
+                  },
+                },
               });
 
               if (recentSales > 20) {
                 // High demand - increase price by 5%
-                newPrice = product.price * 1.05;
+                newPrice = basePrice * 1.05;
                 priceChanged = true;
               }
             }
 
             // Update product price if changed
-            if (priceChanged && newPrice !== product.price) {
-              await Product.findByIdAndUpdate(product._id, {
-                price: Math.round(newPrice * 100) / 100, // Round to 2 decimals
+            if (priceChanged && newPrice !== basePrice) {
+              await prisma.product.update({
+                where: { id: product.id },
+                data: { price: Math.round(newPrice * 100) / 100 }, // Round to 2 decimals
               });
               totalUpdated++;
             }
           } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             totalFailed++;
-            results.errors?.push(`Product ${product._id}: ${error.message}`);
+            results.errors?.push(`Product ${product.id}: ${error.message}`);
           }
         }
       } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any

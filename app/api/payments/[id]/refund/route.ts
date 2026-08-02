@@ -1,29 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Payment from '@/models/Payment';
+import prisma from '@/lib/prisma';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
+import { serializePayment } from '@/lib/data/payments';
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const tenantAccess = await requireTenantAccess(request);
     const { tenantId, user } = tenantAccess;
     if (!(await hasTenantPermission(user.role, tenantId, 'refunds.process'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
     const { id: paymentId } = await params;
-    
+
     const { refundReason } = await request.json();
 
-    // Find payment
-    const payment = await Payment.findOne({
-      _id: paymentId,
-      tenantId,
+    const payment = await prisma.payment.findFirst({
+      where: { id: paymentId, tenantId },
     });
 
     if (!payment) {
@@ -33,7 +30,6 @@ export async function POST(
       );
     }
 
-    // Check if already refunded
     if (payment.status === 'refunded') {
       return NextResponse.json(
         { success: false, error: 'Payment already refunded' },
@@ -41,28 +37,28 @@ export async function POST(
       );
     }
 
-    // Update payment status
-    payment.status = 'refunded';
-    payment.refundedAt = new Date();
-    if (refundReason) {
-      payment.refundReason = refundReason;
-    }
-    await payment.save();
+    const updated = await prisma.payment.update({
+      where: { id: payment.id },
+      data: {
+        status: 'refunded',
+        refundedAt: new Date(),
+        ...(refundReason ? { refundReason } : {}),
+      },
+    });
 
-    // Create audit log
     await createAuditLog(request, {
       tenantId,
       userId: user.userId,
       action: AuditActions.PAYMENT_REFUND,
       entityType: 'payment',
-      entityId: payment._id.toString(),
+      entityId: updated.id,
       changes: {
         status: 'refunded',
         refundReason,
       },
     });
 
-    return NextResponse.json({ success: true, data: payment });
+    return NextResponse.json({ success: true, data: serializePayment(updated) });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'Failed to process refund';
     if (msg.includes('Unauthorized') || msg.includes('Forbidden')) {

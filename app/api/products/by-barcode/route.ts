@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
+import { findProductByBarcodeOrSku, serializeProduct } from '@/lib/data/products';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
-
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId } = authResult;
@@ -24,21 +21,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'code query param is required' }, { status: 400 });
     }
 
-    const escapedCode = code.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const product = await Product.findOne({
-      tenantId,
-      isActive: { $ne: false },
-      $or: [
-        { barcode: { $regex: `^${escapedCode}$`, $options: 'i' } },
-        { sku: { $regex: `^${escapedCode}$`, $options: 'i' } },
-      ],
-    }).lean();
+    const product = await findProductByBarcodeOrSku(tenantId, code.trim());
 
     if (!product) {
       return NextResponse.json({ success: false, error: 'NOT_FOUND', data: null }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, data: { product } });
+    return NextResponse.json({ success: true, data: { product: serializeProduct(product) } });
   } catch (error) {
     return handleApiError(error, 'Failed to look up product by barcode');
   }

@@ -1,16 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
+import prisma from '@/lib/prisma';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
-import TenantEcommerceIntegration from '@/models/TenantEcommerceIntegration';
-import ProductChannelListing from '@/models/ProductChannelListing';
 import { requireEcommerceIntegrationFeature } from '@/lib/ecommerce/require-ecommerce-feature';
 import { checkRateLimit } from '@/lib/rate-limit';
 import type { EcommerceProvider } from '@/lib/ecommerce/constants';
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const { tenantId, user } = await requireTenantAccess(request);
     if (!(await hasTenantPermission(user.role, tenantId, 'integrations.disconnect'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
@@ -28,8 +25,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Invalid provider' }, { status: 400 });
     }
 
-    await ProductChannelListing.deleteMany({ tenantId, provider });
-    await TenantEcommerceIntegration.deleteMany({ tenantId, provider });
+    await prisma.productChannelListing.deleteMany({ where: { tenantId, provider } });
+    await prisma.tenantEcommerceIntegration.deleteMany({ where: { tenantId, provider } });
 
     return NextResponse.json({ success: true });
   } catch (e: unknown) {

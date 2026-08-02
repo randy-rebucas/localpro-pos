@@ -1,9 +1,5 @@
-import connectDB from '@/lib/mongodb';
-import Subscription from '@/models/Subscription';
-import SubscriptionPlan from '@/models/SubscriptionPlan';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
-import mongoose from 'mongoose'; // eslint-disable-line @typescript-eslint/no-unused-vars
 
 export interface SubscriptionLimits {
   maxUsers: number;
@@ -65,51 +61,52 @@ export interface SubscriptionStatus {
   nextBillingDate?: Date;
 }
 
+type PlanFeatures = SubscriptionLimits & SubscriptionFeatures;
+
 export class SubscriptionService {
   /**
    * Get subscription status for a tenant
    */
   static async getSubscriptionStatus(tenantId: string): Promise<SubscriptionStatus | null> {
     try {
-      await connectDB();
-
-      const subscription = await Subscription.findOne({ tenantId })
-        .populate('planId', 'name tier price features birCompliance pharmacyCompliance')
-        .lean();
+      const subscription = await prisma.subscription.findUnique({
+        where: { tenantId },
+        include: { plan: true },
+      });
 
       if (!subscription) {
         return null;
       }
 
-      type PopulatedPlan = {
-        name: string;
-        features: SubscriptionLimits & SubscriptionFeatures;
-        birCompliance?: BirComplianceFeatures;
-      };
-      let plan = subscription.planId as unknown as PopulatedPlan | null;
+      let plan = subscription.plan;
       const now = new Date();
 
-      // Handle orphaned planId (plan was deleted/recreated)
-      if (!plan || !plan.features) {
-        const fallbackPlan = await SubscriptionPlan.findOne({ tier: 'starter', isActive: true }).lean();
+      // Handle orphaned/missing plan features
+      if (!plan || !plan.features || Object.keys(plan.features as object).length === 0) {
+        const fallbackPlan = await prisma.subscriptionPlan.findFirst({
+          where: { tier: 'starter', isActive: true },
+        });
         if (fallbackPlan) {
           // Reassign subscription to the current starter plan
-          await Subscription.findByIdAndUpdate(subscription._id, { planId: fallbackPlan._id });
-          plan = fallbackPlan as PopulatedPlan;
+          await prisma.subscription.update({
+            where: { id: subscription.id },
+            data: { planId: fallbackPlan.id },
+          });
+          plan = fallbackPlan;
         } else {
           // Subscription exists but plan data is unavailable — return a safe fallback
           // so onboarding is not blocked by a null status.
           logger.warn('Subscription has missing plan; using fallback status', { tenantId });
-          const now = new Date();
+          const usage = (subscription.usage ?? {}) as Record<string, number>;
           return {
             isActive: subscription.status === 'active',
             isTrial: subscription.isTrial || subscription.status === 'trial',
             isExpired: subscription.endDate ? now > subscription.endDate : false,
             isTrialExpired: subscription.trialEndDate ? now > subscription.trialEndDate : false,
             planName: 'Starter',
-            billingCycle: subscription.billingCycle,
-            trialEndDate: subscription.trialEndDate,
-            nextBillingDate: subscription.nextBillingDate,
+            billingCycle: subscription.billingCycle as 'monthly' | 'yearly',
+            trialEndDate: subscription.trialEndDate ?? undefined,
+            nextBillingDate: subscription.nextBillingDate ?? undefined,
             limits: {
               maxUsers: 2,
               maxBranches: 1,
@@ -145,10 +142,20 @@ export class SubscriptionService {
               expiryTracking: false,
               pdeaReporting: false,
             },
-            usage: subscription.usage,
+            usage: {
+              currentUsers: usage.currentUsers ?? 0,
+              currentBranches: usage.currentBranches ?? 0,
+              currentProducts: usage.currentProducts ?? 0,
+              currentTransactions: usage.currentTransactions ?? 0,
+            },
           };
         }
       }
+
+      const planFeatures = (plan.features ?? {}) as Partial<PlanFeatures>;
+      const birCompliance = (plan.birCompliance ?? {}) as Partial<BirComplianceFeatures>;
+      const pharmacyCompliance = (plan.pharmacyCompliance ?? {}) as Partial<PharmacyComplianceFeatures>;
+      const usage = (subscription.usage ?? {}) as Record<string, number>;
 
       const status: SubscriptionStatus = {
         isActive: subscription.status === 'active',
@@ -156,45 +163,50 @@ export class SubscriptionService {
         isExpired: subscription.endDate ? now > subscription.endDate : false,
         isTrialExpired: subscription.trialEndDate ? now > subscription.trialEndDate : false,
         planName: plan.name,
-        billingCycle: subscription.billingCycle,
-        trialEndDate: subscription.trialEndDate,
-        nextBillingDate: subscription.nextBillingDate,
+        billingCycle: subscription.billingCycle as 'monthly' | 'yearly',
+        trialEndDate: subscription.trialEndDate ?? undefined,
+        nextBillingDate: subscription.nextBillingDate ?? undefined,
         limits: {
-          maxUsers: plan.features.maxUsers,
-          maxBranches: plan.features.maxBranches,
-          maxProducts: plan.features.maxProducts,
-          maxTransactions: plan.features.maxTransactions,
+          maxUsers: planFeatures.maxUsers as number,
+          maxBranches: planFeatures.maxBranches as number,
+          maxProducts: planFeatures.maxProducts as number,
+          maxTransactions: planFeatures.maxTransactions as number,
         },
         features: {
-          enableInventory: plan.features.enableInventory,
-          enableCategories: plan.features.enableCategories,
-          enableDiscounts: plan.features.enableDiscounts,
-          enableLoyaltyProgram: plan.features.enableLoyaltyProgram,
-          enableCustomerManagement: plan.features.enableCustomerManagement,
-          enableBookingScheduling: plan.features.enableBookingScheduling,
-          enableReports: plan.features.enableReports,
-          enableMultiBranch: plan.features.enableMultiBranch,
-          enableHardwareIntegration: plan.features.enableHardwareIntegration,
-          prioritySupport: plan.features.prioritySupport,
-          customIntegrations: plan.features.customIntegrations,
-          dedicatedAccountManager: plan.features.dedicatedAccountManager,
-          enableTableManagement: plan.features.enableTableManagement ?? false,
+          enableInventory: planFeatures.enableInventory as boolean,
+          enableCategories: planFeatures.enableCategories as boolean,
+          enableDiscounts: planFeatures.enableDiscounts as boolean,
+          enableLoyaltyProgram: planFeatures.enableLoyaltyProgram as boolean,
+          enableCustomerManagement: planFeatures.enableCustomerManagement as boolean,
+          enableBookingScheduling: planFeatures.enableBookingScheduling as boolean,
+          enableReports: planFeatures.enableReports as boolean,
+          enableMultiBranch: planFeatures.enableMultiBranch as boolean,
+          enableHardwareIntegration: planFeatures.enableHardwareIntegration as boolean,
+          prioritySupport: planFeatures.prioritySupport as boolean,
+          customIntegrations: planFeatures.customIntegrations as boolean,
+          dedicatedAccountManager: planFeatures.dedicatedAccountManager as boolean,
+          enableTableManagement: planFeatures.enableTableManagement ?? false,
         },
         birCompliance: {
-          ptuAssistance: plan.birCompliance?.ptuAssistance ?? false,
-          receiptFormatting: plan.birCompliance?.receiptFormatting ?? false,
-          birDocumentation: plan.birCompliance?.birDocumentation ?? false,
-          casReporting: plan.birCompliance?.casReporting ?? false,
-          auditTrailSystem: plan.birCompliance?.auditTrailSystem ?? false,
-          monthlySupport: plan.birCompliance?.monthlySupport ?? false,
+          ptuAssistance: birCompliance.ptuAssistance ?? false,
+          receiptFormatting: birCompliance.receiptFormatting ?? false,
+          birDocumentation: birCompliance.birDocumentation ?? false,
+          casReporting: birCompliance.casReporting ?? false,
+          auditTrailSystem: birCompliance.auditTrailSystem ?? false,
+          monthlySupport: birCompliance.monthlySupport ?? false,
         },
         pharmacyCompliance: {
-          enablePharmacyCompliance: (plan as any).pharmacyCompliance?.enablePharmacyCompliance ?? false, // eslint-disable-line @typescript-eslint/no-explicit-any
-          prescriptionManagement: (plan as any).pharmacyCompliance?.prescriptionManagement ?? false, // eslint-disable-line @typescript-eslint/no-explicit-any
-          expiryTracking: (plan as any).pharmacyCompliance?.expiryTracking ?? false, // eslint-disable-line @typescript-eslint/no-explicit-any
-          pdeaReporting: (plan as any).pharmacyCompliance?.pdeaReporting ?? false, // eslint-disable-line @typescript-eslint/no-explicit-any
+          enablePharmacyCompliance: pharmacyCompliance.enablePharmacyCompliance ?? false,
+          prescriptionManagement: pharmacyCompliance.prescriptionManagement ?? false,
+          expiryTracking: pharmacyCompliance.expiryTracking ?? false,
+          pdeaReporting: pharmacyCompliance.pdeaReporting ?? false,
         },
-        usage: subscription.usage,
+        usage: {
+          currentUsers: usage.currentUsers ?? 0,
+          currentBranches: usage.currentBranches ?? 0,
+          currentProducts: usage.currentProducts ?? 0,
+          currentTransactions: usage.currentTransactions ?? 0,
+        },
       };
 
       return status;
@@ -311,28 +323,35 @@ export class SubscriptionService {
     }>
   ): Promise<void> {
     try {
-      await connectDB();
+      const existing = await prisma.subscription.findUnique({
+        where: { tenantId },
+        select: { usage: true },
+      });
 
-      const updateObj: Record<string, number> = {};
+      if (!existing) {
+        return;
+      }
+
+      const currentUsage = (existing.usage ?? {}) as Record<string, unknown>;
+      const nextUsage: Record<string, unknown> = { ...currentUsage };
 
       if (updates.users !== undefined) {
-        updateObj['usage.currentUsers'] = updates.users;
+        nextUsage.currentUsers = updates.users;
       }
       if (updates.branches !== undefined) {
-        updateObj['usage.currentBranches'] = updates.branches;
+        nextUsage.currentBranches = updates.branches;
       }
       if (updates.products !== undefined) {
-        updateObj['usage.currentProducts'] = updates.products;
+        nextUsage.currentProducts = updates.products;
       }
       if (updates.transactions !== undefined) {
-        updateObj['usage.currentTransactions'] = updates.transactions;
+        nextUsage.currentTransactions = updates.transactions;
       }
 
-      await Subscription.findOneAndUpdate(
-        { tenantId },
-        updateObj,
-        { upsert: false }
-      );
+      await prisma.subscription.update({
+        where: { tenantId },
+        data: { usage: nextUsage as object },
+      });
     } catch (error) {
       logger.error('Error updating subscription usage:', error);
     }
@@ -343,8 +362,11 @@ export class SubscriptionService {
    */
   static async getPlans(): Promise<Record<string, unknown>[]> {
     try {
-      await connectDB();
-      return await SubscriptionPlan.find({ isActive: true }).sort({ 'price.monthly': 1 }).lean();
+      const plans = await prisma.subscriptionPlan.findMany({
+        where: { isActive: true },
+        orderBy: { priceMonthly: 'asc' },
+      });
+      return plans as unknown as Record<string, unknown>[];
     } catch (error) {
       logger.error('Error getting subscription plans:', error);
       return [];
@@ -364,54 +386,36 @@ export class SubscriptionService {
     } = {}
   ): Promise<unknown> {
     try {
-      await connectDB();
-
       const { isTrial = true, billingCycle = 'monthly', startDate = new Date() } = options;
 
       // Check if tenant already has a subscription
-      const existingSubscription = await Subscription.findOne({
-        tenantId,
-        status: { $in: ['active', 'trial'] }
+      const existingSubscription = await prisma.subscription.findFirst({
+        where: {
+          tenantId,
+          status: { in: ['active', 'trial'] },
+        },
       });
 
       if (existingSubscription) {
         throw new Error('Tenant already has an active subscription');
       }
 
-      const subscriptionData: {
-        tenantId: string;
-        planId: string;
-        status: string;
-        billingCycle: string;
-        startDate: Date;
-        isTrial: boolean;
-        autoRenew: boolean;
-        usage: Record<string, unknown>;
-        trialEndDate?: Date;
-        nextBillingDate?: Date;
-      } = {
-        tenantId,
-        planId,
-        status: isTrial ? 'trial' : 'active',
-        billingCycle,
-        startDate,
-        isTrial,
-        autoRenew: true,
-        usage: {
-          currentUsers: 1,
-          currentBranches: 1,
-          currentProducts: 0,
-          currentTransactions: 0,
-          lastResetDate: startDate,
-        },
+      const usage = {
+        currentUsers: 1,
+        currentBranches: 1,
+        currentProducts: 0,
+        currentTransactions: 0,
+        lastResetDate: startDate,
       };
+
+      let trialEndDate: Date | undefined;
+      let nextBillingDate: Date | undefined;
 
       // Set trial/billing dates
       if (isTrial) {
-        const trialEndDate = new Date(startDate);
+        trialEndDate = new Date(startDate);
         trialEndDate.setDate(trialEndDate.getDate() + 30);
-        subscriptionData.trialEndDate = trialEndDate;
-        subscriptionData.nextBillingDate = trialEndDate;
+        nextBillingDate = trialEndDate;
       } else {
         const nextBilling = new Date(startDate);
         if (billingCycle === 'yearly') {
@@ -419,14 +423,22 @@ export class SubscriptionService {
         } else {
           nextBilling.setMonth(nextBilling.getMonth() + 1);
         }
-        subscriptionData.nextBillingDate = nextBilling;
+        nextBillingDate = nextBilling;
       }
 
-      const subscription = await Subscription.create(subscriptionData);
-
-      // Update tenant with subscription reference
-      await Tenant.findByIdAndUpdate(tenantId, {
-        subscriptionId: subscription._id
+      const subscription = await prisma.subscription.create({
+        data: {
+          tenantId,
+          planId,
+          status: isTrial ? 'trial' : 'active',
+          billingCycle,
+          startDate,
+          isTrial,
+          autoRenew: true,
+          usage,
+          trialEndDate,
+          nextBillingDate,
+        },
       });
 
       return subscription;
@@ -441,21 +453,23 @@ export class SubscriptionService {
    * Returns the existing subscription if one is already active/trial.
    */
   static async ensureTrialSubscription(tenantId: string): Promise<{
-    subscription: InstanceType<typeof Subscription>;
+    subscription: Awaited<ReturnType<typeof prisma.subscription.findUniqueOrThrow>>;
     created: boolean;
   }> {
-    await connectDB();
-
-    const existing = await Subscription.findOne({
-      tenantId,
-      status: { $in: ['active', 'trial'] },
+    const existing = await prisma.subscription.findFirst({
+      where: {
+        tenantId,
+        status: { in: ['active', 'trial'] },
+      },
     });
 
     if (existing) {
       return { subscription: existing, created: false };
     }
 
-    const starterPlan = await SubscriptionPlan.findOne({ tier: 'starter', isActive: true });
+    const starterPlan = await prisma.subscriptionPlan.findFirst({
+      where: { tier: 'starter', isActive: true },
+    });
     if (!starterPlan) {
       throw new Error('Starter plan not available');
     }
@@ -465,33 +479,32 @@ export class SubscriptionService {
     trialEndDate.setDate(trialEndDate.getDate() + 14);
 
     try {
-      const subscription = await Subscription.create({
-        tenantId,
-        planId: starterPlan._id,
-        status: 'trial',
-        billingCycle: 'monthly',
-        startDate: now,
-        trialEndDate,
-        nextBillingDate: trialEndDate,
-        isTrial: true,
-        autoRenew: true,
-        usage: {
-          currentUsers: 1,
-          currentBranches: 1,
-          currentProducts: 0,
-          currentTransactions: 0,
-          lastResetDate: now,
+      const subscription = await prisma.subscription.create({
+        data: {
+          tenantId,
+          planId: starterPlan.id,
+          status: 'trial',
+          billingCycle: 'monthly',
+          startDate: now,
+          trialEndDate,
+          nextBillingDate: trialEndDate,
+          isTrial: true,
+          autoRenew: true,
+          usage: {
+            currentUsers: 1,
+            currentBranches: 1,
+            currentProducts: 0,
+            currentTransactions: 0,
+            lastResetDate: now,
+          },
         },
-      });
-
-      await Tenant.findByIdAndUpdate(tenantId, {
-        subscriptionId: subscription._id,
       });
 
       return { subscription, created: true };
     } catch (error: unknown) {
-      if ((error as { code?: number }).code === 11000) {
-        const raced = await Subscription.findOne({ tenantId });
+      // Unique constraint violation (tenantId is unique) — another request raced us.
+      if ((error as { code?: string }).code === 'P2002') {
+        const raced = await prisma.subscription.findUnique({ where: { tenantId } });
         if (raced) {
           return { subscription: raced, created: false };
         }

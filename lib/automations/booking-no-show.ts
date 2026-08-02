@@ -3,9 +3,7 @@
  * Detect no-shows and automatically update status and send follow-up
  */
 
-import connectDB from '@/lib/mongodb';
-import Booking from '@/models/Booking';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/prisma';
 import { sendEmail, sendSMS } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { formatDate, formatTime } from '@/lib/formatting';
@@ -22,8 +20,6 @@ export interface NoShowDetectionOptions {
 export async function detectNoShows(
   options: NoShowDetectionOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -39,10 +35,10 @@ export async function detectNoShows(
     // Get tenants to process
     let tenants;
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await prisma.tenant.findUnique({ where: { id: options.tenantId } });
       tenants = tenant ? [tenant] : [];
     } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
+      tenants = await prisma.tenant.findMany({ where: { isActive: true } });
     }
 
     if (tenants.length === 0) {
@@ -55,25 +51,28 @@ export async function detectNoShows(
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
+        const tenantId = tenant.id;
         const tenantSettings = await getTenantSettingsById(tenantId);
 
         // Find bookings that:
         // 1. Are past start time + grace period
         // 2. Are still pending or confirmed (not completed/cancelled/no-show)
         const gracePeriodEnd = new Date(now.getTime() - gracePeriodMinutes * 60 * 1000);
-        
-        const potentialNoShows = await Booking.find({
-          tenantId,
-          startTime: { $lte: gracePeriodEnd },
-          status: { $in: ['pending', 'confirmed'] },
-        }).lean();
+
+        const potentialNoShows = await prisma.booking.findMany({
+          where: {
+            tenantId,
+            startTime: { lte: gracePeriodEnd },
+            status: { in: ['pending', 'confirmed'] },
+          },
+        });
 
         for (const booking of potentialNoShows) {
           try {
             // Mark as no-show
-            await Booking.findByIdAndUpdate(booking._id, {
-              status: 'no-show',
+            await prisma.booking.update({
+              where: { id: booking.id },
+              data: { status: 'no_show' },
             });
 
             totalNoShows++;
@@ -123,7 +122,7 @@ ${companyName}`;
             }
           } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             totalFailed++;
-            results.errors?.push(`Booking ${booking._id}: ${error.message}`);
+            results.errors?.push(`Booking ${booking.id}: ${error.message}`);
           }
         }
       } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any

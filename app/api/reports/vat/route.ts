@@ -1,17 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
+import prisma from '@/lib/prisma';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { getVATReport } from '@/lib/analytics';
-import Tenant from '@/models/Tenant';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkFeatureAccess } from '@/lib/subscription';
 import { logger } from '@/lib/logger';
+import type { ITenantSettings } from '@/types/tenant';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
@@ -27,14 +26,14 @@ export async function GET(request: NextRequest) {
     // Check if reports feature is enabled in subscription
     try {
       await checkFeatureAccess(tenantId.toString(), 'enableReports');
-    } catch (featureError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+    } catch (featureError: unknown) {
       return NextResponse.json(
-        { success: false, error: featureError.message },
+        { success: false, error: (featureError as Error).message },
         { status: 403 }
       );
     }
 
-    const tenant = await Tenant.findById(tenantId).lean();
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { settings: true } });
     if (!tenant) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
@@ -49,12 +48,12 @@ export async function GET(request: NextRequest) {
     startDate.setHours(0, 0, 0, 0);
     if (searchParams.get('endDate')) endDate.setHours(23, 59, 59, 999);
 
-    const report = await getVATReport(tenantId, startDate, endDate, tenant.settings);
+    const report = await getVATReport(tenantId, startDate, endDate, tenant.settings as unknown as ITenantSettings);
 
     return NextResponse.json({ success: true, data: report });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  } catch (error: unknown) {
     logger.error('Error fetching VAT report:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Failed to fetch VAT report';
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
-

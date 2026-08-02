@@ -1,16 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import ProductBundle from '@/models/ProductBundle';
-import '@/models/Category'; // register schema for populate
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
+import { findBundles, createBundle } from '@/lib/data/bundles';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
 
@@ -27,41 +24,21 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
-    const query: any = { tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (search) {
-      const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      query.$or = [
-        { name: { $regex: escapedSearch, $options: 'i' } },
-        { description: { $regex: escapedSearch, $options: 'i' } },
-        { sku: { $regex: escapedSearch, $options: 'i' } },
-      ];
-    }
-    if (isActive !== null && isActive !== '') {
-      query.isActive = isActive === 'true';
-    }
-    if (categoryId) {
-      query.categoryId = categoryId;
-    }
-    if (minPrice || maxPrice) {
-      query.price = {};
-      if (minPrice) query.price.$gte = parseFloat(minPrice);
-      if (maxPrice) query.price.$lte = parseFloat(maxPrice);
-    }
-    if (startDate || endDate) {
-      query.createdAt = {};
-      if (startDate) query.createdAt.$gte = new Date(startDate);
-      if (endDate) {
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        query.createdAt.$lte = end;
-      }
+    let end: Date | undefined;
+    if (endDate) {
+      end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
     }
 
-    const bundles = await ProductBundle.find(query)
-      .populate('items.productId', 'name price stock')
-      .populate('categoryId', 'name')
-      .sort({ createdAt: -1 })
-      .lean();
+    const bundles = await findBundles(tenantId, {
+      search,
+      isActive: isActive !== null && isActive !== '' ? isActive === 'true' : undefined,
+      categoryId: categoryId || undefined,
+      minPrice: minPrice ? parseFloat(minPrice) : undefined,
+      maxPrice: maxPrice ? parseFloat(maxPrice) : undefined,
+      startDate: startDate ? new Date(startDate) : undefined,
+      endDate: end,
+    });
 
     return NextResponse.json({ success: true, data: bundles });
   } catch (_error: unknown) {
@@ -72,7 +49,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
@@ -91,8 +67,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const bundle = await ProductBundle.create({
-      tenantId,
+    const bundle = await createBundle(tenantId, {
       name,
       description,
       price,
@@ -100,22 +75,21 @@ export async function POST(request: NextRequest) {
       sku,
       categoryId,
       image,
-      trackInventory: trackInventory !== false,
-      isActive: true,
+      trackInventory,
     });
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.CREATE,
       entityType: 'bundle',
-      entityId: bundle._id.toString(),
+      entityId: bundle._id,
       changes: body,
     });
 
     return NextResponse.json({ success: true, data: bundle }, { status: 201 });
   } catch (error: unknown) {
     const t = await getValidationTranslatorFromRequest(request);
-    if ((error as Record<string, unknown>).code === 11000) {
+    if ((error as Record<string, unknown>).code === 'P2002') {
       return NextResponse.json(
         { success: false, error: t('validation.bundleSkuExists', 'Bundle with this SKU already exists') },
         { status: 400 }
@@ -125,4 +99,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: 'Failed to create bundle' }, { status: 400 });
   }
 }
-

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
+import prisma from '@/lib/prisma';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { updateStock } from '@/lib/stock';
@@ -9,36 +9,34 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
-    
+
     if (!tenantId) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
-    
+
     const body = await request.json();
     const { quantity, notes } = body;
-    
+
     if (!quantity || quantity <= 0) {
       return NextResponse.json(
         { success: false, error: t('validation.quantityGreaterThanZero', 'Quantity must be greater than 0') },
         { status: 400 }
       );
     }
-    
+
     // Get product before update to track previous stock
-    const Product = (await import('@/models/Product')).default;
-    const productBefore = await Product.findOne({ _id: id, tenantId });
-    
+    const productBefore = await prisma.product.findFirst({ where: { id, tenantId } });
+
     if (!productBefore) {
       return NextResponse.json({ success: false, error: t('validation.productNotFound', 'Product not found') }, { status: 404 });
     }
-    
-    const previousStock = productBefore.stock;
-    
+
+    const previousStock = Number(productBefore.stock);
+
     // Update stock using the stock utility function
     await updateStock(
       id,
@@ -51,19 +49,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         notes: notes || undefined,
       }
     );
-    
+
     // Get updated product
-    const product = await Product.findOne({ _id: id, tenantId });
-    
+    const product = await prisma.product.findFirst({ where: { id, tenantId } });
+
     if (!product) {
       return NextResponse.json({ success: false, error: t('validation.productNotFound', 'Product not found') }, { status: 404 });
     }
-    
+
     // Push updated stock to connected storefronts (fire-and-forget)
     {
       const { pushChannelInventoryForProduct } = await import('@/lib/ecommerce/inventory-push');
       void pushChannelInventoryForProduct(tenantId, id, { stockReason: 'purchase' });
     }
+
+    const newStock = Number(product.stock);
 
     // Create audit log
     await createAuditLog(request, {
@@ -75,25 +75,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       changes: {
         stock: {
           old: previousStock,
-          new: product.stock,
+          new: newStock,
         },
         refillQuantity: quantity,
       },
     });
-    
+
     return NextResponse.json({
       success: true,
       data: {
-        product,
+        product: { ...product, _id: product.id, stock: newStock, price: Number(product.price) },
         refilledQuantity: quantity,
-        newStock: product.stock,
+        newStock,
       },
     });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (error.message === 'Product not found') {
+  } catch (error: unknown) {
+    if (error instanceof Error && error.message === 'Product not found') {
       return NextResponse.json({ success: false, error: error.message }, { status: 404 });
     }
     return handleApiError(error);
   }
 }
-

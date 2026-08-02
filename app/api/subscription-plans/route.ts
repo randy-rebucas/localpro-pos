@@ -1,17 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import SubscriptionPlan from '@/models/SubscriptionPlan';
+import prisma from '@/lib/prisma';
 import { requireRole } from '@/lib/auth';
+import { getActiveSubscriptionPlans, planToApi } from '@/lib/data/subscription-plans';
 
 export async function GET(request: NextRequest) { // eslint-disable-line @typescript-eslint/no-unused-vars
   try {
-    await connectDB();
+    const plans = await getActiveSubscriptionPlans();
 
-    const plans = await SubscriptionPlan.find({ isActive: true })
-      .sort({ 'price.monthly': 1 })
-      .lean();
-
-    return NextResponse.json({ success: true, data: plans });
+    return NextResponse.json({ success: true, data: plans.map(planToApi) });
   } catch (_error: unknown) {
     return NextResponse.json({ success: false, error: 'Failed to fetch plans' }, { status: 500 });
   }
@@ -19,7 +15,6 @@ export async function GET(request: NextRequest) { // eslint-disable-line @typesc
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     // Creating a global subscription plan tier (visible to every tenant) — super_admin only
     await requireRole(request, ['super_admin']);
 
@@ -34,7 +29,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if tier already exists
-    const existingPlan = await SubscriptionPlan.findOne({ tier });
+    const existingPlan = await prisma.subscriptionPlan.findUnique({ where: { tier } });
     if (existingPlan) {
       return NextResponse.json(
         { success: false, error: 'A plan with this tier already exists' },
@@ -42,50 +37,52 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const planData = {
-      name,
-      tier,
-      description,
-      price: {
-        monthly: price.monthly,
-        setupFee: price.setupFee || 0,
-        currency: price.currency || 'PHP',
-      },
-      features: {
-        maxUsers: features?.maxUsers || 1,
-        maxBranches: features?.maxBranches || 1,
-        maxProducts: features?.maxProducts || 0,
-        maxTransactions: features?.maxTransactions || 0,
-        enableInventory: features?.enableInventory ?? true,
-        enableCategories: features?.enableCategories ?? true,
-        enableDiscounts: features?.enableDiscounts ?? false,
-        enableLoyaltyProgram: features?.enableLoyaltyProgram ?? false,
-        enableCustomerManagement: features?.enableCustomerManagement ?? false,
-        enableBookingScheduling: features?.enableBookingScheduling ?? false,
-        enableReports: features?.enableReports ?? true,
-        enableMultiBranch: features?.enableMultiBranch ?? false,
-        enableHardwareIntegration: features?.enableHardwareIntegration ?? false,
-        prioritySupport: features?.prioritySupport ?? false,
-        customIntegrations: features?.customIntegrations ?? false,
-        dedicatedAccountManager: features?.dedicatedAccountManager ?? false,
-      },
-      birCompliance: {
-        ptuAssistance: birCompliance?.ptuAssistance ?? false,
-        receiptFormatting: birCompliance?.receiptFormatting ?? false,
-        birDocumentation: birCompliance?.birDocumentation ?? false,
-        casReporting: birCompliance?.casReporting ?? false,
-        auditTrailSystem: birCompliance?.auditTrailSystem ?? false,
-        monthlySupport: birCompliance?.monthlySupport ?? false,
-      },
-      isActive: true,
-      isCustom,
+    const featuresData = {
+      maxUsers: features?.maxUsers || 1,
+      maxBranches: features?.maxBranches || 1,
+      maxProducts: features?.maxProducts || 0,
+      maxTransactions: features?.maxTransactions || 0,
+      enableInventory: features?.enableInventory ?? true,
+      enableCategories: features?.enableCategories ?? true,
+      enableDiscounts: features?.enableDiscounts ?? false,
+      enableLoyaltyProgram: features?.enableLoyaltyProgram ?? false,
+      enableCustomerManagement: features?.enableCustomerManagement ?? false,
+      enableBookingScheduling: features?.enableBookingScheduling ?? false,
+      enableReports: features?.enableReports ?? true,
+      enableMultiBranch: features?.enableMultiBranch ?? false,
+      enableHardwareIntegration: features?.enableHardwareIntegration ?? false,
+      prioritySupport: features?.prioritySupport ?? false,
+      customIntegrations: features?.customIntegrations ?? false,
+      dedicatedAccountManager: features?.dedicatedAccountManager ?? false,
     };
 
-    const plan = await SubscriptionPlan.create(planData);
+    const birComplianceData = {
+      ptuAssistance: birCompliance?.ptuAssistance ?? false,
+      receiptFormatting: birCompliance?.receiptFormatting ?? false,
+      birDocumentation: birCompliance?.birDocumentation ?? false,
+      casReporting: birCompliance?.casReporting ?? false,
+      auditTrailSystem: birCompliance?.auditTrailSystem ?? false,
+      monthlySupport: birCompliance?.monthlySupport ?? false,
+    };
 
-    return NextResponse.json({ success: true, data: plan }, { status: 201 });
+    const plan = await prisma.subscriptionPlan.create({
+      data: {
+        name,
+        tier,
+        description,
+        priceMonthly: price.monthly,
+        priceSetupFee: price.setupFee || 0,
+        priceCurrency: price.currency || 'PHP',
+        features: featuresData,
+        birCompliance: birComplianceData,
+        isActive: true,
+        isCustom,
+      },
+    });
+
+    return NextResponse.json({ success: true, data: planToApi(plan) }, { status: 201 });
   } catch (error: unknown) {
-    if ((error as Record<string, unknown>).code === 11000) {
+    if ((error as Record<string, unknown>).code === 'P2002') {
       return NextResponse.json(
         { success: false, error: 'Plan tier already exists' },
         { status: 400 }

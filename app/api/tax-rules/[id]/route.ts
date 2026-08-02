@@ -1,18 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import TaxRule from '@/models/TaxRule';
 import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { getTaxRuleById, updateTaxRule, deleteTaxRule } from '@/lib/data/tax-rules';
+import type { Prisma } from '@prisma/client';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const { id } = await params;
 
     // Require authentication to prevent unauthenticated tax-rule lookups
@@ -24,13 +23,14 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    const taxRule = await TaxRule.findOne({ _id: id, tenantId }).lean();
-    
+    const taxRule = await getTaxRuleById(tenantId, id);
+
     if (!taxRule) {
       return NextResponse.json({ success: false, error: 'Tax rule not found' }, { status: 404 });
     }
-    
-    return NextResponse.json({ success: true, data: taxRule });
+
+    const { id: ruleId, ...rest } = taxRule;
+    return NextResponse.json({ success: true, data: { _id: ruleId, ...rest, rate: Number(rest.rate) } });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -41,7 +41,6 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const { id } = await params;
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
@@ -55,17 +54,17 @@ export async function PATCH(
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
+    const taxRule = await getTaxRuleById(tenantId, id);
 
-    const taxRule = await TaxRule.findOne({ _id: id, tenantId });
-    
     if (!taxRule) {
       return NextResponse.json({ success: false, error: t('validation.taxRuleNotFound', 'Tax rule not found') }, { status: 404 });
     }
-    
+
     const body = await request.json();
-    const oldData = { name: taxRule.name, rate: taxRule.rate, isActive: taxRule.isActive };
-    
-    if (body.name !== undefined) taxRule.name = body.name.trim();
+    const oldData = { name: taxRule.name, rate: Number(taxRule.rate), isActive: taxRule.isActive };
+
+    const updates: Prisma.TaxRuleUpdateInput = {};
+    if (body.name !== undefined) updates.name = body.name.trim();
     if (body.rate !== undefined) {
       if (isNaN(body.rate) || body.rate < 0 || body.rate > 100) {
         return NextResponse.json(
@@ -73,28 +72,29 @@ export async function PATCH(
           { status: 400 }
         );
       }
-      taxRule.rate = parseFloat(body.rate);
+      updates.rate = parseFloat(body.rate);
     }
-    if (body.label !== undefined) taxRule.label = body.label.trim();
-    if (body.appliesTo !== undefined) taxRule.appliesTo = body.appliesTo;
-    if (body.categoryIds !== undefined) taxRule.categoryIds = body.categoryIds;
-    if (body.productIds !== undefined) taxRule.productIds = body.productIds;
-    if (body.region !== undefined) taxRule.region = body.region;
-    if (body.priority !== undefined) taxRule.priority = body.priority;
-    if (body.isActive !== undefined) taxRule.isActive = body.isActive;
-    
-    await taxRule.save();
-    
+    if (body.label !== undefined) updates.label = body.label.trim();
+    if (body.appliesTo !== undefined) updates.appliesTo = body.appliesTo;
+    if (body.categoryIds !== undefined) updates.categoryIds = body.categoryIds;
+    if (body.productIds !== undefined) updates.productIds = body.productIds;
+    if (body.region !== undefined) updates.region = body.region;
+    if (body.priority !== undefined) updates.priority = body.priority;
+    if (body.isActive !== undefined) updates.isActive = body.isActive;
+
+    const updated = await updateTaxRule(id, updates);
+
     await createAuditLog(request, {
       tenantId,
       userId: user.userId,
       action: AuditActions.UPDATE,
       entityType: 'taxRule',
-      entityId: taxRule._id.toString(),
-      changes: { old: oldData, new: { name: taxRule.name, rate: taxRule.rate, isActive: taxRule.isActive } },
+      entityId: id,
+      changes: { old: oldData, new: { name: updated.name, rate: Number(updated.rate), isActive: updated.isActive } },
     });
-    
-    return NextResponse.json({ success: true, data: taxRule });
+
+    const { id: ruleId, ...rest } = updated;
+    return NextResponse.json({ success: true, data: { _id: ruleId, ...rest, rate: Number(rest.rate) } });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return NextResponse.json({ success: false, error: error.message }, { status: 400 });
   }
@@ -105,7 +105,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const { id } = await params;
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
@@ -119,13 +118,13 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
-
-    const taxRule = await TaxRule.findOneAndDelete({ _id: id, tenantId });
-    
+    const taxRule = await getTaxRuleById(tenantId, id);
     if (!taxRule) {
       return NextResponse.json({ success: false, error: t('validation.taxRuleNotFound', 'Tax rule not found') }, { status: 404 });
     }
-    
+
+    await deleteTaxRule(id);
+
     await createAuditLog(request, {
       tenantId,
       userId: user.userId,
@@ -134,7 +133,7 @@ export async function DELETE(
       entityId: id,
       changes: { name: taxRule.name },
     });
-    
+
     return NextResponse.json({ success: true, message: 'Tax rule deleted' });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return NextResponse.json({ success: false, error: error.message }, { status: 400 });

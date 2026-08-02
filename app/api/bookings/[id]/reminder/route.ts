@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Booking from '@/models/Booking';
+import prisma from '@/lib/prisma';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -18,7 +17,6 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const user = await getCurrentUser(request);
     const t = await getValidationTranslatorFromRequest(request);
     if (!user) {
@@ -49,7 +47,7 @@ export async function POST(
     }
 
     const { id } = await params;
-    const booking = await Booking.findOne({ _id: id, tenantId }).lean();
+    const booking = await prisma.booking.findFirst({ where: { id, tenantId } });
 
     if (!booking) {
       return NextResponse.json(
@@ -68,18 +66,18 @@ export async function POST(
     const tenantSettings = await getTenantSettingsById(tenantId);
     const results = await sendBookingReminder({
       customerName: booking.customerName,
-      customerEmail: booking.customerEmail,
-      customerPhone: booking.customerPhone,
+      customerEmail: booking.customerEmail ?? undefined,
+      customerPhone: booking.customerPhone ?? undefined,
       serviceName: booking.serviceName,
       startTime: booking.startTime,
       endTime: booking.endTime,
-      staffName: booking.staffName,
-      notes: booking.notes,
+      staffName: booking.staffName ?? undefined,
+      notes: booking.notes ?? undefined,
       bookingId: id,
     }, tenantSettings || undefined);
 
     // Update reminder sent status
-    await Booking.findByIdAndUpdate(id, { reminderSent: true });
+    await prisma.booking.update({ where: { id }, data: { reminderSent: true } });
 
     return NextResponse.json({
       success: true,
@@ -95,4 +93,3 @@ export async function POST(
     );
   }
 }
-

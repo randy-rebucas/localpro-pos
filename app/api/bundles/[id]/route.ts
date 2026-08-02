@@ -1,19 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import ProductBundle from '@/models/ProductBundle';
-import '@/models/Category'; // register schema for populate
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
+import { getBundleById, updateBundle, setBundleActive } from '@/lib/data/bundles';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
@@ -22,10 +19,7 @@ export async function GET(
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
-    const bundle = await ProductBundle.findOne({ _id: id, tenantId })
-      .populate('items.productId', 'name price stock')
-      .populate('categoryId', 'name')
-      .lean();
+    const bundle = await getBundleById(tenantId, id);
 
     if (!bundle) {
       return NextResponse.json({ success: false, error: t('validation.bundleNotFound', 'Bundle not found') }, { status: 404 });
@@ -43,7 +37,6 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
@@ -52,38 +45,38 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    const bundle = await ProductBundle.findOne({ _id: id, tenantId });
-    if (!bundle) {
+    const oldData = await getBundleById(tenantId, id);
+    if (!oldData) {
       return NextResponse.json({ success: false, error: 'Bundle not found' }, { status: 404 });
     }
 
     const body = await request.json();
-    const oldData = bundle.toObject();
 
-    if (body.name) bundle.name = body.name;
-    if (body.description !== undefined) bundle.description = body.description;
-    if (body.price !== undefined) bundle.price = body.price;
-    if (body.items) bundle.items = body.items;
-    if (body.sku !== undefined) bundle.sku = body.sku;
-    if (body.categoryId !== undefined) bundle.categoryId = body.categoryId;
-    if (body.image !== undefined) bundle.image = body.image;
-    if (body.trackInventory !== undefined) bundle.trackInventory = body.trackInventory;
-    if (body.isActive !== undefined) bundle.isActive = body.isActive;
+    const updates: Record<string, unknown> = {};
+    if (body.name) updates.name = body.name;
+    if (body.description !== undefined) updates.description = body.description;
+    if (body.price !== undefined) updates.price = body.price;
+    if (body.items) updates.items = body.items;
+    if (body.sku !== undefined) updates.sku = body.sku;
+    if (body.categoryId !== undefined) updates.categoryId = body.categoryId;
+    if (body.image !== undefined) updates.image = body.image;
+    if (body.trackInventory !== undefined) updates.trackInventory = body.trackInventory;
+    if (body.isActive !== undefined) updates.isActive = body.isActive;
 
-    await bundle.save();
+    const bundle = await updateBundle(tenantId, id, updates as any); // eslint-disable-line @typescript-eslint/no-explicit-any
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.UPDATE,
       entityType: 'bundle',
-      entityId: bundle._id.toString(),
-      changes: { before: oldData, after: bundle.toObject() },
+      entityId: id,
+      changes: { before: oldData, after: bundle },
     });
 
     return NextResponse.json({ success: true, data: bundle });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     const t = await getValidationTranslatorFromRequest(request);
-    if (error.code === 11000) {
+    if (error.code === 'P2002') {
       return NextResponse.json(
         { success: false, error: t('validation.bundleSkuExists', 'Bundle with this SKU already exists') },
         { status: 400 }
@@ -99,7 +92,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
@@ -109,20 +101,19 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
-    const bundle = await ProductBundle.findOne({ _id: id, tenantId });
+    const bundle = await getBundleById(tenantId, id);
     if (!bundle) {
       return NextResponse.json({ success: false, error: t('validation.bundleNotFound', 'Bundle not found') }, { status: 404 });
     }
 
     // Soft delete - set isActive to false
-    bundle.isActive = false;
-    await bundle.save();
+    await setBundleActive(tenantId, id, false);
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.DELETE,
       entityType: 'bundle',
-      entityId: bundle._id.toString(),
+      entityId: id,
       changes: { name: bundle.name },
     });
 
@@ -132,4 +123,3 @@ export async function DELETE(
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
-

@@ -1,16 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Device from '@/models/Device';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
+import { listDevices, createDevice } from '@/lib/data/devices';
+import { Prisma } from '@prisma/client';
+
+function serializeDevice(device: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const { id, branch, registeredByUser, ...rest } = device;
+  return {
+    _id: id,
+    ...rest,
+    branchId: branch ? { _id: branch.id, name: branch.name } : rest.branchId,
+    registeredBy: registeredByUser ? { _id: registeredByUser.id, name: registeredByUser.name, email: registeredByUser.email } : rest.registeredBy,
+  };
+}
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId } = authResult;
@@ -18,18 +27,12 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const isActive = searchParams.get('isActive');
 
-    const query: any = { tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (searchParams.has('isActive')) {
-      query.isActive = isActive === 'true';
-    }
+    const devices = await listDevices(
+      tenantId,
+      searchParams.has('isActive') ? isActive === 'true' : undefined
+    );
 
-    const devices = await Device.find(query)
-      .populate('branchId', 'name')
-      .populate('registeredBy', 'name email')
-      .sort({ terminalId: 1 })
-      .lean();
-
-    return NextResponse.json({ success: true, data: devices });
+    return NextResponse.json({ success: true, data: devices.map(serializeDevice) });
   } catch (error) {
     return handleApiError(error, 'Failed to fetch devices');
   }
@@ -37,7 +40,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId, user } = authResult;
@@ -64,7 +66,7 @@ export async function POST(request: NextRequest) {
 
     let device;
     try {
-      device = await Device.create({
+      device = await createDevice({
         tenantId,
         branchId: branchId || undefined,
         label,
@@ -72,11 +74,10 @@ export async function POST(request: NextRequest) {
         terminalId,
         ptuNumber: ptuNumber || undefined,
         ptuStatus: ptuStatus || 'pending',
-        isActive: true,
         registeredBy: user.userId,
       });
     } catch (createErr: unknown) {
-      if (createErr instanceof Error && 'code' in createErr && (createErr as { code?: number }).code === 11000) {
+      if (createErr instanceof Prisma.PrismaClientKnownRequestError && createErr.code === 'P2002') {
         return NextResponse.json(
           { success: false, error: t('validation.deviceDuplicate', 'A device with this terminal ID or serial number already exists') },
           { status: 409 }
@@ -90,11 +91,11 @@ export async function POST(request: NextRequest) {
       userId: user.userId,
       action: AuditActions.DEVICE_CREATE,
       entityType: 'device',
-      entityId: device._id.toString(),
+      entityId: device.id,
       changes: { label, serialNumber, terminalId, branchId, ptuNumber, ptuStatus },
     });
 
-    return NextResponse.json({ success: true, data: device }, { status: 201 });
+    return NextResponse.json({ success: true, data: { _id: device.id, ...device } }, { status: 201 });
   } catch (error) {
     return handleApiError(error, 'Failed to create device');
   }

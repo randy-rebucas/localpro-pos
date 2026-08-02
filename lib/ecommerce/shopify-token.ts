@@ -1,9 +1,6 @@
-import mongoose from 'mongoose';
-import connectDB from '@/lib/mongodb';
-import TenantEcommerceIntegration from '@/models/TenantEcommerceIntegration';
+import prisma from '@/lib/prisma';
 import { encryptCredentialsPayload } from '@/lib/ecommerce/crypto';
 import { getShopifyCredentials } from '@/lib/ecommerce/integration-credentials';
-import type { ITenantEcommerceIntegration } from '@/models/TenantEcommerceIntegration';
 import type { ShopifyCredentials } from '@/lib/ecommerce/types';
 import { shopifyRefreshOfflineToken, shopifyCredentialsFromTokenResponse } from '@/lib/ecommerce/shopify-oauth';
 
@@ -13,8 +10,10 @@ const ACCESS_EXPIRY_BUFFER_SEC = 120;
  * Returns a valid Admin API access token, refreshing the expiring offline token when needed.
  */
 export async function getShopifyAccessTokenForIntegration(
-  integration: Pick<ITenantEcommerceIntegration, 'credentialsEncrypted' | 'shopDomain'> & {
-    _id: mongoose.Types.ObjectId | string;
+  integration: {
+    credentialsEncrypted: string;
+    shopDomain: string | null;
+    _id: string;
   }
 ): Promise<string> {
   const clientId = process.env.SHOPIFY_CLIENT_ID?.trim();
@@ -50,8 +49,7 @@ export async function getShopifyAccessTokenForIntegration(
     }),
   } as Record<string, unknown>);
 
-  await connectDB();
-  await TenantEcommerceIntegration.updateOne({ _id: integration._id }, { $set: { credentialsEncrypted: enc } });
+  await prisma.tenantEcommerceIntegration.update({ where: { id: integration._id }, data: { credentialsEncrypted: enc } });
 
   return next.accessToken;
 }

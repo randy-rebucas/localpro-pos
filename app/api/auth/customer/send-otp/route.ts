@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import CustomerOTP from '@/models/CustomerOTP';
-import Customer from '@/models/Customer'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import prisma from '@/lib/prisma';
+import { getTenantBySlug } from '@/lib/data/tenants';
 import { sendSMS } from '@/lib/notifications';
-import { getTenantIdFromRequest } from '@/lib/api-tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
@@ -25,7 +23,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await connectDB();
     const t = await getValidationTranslatorFromRequest(request);
     const body = await request.json();
     const { phone, tenantSlug } = body;
@@ -49,12 +46,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Get tenant ID
-    const Tenant = (await import('@/models/Tenant')).default;
-    const tenant = await Tenant.findOne({ 
-      slug: tenantSlug || 'default', 
-      isActive: true 
-    }).lean();
-    
+    const tenant = await getTenantBySlug(tenantSlug || 'default');
+
     if (!tenant) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
@@ -64,16 +57,18 @@ export async function POST(request: NextRequest) {
 
     // Check for recent OTP (rate limiting - max 1 per minute)
     const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
-    const recentOTP = await CustomerOTP.findOne({
-      tenantId: tenant._id,
-      phone: normalizedPhone,
-      createdAt: { $gte: oneMinuteAgo },
+    const recentOTP = await prisma.customerOTP.findFirst({
+      where: {
+        tenantId: tenant.id,
+        phone: normalizedPhone,
+        createdAt: { gte: oneMinuteAgo },
+      },
     });
 
     if (recentOTP) {
       return NextResponse.json(
-        { 
-          success: false, 
+        {
+          success: false,
           error: t('validation.otpRateLimit', 'Please wait before requesting another OTP'),
           retryAfter: 60,
         },
@@ -86,24 +81,26 @@ export async function POST(request: NextRequest) {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes expiry
 
     // Invalidate any existing OTPs for this phone
-    await CustomerOTP.updateMany(
-      { tenantId: tenant._id, phone: normalizedPhone, verified: false },
-      { verified: true } // Mark as used
-    );
+    await prisma.customerOTP.updateMany({
+      where: { tenantId: tenant.id, phone: normalizedPhone, verified: false },
+      data: { verified: true }, // Mark as used
+    });
 
     // Create new OTP
-    await CustomerOTP.create({
-      tenantId: tenant._id,
-      phone: normalizedPhone,
-      otp,
-      expiresAt,
-      verified: false,
-      attempts: 0,
+    await prisma.customerOTP.create({
+      data: {
+        tenantId: tenant.id,
+        phone: normalizedPhone,
+        otp,
+        expiresAt,
+        verified: false,
+        attempts: 0,
+      },
     });
 
     // Send OTP via SMS using Twilio
     const smsMessage = `Your verification code is ${otp}. This code expires in 10 minutes.`;
-    
+
     const smsSent = await sendSMS({
       to: normalizedPhone,
       message: smsMessage,

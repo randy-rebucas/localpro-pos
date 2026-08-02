@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import mongoose from 'mongoose';
-import Customer from '@/models/Customer';
-import LoyaltyTransaction from '@/models/LoyaltyTransaction';
+import prisma from '@/lib/prisma';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -13,8 +10,6 @@ import { handleApiError } from '@/lib/error-handler';
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
-
     const user = await getCurrentUser(request);
     if (!user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
@@ -57,7 +52,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'description is required' }, { status: 400 });
     }
 
-    const customer = await Customer.findOne({ _id: customerId, tenantId });
+    const customer = await prisma.customer.findFirst({ where: { id: customerId, tenantId } });
     if (!customer) {
       return NextResponse.json({ success: false, error: 'Customer not found' }, { status: 404 });
     }
@@ -65,51 +60,45 @@ export async function POST(request: NextRequest) {
     const balanceBefore = customer.loyaltyPointsBalance ?? 0;
     const balanceAfter = Math.max(0, balanceBefore + points);
 
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
-    try {
-      customer.loyaltyPointsBalance = balanceAfter;
-      await customer.save({ session });
-
-      const loyaltyTx = await LoyaltyTransaction.create([{
-        tenantId,
-        customerId: customer._id,
-        type: 'adjust',
-        points,
-        balanceBefore,
-        balanceAfter,
-        description: description.trim(),
-        createdBy: user.userId,
-      }], { session });
-
-      await session.commitTransaction();
-
-      await createAuditLog(request, {
-        tenantId: tenantId.toString(),
-        userId: user.userId,
-        action: AuditActions.UPDATE,
-        entityType: 'loyalty_adjust',
-        entityId: loyaltyTx[0]._id.toString(),
-        changes: { customerId, points, balanceBefore, balanceAfter, description },
+    const loyaltyTx = await prisma.$transaction(async (tx) => {
+      await tx.customer.update({
+        where: { id: customer.id },
+        data: { loyaltyPointsBalance: balanceAfter },
       });
 
-      return NextResponse.json({
-        success: true,
+      return tx.loyaltyTransaction.create({
         data: {
-          customerId,
+          tenantId,
+          customerId: customer.id,
+          type: 'adjust',
+          points,
           balanceBefore,
           balanceAfter,
-          pointsAdjusted: points,
-          loyaltyTransactionId: loyaltyTx[0]._id,
+          description: description.trim(),
+          createdBy: user.userId,
         },
       });
-    } catch (txError) {
-      await session.abortTransaction();
-      throw txError;
-    } finally {
-      session.endSession();
-    }
+    });
+
+    await createAuditLog(request, {
+      tenantId: tenantId.toString(),
+      userId: user.userId,
+      action: AuditActions.UPDATE,
+      entityType: 'loyalty_adjust',
+      entityId: loyaltyTx.id,
+      changes: { customerId, points, balanceBefore, balanceAfter, description },
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        customerId,
+        balanceBefore,
+        balanceAfter,
+        pointsAdjusted: points,
+        loyaltyTransactionId: loyaltyTx.id,
+      },
+    });
   } catch (error) {
     return handleApiError(error, 'Failed to adjust loyalty points');
   }

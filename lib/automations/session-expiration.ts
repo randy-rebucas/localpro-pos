@@ -3,10 +3,7 @@
  * Enhanced session management with activity tracking
  */
 
-import connectDB from '@/lib/mongodb';
-import AuditLog from '@/models/AuditLog';
-import User from '@/models/User';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/prisma';
 import { AutomationResult } from './types';
 
 export interface SessionExpirationOptions {
@@ -22,8 +19,6 @@ export interface SessionExpirationOptions {
 export async function expireInactiveSessions(
   options: SessionExpirationOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -39,10 +34,10 @@ export async function expireInactiveSessions(
     // Get tenants to process
     let tenants;
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await prisma.tenant.findUnique({ where: { id: options.tenantId } });
       tenants = tenant ? [tenant] : [];
     } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
+      tenants = await prisma.tenant.findMany({ where: { isActive: true } });
     }
 
     if (tenants.length === 0) {
@@ -55,20 +50,18 @@ export async function expireInactiveSessions(
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
+        const tenantId = tenant.id;
 
         // Get all active users
-        const users = await User.find({ tenantId, isActive: true }).lean();
+        const users = await prisma.user.findMany({ where: { tenantId, isActive: true } });
 
         for (const user of users) {
           try {
             // Get last activity from audit logs
-            const lastActivity = await AuditLog.findOne({
-              tenantId,
-              userId: user._id,
-            })
-              .sort({ createdAt: -1 })
-              .lean();
+            const lastActivity = await prisma.auditLog.findFirst({
+              where: { tenantId, userId: user.id },
+              orderBy: { createdAt: 'desc' },
+            });
 
             if (!lastActivity) {
               // No activity logged, check lastLogin
@@ -91,7 +84,7 @@ export async function expireInactiveSessions(
             }
           } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             totalFailed++;
-            results.errors?.push(`User ${user._id}: ${error.message}`);
+            results.errors?.push(`User ${user.id}: ${error.message}`);
           }
         }
       } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any

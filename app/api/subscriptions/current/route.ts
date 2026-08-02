@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Subscription from '@/models/Subscription';
-import '@/models/SubscriptionPlan';
 import { requireAuth } from '@/lib/auth';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { logger } from '@/lib/logger';
+import { getSubscriptionByTenantIdWithPlan, subscriptionToApi } from '@/lib/data/subscriptions';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
-
     // Require authentication
     const user = await requireAuth(request); // eslint-disable-line @typescript-eslint/no-unused-vars
     const tenantId = await getTenantIdFromRequest(request);
@@ -22,13 +18,11 @@ export async function GET(request: NextRequest) {
     }
 
     // Get the current subscription for this tenant
-    const subscription = await Subscription.findOne({ tenantId })
-      .populate('planId', 'name tier price features birCompliance isCustom')
-      .lean();
+    const subscription = await getSubscriptionByTenantIdWithPlan(tenantId);
 
     return NextResponse.json({
       success: true,
-      data: subscription,
+      data: subscription ? subscriptionToApi(subscription) : null,
     });
 
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any

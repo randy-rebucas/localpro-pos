@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { logger } from '@/lib/logger';
@@ -7,7 +6,6 @@ import { ensureLegalDiscounts } from '@/lib/discount-seeds';
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId, user } = authResult;

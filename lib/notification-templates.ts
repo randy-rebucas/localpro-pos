@@ -3,7 +3,7 @@
  * Manages email and SMS templates with variable substitution
  */
 
-import { ITenantSettings } from '@/models/Tenant';
+import type { ITenantSettings } from '@/types/tenant';
 import { formatDate, formatTime } from './formatting';
 
 export interface NotificationTemplate {
