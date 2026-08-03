@@ -110,12 +110,10 @@ async function handleAuthenticatedReset(
   });
 }
 
-// TODO(postgres-migration): The Prisma User model does not yet have
-// resetToken/resetTokenExpiry columns (the Mongoose model had them). This
-// token-based (forgot-password-email) reset flow is left non-functional
-// (always returns "invalid or expired reset token") until those columns are
-// added to prisma/schema.prisma — flagging rather than guessing at a schema
-// change outside this route-conversion batch's scope.
+// TODO: The Prisma User model does not yet have resetToken/resetTokenExpiry
+// columns. This token-based (forgot-password-email) reset flow is left
+// non-functional (always returns "invalid or expired reset token") until
+// those columns are added to prisma/schema.prisma.
 async function handleTokenReset(
   request: NextRequest,
   body: { email?: string; tenantId?: string; resetToken?: string; newPassword?: string },

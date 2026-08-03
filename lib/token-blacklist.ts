@@ -6,10 +6,10 @@
  * Uses PostgreSQL as the persistent store for multi-instance / serverless compatibility.
  * Falls back to in-memory store if the DB write/read fails.
  *
- * Tokens are stored by their SHA-256 hash until their natural expiration. Unlike
- * Mongo's TTL index, Postgres has no auto-expiry — a scheduled cleanup job must
- * purge expired rows explicitly (see lib/automations/session-expiration.ts or a
- * dedicated cleanup job).
+ * Tokens are stored by their SHA-256 hash until their natural expiration.
+ * Postgres has no auto-expiry (no TTL index equivalent) — a scheduled cleanup
+ * job must purge expired rows explicitly (see lib/automations/session-expiration.ts
+ * or a dedicated cleanup job).
  */
 
 import crypto from 'crypto';

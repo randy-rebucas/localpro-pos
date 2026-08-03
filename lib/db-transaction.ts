@@ -8,9 +8,6 @@ export type PrismaTx = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '
  * checkout/refund/stock-adjustment flows read a product's current stock and
  * write a decremented value back — under the weaker default (Read Committed)
  * two concurrent checkouts could both read the same stock and oversell.
- * Replaces lib/mongo-session.ts's runWithOptionalMongoTransaction: Postgres
- * always supports transactions, so there is no standalone-server fallback to
- * port — callers that used to branch on `session` just always get a `tx`.
  */
 export async function runInTransaction<T>(
   run: (tx: PrismaTx) => Promise<T>

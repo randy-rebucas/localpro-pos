@@ -5,10 +5,10 @@ import { Prisma } from '@prisma/client';
  * Legal discount definitions — Philippine law requires these discounts.
  * They are auto-seeded for every tenant on first access.
  *
- * Prisma-backed replacement for lib/discount-seeds.ts's ensureLegalDiscounts
- * (that file is still Mongoose-backed and out of scope for this batch — see
- * app/api/discounts/route.ts and app/api/discounts/validate/route.ts, which
- * use this version instead so their reads/writes stay on Postgres).
+ * A separate, differently-shaped seeding path from lib/discount-seeds.ts's
+ * ensureLegalDiscounts (used by app/api/discounts/seed-defaults/route.ts).
+ * app/api/discounts/route.ts and app/api/discounts/validate/route.ts use
+ * this version instead.
  */
 const LEGAL_DISCOUNTS = [
   {

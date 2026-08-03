@@ -9,7 +9,7 @@ type SubWithRelations = Subscription & {
 };
 
 // Maps a Prisma Subscription row (with optional included tenant/plan/billingHistory)
-// back to the Mongoose-shaped API response: _id, populated tenantId/planId objects,
+// to the API response shape: _id, populated tenantId/planId objects,
 // Decimal fields coerced to Number, and Json paymentMethod/usage passed through as-is.
 export function subscriptionToApi(sub: SubWithRelations) {
   const { id, tenant, plan, billingHistory, outstandingBalance, ...rest } = sub;

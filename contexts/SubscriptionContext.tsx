@@ -4,7 +4,7 @@ import React, { createContext, useContext, useEffect, useState, ReactNode } from
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 
-// Define types locally to avoid importing mongoose models in client code
+// Define types locally to avoid importing server-only/Prisma modules in client code
 interface SubscriptionLimits {
   maxUsers: number;
   maxBranches: number;

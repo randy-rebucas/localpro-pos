@@ -2,17 +2,14 @@
  * Automated Database Backups
  * Scheduled automatic backups with optional S3 cloud upload
  *
- * Postgres port note: the original Mongo implementation dumped every
- * collection via the driver's raw `db.listCollections()`. Prisma has no
- * equivalent "list all tables and read them generically" API, so this
+ * Prisma has no "list all tables and read them generically" API, so this
  * enumerates the app's Prisma models explicitly (kept in sync with
  * prisma/schema.prisma) and reads each via `prisma.<model>.findMany()`.
- * The on-disk format is preserved: a single JSON file of
- * `{ [modelName]: record[] }`, written to the same `backups/` directory
- * consumed by app/api/super-admin/backups/* and
- * app/api/automations/backups/create. `modelName` is now the Prisma
- * client's camelCase accessor (e.g. `offlineTransaction`) rather than the
- * old Mongo collection name — restore only relies on these names being
+ * The on-disk format is a single JSON file of `{ [modelName]: record[] }`,
+ * written to the `backups/` directory consumed by
+ * app/api/super-admin/backups/* and app/api/automations/backups/create.
+ * `modelName` is the Prisma client's camelCase accessor (e.g.
+ * `offlineTransaction`) — restore only relies on these names being
  * self-consistent between backup and restore, not on any external format.
  */
 

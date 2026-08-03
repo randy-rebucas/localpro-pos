@@ -3,9 +3,9 @@ import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 
-// Mongo stored lastUpdate as an epoch-ms number; Postgres uses a real DateTime
-// column. Convert at the API boundary so the response shape (and the frontend
-// that reads it) doesn't change.
+// Postgres stores lastUpdate as a real DateTime column, but the response
+// shape (and the frontend that reads it) expects an epoch-ms number. Convert
+// at the API boundary so that contract doesn't change.
 function serialize(session: {
   cart: unknown;
   subtotal: Prisma.Decimal;

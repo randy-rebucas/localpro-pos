@@ -1,7 +1,6 @@
 // Set env vars before any imports
 process.env.JWT_SECRET = 'test-secret-for-api-integration-tests-32chars!!';
 process.env.NODE_ENV = 'test';
-process.env.MONGODB_URI = 'mongodb://test:test@localhost:27017/localpro-pos-test';
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
@@ -10,10 +9,6 @@ import { generateToken } from '@/lib/auth';
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
-
-vi.mock('@/lib/mongodb', () => ({
-  default: vi.fn().mockResolvedValue(undefined),
-}));
 
 vi.mock('@/lib/logger', () => ({
   logger: {
@@ -26,12 +21,6 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/lib/token-blacklist', () => ({
   isTokenRevoked: vi.fn().mockResolvedValue(false),
   isTokenIssuedBeforeRevocation: vi.fn().mockResolvedValue(false),
-}));
-
-vi.mock('@/models/User', () => ({
-  default: {
-    findById: vi.fn(),
-  },
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
@@ -531,8 +520,8 @@ describe('API Integration — Dynamic Routes', () => {
     expect(pathParts[3]).toBe('cust-1');
   });
 
-  it('should validate ObjectId format for dynamic parameters', () => {
-    const validId = '507f1f77bcf86cd799439011'; // Valid MongoDB ObjectId
+  it('should validate ID format for dynamic parameters', () => {
+    const validId = '550e8400-e29b-41d4-a716-446655440000'; // Valid UUID
     const invalidId = 'not-an-id';
 
     const validUrl = new URL(`/api/tables/${validId}`, 'http://localhost');
@@ -540,6 +529,6 @@ describe('API Integration — Dynamic Routes', () => {
 
     expect(validUrl.pathname).toContain(validId);
     expect(invalidUrl.pathname).toContain(invalidId);
-    // Real API would validate ObjectId format
+    // Real API would validate UUID format
   });
 });

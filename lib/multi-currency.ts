@@ -65,7 +65,7 @@ export async function fetchExchangeRates(
 }
 
 /**
- * Safely read a rate from a rates map that may be a Mongoose Map or plain object.
+ * Safely read a rate from a rates map that may be a Map instance or plain object.
  */
 function getRate(
   rates: Record<string, number> | Map<string, number> | undefined,

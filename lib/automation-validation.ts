@@ -34,19 +34,13 @@ export function positiveFloat(
   return Math.min(num, max);
 }
 
-/**
- * Validate a MongoDB ObjectId string (24 hex chars).
- * Returns the string if valid, undefined otherwise.
- */
-export function validObjectId(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined;
-  return /^[0-9a-fA-F]{24}$/.test(value) ? value : undefined;
-}
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Validate a tenant ID from automation params.
- * Returns undefined if not a valid ObjectId, allowing tenant-wide operations.
+ * Returns undefined if not a valid UUID, allowing tenant-wide operations.
  */
 export function validTenantId(value: unknown): string | undefined {
-  return validObjectId(value);
+  if (typeof value !== 'string') return undefined;
+  return UUID_RE.test(value) ? value : undefined;
 }

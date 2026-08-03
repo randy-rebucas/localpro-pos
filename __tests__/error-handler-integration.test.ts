@@ -3,6 +3,7 @@ process.env.JWT_SECRET = 'test-secret-for-error-handler-tests-32chars!!';
 process.env.NODE_ENV = 'test';
 
 import { describe, it, expect, vi } from 'vitest';
+import { Prisma } from '@prisma/client';
 import { handleApiError } from '@/lib/error-handler';
 import { ValidationException } from '@/lib/validation';
 
@@ -59,58 +60,19 @@ describe('handleApiError — ValidationException', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Mongoose ValidationError → 400 with field errors
+// Prisma unique constraint violation (P2002) → 400 with DUPLICATE_KEY code
 // ---------------------------------------------------------------------------
-describe('handleApiError — Mongoose ValidationError', () => {
-  it('maps mongoose ValidationError to 400 with per-field errors', async () => {
-    const mongooseError = {
-      name: 'ValidationError',
-      errors: {
-        email: { path: 'email', message: 'email is required' },
-        phone: { path: 'phone', message: 'phone must be valid' },
-      },
-    };
+describe('handleApiError — Prisma unique constraint violation', () => {
+  function makeP2002Error(target: string[]) {
+    return new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+      code: 'P2002',
+      clientVersion: '6.19.3',
+      meta: { target },
+    });
+  }
 
-    const response = handleApiError(mongooseError);
-    const { status, body } = await parseResponse(response);
-
-    expect(status).toBe(400);
-    expect(body.success).toBe(false);
-    expect(body.error).toBe('Validation failed');
-    const errors = body.errors as Array<{ field: string; message: string }>;
-    expect(errors.some((e) => e.field === 'email')).toBe(true);
-    expect(errors.some((e) => e.field === 'phone')).toBe(true);
-  });
-
-  it('handles a single field mongoose ValidationError', async () => {
-    const mongooseError = {
-      name: 'ValidationError',
-      errors: {
-        username: { path: 'username', message: 'username is required' },
-      },
-    };
-
-    const response = handleApiError(mongooseError);
-    const { status, body } = await parseResponse(response);
-
-    expect(status).toBe(400);
-    const errors = body.errors as Array<{ field: string; message: string }>;
-    expect(errors[0].field).toBe('username');
-    expect(errors[0].message).toBe('username is required');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Duplicate key error (MongoDB error code 11000)
-// ---------------------------------------------------------------------------
-describe('handleApiError — duplicate key error', () => {
   it('returns 400 with "email already exists" and DUPLICATE_KEY code', async () => {
-    const dupError = {
-      code: 11000,
-      keyPattern: { email: 1 },
-    };
-
-    const response = handleApiError(dupError);
+    const response = handleApiError(makeP2002Error(['email']));
     const { status, body } = await parseResponse(response);
 
     expect(status).toBe(400);
@@ -119,13 +81,8 @@ describe('handleApiError — duplicate key error', () => {
     expect(body.code).toBe('DUPLICATE_KEY');
   });
 
-  it('uses the first key from keyPattern', async () => {
-    const dupError = {
-      code: 11000,
-      keyPattern: { slug: 1 },
-    };
-
-    const response = handleApiError(dupError);
+  it('uses the first key from the constraint target', async () => {
+    const response = handleApiError(makeP2002Error(['slug']));
     const { status, body } = await parseResponse(response);
 
     expect(status).toBe(400);
@@ -133,15 +90,33 @@ describe('handleApiError — duplicate key error', () => {
     expect(body.code).toBe('DUPLICATE_KEY');
   });
 
-  it('falls back to "field" when keyPattern is absent', async () => {
-    const dupError = { code: 11000 };
-
-    const response = handleApiError(dupError);
+  it('falls back to "field" when the target is absent', async () => {
+    const response = handleApiError(makeP2002Error([]));
     const { status, body } = await parseResponse(response);
 
     expect(status).toBe(400);
     expect(body.error).toBe('field already exists');
     expect(body.code).toBe('DUPLICATE_KEY');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Prisma record-not-found (P2025) → 404
+// ---------------------------------------------------------------------------
+describe('handleApiError — Prisma record not found', () => {
+  it('returns 404 with NOT_FOUND code', async () => {
+    const error = new Prisma.PrismaClientKnownRequestError('Record not found', {
+      code: 'P2025',
+      clientVersion: '6.19.3',
+    });
+
+    const response = handleApiError(error);
+    const { status, body } = await parseResponse(response);
+
+    expect(status).toBe(404);
+    expect(body.success).toBe(false);
+    expect(body.error).toBe('Record not found');
+    expect(body.code).toBe('NOT_FOUND');
   });
 });
 

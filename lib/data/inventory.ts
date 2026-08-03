@@ -10,9 +10,8 @@ interface VariationLike {
 }
 
 /**
- * Prisma-backed replacement for lib/stock.ts's getLowStockProducts (that file is
- * still Mongoose-backed and out of scope for this batch). Branch-specific stock now
- * lives in the ProductBranchStock child table (was Product.branchStock[] embedded array).
+ * A separate implementation from lib/stock.ts's getLowStockProducts.
+ * Branch-specific stock lives in the ProductBranchStock child table.
  */
 export async function getLowStockProducts(tenantId: string, branchId?: string, threshold?: number) {
   const products = await prisma.product.findMany({

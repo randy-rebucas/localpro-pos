@@ -27,35 +27,6 @@ export function handleApiError(error: any, defaultMessage: string = 'An error oc
     );
   }
 
-  // Mongoose validation errors
-  if (error.name === 'ValidationError') {
-    const errors = Object.values(error.errors).map((err: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
-      field: err.path,
-      message: err.message,
-    }));
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Validation failed',
-        errors,
-      },
-      { status: 400 }
-    );
-  }
-
-  // Duplicate key errors (Mongoose)
-  if (error.code === 11000) {
-    const field = Object.keys(error.keyPattern || {})[0] || 'field';
-    return NextResponse.json(
-      {
-        success: false,
-        error: `${field} already exists`,
-        code: 'DUPLICATE_KEY',
-      },
-      { status: 400 }
-    );
-  }
-
   // Prisma errors
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     if (error.code === 'P2002') {

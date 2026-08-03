@@ -6,8 +6,9 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { logger } from '@/lib/logger';
 import { getTenantBySlug } from '@/lib/data/tenants';
 
-// Mongo used dash-separated values ('dry-clean'); Prisma's LaundryServiceType
-// enum client value is `dry_clean` (mapped to the DB value 'dry-clean').
+// Sample-data fixtures use dash-separated values ('dry-clean'); Prisma's
+// LaundryServiceType enum client value is `dry_clean` (mapped to the DB
+// value 'dry-clean').
 const LAUNDRY_SERVICE_TYPE_MAP: Record<string, string> = {
   wash: 'wash',
   'dry-clean': 'dry_clean',

@@ -1,9 +1,8 @@
 /**
- * Postgres/Prisma equivalent of scripts/reset-collections.ts, for use once
- * the migration cutover repoints the app at Postgres.
+ * Wipes tables for local/dev resets.
  *
- * Unlike Mongo, Postgres enforces FK constraints, so wiping data isn't a
- * bare deleteMany per table:
+ * Postgres enforces FK constraints, so wiping data isn't a bare deleteMany
+ * per table:
  *   --all wipes every table with TRUNCATE ... CASCADE (single statement,
  *     no ordering to get right).
  *   --tenant=<slug> nulls the circular User<->Branch refs for that tenant,

@@ -246,8 +246,8 @@ export async function getStockMovements(
   const where: Record<string, unknown> = { productId, tenantId };
   if (options.branchId) where.branchId = options.branchId;
   // Variation is stored as a jsonb column — filter in application code below
-  // rather than a jsonb-path query, since the shape is small and this mirrors
-  // the original Mongoose behavior closely enough for the callers that use it.
+  // rather than a jsonb-path query, since the shape is small and this is
+  // simple enough for the callers that use it.
 
   const movements = await prisma.stockMovement.findMany({
     where,

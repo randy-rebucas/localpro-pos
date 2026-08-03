@@ -1,6 +1,6 @@
 /**
- * Customer types shared by client hooks, API JSON, and Mongoose model.
- * Mirrors `models/Customer.ts` — keep in sync when the schema changes.
+ * Customer types shared by client hooks and API JSON.
+ * Mirrors the Prisma `Customer` model — keep in sync when the schema changes.
  */
 
 export interface CustomerAddress {

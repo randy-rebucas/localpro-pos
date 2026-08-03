@@ -1,6 +1,6 @@
 /**
  * Isomorphic permission registry — safe to import from both client ('use client')
- * and server code. No server-only dependencies (mongoose, jwt, etc.) on purpose.
+ * and server code. No server-only dependencies (Prisma, jwt, etc.) on purpose.
  *
  * Roles are hierarchical: viewer < cashier < manager < admin < owner < super_admin.
  * Only viewer/cashier/manager can be overridden per-tenant (see Tenant.settings.rolePermissionOverrides) —

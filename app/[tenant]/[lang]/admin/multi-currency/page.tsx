@@ -167,7 +167,7 @@ export default function MultiCurrencyPage() {
               )}
               <div className="space-y-2">
                 {multiCurrency.displayCurrencies.map((currency: string) => {
-                  // exchangeRates may be a Mongoose Map or a plain object — handle both
+                  // exchangeRates may be a Map instance or a plain object — handle both
                   const ratesRaw = multiCurrency.exchangeRates as unknown;
                   const rate: number | undefined =
                     ratesRaw instanceof Map

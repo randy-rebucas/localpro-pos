@@ -1,7 +1,7 @@
 /**
  * Pure TypeScript types for tenant settings.
- * This file must NOT import from mongoose or any server-only module
- * so it can be safely used in client components.
+ * This file must NOT import Prisma, the database client, or any server-only
+ * module so it can be safely used in client components.
  */
 
 export interface ITenantSettings {

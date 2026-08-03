@@ -12,10 +12,9 @@ export interface DataArchivingOptions {
   collections?: string[]; // Collections to archive (default: ['transactions'])
 }
 
-// TODO(postgres-migration): The original Mongo implementation archived
-// arbitrary collections generically by copying documents into a sibling
-// `${collection}_archive` Mongo collection created on the fly, then deleting
-// the originals. Postgres has no equivalent of creating an ad-hoc table at
+// TODO: Archiving arbitrary tables generically (copying rows into a sibling
+// `${table}_archive` table created on the fly, then deleting the originals)
+// isn't supported. Postgres has no equivalent of creating an ad-hoc table at
 // runtime from an unvalidated caller-supplied name (and doing so via raw SQL
 // with an externally-supplied identifier would be a SQL-injection risk).
 // `prisma/schema.prisma` currently only has a cold-storage table for audit

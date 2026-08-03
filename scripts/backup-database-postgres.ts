@@ -1,9 +1,7 @@
 /**
- * Postgres database backup script — replaces backup-database.ts's MongoDB
- * dump once the migration cutover repoints the app at Postgres. Uses
- * pg_dump in custom format (via `docker exec` against the local dev
- * Postgres container; point PG_CONTAINER at a different container/host
- * setup in other environments).
+ * Postgres database backup script. Uses pg_dump in custom format (via
+ * `docker exec` against the local dev Postgres container; point
+ * PG_CONTAINER at a different container/host setup in other environments).
  *
  * Usage:
  *   npx tsx scripts/backup-database-postgres.ts [options]

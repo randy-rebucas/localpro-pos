@@ -2,10 +2,6 @@
 /**
  * 1POS — System Health Check (PostgreSQL)
  *
- * Postgres/Prisma equivalent of scripts/health-check.ts, for use once the
- * migration cutover repoints the app at Postgres. Run alongside the Mongo
- * version during the parallel-run period to sanity-check the migrated data.
- *
  * Usage:
  *   npx tsx scripts/health-check-postgres.ts
  *   npx tsx scripts/health-check-postgres.ts --verbose

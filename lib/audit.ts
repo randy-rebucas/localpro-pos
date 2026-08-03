@@ -27,14 +27,12 @@ export interface AuditLogData {
 export async function createAuditLog(
   request: NextRequest,
   data: Omit<AuditLogData, 'userId' | 'tenantId'> & {
-    // Tolerates a Mongoose ObjectId from routes not yet converted to Prisma
-    // (migration in progress) — anything stringifiable works.
-    tenantId?: string | { toString(): string };
+    tenantId?: string;
     userId?: string;
   }
 ): Promise<void> {
   try {
-    const inputTenantId = data.tenantId !== undefined ? String(data.tenantId) : undefined;
+    const inputTenantId = data.tenantId;
     const ipAddress = request.headers.get('x-forwarded-for') ||
                      request.headers.get('x-real-ip') ||
                      'unknown';

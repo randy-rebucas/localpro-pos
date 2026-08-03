@@ -26,8 +26,7 @@ export async function GET(request: NextRequest) {
     const latencyMs = Date.now() - start;
 
     // Approximate row counts (fast — reads Postgres's planner statistics
-    // rather than scanning each table, same tradeoff as Mongo's
-    // estimatedDocumentCount() this replaces).
+    // rather than scanning each table).
     const rows = await prisma.$queryRaw<Array<{ relname: string; n_live_tup: bigint }>>`
       SELECT relname, n_live_tup
       FROM pg_stat_user_tables

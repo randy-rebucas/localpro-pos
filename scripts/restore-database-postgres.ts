@@ -1,8 +1,6 @@
 /**
- * Postgres database restore script — replaces restore-database.ts's MongoDB
- * restore once the migration cutover repoints the app at Postgres. Uses
- * pg_restore (via `docker exec`), matching backup-database-postgres.ts's
- * custom-format .dump output.
+ * Postgres database restore script. Uses pg_restore (via `docker exec`),
+ * matching backup-database-postgres.ts's custom-format .dump output.
  *
  * Usage:
  *   npx tsx scripts/restore-database-postgres.ts --file=<path> [options]

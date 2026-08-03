@@ -1,10 +1,3 @@
-// Phase 2 (foundation/reference tables) of the MongoDB -> PostgreSQL migration.
-// See C:\Users\corew\.claude\plans\lets-migrate-the-database-tingly-quasar.md for the full plan.
-//
-// Fields that reference a model not yet migrated (User, Category, Product) are
-// plain String @db.Uuid columns for now, with an index but no @relation — the
-// @relation gets added once that model lands in a later phase.
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -723,9 +716,9 @@ model AuditLog {
   @@map("audit_logs")
 }
 
-// Cold-storage copy of expired AuditLog rows. No TTL index in Postgres —
+// Cold-storage copy of expired AuditLog rows. Postgres has no TTL index —
 // the app's scheduled cleanup job (app/api/automations/audit-logs/cleanup)
-// moves rows here explicitly instead of relying on Mongo's TTL collection.
+// moves rows here explicitly.
 model ArchivedAuditLog {
   id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenantId   String   @map("tenant_id") @db.Uuid
@@ -1072,8 +1065,7 @@ model Customer {
   @@map("customers")
 }
 
-// No TTL in Postgres — a scheduled cleanup job must purge expired OTPs
-// explicitly (Mongo relied on an `expireAfterSeconds: 0` TTL index here).
+// No TTL in Postgres — a scheduled cleanup job must purge expired OTPs explicitly.
 model CustomerOTP {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenantId  String   @map("tenant_id") @db.Uuid
@@ -1749,8 +1741,7 @@ model Counter {
   @@map("counters")
 }
 
-// No TTL in Postgres — a scheduled cleanup job must purge expired rows
-// explicitly (Mongo relied on `expireAfterSeconds: 0` TTL indexes here).
+// No TTL in Postgres — a scheduled cleanup job must purge expired rows explicitly.
 model RevokedToken {
   tokenHash String   @id @map("token_hash")
   reason    String   @default("logout")
@@ -1769,9 +1760,8 @@ model UserRevocation {
   @@map("user_revocations")
 }
 
-// Ephemeral in-progress cart cache (1hr TTL in Mongo, no TTL in Postgres —
-// needs an explicit cleanup job). `tenant` is a loose string, not a real FK,
-// matching the original schema's untyped field.
+// Ephemeral in-progress cart cache (intended 1hr TTL; Postgres has no TTL,
+// needs an explicit cleanup job). `tenant` is a loose string, not a real FK.
 model PosSession {
   sessionId     String                  @id @map("session_id")
   tenant        String

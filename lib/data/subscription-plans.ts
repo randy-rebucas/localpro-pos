@@ -1,9 +1,8 @@
 import prisma from '@/lib/prisma';
 import type { SubscriptionPlan } from '@prisma/client';
 
-// Maps the flat Prisma columns (priceMonthly/priceSetupFee/priceCurrency) back to the
-// nested `price: { monthly, setupFee, currency }` shape the frontend/API contract expects
-// (this mirrors the old Mongoose SubscriptionPlan.price sub-document).
+// Maps the flat Prisma columns (priceMonthly/priceSetupFee/priceCurrency) to the
+// nested `price: { monthly, setupFee, currency }` shape the frontend/API contract expects.
 export function planToApi(plan: SubscriptionPlan & { subscriberCount?: number }) {
   const { id, priceMonthly, priceSetupFee, priceCurrency, reactivationFee, yearlyDiscount, ...rest } = plan;
   return {

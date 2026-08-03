@@ -1,7 +1,7 @@
 import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 
-// Fields Product.create/update accept, taken from the old Mongoose model / validateProduct().
+// Fields Product.create/update accept, per the Prisma model / validateProduct().
 // Anything not on this list is dropped so callers can safely spread validated request bodies in.
 const PRODUCT_WRITABLE_FIELDS = [
   'name', 'description', 'price', 'stock', 'sku', 'barcode', 'category', 'categoryId',
@@ -30,8 +30,8 @@ export function sanitizeProductInput(data: Record<string, unknown>): Record<stri
   return out;
 }
 
-// Product docs come back with BigInt stock (JSON.stringify-unsafe) and Decimal price.
-// Keep the Mongoose `_id` shape for the frontend.
+// Product rows come back with BigInt stock (JSON.stringify-unsafe) and Decimal price.
+// Keep the `_id` key in the response shape for the frontend.
 export function serializeProduct<T extends { id: string; price: Prisma.Decimal; stock: bigint; categoryRef?: { id: string; name: string } | null }>(
   product: T
 ) {
@@ -143,7 +143,7 @@ export async function updateProductById(tenantId: string, id: string, data: Reco
 }
 
 export async function softDeleteProduct(tenantId: string, id: string) {
-  // Mirrors the old Mongoose findOneAndUpdate({_id,tenantId,isActive:true}) guard.
+  // Guard: only soft-delete a product that belongs to this tenant and is still active.
   const existing = await prisma.product.findFirst({ where: { id, tenantId, isActive: true } });
   if (!existing) return null;
   return prisma.product.update({ where: { id }, data: { isActive: false } });

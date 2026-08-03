@@ -6,11 +6,10 @@ import { logger } from '@/lib/logger';
 /**
  * Get bundle analytics - sales performance metrics
  *
- * TODO(postgres-migration): The original Mongoose TransactionItem schema stored an
- * ad-hoc, not-officially-modeled `bundleId` field on each cart item to mark "this line
- * item was sold as part of bundle X". The Prisma TransactionItem model (prisma/schema.prisma)
- * has no such column — it was never a first-class field, so it wasn't carried over.
- * As a best-effort substitute, a transaction item is now attributed to a bundle if its
+ * TODO: There is no first-class way to mark "this line item was sold as part
+ * of bundle X" on a transaction item — the Prisma TransactionItem model
+ * (prisma/schema.prisma) has no `bundleId` column.
+ * As a best-effort substitute, a transaction item is attributed to a bundle if its
  * productId matches one of that bundle's component products. This is an approximation:
  * a product sold standalone (not as part of a bundle) will also be counted here if it
  * happens to also be a bundle component. If precise bundle-attribution is needed, add a
