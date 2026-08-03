@@ -89,9 +89,9 @@ PROCESS:
      ────────────────
      From JWT token in cookie/header (automatic)
 
-  5. Create AuditLog Document
-     ────────────────────────
-     Saves all fields to MongoDB
+  5. Create AuditLog Row
+     ────────────────────
+     Saves all fields to PostgreSQL
 
   6. Error Handling
      ─────────────
@@ -322,7 +322,7 @@ OUTPUT:
 | Changes | Calling code | When applicable |
 | IP Address | `x-forwarded-for` / `x-real-ip` | Yes |
 | User Agent | `user-agent` header | Yes |
-| Timestamp | MongoDB `timestamps: true` | Yes (auto) |
+| Timestamp | Prisma `@default(now())` | Yes (auto) |
 | Metadata | Calling code | When applicable |
 
 ---

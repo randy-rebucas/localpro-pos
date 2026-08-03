@@ -79,7 +79,7 @@ export default function SettingsPage() {
           <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
             <div>
               <h2 className="text-base font-bold text-gray-900">Database Health</h2>
-              <p className="text-sm text-gray-500">Check MongoDB connection and collection stats</p>
+              <p className="text-sm text-gray-500">Check PostgreSQL connection and table stats</p>
             </div>
             <button
               onClick={checkHealth}

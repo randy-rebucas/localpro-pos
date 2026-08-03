@@ -29,51 +29,46 @@ console-mode log addressed to that inbox alongside the tenant one.
 
 - `CRON_SECRET` set in your `.env.local` (required to call the endpoint outside dev, and recommended even in dev so the auth path is exercised).
 - A running dev server: `npm run dev`.
-- `mongosh` (or Compass / Studio 3T) connected to your dev database.
+- `psql` (or another Postgres client) connected via `DATABASE_URL` to your dev database.
 
 ## 2. Seed a test tenant + subscription
 
 Use an existing dev tenant, or create one via the normal super-admin "Create Tenant" flow so it gets a trial `Subscription` automatically. Then convert it to an active paid subscription so the billing job has something to act on:
 
-```js
-// mongosh
-use localpro_pos // or your dev DB name
+```sql
+-- psql
+\c localpro_pos -- or your dev DB name
 
-const tenant = db.tenants.findOne({ slug: "your-test-tenant" });
-const sub = db.subscriptions.findOne({ tenantId: tenant._id });
-const plan = db.subscriptionplans.findOne({ _id: sub.planId });
+SELECT id, tenant_id, plan_id FROM subscriptions s
+  JOIN tenants t ON t.id = s.tenant_id
+  WHERE t.slug = 'your-test-tenant';
+-- note the subscription id as :sub_id below
 
-db.subscriptions.updateOne(
-  { _id: sub._id },
-  {
-    $set: {
-      status: "active",
-      isTrial: false,
-      autoRenew: true,
-      paymentOverdue: false,
-    },
-    $unset: {
-      gracePeriodEndDate: "",
-      lastInvoiceGeneratedAt: "",
-      lateFeeAppliedAt: "",
-      reactivationFeeAppliedAt: "",
-      deactivatedAt: "",
-    },
-  }
-);
+UPDATE subscriptions
+SET status = 'active',
+    is_trial = false,
+    auto_renew = true,
+    payment_overdue = false,
+    grace_period_end_date = NULL,
+    last_invoice_generated_at = NULL,
+    late_fee_applied_at = NULL,
+    reactivation_fee_applied_at = NULL,
+    deactivated_at = NULL
+WHERE id = :'sub_id';
 ```
 
 ## 3. Fast-forward the due date to simulate each stage
 
-The whole lifecycle is anchored on `nextBillingDate`. Set it relative to "now"
-to jump straight to the stage you want to test, then call the endpoint.
+The whole lifecycle is anchored on `nextBillingDate` (column `next_billing_date`).
+Set it relative to "now" to jump straight to the stage you want to test, then
+call the endpoint.
 
-```js
-// Helper: set nextBillingDate N days from now (negative = in the future, positive = past due)
-function setDueOffset(subscriptionId, daysFromNow) {
-  const due = new Date(Date.now() + daysFromNow * 24 * 60 * 60 * 1000);
-  db.subscriptions.updateOne({ _id: subscriptionId }, { $set: { nextBillingDate: due } });
-}
+```sql
+-- Set next_billing_date N days from now (negative = in the future, positive = past due)
+-- e.g. 2 days from now:
+UPDATE subscriptions SET next_billing_date = NOW() + INTERVAL '2 days' WHERE id = :'sub_id';
+-- e.g. 10 days past due:
+UPDATE subscriptions SET next_billing_date = NOW() - INTERVAL '10 days' WHERE id = :'sub_id';
 ```
 
 Call the automation endpoint after each update:
@@ -90,14 +85,14 @@ it to run against every tenant.
 
 ### Stage-by-stage script
 
-| Stage | mongosh command | Then hit the endpoint | Expect |
+| Stage | next_billing_date offset | Then hit the endpoint | Expect |
 |---|---|---|---|
-| Invoice generation | `setDueOffset(sub._id, 2)` (due in 2 days, inside the 3-day window) | yes | `details.invoicesGenerated: 1`; new `Invoice` doc with `status: "sent"`; `BillingEvent` type `invoice_generated`; `subscription.lastInvoiceGeneratedAt` set; console email logged |
-| Due date passes, unpaid | `setDueOffset(sub._id, 0)` | yes | `details.overdueFlagged: 1`; `subscription.paymentOverdue: true`; `gracePeriodEndDate` = now + 7 days; `BillingEvent` type `payment_overdue`; reminder email logged |
-| Reminder window (+7 to +10d) | `setDueOffset(sub._id, -8)` (8 days past due — inside `gracePeriodEndDate` window since grace already ran) | yes | `details.remindersSent: 1`; final-notice email logged; **no status change yet** |
-| Deactivation (+10d) | `setDueOffset(sub._id, -10)` | yes | `details.accountsDeactivated: 1`; `subscription.status: "suspended"`, `deactivatedAt` set; **`tenant.isActive: false`**; `BillingEvent` type `account_deactivated`; deactivation email logged |
-| Late fee (+15d) | `setDueOffset(sub._id, -15)` | yes | `details.lateFeesApplied: 1`; `subscription.outstandingBalance` increases by `10% of plan.price.monthly`; `lateFeeAppliedAt` set; `BillingEvent` type `late_fee_applied` |
-| Reactivation fee (+30d) | `setDueOffset(sub._id, -30)` | yes | `details.reactivationFeesApplied: 1`; `subscription.outstandingBalance` increases by `plan.reactivationFee`; `reactivationFeeAppliedAt` set; `BillingEvent` type `reactivation_fee_applied` |
+| Invoice generation | `+2 days` (due in 2 days, inside the 3-day window) | yes | `details.invoicesGenerated: 1`; new `Invoice` row with `status: "sent"`; `BillingEvent` type `invoice_generated`; `subscription.lastInvoiceGeneratedAt` set; console email logged |
+| Due date passes, unpaid | `0 days` (now) | yes | `details.overdueFlagged: 1`; `subscription.paymentOverdue: true`; `gracePeriodEndDate` = now + 7 days; `BillingEvent` type `payment_overdue`; reminder email logged |
+| Reminder window (+7 to +10d) | `-8 days` (8 days past due — inside `gracePeriodEndDate` window since grace already ran) | yes | `details.remindersSent: 1`; final-notice email logged; **no status change yet** |
+| Deactivation (+10d) | `-10 days` | yes | `details.accountsDeactivated: 1`; `subscription.status: "suspended"`, `deactivatedAt` set; **`tenant.isActive: false`**; `BillingEvent` type `account_deactivated`; deactivation email logged |
+| Late fee (+15d) | `-15 days` | yes | `details.lateFeesApplied: 1`; `subscription.outstandingBalance` increases by `10% of plan.priceMonthly`; `lateFeeAppliedAt` set; `BillingEvent` type `late_fee_applied` |
+| Reactivation fee (+30d) | `-30 days` | yes | `details.reactivationFeesApplied: 1`; `subscription.outstandingBalance` increases by `plan.reactivationFee`; `reactivationFeeAppliedAt` set; `BillingEvent` type `reactivation_fee_applied` |
 
 > Because each stage checks its own timestamp guard independently of the
 > others, you can jump straight to `-30` days and run the endpoint **once**
@@ -107,11 +102,11 @@ it to run against every tenant.
 
 ### Verify each stage
 
-```js
-db.subscriptions.findOne({ _id: sub._id });
-db.billingevents.find({ subscriptionId: sub._id }).sort({ createdAt: 1 });
-db.tenants.findOne({ _id: tenant._id }, { isActive: 1 });
-db.invoices.find({ tenantId: tenant._id }).sort({ createdAt: -1 }).limit(1);
+```sql
+SELECT * FROM subscriptions WHERE id = :'sub_id';
+SELECT * FROM billing_events WHERE subscription_id = :'sub_id' ORDER BY created_at ASC;
+SELECT is_active FROM tenants WHERE id = :'tenant_id';
+SELECT * FROM invoices WHERE tenant_id = :'tenant_id' ORDER BY created_at DESC LIMIT 1;
 ```
 
 ## 4. Confirm the lockout actually blocks access
@@ -160,27 +155,21 @@ courtesy waiver) — it still rejects with `400` if `outstandingBalance > 0`.
 
 ## 6. Reset between test runs
 
-```js
-db.subscriptions.updateOne(
-  { _id: sub._id },
-  {
-    $set: {
-      status: "active",
-      paymentOverdue: false,
-      outstandingBalance: 0,
-      nextBillingDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-    },
-    $unset: {
-      gracePeriodEndDate: "",
-      lastInvoiceGeneratedAt: "",
-      lateFeeAppliedAt: "",
-      reactivationFeeAppliedAt: "",
-      deactivatedAt: "",
-    },
-  }
-);
-db.tenants.updateOne({ _id: tenant._id }, { $set: { isActive: true } });
-db.billingevents.deleteMany({ subscriptionId: sub._id });
+```sql
+UPDATE subscriptions
+SET status = 'active',
+    payment_overdue = false,
+    outstanding_balance = 0,
+    next_billing_date = NOW() + INTERVAL '30 days',
+    grace_period_end_date = NULL,
+    last_invoice_generated_at = NULL,
+    late_fee_applied_at = NULL,
+    reactivation_fee_applied_at = NULL,
+    deactivated_at = NULL
+WHERE id = :'sub_id';
+
+UPDATE tenants SET is_active = true WHERE id = :'tenant_id';
+DELETE FROM billing_events WHERE subscription_id = :'sub_id';
 ```
 
 ## Production cron

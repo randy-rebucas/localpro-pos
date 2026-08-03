@@ -110,8 +110,8 @@ if [ ! -f ".env.local" ]; then
     else
         print_info "Creating basic .env.local file..."
         cat > .env.local << EOF
-# MongoDB Connection String
-MONGODB_URI=mongodb://localhost:27017/pos-system
+# PostgreSQL Connection String
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/localpro_pos?schema=public
 
 # JWT Authentication (CHANGE THIS IN PRODUCTION!)
 JWT_SECRET=$(openssl rand -hex 32)
@@ -124,7 +124,7 @@ PORT=3000
 DEFAULT_TENANT_SLUG=default
 EOF
         print_success ".env.local created with default values"
-        print_warning "Generated random JWT_SECRET. Please update MONGODB_URI if needed."
+        print_warning "Generated random JWT_SECRET. Please update DATABASE_URL if needed."
     fi
 else
     print_success ".env.local file exists"
@@ -165,21 +165,21 @@ echo ""
 echo "Step 6: Database setup..."
 echo "--------------------------------"
 
-# Check if .env.local exists and has MONGODB_URI
+# Check if .env.local exists and has DATABASE_URL
 if [ -f ".env.local" ]; then
-    if grep -q "MONGODB_URI" .env.local; then
-        MONGODB_URI=$(grep "MONGODB_URI" .env.local | cut -d '=' -f2 | tr -d '"' | tr -d "'" | xargs)
-        if [ -z "$MONGODB_URI" ] || [ "$MONGODB_URI" = "mongodb://localhost:27017/pos-system" ]; then
-            print_warning "MongoDB URI is set to default localhost"
-            print_info "Make sure MongoDB is running locally, or update MONGODB_URI in .env.local"
+    if grep -q "DATABASE_URL" .env.local; then
+        DATABASE_URL=$(grep "DATABASE_URL" .env.local | cut -d '=' -f2- | tr -d '"' | tr -d "'" | xargs)
+        if [ -z "$DATABASE_URL" ] || [ "$DATABASE_URL" = "postgresql://postgres:postgres@localhost:5432/localpro_pos?schema=public" ]; then
+            print_warning "DATABASE_URL is set to default localhost"
+            print_info "Make sure PostgreSQL is running locally, or update DATABASE_URL in .env.local"
         fi
     else
-        print_warning "MONGODB_URI not found in .env.local"
-        print_info "Please add MONGODB_URI to .env.local before creating tenants"
+        print_warning "DATABASE_URL not found in .env.local"
+        print_info "Please add DATABASE_URL to .env.local before creating tenants"
     fi
 else
     print_warning ".env.local file not found"
-    print_info "Please create .env.local with MONGODB_URI before creating tenants"
+    print_info "Please create .env.local with DATABASE_URL before creating tenants"
 fi
 
 read -p "Do you want to create the default tenant? (y/n) " -n 1 -r
@@ -232,7 +232,7 @@ echo ""
 print_success "POS System is ready to use!"
 echo ""
 echo "Next steps:"
-echo "  1. Update .env.local with your MongoDB connection string"
+echo "  1. Update .env.local with your PostgreSQL connection string"
 echo "  2. Run 'npm run dev' to start the development server"
 echo "  3. Access the application at http://localhost:3000"
 echo "  4. Login at http://localhost:3000/login"

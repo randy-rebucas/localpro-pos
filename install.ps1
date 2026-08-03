@@ -82,8 +82,8 @@ if (-not (Test-Path ".env.local")) {
         Write-Host "  Creating basic .env.local file..." -ForegroundColor Gray
         $jwtSecret = -join ((48..57) + (65..70) | Get-Random -Count 64 | ForEach-Object {[char]$_})
         $envContent = @"
-# MongoDB Connection String
-MONGODB_URI=mongodb://localhost:27017/pos-system
+# PostgreSQL Connection String
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/localpro_pos?schema=public
 
 # JWT Authentication (CHANGE THIS IN PRODUCTION!)
 JWT_SECRET=$jwtSecret
@@ -97,7 +97,7 @@ DEFAULT_TENANT_SLUG=default
 "@
         $envContent | Out-File -FilePath ".env.local" -Encoding utf8
         Write-Host "  ✓ .env.local created with default values" -ForegroundColor Green
-        Write-Host "  ⚠ Generated random JWT_SECRET. Please update MONGODB_URI if needed." -ForegroundColor Yellow
+        Write-Host "  ⚠ Generated random JWT_SECRET. Please update DATABASE_URL if needed." -ForegroundColor Yellow
     }
 } else {
     Write-Host "  ✓ .env.local file exists" -ForegroundColor Green
@@ -184,7 +184,7 @@ Write-Host ""
 Write-Host "✓ POS System is ready to use!" -ForegroundColor Green
 Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Yellow
-Write-Host "  1. Update .env.local with your MongoDB connection string"
+Write-Host "  1. Update .env.local with your PostgreSQL connection string"
 Write-Host "  2. Run 'npm run dev' to start the development server"
 Write-Host "  3. Access the application at http://localhost:3000"
 Write-Host "  4. Login at http://localhost:3000/login"

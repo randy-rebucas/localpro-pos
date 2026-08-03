@@ -208,10 +208,10 @@ Navigate to **Super Admin → Backups** (`/super-admin/backups`).
 
 1. In the **Backup Files** table, click the **Restore** button on the row you want to restore from. The row highlights blue and the filename appears in the panel below.
 2. Choose options:
-   - **Clear existing data before restore** — empties each collection first (shows a red warning).
+   - **Clear existing data before restore** — empties each table first (shows a red warning).
    - **Dry run** — preview only, no writes.
 3. Click **Restore** (or **Run Dry Run**).
-4. A results table appears showing inserted and cleared counts per collection, plus any warnings.
+4. A results table appears showing inserted and cleared counts per model, plus any warnings.
 
 ### Restore from Uploaded File
 
@@ -227,34 +227,34 @@ This mode is useful when:
 
 ## Behaviour Details
 
-### `_id` re-hydration
+### Restore order (foreign-key integrity)
 
-Documents in the backup file may have their `_id` stored as a plain string or as extended JSON (`{ "$oid": "..." }`). The restore engine re-hydrates these back into `ObjectId` instances before inserting, preserving the original document identities.
+Rows are restored one Prisma model at a time, in a fixed parent-before-child order (tenants and users first, join/detail tables like `transactionItem` and `productBundleItem` last) so foreign-key constraints don't fail mid-restore. Any model in the backup file that isn't in the known order list is restored last, in file order.
 
 ### Chunked inserts
 
-Documents are inserted in batches of 500 to stay well under MongoDB's 16 MB BSON limit per batch. If a batch fails (e.g., a duplicate key on merge), the error is recorded in `errors` and the next batch continues — the restore does not abort mid-collection.
+Rows are inserted in batches of 500 via `prisma.<model>.createMany({ data, skipDuplicates: true })`. `skipDuplicates` makes merge-mode restores idempotent — rows whose primary key already exists are silently skipped rather than erroring. If a batch fails, the error is recorded in `errors` and the next batch continues — the restore does not abort mid-model.
 
-### Collection format compatibility
+### Backup format compatibility
 
 The restore engine accepts both backup formats:
 
 ```json
 // Flat format (older backups, per-tenant backup-reset API)
-{ "products": [...], "customers": [...] }
+{ "product": [...], "customer": [...] }
 
 // Wrapped format (db:backup CLI and automated backup)
 {
   "version": "1.0",
-  "collections": { "products": [...], "customers": [...] }
+  "collections": { "product": [...], "customer": [...] }
 }
 ```
 
 ### What is not restored
 
-- **`system.*` collections** — skipped by the backup and therefore absent from the file.
-- Collections **not present in the backup file** — listed as `skipped: true` in the response.
-- Cross-collection references (e.g., a `tenantId` foreign key) are preserved as-is from the backup. If you are restoring into a different database, make sure referenced documents (tenants, users) exist or restore them as well.
+- **System/audit tables** (`RevokedToken`, `UserRevocation`, `SuperAdminAction`, `Counter`, `MigrationIdMap`) — skipped by the backup and therefore absent from the file.
+- Models **not present in the backup file**, or not recognized as a valid Prisma model accessor — listed as `skipped: true` in the response.
+- Cross-table references (e.g., a `tenantId` foreign key) are preserved as-is from the backup. If you are restoring into a different database, make sure referenced rows (tenants, users) exist or restore them as well — this is also why restore order matters.
 
 ---
 
@@ -272,13 +272,13 @@ npm run db:restore -- \
   --clear --force
 ```
 
-### Selective collection recovery
+### Selective model recovery
 
 ```sh
 # Restore only products and categories from yesterday's backup
 npm run db:restore -- \
   --file=backups/backup-2026-06-15T02-00-00-000Z.json \
-  --collections=products,categories \
+  --collections=product,category \
   --clear
 ```
 
@@ -306,7 +306,7 @@ npm run db:restore -- --file="$LATEST" --dry-run --force
 
 | File | Purpose |
 |---|---|
-| `scripts/restore-database.ts` | CLI restore script |
-| `lib/automations/database-backups.ts` | `restoreDatabaseBackup()` core function |
+| `scripts/restore-database-postgres.ts` | CLI restore script |
+| `lib/automations/database-backups.ts` | `restoreDatabaseBackup()` core function (Prisma-based) |
 | `app/api/super-admin/backups/restore/route.ts` | HTTP restore endpoint (server file or upload) |
 | `app/super-admin/backups/page.tsx` | Super-admin UI (restore panels) |

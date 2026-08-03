@@ -22,7 +22,7 @@ flowchart TB
         Cron["Automations\n(node-cron)"]
     end
 
-    subgraph Data["Data Layer (MongoDB / Mongoose)"]
+    subgraph Data["Data Layer (PostgreSQL / Prisma)"]
         Tenant[("Tenant")]
         Transaction[("Transaction")]
         Product[("Product")]
@@ -90,7 +90,7 @@ flowchart LR
     Queue --> Reconnect{Reconnected?}
     Reconnect -- "Yes" --> Sync["syncOfflineTransactions()"]
     Sync --> Direct
-    Direct --> DB[("MongoDB\nTransaction collection")]
+    Direct --> DB[("PostgreSQL\nTransaction table")]
 ```
 
 ---

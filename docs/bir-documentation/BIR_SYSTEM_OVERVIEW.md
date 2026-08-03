@@ -11,7 +11,7 @@
 | Framework | Next.js (App Router, Turbopack) | 16.0.10 |
 | Frontend | React | 19.2.0 |
 | Language | TypeScript | 5.x |
-| Database | MongoDB (Mongoose ODM) | 8.20.0 |
+| Database | PostgreSQL (Prisma ORM) | 6.19.3 |
 | Authentication | JWT (jsonwebtoken) | 9.0.2 |
 | Password Hashing | bcryptjs (10-round salt) | 3.0.3 |
 | PDF Generation | jsPDF | 2.5.2 |
@@ -50,7 +50,7 @@
 │        │               │                 │            │
 ├────────┴───────────────┴─────────────────┴───────────┤
 │                  DATA LAYER                           │
-│          MongoDB (Mongoose Models)                    │
+│          PostgreSQL (Prisma Models)                   │
 │                                                      │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌────────┐  │
 │  │Transact. │ │ Products │ │ AuditLog │ │  Users │  │

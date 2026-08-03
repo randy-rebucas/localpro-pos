@@ -213,7 +213,7 @@ Save one product's scan data during a bulk-scan session.
 
 **Auth:** Required
 
-**URL param:** `:id` — MongoDB product `_id`
+**URL param:** `:id` — product `id`
 
 **Request body:**
 ```json

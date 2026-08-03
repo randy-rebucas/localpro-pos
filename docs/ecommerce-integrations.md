@@ -2,7 +2,7 @@
 
 This document describes how the POS connects to **Shopify** and **WooCommerce**: credential storage, catalog sync, two-way inventory behavior, order import, HTTP APIs, webhooks, and operational limits.
 
-Secrets are **never** stored in tenant `settings` (which may be exposed to the client). They live in MongoDB only, encrypted at rest.
+Secrets are **never** stored in tenant `settings` (which may be exposed to the client). They live in PostgreSQL only, encrypted at rest.
 
 ---
 
@@ -52,7 +52,7 @@ flowchart TB
     WebShop[POST /api/webhooks/shopify]
     WebWoo[POST /api/webhooks/woocommerce/id]
   end
-  subgraph mongo [MongoDB]
+  subgraph postgres [PostgreSQL]
     IntDoc[TenantEcommerceIntegration]
     ListDoc[ProductChannelListing]
     TxDoc[Transaction]
@@ -256,7 +256,7 @@ All authenticated routes expect a logged-in staff session and, where applicable,
 
 ### WooCommerce — `POST /api/webhooks/woocommerce/[integrationId]`
 
-- **Path:** Mongo `_id` of the `TenantEcommerceIntegration` document (`provider: woocommerce`).
+- **Path:** `id` of the `TenantEcommerceIntegration` row (`provider: woocommerce`).
 - **Header:** `X-WC-Webhook-Signature` — base64(HMAC-SHA256(raw body, webhook secret)).
 - **Secret:** Plain secret generated at connect time, stored encrypted in `webhookSecretEncrypted`.
 - **Registered topics:** `order.updated` and `order.created` (importer only creates POS transactions for **`processing`** and **`completed`**; other statuses are ignored — idempotency prevents double-import when both webhooks fire).
@@ -314,7 +314,7 @@ Implemented in `lib/ecommerce/import-channel-order.ts`.
 | **Shopify** | `financial_status === 'paid'`; line items must have `product_id` and `variant_id`. |
 | **WooCommerce** | Order `status` is `processing` or `completed`. Line unit price prefers `line_item.price`; if zero, falls back to `subtotal` or `total` divided by quantity (discount-heavy lines). |
 
-### Steps (atomic Mongo transaction)
+### Steps (atomic DB transaction)
 
 1. Skip if `Transaction` already exists with same `channelSyncKey`.
 2. Resolve each line to `ProductChannelListing` by `externalVariantId`.

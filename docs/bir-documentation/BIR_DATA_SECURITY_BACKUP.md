@@ -183,9 +183,9 @@ Set httpOnly cookie + audit log (successful login)
 
 | Control | Implementation |
 |---------|---------------|
-| Database | MongoDB Atlas (encrypted at rest) |
-| Connection | `mongodb+srv://` with TLS |
-| Sensitive Fields | Password: `select: false` in schema |
+| Database | PostgreSQL (encrypted at rest, provider-managed) |
+| Connection | `DATABASE_URL` with TLS (`sslmode=require` in production) |
+| Sensitive Fields | Password: hashed with bcrypt; queries explicitly omit it via Prisma `select` unless needed |
 | Environment Secrets | `.env.local` (never committed to git) |
 
 ### 3.3 Security Headers
@@ -239,15 +239,14 @@ Production:
 | Password | Minimum length, strength requirements |
 | Numeric | Range checks, type coercion |
 | Strings | Trim, max length, allowed characters |
-| ObjectIds | MongoDB ObjectId format validation |
+| IDs | UUID format validation |
 | Dates | ISO format parsing and range checks |
 
 ### 4.2 Protection Against Common Attacks
 
 | Attack Vector | Mitigation |
 |--------------|-----------|
-| SQL Injection | N/A (MongoDB, no SQL) |
-| NoSQL Injection | Mongoose schema validation, typed queries |
+| SQL Injection | Prisma parameterized queries (no raw SQL string interpolation) |
 | XSS | CSP headers, input sanitization |
 | CSRF | SameSite cookies, origin validation |
 | Clickjacking | X-Frame-Options: DENY |
@@ -288,33 +287,25 @@ Every Database Query:
 ## 6. Database Security
 
 ### 6.1 Connection Configuration
-**Source**: `lib/mongodb.ts`
+**Source**: `lib/prisma.ts`
 
 ```
-Connection Options:
-  bufferCommands:            false
-  serverSelectionTimeoutMS:  5000    → Fail fast on connection issues
-  connectTimeoutMS:          10000   → 10s connection timeout
-  socketTimeoutMS:           45000   → 45s query timeout
-  maxPoolSize:               10      → Limit concurrent connections
-  minPoolSize:               2       → Keep minimum pool ready
-
 Connection Management:
-  - Global singleton (prevents connection leaks)
-  - Cached promise pattern (reused across requests)
+  - Global singleton PrismaClient (prevents connection leaks in dev hot-reload)
+  - Connection pool size configurable via `connection_limit` query param on DATABASE_URL
   - Error logging via structured logger
 ```
 
 ### 6.2 Connection String Security
 
 ```
-Environment Variable: MONGODB_URI
-Format: mongodb+srv://<username>:<password>@<cluster>/<database>
+Environment Variable: DATABASE_URL
+Format: postgresql://<username>:<password>@<host>:<port>/<database>?schema=public
 
 Security:
   - Stored in .env.local (never committed)
-  - TLS encryption for all connections
-  - IP whitelist on MongoDB Atlas (recommended)
+  - TLS encryption for all connections (sslmode=require in production)
+  - IP allowlist on the database provider (recommended)
   - Database user with least-privilege access
 ```
 
@@ -339,22 +330,22 @@ Backup Automation:
   Process:
     1. Authenticate cron request
     2. Connect to database
-    3. Export collections (tenant-scoped or full)
+    3. Export Prisma model tables (tenant-scoped or full)
     4. Compress backup data
     5. Upload to cloud storage (optional)
     6. Log backup result
 
   Recovery:
-    - Restore from backup file
-    - MongoDB Atlas point-in-time recovery (if Atlas)
-    - Manual import via mongorestore
+    - Restore from backup file (see database-restore.md)
+    - Provider-managed point-in-time recovery (if using a managed Postgres service)
+    - Manual restore via `pg_restore` / `psql`
 ```
 
-### 7.2 MongoDB Atlas Backups (Recommended)
+### 7.2 Managed PostgreSQL Backups (Recommended)
 
 | Feature | Description |
 |---------|-------------|
-| Continuous Backup | Point-in-time recovery up to last 24 hours |
+| Continuous Backup | Point-in-time recovery (provider-dependent, e.g. up to last 24 hours) |
 | Daily Snapshots | Retained for 7 days (configurable) |
 | Weekly Snapshots | Retained for 4 weeks |
 | Monthly Snapshots | Retained for 12 months |
@@ -365,7 +356,7 @@ Backup Automation:
 | Backup Type | Frequency | Retention | Method |
 |------------|-----------|-----------|--------|
 | Automated DB Backup | Daily (2:00 AM) | 30 days | Cron + cloud storage |
-| MongoDB Atlas Snapshot | Continuous | Per Atlas plan | Automatic |
+| Managed Postgres Snapshot | Continuous | Per provider plan | Automatic |
 | Configuration Export | Weekly | 90 days | Settings + env backup |
 | Audit Log Archive | Monthly | 5 years (BIR) | Export to cold storage |
 
@@ -457,7 +448,7 @@ Log Entry:
 
 | Variable | Purpose | Generation |
 |---------|---------|-----------|
-| `MONGODB_URI` | Database connection | MongoDB Atlas dashboard |
+| `DATABASE_URL` | Database connection | Postgres provider dashboard |
 | `JWT_SECRET` | Token signing | `crypto.randomBytes(32).toString('hex')` |
 | `CRON_SECRET` | Automation auth | `crypto.randomBytes(32).toString('hex')` |
 
@@ -497,7 +488,7 @@ Storage:
 |----------------|----------------------|--------|
 | Data confidentiality | JWT auth, RBAC, tenant isolation | Implemented |
 | Data integrity | Immutable transactions, audit trail | Implemented |
-| Data availability | Automated backups, MongoDB replication | Implemented |
+| Data availability | Automated backups, PostgreSQL replication | Implemented |
 | Access control | 5-tier role hierarchy, API-level enforcement | Implemented |
 | Audit trail | Complete action logging with user + timestamp + IP | Implemented |
 | Secure transmission | HTTPS (HSTS), TLS for database | Implemented |
@@ -517,7 +508,7 @@ Storage:
 | Scenario | RTO | RPO | Recovery Method |
 |----------|-----|-----|----------------|
 | Application crash | < 5 min | 0 | Auto-restart (platform) |
-| Database corruption | < 1 hour | < 24 hours | Atlas point-in-time restore |
+| Database corruption | < 1 hour | < 24 hours | Provider point-in-time restore |
 | Data center outage | < 4 hours | < 1 hour | Cross-region replica |
 | Accidental deletion | < 30 min | < 24 hours | Backup restore |
 | Security breach | < 1 hour | 0 | Token revocation + password reset |
@@ -525,7 +516,7 @@ Storage:
 ### Recovery Procedures
 
 1. **Application Failure**: Platform auto-restart (Vercel/Railway/AWS)
-2. **Database Issues**: MongoDB Atlas automatic failover to replica
+2. **Database Issues**: PostgreSQL provider automatic failover to replica
 3. **Data Loss**: Restore from most recent backup
 4. **Compromised Account**: Revoke all tokens → force password reset → review audit logs
 5. **Full System Compromise**: Rotate all secrets → restore from clean backup → audit review

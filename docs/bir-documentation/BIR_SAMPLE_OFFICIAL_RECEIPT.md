@@ -300,7 +300,7 @@ Audit Trail ID:  65f2a1b3c4d5e6f7a8b9c0d3
 {{cardBrand}}          → Visa / MC / etc.
 
 {{footerText}}         → Custom footer message
-{{transactionId}}      → MongoDB document ID
+{{transactionId}}      → Transaction row ID
 ```
 
 ---
