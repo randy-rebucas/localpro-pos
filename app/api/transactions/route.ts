@@ -782,7 +782,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      let transaction: Awaited<ReturnType<typeof tx.transaction.create>> | undefined;
+      let transaction: Prisma.TransactionGetPayload<{ include: { items: true } }> | undefined;
       let receiptNumber = '';
 
       for (let receiptAttempt = 0; receiptAttempt < 3; receiptAttempt++) {
@@ -838,6 +838,7 @@ export async function POST(request: NextRequest) {
                   }
                 : undefined,
             },
+            include: { items: true },
           });
           break;
         } catch (createErr) {
@@ -1098,6 +1099,11 @@ export async function POST(request: NextRequest) {
       total: Number(transaction.total),
       cashReceived: transaction.cashReceived !== null ? Number(transaction.cashReceived) : null,
       change: transaction.change !== null ? Number(transaction.change) : null,
+      items: transaction.items.map((item) => ({
+        ...item,
+        price: Number(item.price),
+        subtotal: Number(item.subtotal),
+      })),
     };
     if (paymentRecords.length > 0) {
       responseData.payments = paymentRecords.map((p) => ({

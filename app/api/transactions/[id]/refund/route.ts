@@ -133,6 +133,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             })),
           },
         },
+        include: { items: true },
       });
 
       // Restore stock for refunded items (only if product tracks inventory)
