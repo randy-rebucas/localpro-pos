@@ -312,6 +312,14 @@ const TenantSchema: Schema = new Schema(
         type: Boolean,
         default: false,
       },
+      autoOpenDrawerOnShiftStart: {
+        type: Boolean,
+        default: false,
+      },
+      autoOpenDrawerOnShiftEnd: {
+        type: Boolean,
+        default: false,
+      },
       enableBookingScheduling: {
         type: Boolean,
         default: false,

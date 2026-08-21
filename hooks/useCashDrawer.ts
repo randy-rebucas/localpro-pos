@@ -1,5 +1,7 @@
 import { useState, useCallback } from 'react';
 import type { CashDrawerSession } from '@/types/cash-drawer';
+import { hardwareService } from '@/lib/hardware';
+import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 export type { CashDrawerSession };
 
 interface UseCashDrawerReturn {
@@ -15,6 +17,7 @@ export function useCashDrawer(): UseCashDrawerReturn {
   const [activeSession, setActiveSession] = useState<CashDrawerSession | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { settings } = useTenantSettings();
 
   const checkActiveSession = useCallback(async (): Promise<CashDrawerSession | null> => {
     setLoading(true);
@@ -53,6 +56,9 @@ export function useCashDrawer(): UseCashDrawerReturn {
       const data = await res.json();
       if (res.ok && data.success) {
         setActiveSession(data.data);
+        if (settings?.autoOpenDrawerOnShiftStart) {
+          hardwareService.openCashDrawer().catch(() => {});
+        }
         return true;
       }
       setError(data.error || 'Failed to open cash drawer');
@@ -79,6 +85,9 @@ export function useCashDrawer(): UseCashDrawerReturn {
       const data = await res.json();
       if (res.ok && data.success) {
         setActiveSession(null);
+        if (settings?.autoOpenDrawerOnShiftEnd) {
+          hardwareService.openCashDrawer().catch(() => {});
+        }
         return { success: true, session: data.data as CashDrawerSession };
       }
       const errorMsg = data.error || 'Failed to close cash drawer';

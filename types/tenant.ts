@@ -92,6 +92,10 @@ export interface ITenantSettings {
   enableTableManagement?: boolean;
   /** When true, POS may sell on account (customer balance / pay later). */
   enableOnAccountSales?: boolean;
+  /** When true, automatically pulse the cash drawer open when a shift (cash drawer session) starts. */
+  autoOpenDrawerOnShiftStart?: boolean;
+  /** When true, automatically pulse the cash drawer open when a shift (cash drawer session) ends. */
+  autoOpenDrawerOnShiftEnd?: boolean;
 
   /**
    * Tenant-controlled integration layer (non-secret).

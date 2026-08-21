@@ -58,6 +58,8 @@ interface FormData {
   enableBookingScheduling: boolean;
   enableTableManagement: boolean;
   enableOnAccountSales: boolean;
+  autoOpenDrawerOnShiftStart: boolean;
+  autoOpenDrawerOnShiftEnd: boolean;
   // Notifications
   lowStockAlert: boolean;
   lowStockThreshold: number;
@@ -121,6 +123,7 @@ export default function AdminSettingsPage() {
     enableInventory: true, enableCategories: true, enableDiscounts: true,
     enableLoyaltyProgram: false, enableCustomerManagement: true,
     enableBookingScheduling: false, enableTableManagement: false, enableOnAccountSales: false,
+    autoOpenDrawerOnShiftStart: false, autoOpenDrawerOnShiftEnd: false,
     lowStockAlert: true, lowStockThreshold: 10,
     emailNotifications: false, smsNotifications: false,
   });
@@ -172,6 +175,8 @@ export default function AdminSettingsPage() {
           enableBookingScheduling: s.enableBookingScheduling ?? false,
           enableTableManagement: s.enableTableManagement ?? false,
           enableOnAccountSales: s.enableOnAccountSales ?? false,
+          autoOpenDrawerOnShiftStart: s.autoOpenDrawerOnShiftStart ?? false,
+          autoOpenDrawerOnShiftEnd: s.autoOpenDrawerOnShiftEnd ?? false,
           lowStockAlert: s.lowStockAlert ?? true,
           lowStockThreshold: s.lowStockThreshold ?? 10,
           emailNotifications: s.emailNotifications ?? false,
@@ -238,6 +243,8 @@ export default function AdminSettingsPage() {
           enableBookingScheduling: form.enableBookingScheduling,
           enableTableManagement: form.enableTableManagement,
           enableOnAccountSales: form.enableOnAccountSales,
+          autoOpenDrawerOnShiftStart: form.autoOpenDrawerOnShiftStart,
+          autoOpenDrawerOnShiftEnd: form.autoOpenDrawerOnShiftEnd,
           lowStockAlert: form.lowStockAlert,
           lowStockThreshold: form.lowStockThreshold,
           emailNotifications: form.emailNotifications,
@@ -584,6 +591,20 @@ export default function AdminSettingsPage() {
                   <Toggle label="Booking & Scheduling" desc="Accept service appointments and reservations" checked={form.enableBookingScheduling} onChange={v => set('enableBookingScheduling', v)} />
                   <Toggle label="Table Management" desc="Manage dining tables and floor layout" checked={form.enableTableManagement} onChange={v => set('enableTableManagement', v)} />
                   <Toggle label="On-Account Sales" desc="Allow customers to purchase on credit / pay later" checked={form.enableOnAccountSales} onChange={v => set('enableOnAccountSales', v)} />
+                </div>
+              </div>
+            )}
+
+            {/* Cash Drawer */}
+            {activeSection === 'features' && (
+              <div className="bg-white border border-gray-300 mt-4">
+                <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
+                  <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Cash Drawer</h2>
+                  <p className="text-xs text-gray-400 mt-0.5">Requires a cash drawer configured under Hardware settings</p>
+                </div>
+                <div className="p-5 divide-y divide-gray-50">
+                  <Toggle label="Auto-Open on Shift Start" desc="Automatically pop open the cash drawer when a cashier starts their shift" checked={form.autoOpenDrawerOnShiftStart} onChange={v => set('autoOpenDrawerOnShiftStart', v)} />
+                  <Toggle label="Auto-Open on Shift End" desc="Automatically pop open the cash drawer when a cashier ends their shift" checked={form.autoOpenDrawerOnShiftEnd} onChange={v => set('autoOpenDrawerOnShiftEnd', v)} />
                 </div>
               </div>
             )}
