@@ -59,7 +59,7 @@
     "jspdf": "^4.2.1",
     "jsqr": "^1.4.0",
     "lucide-react": "^0.562.0",
-    "mongoose": "^8.20.0",
+    "mongoose": "^8.24.3",
     "negotiator": "^1.0.0",
     "next": "^16.2.4",
     "node-cron": "^4.2.1",
