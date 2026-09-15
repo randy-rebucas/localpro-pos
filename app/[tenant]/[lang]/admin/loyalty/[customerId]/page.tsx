@@ -115,7 +115,7 @@ export default function LoyaltyCustomerPage() {
                         <div>
                           <p className="text-sm text-gray-800">{entry.description}</p>
                           <p className="text-xs text-gray-400">
-                            {new Date(entry.createdAt).toLocaleString()} · {dict?.loyalty?.balanceLabel || 'Balance:'} {entry.balanceBefore} → {entry.balanceAfter}
+                            {new Date(entry.createdAt).toLocaleString(undefined, { hour12: true })} · {dict?.loyalty?.balanceLabel || 'Balance:'} {entry.balanceBefore} → {entry.balanceAfter}
                           </p>
                         </div>
                       </div>

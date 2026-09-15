@@ -4,9 +4,11 @@ import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { getSalesReport } from '@/lib/analytics';
+import Tenant from '@/models/Tenant';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkFeatureAccess } from '@/lib/subscription';
 import { logger } from '@/lib/logger';
+import { getTenantDayBoundaries, DEFAULT_TENANT_TIMEZONE } from '@/lib/timezone';
 
 export async function GET(request: NextRequest) {
   try {
@@ -33,12 +35,14 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const tenantDoc = await Tenant.findById(tenantId).select('settings.timezone').lean();
+    const tenantTz = tenantDoc?.settings?.timezone || DEFAULT_TENANT_TIMEZONE;
     const searchParams = request.nextUrl.searchParams;
     const period = (searchParams.get('period') || 'daily') as 'daily' | 'weekly' | 'monthly';
-    const startDate = searchParams.get('startDate') ? new Date(searchParams.get('startDate')!) : undefined;
-    const endDate = searchParams.get('endDate') ? new Date(searchParams.get('endDate')!) : undefined;
-    if (startDate) startDate.setHours(0, 0, 0, 0);
-    if (endDate) endDate.setHours(23, 59, 59, 999);
+    const startDateParam = searchParams.get('startDate');
+    const endDateParam = searchParams.get('endDate');
+    const startDate = startDateParam ? getTenantDayBoundaries(startDateParam, tenantTz).start : undefined;
+    const endDate = endDateParam ? getTenantDayBoundaries(endDateParam, tenantTz).end : undefined;
 
     const report = await getSalesReport(tenantId, period, startDate, endDate);
 

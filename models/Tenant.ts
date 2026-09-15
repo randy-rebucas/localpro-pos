@@ -77,7 +77,7 @@ const TenantSchema: Schema = new Schema(
       },
       timezone: {
         type: String,
-        default: 'UTC',
+        default: 'Asia/Manila',
       },
       language: {
         type: String,

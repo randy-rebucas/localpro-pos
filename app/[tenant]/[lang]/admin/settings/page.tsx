@@ -111,7 +111,7 @@ export default function AdminSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<FormData>({
     companyName: '', businessType: '', taxId: '', registrationNumber: '',
-    language: 'en', timezone: 'UTC', currency: 'PHP', currencySymbol: '₱',
+    language: 'en', timezone: 'Asia/Manila', currency: 'PHP', currencySymbol: '₱',
     currencyPosition: 'before', dateFormat: 'MM/DD/YYYY', timeFormat: '12h',
     primaryColor: '#35979c', secondaryColor: '',
     logo: '',

@@ -10,8 +10,10 @@ import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import Transaction from '@/models/Transaction';
+import Tenant from '@/models/Tenant';
 import { checkBirFeatureAccess } from '@/lib/subscription';
 import { arrayToCSV } from '@/lib/export';
+import { resolveTenantDateRange, DEFAULT_TENANT_TIMEZONE } from '@/lib/timezone';
 
 export async function GET(request: NextRequest) {
   try {
@@ -50,15 +52,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Invalid endDate format' }, { status: 400 });
     }
 
-    const startDate = startDateParam
-      ? new Date(startDateParam)
-      : new Date(new Date().setDate(new Date().getDate() - 30));
-    const endDate = endDateParam ? new Date(endDateParam) : new Date();
-    // A bare "YYYY-MM-DD" endDate parses to UTC midnight (start of that day),
-    // which would make createdAt $lte exclude nearly the entire end day's
-    // transactions from what should be an inclusive BIR filing period —
-    // extend to end-of-day, matching the other /api/reports/* routes.
-    if (endDateParam) endDate.setHours(23, 59, 59, 999);
+    const tenantDoc = await Tenant.findById(tenantId).select('settings.timezone').lean();
+    // Boundaries are resolved in the tenant's timezone (not the server's,
+    // which is UTC in production) so a BIR filing "day" matches the
+    // merchant's actual business day — see lib/timezone.ts.
+    const { startDate, endDate } = resolveTenantDateRange(
+      startDateParam,
+      endDateParam,
+      tenantDoc?.settings?.timezone || DEFAULT_TENANT_TIMEZONE
+    );
 
     const transactions = await Transaction.find({
       tenantId,

@@ -102,7 +102,7 @@ export default function LogsPage() {
 
   const fmt = (d: string) => {
     const dt = new Date(d);
-    return dt.toLocaleDateString() + ' ' + dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return dt.toLocaleDateString() + ' ' + dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
   };
 
   return (

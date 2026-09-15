@@ -191,19 +191,33 @@ export async function POST(request: NextRequest) {
       const shortage = differenceCents < 0 ? Math.abs(differenceCents) / 100 : 0;
       const overage = differenceCents > 0 ? differenceCents / 100 : 0;
 
-      openSession.closingAmount = actualClosingAmount;
-      openSession.expectedAmount = expectedAmount;
-      openSession.shortage = shortage;
-      openSession.overage = overage;
-      openSession.closingTime = sessionEnd;
-      openSession.status = 'closed';
-      openSession.totalVAT = totalVATCents / 100;
-      openSession.totalDiscounts = totalDiscountsCents / 100;
-      if (notes) {
-        openSession.notes = notes;
-      }
+      // Atomic claim: guards against a double-click/retry closing the same
+      // session twice before either write lands (findOne above is not atomic).
+      const closedSession = await CashDrawerSession.findOneAndUpdate(
+        { _id: openSession._id, tenantId, status: 'open' },
+        {
+          $set: {
+            closingAmount: actualClosingAmount,
+            expectedAmount,
+            shortage,
+            overage,
+            closingTime: sessionEnd,
+            status: 'closed',
+            totalVAT: totalVATCents / 100,
+            totalDiscounts: totalDiscountsCents / 100,
+            ...(notes ? { notes } : {}),
+          },
+        },
+        { new: true }
+      );
 
-      await openSession.save();
+      if (!closedSession) {
+        return NextResponse.json(
+          { success: false, error: t('validation.noOpenCashDrawerSession', 'No open cash drawer session found') },
+          { status: 409 }
+        );
+      }
+      openSession = closedSession;
 
       await createAuditLog(request, {
         tenantId,

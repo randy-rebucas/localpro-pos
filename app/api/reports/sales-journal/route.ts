@@ -4,10 +4,12 @@ import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import Transaction from '@/models/Transaction';
+import Tenant from '@/models/Tenant';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkFeatureAccess } from '@/lib/subscription';
 import { arrayToCSV } from '@/lib/export';
 import { logger } from '@/lib/logger';
+import { resolveTenantDateRange, DEFAULT_TENANT_TIMEZONE } from '@/lib/timezone';
 
 export async function GET(request: NextRequest) {
   try {
@@ -34,15 +36,16 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const tenantDoc = await Tenant.findById(tenantId).select('settings.timezone settings.timeFormat').lean();
+    const tenantTz = tenantDoc?.settings?.timezone || DEFAULT_TENANT_TIMEZONE;
+    const tenantTimeFormat = tenantDoc?.settings?.timeFormat || '12h';
+
     const searchParams = request.nextUrl.searchParams;
-    const startDate = searchParams.get('startDate')
-      ? new Date(searchParams.get('startDate')!)
-      : new Date(new Date().setDate(new Date().getDate() - 30));
-    const endDate = searchParams.get('endDate')
-      ? new Date(searchParams.get('endDate')!)
-      : new Date();
-    startDate.setHours(0, 0, 0, 0);
-    if (searchParams.get('endDate')) endDate.setHours(23, 59, 59, 999);
+    const { startDate, endDate } = resolveTenantDateRange(
+      searchParams.get('startDate'),
+      searchParams.get('endDate'),
+      tenantTz
+    );
     const format = searchParams.get('format') || 'json'; // json, csv
 
     // Query transactions for the date range
@@ -56,8 +59,8 @@ export async function GET(request: NextRequest) {
     // Map to sales journal format
     const journalEntries = transactions.map((txn: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
       receiptNumber: txn.receiptNumber || '',
-      date: new Date(txn.createdAt).toISOString().split('T')[0],
-      time: new Date(txn.createdAt).toLocaleTimeString('en-PH', { hour12: false }),
+      date: new Date(txn.createdAt).toLocaleDateString('en-CA', { timeZone: tenantTz }),
+      time: new Date(txn.createdAt).toLocaleTimeString('en-US', { timeZone: tenantTz, hour12: tenantTimeFormat === '12h' }),
       items: txn.items?.map((item: any) => item.name).join('; ') || '', // eslint-disable-line @typescript-eslint/no-explicit-any
       itemCount: txn.items?.length || 0,
       subtotal: txn.subtotal || 0,

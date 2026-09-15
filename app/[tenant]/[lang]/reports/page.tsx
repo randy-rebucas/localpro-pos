@@ -11,6 +11,8 @@ import { useParams } from 'next/navigation';
 import { getDictionaryClient } from '../dictionaries-client';
 import Currency from '@/components/Currency';
 import { formatGrandTotalRegister } from '@/lib/bir-format';
+import { formatDateTime, formatDate as formatTenantDate } from '@/lib/formatting';
+import { getDefaultTenantSettings } from '@/lib/currency';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import toast from 'react-hot-toast';
@@ -181,7 +183,7 @@ export default function ReportsPage() {
         );
       case 'cash-drawer':
         return cashDrawerReports.length > 0 ? (
-          <CashDrawerReportView reports={cashDrawerReports} dict={dict} />
+          <CashDrawerReportView reports={cashDrawerReports} dict={dict} settings={settings} />
         ) : (
           renderEmptyState(reportsDict.noCashDrawerReports || 'No cash drawer reports found')
         );
@@ -205,6 +207,7 @@ export default function ReportsPage() {
             primaryColor={primaryColor}
             onGenerate={handleGenerateZReading}
             generating={generatingZReading}
+            settings={settings}
           />
         );
       default:
@@ -695,7 +698,7 @@ function ProfitLossView({ summary, dict, primaryColor, colors }: { summary: Prof
   );
 }
 
-function CashDrawerReportView({ reports, dict }: { reports: CashDrawerReport[]; dict: any }) { // eslint-disable-line @typescript-eslint/no-explicit-any
+function CashDrawerReportView({ reports, dict, settings }: { reports: CashDrawerReport[]; dict: any; settings: ReturnType<typeof useTenantSettings>['settings'] }) { // eslint-disable-line @typescript-eslint/no-explicit-any
   return (
     <div className="space-y-6">
       <div className="bg-white border border-gray-300 overflow-hidden">
@@ -732,10 +735,10 @@ function CashDrawerReportView({ reports, dict }: { reports: CashDrawerReport[]; 
             {reports.map((report, index) => (
               <tr key={report.sessionId || `session-${index}`}>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {new Date(report.openingTime).toLocaleString()}
+                  {formatDateTime(report.openingTime, settings || getDefaultTenantSettings())}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {report.closingTime ? new Date(report.closingTime).toLocaleString() : '-'}
+                  {report.closingTime ? formatDateTime(report.closingTime, settings || getDefaultTenantSettings()) : '-'}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   <Currency amount={report.openingAmount} />
@@ -815,7 +818,7 @@ function XReadingView({ data, dict, primaryColor }: { data: XReadingData; dict: 
   );
 }
 
-function ZReadingView({ readings, dict, primaryColor, onGenerate, generating }: { readings: ZReadingRecord[]; dict: any; primaryColor: string; onGenerate: () => void; generating: boolean }) { // eslint-disable-line @typescript-eslint/no-explicit-any
+function ZReadingView({ readings, dict, primaryColor, onGenerate, generating, settings }: { readings: ZReadingRecord[]; dict: any; primaryColor: string; onGenerate: () => void; generating: boolean; settings: ReturnType<typeof useTenantSettings>['settings'] }) { // eslint-disable-line @typescript-eslint/no-explicit-any
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
@@ -854,7 +857,7 @@ function ZReadingView({ readings, dict, primaryColor, onGenerate, generating }: 
             ) : (
               readings.map((r) => (
                 <tr key={r._id}>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{new Date(r.businessDate).toLocaleDateString()}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{formatTenantDate(r.businessDate, settings || getDefaultTenantSettings())}</td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-500"><Currency amount={r.beginningGT} /></td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900 font-medium"><Currency amount={r.endingGT} /></td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900"><Currency amount={r.grossSales} /></td>

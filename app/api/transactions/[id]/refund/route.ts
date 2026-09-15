@@ -11,6 +11,7 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { updateStock } from '@/lib/stock';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
+import { runWithOptionalMongoTransaction } from '@/lib/mongo-session';
 import {
   calculateOnAccountRefundAmount,
   getOnAccountTotalForTransaction,
@@ -52,6 +53,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       );
     }
 
+    const currentUser = await getCurrentUser(request);
     const { items, reason, notes } = body;
 
     // If no items specified, refund all items (full refund)
@@ -61,7 +63,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }));
 
     // Validate items to refund
-    const refundItems = [];
+    const refundItems: { productId: string; quantity: number; price: number; subtotal: number }[] = [];
     let refundAmount = 0;
 
     for (const refundItem of itemsToRefund) {
@@ -101,42 +103,160 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       refundAmount = Math.round((refundAmount - refundDiscount) * 100) / 100;
     }
 
-    // Create refund transaction
-    const refundTransaction = await Transaction.create({
-      tenantId,
-      items: refundItems.map((item: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
-        product: item.productId,
-        name: transaction.items.find((i: any) => i.product.toString() === item.productId)?.name || '', // eslint-disable-line @typescript-eslint/no-explicit-any
-        price: item.price,
-        quantity: item.quantity,
-        subtotal: item.subtotal,
-      })),
-      subtotal: refundAmount,
-      total: refundAmount,
-      paymentMethod: transaction.paymentMethod,
-      status: 'refunded',
-      receiptNumber: `REF-${transaction.receiptNumber || transaction._id.toString().slice(-8)}`,
-      notes: notes || reason || 'Refund',
-    });
+    // Mark original transaction as refunded if full refund
+    const isFullRefund = refundItems.length === transaction.items.length &&
+      refundItems.every((item: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+        const original = transaction.items.find((i: any) => i.product.toString() === item.productId); // eslint-disable-line @typescript-eslint/no-explicit-any
+        return original && item.quantity === original.quantity;
+      });
 
-    // Restore stock for refunded items (only if product tracks inventory)
-    for (const refundItem of refundItems) {
-      const product = await Product.findOne({ _id: refundItem.productId, tenantId });
-      if (product && product.trackInventory !== false) {
-        await updateStock(
-          refundItem.productId,
-          tenantId,
-          refundItem.quantity, // Positive to restore
-          'return',
-          {
-            transactionId: refundTransaction._id.toString(),
-            reason: reason || 'Transaction refund',
-            notes: notes,
+    let refundTransaction: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+    let refundPayment: any = null; // eslint-disable-line @typescript-eslint/no-explicit-any
+    let onAccountRefundAmount = 0;
+    let accountBalanceBefore: number | undefined;
+    let accountBalanceAfter: number | undefined;
+
+    try {
+      await runWithOptionalMongoTransaction(async (session) => {
+        // Atomic claim: fails if a concurrent refund already changed this
+        // transaction's status (double-submit / retry / two staff refunding at once).
+        const claimed = await Transaction.findOneAndUpdate(
+          { _id: id, tenantId, status: 'completed' },
+          { $set: { status: isFullRefund ? 'refunded' : 'completed' } },
+          session ? { session, new: true } : { new: true }
+        );
+        if (!claimed) {
+          throw new Error('REFUND_CONFLICT');
+        }
+
+        const [createdRefund] = await Transaction.create(
+          [{
+            tenantId,
+            items: refundItems.map((item: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+              product: item.productId,
+              name: transaction.items.find((i: any) => i.product.toString() === item.productId)?.name || '', // eslint-disable-line @typescript-eslint/no-explicit-any
+              price: item.price,
+              quantity: item.quantity,
+              subtotal: item.subtotal,
+            })),
+            subtotal: refundAmount,
+            total: refundAmount,
+            paymentMethod: transaction.paymentMethod,
+            status: 'refunded',
+            receiptNumber: `REF-${transaction.receiptNumber || transaction._id.toString().slice(-8)}`,
+            notes: notes || reason || 'Refund',
+          }],
+          session ? { session } : {}
+        );
+        refundTransaction = createdRefund;
+
+        // Restore stock for refunded items (only if product tracks inventory)
+        for (const refundItem of refundItems) {
+          const productQuery = Product.findOne({ _id: refundItem.productId, tenantId });
+          const product = session ? await productQuery.session(session) : await productQuery;
+          if (product && product.trackInventory !== false) {
+            await updateStock(
+              refundItem.productId,
+              tenantId,
+              refundItem.quantity, // Positive to restore
+              'return',
+              {
+                transactionId: refundTransaction._id.toString(),
+                reason: reason || 'Transaction refund',
+                notes: notes,
+              },
+              session
+            );
           }
+        }
+
+        // Create Payment refund record if original payment exists
+        const originalPaymentQuery = Payment.findOne({
+          tenantId,
+          transactionId: transaction._id,
+          status: 'completed',
+        });
+        const originalPayment = session ? await originalPaymentQuery.session(session) : await originalPaymentQuery;
+
+        if (originalPayment) {
+          const [createdPayment] = await Payment.create(
+            [{
+              tenantId,
+              transactionId: refundTransaction._id,
+              method: originalPayment.method,
+              amount: refundAmount,
+              status: 'refunded',
+              details: originalPayment.details,
+              processedBy: currentUser?.userId,
+              processedAt: new Date(),
+              refundedAt: new Date(),
+              refundReason: body.reason || body.notes || 'Transaction refund',
+            }],
+            session ? { session } : {}
+          );
+          refundPayment = createdPayment;
+
+          originalPayment.status = 'refunded';
+          originalPayment.refundedAt = new Date();
+          originalPayment.refundReason = body.reason || body.notes || 'Transaction refund';
+          await originalPayment.save(session ? { session } : {});
+        }
+
+        if (transaction.customerId && refundAmount > 0) {
+          const onAccountTotal = await getOnAccountTotalForTransaction(
+            tenantId,
+            transaction._id,
+            transaction.total,
+            transaction.paymentMethod
+          );
+
+          if (onAccountTotal > 0) {
+            onAccountRefundAmount = calculateOnAccountRefundAmount(
+              refundAmount,
+              transaction.total,
+              onAccountTotal
+            );
+
+            if (onAccountRefundAmount > 0) {
+              const custQuery = Customer.findOne({ _id: transaction.customerId, tenantId }).select('accountBalance');
+              const cust = session ? await custQuery.session(session) : await custQuery;
+              if (cust) {
+                accountBalanceBefore = cust.accountBalance ?? 0;
+                accountBalanceAfter = Math.max(0, accountBalanceBefore - onAccountRefundAmount);
+                await Customer.updateOne(
+                  { _id: cust._id },
+                  { $inc: { accountBalance: -onAccountRefundAmount } },
+                  session ? { session } : {}
+                );
+                // Clamp negative balances from rounding edge cases
+                if (accountBalanceAfter < 0.01) {
+                  await Customer.updateOne(
+                    { _id: cust._id },
+                    { $set: { accountBalance: 0 } },
+                    session ? { session } : {}
+                  );
+                  accountBalanceAfter = 0;
+                }
+              }
+            }
+          }
+        }
+      });
+    } catch (txError: unknown) {
+      if (txError instanceof Error && txError.message === 'REFUND_CONFLICT') {
+        return NextResponse.json(
+          { success: false, error: t('validation.transactionAlreadyRefunded', 'Transaction has already been refunded') },
+          { status: 409 }
         );
       }
+      throw txError;
     }
 
+    if (isFullRefund) {
+      transaction.status = 'refunded';
+    }
+
+    // Best-effort external side effects — kept outside the DB transaction
     {
       const ids = refundItems.map((x) => x.productId);
       const { pushChannelInventoryForProducts } = await import('@/lib/ecommerce/inventory-push');
@@ -167,92 +287,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       }
     }
 
-    // Mark original transaction as refunded if full refund
-    const isFullRefund = refundItems.length === transaction.items.length &&
-      refundItems.every((item: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-        const original = transaction.items.find((i: any) => i.product.toString() === item.productId); // eslint-disable-line @typescript-eslint/no-explicit-any
-        return original && item.quantity === original.quantity;
-      });
-
-    if (isFullRefund) {
-      transaction.status = 'refunded';
-      await transaction.save();
-    }
-
-    // Create Payment refund record if original payment exists
-    let refundPayment = null;
-    let paymentRefundWarning: string | undefined;
-    try {
-      const originalPayment = await Payment.findOne({
-        tenantId,
-        transactionId: transaction._id,
-        status: 'completed',
-      });
-
-      if (originalPayment) {
-        const user = await getCurrentUser(request);
-        refundPayment = await Payment.create({
-          tenantId,
-          transactionId: refundTransaction._id,
-          method: originalPayment.method,
-          amount: refundAmount,
-          status: 'refunded',
-          details: originalPayment.details,
-          processedBy: user?.userId,
-          processedAt: new Date(),
-          refundedAt: new Date(),
-          refundReason: body.reason || body.notes || 'Transaction refund',
-        });
-
-        // Mark original payment as refunded
-        originalPayment.status = 'refunded';
-        originalPayment.refundedAt = new Date();
-        originalPayment.refundReason = body.reason || body.notes || 'Transaction refund';
-        await originalPayment.save();
-      }
-    } catch (paymentError) {
-      logger.error('Failed to create payment refund record:', paymentError);
-      paymentRefundWarning = 'Refund recorded but payment record could not be updated. Please update the payment manually.';
-    }
-
-    let onAccountRefundAmount = 0;
-    let accountBalanceBefore: number | undefined;
-    let accountBalanceAfter: number | undefined;
-
-    if (transaction.customerId && refundAmount > 0) {
-      const onAccountTotal = await getOnAccountTotalForTransaction(
-        tenantId,
-        transaction._id,
-        transaction.total,
-        transaction.paymentMethod
-      );
-
-      if (onAccountTotal > 0) {
-        onAccountRefundAmount = calculateOnAccountRefundAmount(
-          refundAmount,
-          transaction.total,
-          onAccountTotal
-        );
-
-        if (onAccountRefundAmount > 0) {
-          const cust = await Customer.findOne({ _id: transaction.customerId, tenantId }).select('accountBalance');
-          if (cust) {
-            accountBalanceBefore = cust.accountBalance ?? 0;
-            accountBalanceAfter = Math.max(0, accountBalanceBefore - onAccountRefundAmount);
-            await Customer.updateOne(
-              { _id: cust._id },
-              { $inc: { accountBalance: -onAccountRefundAmount } }
-            );
-            // Clamp negative balances from rounding edge cases
-            if (accountBalanceAfter < 0.01) {
-              await Customer.updateOne({ _id: cust._id }, { $set: { accountBalance: 0 } });
-              accountBalanceAfter = 0;
-            }
-          }
-        }
-      }
-    }
-
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.TRANSACTION_REFUND,
@@ -280,7 +314,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         isFullRefund,
         refundPayment,
       },
-      ...(paymentRefundWarning ? { warning: paymentRefundWarning } : {}),
     }, { status: 201 });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Refund failed';

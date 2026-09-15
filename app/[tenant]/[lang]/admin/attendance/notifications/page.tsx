@@ -254,7 +254,7 @@ export default function AttendanceNotificationsPage() {
                               <span>{notification.minutesLate} min late</span>
                               {notification.expectedTime && (
                                 <p className="text-xs text-gray-400">
-                                  {dict.admin?.expectedTime || 'Expected'}: {new Date(notification.expectedTime).toLocaleTimeString()}
+                                  {dict.admin?.expectedTime || 'Expected'}: {new Date(notification.expectedTime).toLocaleTimeString(undefined, { hour12: true })}
                                 </p>
                               )}
                             </div>

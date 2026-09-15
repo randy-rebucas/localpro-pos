@@ -162,7 +162,7 @@ export default function MultiCurrencyPage() {
               </div>
               {multiCurrency.lastUpdated && (
                 <p className="text-xs text-gray-500 mb-4">
-                  {dict?.admin?.lastUpdated || 'Last updated'}: {new Date(multiCurrency.lastUpdated).toLocaleString()}
+                  {dict?.admin?.lastUpdated || 'Last updated'}: {new Date(multiCurrency.lastUpdated).toLocaleString(undefined, { hour12: true })}
                 </p>
               )}
               <div className="space-y-2">

@@ -123,7 +123,7 @@ export function getDefaultTenantSettings(): ITenantSettings {
     currencyPosition: 'before',
     dateFormat: 'MM/DD/YYYY',
     timeFormat: '12h',
-    timezone: 'UTC',
+    timezone: 'Asia/Manila',
     language: 'en',
     numberFormat: {
       decimalSeparator: '.',

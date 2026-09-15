@@ -6,6 +6,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
 import { createAuditLog, AuditActions } from '@/lib/audit';
+import { getTenantDayBoundaries, DEFAULT_TENANT_TIMEZONE } from '@/lib/timezone';
 
 export async function GET(request: NextRequest) {
   try {
@@ -27,8 +28,7 @@ export async function GET(request: NextRequest) {
     const alertDays = Number(searchParams.get('days') ?? defaultAlertDays);
     const scheduleFilter = searchParams.get('schedule'); // otc | rx | dangerous
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const today = getTenantDayBoundaries(new Date(), tenant?.settings?.timezone || DEFAULT_TENANT_TIMEZONE).start;
     const alertDate = new Date(today);
     alertDate.setDate(alertDate.getDate() + alertDays);
 

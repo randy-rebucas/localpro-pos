@@ -177,7 +177,7 @@ export default function FileUploadPage() {
 
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
-    return date.toLocaleDateString(lang === 'es' ? 'es-ES' : 'en-US') + ' ' + date.toLocaleTimeString();
+    return date.toLocaleDateString(lang === 'es' ? 'es-ES' : 'en-US') + ' ' + date.toLocaleTimeString(undefined, { hour12: true });
   };
 
   const copyToClipboard = (text: string) => {

@@ -272,7 +272,7 @@ export default function BackupsPage() {
                       <tr key={backup.name} className={`hover:bg-gray-50 ${restoreFilename === backup.name ? 'bg-blue-50' : ''}`}>
                         <td className="px-4 py-2.5 font-mono text-gray-700">{backup.name}</td>
                         <td className="px-4 py-2.5 text-right text-gray-600">{formatBytes(backup.size)}</td>
-                        <td className="px-4 py-2.5 text-gray-600">{new Date(backup.createdAt).toLocaleString()}</td>
+                        <td className="px-4 py-2.5 text-gray-600">{new Date(backup.createdAt).toLocaleString(undefined, { hour12: true })}</td>
                         <td className="px-4 py-2.5 text-right">
                           <div className="flex gap-2 justify-end">
                             <button

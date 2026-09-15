@@ -264,7 +264,7 @@ export default function AttendancePage() {
                     <div key={session._id} className="bg-white border border-teal-200 px-3 py-2 flex items-center justify-between gap-2">
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-gray-900 truncate">{userName}</p>
-                        <p className="text-xs text-gray-500">{clockInTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                        <p className="text-xs text-gray-500">{clockInTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}</p>
                       </div>
                       <span className="text-sm font-bold text-teal-700 flex-shrink-0">{hours.toFixed(1)}h</span>
                     </div>
@@ -343,9 +343,9 @@ export default function AttendancePage() {
                       return (
                         <tr key={attendance._id} className="hover:bg-gray-50">
                           <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">{userName}</td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{clockIn.toLocaleString()}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{clockIn.toLocaleString(undefined, { hour12: true })}</td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                            {clockOut ? clockOut.toLocaleString() : (
+                            {clockOut ? clockOut.toLocaleString(undefined, { hour12: true }) : (
                               <span className="inline-flex items-center gap-1 text-green-600 font-semibold">
                                 <span className="w-1.5 h-1.5 bg-green-500 animate-pulse" />
                                 {dict.admin?.active || 'Active'}
@@ -354,7 +354,7 @@ export default function AttendancePage() {
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                             {breakStart && breakEnd ? (
-                              <span>{breakStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} – {breakEnd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                              <span>{breakStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })} – {breakEnd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
                             ) : breakStart ? (
                               <span className="text-yellow-600 font-medium">{dict.admin?.onBreak || 'On Break'}</span>
                             ) : '—'}

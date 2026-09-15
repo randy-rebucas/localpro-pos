@@ -258,7 +258,7 @@ export default function PrescriptionsPage() {
                       <p className="text-gray-500">{item.quantity} unit(s) · {item.dosage} · {item.frequency}</p>
                       {item.instructions && <p className="text-gray-400 text-xs">{item.instructions}</p>}
                       {item.dispensed && item.dispensedAt && (
-                        <p className="text-green-600 text-xs">Dispensed {new Date(item.dispensedAt).toLocaleString()}</p>
+                        <p className="text-green-600 text-xs">Dispensed {new Date(item.dispensedAt).toLocaleString(undefined, { hour12: true })}</p>
                       )}
                     </div>
                   </label>

@@ -126,7 +126,7 @@ export default function AdminLogsPage() {
                   <>
                     <tr key={log._id} className="hover:bg-gray-50/50 transition-colors">
                       <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
-                        {new Date(log.createdAt).toLocaleString()}
+                        {new Date(log.createdAt).toLocaleString(undefined, { hour12: true })}
                       </td>
                       <td className="px-4 py-3">
                         {log.adminUserId ? (

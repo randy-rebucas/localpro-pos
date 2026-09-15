@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Transaction from '@/models/Transaction';
-import Product from '@/models/Product';
 import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { requireAuth } from '@/lib/auth'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
-import { updateStock } from '@/lib/stock';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -91,46 +89,42 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       );
     }
 
-    // Only allow status updates (void/refund) on completed transactions
-    if (body.status && ['cancelled', 'refunded'].includes(body.status)) {
-      const oldStatus = transaction.status;
-      transaction.status = body.status;
-      await transaction.save();
+    // Refunds must go through the dedicated refund endpoint — it also creates
+    // the Payment refund record and credits any on-account balance, which this
+    // route does not do. Allowing 'refunded' here would leave those out of sync.
+    if (body.status === 'refunded') {
+      return NextResponse.json(
+        { success: false, error: 'Use POST /api/transactions/[id]/refund to process a refund' },
+        { status: 400 }
+      );
+    }
 
-      // If refunding, restore stock (only if product tracks inventory)
-      if (body.status === 'refunded' && oldStatus === 'completed') {
-        const restoredIds: string[] = [];
-        for (const item of transaction.items) {
-          const product = await Product.findOne({ _id: item.product.toString(), tenantId });
-          if (product && product.trackInventory !== false) {
-            await updateStock(
-              item.product.toString(),
-              tenantId,
-              item.quantity, // Positive to restore
-              'return',
-              {
-                transactionId: transaction._id.toString(),
-                reason: 'Transaction refund',
-              }
-            );
-            restoredIds.push(item.product.toString());
-          }
-        }
-        if (restoredIds.length) {
-          const { pushChannelInventoryForProducts } = await import('@/lib/ecommerce/inventory-push');
-          void pushChannelInventoryForProducts(tenantId, restoredIds, { stockReason: 'Transaction refund' });
-        }
+    // Only allow void (cancel) on completed transactions
+    if (body.status === 'cancelled') {
+      // Atomic claim: guards against a concurrent void/refund racing on the
+      // same transaction (double-click, retry) before either write lands.
+      const claimed = await Transaction.findOneAndUpdate(
+        { _id: id, tenantId, status: transaction.status },
+        { $set: { status: 'cancelled' } },
+        { new: true }
+      );
+      if (!claimed) {
+        return NextResponse.json(
+          { success: false, error: t('validation.transactionAlreadyFinalized', 'This transaction has already been voided or refunded and cannot be modified') },
+          { status: 409 }
+        );
       }
+      const oldStatus = transaction.status;
 
       await createAuditLog(request, {
         tenantId,
-        action: body.status === 'refunded' ? AuditActions.TRANSACTION_REFUND : AuditActions.TRANSACTION_CANCEL,
+        action: AuditActions.TRANSACTION_CANCEL,
         entityType: 'transaction',
         entityId: id,
-        changes: { status: { old: oldStatus, new: body.status } },
+        changes: { status: { old: oldStatus, new: 'cancelled' } },
       });
 
-      return NextResponse.json({ success: true, data: transaction });
+      return NextResponse.json({ success: true, data: claimed });
     }
 
     // Reject any other modifications to completed transactions

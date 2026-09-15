@@ -18,9 +18,24 @@ export async function POST(request: NextRequest) {
     const rl = checkRateLimit(`shopify-gift-debit:${user.tenantId}`, 20, 60_000);
     if (!rl.allowed) return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
 
-    const { code, amount } = await request.json() as { code: string; amount: number };
+    const { code, amount, idempotencyKey } = await request.json() as { code: string; amount: number; idempotencyKey?: string };
     if (!code || !amount || amount <= 0) {
       return NextResponse.json({ success: false, error: 'code and positive amount required' }, { status: 400 });
+    }
+
+    // Idempotency: a caller-supplied key (preferred, e.g. the POS transaction id)
+    // is blocked from re-debiting for 24h. Without one, fall back to a
+    // code+amount dedupe within a short window to blunt accidental retries.
+    const dedupeKey = idempotencyKey
+      ? `shopify-gift-debit-key:${user.tenantId}:${idempotencyKey}`
+      : `shopify-gift-debit-code:${user.tenantId}:${code}:${amount}`;
+    const dedupeWindowMs = idempotencyKey ? 24 * 60 * 60 * 1000 : 15_000;
+    const dedupe = checkRateLimit(dedupeKey, 1, dedupeWindowMs);
+    if (!dedupe.allowed) {
+      return NextResponse.json(
+        { success: false, error: 'A debit for this gift card was already processed. Please check the card balance before retrying.' },
+        { status: 409 }
+      );
     }
 
     await requireEcommerceIntegrationFeature(user.tenantId);

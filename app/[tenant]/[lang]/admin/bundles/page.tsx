@@ -270,7 +270,7 @@ export default function BundlesPage() {
       [hItemsCount]: bundle.items.length,
       [hStatus]: bundle.isActive ? (dict.admin?.active || 'Active') : (dict.admin?.inactive || 'Inactive'),
       [hDescription]: bundle.description || '',
-      [hCreatedAt]: new Date(bundle.createdAt).toLocaleString(),
+      [hCreatedAt]: new Date(bundle.createdAt).toLocaleString(undefined, { hour12: true }),
     }));
 
     const baseFilename = `bundles_export_${new Date().toISOString().split('T')[0]}`;

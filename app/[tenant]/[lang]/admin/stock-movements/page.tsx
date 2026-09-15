@@ -129,7 +129,7 @@ export default function StockMovementsPage() {
                   return (
                     <tr key={movement._id}>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(movement.createdAt).toLocaleString()}
+                        {new Date(movement.createdAt).toLocaleString(undefined, { hour12: true })}
                       </td>
                       <td className="px-4 py-4">
                         <div className="text-sm font-medium text-gray-900">{productName}</div>

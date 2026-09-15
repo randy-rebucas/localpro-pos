@@ -1,48 +1,80 @@
 import { ITenantSettings } from '@/types/tenant';
 
+/** Extract the date/time fields of `date` as observed in `timezone`. */
+function partsInTimezone(d: Date, timezone: string) {
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    hourCycle: 'h23',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit',
+  });
+  const parts = dtf.formatToParts(d).reduce((acc: Record<string, string>, p) => {
+    if (p.type !== 'literal') acc[p.type] = p.value;
+    return acc;
+  }, {});
+  return {
+    year: Number(parts.year),
+    month: Number(parts.month),
+    day: Number(parts.day),
+    hours: Number(parts.hour),
+    minutes: Number(parts.minute),
+  };
+}
+
 /**
- * Format date based on tenant settings
- * Note: Date objects are in the user's local timezone. For timezone conversion,
- * you may need to use a library like date-fns-tz or handle it server-side.
+ * Format date based on tenant settings, rendered in the tenant's configured
+ * timezone (settings.timezone) rather than the browser/server's local zone.
  */
 export function formatDate(date: Date | string, settings: ITenantSettings): string {
   const d = typeof date === 'string' ? new Date(date) : date;
-  
+
   if (isNaN(d.getTime())) {
     return '';
   }
 
   const format = settings.dateFormat || 'MM/DD/YYYY';
-  const day = String(d.getDate()).padStart(2, '0');
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const year = d.getFullYear();
+  let year: number, month: number, dayNum: number;
+  try {
+    ({ year, month, day: dayNum } = partsInTimezone(d, settings.timezone || 'Asia/Manila'));
+  } catch {
+    year = d.getFullYear();
+    month = d.getMonth() + 1;
+    dayNum = d.getDate();
+  }
+  const day = String(dayNum).padStart(2, '0');
+  const monthStr = String(month).padStart(2, '0');
 
   switch (format) {
     case 'DD/MM/YYYY':
-      return `${day}/${month}/${year}`;
+      return `${day}/${monthStr}/${year}`;
     case 'YYYY-MM-DD':
-      return `${year}-${month}-${day}`;
+      return `${year}-${monthStr}-${day}`;
     case 'MM/DD/YYYY':
     default:
-      return `${month}/${day}/${year}`;
+      return `${monthStr}/${day}/${year}`;
   }
 }
 
 /**
- * Format time based on tenant settings
- * Note: Date objects are in the user's local timezone. For timezone conversion,
- * you may need to use a library like date-fns-tz or handle it server-side.
+ * Format time based on tenant settings, rendered in the tenant's configured
+ * timezone (settings.timezone) rather than the browser/server's local zone.
  */
 export function formatTime(date: Date | string, settings: ITenantSettings): string {
   const d = typeof date === 'string' ? new Date(date) : date;
-  
+
   if (isNaN(d.getTime())) {
     return '';
   }
 
   const format = settings.timeFormat || '12h';
-  let hours = d.getHours();
-  const minutes = String(d.getMinutes()).padStart(2, '0');
+  let hours: number, minutesNum: number;
+  try {
+    ({ hours, minutes: minutesNum } = partsInTimezone(d, settings.timezone || 'Asia/Manila'));
+  } catch {
+    hours = d.getHours();
+    minutesNum = d.getMinutes();
+  }
+  const minutes = String(minutesNum).padStart(2, '0');
 
   if (format === '12h') {
     const ampm = hours >= 12 ? 'PM' : 'AM';

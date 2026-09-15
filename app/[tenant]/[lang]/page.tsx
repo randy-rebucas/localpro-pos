@@ -87,7 +87,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { showToast } from '@/lib/toast';
 import { useConfirm } from '@/lib/confirm';
 import { getDefaultTenantSettings } from '@/lib/currency';
-import { formatDateTime } from '@/lib/formatting';
+import { formatDateTime, formatTime } from '@/lib/formatting';
 import { useDeviceType } from '@/hooks/useDeviceType';
 import type { CustomerSummary } from '@/types/customer';
 import CartLineItem from '@/components/pos/CartLineItem';
@@ -1210,7 +1210,7 @@ export default function Dashboard() {
             </svg>
             <span className="font-medium">{dict.pos?.shiftActive || 'Shift Active'}</span>
             <span className="text-green-600 text-xs sm:text-sm truncate">
-              <span className="hidden sm:inline">| Opened: {new Date(cashDrawerSession.openingTime).toLocaleTimeString()}</span>
+              <span className="hidden sm:inline">| Opened: {formatTime(cashDrawerSession.openingTime, settings || getDefaultTenantSettings())}</span>
               <span className="sm:ml-1">| Opening: <Currency amount={cashDrawerSession.openingAmount} /></span>
             </span>
           </div>

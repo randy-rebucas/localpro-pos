@@ -293,7 +293,7 @@ export default function AdminDashboard() {
                       {fmt(tx.total, currencySymbol)}
                     </td>
                     <td className="px-5 py-3 text-right text-gray-400 text-xs">
-                      {new Date(tx.createdAt).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      {new Date(tx.createdAt).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}
                     </td>
                   </tr>
                 ))}

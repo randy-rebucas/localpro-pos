@@ -192,7 +192,16 @@ export async function updateStock(
     product.markModified('branchStock');
   }
 
-  await product.save(session ? { session } : {});
+  try {
+    await product.save(session ? { session } : {});
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === 'VersionError') {
+      throw new Error(
+        `Stock for product ${productId} was updated by another request at the same time. Please retry.`
+      );
+    }
+    throw err;
+  }
 
   // Log the update for debugging
   logger.info(`Stock updated: Product ${productId}, ${previousStock} -> ${newStock} (${quantity > 0 ? '+' : ''}${quantity})`);

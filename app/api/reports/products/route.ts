@@ -6,10 +6,12 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import { getProductPerformance } from '@/lib/analytics';
 import Product from '@/models/Product'; // Ensure Product model is registered
 import Transaction from '@/models/Transaction'; // Ensure Transaction model is registered
+import Tenant from '@/models/Tenant';
 import mongoose from 'mongoose';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkFeatureAccess } from '@/lib/subscription';
 import { logger } from '@/lib/logger';
+import { resolveTenantDateRange, DEFAULT_TENANT_TIMEZONE } from '@/lib/timezone';
 
 export async function GET(request: NextRequest) {
   try {
@@ -49,15 +51,13 @@ export async function GET(request: NextRequest) {
       const _transactionName = Transaction.modelName;
     }
 
+    const tenantDoc = await Tenant.findById(tenantId).select('settings.timezone').lean();
     const searchParams = request.nextUrl.searchParams;
-    const startDate = searchParams.get('startDate')
-      ? new Date(searchParams.get('startDate')!)
-      : new Date(new Date().setDate(new Date().getDate() - 30));
-    const endDate = searchParams.get('endDate')
-      ? new Date(searchParams.get('endDate')!)
-      : new Date();
-    startDate.setHours(0, 0, 0, 0);
-    if (searchParams.get('endDate')) endDate.setHours(23, 59, 59, 999);
+    const { startDate, endDate } = resolveTenantDateRange(
+      searchParams.get('startDate'),
+      searchParams.get('endDate'),
+      tenantDoc?.settings?.timezone || DEFAULT_TENANT_TIMEZONE
+    );
     const limit = parseInt(searchParams.get('limit') || '10', 10);
 
     const performance = await getProductPerformance(tenantId, startDate, endDate, limit);
