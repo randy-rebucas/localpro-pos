@@ -7,6 +7,7 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
 import { logger } from '@/lib/logger';
+import { updateStock } from '@/lib/stock';
 
 const SKU_CHARSET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 const SKU_LENGTH = 8;
@@ -109,18 +110,32 @@ export async function PATCH(
     if (barcode !== undefined) updates.barcode = barcode.trim();
     if (name !== undefined && name.trim()) updates.name = name.trim();
     if (price !== undefined && price >= 0) updates.price = price;
-    if (stock !== undefined && stock >= 0) updates.stock = stock;
     if (categoryId && mongoose.Types.ObjectId.isValid(categoryId)) {
       updates.categoryId = new mongoose.Types.ObjectId(categoryId);
     }
     if (imageUrl !== undefined) updates.image = imageUrl;
     if (notes !== undefined) updates.description = notes;
 
-    const updatedProduct = await Product.findOneAndUpdate(
+    await Product.findOneAndUpdate(
       { _id: id, tenantId },
       { $set: updates },
-      { new: true, lean: true }
+      { new: true }
     );
+
+    // Route stock changes through updateStock() so a StockMovement record is created
+    // and the allowOutOfStockSales guard is applied consistently.
+    if (stock !== undefined && stock >= 0) {
+      const delta = stock - product.stock;
+      if (delta !== 0) {
+        await updateStock(id, tenantId, delta, 'adjustment', {
+          userId: authResult.user.userId,
+          reason: 'Scan-update stock correction',
+          notes: sessionId ? `Session: ${sessionId}` : undefined,
+        });
+      }
+    }
+
+    const updatedProduct = await Product.findOne({ _id: id, tenantId }).lean();
 
     await createAuditLog(request, {
       tenantId,

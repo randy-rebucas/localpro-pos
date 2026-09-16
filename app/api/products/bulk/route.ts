@@ -10,6 +10,7 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
 import { logger } from '@/lib/logger';
+import { updateStock } from '@/lib/stock';
 
 const MAX_BULK_IDS = 100;
 
@@ -20,9 +21,11 @@ export async function PUT(request: NextRequest) {
     await connectDB();
 
     let tenantId: string;
+    let userId: string;
     try {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
+      userId = tenantAccess.user.userId;
     } catch (authError: unknown) {
       const message = authError instanceof Error ? authError.message : 'Unauthorized';
       if (message.includes('Unauthorized') || message.includes('Forbidden')) {
@@ -167,25 +170,26 @@ export async function PUT(request: NextRequest) {
 
     if (updates.stock) {
       const { mode, value } = updates.stock;
-      if (mode === 'set') {
-        const result = await Product.updateMany(filter, { $set: { stock: value } });
-        modifiedCount = Math.max(modifiedCount, result.modifiedCount);
-      } else {
-        const bulkOps = objectIds.map((id) => ({
-          updateOne: {
-            filter: { _id: id, tenantId: tenantObjectId },
-            update: [
-              {
-                $set: {
-                  stock: { $max: [0, { $add: ['$stock', value] }] },
-                },
-              },
-            ],
-          },
-        }));
-        const result = await Product.bulkWrite(bulkOps as Parameters<typeof Product.bulkWrite>[0]);
-        modifiedCount = Math.max(modifiedCount, result.modifiedCount);
+      // Applied one product at a time through updateStock() so each change gets a
+      // StockMovement record and the allowOutOfStockSales guard is honored consistently.
+      const productsForStock = await Product.find(filter).select('stock trackInventory').lean();
+      let stockModified = 0;
+      for (const p of productsForStock) {
+        if (p.trackInventory === false) continue;
+        const currentStock = p.stock || 0;
+        const delta = mode === 'set' ? value - currentStock : value;
+        if (delta === 0) continue;
+        try {
+          await updateStock(p._id.toString(), tenantId, delta, 'adjustment', {
+            userId,
+            reason: 'Bulk stock update',
+          });
+          stockModified += 1;
+        } catch (err) {
+          logger.error(`Bulk stock update failed for product ${p._id}:`, err);
+        }
       }
+      modifiedCount = Math.max(modifiedCount, stockModified);
     }
 
     await createAuditLog(request, {

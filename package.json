@@ -28,6 +28,7 @@
     "security:audit": "npm audit --omit=dev && echo '--- Full audit (including dev) ---' && npm audit",
     "tenant:set-plan": "tsx scripts/set-tenant-plan.ts",
     "fix:duplicate-attendance": "tsx scripts/fix-duplicate-attendance-sessions.ts",
+    "fix:orphaned-stock-movements": "tsx scripts/fix-orphaned-stock-movements.ts",
     "load:test:api": "k6 run load-tests/api-endpoints.js",
     "load:test:auth": "k6 run load-tests/auth.js",
     "load:test:transactions": "k6 run load-tests/transactions.js",

@@ -9,6 +9,7 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { updateStock } from '@/lib/stock';
 
 export async function POST(
   request: NextRequest,
@@ -113,10 +114,17 @@ export async function POST(
       for (const idx of itemIndexes) {
         const item = prescription.items[idx];
         if (item.productId) {
-          await Product.findOneAndUpdate(
-            { _id: item.productId, tenantId: user.tenantId },
-            { $inc: { stock: -item.quantity } },
-            { session }
+          await updateStock(
+            item.productId.toString(),
+            user.tenantId,
+            -item.quantity,
+            'sale',
+            {
+              userId: user.userId,
+              reason: 'Prescription dispense',
+              notes: `Prescription ${id}, item: ${item.drugName}`,
+            },
+            session
           );
         }
         prescription.items[idx].dispensed = true;

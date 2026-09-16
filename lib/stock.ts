@@ -350,6 +350,7 @@ export async function getLowStockProducts(
   const products = await Product.find({
     tenantId,
     trackInventory: true,
+    isActive: { $ne: false },
   }).lean();
 
   const lowStockProducts = [];

@@ -15,7 +15,7 @@ import { showToast } from '@/lib/toast';
 import { useConfirm } from '@/lib/confirm';
 import { getBusinessTypeConfig, getAllowedProductTypes } from '@/lib/business-types'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getBusinessType } from '@/lib/business-type-helpers';
-import { Barcode, Pencil, RefreshCw, Trash2 } from 'lucide-react';
+import { Barcode, Pencil, RefreshCw, RotateCcw, Trash2 } from 'lucide-react';
 import { useProductsList, type Product, type Category } from '@/hooks/useProductsList';
 import { useProductsForm } from '@/hooks/useProductsForm';
 import type { BulkProductUpdates } from '@/lib/validation';
@@ -54,6 +54,7 @@ export default function ProductsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [productFilter, setProductFilter] = useState<'missing-barcode' | 'all'>('missing-barcode');
+  const [statusFilter, setStatusFilter] = useState<'active' | 'inactive' | 'all'>('active');
   const [page, setPage] = useState(1);
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
   const [showBulkEditModal, setShowBulkEditModal] = useState(false);
@@ -77,8 +78,14 @@ export default function ProductsPage() {
   } = useProductsList(tenant);
 
   const loadProducts = useCallback(() => {
-    fetchProducts({ page, limit: PAGE_SIZE, search: debouncedSearch, filter: productFilter === 'all' ? undefined : productFilter });
-  }, [fetchProducts, page, debouncedSearch, productFilter]);
+    fetchProducts({
+      page,
+      limit: PAGE_SIZE,
+      search: debouncedSearch,
+      filter: productFilter === 'all' ? undefined : productFilter,
+      isActive: statusFilter === 'active' ? true : statusFilter === 'inactive' ? false : 'all',
+    });
+  }, [fetchProducts, page, debouncedSearch, productFilter, statusFilter]);
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -97,7 +104,7 @@ export default function ProductsPage() {
 
   useEffect(() => {
     setSelectedProducts(new Set());
-  }, [page, debouncedSearch, productFilter]);
+  }, [page, debouncedSearch, productFilter, statusFilter]);
 
   useEffect(() => {
     if (selectAllRef.current) {
@@ -132,6 +139,27 @@ export default function ProductsPage() {
       }
     } else {
       showToast.error(result.error || getProductDeleteErrorMessage(dict));
+    }
+  };
+
+  const handleReactivateProduct = async (productId: string) => {
+    if (!dict) return;
+    try {
+      const res = await fetch(`/api/products/${productId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ isActive: true }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        showToast.success(dict.products?.productReactivated || 'Product reactivated');
+        loadProducts();
+      } else {
+        showToast.error(result.error || dict.products?.reactivateError || 'Failed to reactivate product');
+      }
+    } catch {
+      showToast.error(dict.products?.reactivateError || 'Failed to reactivate product');
     }
   };
 
@@ -306,7 +334,7 @@ export default function ProductsPage() {
           </div>
 
           <div className="flex justify-between items-center mb-6 flex-wrap gap-2">
-            <div className="flex-1 max-w-md">
+            <div className="flex-1 max-w-md flex gap-2">
               <input
                 type="text"
                 placeholder={dict.common?.search || 'Search products...'}
@@ -315,8 +343,21 @@ export default function ProductsPage() {
                   setSearchTerm(e.target.value);
                   setPage(1);
                 }}
-                className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
+                className="flex-1 px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
               />
+              <select
+                value={statusFilter}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value as 'active' | 'inactive' | 'all');
+                  setPage(1);
+                }}
+                className="px-3 py-2 border border-gray-300 bg-white text-sm"
+                aria-label={dict.products?.statusFilter || 'Status'}
+              >
+                <option value="active">{dict.products?.statusActive || 'Active'}</option>
+                <option value="inactive">{dict.products?.statusInactive || 'Inactive'}</option>
+                <option value="all">{dict.products?.statusAll || 'All'}</option>
+              </select>
             </div>
             <div className="flex gap-2 flex-wrap">
               <div className="relative group">
@@ -468,7 +509,14 @@ export default function ProductsPage() {
                       )}
                     </td>
                     <td className="px-4 py-4">
-                      <div className="text-sm font-medium text-gray-900">{product.name}</div>
+                      <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
+                        {product.name}
+                        {product.isActive === false && (
+                          <span className="px-1.5 py-0.5 text-xs font-semibold border border-gray-300 bg-gray-100 text-gray-600">
+                            {dict.products?.statusInactive || 'Inactive'}
+                          </span>
+                        )}
+                      </div>
                       {product.description && (
                         <div className="text-xs text-gray-500 mt-1">{product.description.substring(0, 50)}...</div>
                       )}
@@ -519,15 +567,27 @@ export default function ProductsPage() {
                         >
                           <Pencil className="w-4 h-4" aria-hidden />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteProduct(product._id)}
-                          className={`${btnTableIcon} text-red-600 hover:text-red-900`}
-                          title={dict.common?.delete || 'Delete'}
-                          aria-label={dict.common?.delete || 'Delete'}
-                        >
-                          <Trash2 className="w-4 h-4" aria-hidden />
-                        </button>
+                        {product.isActive === false ? (
+                          <button
+                            type="button"
+                            onClick={() => handleReactivateProduct(product._id)}
+                            className={`${btnTableIcon} text-green-600 hover:text-green-900`}
+                            title={dict.products?.reactivate || 'Reactivate'}
+                            aria-label={dict.products?.reactivate || 'Reactivate'}
+                          >
+                            <RotateCcw className="w-4 h-4" aria-hidden />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteProduct(product._id)}
+                            className={`${btnTableIcon} text-red-600 hover:text-red-900`}
+                            title={dict.common?.delete || 'Delete'}
+                            aria-label={dict.common?.delete || 'Delete'}
+                          >
+                            <Trash2 className="w-4 h-4" aria-hidden />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

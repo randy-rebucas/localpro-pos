@@ -155,6 +155,68 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   }
 }
 
+// Partial update for fields that don't require full product validation (e.g. reactivating a
+// soft-deleted product, where PUT's required name/price/stock checks would otherwise reject it).
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    await connectDB();
+    let tenantId: string;
+    try {
+      const tenantAccess = await requireTenantAccess(request);
+      tenantId = tenantAccess.tenantId;
+      if (!(await hasTenantPermission(tenantAccess.user.role, tenantId, 'products.manage'))) {
+        return NextResponse.json(
+          { success: false, error: 'Forbidden: Insufficient permissions' },
+          { status: 403 }
+        );
+      }
+    } catch (authError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+      if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
+        return NextResponse.json(
+          { success: false, error: authError.message },
+          { status: authError.message.includes('Unauthorized') ? 401 : 403 }
+        );
+      }
+      throw authError;
+    }
+    const { id } = await params;
+    const body = await request.json();
+
+    const updates: Record<string, unknown> = {};
+    if (typeof body.isActive === 'boolean') {
+      updates.isActive = body.isActive;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json({ success: false, error: 'No valid fields to update' }, { status: 400 });
+    }
+
+    const oldProduct = await Product.findOne({ _id: id, tenantId }).lean();
+    if (!oldProduct) {
+      return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
+    }
+
+    const product = await Product.findOneAndUpdate({ _id: id, tenantId }, updates, { new: true });
+
+    await createAuditLog(request, {
+      tenantId,
+      action: AuditActions.UPDATE,
+      entityType: 'product',
+      entityId: id,
+      changes: Object.fromEntries(
+        Object.keys(updates).map((key) => [
+          key,
+          { old: oldProduct[key as keyof typeof oldProduct], new: updates[key] },
+        ])
+      ),
+    });
+
+    return NextResponse.json({ success: true, data: product });
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+    return handleApiError(error);
+  }
+}
+
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await connectDB();
