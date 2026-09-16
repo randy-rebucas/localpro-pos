@@ -12,7 +12,7 @@
 
 - **Search** by product name, SKU, or barcode
 - **Filter by Category** — Select a category tab
-- **Filter by Status** — Active, Inactive, Out of Stock
+- **Filter by Status** — Active, Inactive, or All (defaults to Active). Deactivated products carry an **Inactive** badge next to their name so they're easy to spot once you switch the filter.
 - **Sort** — By name, price, date added, stock level
 
 ## Adding a New Product
@@ -37,6 +37,8 @@
 | **Low Stock Threshold** | If tracking | Alert when stock falls below this number |
 
 4. Click **Save**
+
+> **Duplicate name check:** As you type the product name (and again when you leave the field), the system checks for an existing active product with the same name. If one is found, a warning appears showing its SKU and current stock. You can still save if the two products are genuinely different (e.g. different pack sizes sharing a name) — the warning just prevents accidentally creating a second record for the same item, which would split its stock and history across two SKUs.
 
 ## Product Variations
 

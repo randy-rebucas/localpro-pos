@@ -763,6 +763,8 @@ function ProductModal({
 }) {
   const { formData, saving, error, updateFormData, submitForm } = useProductsForm(product, businessTypeConfig);
   const { confirm: confirmDialog, Dialog: DuplicateDialog } = useConfirm();
+  const [nameDuplicate, setNameDuplicate] = useState<{ _id: string; name: string; sku?: string; stock: number } | null>(null);
+  const [checkingName, setCheckingName] = useState(false);
   const [categorySearch, setCategorySearch] = useState('');
   const [showCategorySuggestions, setShowCategorySuggestions] = useState(false);
   const categoryInputRef = useRef<HTMLInputElement>(null);
@@ -867,6 +869,37 @@ function ProductModal({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const checkDuplicateName = useCallback(
+    async (name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) {
+        setNameDuplicate(null);
+        return;
+      }
+      setCheckingName(true);
+      try {
+        const params = new URLSearchParams({ name: trimmed });
+        if (product?._id) params.set('excludeId', product._id);
+        const res = await fetch(`/api/products/check-duplicate?${params}`, { credentials: 'include' });
+        const data = await res.json();
+        setNameDuplicate(data.success && data.exists ? data.product : null);
+      } catch {
+        // Non-blocking: live check failing shouldn't stop the user from typing/submitting
+      } finally {
+        setCheckingName(false);
+      }
+    },
+    [product?._id]
+  );
+
+  // Debounced check while typing
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      checkDuplicateName(formData.name);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [formData.name, checkDuplicateName]);
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const result = await submitForm(settings);
@@ -929,8 +962,23 @@ function ProductModal({
                   required
                   value={formData.name}
                   onChange={(e) => updateFormData({ name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
+                  onBlur={(e) => checkDuplicateName(e.target.value)}
+                  className={`w-full px-3 py-2 border bg-white focus:ring-2 ${
+                    nameDuplicate ? 'border-amber-400 focus:ring-amber-400' : 'border-gray-300 focus:ring-brand'
+                  }`}
                 />
+                {checkingName && (
+                  <p className="text-xs text-gray-400 mt-1">{dict.products?.checkingDuplicate || 'Checking...'}</p>
+                )}
+                {!checkingName && nameDuplicate && (
+                  <p className="text-xs text-amber-700 mt-1">
+                    {(dict.products?.duplicateProductInlineWarning ||
+                      'A product named "{name}" already exists (SKU: {sku}, stock: {stock}).')
+                      .replace('{name}', nameDuplicate.name)
+                      .replace('{sku}', nameDuplicate.sku || '-')
+                      .replace('{stock}', String(nameDuplicate.stock))}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
