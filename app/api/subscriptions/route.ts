@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import connectDB from '@/lib/mongodb';
 import Subscription from '@/models/Subscription';
 import SubscriptionPlan from '@/models/SubscriptionPlan';
 import Tenant from '@/models/Tenant';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function GET(request: NextRequest) {
   try {
@@ -37,13 +39,15 @@ export async function GET(request: NextRequest) {
         { status: (error as Error).message === 'Unauthorized' ? 401 : 403 }
       );
     }
-    return NextResponse.json({ success: false, error: 'Failed to fetch subscriptions' }, { status: 500 });
+    const t = await getValidationTranslatorFromRequest(request);
+    return NextResponse.json({ success: false, error: t('validation.failedToFetchSubscriptions', 'Failed to fetch subscriptions') }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
+    const t = await getValidationTranslatorFromRequest(request);
 
     // Creating a subscription for an arbitrary tenantId — super_admin only
     await requireRole(request, ['super_admin']);
@@ -53,7 +57,7 @@ export async function POST(request: NextRequest) {
 
     if (!tenantId || !planId) {
       return NextResponse.json(
-        { success: false, error: 'Tenant ID and Plan ID are required' },
+        { success: false, error: t('validation.tenantAndPlanIdRequired', 'Tenant ID and Plan ID are required') },
         { status: 400 }
       );
     }
@@ -62,7 +66,7 @@ export async function POST(request: NextRequest) {
     const tenant = await Tenant.findById(tenantId);
     if (!tenant) {
       return NextResponse.json(
-        { success: false, error: 'Tenant not found' },
+        { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
         { status: 404 }
       );
     }
@@ -75,7 +79,7 @@ export async function POST(request: NextRequest) {
 
     if (existingSubscription) {
       return NextResponse.json(
-        { success: false, error: 'Tenant already has an active subscription' },
+        { success: false, error: t('validation.tenantAlreadyHasActiveSubscription', 'Tenant already has an active subscription') },
         { status: 400 }
       );
     }
@@ -84,7 +88,7 @@ export async function POST(request: NextRequest) {
     const plan = await SubscriptionPlan.findById(planId);
     if (!plan || !plan.isActive) {
       return NextResponse.json(
-        { success: false, error: 'Subscription plan not found or inactive' },
+        { success: false, error: t('validation.subscriptionPlanNotFoundOrInactive', 'Subscription plan not found or inactive') },
         { status: 404 }
       );
     }
@@ -124,12 +128,22 @@ export async function POST(request: NextRequest) {
       subscriptionData.nextBillingDate = nextBilling;
     }
 
-    const subscription = await Subscription.create(subscriptionData);
-
-    // Update tenant with subscription reference
-    await Tenant.findByIdAndUpdate(tenantId, {
-      subscriptionId: subscription._id
-    });
+    // Subscription create + tenant backref must land together, otherwise a
+    // failure between the two leaves an orphaned subscription with no
+    // tenant.subscriptionId pointing to it.
+    const session = await mongoose.startSession();
+    let subscription;
+    try {
+      session.startTransaction();
+      [subscription] = await Subscription.create([subscriptionData], { session });
+      await Tenant.findByIdAndUpdate(tenantId, { subscriptionId: subscription._id }, { session });
+      await session.commitTransaction();
+    } catch (e) {
+      await session.abortTransaction();
+      throw e;
+    } finally {
+      session.endSession();
+    }
 
     await createAuditLog(request, {
       tenantId,
@@ -154,8 +168,9 @@ export async function POST(request: NextRequest) {
     }, { status: 201 });
   } catch (error: unknown) {
     if ((error as Record<string, unknown>).code === 11000) {
+      const t = await getValidationTranslatorFromRequest(request);
       return NextResponse.json(
-        { success: false, error: 'Tenant already has a subscription' },
+        { success: false, error: t('validation.tenantAlreadyHasSubscription', 'Tenant already has a subscription') },
         { status: 400 }
       );
     }

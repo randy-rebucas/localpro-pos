@@ -53,6 +53,10 @@ export default function TransactionsPage() {
   const [manualLoading, setManualLoading] = useState(false);
   const [manualError, setManualError] = useState('');
   const [manualSuccess, setManualSuccess] = useState(false);
+  // Regenerated each time the modal opens/succeeds so a client retry after a
+  // dropped response reuses the same key (server dedupes), but a genuinely
+  // new manual entry gets a fresh one.
+  const [manualIdempotencyKey, setManualIdempotencyKey] = useState('');
 
   // Manual expense modal
   const [showExpenseModal, setShowExpenseModal] = useState(false);
@@ -176,7 +180,12 @@ export default function TransactionsPage() {
         if (isNaN(it.quantity) || it.quantity < 1) { setManualError(`Invalid quantity for "${it.name}".`); setManualLoading(false); return; }
       }
 
-      const body: Record<string, unknown> = { items: parsedItems, paymentMethod: manualPayment, notes: manualNotes || undefined };
+      const body: Record<string, unknown> = {
+        items: parsedItems,
+        paymentMethod: manualPayment,
+        notes: manualNotes || undefined,
+        idempotencyKey: manualIdempotencyKey || crypto.randomUUID(),
+      };
       if (manualPayment === 'cash' && manualCash) body.cashReceived = parseFloat(manualCash);
 
       const res = await fetch(`/api/transactions/manual?tenant=${tenant}`, {
@@ -190,6 +199,7 @@ export default function TransactionsPage() {
         setManualError(data.error || 'Failed to create transaction');
       } else {
         setManualSuccess(true);
+        setManualIdempotencyKey(crypto.randomUUID());
         refetch();
       }
     } catch {
@@ -342,7 +352,7 @@ export default function TransactionsPage() {
                 </button>
               )}
               <button
-                onClick={() => { setShowAddModal(true); setManualItems([emptyItem()]); setManualPayment('cash'); setManualCash(''); setManualNotes(''); setManualError(''); setManualSuccess(false); }}
+                onClick={() => { setShowAddModal(true); setManualItems([emptyItem()]); setManualPayment('cash'); setManualCash(''); setManualNotes(''); setManualError(''); setManualSuccess(false); setManualIdempotencyKey(crypto.randomUUID()); }}
                 className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white hover:bg-green-700 active:bg-green-800 border border-green-700 text-sm font-medium transition-colors touch-manipulation min-h-[44px] sm:min-h-0 whitespace-nowrap"
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
@@ -459,6 +469,7 @@ export default function TransactionsPage() {
                       setManualNotes('');
                       setManualError('');
                       setManualSuccess(false);
+                      setManualIdempotencyKey(crypto.randomUUID());
                     },
                   }
             }

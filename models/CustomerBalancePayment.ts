@@ -7,6 +7,7 @@ export interface ICustomerBalancePayment extends Document {
   method: 'cash' | 'card' | 'digital' | 'check' | 'other';
   notes?: string;
   recordedBy?: mongoose.Types.ObjectId;
+  idempotencyKey?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -44,11 +45,19 @@ const CustomerBalancePaymentSchema: Schema = new Schema(
       ref: 'User',
       index: true,
     },
+    idempotencyKey: {
+      type: String,
+    },
   },
   { timestamps: true }
 );
 
 CustomerBalancePaymentSchema.index({ tenantId: 1, customerId: 1, createdAt: -1 });
+// Prevent a double-submit/retry from recording the same payment twice.
+CustomerBalancePaymentSchema.index(
+  { tenantId: 1, idempotencyKey: 1 },
+  { unique: true, partialFilterExpression: { idempotencyKey: { $type: 'string' } } }
+);
 
 const CustomerBalancePayment: Model<ICustomerBalancePayment> =
   mongoose.models.CustomerBalancePayment ||

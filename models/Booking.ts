@@ -149,7 +149,7 @@ BookingSchema.pre('save', async function(this: IBooking, next) {
         status: { $in: activeStatuses },
         startTime: { $lt: this.endTime },
         endTime: { $gt: this.startTime },
-      });
+      }).session(this.$session());
       if (overlap) {
         return next(new Error('Staff member has an overlapping booking during this time'));
       }

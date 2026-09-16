@@ -13,15 +13,17 @@ import { handleApiError } from '@/lib/error-handler';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { checkBirFeatureAccess } from '@/lib/subscription';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
+    const t = await getValidationTranslatorFromRequest(request);
     const user = await getCurrentUser(request);
     if (!user) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ success: false, error: t('validation.unauthorized', 'Unauthorized') }, { status: 401 });
     }
 
     const { slug } = await params;
@@ -29,12 +31,12 @@ export async function GET(
 
     const tenant = await Tenant.findOne({ slug }).lean();
     if (!tenant) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
     // Tenant isolation
     if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
-      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden') }, { status: 403 });
     }
 
     const templates = tenant.settings.receiptTemplates?.templates || [];
@@ -57,32 +59,33 @@ export async function POST(
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
+    const t = await getValidationTranslatorFromRequest(request);
     const user = await getCurrentUser(request);
     if (!user) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ success: false, error: t('validation.unauthorized', 'Unauthorized') }, { status: 401 });
     }
 
     if (!(await hasTenantPermission(user.role, user.tenantId, 'receipt_templates.manage'))) {
-      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden') }, { status: 403 });
     }
 
     // Rate limit: 30 writes per minute
     const rl = checkRateLimit(`receipt-templates:${user.userId}`, 30, 60_000);
     if (!rl.allowed) {
-      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
+      return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
     }
 
     const { slug } = await params;
     await connectDB();
 
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await Tenant.findOne({ slug }).lean();
     if (!tenant) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
     // Tenant isolation
     if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
-      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden') }, { status: 403 });
     }
 
     // Feature gate
@@ -99,7 +102,7 @@ export async function POST(
     const { name, html, isDefault } = body;
 
     if (!name || !html) {
-      return NextResponse.json({ success: false, error: 'Name and HTML are required' }, { status: 400 });
+      return NextResponse.json({ success: false, error: t('validation.nameAndHtmlRequired', 'Name and HTML are required') }, { status: 400 });
     }
 
     const validation = validateTemplate(html);
@@ -107,7 +110,6 @@ export async function POST(
       return NextResponse.json({ success: false, error: validation.error }, { status: 400 });
     }
 
-    const templates = tenant.settings.receiptTemplates?.templates || [];
     const newTemplate = {
       id: `template_${Date.now()}`,
       name,
@@ -117,25 +119,27 @@ export async function POST(
       updatedAt: new Date(),
     };
 
+    // Atomic push (+ atomic default-flag clear when applicable) instead of a
+    // read-mutate-save on the whole document, so two concurrent template writes
+    // (e.g. two browser tabs) can't clobber each other's array changes.
     if (isDefault) {
-      templates.forEach((t) => {
-        t.isDefault = false;
-      });
-      tenant.settings.receiptTemplates = {
-        ...tenant.settings.receiptTemplates,
-        default: newTemplate.id,
-      };
+      await Tenant.updateOne(
+        { slug },
+        { $set: { 'settings.receiptTemplates.templates.$[].isDefault': false } }
+      );
+      await Tenant.updateOne(
+        { slug },
+        {
+          $push: { 'settings.receiptTemplates.templates': newTemplate },
+          $set: { 'settings.receiptTemplates.default': newTemplate.id },
+        }
+      );
+    } else {
+      await Tenant.updateOne(
+        { slug },
+        { $push: { 'settings.receiptTemplates.templates': newTemplate } }
+      );
     }
-
-    templates.push(newTemplate);
-
-    tenant.settings.receiptTemplates = {
-      ...tenant.settings.receiptTemplates,
-      templates,
-    };
-
-    tenant.markModified('settings.receiptTemplates');
-    await tenant.save();
 
     await createAuditLog(request, {
       tenantId: tenant._id,
@@ -160,19 +164,20 @@ export async function PUT(
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
+    const t = await getValidationTranslatorFromRequest(request);
     const user = await getCurrentUser(request);
     if (!user) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ success: false, error: t('validation.unauthorized', 'Unauthorized') }, { status: 401 });
     }
 
     if (!(await hasTenantPermission(user.role, user.tenantId, 'receipt_templates.manage'))) {
-      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden') }, { status: 403 });
     }
 
     // Rate limit: 30 writes per minute
     const rl = checkRateLimit(`receipt-templates:${user.userId}`, 30, 60_000);
     if (!rl.allowed) {
-      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
+      return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
     }
 
     const { slug } = await params;
@@ -180,7 +185,7 @@ export async function PUT(
     const { id, name, html, isDefault } = body;
 
     if (!id) {
-      return NextResponse.json({ success: false, error: 'Template ID is required' }, { status: 400 });
+      return NextResponse.json({ success: false, error: t('validation.templateIdRequired', 'Template ID is required') }, { status: 400 });
     }
 
     if (html) {
@@ -192,54 +197,65 @@ export async function PUT(
 
     await connectDB();
 
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await Tenant.findOne({ slug }).lean();
     if (!tenant) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
     // Tenant isolation
     if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
-      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden') }, { status: 403 });
     }
 
     const templates = tenant.settings.receiptTemplates?.templates || [];
-    const templateIndex = templates.findIndex((t) => t.id === id);
+    const existingTemplate = templates.find((tpl) => tpl.id === id);
 
-    if (templateIndex === -1) {
-      return NextResponse.json({ success: false, error: 'Template not found' }, { status: 404 });
+    if (!existingTemplate) {
+      return NextResponse.json({ success: false, error: t('validation.templateNotFound', 'Template not found') }, { status: 404 });
     }
 
-    if (name) templates[templateIndex].name = name;
-    if (html) templates[templateIndex].html = html;
-    templates[templateIndex].updatedAt = new Date();
+    // Atomic per-element update via arrayFilters instead of a read-mutate-save
+    // on the whole document, so a concurrent edit to a different template (or
+    // the same one) can't be silently lost.
+    const elemSet: Record<string, unknown> = { 'settings.receiptTemplates.templates.$[elem].updatedAt': new Date() };
+    if (name) elemSet['settings.receiptTemplates.templates.$[elem].name'] = name;
+    if (html) elemSet['settings.receiptTemplates.templates.$[elem].html'] = html;
 
     if (isDefault !== undefined) {
       if (isDefault) {
-        templates.forEach((t) => {
-          t.isDefault = false;
-        });
-        templates[templateIndex].isDefault = true;
-        tenant.settings.receiptTemplates = {
-          ...tenant.settings.receiptTemplates,
-          default: id,
-        };
+        await Tenant.updateOne(
+          { slug },
+          { $set: { 'settings.receiptTemplates.templates.$[].isDefault': false } }
+        );
+        elemSet['settings.receiptTemplates.templates.$[elem].isDefault'] = true;
+        elemSet['settings.receiptTemplates.default'] = id;
+        await Tenant.updateOne(
+          { slug },
+          { $set: elemSet },
+          { arrayFilters: [{ 'elem.id': id }] }
+        );
       } else {
-        templates[templateIndex].isDefault = false;
+        elemSet['settings.receiptTemplates.templates.$[elem].isDefault'] = false;
+        const unset: Record<string, ''> = {};
         if (tenant.settings.receiptTemplates?.default === id) {
-          if (tenant.settings.receiptTemplates) {
-            tenant.settings.receiptTemplates.default = undefined;
-          }
+          unset['settings.receiptTemplates.default'] = '';
         }
+        await Tenant.updateOne(
+          { slug },
+          { $set: elemSet, ...(Object.keys(unset).length ? { $unset: unset } : {}) },
+          { arrayFilters: [{ 'elem.id': id }] }
+        );
       }
+    } else {
+      await Tenant.updateOne(
+        { slug },
+        { $set: elemSet },
+        { arrayFilters: [{ 'elem.id': id }] }
+      );
     }
 
-    tenant.settings.receiptTemplates = {
-      ...tenant.settings.receiptTemplates,
-      templates,
-    };
-
-    tenant.markModified('settings.receiptTemplates');
-    await tenant.save();
+    const updatedTenant = await Tenant.findOne({ slug }, { 'settings.receiptTemplates': 1 }).lean();
+    const updatedTemplate = updatedTenant?.settings.receiptTemplates?.templates?.find((tpl) => tpl.id === id);
 
     await createAuditLog(request, {
       tenantId: tenant._id,
@@ -252,7 +268,7 @@ export async function PUT(
 
     return NextResponse.json({
       success: true,
-      data: templates[templateIndex],
+      data: updatedTemplate,
     });
   } catch (error: unknown) {
     return handleApiError(error, 'Failed to update receipt template');
@@ -264,19 +280,20 @@ export async function DELETE(
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
+    const t = await getValidationTranslatorFromRequest(request);
     const user = await getCurrentUser(request);
     if (!user) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ success: false, error: t('validation.unauthorized', 'Unauthorized') }, { status: 401 });
     }
 
     if (!(await hasTenantPermission(user.role, user.tenantId, 'receipt_templates.manage'))) {
-      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden') }, { status: 403 });
     }
 
     // Rate limit: 30 writes per minute
     const rl = checkRateLimit(`receipt-templates:${user.userId}`, 30, 60_000);
     if (!rl.allowed) {
-      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
+      return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
     }
 
     const { slug } = await params;
@@ -284,39 +301,39 @@ export async function DELETE(
     const id = searchParams.get('id');
 
     if (!id) {
-      return NextResponse.json({ success: false, error: 'Template ID is required' }, { status: 400 });
+      return NextResponse.json({ success: false, error: t('validation.templateIdRequired', 'Template ID is required') }, { status: 400 });
     }
 
     await connectDB();
 
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await Tenant.findOne({ slug }).lean();
     if (!tenant) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
     // Tenant isolation
     if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
-      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden') }, { status: 403 });
     }
 
     const templates = tenant.settings.receiptTemplates?.templates || [];
-    const filtered = templates.filter((t) => t.id !== id);
+    const exists = templates.some((tpl) => tpl.id === id);
 
-    if (filtered.length === templates.length) {
-      return NextResponse.json({ success: false, error: 'Template not found' }, { status: 404 });
+    if (!exists) {
+      return NextResponse.json({ success: false, error: t('validation.templateNotFound', 'Template not found') }, { status: 404 });
     }
 
-    if (tenant.settings.receiptTemplates?.default === id) {
-      tenant.settings.receiptTemplates.default = undefined;
-    }
-
-    tenant.settings.receiptTemplates = {
-      ...tenant.settings.receiptTemplates,
-      templates: filtered,
-    };
-
-    tenant.markModified('settings.receiptTemplates');
-    await tenant.save();
+    // Atomic $pull instead of read-filter-save so a concurrent template write
+    // to the same document can't be lost.
+    await Tenant.updateOne(
+      { slug },
+      {
+        $pull: { 'settings.receiptTemplates.templates': { id } },
+        ...(tenant.settings.receiptTemplates?.default === id
+          ? { $unset: { 'settings.receiptTemplates.default': '' } }
+          : {}),
+      }
+    );
 
     await createAuditLog(request, {
       tenantId: tenant._id,

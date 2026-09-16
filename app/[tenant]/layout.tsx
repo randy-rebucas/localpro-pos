@@ -52,22 +52,15 @@ export default async function TenantLayout({
   params: Promise<{ tenant: string }>;
 }) {
   const { tenant: tenantSlug } = await params;
-  
-  // IMPORTANT: The forbidden route at app/[tenant]/forbidden.tsx must bypass tenant checks
-  // Since we can't easily detect pathname in server components, we use a workaround:
-  // 1. Check referer to see if we're being redirected from/to forbidden
-  // 2. Always allow rendering if we detect forbidden route patterns
-  // This prevents redirect loops when the forbidden page tries to render
+
+  // IMPORTANT: The forbidden route at app/[tenant]/forbidden.tsx must bypass tenant checks,
+  // otherwise a legitimately-forbidden user landing there would redirect-loop back to itself.
+  // proxy.ts (Next.js middleware) sets x-pathname from request.nextUrl.pathname on every page
+  // request, overwriting any client-supplied value, so this can't be spoofed the way sniffing
+  // the client-controlled Referer header previously could be.
   const headersList = await headers();
-  const referer = headersList.get('referer') || '';
-  // Check if referer indicates we're on or redirecting to forbidden page
-  // Also, we'll check the actual route by allowing forbidden to always render
-  // The route app/[tenant]/forbidden.tsx should be accessible without tenant checks
-  const isForbiddenRoute = referer.includes('/forbidden');
-  
-  // Since we can't easily detect the current pathname in server components,
-  // we'll use a simpler approach: always skip tenant check if we detect forbidden patterns
-  // This ensures /[tenant]/forbidden is always accessible
+  const pathname = headersList.get('x-pathname') || '';
+  const isForbiddenRoute = pathname === `/${tenantSlug}/forbidden`;
   
   // If it's the default tenant and doesn't exist, create it
   if (tenantSlug === 'default') {

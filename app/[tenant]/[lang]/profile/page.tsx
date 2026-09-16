@@ -22,6 +22,7 @@ export default function ProfilePage() {
   const [dict, setDict] = useState<TranslationDict | null>(null);
   const { profile, status, error, refetch } = useProfilePage();
   const [profileData, setProfileData] = useState({ name: '', email: '' });
+  const [profileCurrentPassword, setProfileCurrentPassword] = useState('');
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
     newPassword: '',
@@ -50,16 +51,21 @@ export default function ProfilePage() {
     setMessage(null);
 
     try {
+      const emailChanging = profileData.email !== (profile?.email || '');
       const res = await fetch('/api/auth/profile', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(profileData),
+        body: JSON.stringify({
+          ...profileData,
+          ...(emailChanging ? { currentPassword: profileCurrentPassword } : {}),
+        }),
       });
 
       const data = await res.json();
       if (data.success) {
         setMessage({ type: 'success', text: dict?.profile?.saved || 'Profile updated successfully!' });
+        setProfileCurrentPassword('');
         window.location.reload();
       } else {
         setMessage({
@@ -286,6 +292,34 @@ export default function ProfilePage() {
                     />
                   </div>
                 </div>
+
+                {profileData.email !== (profile?.email || '') && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {profileDict.currentPassword || 'Current Password'}
+                    </label>
+                    <input
+                      type="password"
+                      value={profileCurrentPassword}
+                      onChange={(e) => setProfileCurrentPassword(e.target.value)}
+                      required
+                      className="w-full px-4 py-3 border-2 border-gray-300 transition-all bg-white"
+                      placeholder={profileDict.currentPasswordPlaceholder || 'Enter current password'}
+                      onFocus={(e) => {
+                        e.currentTarget.style.borderColor = primaryColor;
+                        e.currentTarget.style.boxShadow = `0 0 0 2px ${primaryColor}30`;
+                      }}
+                      onBlur={(e) => {
+                        e.currentTarget.style.borderColor = '#d1d5db';
+                        e.currentTarget.style.boxShadow = 'none';
+                      }}
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      {profileDict.emailChangeRequiresPassword ||
+                        'Changing your email requires confirming your current password.'}
+                    </p>
+                  </div>
+                )}
 
                 {profile && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-gray-200">

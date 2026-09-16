@@ -119,6 +119,15 @@ function getTransactionErrorStatus(error: unknown): number {
   return 500;
 }
 
+class IdempotentReplayError extends Error {
+  idempotencyKey: string;
+  constructor(idempotencyKey: string) {
+    super('Duplicate idempotency key');
+    this.name = 'IdempotentReplayError';
+    this.idempotencyKey = idempotencyKey;
+  }
+}
+
 interface TransactionItemRecord {
   product: unknown;
   name: string;
@@ -141,9 +150,10 @@ export async function GET(request: NextRequest) {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
     } catch (authError: unknown) {
+      const t = await getValidationTranslatorFromRequest(request);
       const msg = authError instanceof Error ? authError.message : '';
       return NextResponse.json(
-        { success: false, error: msg.includes('Forbidden') ? 'Forbidden' : 'Unauthorized' },
+        { success: false, error: msg.includes('Forbidden') ? t('validation.forbidden', 'Forbidden') : t('validation.unauthorized', 'Unauthorized') },
         { status: msg.includes('Forbidden') ? 403 : 401 }
       );
     }
@@ -208,13 +218,13 @@ export async function POST(request: NextRequest) {
       throw authError;
     }
 
+    const t = await getValidationTranslatorFromRequest(request);
     const rl = checkRateLimit(`transactions:${user.userId}`, 120, 60_000);
     if (!rl.allowed) {
-      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
+      return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
     }
 
     const body = await request.json();
-    const t = await getValidationTranslatorFromRequest(request);
     const { data, errors } = validateAndSanitize(body, validateTransaction, t);
 
     if (errors.length > 0) {
@@ -227,9 +237,23 @@ export async function POST(request: NextRequest) {
     const { items, paymentMethod, cashReceived, notes, discountCode, branchId, payments, scPwdName, scPwdId, deviceId } = data as unknown as TransactionInput;
     const customerId = body.customerId as string | undefined;
     if (customerId && !mongoose.Types.ObjectId.isValid(customerId)) {
-      return NextResponse.json({ success: false, error: 'Invalid customer ID' }, { status: 400 });
+      return NextResponse.json({ success: false, error: t('validation.invalidCustomerId', 'Invalid customer ID') }, { status: 400 });
     }
     const loyaltyPointsToRedeem = typeof body.loyaltyPointsToRedeem === 'number' ? Math.floor(body.loyaltyPointsToRedeem) : 0;
+
+    // Dedupe a client retry/double-submit of the same checkout (dropped
+    // response, double-tap "Pay") — without this, a repeat POST would fully
+    // re-run the sale: double stock deduction, double charge, double loyalty
+    // points. Mirrors the same pattern used by transactions/manual.
+    const idempotencyKey = typeof body.idempotencyKey === 'string' && body.idempotencyKey.trim()
+      ? body.idempotencyKey.trim()
+      : undefined;
+    if (idempotencyKey) {
+      const existing = await Transaction.findOne({ tenantId, idempotencyKey }).lean();
+      if (existing) {
+        return NextResponse.json({ success: true, data: existing }, { status: 200 });
+      }
+    }
 
     // Restaurant & split-billing fields
     const rawOrderType = typeof body.orderType === 'string' ? body.orderType : undefined;
@@ -284,7 +308,7 @@ export async function POST(request: NextRequest) {
       if (loyaltyEnabled) {
         const customer = await Customer.findOne({ _id: customerId, tenantId });
         if (!customer) {
-          return NextResponse.json({ success: false, error: 'Customer not found' }, { status: 404 });
+          return NextResponse.json({ success: false, error: t('validation.customerNotFound', 'Customer not found') }, { status: 404 });
         }
         loyaltyCustomer = customer;
 
@@ -292,13 +316,21 @@ export async function POST(request: NextRequest) {
           const balance = customer.loyaltyPointsBalance ?? 0;
           if (loyaltyPointsToRedeem < loyaltyConfig.minRedemption) {
             return NextResponse.json(
-              { success: false, error: `Minimum ${loyaltyConfig.minRedemption} points required for redemption` },
+              {
+                success: false,
+                error: t('validation.minimumPointsRequired', 'Minimum {min} points required for redemption')
+                  .replace('{min}', loyaltyConfig.minRedemption.toString()),
+              },
               { status: 400 }
             );
           }
           if (loyaltyPointsToRedeem > balance) {
             return NextResponse.json(
-              { success: false, error: `Insufficient loyalty points. Balance: ${balance}` },
+              {
+                success: false,
+                error: t('validation.insufficientLoyaltyPoints', 'Insufficient loyalty points. Balance: {balance}')
+                  .replace('{balance}', balance.toString()),
+              },
               { status: 400 }
             );
           }
@@ -525,6 +557,9 @@ export async function POST(request: NextRequest) {
     let discountAmount = 0;
     let appliedDiscountCode: string | undefined;
     let appliedDiscountCategory: string | undefined;
+    // Set once the usage-increment below succeeds; used to compensate the
+    // increment if checkout fails or is replayed after this point.
+    let appliedDiscountId: mongoose.Types.ObjectId | undefined;
 
     if (discountCode) {
       const now = new Date();
@@ -599,6 +634,7 @@ export async function POST(request: NextRequest) {
 
       appliedDiscountCode = discount.code;
       appliedDiscountCategory = discount.category || 'general';
+      appliedDiscountId = discount._id;
     }
 
     // Calculate subtotal after discount
@@ -789,6 +825,7 @@ export async function POST(request: NextRequest) {
         tableId: tableId || undefined,
         splitCount: splitCount || undefined,
         splitPayments: splitPayments || undefined,
+        ...(idempotencyKey ? { idempotencyKey } : {}),
       };
 
       for (let receiptAttempt = 0; receiptAttempt < 3; receiptAttempt++) {
@@ -804,6 +841,20 @@ export async function POST(request: NextRequest) {
           if (isDuplicateReceiptNumberError(createErr) && receiptAttempt < 2) {
             logger.warn('Duplicate receipt number, retrying with next sequence', { receiptNumber });
             continue;
+          }
+          // A concurrent duplicate request (same idempotencyKey) raced us
+          // inside the transaction and won — surface it as a dedicated
+          // error so the outer handler can return that transaction instead
+          // of a generic failure.
+          if (
+            idempotencyKey &&
+            createErr &&
+            typeof createErr === 'object' &&
+            'code' in createErr &&
+            (createErr as { code?: number }).code === 11000 &&
+            String((createErr as { message?: string }).message || '').includes('idempotencyKey')
+          ) {
+            throw new IdempotentReplayError(idempotencyKey);
           }
           throw createErr;
         }
@@ -983,7 +1034,30 @@ export async function POST(request: NextRequest) {
       }
 
       return { transaction, paymentRecords, onAccountCreditChange };
+    }).catch(async (txError) => {
+      if (txError instanceof IdempotentReplayError) {
+        const existing = await Transaction.findOne({ tenantId, idempotencyKey: txError.idempotencyKey }).lean();
+        if (existing) {
+          // A concurrent request with the same idempotencyKey already created the
+          // transaction and consumed the discount usage; this loser's earlier
+          // usageCount increment is a duplicate and must be compensated.
+          if (appliedDiscountId) {
+            await Discount.findByIdAndUpdate(appliedDiscountId, { $inc: { usageCount: -1 } });
+          }
+          return { transaction: existing, paymentRecords: [], onAccountCreditChange: null, replay: true };
+        }
+      }
+      // Checkout failed outright (stock conflict, DB error, etc.) — release
+      // the discount usage this request reserved before the atomic section ran.
+      if (appliedDiscountId) {
+        await Discount.findByIdAndUpdate(appliedDiscountId, { $inc: { usageCount: -1 } });
+      }
+      throw txError;
     });
+
+    if ((checkoutResult as { replay?: boolean }).replay) {
+      return NextResponse.json({ success: true, data: checkoutResult.transaction }, { status: 200 });
+    }
 
     const { transaction, paymentRecords, onAccountCreditChange } = checkoutResult;
 

@@ -10,6 +10,7 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { updateStock } from '@/lib/stock';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { runWithOptionalMongoTransaction } from '@/lib/mongo-session';
 import {
@@ -31,7 +32,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     if (!(await hasTenantPermission(authUser.role, tenantId, 'refunds.process'))) {
-      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
+    }
+
+    const rl = checkRateLimit(`transactions:refund:${tenantId}`, 30, 60_000);
+    if (!rl.allowed) {
+      return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
     }
 
     const transaction = await Transaction.findOne({ _id: id, tenantId });
@@ -316,15 +322,25 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       },
     }, { status: 201 });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Refund failed';
-    if (message === 'Unauthorized' || message.includes('Forbidden')) {
+    const t = await getValidationTranslatorFromRequest(request);
+    const message = error instanceof Error ? error.message : undefined;
+    if (message === 'Unauthorized') {
       return NextResponse.json(
-        { success: false, error: message },
-        { status: message === 'Unauthorized' ? 401 : 403 }
+        { success: false, error: t('validation.unauthorized', 'Unauthorized') },
+        { status: 401 }
+      );
+    }
+    if (message?.includes('Forbidden')) {
+      return NextResponse.json(
+        { success: false, error: t('validation.forbidden', message) },
+        { status: 403 }
       );
     }
     logger.error('Refund error:', error);
-    return NextResponse.json({ success: false, error: message }, { status: 400 });
+    return NextResponse.json(
+      { success: false, error: message || t('validation.refundFailed', 'Refund failed') },
+      { status: 400 }
+    );
   }
 }
 

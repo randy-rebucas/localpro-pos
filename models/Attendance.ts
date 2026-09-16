@@ -103,8 +103,12 @@ AttendanceSchema.pre('save', function (next) {
 // Compound indexes for efficient queries
 AttendanceSchema.index({ tenantId: 1, userId: 1, clockIn: -1 });
 AttendanceSchema.index({ tenantId: 1, clockIn: -1 });
-// Per-user active session lookup (clock-in/out routes)
-AttendanceSchema.index({ userId: 1, clockOut: 1 }, { partialFilterExpression: { clockOut: null } });
+// Per-user active session lookup (clock-in/out routes). Unique so concurrent
+// clock-in requests can't both create an open session for the same user.
+AttendanceSchema.index(
+  { userId: 1, tenantId: 1, clockOut: 1 },
+  { unique: true, partialFilterExpression: { clockOut: null } }
+);
 // Tenant-wide active session scan (automations: auto-clockout, break detection, cash-count reminders)
 AttendanceSchema.index({ tenantId: 1, clockOut: 1 }, { partialFilterExpression: { clockOut: null } });
 AttendanceSchema.index({ tenantId: 1, isActive: 1 });

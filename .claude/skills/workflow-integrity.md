@@ -11,9 +11,10 @@ Editing `app/api/{transactions,pos,cash-drawer,stock-movements,inventory,payment
 3. **Concurrency** — flag `findOne` → compute → `save()` on stock/balance/points (two concurrent sales can oversell). Prefer atomic `findOneAndUpdate` with `$inc` + a precondition filter (e.g. `{ stock: { $gte: qty } }`).
 4. **State machine** — status transitions (pending→completed→refunded, open→closed, pending→dispensed) must be validated server-side before mutating, not just set.
 5. **Tenant + audit** — every write shares `tenantId`; one audit log per meaningful state change, not just the first write. See [[project_tenant_isolation_audit]], [[auth_system]], [[project_role_permission_audit]].
+6. **Language/translation** — any user-facing error/status message returned by the route (validation failures, state-transition rejections, success messages) must go through the translation layer (`getValidationTranslator` / `getValidationTranslatorFromTenant` / `getValidationTranslatorFromRequest` in `lib/validation-translations.ts`), not a hardcoded English string. Flag any new or edited multi-write route that returns raw literal strings to the client instead of `t(key, fallback)`.
 
 ## Output
-Per file: writes involved → atomicity → idempotency → concurrency → state machine → tenant/audit. Flag only plausible concrete failure scenarios (same bar as [[project_tenant_isolation_audit]]/[[project_role_permission_audit]]: full file read, no grep-only pass, no hedging).
+Per file: writes involved → atomicity → idempotency → concurrency → state machine → tenant/audit → language/translation. Flag only plausible concrete failure scenarios (same bar as [[project_tenant_isolation_audit]]/[[project_role_permission_audit]]: full file read, no grep-only pass, no hedging).
 
 ## Verify
 `pnpm run lint` && `pnpm run build`; add a test via `test-writer` if a race/idempotency fix has no coverage.

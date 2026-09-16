@@ -11,21 +11,24 @@ import { getPublicAppUrl } from '@/lib/ecommerce/public-url';
 import { requireEcommerceIntegrationFeature } from '@/lib/ecommerce/require-ecommerce-feature';
 import { requireEcommerceProviderConnectAllowed } from '@/lib/ecommerce/tenant-integration-policy';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { createAuditLog, AuditActions } from '@/lib/audit';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import mongoose from 'mongoose';
 
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
+    const t = await getValidationTranslatorFromRequest(request);
     const { tenantId, user } = await requireTenantAccess(request);
     if (!(await hasTenantPermission(user.role, tenantId, 'integrations.manage'))) {
-      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
     await requireEcommerceIntegrationFeature(tenantId);
     await requireEcommerceProviderConnectAllowed(tenantId, 'woocommerce');
 
     const rl = checkRateLimit(`woo-connect:${tenantId}`, 10, 60_000);
     if (!rl.allowed) {
-      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
+      return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
     }
 
     const body = await request.json();
@@ -33,7 +36,7 @@ export async function POST(request: NextRequest) {
     const consumerKey = typeof body.consumerKey === 'string' ? body.consumerKey : '';
     const consumerSecret = typeof body.consumerSecret === 'string' ? body.consumerSecret : '';
     if (!siteUrl || !consumerKey || !consumerSecret) {
-      return NextResponse.json({ success: false, error: 'siteUrl, consumerKey, and consumerSecret are required' }, { status: 400 });
+      return NextResponse.json({ success: false, error: t('validation.wooCredentialsRequired', 'siteUrl, consumerKey, and consumerSecret are required') }, { status: 400 });
     }
 
     let normalized: string;
@@ -73,6 +76,15 @@ export async function POST(request: NextRequest) {
     } catch {
       await integration.updateOne({ $set: { lastError: 'webhook_registration_failed' } });
     }
+
+    await createAuditLog(request, {
+      tenantId,
+      userId: user.userId,
+      action: AuditActions.UPDATE,
+      entityType: 'ecommerce_integration',
+      entityId: integration._id.toString(),
+      changes: { provider: 'woocommerce', siteUrl: normalized },
+    });
 
     return NextResponse.json({ success: true });
   } catch (e: unknown) {

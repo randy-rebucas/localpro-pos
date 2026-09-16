@@ -13,6 +13,7 @@ import LowStockAlerts from '@/components/LowStockAlerts';
 import RealTimeStockTracker from '@/components/RealTimeStockTracker';
 import { getDictionaryClient } from '../dictionaries-client';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { useSubscription } from '@/contexts/SubscriptionContext';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { getBusinessTypeConfig } from '@/lib/business-types';
 import { getBusinessType, supportsFeature } from '@/lib/business-type-helpers';
@@ -24,6 +25,7 @@ export default function InventoryPage() {
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const { settings } = useTenantSettings();
+  const { subscriptionStatus } = useSubscription();
   const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#35979c';
   const [dict, setDict] = useState<TranslationDict | null>(null);
   const [selectedBranch, setSelectedBranch] = useState<string>('');
@@ -42,7 +44,9 @@ export default function InventoryPage() {
     refetchPredictions,
   } = useInventoryPage(tenant);
 
-  const inventoryEnabled = supportsFeature(settings ?? undefined, 'inventory');
+  const inventoryEnabled =
+    supportsFeature(settings ?? undefined, 'inventory') &&
+    subscriptionStatus?.features.enableInventory !== false;
   const businessTypeConfig = settings ? getBusinessTypeConfig(getBusinessType(settings)) : null;
 
   useEffect(() => {

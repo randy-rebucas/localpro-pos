@@ -95,8 +95,9 @@ export async function PUT(request: NextRequest) {
 
     // Build update object
     const updateData: Record<string, unknown> = {};
+    const emailChanging = email !== undefined && email !== oldUser.email;
 
-    if (email !== undefined && email !== oldUser.email) {
+    if (emailChanging) {
       if (!validateEmail(email)) {
         return NextResponse.json(
           { success: false, error: t('validation.invalidEmailFormat', 'Invalid email format') },
@@ -116,11 +117,13 @@ export async function PUT(request: NextRequest) {
       updateData.name = name.trim();
     }
 
-    // Password change requires current password
-    if (password !== undefined && password) {
+    // Email is a recovery/login credential — changing it requires re-verifying
+    // the current password, same as a password change, so a hijacked session
+    // can't silently take over the account by pointing it at an attacker email.
+    if (emailChanging || (password !== undefined && password)) {
       if (!currentPassword) {
         return NextResponse.json(
-          { success: false, error: t('validation.currentPasswordRequired', 'Current password is required to change password') },
+          { success: false, error: t('validation.currentPasswordRequired', 'Current password is required to change your password or email') },
           { status: 400 }
         );
       }
@@ -132,7 +135,9 @@ export async function PUT(request: NextRequest) {
           { status: 400 }
         );
       }
+    }
 
+    if (password !== undefined && password) {
       const passwordValidation = validatePassword(password, t);
       if (!passwordValidation.valid) {
         return NextResponse.json(

@@ -103,14 +103,28 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Create new attendance record
-      const attendance = await Attendance.create({
-        userId: user.userId,
-        tenantId: user.tenantId,
-        clockIn: new Date(),
-        notes,
-        location,
-      });
+      // Create new attendance record. The unique partial index on
+      // { userId, tenantId, clockOut: null } is the real guard against a
+      // double clock-in race; the findOne check above is just a fast path
+      // for the common case and returns a friendly error.
+      let attendance;
+      try {
+        attendance = await Attendance.create({
+          userId: user.userId,
+          tenantId: user.tenantId,
+          clockIn: new Date(),
+          notes,
+          location,
+        });
+      } catch (createError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+        if (createError?.code === 11000) {
+          return NextResponse.json(
+            { success: false, error: t('validation.alreadyClockedIn', 'You are already clocked in. Please clock out first.') },
+            { status: 400 }
+          );
+        }
+        throw createError;
+      }
 
       await createAuditLog(request, {
         tenantId: user.tenantId,

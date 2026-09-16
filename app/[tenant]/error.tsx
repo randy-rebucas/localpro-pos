@@ -54,7 +54,9 @@ export default function TenantError({
           {dict?.admin?.errorLoadingStore || 'Error Loading Store'}
         </h1>
         <p className="text-gray-600 mb-6">
-          {error.message || dict?.admin?.errorLoadingStoreMessage || 'An error occurred while loading the store information.'}
+          {process.env.NODE_ENV === 'development' && error.message
+            ? error.message
+            : dict?.admin?.errorLoadingStoreMessage || 'An error occurred while loading the store information.'}
         </p>
         <div className="space-y-3">
           <button

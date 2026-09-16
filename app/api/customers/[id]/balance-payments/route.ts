@@ -40,9 +40,10 @@ export async function GET(
       throw authError;
     }
 
+    const t = await getValidationTranslatorFromRequest(request);
     const customer = await Customer.findOne({ _id: customerId, tenantId }).select('_id').lean();
     if (!customer) {
-      return NextResponse.json({ success: false, error: 'Customer not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.customerNotFound', 'Customer not found') }, { status: 404 });
     }
 
     const rawLimit = parseInt(request.nextUrl.searchParams.get('limit') || '20', 10);
@@ -65,6 +66,8 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  let idempotencyKeyForConflictCheck: string | undefined;
+  let tenantIdForConflictCheck: string | undefined;
   try {
     await connectDB();
     const { id: customerId } = await params;
@@ -100,13 +103,25 @@ export async function POST(
 
     const rl = checkRateLimit(`balance-payment:${userId}`, 60, 60_000);
     if (!rl.allowed) {
-      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
+      return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
     }
 
     const body = await request.json();
     const amount = typeof body.amount === 'number' ? body.amount : parseFloat(String(body.amount));
     const method = typeof body.method === 'string' ? body.method.trim() : '';
     const notes = typeof body.notes === 'string' ? body.notes.trim() : undefined;
+    const idempotencyKey = typeof body.idempotencyKey === 'string' && body.idempotencyKey.trim()
+      ? body.idempotencyKey.trim()
+      : undefined;
+    idempotencyKeyForConflictCheck = idempotencyKey;
+    tenantIdForConflictCheck = tenantId;
+
+    if (idempotencyKey) {
+      const existing = await CustomerBalancePayment.findOne({ tenantId, idempotencyKey }).lean();
+      if (existing) {
+        return NextResponse.json({ success: true, data: existing }, { status: 200 });
+      }
+    }
 
     if (!amount || amount <= 0 || Number.isNaN(amount)) {
       return NextResponse.json(
@@ -158,6 +173,7 @@ export async function POST(
             method: method as (typeof VALID_METHODS)[number],
             notes,
             recordedBy: new mongoose.Types.ObjectId(userId) as Types.ObjectId,
+            ...(idempotencyKey ? { idempotencyKey } : {}),
           },
         ],
         { session }
@@ -196,6 +212,24 @@ export async function POST(
 
     return NextResponse.json({ success: true, data: record }, { status: 201 });
   } catch (error: unknown) {
+    // A concurrent duplicate request (same idempotencyKey) raced us and won —
+    // return that payment instead of a generic failure.
+    if (
+      idempotencyKeyForConflictCheck &&
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      (error as { code?: number }).code === 11000 &&
+      String((error as { message?: string }).message || '').includes('idempotencyKey')
+    ) {
+      const existing = await CustomerBalancePayment.findOne({
+        tenantId: tenantIdForConflictCheck,
+        idempotencyKey: idempotencyKeyForConflictCheck,
+      }).lean();
+      if (existing) {
+        return NextResponse.json({ success: true, data: existing }, { status: 200 });
+      }
+    }
     logger.error('balance-payments POST:', error);
     const message = error instanceof Error ? error.message : 'Failed to record payment';
     return NextResponse.json({ success: false, error: message }, { status: 500 });

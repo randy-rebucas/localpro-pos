@@ -9,6 +9,7 @@ export type BillingEventType =
   | 'plan_changed'
   | 'trial_started'
   | 'trial_converted'
+  | 'trial_expired'
   | 'subscription_cancelled'
   | 'subscription_suspended'
   | 'subscription_paused'
@@ -60,6 +61,7 @@ const BillingEventSchema: Schema = new Schema(
         'plan_changed',
         'trial_started',
         'trial_converted',
+        'trial_expired',
         'subscription_cancelled',
         'subscription_suspended',
         'subscription_paused',
@@ -110,6 +112,12 @@ const BillingEventSchema: Schema = new Schema(
 );
 
 BillingEventSchema.index({ tenantId: 1, createdAt: -1 });
+// Prevents double-recording the same payment (e.g. a PayPal capture retried after
+// a dropped response) — only enforced when transactionId is actually set.
+BillingEventSchema.index(
+  { tenantId: 1, transactionId: 1 },
+  { unique: true, partialFilterExpression: { transactionId: { $type: 'string' } } }
+);
 
 const BillingEvent: Model<IBillingEvent> =
   mongoose.models.BillingEvent ||

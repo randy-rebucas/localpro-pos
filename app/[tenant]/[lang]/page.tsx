@@ -414,7 +414,7 @@ export default function Dashboard() {
   // Initialize dual-screen terminal session
   useEffect(() => {
     const initSession = async () => {
-      const id = 'session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+      const id = crypto.randomUUID();
       setSessionId(id);
 
       // Initialize session on API

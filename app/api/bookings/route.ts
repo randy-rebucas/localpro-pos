@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import connectDB from '@/lib/mongodb';
 import Booking from '@/models/Booking';
 import User from '@/models/User';
@@ -14,6 +15,15 @@ import { requireBookingSchedulingAccess } from '@/lib/booking-scheduling-access'
 import { getClosedHolidayForDate } from '@/lib/holidays';
 import { logger } from '@/lib/logger';
 
+class BookingConflictError extends Error {
+  conflicts: unknown;
+  constructor(message: string, conflicts: unknown) {
+    super(message);
+    this.name = 'BookingConflictError';
+    this.conflicts = conflicts;
+  }
+}
+
 /**
  * GET - Get all bookings for a tenant
  * Query params:
@@ -26,11 +36,12 @@ export async function GET(request: NextRequest) {
   try {
     await connectDB();
     let user;
+    const t = await getValidationTranslatorFromRequest(request);
     try {
       user = await requireAuth(request);
     } catch {
       return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
+        { success: false, error: t('validation.unauthorized', 'Unauthorized') },
         { status: 401 }
       );
     }
@@ -38,13 +49,13 @@ export async function GET(request: NextRequest) {
     const tenantId = await getTenantIdFromRequest(request);
     if (!tenantId) {
       return NextResponse.json(
-        { success: false, error: 'Tenant not found' },
+        { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
         { status: 404 }
       );
     }
 
     if (!(await hasTenantPermission(user.role, tenantId, 'bookings.manage'))) {
-      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -82,8 +93,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: true, data: bookings });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Get bookings error:', error);
+    const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to fetch bookings' },
+      { success: false, error: error.message || t('validation.failedToFetchBookings', 'Failed to fetch bookings') },
       { status: 500 }
     );
   }
@@ -119,7 +131,7 @@ export async function POST(request: NextRequest) {
       }
       if (!(await hasTenantPermission(user.role, user.tenantId, 'bookings.manage'))) {
         return NextResponse.json(
-          { success: false, error: 'Forbidden: Insufficient permissions' },
+          { success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') },
           { status: 403 }
         );
       }
@@ -136,7 +148,7 @@ export async function POST(request: NextRequest) {
     const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
     const { allowed } = checkRateLimit(`write:bookings:${tenantId}:${ip}`, 30, 60_000);
     if (!allowed) {
-      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
+      return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
     }
 
     try {
@@ -198,47 +210,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check for conflicts with existing bookings
-    const conflictingBookings = await Booking.find({
-      tenantId,
-      status: { $in: ['pending', 'confirmed'] },
-      $or: [
-        {
-          startTime: { $lt: end },
-          endTime: { $gt: start },
-        },
-      ],
-    });
-
-    // If staff is assigned, check for conflicts with that staff member
-    if (staffId) {
-      const staffConflicts = conflictingBookings.filter(
-        (booking) => booking.staffId?.toString() === staffId
-      );
-      if (staffConflicts.length > 0) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: t('validation.staffBookingConflict', 'Staff member already has a booking at this time'),
-            conflicts: staffConflicts,
-          },
-          { status: 409 }
-        );
-      }
-    } else {
-      // If no staff assigned, check for any conflicts
-      if (conflictingBookings.length > 0) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: t('validation.timeSlotBooked', 'Time slot is already booked'),
-            conflicts: conflictingBookings,
-          },
-          { status: 409 }
-        );
-      }
-    }
-
     // Verify staff exists if provided (only for staff-created bookings, not customer bookings)
     if (staffId && !isCustomer) {
       const staff = await User.findOne({ _id: staffId, tenantId, isActive: true });
@@ -250,21 +221,69 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Create booking
-    const booking = await Booking.create({
-      tenantId,
-      customerName,
-      customerEmail,
-      customerPhone,
-      serviceName,
-      serviceDescription,
-      startTime: start,
-      endTime: end,
-      duration,
-      staffId,
-      notes,
-      status,
-    });
+    // Check for conflicts and create inside a transaction so the read (conflict
+    // check) and the write (create, which also re-checks staff overlap in the
+    // model's pre('save') hook) share one snapshot — a plain read-then-create
+    // would let two concurrent bookings both pass the conflict check before
+    // either insert commits, double-booking the same staff/slot.
+    const session = await mongoose.startSession();
+    let booking: InstanceType<typeof Booking> | undefined;
+    try {
+      await session.withTransaction(async () => {
+        const conflictingBookings = await Booking.find({
+          tenantId,
+          status: { $in: ['pending', 'confirmed'] },
+          startTime: { $lt: end },
+          endTime: { $gt: start },
+        }).session(session);
+
+        if (staffId) {
+          const staffConflicts = conflictingBookings.filter(
+            (b) => b.staffId?.toString() === staffId
+          );
+          if (staffConflicts.length > 0) {
+            throw new BookingConflictError(
+              t('validation.staffBookingConflict', 'Staff member already has a booking at this time'),
+              staffConflicts
+            );
+          }
+        } else if (conflictingBookings.length > 0) {
+          throw new BookingConflictError(
+            t('validation.timeSlotBooked', 'Time slot is already booked'),
+            conflictingBookings
+          );
+        }
+
+        const created = await Booking.create([{
+          tenantId,
+          customerName,
+          customerEmail,
+          customerPhone,
+          serviceName,
+          serviceDescription,
+          startTime: start,
+          endTime: end,
+          duration,
+          staffId,
+          notes,
+          status,
+        }], { session });
+        booking = created[0];
+      });
+    } catch (txError) {
+      if (txError instanceof BookingConflictError) {
+        return NextResponse.json(
+          { success: false, error: txError.message, conflicts: txError.conflicts },
+          { status: 409 }
+        );
+      }
+      throw txError;
+    } finally {
+      await session.endSession();
+    }
+    if (!booking) {
+      throw new Error('Booking transaction completed without producing a booking');
+    }
 
     // Send confirmation if status is confirmed and contact info is provided
     if (status === 'confirmed' && (customerEmail || customerPhone)) {

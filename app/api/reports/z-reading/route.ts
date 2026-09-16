@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (!(await hasTenantPermission(user.role, tenantId, 'reports.z_reading'))) {
-      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 
     const searchParams = request.nextUrl.searchParams;
@@ -62,12 +62,12 @@ export async function POST(request: NextRequest) {
     }
 
     if (!(await hasTenantPermission(user.role, tenantId, 'reports.z_reading'))) {
-      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 
     const rl = checkRateLimit(`z-reading:${tenantId}`, 10, 60_000);
     if (!rl.allowed) {
-      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
+      return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
     }
 
     const body = await request.json().catch(() => ({}));

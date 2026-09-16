@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import connectDB from '@/lib/mongodb';
 import Booking from '@/models/Booking';
 import User from '@/models/User';
@@ -11,7 +12,17 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 import { getTenantSettingsById } from '@/lib/tenant';
 import { requireBookingSchedulingAccess } from '@/lib/booking-scheduling-access';
 import { getClosedHolidayForDate } from '@/lib/holidays';
+import { isValidBookingStatusTransition, type BookingStatus } from '@/lib/bookings-helpers';
 import { logger } from '@/lib/logger';
+
+class BookingConflictError extends Error {
+  conflicts: unknown;
+  constructor(message: string, conflicts: unknown) {
+    super(message);
+    this.name = 'BookingConflictError';
+    this.conflicts = conflicts;
+  }
+}
 
 /**
  * GET - Get a single booking by ID
@@ -90,7 +101,7 @@ export async function PUT(
     }
 
     if (!(await hasTenantPermission(user.role, tenantId, 'bookings.manage'))) {
-      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 
     try {
@@ -127,6 +138,18 @@ export async function PUT(
     const oldStatus = existingBooking.status;
     const oldStartTime = existingBooking.startTime;
 
+    if (status !== undefined && !isValidBookingStatusTransition(oldStatus as BookingStatus, status)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: t('validation.invalidBookingStatusTransition', 'Cannot change booking status from {from} to {to}')
+            .replace('{from}', oldStatus)
+            .replace('{to}', status),
+        },
+        { status: 400 }
+      );
+    }
+
     // Calculate new end time if start time or duration changed
     let newStartTime = existingBooking.startTime;
     let newEndTime = existingBooking.endTime;
@@ -157,38 +180,6 @@ export async function PUT(
       }
     }
 
-    // Check for conflicts if time changed
-    if (startTime || duration) {
-      const conflictingBookings = await Booking.find({
-        tenantId,
-        _id: { $ne: id },
-        status: { $in: ['pending', 'confirmed'] },
-        $or: [
-          {
-            startTime: { $lt: newEndTime },
-            endTime: { $gt: newStartTime },
-          },
-        ],
-      });
-
-      const checkStaffId = staffId || existingBooking.staffId;
-      if (checkStaffId) {
-        const staffConflicts = conflictingBookings.filter(
-          (booking) => booking.staffId?.toString() === checkStaffId.toString()
-        );
-        if (staffConflicts.length > 0) {
-          return NextResponse.json(
-            {
-              success: false,
-              error: t('validation.staffBookingConflict', 'Staff member already has a booking at this time'),
-              conflicts: staffConflicts,
-            },
-            { status: 409 }
-          );
-        }
-      }
-    }
-
     // Verify staff exists if provided
     if (staffId) {
       const staff = await User.findOne({ _id: staffId, tenantId, isActive: true });
@@ -200,7 +191,12 @@ export async function PUT(
       }
     }
 
-    // Update booking
+    // Build the update and apply it inside a transaction so the conflict
+    // check and the write happen back-to-back: findByIdAndUpdate would skip
+    // the model's pre('save') overlap re-check entirely (that hook only runs
+    // on .save()/.create()), which let concurrent reschedules double-book
+    // the same staff member. Using existingBooking.save() here means the
+    // overlap check always runs immediately before the write commits.
     const updateData: any = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
     if (customerName !== undefined) updateData.customerName = customerName;
     if (customerEmail !== undefined) updateData.customerEmail = customerEmail;
@@ -214,11 +210,51 @@ export async function PUT(
     if (notes !== undefined) updateData.notes = notes;
     if (status !== undefined) updateData.status = status;
 
-    const updatedBooking = await Booking.findByIdAndUpdate(
-      id,
-      { $set: updateData },
-      { new: true }
-    ).populate('staffId', 'name email');
+    const session = await mongoose.startSession();
+    let updatedBooking;
+    try {
+      await session.withTransaction(async () => {
+        if (startTime || duration) {
+          const conflictingBookings = await Booking.find({
+            tenantId,
+            _id: { $ne: id },
+            status: { $in: ['pending', 'confirmed'] },
+            startTime: { $lt: newEndTime },
+            endTime: { $gt: newStartTime },
+          }).session(session);
+
+          const checkStaffId = staffId || existingBooking.staffId;
+          if (checkStaffId) {
+            const staffConflicts = conflictingBookings.filter(
+              (booking) => booking.staffId?.toString() === checkStaffId.toString()
+            );
+            if (staffConflicts.length > 0) {
+              throw new BookingConflictError(
+                t('validation.staffBookingConflict', 'Staff member already has a booking at this time'),
+                staffConflicts
+              );
+            }
+          }
+        }
+
+        existingBooking.set(updateData);
+        // Re-checked by the model's pre('save') hook too (staff overlap),
+        // using this same session/snapshot.
+        await existingBooking.save({ session });
+      });
+
+      updatedBooking = await Booking.findById(id).populate('staffId', 'name email');
+    } catch (txError) {
+      if (txError instanceof BookingConflictError) {
+        return NextResponse.json(
+          { success: false, error: txError.message, conflicts: txError.conflicts },
+          { status: 409 }
+        );
+      }
+      throw txError;
+    } finally {
+      await session.endSession();
+    }
 
     // Send notifications based on status changes
     if (status && status !== oldStatus) {
@@ -304,7 +340,7 @@ export async function DELETE(
     }
 
     if (!(await hasTenantPermission(user.role, tenantId, 'bookings.manage'))) {
-      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 
     const { id } = await params;

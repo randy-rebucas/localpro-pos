@@ -178,6 +178,20 @@ export function initializeCronJobs() {
     timezone: 'UTC',
   });
 
+  // 8c. Subscription Expiry - Every day at 1 AM (before billing lifecycle runs at 2 AM)
+  const subscriptionExpiryJob = cron.schedule('0 1 * * *', async () => {
+    logger.info('⏳ Running subscription expiry automation...');
+    try {
+      const { expireSubscriptions } = await import('./automations/subscription-expiry');
+      const result = await expireSubscriptions();
+      logger.info('✅ Subscription expiry:' + result.message);
+    } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+      logger.error('❌ Subscription expiry error:' + error.message);
+    }
+  }, {
+    timezone: 'UTC',
+  });
+
   // 9. Cash Drawer Auto-Close - Every day at 10 PM
   const cashDrawerCloseJob = cron.schedule('0 22 * * *', async () => {
     logger.info('💵 Running cash drawer auto-close automation...');
@@ -508,6 +522,7 @@ export function initializeCronJobs() {
     monthlyReportJob,
     pendingReceiptsJob,
     discountManagementJob,
+    subscriptionExpiryJob,
     subscriptionBillingJob,
     attendanceViolationsJob,
     breakDetectionJob,

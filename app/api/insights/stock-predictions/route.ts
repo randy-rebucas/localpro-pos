@@ -4,6 +4,7 @@ import StockMovement from '@/models/StockMovement';
 import Product from '@/models/Product';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { handleApiError } from '@/lib/error-handler';
+import { checkFeatureAccess } from '@/lib/subscription';
 
 // Days of history to compute velocity from
 const VELOCITY_WINDOW_DAYS = 30;
@@ -17,6 +18,16 @@ export async function GET(request: NextRequest) {
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId } = authResult;
+
+    // Check if inventory feature is enabled in subscription
+    try {
+      await checkFeatureAccess(tenantId.toString(), 'enableInventory');
+    } catch (featureError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+      return NextResponse.json(
+        { success: false, error: featureError.message },
+        { status: 403 }
+      );
+    }
 
     const branchId = request.nextUrl.searchParams.get('branchId') || undefined;
 

@@ -161,5 +161,6 @@ export const AuditActions = {
   DEVICE_CREATE: 'device.create',
   DEVICE_UPDATE: 'device.update',
   DEVICE_DELETE: 'device.delete',
+  SUBSCRIPTION_ACTIVATE: 'subscription.activate',
 } as const;
 

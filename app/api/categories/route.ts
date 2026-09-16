@@ -41,8 +41,9 @@ export async function POST(request: NextRequest) {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
       if (!(await hasTenantPermission(tenantAccess.user.role, tenantId, 'categories.manage'))) {
+        const t = await getValidationTranslatorFromRequest(request);
         return NextResponse.json(
-          { success: false, error: 'Forbidden: Insufficient permissions' },
+          { success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') },
           { status: 403 }
         );
       }
@@ -83,8 +84,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, data: category }, { status: 201 });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     if (error.code === 11000) {
+      const t = await getValidationTranslatorFromRequest(request);
       return NextResponse.json(
-        { success: false, error: 'Category with this name already exists' },
+        { success: false, error: t('validation.categoryNameExists', 'Category with this name already exists') },
         { status: 400 }
       );
     }

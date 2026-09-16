@@ -5,11 +5,13 @@ import SubscriptionPlan from '@/models/SubscriptionPlan';
 import Tenant from '@/models/Tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { requireAuth } from '@/lib/auth';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
+    const t = await getValidationTranslatorFromRequest(request);
 
     // Require authentication for upgrade requests
     const user = await requireAuth(request);
@@ -17,7 +19,7 @@ export async function POST(request: NextRequest) {
 
     if (!tenantId) {
       return NextResponse.json(
-        { success: false, error: 'Tenant not found' },
+        { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
         { status: 404 }
       );
     }
@@ -27,7 +29,7 @@ export async function POST(request: NextRequest) {
 
     if (!planId) {
       return NextResponse.json(
-        { success: false, error: 'Plan ID is required' },
+        { success: false, error: t('validation.planIdRequired', 'Plan ID is required') },
         { status: 400 }
       );
     }
@@ -36,7 +38,7 @@ export async function POST(request: NextRequest) {
     const requestedPlanDoc = await SubscriptionPlan.findOne({ _id: planId, isActive: true });
     if (!requestedPlanDoc) {
       return NextResponse.json(
-        { success: false, error: 'Requested plan not found or not available' },
+        { success: false, error: t('validation.requestedPlanNotFound', 'Requested plan not found or not available') },
         { status: 404 }
       );
     }
@@ -48,7 +50,7 @@ export async function POST(request: NextRequest) {
 
     if (!currentSubscription) {
       return NextResponse.json(
-        { success: false, error: 'No active subscription found' },
+        { success: false, error: t('validation.noActiveSubscription', 'No active subscription found') },
         { status: 404 }
       );
     }
@@ -56,7 +58,7 @@ export async function POST(request: NextRequest) {
     // Check if already on this plan
     if (currentSubscription.planId._id.toString() === planId) {
       return NextResponse.json(
-        { success: false, error: 'You are already on this plan' },
+        { success: false, error: t('validation.alreadyOnPlan', 'You are already on this plan') },
         { status: 400 }
       );
     }
@@ -80,7 +82,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: 'Upgrade request submitted successfully',
+      message: t('subscription.upgradeRequestSubmitted', 'Upgrade request submitted successfully'),
       data: {
         currentPlan,
         requestedPlan,
@@ -90,8 +92,9 @@ export async function POST(request: NextRequest) {
 
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Error requesting upgrade:', error);
+    const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: error.message || t('validation.upgradeRequestFailed', 'Failed to submit upgrade request') },
       { status: 500 }
     );
   }

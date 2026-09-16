@@ -53,13 +53,13 @@ export async function POST(request: NextRequest) {
     const t = await getValidationTranslatorFromRequest(request);
 
     if (!(await hasTenantPermission(user.role, tenantId, 'expenses.manage'))) {
-      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 
     const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
     const { allowed } = checkRateLimit(`write:expenses:${tenantId}:${ip}`, 30, 60_000);
     if (!allowed) {
-      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
+      return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
     }
 
     const body = await request.json();

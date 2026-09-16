@@ -27,12 +27,24 @@ function shouldSkipLocaleRedirect(pathname: string): boolean {
   return false;
 }
 
+// Sets a trustworthy x-pathname header for page requests — Server Components
+// (e.g. app/[tenant]/layout.tsx) can't otherwise learn the actual pathname,
+// and previously fell back to sniffing the client-controlled Referer header
+// to detect the /forbidden route, which any raw HTTP client could spoof to
+// bypass the tenant-ownership check. This overwrites any client-supplied
+// x-pathname before the request reaches route handlers, so it can't be forged.
+function pageNext(request: NextRequest): NextResponse {
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-pathname', request.nextUrl.pathname);
+  return NextResponse.next({ request: { headers: requestHeaders } });
+}
+
 function localeTenantRedirect(request: NextRequest): NextResponse {
   const { pathname } = request.nextUrl;
   const host = request.headers.get('host') || '';
 
   if (pathname.includes('/forbidden') || pathname.includes('/error') || pathname.includes('/not-found')) {
-    return NextResponse.next();
+    return pageNext(request);
   }
 
   const pathParts = pathname.split('/').filter(Boolean);
@@ -40,10 +52,10 @@ function localeTenantRedirect(request: NextRequest): NextResponse {
   if (pathParts.length >= 2) {
     const secondPart = pathParts[1];
     if (locales.includes(secondPart)) {
-      return NextResponse.next();
+      return pageNext(request);
     }
     if (secondPart === 'forbidden' || secondPart === 'error' || secondPart === 'not-found') {
-      return NextResponse.next();
+      return pageNext(request);
     }
   }
 
@@ -345,12 +357,12 @@ export function proxy(request: NextRequest) {
     pathname === '/privacy' ||
     pathname.startsWith('/super-admin')
   ) {
-    return NextResponse.next();
+    return pageNext(request);
   }
 
   // ── Pages: locale + tenant for remaining paths ─────────────────────────
   if (shouldSkipLocaleRedirect(pathname)) {
-    return NextResponse.next();
+    return pageNext(request);
   }
 
   return localeTenantRedirect(request);

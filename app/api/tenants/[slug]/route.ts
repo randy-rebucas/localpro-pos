@@ -14,12 +14,33 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { slug } = await params;
     const t = await getValidationTranslatorFromRequest(request);
     const tenant = await Tenant.findOne({ slug }).lean();
-    
+
     if (!tenant) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
-    
-    return NextResponse.json({ success: true, data: tenant });
+
+    // Full tenant document (BIR/permit/registration numbers, contact info,
+    // integration settings, etc.) is only for the tenant's own users or a
+    // super_admin — everyone else (including unauthenticated callers, e.g.
+    // the forbidden-access page identifying a tenant it was denied access to)
+    // gets back only the minimal, non-sensitive identity fields.
+    let user;
+    try {
+      user = await requireAuth(request);
+    } catch {
+      user = null;
+    }
+    const isSameTenantOrAdmin =
+      !!user && (user.role === 'super_admin' || user.tenantId === tenant._id.toString());
+
+    if (isSameTenantOrAdmin) {
+      return NextResponse.json({ success: true, data: tenant });
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: { _id: tenant._id, slug: tenant.slug, name: tenant.name },
+    });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

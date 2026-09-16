@@ -18,6 +18,8 @@ import {
   getStatusColor,
   formatBookingDateTime,
   getDeleteBookingConfirmMessage,
+  getAllowedNextStatuses,
+  isBookingStatusEditable,
 } from '@/lib/bookings-helpers';
 
 export default function BookingsPage() {
@@ -381,16 +383,17 @@ export default function BookingsPage() {
                 <label className="block text-sm font-medium text-gray-700">{dict?.admin?.status || 'Status'}</label>
                 <select
                   value={selectedBooking.status}
+                  disabled={!isBookingStatusEditable(selectedBooking.status)}
                   onChange={(e) => {
                     handleUpdateBooking(selectedBooking._id, { status: e.target.value as Booking['status'] });
                   }}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <option value="pending">{dict?.admin?.pending || 'Pending'}</option>
-                  <option value="confirmed">{dict?.admin?.confirmed || 'Confirmed'}</option>
-                  <option value="completed">{dict?.admin?.completed || 'Completed'}</option>
-                  <option value="cancelled">{dict?.admin?.cancelled || 'Cancelled'}</option>
-                  <option value="no-show">{dict?.admin?.noShow || 'No Show'}</option>
+                  {getAllowedNextStatuses(selectedBooking.status).map((s) => (
+                    <option key={s} value={s}>
+                      {dict?.admin?.[s === 'no-show' ? 'noShow' : s] || s}
+                    </option>
+                  ))}
                 </select>
               </div>
               {selectedBooking.notes && (

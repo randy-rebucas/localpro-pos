@@ -36,6 +36,7 @@ export default function CustomersPage() {
   const [bpMethod, setBpMethod] = useState<'cash' | 'card' | 'digital' | 'check' | 'other'>('cash');
   const [bpNotes, setBpNotes] = useState('');
   const [bpSubmitting, setBpSubmitting] = useState(false);
+  const [bpIdempotencyKey, setBpIdempotencyKey] = useState('');
   const [balancePaymentHistory, setBalancePaymentHistory] = useState<Array<{
     _id: string;
     amount: number;
@@ -160,6 +161,7 @@ export default function CustomersPage() {
     setBpMethod('cash');
     setBpNotes('');
     setBalancePaymentHistory([]);
+    setBpIdempotencyKey(crypto.randomUUID());
     setBalancePayOpen(true);
     void fetchBalancePaymentHistory(customer._id);
   };
@@ -177,7 +179,7 @@ export default function CustomersPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ amount: amt, method: bpMethod, notes: bpNotes.trim() || undefined }),
+        body: JSON.stringify({ amount: amt, method: bpMethod, notes: bpNotes.trim() || undefined, idempotencyKey: bpIdempotencyKey }),
       });
       const data = await res.json();
       if (data.success) {
@@ -185,6 +187,7 @@ export default function CustomersPage() {
         const newBalance = Math.max(0, (Number(balancePayCustomer.accountBalance) || 0) - amt);
         setBalancePayCustomer({ ...balancePayCustomer, accountBalance: newBalance });
         setBpAmount(newBalance > 0 ? newBalance.toFixed(2) : '');
+        setBpIdempotencyKey(crypto.randomUUID());
         await fetchBalancePaymentHistory(balancePayCustomer._id);
         await fetchCustomers();
         if (newBalance <= 0.01) {

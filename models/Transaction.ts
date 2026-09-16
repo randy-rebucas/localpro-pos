@@ -52,6 +52,7 @@ export interface ITransaction extends Document {
   terminalId?: string; // Denormalized snapshot of Device.terminalId at time of sale
   deviceSerialNumber?: string; // Denormalized snapshot of Device.serialNumber at time of sale
   receiptNumber?: string;
+  idempotencyKey?: string;
   notes?: string;
   displayCurrency?: string; // Currency code the customer chose to view the total in
   displayTotal?: number;    // Total converted to displayCurrency at time of sale
@@ -248,6 +249,11 @@ const TransactionSchema: Schema = new Schema(
       type: String,
       // unique enforced via compound index { tenantId, receiptNumber } below
     },
+    idempotencyKey: {
+      type: String,
+      // dedupes client-retried creates (e.g. manual transaction entry); unique
+      // enforced via compound index { tenantId, idempotencyKey } below
+    },
     notes: {
       type: String,
       trim: true,
@@ -318,6 +324,7 @@ const TransactionSchema: Schema = new Schema(
 TransactionSchema.index({ tenantId: 1, createdAt: -1 });
 TransactionSchema.index({ tenantId: 1, branchId: 1, createdAt: -1 });
 TransactionSchema.index({ tenantId: 1, receiptNumber: 1 }, { unique: true, sparse: true });
+TransactionSchema.index({ tenantId: 1, idempotencyKey: 1 }, { unique: true, sparse: true });
 TransactionSchema.index({ tenantId: 1, status: 1 });
 TransactionSchema.index({ tenantId: 1, isActive: 1, createdAt: -1 });
 TransactionSchema.index(

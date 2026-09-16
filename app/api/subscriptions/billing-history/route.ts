@@ -3,11 +3,13 @@ import connectDB from '@/lib/mongodb';
 import Subscription from '@/models/Subscription';
 import { requireAuth } from '@/lib/auth';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
+    const t = await getValidationTranslatorFromRequest(request);
 
     // Require authentication
     const user = await requireAuth(request); // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -15,7 +17,7 @@ export async function GET(request: NextRequest) {
 
     if (!tenantId) {
       return NextResponse.json(
-        { success: false, error: 'Tenant not found' },
+        { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
         { status: 404 }
       );
     }
@@ -52,8 +54,9 @@ export async function GET(request: NextRequest) {
 
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Error fetching billing history:', error);
+    const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: error.message || t('validation.failedToFetchBillingHistory', 'Failed to fetch billing history') },
       { status: 500 }
     );
   }

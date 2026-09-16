@@ -45,23 +45,24 @@ export async function PUT(
     await connectDB();
     const { slug } = await params;
 
+    const t = await getValidationTranslatorFromRequest(request);
+
     const user = await getCurrentUser(request);
     if (!user) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ success: false, error: t('validation.unauthorized', 'Unauthorized') }, { status: 401 });
     }
 
     const rl = checkRateLimit(`settings:${slug}`, 30, 60_000);
     if (!rl.allowed) {
-      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
+      return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
     }
 
     if (!(await hasTenantPermission(user.role, user.tenantId, 'settings.manage'))) {
-      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 
     const body = await request.json();
     const settings = body.settings || body;
-    const t = await getValidationTranslatorFromRequest(request);
 
     // Validate settings structure
     const defaultSettings = getDefaultTenantSettings();
@@ -81,8 +82,12 @@ export async function PUT(
 
     // Apply business type defaults if business type is being set or changed
     let updatedSettings = mergedSettings;
+    let businessTypeDefaultKeys: string[] = [];
     if (newBusinessType && newBusinessType !== currentBusinessType) {
       updatedSettings = applyBusinessTypeDefaults(mergedSettings, newBusinessType);
+      businessTypeDefaultKeys = Object.keys(updatedSettings).filter(
+        (key) => JSON.stringify(updatedSettings[key]) !== JSON.stringify(mergedSettings[key])
+      );
     }
 
     // Validate currency code (basic check)
@@ -108,7 +113,7 @@ export async function PUT(
     for (const field of colorFields) {
       if (updatedSettings[field] && !/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(updatedSettings[field])) {
         return NextResponse.json(
-          { success: false, error: `Invalid color format for ${field}. Use hex format (e.g., #FF5733)` },
+          { success: false, error: t('validation.invalidColorFormat', `Invalid color format for ${field}. Use hex format (e.g., #FF5733)`) },
           { status: 400 }
         );
       }
@@ -116,12 +121,22 @@ export async function PUT(
 
     // Tenant isolation: verify the authenticated user belongs to this tenant (reuse existingTenant)
     if (existingTenant && user && user.role !== 'super_admin' && user.tenantId !== existingTenant._id.toString()) {
-      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden') }, { status: 403 });
+    }
+
+    // Only $set the settings keys this request actually owns (submitted keys, plus
+    // any business-type-default keys it triggered) so a concurrent PUT touching
+    // other keys (e.g. a different tab, or the page's language auto-save) can't
+    // clobber this request's changes with its own stale read-merge snapshot.
+    const keysToSet = Array.from(new Set([...Object.keys(settings), ...businessTypeDefaultKeys]));
+    const setPayload: Record<string, unknown> = {};
+    for (const key of keysToSet) {
+      setPayload[`settings.${key}`] = updatedSettings[key];
     }
 
     const tenant = await Tenant.findOneAndUpdate(
       { slug },
-      { $set: { settings: updatedSettings } },
+      { $set: setPayload },
       { new: true, runValidators: true }
     );
 

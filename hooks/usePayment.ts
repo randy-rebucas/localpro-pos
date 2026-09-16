@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { CartItem } from './useCart';
 import { Discount } from './useDiscount';
 
@@ -90,6 +90,25 @@ export function usePayment(): UsePaymentReturn {
   const [paymentReference, setPaymentReference] = useState('');
   const [bnplInstallments, setBnplInstallments] = useState(3);
   const [processing, setProcessing] = useState(false);
+
+  // Idempotency key for the in-flight checkout attempt. Kept stable across a
+  // manual retry of the *same* cart/total (e.g. after a dropped response or
+  // timeout, where the sale may have actually gone through server-side) so
+  // the retry replays the original result instead of double-charging /
+  // double-deducting stock. Rotates once the cart or total actually changes,
+  // i.e. it's a genuinely new sale.
+  const idempotencyKeyRef = useRef<{ signature: string; key: string } | null>(null);
+  const getIdempotencyKey = useCallback((signature: string): string => {
+    if (idempotencyKeyRef.current?.signature === signature) {
+      return idempotencyKeyRef.current.key;
+    }
+    const key =
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    idempotencyKeyRef.current = { signature, key };
+    return key;
+  }, []);
 
   const validatePayment = useCallback(
     (
@@ -213,7 +232,19 @@ export function usePayment(): UsePaymentReturn {
           deviceId: deviceId || undefined,
         };
 
-        const bodyPayload: Record<string, unknown> = { ...payload, customerId: customerId || undefined };
+        const idempotencySignature = JSON.stringify({
+          items: cart.map((item) => [item.productId, item.quantity, item.variation]),
+          total,
+          primaryMethod,
+          customerId: customerId || null,
+          splitPayments: splitPayments || null,
+        });
+
+        const bodyPayload: Record<string, unknown> = {
+          ...payload,
+          customerId: customerId || undefined,
+          idempotencyKey: getIdempotencyKey(idempotencySignature),
+        };
         if (splitPayments?.length) {
           bodyPayload.payments = splitPayments.map((s) => ({
             method: s.method,
@@ -253,7 +284,7 @@ export function usePayment(): UsePaymentReturn {
         setProcessing(false);
       }
     },
-    [paymentMethod, cashReceived, paymentProvider, paymentReference, bnplInstallments, validatePayment]
+    [paymentMethod, cashReceived, paymentProvider, paymentReference, bnplInstallments, validatePayment, getIdempotencyKey]
   );
 
   return {

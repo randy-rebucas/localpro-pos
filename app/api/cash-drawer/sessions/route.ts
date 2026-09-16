@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (!(await hasTenantPermission(user.role, tenantId, 'cash_drawer.manage'))) {
-      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 
     const searchParams = request.nextUrl.searchParams;
@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
       const amount = parseFloat(openingAmount);
       if (isNaN(amount) || amount < 0) {
         return NextResponse.json(
-          { success: false, error: 'Opening amount must be a non-negative number' },
+          { success: false, error: t('validation.invalidOpeningAmount', 'Opening amount must be a non-negative number') },
           { status: 400 }
         );
       }
@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
       const amount = parseFloat(closingAmount);
       if (isNaN(amount) || amount < 0) {
         return NextResponse.json(
-          { success: false, error: 'Closing amount must be a non-negative number' },
+          { success: false, error: t('validation.invalidClosingAmount', 'Closing amount must be a non-negative number') },
           { status: 400 }
         );
       }
@@ -145,7 +145,7 @@ export async function POST(request: NextRequest) {
       // Fallback: any open session (for managers closing another cashier's drawer)
       if (!openSession) {
         if (!(await hasTenantPermission(user.role, tenantId, 'cash_drawer.close'))) {
-          return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+          return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
         }
         openSession = await CashDrawerSession.findOne({ tenantId, status: 'open' });
       }

@@ -106,13 +106,38 @@ export async function POST(
 
     let session = await PosSession.findOne({ sessionId });
 
-    if (action === 'init') {
-      // Upsert: create or reset session
+    // Once a session belongs to a tenant, no caller may reassign it to a different
+    // tenant — the client-supplied `tenant` field is otherwise unauthenticated and
+    // sessionId alone must not be enough to hijack or reset another tenant's session.
+    if (session && session.tenant !== tenant) {
+      return NextResponse.json(
+        { success: false, error: 'Session not found' },
+        { status: 404 }
+      );
+    }
+
+    if (action === 'init' && !session) {
+      // Create a brand-new session
+      session = await PosSession.create({
+        sessionId,
+        tenant,
+        cart: data?.cart || [],
+        subtotal: data?.subtotal || 0,
+        discount: data?.discount || null,
+        taxAmount: data?.taxAmount,
+        taxRate: data?.taxRate,
+        taxLabel: data?.taxLabel,
+        tip: data?.tip || 0,
+        total: data?.total || 0,
+        paymentMethod: data?.paymentMethod || null,
+        paymentStatus: 'pending',
+        lastUpdate: Date.now(),
+      });
+    } else if (action === 'init' && session) {
+      // Reset an existing session owned by the same tenant
       session = await PosSession.findOneAndUpdate(
         { sessionId },
         {
-          sessionId,
-          tenant,
           cart: data?.cart || [],
           subtotal: data?.subtotal || 0,
           discount: data?.discount || null,
@@ -125,7 +150,7 @@ export async function POST(
           paymentStatus: 'pending',
           lastUpdate: Date.now(),
         },
-        { upsert: true, new: true }
+        { new: true }
       );
     } else if (action === 'update-cart' && !session) {
       // Auto-create session if it doesn't exist (handles race condition where cart syncs before init completes)

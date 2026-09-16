@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb';
 import Category from '@/models/Category';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateAndSanitize, validateCategory } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -13,21 +14,26 @@ export async function GET(
 ) {
   try {
     await connectDB();
+    await requireAuth(request);
+    const t = await getValidationTranslatorFromRequest(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
 
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
     const category = await Category.findOne({ _id: id, tenantId }).lean();
 
     if (!category) {
-      return NextResponse.json({ success: false, error: 'Category not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.categoryNotFound', 'Category not found') }, { status: 404 });
     }
 
     return NextResponse.json({ success: true, data: category });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+    if (error.message?.includes('Unauthorized')) {
+      return NextResponse.json({ success: false, error: error.message }, { status: 401 });
+    }
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -38,21 +44,26 @@ export async function PUT(
 ) {
   try {
     await connectDB();
-    await requireAuth(request);
+    const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
-    const { id } = await params;
+    const t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
+
+    if (!(await hasTenantPermission(user.role, tenantId, 'categories.manage'))) {
+      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
+    }
+
+    const { id } = await params;
 
     const category = await Category.findOne({ _id: id, tenantId });
     if (!category) {
-      return NextResponse.json({ success: false, error: 'Category not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.categoryNotFound', 'Category not found') }, { status: 404 });
     }
 
     const body = await request.json();
-    const t = await getValidationTranslatorFromRequest(request);
     const { data, errors } = validateAndSanitize(body, validateCategory, t);
 
     if (errors.length > 0) {
@@ -81,8 +92,9 @@ export async function PUT(
     return NextResponse.json({ success: true, data: category });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     if (error.code === 11000) {
+      const t = await getValidationTranslatorFromRequest(request);
       return NextResponse.json(
-        { success: false, error: 'Category with this name already exists' },
+        { success: false, error: t('validation.categoryNameExists', 'Category with this name already exists') },
         { status: 400 }
       );
     }
@@ -96,17 +108,23 @@ export async function DELETE(
 ) {
   try {
     await connectDB();
-    await requireAuth(request);
+    const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
-    const { id } = await params;
+    const t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
+
+    if (!(await hasTenantPermission(user.role, tenantId, 'categories.manage'))) {
+      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
+    }
+
+    const { id } = await params;
 
     const category = await Category.findOne({ _id: id, tenantId });
     if (!category) {
-      return NextResponse.json({ success: false, error: 'Category not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.categoryNotFound', 'Category not found') }, { status: 404 });
     }
 
     // Soft delete - set isActive to false
@@ -122,7 +140,7 @@ export async function DELETE(
       changes: { name: category.name },
     });
 
-    return NextResponse.json({ success: true, message: 'Category deactivated' });
+    return NextResponse.json({ success: true, message: t('validation.categoryDeactivated', 'Category deactivated') });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
