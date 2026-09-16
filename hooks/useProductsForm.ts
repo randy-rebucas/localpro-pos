@@ -100,7 +100,15 @@ export const useProductsForm = (product: Product | null, businessTypeConfig: Bus
   }, []);
 
   const submitForm = useCallback(
-    async (settings: { businessType?: string } | null): Promise<{ success: boolean; error?: string }> => {
+    async (
+      settings: { businessType?: string } | null,
+      confirmDuplicate = false
+    ): Promise<{
+      success: boolean;
+      error?: string;
+      duplicate?: boolean;
+      existingProduct?: { _id: string; name: string; sku?: string; stock: number };
+    }> => {
       setSaving(true);
       setError('');
 
@@ -120,6 +128,10 @@ export const useProductsForm = (product: Product | null, businessTypeConfig: Bus
           trackInventory: formData.trackInventory,
           lowStockThreshold: formData.lowStockThreshold,
         };
+
+        if (!product && confirmDuplicate) {
+          body.confirmDuplicate = true;
+        }
 
         // Add restaurant-specific fields
         if (settings?.businessType?.toLowerCase() === 'restaurant') {
@@ -165,6 +177,8 @@ export const useProductsForm = (product: Product | null, businessTypeConfig: Bus
         const data = await res.json();
         if (data.success) {
           return { success: true };
+        } else if (res.status === 409 && data.code === 'DUPLICATE_PRODUCT_NAME') {
+          return { success: false, duplicate: true, existingProduct: data.existingProduct };
         } else {
           const errorMsg = data.error || 'Failed to save product';
           setError(errorMsg);

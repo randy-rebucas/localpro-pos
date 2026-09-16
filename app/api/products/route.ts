@@ -161,6 +161,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Warn on likely duplicates (same name, case-insensitive) instead of silently creating
+    // a second product — this is how duplicate SKUs for the same item have crept in before.
+    // Callers that intend to create anyway (confirmed by the user) pass confirmDuplicate: true.
+    if (!body.confirmDuplicate) {
+      const escapedName = String(data.name).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const possibleDuplicate = await Product.findOne({
+        tenantId,
+        isActive: { $ne: false },
+        name: { $regex: `^${escapedName}$`, $options: 'i' },
+      }).select('_id name sku stock').lean();
+
+      if (possibleDuplicate) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'A product with this name already exists',
+            code: 'DUPLICATE_PRODUCT_NAME',
+            existingProduct: possibleDuplicate,
+          },
+          { status: 409 }
+        );
+      }
+    }
+
     // Check subscription limits
     const currentProductCount = await Product.countDocuments({ tenantId, isActive: true });
     try {

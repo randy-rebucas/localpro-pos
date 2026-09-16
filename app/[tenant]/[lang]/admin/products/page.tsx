@@ -58,6 +58,7 @@ export default function ProductsPage() {
   const [page, setPage] = useState(1);
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
   const [showBulkEditModal, setShowBulkEditModal] = useState(false);
+  const [showBulkRestockModal, setShowBulkRestockModal] = useState(false);
   const [showBulkBarcodeModal, setShowBulkBarcodeModal] = useState(false);
   const [exporting, setExporting] = useState(false);
   const selectAllRef = useRef<HTMLInputElement>(null);
@@ -201,6 +202,35 @@ export default function ProductsPage() {
       loadProducts();
     } else {
       showToast.error(result.error || 'Failed to update products');
+    }
+  };
+
+  const handleBulkRestockSave = async (items: Array<{ productId: string; quantity: number }>) => {
+    if (items.length === 0 || !dict) return;
+    try {
+      const res = await fetch('/api/products/bulk-restock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ items, reason: 'Bulk restock (delivery received)' }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        if (result.failed > 0) {
+          showToast.error(
+            `${result.restocked} restocked, ${result.failed} failed: ${result.errors?.[0]?.error || ''}`
+          );
+        } else {
+          showToast.success(`${result.restocked} product(s) restocked`);
+        }
+        setSelectedProducts(new Set());
+        setShowBulkRestockModal(false);
+        loadProducts();
+      } else {
+        showToast.error(result.error || 'Failed to restock products');
+      }
+    } catch {
+      showToast.error('Failed to restock products');
     }
   };
 
@@ -441,6 +471,13 @@ export default function ProductsPage() {
                   className={btnPrimarySm}
                 >
                   {dict.products?.bulkEdit || 'Edit Selected'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowBulkRestockModal(true)}
+                  className={btnPrimarySm}
+                >
+                  {dict.products?.restockSelected || 'Restock Selected'}
                 </button>
                 <button
                   type="button"
@@ -685,6 +722,15 @@ export default function ProductsPage() {
           />
         )}
 
+        {showBulkRestockModal && (
+          <BulkRestockModal
+            products={products.filter((p) => selectedProducts.has(p._id))}
+            dict={dict}
+            onClose={() => setShowBulkRestockModal(false)}
+            onSave={handleBulkRestockSave}
+          />
+        )}
+
         {showBulkBarcodeModal && (
           <BulkBarcodeModal
             products={products.filter((p) => selectedProducts.has(p._id))}
@@ -716,6 +762,7 @@ function ProductModal({
   settings: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }) {
   const { formData, saving, error, updateFormData, submitForm } = useProductsForm(product, businessTypeConfig);
+  const { confirm: confirmDialog, Dialog: DuplicateDialog } = useConfirm();
   const [categorySearch, setCategorySearch] = useState('');
   const [showCategorySuggestions, setShowCategorySuggestions] = useState(false);
   const categoryInputRef = useRef<HTMLInputElement>(null);
@@ -825,6 +872,26 @@ function ProductModal({
     const result = await submitForm(settings);
     if (result.success) {
       onSave();
+      return;
+    }
+
+    if (result.duplicate && result.existingProduct) {
+      const existing = result.existingProduct;
+      const confirmed = await confirmDialog(
+        dict.products?.duplicateProductTitle || 'Similar product already exists',
+        (dict.products?.duplicateProductMessage ||
+          'A product named "{name}" already exists (SKU: {sku}, stock: {stock}). Create a new, separate product anyway?')
+          .replace('{name}', existing.name)
+          .replace('{sku}', existing.sku || '-')
+          .replace('{stock}', String(existing.stock)),
+        { variant: 'warning' }
+      );
+      if (confirmed) {
+        const retryResult = await submitForm(settings, true);
+        if (retryResult.success) {
+          onSave();
+        }
+      }
     }
   };
 
@@ -1525,7 +1592,104 @@ function ProductModal({
           </div>
         </div>
       )}
+      {DuplicateDialog}
     </>
+  );
+}
+
+function BulkRestockModal({
+  products,
+  dict,
+  onClose,
+  onSave,
+}: {
+  products: Product[];
+  dict: Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  onClose: () => void;
+  onSave: (items: Array<{ productId: string; quantity: number }>) => Promise<void>;
+}) {
+  const [quantities, setQuantities] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const setQuantity = (productId: string, value: string) => {
+    setQuantities((prev) => ({ ...prev, [productId]: value }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    const items = products
+      .map((p) => {
+        const raw = quantities[p._id];
+        const quantity = raw ? parseInt(raw, 10) : 0;
+        return { productId: p._id, quantity };
+      })
+      .filter((item) => item.quantity > 0);
+
+    if (items.length === 0) {
+      setError(dict.products?.restockEnterQuantity || 'Enter a quantity for at least one product');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await onSave(items);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white border border-gray-300 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <form onSubmit={handleSubmit} className="p-6">
+          <h2 className="text-2xl font-bold text-gray-900 mb-1">
+            {dict.products?.restockSelected || 'Restock Selected'}
+          </h2>
+          <p className="text-sm text-gray-500 mb-4">
+            {dict.products?.restockDescription ||
+              `Enter the quantity received for each product (${products.length} selected). Leave blank to skip a product.`}
+          </p>
+
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 text-red-800 border border-red-300 text-sm">{error}</div>
+          )}
+
+          <div className="border border-gray-200 divide-y divide-gray-100 max-h-96 overflow-y-auto">
+            {products.map((product) => (
+              <div key={product._id} className="flex items-center justify-between gap-3 px-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium text-gray-900 truncate">{product.name}</div>
+                  <div className="text-xs text-gray-500">
+                    {product.sku || '-'} · {dict.admin?.stock || 'Stock'}: {product.trackInventory ? product.stock : '∞'}
+                  </div>
+                </div>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  placeholder="0"
+                  value={quantities[product._id] || ''}
+                  onChange={(e) => setQuantity(product._id, e.target.value)}
+                  className="w-24 px-2 py-1.5 border border-gray-300 text-sm text-right"
+                />
+              </div>
+            ))}
+          </div>
+
+          <div className="flex justify-end gap-2 mt-6">
+            <button type="button" onClick={onClose} className={btnSecondarySm} disabled={saving}>
+              {dict.common?.cancel || 'Cancel'}
+            </button>
+            <button type="submit" className={btnPrimarySm} disabled={saving}>
+              {saving ? (dict.common?.saving || 'Saving...') : (dict.products?.restockConfirm || 'Restock')}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }
 
