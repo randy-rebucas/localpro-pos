@@ -70,10 +70,15 @@ Every stock change is recorded as a movement. Navigate to **Admin > Stock Moveme
 
 ### Bulk Restock
 
-1. Navigate to **Inventory**
-2. Click **Bulk Restock**
-3. Add multiple products and their quantities
-4. Click **Submit All**
+Use this when receiving a delivery that covers many products at once, instead of restocking one at a time:
+
+1. Navigate to **Admin > Products**
+2. Check the box next to each product you're receiving stock for (use **Select All** if the whole visible list is part of the delivery)
+3. Click **Restock Selected** in the toolbar that appears
+4. A list of the selected products opens, each with its current stock and a quantity box — enter the quantity received for each (leave blank to skip a product)
+5. Click **Restock**
+
+Each product is updated and logged individually (as a **Purchase** stock movement), so even if one line fails validation, the rest are still applied — the confirmation shows how many succeeded and lists any that failed.
 
 ## Stock Adjustments
 

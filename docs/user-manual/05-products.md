@@ -108,11 +108,20 @@ When a bundle is sold:
 
 Instead of deleting, products are deactivated (soft delete):
 
-1. Open the product
-2. Toggle **Active** to off
-3. Click **Save**
+1. Navigate to **Admin > Products**
+2. Click the **Delete** (trash) icon on the product row
+3. Confirm
 
-The product is hidden from the POS but remains in the database for historical records.
+The product is hidden from the POS and from the default product list, but remains in the database for historical records (past transactions and stock movements still reference it).
+
+## Reactivating a Product
+
+1. Navigate to **Admin > Products**
+2. Switch the **Status** filter to **Inactive** (or **All**) — deactivated products don't show under the default Active filter
+3. Click the **Reactivate** (↺) icon on the product row, in place of the usual Delete icon
+4. The product becomes active again immediately (visible in POS and listings)
+
+Reactivating only restores visibility — it does not restore stock. If the product was deactivated for being out of stock, restock it separately (see [Inventory > Restocking](06-inventory.md#restocking-inventory)).
 
 ## Importing Products (Bulk)
 
