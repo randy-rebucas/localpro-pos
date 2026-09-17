@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getDefaultTenantSettings } from '@/lib/currency';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface Tenant {
   _id: string;
@@ -38,6 +39,8 @@ export default function TenantsPage() {
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
   const { settings: tenantSettings } = useTenantSettings();
   const primaryColor = (tenantSettings || getDefaultTenantSettings()).primaryColor || '#35979c';
+  const { canAccess } = usePermissions();
+  const canManage = canAccess('tenant_profile.manage');
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -105,7 +108,7 @@ export default function TenantsPage() {
         <div className="bg-white border border-gray-300 p-6">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold text-gray-900">{dict.admin?.tenantInfo || 'Tenant Information'}</h2>
-            {tenants.length > 0 && (
+            {canManage && tenants.length > 0 && (
               <button
                 onClick={() => {
                   setEditingTenant(tenants[0]);
@@ -162,16 +165,18 @@ export default function TenantsPage() {
                       </span>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                      <button
-                        onClick={() => {
-                          setEditingTenant(tenantItem);
-                          setShowTenantModal(true);
-                        }}
-                        style={{ color: primaryColor }}
-                        className="hover:opacity-70 transition-opacity"
-                      >
-                        {dict.common?.edit || 'Edit'}
-                      </button>
+                      {canManage && (
+                        <button
+                          onClick={() => {
+                            setEditingTenant(tenantItem);
+                            setShowTenantModal(true);
+                          }}
+                          style={{ color: primaryColor }}
+                          className="hover:opacity-70 transition-opacity"
+                        >
+                          {dict.common?.edit || 'Edit'}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

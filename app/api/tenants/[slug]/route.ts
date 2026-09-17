@@ -70,7 +70,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const updateData: any = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
-    
+    // Only $set the individual keys this request actually owns — a full
+    // `settings: mergedSettings` replace would clobber a concurrent write made
+    // through /api/tenants/[slug]/settings (which itself only $sets its own
+    // submitted keys) with this request's stale read of the rest of the doc.
+    const setPayload: Record<string, unknown> = {};
+
     if (name !== undefined) {
       if (!name.trim()) {
         return NextResponse.json(
@@ -79,39 +84,56 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         );
       }
       updateData.name = name.trim();
+      setPayload.name = updateData.name;
     }
-    
+
     if (domain !== undefined) {
       updateData.domain = domain.trim() || null;
+      setPayload.domain = updateData.domain;
     }
-    
+
     if (subdomain !== undefined) {
       updateData.subdomain = subdomain.trim().toLowerCase() || null;
+      setPayload.subdomain = updateData.subdomain;
     }
-    
+
     if (isActive !== undefined) {
       updateData.isActive = isActive;
+      setPayload.isActive = updateData.isActive;
     }
-    
+
+    let settingsKeysToSet: string[] = [];
     if (settings !== undefined) {
       // Check if business type is being changed
       const currentBusinessType = oldTenant.settings?.businessType;
       const newBusinessType = settings.businessType;
-      
-      // Merge settings first
-      let mergedSettings = { ...oldTenant.settings, ...settings };
-      
-      // Apply business type defaults if business type is being set or changed
+
+      let updatedSettings = settings;
+      settingsKeysToSet = Object.keys(settings);
+
+      // Apply business type defaults if business type is being set or changed —
+      // computed against a full merge (read-only, never written back wholesale)
+      // so defaults resolve correctly, but only the resulting *changed* keys
+      // are added to the per-key $set alongside the submitted ones.
       if (newBusinessType && newBusinessType !== currentBusinessType) {
-        mergedSettings = applyBusinessTypeDefaults(mergedSettings, newBusinessType);
+        const mergedSettings = { ...oldTenant.settings, ...settings };
+        const withDefaults = applyBusinessTypeDefaults(mergedSettings, newBusinessType);
+        const defaultKeys = Object.keys(withDefaults).filter(
+          (key) => JSON.stringify(withDefaults[key]) !== JSON.stringify(mergedSettings[key])
+        );
+        updatedSettings = withDefaults;
+        settingsKeysToSet = Array.from(new Set([...settingsKeysToSet, ...defaultKeys]));
       }
-      
-      updateData.settings = mergedSettings;
+
+      for (const key of settingsKeysToSet) {
+        setPayload[`settings.${key}`] = updatedSettings[key];
+      }
+      updateData.settings = { ...oldTenant.settings, ...updatedSettings };
     }
 
     const tenant = await Tenant.findOneAndUpdate(
       { slug },
-      updateData,
+      { $set: setPayload },
       { new: true, runValidators: true }
     );
     

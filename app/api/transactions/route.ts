@@ -8,6 +8,7 @@ import Payment from '@/models/Payment';
 import Product from '@/models/Product';
 import Discount from '@/models/Discount';
 import { requireTenantAccess } from '@/lib/api-tenant';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateAndSanitize, validateTransaction } from '@/lib/validation';
 import { generateReceiptNumber, isDuplicateReceiptNumberError } from '@/lib/receipt';
@@ -23,6 +24,7 @@ import Customer from '@/models/Customer';
 import LoyaltyConfig from '@/models/LoyaltyConfig';
 import LoyaltyTransaction from '@/models/LoyaltyTransaction';
 import Table from '@/models/Table';
+import Branch from '@/models/Branch';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { wouldExceedCreditLimit } from '@/lib/customer-credit';
 import {
@@ -146,15 +148,25 @@ export async function GET(request: NextRequest) {
     await connectDB();
     // Require authentication — financial data must not be public
     let tenantId: string;
+    let role: string;
     try {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
+      role = tenantAccess.user.role;
     } catch (authError: unknown) {
       const t = await getValidationTranslatorFromRequest(request);
       const msg = authError instanceof Error ? authError.message : '';
       return NextResponse.json(
         { success: false, error: msg.includes('Forbidden') ? t('validation.forbidden', 'Forbidden') : t('validation.unauthorized', 'Unauthorized') },
         { status: msg.includes('Forbidden') ? 403 : 401 }
+      );
+    }
+
+    const t = await getValidationTranslatorFromRequest(request);
+    if (!(await hasTenantPermission(role, tenantId, 'transactions.view'))) {
+      return NextResponse.json(
+        { success: false, error: t('validation.forbidden', 'Forbidden') },
+        { status: 403 }
       );
     }
 
@@ -652,7 +664,24 @@ export async function POST(request: NextRequest) {
         zeroRated: item.zeroRated || false,
         subtotal: item.subtotal,
       }));
-      taxResult = await calculateTax(tenantId, subtotalAfterDiscount, taxItems, tenantSettings ?? undefined, appliedDiscountCategory);
+
+      // Resolve the region a region-scoped tax rule should match against: the
+      // transaction's branch address if one is set, else the tenant's own address.
+      let taxRegion: { country?: string; state?: string; city?: string; zipCode?: string } | undefined;
+      const branchForTax = typeof branchId === 'string' && branchId
+        ? await Branch.findOne({ _id: branchId, tenantId }).select('address').lean()
+        : null;
+      const addressSource = branchForTax?.address || tenantSettings?.address;
+      if (addressSource) {
+        taxRegion = {
+          country: addressSource.country,
+          state: addressSource.state,
+          city: addressSource.city,
+          zipCode: addressSource.zipCode,
+        };
+      }
+
+      taxResult = await calculateTax(tenantId, subtotalAfterDiscount, taxItems, tenantSettings ?? undefined, appliedDiscountCategory, taxRegion);
       taxAmount = taxResult.taxAmount;
     }
 

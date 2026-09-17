@@ -63,10 +63,21 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Invalid campaign ID' }, { status: 400 });
     }
 
-    const campaign = await Campaign.findOne({ _id: id, tenantId });
-    if (!campaign) return NextResponse.json({ success: false, error: 'Campaign not found' }, { status: 404 });
-    if (campaign.status === 'sent') {
-      return NextResponse.json({ success: false, error: 'Campaign already sent' }, { status: 409 });
+    // Atomically claim the campaign before sending anything: a plain find()
+    // followed by a later status check is a race — two concurrent clicks (or
+    // two admins) could both read 'draft' and each blast the full segment.
+    // Claiming via findOneAndUpdate makes only one request win the send.
+    const campaign = await Campaign.findOneAndUpdate(
+      { _id: id, tenantId, status: { $in: ['draft', 'failed'] } },
+      { $set: { status: 'sent' } },
+      { new: true }
+    );
+    if (!campaign) {
+      const exists = await Campaign.exists({ _id: id, tenantId });
+      return NextResponse.json(
+        { success: false, error: exists ? 'Campaign already sent' : 'Campaign not found' },
+        { status: exists ? 409 : 404 }
+      );
     }
 
     // Resolve recipients — fetch all active customers with contact info

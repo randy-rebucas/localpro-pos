@@ -324,7 +324,12 @@ const TransactionSchema: Schema = new Schema(
 TransactionSchema.index({ tenantId: 1, createdAt: -1 });
 TransactionSchema.index({ tenantId: 1, branchId: 1, createdAt: -1 });
 TransactionSchema.index({ tenantId: 1, receiptNumber: 1 }, { unique: true, sparse: true });
-TransactionSchema.index({ tenantId: 1, idempotencyKey: 1 }, { unique: true, sparse: true });
+// partialFilterExpression (not sparse) — sparse only excludes missing fields, not
+// explicit nulls, and legacy rows have idempotencyKey: null, which broke the unique build
+TransactionSchema.index(
+  { tenantId: 1, idempotencyKey: 1 },
+  { unique: true, partialFilterExpression: { idempotencyKey: { $type: 'string' } } }
+);
 TransactionSchema.index({ tenantId: 1, status: 1 });
 TransactionSchema.index({ tenantId: 1, isActive: 1, createdAt: -1 });
 TransactionSchema.index(

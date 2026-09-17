@@ -8,6 +8,7 @@ import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { showToast } from '@/lib/toast';
 import { getDictionaryClient } from '../../dictionaries-client';
+import { usePermissions } from '@/hooks/usePermissions';
 
 type Segment = 'all' | 'new' | 'regular' | 'vip' | 'at_risk' | 'lapsed';
 type Channel = 'email' | 'sms';
@@ -59,6 +60,8 @@ export default function CRMPage() {
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const { settings } = useTenantSettings();
   const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#35979c';
+  const { canAccess } = usePermissions();
+  const canManage = canAccess('crm.manage');
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -166,17 +169,19 @@ export default function CRMPage() {
         <PageTitle />
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">{dict?.crm?.title || 'CRM'}</h1>
-          <button
-            type="button"
-            onClick={() => setShowCompose(true)}
-            className="flex items-center gap-2 px-4 py-2.5 text-white text-sm font-medium border transition-colors"
-            style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-            </svg>
-            {dict?.crm?.newCampaign || 'New Campaign'}
-          </button>
+          {canManage && (
+            <button
+              type="button"
+              onClick={() => setShowCompose(true)}
+              className="flex items-center gap-2 px-4 py-2.5 text-white text-sm font-medium border transition-colors"
+              style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+              {dict?.crm?.newCampaign || 'New Campaign'}
+            </button>
+          )}
         </div>
 
         {/* Segment cards */}
@@ -350,7 +355,7 @@ export default function CRMPage() {
                           }`}>
                             {c.status.toUpperCase()}
                           </span>
-                          {c.status === 'draft' && (
+                          {canManage && c.status === 'draft' && (
                             <button
                               type="button"
                               onClick={() => handleSend(c)}
@@ -358,7 +363,7 @@ export default function CRMPage() {
                               className="text-xs px-2 py-1 text-white border transition-colors disabled:opacity-50"
                               style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
                             >
-                              {sending === c._id ? '…' : 'Send'}
+                              {sending === c._id ? '…' : (dict?.crm?.send || 'Send')}
                             </button>
                           )}
                         </div>
@@ -373,7 +378,7 @@ export default function CRMPage() {
       </div>
 
       {/* Compose campaign modal */}
-      {showCompose && (
+      {showCompose && canManage && (
         <div
           className="fixed inset-0 bg-gray-900/30 backdrop-blur-md z-50"
           onClick={() => setShowCompose(false)}

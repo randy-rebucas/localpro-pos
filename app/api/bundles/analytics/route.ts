@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import ProductBundle from '@/models/ProductBundle';
 import Transaction from '@/models/Transaction';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { requireTenantAccess } from '@/lib/api-tenant';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { logger } from '@/lib/logger';
 
 /**
@@ -11,10 +12,10 @@ import { logger } from '@/lib/logger';
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
-    const tenantId = await getTenantIdFromRequest(request);
+    const { tenantId, user } = await requireTenantAccess(request);
 
-    if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+    if (!(await hasTenantPermission(user.role, tenantId, 'bundles.manage'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
     const searchParams = request.nextUrl.searchParams;

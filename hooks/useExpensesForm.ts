@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { Expense } from './useExpensesList';
+import { type TranslationDict } from '@/types/dictionary';
 
 export interface ExpenseFormData {
   name: string;
@@ -33,10 +34,11 @@ const emptyForm: ExpenseFormData = {
   notes: '',
 };
 
-export function useExpensesForm(): UseExpensesFormReturn {
+export function useExpensesForm(dict?: TranslationDict | null): UseExpensesFormReturn {
   const [formData, setFormDataState] = useState<ExpenseFormData>(emptyForm);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const t = (key: string, fallback: string) => dict?.validation?.[key] || fallback;
 
   const setFormData = useCallback((data: Partial<ExpenseFormData>) => {
     setFormDataState(prev => ({ ...prev, ...data }));
@@ -66,26 +68,26 @@ export function useExpensesForm(): UseExpensesFormReturn {
 
       // Validate required fields
       if (!formData.name?.trim()) {
-        setError('Name of expense is required');
+        setError(t('expenseNameRequired', 'Name of expense is required'));
         return;
       }
       if (!formData.description?.trim()) {
-        setError('Description is required');
+        setError(t('descriptionRequired', 'Description is required'));
         return;
       }
       if (!formData.amount || formData.amount === '') {
-        setError('Amount is required');
+        setError(t('amountRequired', 'Amount is required'));
         return;
       }
 
       const amountValue = parseFloat(formData.amount);
       if (isNaN(amountValue) || amountValue <= 0) {
-        setError('Amount must be a positive number');
+        setError(t('amountPositive', 'Amount must be a valid positive number'));
         return;
       }
 
       if (!formData.date) {
-        setError('Date is required');
+        setError(t('expenseDateRequired', 'Date is required'));
         return;
       }
 
@@ -111,7 +113,8 @@ export function useExpensesForm(): UseExpensesFormReturn {
         setSubmitting(false);
       }
     },
-    [formData]
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `t` is derived purely from `dict`, already listed
+    [formData, dict]
   );
 
   return {

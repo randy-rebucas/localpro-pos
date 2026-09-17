@@ -88,7 +88,8 @@
       "Bash(grep -v \"dict\\\\|//\")",
       "Bash(python add_settings_error_keys.py)",
       "Bash(python add_bundles_keys.py)",
-      "Bash(python3 -c ' *)"
+      "Bash(python3 -c ' *)",
+      "Bash(npx tsc *)"
     ]
   },
   "hooks": {

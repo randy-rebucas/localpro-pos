@@ -6,9 +6,10 @@ export function useCashDrawerSessions() {
   const [sessions, setSessions] = useState<CashDrawerSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [totalPages, setTotalPages] = useState(1);
 
   const fetchSessions = useCallback(
-    async (statusFilter?: string, onError?: (error: string) => void) => {
+    async (statusFilter?: string, onError?: (error: string) => void, page = 1, limit = 10) => {
       setLoading(true);
       setError(null);
 
@@ -16,12 +17,12 @@ export function useCashDrawerSessions() {
       const timeout = setTimeout(() => controller.abort(), 20000);
 
       try {
-        let url = '/api/cash-drawer/sessions';
+        const params = new URLSearchParams({ page: String(page), limit: String(limit) });
         if (statusFilter) {
-          url += `?status=${statusFilter}`;
+          params.set('status', statusFilter);
         }
 
-        const res = await globalThis.fetch(url, {
+        const res = await globalThis.fetch(`/api/cash-drawer/sessions?${params.toString()}`, {
           credentials: 'include',
           signal: controller.signal,
         });
@@ -30,6 +31,7 @@ export function useCashDrawerSessions() {
 
         if (res.ok && data.success) {
           setSessions(data.data || []);
+          setTotalPages(data.pagination?.totalPages || 1);
         } else {
           const errorMsg = data.error || 'Failed to fetch cash drawer sessions';
           setError(errorMsg);
@@ -49,5 +51,5 @@ export function useCashDrawerSessions() {
     []
   );
 
-  return { sessions, loading, error, fetchSessions };
+  return { sessions, loading, error, totalPages, fetchSessions };
 }

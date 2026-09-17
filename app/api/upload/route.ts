@@ -7,6 +7,7 @@ import { uploadToCloudinary, deleteFromCloudinary } from '@/lib/cloudinary';
 import File from '@/models/File';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { createAuditLog } from '@/lib/audit';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = [
@@ -21,17 +22,18 @@ const ALLOWED_TYPES = [
 ];
 
 export async function POST(request: NextRequest) {
+  const t = await getValidationTranslatorFromRequest(request);
   try {
     await requireAuth(request);
     const user = await getCurrentUser(request);
     const tenantId = await getTenantIdFromRequest(request);
 
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 403 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 403 });
     }
 
     if (!user || !user.userId) {
-      return NextResponse.json({ success: false, error: 'User not found' }, { status: 401 });
+      return NextResponse.json({ success: false, error: t('validation.userNotFound', 'User not found') }, { status: 401 });
     }
 
     // Rate limit: 50 uploads per hour per user
@@ -39,7 +41,7 @@ export async function POST(request: NextRequest) {
     const { allowed } = checkRateLimit(rateLimitKey, 50, 60 * 60 * 1000);
     if (!allowed) {
       return NextResponse.json(
-        { success: false, error: 'Upload limit exceeded. Maximum 50 uploads per hour.' },
+        { success: false, error: t('validation.uploadLimitExceeded', 'Upload limit exceeded. Maximum 50 uploads per hour.') },
         { status: 429 }
       );
     }
@@ -48,13 +50,13 @@ export async function POST(request: NextRequest) {
     const file = formData.get('file') as File | null;
 
     if (!file) {
-      return NextResponse.json({ success: false, error: 'No file provided' }, { status: 400 });
+      return NextResponse.json({ success: false, error: t('validation.noFileProvided', 'No file provided') }, { status: 400 });
     }
 
     // Validate type
     if (!ALLOWED_TYPES.includes(file.type)) {
       return NextResponse.json(
-        { success: false, error: `Invalid file type. Allowed: ${ALLOWED_TYPES.join(', ')}` },
+        { success: false, error: t('validation.invalidFileType', `Invalid file type. Allowed: ${ALLOWED_TYPES.join(', ')}`) },
         { status: 400 }
       );
     }
@@ -62,7 +64,7 @@ export async function POST(request: NextRequest) {
     // Validate size
     if (file.size > MAX_FILE_SIZE) {
       return NextResponse.json(
-        { success: false, error: `File too large. Maximum size: ${MAX_FILE_SIZE / 1024 / 1024}MB` },
+        { success: false, error: t('validation.fileTooLarge', `File too large. Maximum size: ${MAX_FILE_SIZE / 1024 / 1024}MB`) },
         { status: 400 }
       );
     }
@@ -115,17 +117,33 @@ export async function POST(request: NextRequest) {
     } else {
       logger.error('Error uploading file:', error);
     }
-    return NextResponse.json({ success: false, error: 'Failed to upload file' }, { status: 500 });
+    return NextResponse.json({ success: false, error: t('validation.uploadFailed', 'Failed to upload file') }, { status: 500 });
   }
 }
 
 export async function GET(request: NextRequest) {
+  const t = await getValidationTranslatorFromRequest(request);
   try {
     await requireAuth(request);
+    const user = await getCurrentUser(request);
     const tenantId = await getTenantIdFromRequest(request);
 
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 403 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 403 });
+    }
+
+    if (!user || !user.userId) {
+      return NextResponse.json({ success: false, error: t('validation.userNotFound', 'User not found') }, { status: 401 });
+    }
+
+    // Rate limit: 200 listings per hour per user
+    const rateLimitKey = `upload-list:${tenantId}:${user.userId}`;
+    const { allowed } = checkRateLimit(rateLimitKey, 200, 60 * 60 * 1000);
+    if (!allowed) {
+      return NextResponse.json(
+        { success: false, error: t('validation.tooManyRequests', 'Too many requests') },
+        { status: 429 }
+      );
     }
 
     await connectDB();
@@ -149,22 +167,33 @@ export async function GET(request: NextRequest) {
     });
   } catch (error: unknown) {
     logger.error('Error fetching files:', error);
-    return NextResponse.json({ success: false, error: 'Failed to fetch files' }, { status: 500 });
+    return NextResponse.json({ success: false, error: t('validation.fetchFilesFailed', 'Failed to fetch files') }, { status: 500 });
   }
 }
 
 export async function DELETE(request: NextRequest) {
+  const t = await getValidationTranslatorFromRequest(request);
   try {
     await requireAuth(request);
     const user = await getCurrentUser(request);
     const tenantId = await getTenantIdFromRequest(request);
 
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 403 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 403 });
     }
 
     if (!user || !user.userId) {
-      return NextResponse.json({ success: false, error: 'User not found' }, { status: 401 });
+      return NextResponse.json({ success: false, error: t('validation.userNotFound', 'User not found') }, { status: 401 });
+    }
+
+    // Rate limit: 50 deletions per hour per user
+    const rateLimitKey = `upload-delete:${tenantId}:${user.userId}`;
+    const { allowed } = checkRateLimit(rateLimitKey, 50, 60 * 60 * 1000);
+    if (!allowed) {
+      return NextResponse.json(
+        { success: false, error: t('validation.tooManyRequests', 'Too many requests') },
+        { status: 429 }
+      );
     }
 
     // Get file ID from query params
@@ -172,7 +201,7 @@ export async function DELETE(request: NextRequest) {
     const fileId = searchParams.get('id');
 
     if (!fileId) {
-      return NextResponse.json({ success: false, error: 'File ID is required' }, { status: 400 });
+      return NextResponse.json({ success: false, error: t('validation.fileIdRequired', 'File ID is required') }, { status: 400 });
     }
 
     await connectDB();
@@ -181,13 +210,13 @@ export async function DELETE(request: NextRequest) {
     const file = await File.findById(fileId);
 
     if (!file) {
-      return NextResponse.json({ success: false, error: 'File not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.fileNotFound', 'File not found') }, { status: 404 });
     }
 
     // Ensure file belongs to authenticated tenant (security check)
     if (file.tenantId.toString() !== tenantId) {
       return NextResponse.json(
-        { success: false, error: 'Unauthorized: File does not belong to your tenant' },
+        { success: false, error: t('validation.fileNotYourTenant', 'Unauthorized: File does not belong to your tenant') },
         { status: 403 }
       );
     }
@@ -220,7 +249,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: 'File deleted successfully',
+      message: t('validation.fileDeleted', 'File deleted successfully'),
     });
   } catch (error: unknown) {
     if (error instanceof Error) {
@@ -228,7 +257,7 @@ export async function DELETE(request: NextRequest) {
     } else {
       logger.error('Error deleting file:', error);
     }
-    return NextResponse.json({ success: false, error: 'Failed to delete file' }, { status: 500 });
+    return NextResponse.json({ success: false, error: t('validation.deleteFailed', 'Failed to delete file') }, { status: 500 });
   }
 }
 

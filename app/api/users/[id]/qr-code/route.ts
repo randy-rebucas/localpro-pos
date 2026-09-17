@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 import { requireAuth, getCurrentUser } from '@/lib/auth';
@@ -45,7 +46,7 @@ export async function GET(
 
     if (!user.qrToken) {
       // Generate QR token if it doesn't exist
-      const newQrToken = user._id.toString() + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 15);
+      const newQrToken = crypto.randomBytes(32).toString('hex');
       await User.findByIdAndUpdate(id, { qrToken: newQrToken });
       return NextResponse.json({
         success: true,
@@ -112,8 +113,8 @@ export async function POST(
     }
 
     // Generate new QR token
-    const newQrToken = user._id.toString() + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 15);
-    
+    const newQrToken = crypto.randomBytes(32).toString('hex');
+
     await User.findByIdAndUpdate(id, { qrToken: newQrToken });
 
     await createAuditLog(request, {

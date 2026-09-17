@@ -39,6 +39,11 @@ const CATEGORY_VARIABLES: Record<TemplateCategory, string[]> = {
   attendanceAlert: ['{{employeeName}}', '{{clockInTime}}', '{{expectedTime}}', '{{hours}}'],
 };
 
+// Attendance alerts are only ever sent by email (lib/notifications.ts
+// sendAttendanceNotification has no SMS path) — don't offer an SMS template
+// that would silently never be used.
+const SMS_UNSUPPORTED_CATEGORIES: TemplateCategory[] = ['attendanceAlert'];
+
 export default function NotificationTemplatesManager({ settings, tenant, onUpdate, dict }: NotificationTemplatesManagerProps) { // eslint-disable-line @typescript-eslint/no-unused-vars
   const [templates, setTemplates] = useState<Record<string, any>>({}); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [loading, setLoading] = useState(true);
@@ -160,7 +165,9 @@ export default function NotificationTemplatesManager({ settings, tenant, onUpdat
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {(Object.keys(CATEGORY_VARIABLES) as TemplateCategory[]).map((category) => (
+        {(Object.keys(CATEGORY_VARIABLES) as TemplateCategory[])
+          .filter((category) => activeType === 'email' || !SMS_UNSUPPORTED_CATEGORIES.includes(category))
+          .map((category) => (
           <div
             key={category}
             className="p-4 border-2 border-gray-300 hover:bg-gray-50"

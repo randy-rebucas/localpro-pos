@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { ShoppingCart, RefreshCw, Package } from 'lucide-react';
 import { getDictionaryClient } from '../../dictionaries-client';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface ShopifyLineItem {
   id: number;
@@ -31,6 +32,8 @@ export default function ChannelOrdersPage() {
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const { canAccess } = usePermissions();
+  const canManage = canAccess('integrations.manage');
 
   const [orders, setOrders] = useState<ShopifyOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -85,6 +88,19 @@ export default function ChannelOrdersPage() {
       setFulfilling(null);
     }
   };
+
+  if (!canManage) {
+    return (
+      <div className="px-4 sm:px-6 py-6">
+        <div className="bg-red-50 border-2 border-red-300 p-6">
+          <h2 className="text-lg font-bold text-red-800 mb-1">{dict?.admin?.accessRestricted || 'Access Restricted'}</h2>
+          <p className="text-sm text-red-700">
+            {dict?.admin?.accessRestrictedChannelOrders || "You don't have permission to view channel orders. Contact an admin or owner."}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const customerName = (o: ShopifyOrder) => {
     const c = o.customer;
@@ -195,7 +211,7 @@ export default function ChannelOrdersPage() {
                         </p>
                         <p className="text-xs text-gray-400">{order.line_items.length} item{order.line_items.length !== 1 ? 's' : ''}</p>
                       </div>
-                      {(!order.fulfillment_status || order.fulfillment_status === 'unfulfilled' || order.fulfillment_status === 'partial') && (
+                      {canManage && (!order.fulfillment_status || order.fulfillment_status === 'unfulfilled' || order.fulfillment_status === 'partial') && (
                         <button
                           onClick={e => { e.stopPropagation(); handleFulfill(order.id); }}
                           disabled={fulfilling === order.id}

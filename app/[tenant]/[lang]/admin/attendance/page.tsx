@@ -8,6 +8,7 @@ import { useAttendance } from '@/hooks/useAttendance';
 import { useAttendanceFilters } from '@/hooks/useAttendanceFilters';
 import { useCurrentSessions } from '@/hooks/useCurrentSessions';
 import { getUserName, buildExportData, formatHours, calculateTotalHours, calculateAverageHours } from '@/lib/attendance-helpers';
+import { usePermissions } from '@/hooks/usePermissions';
 import toast from 'react-hot-toast';
 
 // Dynamically import charts to avoid SSR issues
@@ -42,6 +43,8 @@ export default function AttendancePage() {
   const { attendances, loading, fetchAttendances } = useAttendance();
   const { selectedUserId, setSelectedUserId, startDate, setStartDate, endDate, setEndDate, initializeDateRange } = useAttendanceFilters();
   const { currentSessions, fetchCurrentSessions, calculateSessionHours } = useCurrentSessions();
+  const { canAccess } = usePermissions();
+  const canManage = canAccess('attendance.manage');
 
   // Load dictionary
   useEffect(() => {
@@ -76,11 +79,11 @@ export default function AttendancePage() {
         if (data.success) {
           setUsers(data.data);
         } else {
-          throw new Error(data.error || 'Failed to fetch users');
+          throw new Error(data.error || dict?.common?.failedToFetchUsers || 'Failed to fetch users');
         }
       } catch (error) {
         console.error('Error fetching users:', error);
-        const errorMsg = error instanceof Error ? error.message : 'Failed to load employees';
+        const errorMsg = error instanceof Error ? error.message : (dict?.admin?.failedToLoadEmployees || 'Failed to load employees');
         setMessage({ type: 'error', text: errorMsg });
       } finally {
         setUsersLoading(false);
@@ -88,6 +91,7 @@ export default function AttendancePage() {
     };
 
     fetchUsers();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenant]);
 
   // Fetch attendance records when filters change
@@ -140,10 +144,10 @@ export default function AttendancePage() {
         } else if (format === 'pdf') {
           await downloadPDF(exportData, headers, baseFilename, dict.admin?.attendance || 'Attendance Records');
         }
-        toast.success(`Successfully exported as ${format.toUpperCase()}`);
+        toast.success((dict?.admin?.exportedSuccessfully || 'Successfully exported as {format}').replace('{format}', format.toUpperCase()));
       } catch (error) {
         console.error('Error exporting:', error);
-        const errorMsg = error instanceof Error ? error.message : `Failed to export ${format}`;
+        const errorMsg = error instanceof Error ? error.message : (dict?.admin?.failedToExport || 'Failed to export {format}').replace('{format}', format);
         toast.error(errorMsg);
       }
     },
@@ -156,6 +160,19 @@ export default function AttendancePage() {
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!canManage) {
+    return (
+      <div className="px-4 sm:px-6 py-6">
+        <div className="bg-red-50 border-2 border-red-300 p-6">
+          <h2 className="text-lg font-bold text-red-800 mb-1">{dict?.admin?.accessRestricted || 'Access Restricted'}</h2>
+          <p className="text-sm text-red-700">
+            {dict?.admin?.accessRestrictedAttendance || "You don't have permission to view the attendance dashboard. Contact an admin or owner."}
+          </p>
         </div>
       </div>
     );
@@ -196,7 +213,7 @@ export default function AttendancePage() {
         {/* Left — Filters sidebar */}
         <aside className="w-56 shrink-0 sticky top-6 space-y-4">
           <div className="bg-white border border-gray-300 p-4">
-            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Filters</h2>
+            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">{dict.admin?.filters || 'Filters'}</h2>
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">{dict.admin?.employee || 'Employee'}</label>
@@ -235,7 +252,7 @@ export default function AttendancePage() {
 
           {/* Export */}
           <div className="bg-white border border-gray-300 p-4">
-            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Export</h2>
+            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">{dict.admin?.exportSectionTitle || 'Export'}</h2>
             <div className="space-y-2">
               <button onClick={() => handleExport('csv')} className="w-full px-3 py-2 text-sm text-left border border-gray-300 bg-white hover:bg-gray-50 transition-colors">
                 CSV

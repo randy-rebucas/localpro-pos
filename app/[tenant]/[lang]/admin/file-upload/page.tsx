@@ -408,7 +408,7 @@ export default function FileUploadPage() {
                             <button
                               onClick={() => copyToClipboard(file.url)}
                               className="px-2 py-1 bg-gray-200 text-gray-700 hover:bg-gray-300 text-xs font-medium transition-colors whitespace-nowrap"
-                              title="Copy URL"
+                              title={(dict as any)?.fileUpload?.copy || 'Copy URL'} // eslint-disable-line @typescript-eslint/no-explicit-any
                             >
                               {(dict as any)?.fileUpload?.copy || 'Copy'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
                             </button>
@@ -507,7 +507,7 @@ export default function FileUploadPage() {
                   setViewingFile(null);
                 }}
                 className="ml-4 flex-shrink-0 text-gray-500 hover:text-gray-700 transition-colors"
-                aria-label="Close"
+                aria-label={(dict as any)?.common?.close || 'Close'} // eslint-disable-line @typescript-eslint/no-explicit-any
               >
                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -519,7 +519,7 @@ export default function FileUploadPage() {
             <div className="p-6">
               {/* URL Section */}
               <div className="mb-6 p-4 bg-gray-50 border border-gray-200">
-                <p className="text-xs font-semibold text-gray-700 mb-2">Public URL:</p>
+                <p className="text-xs font-semibold text-gray-700 mb-2">{(dict as any)?.fileUpload?.publicUrl || 'Public URL:'}</p> {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
                 <div className="flex items-center gap-2 flex-wrap">
                   <code className="flex-1 text-xs bg-white px-3 py-2 border border-gray-300 text-gray-700 break-all">
                     {viewingFile.url}
@@ -527,7 +527,7 @@ export default function FileUploadPage() {
                   <button
                     onClick={() => copyToClipboard(viewingFile.url)}
                     className="px-3 py-2 bg-gray-200 text-gray-700 hover:bg-gray-300 text-sm font-medium transition-colors whitespace-nowrap"
-                    title="Copy URL"
+                    title={(dict as any)?.fileUpload?.copy || 'Copy URL'} // eslint-disable-line @typescript-eslint/no-explicit-any
                   >
                     {(dict as any)?.fileUpload?.copy || 'Copy'} {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
                   </button>

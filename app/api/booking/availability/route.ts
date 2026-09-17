@@ -4,6 +4,7 @@ import Booking from '@/models/Booking';
 import Product from '@/models/Product';
 import Tenant from '@/models/Tenant';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { getClosedHolidayForDate } from '@/lib/holidays';
 
 /**
  * GET /api/booking/availability?tenantId={{tenantId}}&serviceId={{serviceId}}&date={{date}}
@@ -79,6 +80,10 @@ export async function GET(request: NextRequest) {
 
     const existingBookings = await Booking.find(query).lean();
 
+    // Days the tenant has marked the business closed (Admin → Holidays) have no
+    // available slots — mirrors the same check enforced at booking creation/reschedule time.
+    const closedHoliday = getClosedHolidayForDate(tenant.settings?.holidays, selectedDate);
+
     // Generate time slots
     const slots: Array<{ time: string; available: boolean }> = [];
     const slotStart = new Date(selectedDate);
@@ -108,7 +113,7 @@ export async function GET(request: NextRequest) {
 
       slots.push({
         time: currentSlot.toISOString(),
-        available: !hasConflict && !isPast,
+        available: !hasConflict && !isPast && !closedHoliday,
       });
 
       currentSlot = new Date(currentSlot.getTime() + slotInterval * 60000);
@@ -122,6 +127,7 @@ export async function GET(request: NextRequest) {
         slots,
         duration,
         slotInterval,
+        closedHoliday: closedHoliday ? { name: closedHoliday.name } : null,
       },
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any

@@ -15,6 +15,7 @@ import { showToast } from '@/lib/toast';
 import { useConfirm } from '@/lib/confirm';
 import { getBusinessTypeConfig, getAllowedProductTypes } from '@/lib/business-types'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getBusinessType } from '@/lib/business-type-helpers';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Barcode, Pencil, RefreshCw, RotateCcw, Trash2 } from 'lucide-react';
 import { useProductsList, type Product, type Category } from '@/hooks/useProductsList';
 import { useProductsForm } from '@/hooks/useProductsForm';
@@ -65,6 +66,8 @@ export default function ProductsPage() {
   const PAGE_SIZE = 20;
   const { settings } = useTenantSettings();
   const { confirm, Dialog } = useConfirm();
+  const { canAccess } = usePermissions();
+  const canManage = canAccess('products.manage');
   const [businessTypeConfig, setBusinessTypeConfig] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const {
     products,
@@ -428,34 +431,40 @@ export default function ProductsPage() {
                   </button>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setShowImportModal(true)}
-                className={btnSecondaryIcon}
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                </svg>
-                {dict.products?.import || 'Import'}
-              </button>
-              <Link
-                href={`/${tenant}/${lang}/admin/file-upload`}
-                className={btnSecondaryIcon}
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
-                {dict.products?.uploadImages || 'Upload Images'}
-              </Link>
-              <button
-                onClick={() => {
-                  setEditingProduct(null);
-                  setShowProductModal(true);
-                }}
-                className={btnPrimary}
-              >
-                {dict.common?.add || 'Add'} {dict.admin?.product || 'Product'}
-              </button>
+              {canManage && (
+                <button
+                  type="button"
+                  onClick={() => setShowImportModal(true)}
+                  className={btnSecondaryIcon}
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                  </svg>
+                  {dict.products?.import || 'Import'}
+                </button>
+              )}
+              {canManage && (
+                <Link
+                  href={`/${tenant}/${lang}/admin/file-upload`}
+                  className={btnSecondaryIcon}
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                  {dict.products?.uploadImages || 'Upload Images'}
+                </Link>
+              )}
+              {canManage && (
+                <button
+                  onClick={() => {
+                    setEditingProduct(null);
+                    setShowProductModal(true);
+                  }}
+                  className={btnPrimary}
+                >
+                  {dict.common?.add || 'Add'} {dict.admin?.product || 'Product'}
+                </button>
+              )}
             </div>
           </div>
 
@@ -465,20 +474,24 @@ export default function ProductsPage() {
                 {selectedProducts.size} {dict.admin?.selected || 'selected'}
               </span>
               <div className="flex gap-2 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => setShowBulkEditModal(true)}
-                  className={btnPrimarySm}
-                >
-                  {dict.products?.bulkEdit || 'Edit Selected'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowBulkRestockModal(true)}
-                  className={btnPrimarySm}
-                >
-                  {dict.products?.restockSelected || 'Restock Selected'}
-                </button>
+                {canManage && (
+                  <button
+                    type="button"
+                    onClick={() => setShowBulkEditModal(true)}
+                    className={btnPrimarySm}
+                  >
+                    {dict.products?.bulkEdit || 'Edit Selected'}
+                  </button>
+                )}
+                {canManage && (
+                  <button
+                    type="button"
+                    onClick={() => setShowBulkRestockModal(true)}
+                    className={btnPrimarySm}
+                  >
+                    {dict.products?.restockSelected || 'Restock Selected'}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setShowBulkBarcodeModal(true)}
@@ -592,19 +605,21 @@ export default function ProductsPage() {
                         >
                           <Barcode className="w-4 h-4" aria-hidden />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingProduct(product);
-                            setShowProductModal(true);
-                          }}
-                          className={`${btnTableIcon} text-brand hover:text-brand-navy-deep`}
-                          title={dict.common?.edit || 'Edit'}
-                          aria-label={dict.common?.edit || 'Edit'}
-                        >
-                          <Pencil className="w-4 h-4" aria-hidden />
-                        </button>
-                        {product.isActive === false ? (
+                        {canManage && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingProduct(product);
+                              setShowProductModal(true);
+                            }}
+                            className={`${btnTableIcon} text-brand hover:text-brand-navy-deep`}
+                            title={dict.common?.edit || 'Edit'}
+                            aria-label={dict.common?.edit || 'Edit'}
+                          >
+                            <Pencil className="w-4 h-4" aria-hidden />
+                          </button>
+                        )}
+                        {canManage && (product.isActive === false ? (
                           <button
                             type="button"
                             onClick={() => handleReactivateProduct(product._id)}
@@ -624,7 +639,7 @@ export default function ProductsPage() {
                           >
                             <Trash2 className="w-4 h-4" aria-hidden />
                           </button>
-                        )}
+                        ))}
                       </div>
                     </td>
                   </tr>

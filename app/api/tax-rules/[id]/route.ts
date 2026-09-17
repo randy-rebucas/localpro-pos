@@ -6,6 +6,7 @@ import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function GET(
   request: NextRequest,
@@ -55,13 +56,18 @@ export async function PATCH(
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
+    const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
+    const { allowed } = checkRateLimit(`write:tax-rules:${tenantId}:${ip}`, 30, 60_000);
+    if (!allowed) {
+      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
+    }
 
     const taxRule = await TaxRule.findOne({ _id: id, tenantId });
-    
+
     if (!taxRule) {
       return NextResponse.json({ success: false, error: t('validation.taxRuleNotFound', 'Tax rule not found') }, { status: 404 });
     }
-    
+
     const body = await request.json();
     const oldData = { name: taxRule.name, rate: taxRule.rate, isActive: taxRule.isActive };
     
@@ -119,6 +125,11 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
+    const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
+    const { allowed } = checkRateLimit(`write:tax-rules:${tenantId}:${ip}`, 30, 60_000);
+    if (!allowed) {
+      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
+    }
 
     const taxRule = await TaxRule.findOneAndDelete({ _id: id, tenantId });
     

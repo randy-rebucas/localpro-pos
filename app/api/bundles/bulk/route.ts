@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb';
 import ProductBundle from '@/models/ProductBundle';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { logger } from '@/lib/logger';
 
@@ -12,11 +13,15 @@ import { logger } from '@/lib/logger';
 export async function PUT(request: NextRequest) {
   try {
     await connectDB();
-    await requireAuth(request);
+    const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
 
     if (!tenantId) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+    }
+
+    if (!(await hasTenantPermission(user.role, tenantId, 'bundles.manage'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
     const body = await request.json();

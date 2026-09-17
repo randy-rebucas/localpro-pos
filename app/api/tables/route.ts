@@ -6,13 +6,17 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
+import { getTenantSettingsById } from '@/lib/tenant';
 
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
-    const { tenantId } = authResult;
+    const { tenantId, user } = authResult;
+    if (!(await hasTenantPermission(user.role, tenantId, 'tables.manage'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
 
     const searchParams = request.nextUrl.searchParams;
     const isActive = searchParams.get('isActive');
@@ -57,6 +61,14 @@ export async function POST(request: NextRequest) {
     const { tenantId, user } = authResult;
     if (!(await hasTenantPermission(user.role, tenantId, 'tables.configure'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
+
+    const tenantSettings = await getTenantSettingsById(tenantId);
+    if (tenantSettings?.enableTableManagement === false) {
+      return NextResponse.json(
+        { success: false, error: 'Table management is turned off for this store. Enable it under Settings → Feature Flags.' },
+        { status: 403 }
+      );
     }
 
     const ip = request.headers.get('x-forwarded-for') ?? 'unknown';

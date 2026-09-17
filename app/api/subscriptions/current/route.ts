@@ -2,25 +2,25 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Subscription from '@/models/Subscription';
 import '@/models/SubscriptionPlan';
-import { requireAuth } from '@/lib/auth';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { requireTenantAccess } from '@/lib/api-tenant';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
-    const t = await getValidationTranslatorFromRequest(request);
+    const { tenantId, user } = await requireTenantAccess(request);
 
-    // Require authentication
-    const user = await requireAuth(request); // eslint-disable-line @typescript-eslint/no-unused-vars
-    const tenantId = await getTenantIdFromRequest(request);
+    if (!(await hasTenantPermission(user.role, tenantId, 'subscriptions.manage'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
 
-    if (!tenantId) {
-      return NextResponse.json(
-        { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
-        { status: 404 }
-      );
+    const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
+    const { allowed } = checkRateLimit(`read:subscriptions-current:${tenantId}:${ip}`, 60, 60_000);
+    if (!allowed) {
+      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
     // Get the current subscription for this tenant

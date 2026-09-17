@@ -64,6 +64,14 @@ export async function PUT(
     const body = await request.json();
     const settings = body.settings || body;
 
+    // businessHours has its own granular permission (the Business Hours admin
+    // page gates on it, not settings.manage) — enforce it here too, since this
+    // shared settings endpoint is the only thing that actually persists it.
+    if (Object.prototype.hasOwnProperty.call(settings, 'businessHours')
+      && !(await hasTenantPermission(user.role, user.tenantId, 'business_hours.manage'))) {
+      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
+    }
+
     // Validate settings structure
     const defaultSettings = getDefaultTenantSettings();
 
@@ -112,10 +120,8 @@ export async function PUT(
     const colorFields = ['primaryColor', 'secondaryColor', 'accentColor', 'backgroundColor', 'textColor'];
     for (const field of colorFields) {
       if (updatedSettings[field] && !/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(updatedSettings[field])) {
-        return NextResponse.json(
-          { success: false, error: t('validation.invalidColorFormat', `Invalid color format for ${field}. Use hex format (e.g., #FF5733)`) },
-          { status: 400 }
-        );
+        const errorMsg = t('validation.invalidColorFormat', 'Invalid color format for {field}. Use hex format (e.g., #FF5733)').replace('{field}', field);
+        return NextResponse.json({ success: false, error: errorMsg }, { status: 400 });
       }
     }
 

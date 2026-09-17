@@ -475,13 +475,13 @@ export async function sendAttendanceNotification(
 
     const clockInDate = formatDate(data.clockInTime, tenantSettings);
     const clockInTime = formatTime(data.clockInTime, tenantSettings);
-    
+
     let subject = '';
-    let emailBody = '';
-    
+    let defaultBody = '';
+
     if (data.type === 'late_arrival') {
       subject = `Late Arrival Alert: ${data.userName}`;
-      emailBody = `
+      defaultBody = `
 Hello ${data.userName},
 
 This is an automated notification regarding your attendance.
@@ -499,7 +499,7 @@ Attendance Management System
       `.trim();
     } else if (data.type === 'missing_clock_out') {
       subject = `Missing Clock-Out Alert: ${data.userName}`;
-      emailBody = `
+      defaultBody = `
 Hello ${data.userName},
 
 This is an automated notification regarding your attendance.
@@ -514,6 +514,24 @@ Please remember to clock out at the end of your shift.
 Best regards,
 Attendance Management System
       `.trim();
+    }
+
+    // Use tenant's configured template if available, otherwise use the default above
+    const emailTemplate = tenantSettings.notificationTemplates?.email?.attendanceAlert;
+    let emailBody = defaultBody;
+    if (emailTemplate) {
+      const parts = emailTemplate.split('|');
+      const body = parts.length > 1 ? parts[1] : parts[0];
+      const templateVars = {
+        employeeName: data.userName,
+        clockInTime: `${clockInDate} ${clockInTime}`,
+        expectedTime: data.expectedTime ? formatTime(data.expectedTime, tenantSettings) : undefined,
+        hours: data.hoursSinceClockIn ? data.hoursSinceClockIn.toFixed(1) : undefined,
+      };
+      emailBody = renderNotificationTemplate(body, templateVars, tenantSettings);
+      if (parts.length > 1) {
+        subject = renderNotificationTemplate(parts[0], templateVars, tenantSettings);
+      }
     }
 
     return await sendEmail({
@@ -547,17 +565,44 @@ export async function sendBookingCancellation(
   const formattedDate = formatDate(data.startTime, tenantSettings);
   const formattedTime = formatTime(data.startTime, tenantSettings);
 
-  const message = `Your booking for ${data.serviceName} has been cancelled.\n\n` +
+  const templateVars = {
+    customerName: data.customerName,
+    serviceName: data.serviceName,
+    date: formattedDate,
+    time: formattedTime,
+    startTime: formattedTime,
+    reason: data.notes,
+  };
+
+  const defaultMessage = `Your booking for ${data.serviceName} has been cancelled.\n\n` +
     `Original Date: ${formattedDate}\n` +
     `Original Time: ${formattedTime}\n` +
     `\nIf you need to reschedule, please contact us.`;
+
+  // Use template if available, otherwise use default message
+  const emailTemplate = tenantSettings.notificationTemplates?.email?.bookingCancellation;
+  let emailMessage = defaultMessage;
+  let emailSubject = `Booking Cancelled: ${data.serviceName}`;
+  if (emailTemplate) {
+    const parts = emailTemplate.split('|');
+    const body = parts.length > 1 ? parts[1] : parts[0];
+    emailMessage = renderNotificationTemplate(body, templateVars, tenantSettings);
+    if (parts.length > 1) {
+      emailSubject = renderNotificationTemplate(parts[0], templateVars, tenantSettings);
+    }
+  }
+
+  const smsTemplate = tenantSettings.notificationTemplates?.sms?.bookingCancellation;
+  const smsMessage = smsTemplate
+    ? renderNotificationTemplate(smsTemplate, templateVars, tenantSettings)
+    : defaultMessage;
 
   // Send email if email is provided and email notifications are enabled
   if (data.customerEmail && tenantSettings.emailNotifications) {
     results.email = await sendEmail({
       to: data.customerEmail,
-      subject: `Booking Cancelled: ${data.serviceName}`,
-      message,
+      subject: emailSubject,
+      message: emailMessage,
       type: 'email',
     });
   }
@@ -566,7 +611,7 @@ export async function sendBookingCancellation(
   if (data.customerPhone && tenantSettings.smsNotifications) {
     results.sms = await sendSMS({
       to: data.customerPhone,
-      message,
+      message: smsMessage,
       type: 'sms',
     });
   }

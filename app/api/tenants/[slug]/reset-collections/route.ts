@@ -28,6 +28,7 @@ import CustomerOTP from '@/models/CustomerOTP';
 import mongoose from 'mongoose';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
+import { runWithOptionalMongoTransaction, sessionOpts } from '@/lib/mongo-session';
 
 // Map collection names to their models
 const COLLECTION_MODELS: Record<string, any> = { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -225,14 +226,18 @@ export async function POST(
       );
     }
 
-    const results: Record<string, { deleted: number }> = {};
-
-    // Delete documents for each collection
-    for (const collectionName of collections) {
-      const Model = COLLECTION_MODELS[collectionName];
-      const result = await Model.deleteMany({ tenantId: tenant._id });
-      results[collectionName] = { deleted: result.deletedCount || 0 };
-    }
+    // Atomic: either every selected collection is cleared, or none are — a
+    // failure partway through (e.g. one bad collection) must not leave the
+    // tenant with some collections wiped and others untouched.
+    const results = await runWithOptionalMongoTransaction(async (session) => {
+      const r: Record<string, { deleted: number }> = {};
+      for (const collectionName of collections) {
+        const Model = COLLECTION_MODELS[collectionName];
+        const result = await Model.deleteMany({ tenantId: tenant._id }, sessionOpts(session));
+        r[collectionName] = { deleted: result.deletedCount || 0 };
+      }
+      return r;
+    });
 
     // Create audit log
     await createAuditLog(request, {
@@ -314,56 +319,64 @@ export async function PUT(
       );
     }
 
-    const results: Record<string, { restored: number; cleared: number }> = {};
+    // Atomic: a partial failure (bad document, duplicate key, etc.) must not
+    // leave collections cleared-but-not-restored, or one collection restored
+    // while a later one silently fails. `ordered: true` inside the session so
+    // a single bad document aborts that collection's insert instead of
+    // leaving an inconsistent partial set (transactions require ordered writes).
+    const results = await runWithOptionalMongoTransaction(async (session) => {
+      const r: Record<string, { restored: number; cleared: number }> = {};
 
-    // Restore each collection
-    for (const [collectionName, documents] of Object.entries(backupData.collections)) {
-      if (!COLLECTION_MODELS[collectionName]) {
-        continue; // Skip invalid collections
-      }
+      for (const [collectionName, documents] of Object.entries(backupData.collections)) {
+        if (!COLLECTION_MODELS[collectionName]) {
+          continue; // Skip invalid collections
+        }
 
-      const Model = COLLECTION_MODELS[collectionName];
-      let cleared = 0;
+        const Model = COLLECTION_MODELS[collectionName];
+        let cleared = 0;
 
-      // Clear existing data if requested
-      if (clearExisting) {
-        const deleteResult = await Model.deleteMany({ tenantId: tenant._id });
-        cleared = deleteResult.deletedCount || 0;
-      }
+        // Clear existing data if requested
+        if (clearExisting) {
+          const deleteResult = await Model.deleteMany({ tenantId: tenant._id }, sessionOpts(session));
+          cleared = deleteResult.deletedCount || 0;
+        }
 
-      // Restore documents
-      if (Array.isArray(documents) && documents.length > 0) {
-        // Replace tenantId with current tenant's ID and convert _id strings to ObjectIds
-        const documentsToInsert = documents.map((doc: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-          const newDoc = { ...doc };
-          // Remove _id to let MongoDB create new ones (or keep if you want to preserve IDs)
-          delete newDoc._id;
-          // Ensure tenantId is set correctly
-          newDoc.tenantId = tenant._id;
-          // Convert any ObjectId strings to ObjectIds
-          Object.keys(newDoc).forEach(key => {
-            if (typeof newDoc[key] === 'string' && mongoose.Types.ObjectId.isValid(newDoc[key]) && key.endsWith('Id')) {
-              newDoc[key] = new mongoose.Types.ObjectId(newDoc[key]);
-            }
-          });
-          // Handle nested ObjectIds in arrays (like items.product in transactions)
-          if (newDoc.items && Array.isArray(newDoc.items)) {
-            newDoc.items = newDoc.items.map((item: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-              if (item.product && typeof item.product === 'string' && mongoose.Types.ObjectId.isValid(item.product)) {
-                item.product = new mongoose.Types.ObjectId(item.product);
+        // Restore documents
+        if (Array.isArray(documents) && documents.length > 0) {
+          // Replace tenantId with current tenant's ID and convert _id strings to ObjectIds
+          const documentsToInsert = documents.map((doc: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+            const newDoc = { ...doc };
+            // Remove _id to let MongoDB create new ones (or keep if you want to preserve IDs)
+            delete newDoc._id;
+            // Ensure tenantId is set correctly
+            newDoc.tenantId = tenant._id;
+            // Convert any ObjectId strings to ObjectIds
+            Object.keys(newDoc).forEach(key => {
+              if (typeof newDoc[key] === 'string' && mongoose.Types.ObjectId.isValid(newDoc[key]) && key.endsWith('Id')) {
+                newDoc[key] = new mongoose.Types.ObjectId(newDoc[key]);
               }
-              return item;
             });
-          }
-          return newDoc;
-        });
+            // Handle nested ObjectIds in arrays (like items.product in transactions)
+            if (newDoc.items && Array.isArray(newDoc.items)) {
+              newDoc.items = newDoc.items.map((item: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+                if (item.product && typeof item.product === 'string' && mongoose.Types.ObjectId.isValid(item.product)) {
+                  item.product = new mongoose.Types.ObjectId(item.product);
+                }
+                return item;
+              });
+            }
+            return newDoc;
+          });
 
-        await Model.insertMany(documentsToInsert, { ordered: false });
-        results[collectionName] = { restored: documentsToInsert.length, cleared };
-      } else {
-        results[collectionName] = { restored: 0, cleared };
+          await Model.insertMany(documentsToInsert, { ordered: true, ...sessionOpts(session) });
+          r[collectionName] = { restored: documentsToInsert.length, cleared };
+        } else {
+          r[collectionName] = { restored: 0, cleared };
+        }
       }
-    }
+
+      return r;
+    });
 
     // Create audit log
     await createAuditLog(request, {

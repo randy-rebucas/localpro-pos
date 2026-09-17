@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { getDictionaryClient } from '../../dictionaries-client';
 import Currency from '@/components/Currency';
 import { useCashDrawerSessions, type CashDrawerSession } from '@/hooks/useCashDrawerSessions';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   getUserName,
   getUserEmail,
@@ -26,17 +27,20 @@ export default function CashDrawerPage() {
   const [selectedSession, setSelectedSession] = useState<CashDrawerSession | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [refreshing, setRefreshing] = useState(false);
+  const [page, setPage] = useState(1);
 
-  const { sessions, loading, fetchSessions } = useCashDrawerSessions();
+  const { sessions, loading, totalPages, fetchSessions } = useCashDrawerSessions();
+  const { canAccess } = usePermissions();
+  const canView = canAccess('cash_drawer.manage');
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
   }, [lang]);
 
   useEffect(() => {
-    fetchSessions(statusFilter, (error) => toast.error(error));
+    fetchSessions(statusFilter, (error) => toast.error(error), page, 10);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter]);
+  }, [statusFilter, page]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -44,7 +48,7 @@ export default function CashDrawerPage() {
     await fetchSessions(statusFilter, (error) => {
       failed = true;
       toast.error(error);
-    });
+    }, page, 10);
     if (!failed) {
       toast.success(getRefreshSuccessMessage(dict));
     }
@@ -57,6 +61,19 @@ export default function CashDrawerPage() {
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!canView) {
+    return (
+      <div className="px-4 sm:px-6 py-6">
+        <div className="bg-red-50 border-2 border-red-300 p-6">
+          <h2 className="text-lg font-bold text-red-800 mb-1">{dict?.admin?.accessRestricted || 'Access Restricted'}</h2>
+          <p className="text-sm text-red-700">
+            {dict?.admin?.accessRestrictedCashDrawer || "You don't have permission to view cash drawer sessions. Contact an admin or owner."}
+          </p>
         </div>
       </div>
     );
@@ -82,7 +99,7 @@ export default function CashDrawerPage() {
               <label className="block text-sm font-medium text-gray-700 mb-2">{dict.admin?.filterByStatus || 'Filter by Status'}</label>
               <select
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
+                onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
                 className="w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
               >
                 <option value="">{dict.admin?.allSessions || 'All Sessions'}</option>
@@ -94,7 +111,7 @@ export default function CashDrawerPage() {
               onClick={handleRefresh}
               disabled={refreshing}
               className="px-4 py-2 bg-brand text-white hover:bg-brand-hover disabled:bg-gray-400 border border-brand-hover flex items-center gap-2 transition-colors"
-              title="Refresh cash drawer sessions"
+              title={dict.admin?.cashDrawerRefreshTitle || 'Refresh cash drawer sessions'}
             >
               <svg className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.5a11 11 0 0120 0v-5m0 0a11 11 0 0120 5V9m-11 11a11 11 0 0120 0v5m0 0a11 11 0 01-20 0v-5m0 0a11 11 0 01-20 0" />
@@ -171,6 +188,27 @@ export default function CashDrawerPage() {
               <div className="text-center py-8 text-gray-500">{dict.common?.noResults || 'No cash drawer sessions found'}</div>
             )}
           </div>
+          {totalPages > 1 && (
+            <div className="mt-4 flex justify-center gap-2">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="px-4 py-2 border border-gray-300 disabled:opacity-50 bg-white"
+              >
+                {dict.transactions?.previous || dict.common?.previous || 'Previous'}
+              </button>
+              <span className="px-4 py-2 text-sm text-gray-700">
+                {dict.transactions?.page || dict.admin?.page || 'Page'} {page} {dict.transactions?.of || dict.admin?.of || 'of'} {totalPages}
+              </span>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="px-4 py-2 border border-gray-300 disabled:opacity-50 bg-white"
+              >
+                {dict.transactions?.next || dict.common?.next || 'Next'}
+              </button>
+            </div>
+          )}
         </div>
 
         {selectedSession && (

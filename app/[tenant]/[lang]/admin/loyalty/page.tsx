@@ -8,11 +8,15 @@ import { useLoyaltyConfig } from '@/hooks/useLoyaltyConfig';
 import { useLoyaltyCustomers } from '@/hooks/useLoyaltyCustomers';
 import { getSaveSuccessMessage, getSaveErrorMessage } from '@/lib/loyalty-helpers';
 import { getDictionaryClient } from '../../dictionaries-client';
+import { usePermissions } from '@/hooks/usePermissions';
 
 export default function LoyaltyPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
+  const { canAccess } = usePermissions();
+  const canManage = canAccess('loyalty.config');
+  const canView = canAccess('loyalty.manage');
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
 
   useEffect(() => {
@@ -45,6 +49,19 @@ export default function LoyaltyPage() {
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand" />
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!canView) {
+    return (
+      <div className="px-4 sm:px-6 py-6">
+        <div className="bg-red-50 border-2 border-red-300 p-6">
+          <h2 className="text-lg font-bold text-red-800 mb-1">{dict?.admin?.accessRestricted || 'Access Restricted'}</h2>
+          <p className="text-sm text-red-700">
+            {dict?.admin?.accessRestrictedLoyalty || "You don't have permission to view loyalty. Contact an admin or owner."}
+          </p>
         </div>
       </div>
     );
@@ -97,6 +114,7 @@ export default function LoyaltyPage() {
                 {dict?.loyalty?.programSettings || 'Program Settings'}
               </h2>
               <form onSubmit={handleConfigSave} className="space-y-4">
+                <fieldset disabled={!canManage} className="space-y-4">
                 <div>
                   <label className="block text-xs font-medium text-gray-500 uppercase mb-1">
                     {dict?.loyalty?.pointsPerPeso || 'Points per ₱1 spent'}
@@ -173,13 +191,14 @@ export default function LoyaltyPage() {
                 >
                   {savingConfig ? (dict?.admin?.saving || 'Saving...') : configDirty ? (dict?.loyalty?.saveChanges || 'Save Changes') : (dict?.loyalty?.saved || 'Saved')}
                 </button>
+                </fieldset>
               </form>
 
               {config && (
                 <div className="mt-4 pt-4 border-t border-gray-100 text-xs text-gray-400 space-y-1">
-                  <p>Rate: {config.pointsPerPeso} pt / ₱1 spent</p>
-                  <p>Value: ₱{config.pesoPerPoint} / point</p>
-                  <p>Min redeem: {config.minRedemption} points (₱{(config.minRedemption * config.pesoPerPoint).toFixed(2)})</p>
+                  <p>{(dict?.loyalty?.rateSummaryLabel || 'Rate: {rate} pt / ₱1 spent').replace('{rate}', String(config.pointsPerPeso))}</p>
+                  <p>{(dict?.loyalty?.valueSummaryLabel || 'Value: ₱{value} / point').replace('{value}', String(config.pesoPerPoint))}</p>
+                  <p>{(dict?.loyalty?.minRedeemSummaryLabel || 'Min redeem: {points} points (₱{value})').replace('{points}', String(config.minRedemption)).replace('{value}', (config.minRedemption * config.pesoPerPoint).toFixed(2))}</p>
                 </div>
               )}
             </div>

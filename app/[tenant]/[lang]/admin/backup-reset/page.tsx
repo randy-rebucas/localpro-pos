@@ -19,11 +19,14 @@ import {
   formatResultsMessage,
 } from '@/lib/backup-reset-helpers';
 import toast from 'react-hot-toast';
+import { usePermissions } from '@/hooks/usePermissions';
 
 export default function BackupResetPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
+  const { canAccess } = usePermissions();
+  const canManage = canAccess('reset_collections.manage');
   const [dict, setDict] = React.useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [loading, setLoading] = React.useState(true);
   const [selectedCollections, setSelectedCollections] = React.useState<string[]>([]);
@@ -152,7 +155,7 @@ export default function BackupResetPage() {
               <div className="flex items-center gap-4">
                 <button
                   onClick={handleBackupClick}
-                  disabled={backing || !canCreateBackup(selectedCollections)}
+                  disabled={!canManage || backing || !canCreateBackup(selectedCollections)}
                   className="px-6 py-3 bg-brand text-white hover:bg-brand-hover font-semibold transition-all duration-200 border border-brand-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   {backing ? (
@@ -235,7 +238,7 @@ export default function BackupResetPage() {
 
                 <button
                   onClick={handleRestoreClick}
-                  disabled={restoring || !canRestore(restoreFile)}
+                  disabled={!canManage || restoring || !canRestore(restoreFile)}
                   className="px-6 py-3 bg-green-600 text-white hover:bg-green-700 font-semibold transition-all duration-200 border border-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   {restoring ? (
@@ -282,20 +285,22 @@ export default function BackupResetPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-3">
                     {dict?.backupReset?.selectCollectionsToReset || 'Select Collections to Reset:'}
                   </label>
-                  <div className="flex gap-2 mb-4">
-                    <button
-                      onClick={handleSelectAll}
-                      className="px-4 py-2 text-sm bg-brand-soft text-brand-hover hover:bg-teal-100 font-medium transition-colors"
-                    >
-                      {dict?.backupReset?.selectAll || 'Select All'}
-                    </button>
-                    <button
-                      onClick={() => setSelectedCollections([])}
-                      className="px-4 py-2 text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium transition-colors"
-                    >
-                      {dict?.backupReset?.clearAll || 'Clear All'}
-                    </button>
-                  </div>
+                  {canManage && (
+                    <div className="flex gap-2 mb-4">
+                      <button
+                        onClick={handleSelectAll}
+                        className="px-4 py-2 text-sm bg-brand-soft text-brand-hover hover:bg-teal-100 font-medium transition-colors"
+                      >
+                        {dict?.backupReset?.selectAll || 'Select All'}
+                      </button>
+                      <button
+                        onClick={() => setSelectedCollections([])}
+                        className="px-4 py-2 text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium transition-colors"
+                      >
+                        {dict?.backupReset?.clearAll || 'Clear All'}
+                      </button>
+                    </div>
+                  )}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {BACKUP_RESET_COLLECTIONS.map((collection) => (
                       <label
@@ -304,6 +309,7 @@ export default function BackupResetPage() {
                       >
                         <input
                           type="checkbox"
+                          disabled={!canManage}
                           checked={selectedCollections.includes(collection.key)}
                           onChange={(e) => {
                             if (e.target.checked) {
@@ -325,7 +331,7 @@ export default function BackupResetPage() {
                 <div className="flex items-center gap-4 pt-4 border-t border-gray-200">
                   <button
                     onClick={handleResetClick}
-                    disabled={!canReset(selectedCollections, resetting)}
+                    disabled={!canManage || !canReset(selectedCollections, resetting)}
                     className="px-6 py-3 bg-red-600 text-white hover:bg-red-700 font-semibold transition-all duration-200 border border-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   >
                     {resetting ? (

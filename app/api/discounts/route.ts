@@ -1,34 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Discount from '@/models/Discount';
-import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
-import { requireAuth } from '@/lib/auth'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkFeatureAccess } from '@/lib/subscription';
 import { ensureLegalDiscounts } from '@/lib/discount-seeds';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
-    // SECURITY: Validate tenant access for authenticated requests
-    let tenantId: string;
-    try {
-      const tenantAccess = await requireTenantAccess(request);
-      tenantId = tenantAccess.tenantId;
-    } catch (authError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      const t = await getValidationTranslatorFromRequest(request); // eslint-disable-line @typescript-eslint/no-unused-vars
-      if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
-        return NextResponse.json(
-          { success: false, error: authError.message },
-          { status: authError.message.includes('Unauthorized') ? 401 : 403 }
-        );
-      }
-      throw authError;
+    const { tenantId } = await requireTenantAccess(request);
+
+    const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
+    const { allowed } = checkRateLimit(`read:discounts:${tenantId}:${ip}`, 60, 60_000);
+    if (!allowed) {
+      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
-    const t = await getValidationTranslatorFromRequest(request); // eslint-disable-line @typescript-eslint/no-unused-vars
-    
+
     // Auto-seed legal discounts (SC20, PWD20) for this tenant
     await ensureLegalDiscounts(tenantId);
 
@@ -51,32 +43,23 @@ export async function GET(request: NextRequest) {
     const discounts = await Discount.find(query).sort({ createdAt: -1 });
 
     return NextResponse.json({ success: true, data: discounts });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error) {
+    return handleApiError(error, 'Failed to fetch discounts');
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
-    // SECURITY: Validate tenant access for authenticated requests
-    let tenantId: string;
-    try {
-      const tenantAccess = await requireTenantAccess(request);
-      tenantId = tenantAccess.tenantId;
-      // Also check role
-      if (!(await hasTenantPermission(tenantAccess.user.role, tenantId, 'discounts.manage'))) {
-        throw new Error('Forbidden: Insufficient permissions');
-      }
-    } catch (authError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      const t = await getValidationTranslatorFromRequest(request); // eslint-disable-line @typescript-eslint/no-unused-vars
-      if (authError.message.includes('Unauthorized') || authError.message.includes('Forbidden')) {
-        return NextResponse.json(
-          { success: false, error: authError.message },
-          { status: authError.message.includes('Unauthorized') ? 401 : 403 }
-        );
-      }
-      throw authError;
+    const { tenantId, user } = await requireTenantAccess(request);
+    if (!(await hasTenantPermission(user.role, tenantId, 'discounts.manage'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
+
+    const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
+    const { allowed } = checkRateLimit(`write:discounts:${tenantId}:${ip}`, 30, 60_000);
+    if (!allowed) {
+      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
     // Check if discounts feature is enabled in subscription
@@ -187,14 +170,14 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, data: discount }, { status: 201 });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    const t = await getValidationTranslatorFromRequest(request);
     if (error.code === 11000) {
+      const t = await getValidationTranslatorFromRequest(request);
       return NextResponse.json(
         { success: false, error: t('validation.discountCodeExists', 'Discount code already exists') },
         { status: 400 }
       );
     }
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+    return handleApiError(error, 'Failed to create discount');
   }
 }
 

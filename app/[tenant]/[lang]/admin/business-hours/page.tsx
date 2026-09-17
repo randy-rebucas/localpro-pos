@@ -7,12 +7,15 @@ import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { useBusinessHoursSettings } from '@/hooks/useBusinessHoursSettings';
+import { usePermissions } from '@/hooks/usePermissions';
 
 export default function BusinessHoursAdminPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const { canAccess } = usePermissions();
+  const canManage = canAccess('business_hours.manage');
 
   const { settings, loading, fetchSettings, updateSettings } = useBusinessHoursSettings(tenant);
 
@@ -49,22 +52,24 @@ export default function BusinessHoursAdminPage() {
         </div>
 
         <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8">
-          <BusinessHoursManager
-            settings={settings}
-            tenant={tenant}
-            dict={dict}
-            onUpdate={(updates) => {
-              updateSettings(
-                updates,
-                () => {
-                  toast.success(dict?.admin?.businessHoursUpdated || 'Business hours updated successfully');
-                },
-                (error) => {
-                  toast.error(error || dict?.admin?.updateBusinessHoursError || 'Failed to update business hours');
-                }
-              );
-            }}
-          />
+          <fieldset disabled={!canManage}>
+            <BusinessHoursManager
+              settings={settings}
+              tenant={tenant}
+              dict={dict}
+              onUpdate={(updates) => {
+                updateSettings(
+                  updates,
+                  () => {
+                    toast.success(dict?.admin?.businessHoursUpdated || 'Business hours updated successfully');
+                  },
+                  (error) => {
+                    toast.error(error || dict?.admin?.updateBusinessHoursError || 'Failed to update business hours');
+                  }
+                );
+              }}
+            />
+          </fieldset>
         </div>
       </div>
     </div>

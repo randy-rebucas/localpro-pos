@@ -35,6 +35,10 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
+    if (!(await hasTenantPermission(user.role, user.tenantId, 'roles_permissions.manage'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
+
     return NextResponse.json({
       success: true,
       data: {

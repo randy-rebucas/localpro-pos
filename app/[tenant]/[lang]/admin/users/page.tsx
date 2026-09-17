@@ -6,6 +6,7 @@ import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import QRCodeDisplay from '@/components/QRCodeDisplay';
 import { useConfirm } from '@/lib/confirm';
 import { useUsersList, type User } from '@/hooks/useUsersList';
@@ -37,6 +38,9 @@ export default function UsersPage() {
   const { user: currentUser } = useAuth();
   const { confirm, Dialog: ConfirmDialog } = useConfirm();
   const { users, loading, fetchUsers, deleteUser, toggleUserStatus } = useUsersList();
+  const { canAccess } = usePermissions();
+  const canManage = canAccess('users.manage');
+  const canDelete = canAccess('users.delete');
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -108,15 +112,17 @@ export default function UsersPage() {
         <div className="bg-white border border-gray-300 p-6">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold text-gray-900">{dict.admin?.users || 'Users'}</h2>
-            <button
-              onClick={() => {
-                setEditingUser(null);
-                setShowUserModal(true);
-              }}
-              className="px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium border border-brand-hover"
-            >
-              {dict.common?.add || 'Add'} {dict.admin?.user || 'User'}
-            </button>
+            {canManage && (
+              <button
+                onClick={() => {
+                  setEditingUser(null);
+                  setShowUserModal(true);
+                }}
+                className="px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium border border-brand-hover"
+              >
+                {dict.common?.add || 'Add'} {dict.admin?.user || 'User'}
+              </button>
+            )}
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -159,7 +165,7 @@ export default function UsersPage() {
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex gap-2">
-                        {canManageRole(currentUser?.role ?? '', user.role) && (
+                        {canManage && canManageRole(currentUser?.role ?? '', user.role) && (
                           <button
                             onClick={() => {
                               setEditingUser(user);
@@ -170,7 +176,7 @@ export default function UsersPage() {
                             {dict.common?.edit || 'Edit'}
                           </button>
                         )}
-                        {currentUser?._id !== user._id && canManageRole(currentUser?.role ?? '', user.role) && (
+                        {canManage && currentUser?._id !== user._id && canManageRole(currentUser?.role ?? '', user.role) && (
                           <button
                             onClick={() => handleToggleUserStatus(user)}
                             className={getToggleActionClasses(user.isActive)}
@@ -178,7 +184,7 @@ export default function UsersPage() {
                             {getToggleActionLabel(user.isActive, dict)}
                           </button>
                         )}
-                        {currentUser?._id !== user._id && canManageRole(currentUser?.role ?? '', user.role) && (
+                        {canDelete && currentUser?._id !== user._id && canManageRole(currentUser?.role ?? '', user.role) && (
                           <button
                             onClick={() => handleDeleteUser(user._id)}
                             className="text-red-600 hover:text-red-900"
@@ -218,6 +224,7 @@ export default function UsersPage() {
         {showQRModal && editingUser && (
           <QRModal
             user={editingUser}
+            canManage={canManage}
             onClose={() => {
               setShowQRModal(false);
               setEditingUser(null);
@@ -350,11 +357,13 @@ function UserModal({
 
 function QRModal({
   user,
+  canManage,
   onClose,
   onRegenerate,
   dict,
 }: {
   user: User;
+  canManage: boolean;
   onClose: () => void;
   onRegenerate: () => void;
   dict: any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -415,13 +424,15 @@ function QRModal({
                 <QRCodeDisplay qrToken={qrData.qrToken} name={qrData.name} />
               </div>
               <div className="flex gap-3 justify-end pt-4">
-                <button
-                  onClick={handleRegenerate}
-                  disabled={regenerating}
-                  className="px-4 py-2 border border-orange-300 text-orange-700 hover:bg-orange-50 disabled:opacity-50 bg-white"
-                >
-                  {regenerating ? (dict?.admin?.regenerating || 'Regenerating...') : (dict?.admin?.regenerateQRCode || 'Regenerate QR Code')}
-                </button>
+                {canManage && (
+                  <button
+                    onClick={handleRegenerate}
+                    disabled={regenerating}
+                    className="px-4 py-2 border border-orange-300 text-orange-700 hover:bg-orange-50 disabled:opacity-50 bg-white"
+                  >
+                    {regenerating ? (dict?.admin?.regenerating || 'Regenerating...') : (dict?.admin?.regenerateQRCode || 'Regenerate QR Code')}
+                  </button>
+                )}
                 <button
                   onClick={onClose}
                   className="px-4 py-2 bg-brand text-white hover:bg-brand-hover border border-brand-hover"

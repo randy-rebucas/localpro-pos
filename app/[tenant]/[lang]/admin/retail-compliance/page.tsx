@@ -1,10 +1,12 @@
-﻿'use client';
+'use client';
 
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { ShoppingBag } from 'lucide-react';
+import { usePermissions } from '@/hooks/usePermissions';
+import { getDictionaryClient } from '../../dictionaries-client';
 
 interface RetailCompliance {
   dtiBusinessNameRegistration?: string;
@@ -18,19 +20,26 @@ export default function RetailCompliancePage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as string;
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const { canAccess } = usePermissions();
+  const canManage = canAccess('retail_compliance.manage');
 
   const [data, setData] = useState<RetailCompliance>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    getDictionaryClient(lang as 'en' | 'es').then(setDict);
+  }, [lang]);
 
   const fetchData = useCallback(async () => {
     try {
       const res = await fetch(`/api/tenants/${tenant}/retail-compliance`);
       const json = await res.json();
       if (json.success) setData(json.data);
-    } catch { toast.error('Failed to load retail compliance'); }
+    } catch { toast.error(dict?.admin?.failedToLoadRetailCompliance || 'Failed to load retail compliance'); }
     finally { setLoading(false); }
-  }, [tenant]);
+  }, [tenant, dict]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -45,9 +54,9 @@ export default function RetailCompliancePage() {
         body: JSON.stringify(data),
       });
       const json = await res.json();
-      if (json.success) toast.success('Retail compliance settings saved');
-      else toast.error(json.error || 'Failed to save');
-    } catch { toast.error('Failed to save'); }
+      if (json.success) toast.success(dict?.admin?.retailComplianceSaved || 'Retail compliance settings saved');
+      else toast.error(json.error || dict?.admin?.failedToSave || 'Failed to save');
+    } catch { toast.error(dict?.admin?.failedToSave || 'Failed to save'); }
     finally { setSaving(false); }
   };
 
@@ -59,8 +68,8 @@ export default function RetailCompliancePage() {
         <div className="flex items-center gap-3">
           <ShoppingBag className="w-7 h-7 text-brand flex-shrink-0" />
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Retail Store Compliance</h1>
-            <p className="text-sm text-gray-500 mt-0.5">RA 7394 Consumer Act of the Philippines — DTI and consumer protection</p>
+            <h1 className="text-2xl font-bold text-gray-900">{dict?.admin?.retailComplianceTitle || 'Retail Store Compliance'}</h1>
+            <p className="text-sm text-gray-500 mt-0.5">{dict?.admin?.retailComplianceSubtitle || 'RA 7394 Consumer Act of the Philippines — DTI and consumer protection'}</p>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -68,23 +77,31 @@ export default function RetailCompliancePage() {
             href={`/${tenant}/${lang}/admin/compliance`}
             className="px-4 py-2 text-sm text-gray-600 border border-gray-300 bg-white hover:bg-gray-50 transition-colors"
           >
-            Compliance Status
+            {dict?.admin?.complianceStatus || 'Compliance Status'}
           </Link>
-          <button
-            onClick={handleSave}
-            disabled={saving || loading}
-            className="px-4 py-2 text-sm font-medium bg-brand text-white border border-brand-hover hover:bg-brand-hover disabled:opacity-50 transition-colors"
-          >
-            {saving ? 'Saving...' : 'Save Settings'}
-          </button>
+          {canManage && (
+            <button
+              onClick={handleSave}
+              disabled={saving || loading}
+              className="px-4 py-2 text-sm font-medium bg-brand text-white border border-brand-hover hover:bg-brand-hover disabled:opacity-50 transition-colors"
+            >
+              {saving ? (dict?.admin?.saving || 'Saving...') : (dict?.admin?.saveSettings || 'Save Settings')}
+            </button>
+          )}
         </div>
       </div>
+
+      {!loading && !canManage && (
+        <div className="mb-6 p-3 bg-yellow-50 border border-yellow-300 text-sm text-yellow-800">
+          {dict?.settings?.readOnlyNotice || "You don't have permission to change settings. Contact an admin or manager."}
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-24">
           <div className="text-center">
             <div className="inline-block animate-spin h-7 w-7 border-b-2 border-brand mb-3" />
-            <p className="text-sm text-gray-400">Loading...</p>
+            <p className="text-sm text-gray-400">{dict?.common?.loading || 'Loading...'}</p>
           </div>
         </div>
       ) : (
@@ -93,34 +110,34 @@ export default function RetailCompliancePage() {
           {/* Left — info sidebar */}
           <aside className="w-52 shrink-0 sticky top-6">
             <div className="bg-white border border-gray-300 p-4">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Requirements</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">{dict?.admin?.requirements || 'Requirements'}</p>
               <ul className="space-y-2 text-xs text-gray-600">
-                <li className="flex gap-2"><span className="text-brand font-bold mt-0.5">·</span>DTI Business Name Registration (RA 3883)</li>
-                <li className="flex gap-2"><span className="text-brand font-bold mt-0.5">·</span>Price Tagging Compliance (DTI)</li>
-                <li className="flex gap-2"><span className="text-brand font-bold mt-0.5">·</span>Weights &amp; Measures (DOST-MSSM)</li>
-                <li className="flex gap-2"><span className="text-brand font-bold mt-0.5">·</span>Product Labels (RA 7394)</li>
-                <li className="flex gap-2"><span className="text-brand font-bold mt-0.5">·</span>BTI Accreditation (importers/exporters)</li>
+                <li className="flex gap-2"><span className="text-brand font-bold mt-0.5">·</span>{dict?.admin?.retailRequirementDti || 'DTI Business Name Registration (RA 3883)'}</li>
+                <li className="flex gap-2"><span className="text-brand font-bold mt-0.5">·</span>{dict?.admin?.retailRequirementPriceTagging || 'Price Tagging Compliance (DTI)'}</li>
+                <li className="flex gap-2"><span className="text-brand font-bold mt-0.5">·</span>{dict?.admin?.retailRequirementWeightsMeasures || 'Weights & Measures (DOST-MSSM)'}</li>
+                <li className="flex gap-2"><span className="text-brand font-bold mt-0.5">·</span>{dict?.admin?.retailRequirementProductLabels || 'Product Labels (RA 7394)'}</li>
+                <li className="flex gap-2"><span className="text-brand font-bold mt-0.5">·</span>{dict?.admin?.retailRequirementBti || 'BTI Accreditation (importers/exporters)'}</li>
               </ul>
-              <p className="text-xs text-gray-400 mt-4">Ensure all consumer protection requirements are met before operating your retail store.</p>
+              <p className="text-xs text-gray-400 mt-4">{dict?.admin?.retailExpiryNote || 'Ensure all consumer protection requirements are met before operating your retail store.'}</p>
             </div>
           </aside>
 
           {/* Right — form sections */}
-          <div className="flex-1 min-w-0 space-y-4">
+          <fieldset disabled={!canManage} className="flex-1 min-w-0 space-y-4">
 
             {/* DTI Registration */}
             <div className="bg-white border border-gray-300">
               <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
-                <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">DTI Business Name Registration</h2>
-                <p className="text-xs text-gray-400 mt-0.5">Required for sole proprietors under RA 3883. Corporations register with SEC instead.</p>
+                <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{dict?.admin?.dtiRegistrationSectionTitle || 'DTI Business Name Registration'}</h2>
+                <p className="text-xs text-gray-400 mt-0.5">{dict?.admin?.dtiRegistrationSectionDesc || 'Required for sole proprietors under RA 3883. Corporations register with SEC instead.'}</p>
               </div>
               <div className="p-5">
-                <label className="block text-xs font-medium text-gray-600 mb-1">Registration Number</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1">{dict?.admin?.registrationNumber || 'Registration Number'}</label>
                 <input
                   type="text"
                   value={data.dtiBusinessNameRegistration ?? ''}
                   onChange={e => set('dtiBusinessNameRegistration')(e.target.value)}
-                  placeholder="e.g. BN202400000001"
+                  placeholder={dict?.admin?.registrationNumberPlaceholder || 'e.g. BN202400000001'}
                   className="w-full border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand"
                 />
               </div>
@@ -129,8 +146,8 @@ export default function RetailCompliancePage() {
             {/* Consumer Act Compliance */}
             <div className="bg-white border border-gray-300">
               <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
-                <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Consumer Act Compliance (RA 7394)</h2>
-                <p className="text-xs text-gray-400 mt-0.5">Requirements for retail stores selling directly to consumers.</p>
+                <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{dict?.admin?.consumerActComplianceTitle || 'Consumer Act Compliance (RA 7394)'}</h2>
+                <p className="text-xs text-gray-400 mt-0.5">{dict?.admin?.consumerActComplianceDesc || 'Requirements for retail stores selling directly to consumers.'}</p>
               </div>
               <div className="p-5 space-y-3">
                 <label className="flex items-start gap-3 cursor-pointer">
@@ -141,8 +158,8 @@ export default function RetailCompliancePage() {
                     className="checkbox-win8 mt-0.5"
                   />
                   <div>
-                    <span className="text-sm text-gray-700 font-medium">Price Tagging Compliant</span>
-                    <p className="text-xs text-gray-400 mt-0.5">All products have visible price tags or shelf prices per DTI price tag law</p>
+                    <span className="text-sm text-gray-700 font-medium">{dict?.admin?.priceTaggingCompliant || 'Price Tagging Compliant'}</span>
+                    <p className="text-xs text-gray-400 mt-0.5">{dict?.admin?.priceTaggingCompliantDesc || 'All products have visible price tags or shelf prices per DTI price tag law'}</p>
                   </div>
                 </label>
                 <label className="flex items-start gap-3 cursor-pointer">
@@ -153,8 +170,8 @@ export default function RetailCompliancePage() {
                     className="checkbox-win8 mt-0.5"
                   />
                   <div>
-                    <span className="text-sm text-gray-700 font-medium">Weights &amp; Measures Compliant</span>
-                    <p className="text-xs text-gray-400 mt-0.5">Weighing and measuring devices are calibrated and stamped by DOST-MSSM</p>
+                    <span className="text-sm text-gray-700 font-medium">{dict?.admin?.weightsAndMeasuresCompliant || 'Weights & Measures Compliant'}</span>
+                    <p className="text-xs text-gray-400 mt-0.5">{dict?.admin?.weightsAndMeasuresCompliantDesc || 'Weighing and measuring devices are calibrated and stamped by DOST-MSSM'}</p>
                   </div>
                 </label>
                 <label className="flex items-start gap-3 cursor-pointer">
@@ -165,8 +182,8 @@ export default function RetailCompliancePage() {
                     className="checkbox-win8 mt-0.5"
                   />
                   <div>
-                    <span className="text-sm text-gray-700 font-medium">Product Labels Compliant</span>
-                    <p className="text-xs text-gray-400 mt-0.5">All product labels include mandatory information (contents, manufacturer, country of origin)</p>
+                    <span className="text-sm text-gray-700 font-medium">{dict?.admin?.productLabelsCompliant || 'Product Labels Compliant'}</span>
+                    <p className="text-xs text-gray-400 mt-0.5">{dict?.admin?.productLabelsCompliantDesc || 'All product labels include mandatory information (contents, manufacturer, country of origin)'}</p>
                   </div>
                 </label>
               </div>
@@ -175,22 +192,22 @@ export default function RetailCompliancePage() {
             {/* BTI Accreditation */}
             <div className="bg-white border border-gray-300">
               <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
-                <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">BTI Accreditation <span className="normal-case font-normal text-gray-400">(Optional)</span></h2>
-                <p className="text-xs text-gray-400 mt-0.5">Bureau of Trade and Industry accreditation for importers or exporters.</p>
+                <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{dict?.admin?.btiAccreditationSectionTitle || 'BTI Accreditation'} <span className="normal-case font-normal text-gray-400">{dict?.admin?.btiAccreditationOptional || '(Optional)'}</span></h2>
+                <p className="text-xs text-gray-400 mt-0.5">{dict?.admin?.btiAccreditationSectionDesc || 'Bureau of Trade and Industry accreditation for importers or exporters.'}</p>
               </div>
               <div className="p-5">
-                <label className="block text-xs font-medium text-gray-600 mb-1">Accreditation Number</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1">{dict?.admin?.accreditationNumber || 'Accreditation Number'}</label>
                 <input
                   type="text"
                   value={data.btiAccreditation ?? ''}
                   onChange={e => set('btiAccreditation')(e.target.value)}
-                  placeholder="BTI accreditation number (if applicable)"
+                  placeholder={dict?.admin?.accreditationNumberPlaceholder || 'BTI accreditation number (if applicable)'}
                   className="w-full border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand"
                 />
               </div>
             </div>
 
-          </div>
+          </fieldset>
         </div>
       )}
     </div>

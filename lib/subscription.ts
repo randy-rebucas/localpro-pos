@@ -299,6 +299,30 @@ export class SubscriptionService {
   }
 
   /**
+   * Check if tenant has access to a pharmacy compliance feature
+   */
+  static async checkPharmacyFeature(
+    tenantId: string,
+    feature: keyof PharmacyComplianceFeatures
+  ): Promise<boolean> {
+    const status = await this.getSubscriptionStatus(tenantId);
+
+    if (!status) {
+      return false;
+    }
+
+    if (!status.isActive && !status.isTrial) {
+      return false;
+    }
+
+    if (status.isExpired || (status.isTrial && status.isTrialExpired)) {
+      return false;
+    }
+
+    return status.pharmacyCompliance[feature];
+  }
+
+  /**
    * Update usage counters for a tenant
    */
   static async updateUsage(
@@ -545,5 +569,19 @@ export async function checkBirFeatureAccess(
 
   if (!hasAccess) {
     throw new Error(`BIR compliance feature '${feature}' is not available in your current subscription plan. Please upgrade to access this feature.`);
+  }
+}
+
+/**
+ * Middleware function to check pharmacy compliance feature access
+ */
+export async function checkPharmacyFeatureAccess(
+  tenantId: string,
+  feature: keyof PharmacyComplianceFeatures
+): Promise<void> {
+  const hasAccess = await SubscriptionService.checkPharmacyFeature(tenantId, feature);
+
+  if (!hasAccess) {
+    throw new Error(`Pharmacy compliance feature '${feature}' is not available in your current subscription plan. Please upgrade to access this feature.`);
   }
 }

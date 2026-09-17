@@ -1,23 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Discount from '@/models/Discount';
-import { getTenantIdFromRequest } from '@/lib/api-tenant';
-import { requireAuth } from '@/lib/auth';
+import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
-import { logger } from '@/lib/logger';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await connectDB();
-    await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
+    const { tenantId } = await requireTenantAccess(request);
     const { id } = await params;
-
-    if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
-    }
 
     const discount = await Discount.findOne({ _id: id, tenantId }).lean();
     if (!discount) {
@@ -25,26 +20,26 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     return NextResponse.json({ success: true, data: discount });
-  } catch (error: unknown) {
-    logger.error('Error fetching discount:', error);
-    return NextResponse.json({ success: false, error: 'Failed to fetch discount' }, { status: 500 });
+  } catch (error) {
+    return handleApiError(error, 'Failed to fetch discount');
   }
 }
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await connectDB();
-    const user = await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
+    const { tenantId, user } = await requireTenantAccess(request);
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
 
-    if (!tenantId) {
-      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
-    }
-
     if (!(await hasTenantPermission(user.role, tenantId, 'discounts.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
+
+    const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
+    const { allowed } = checkRateLimit(`write:discounts:${tenantId}:${ip}`, 30, 60_000);
+    if (!allowed) {
+      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
     const discount = await Discount.findOne({ _id: id, tenantId });
@@ -123,30 +118,40 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     });
 
     return NextResponse.json({ success: true, data: discount });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+  } catch (error) {
+    return handleApiError(error, 'Failed to update discount');
   }
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await connectDB();
-    const user = await requireAuth(request);
-    const tenantId = await getTenantIdFromRequest(request);
+    const { tenantId, user } = await requireTenantAccess(request);
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
-
-    if (!tenantId) {
-      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
-    }
 
     if (!(await hasTenantPermission(user.role, tenantId, 'discounts.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
+    const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
+    const { allowed } = checkRateLimit(`write:discounts:${tenantId}:${ip}`, 30, 60_000);
+    if (!allowed) {
+      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
+    }
+
     const discount = await Discount.findOne({ _id: id, tenantId });
     if (!discount) {
       return NextResponse.json({ success: false, error: t('validation.discountNotFound', 'Discount not found') }, { status: 404 });
+    }
+
+    // Preserve audit trail: a discount already applied to past transactions must not be hard-deleted.
+    if (discount.usageCount > 0) {
+      const errorMsg = t(
+        'validation.discountInUse',
+        'Cannot delete discount "{code}": it has been used {count} time(s) in transactions. Deactivate it instead (set isActive = false).'
+      ).replace('{code}', discount.code).replace('{count}', String(discount.usageCount));
+      return NextResponse.json({ success: false, error: errorMsg }, { status: 400 });
     }
 
     await discount.deleteOne();
@@ -160,8 +165,8 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     });
 
     return NextResponse.json({ success: true });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+  } catch (error) {
+    return handleApiError(error, 'Failed to delete discount');
   }
 }
 

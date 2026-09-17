@@ -37,8 +37,8 @@ export async function POST(
       );
     }
 
-    if (!(await hasTenantPermission(user.role, tenantId, 'bookings.manage'))) {
-      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    if (!(await hasTenantPermission(user.role, tenantId, 'bookings.send_reminders'))) {
+      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 
     try {

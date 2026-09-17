@@ -4,6 +4,7 @@ import ProductBundle from '@/models/ProductBundle';
 import '@/models/Category'; // register schema for populate
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
@@ -11,6 +12,7 @@ import { logger } from '@/lib/logger';
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
+    await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
 
@@ -73,12 +75,16 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
-    await requireAuth(request);
+    const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
+    }
+
+    if (!(await hasTenantPermission(user.role, tenantId, 'bundles.manage'))) {
+      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 
     const body = await request.json();

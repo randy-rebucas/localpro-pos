@@ -5,6 +5,8 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { ShieldCheck, AlertTriangle, XCircle, CheckCircle, ChevronRight, Clock, Minus } from 'lucide-react';
+import { getDictionaryClient } from '../../dictionaries-client';
+import { usePermissions } from '@/hooks/usePermissions';
 
 type ComplianceStatus = 'compliant' | 'warning' | 'expired' | 'missing' | 'not_applicable';
 
@@ -86,11 +88,18 @@ export default function CompliancePage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as string;
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+
+  useEffect(() => {
+    getDictionaryClient(lang as 'en' | 'es').then(setDict);
+  }, [lang]);
 
   const [sections, setSections] = useState<ComplianceSection[]>([]);
   const [overallStatus, setOverallStatus] = useState<'compliant' | 'action_required' | 'critical'>('compliant');
   const [businessType, setBusinessType] = useState('');
   const [loading, setLoading] = useState(true);
+  const { canAccess } = usePermissions();
+  const canView = canAccess('compliance.view');
 
   const buildDashboard = useCallback(async () => {
     try {
@@ -415,18 +424,18 @@ export default function CompliancePage() {
       setOverallStatus(hasCritical ? 'critical' : hasWarning ? 'action_required' : 'compliant');
       setSections(allSections);
     } catch {
-      toast.error('Failed to load compliance data');
+      toast.error(dict?.admin?.failedToLoadComplianceData || 'Failed to load compliance data');
     } finally {
       setLoading(false);
     }
-  }, [tenant, lang]);
+  }, [tenant, lang, dict]);
 
   useEffect(() => { buildDashboard(); }, [buildDashboard]);
 
   const overallBadge = {
-    compliant: { label: 'All Compliant', cls: 'bg-green-50 text-green-800 border border-green-300' },
-    action_required: { label: 'Action Required', cls: 'bg-amber-50 text-amber-800 border border-amber-300' },
-    critical: { label: 'Attention Needed', cls: 'bg-red-50 text-red-800 border border-red-300' },
+    compliant: { label: dict?.admin?.complianceAllCompliant || 'All Compliant', cls: 'bg-green-50 text-green-800 border border-green-300' },
+    action_required: { label: dict?.admin?.complianceActionRequired || 'Action Required', cls: 'bg-amber-50 text-amber-800 border border-amber-300' },
+    critical: { label: dict?.admin?.complianceAttentionNeeded || 'Attention Needed', cls: 'bg-red-50 text-red-800 border border-red-300' },
   }[overallStatus];
 
   const quickLinks = [
@@ -446,6 +455,19 @@ export default function CompliancePage() {
   const compliantCount = sections.flatMap(s => s.items).filter(i => i.status === 'compliant').length;
   const totalCount = sections.flatMap(s => s.items).length;
 
+  if (!canView) {
+    return (
+      <div className="px-4 sm:px-6 py-6">
+        <div className="bg-red-50 border-2 border-red-300 p-6">
+          <h2 className="text-lg font-bold text-red-800 mb-1">{dict?.admin?.accessRestricted || 'Access Restricted'}</h2>
+          <p className="text-sm text-red-700">
+            {dict?.admin?.accessRestrictedCompliance || "You don't have permission to view the compliance dashboard. Contact an admin or owner."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="px-4 sm:px-6 py-6">
 
@@ -454,8 +476,8 @@ export default function CompliancePage() {
         <div className="flex items-center gap-3">
           <ShieldCheck className="w-7 h-7 text-brand flex-shrink-0" />
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Compliance Dashboard</h1>
-            <p className="text-sm text-gray-500 mt-0.5">Your Philippine regulatory compliance status at a glance</p>
+            <h1 className="text-2xl font-bold text-gray-900">{dict?.admin?.complianceDashboard || 'Compliance Dashboard'}</h1>
+            <p className="text-sm text-gray-500 mt-0.5">{dict?.admin?.complianceDashboardSubtitle || 'Your Philippine regulatory compliance status at a glance'}</p>
           </div>
         </div>
         {!loading && (
@@ -469,7 +491,7 @@ export default function CompliancePage() {
         <div className="flex items-center justify-center py-24 text-gray-400">
           <div className="text-center">
             <div className="inline-block animate-spin h-7 w-7 border-b-2 border-brand mb-3" />
-            <p className="text-sm">Loading compliance data...</p>
+            <p className="text-sm">{dict?.admin?.loadingComplianceData || 'Loading compliance data...'}</p>
           </div>
         </div>
       ) : (
@@ -479,9 +501,9 @@ export default function CompliancePage() {
           <aside className="w-52 shrink-0 sticky top-6 space-y-4">
             {/* Progress */}
             <div className="bg-white border border-gray-300 p-4">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Progress</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">{dict?.admin?.progress || 'Progress'}</p>
               <div className="text-2xl font-bold text-gray-900 mb-1">{compliantCount}<span className="text-sm text-gray-400 font-normal"> / {totalCount}</span></div>
-              <p className="text-xs text-gray-500 mb-3">items compliant</p>
+              <p className="text-xs text-gray-500 mb-3">{dict?.admin?.itemsCompliant || 'items compliant'}</p>
               <div className="w-full bg-gray-100 h-1.5">
                 <div
                   className="h-1.5 bg-green-500 transition-all"
@@ -492,7 +514,7 @@ export default function CompliancePage() {
 
             {/* Quick links */}
             <div className="bg-white border border-gray-300 p-4">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Quick Links</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">{dict?.admin?.quickLinks || 'Quick Links'}</p>
               <div className="space-y-1">
                 {quickLinks.map(l => (
                   <Link
@@ -529,8 +551,8 @@ export default function CompliancePage() {
                           <p className={`text-xs mt-1 font-medium flex items-center gap-1 ${item.daysUntilExpiry < 0 ? 'text-red-600' : 'text-amber-600'}`}>
                             <Clock className="w-3 h-3" />
                             {item.daysUntilExpiry < 0
-                              ? `Expired ${Math.abs(item.daysUntilExpiry)} day(s) ago`
-                              : `Expires in ${item.daysUntilExpiry} day(s)`}
+                              ? (dict?.admin?.expiredDaysAgo || 'Expired {days} day(s) ago').replace('{days}', String(Math.abs(item.daysUntilExpiry)))
+                              : (dict?.admin?.expiresInDays || 'Expires in {days} day(s)').replace('{days}', String(item.daysUntilExpiry))}
                           </p>
                         )}
                       </div>
@@ -539,7 +561,7 @@ export default function CompliancePage() {
                           href={item.actionHref}
                           className="flex items-center gap-1 text-xs text-brand hover:text-brand-hover whitespace-nowrap shrink-0 font-medium"
                         >
-                          {item.actionLabel ?? 'Fix'} <ChevronRight className="w-3 h-3" />
+                          {item.actionLabel ?? (dict?.admin?.fix || 'Fix')} <ChevronRight className="w-3 h-3" />
                         </Link>
                       )}
                     </div>

@@ -17,6 +17,9 @@ export interface TranslationDict {
   admin?: {
     [key: string]: string | undefined;
   };
+  validation?: {
+    [key: string]: string | undefined;
+  };
   pos: {
     // Cart
     cartEmpty?: string;
@@ -129,6 +132,7 @@ export interface TranslationDict {
   reports?: {
     title?: string;
     subtitle?: string;
+    filters?: string;
     startDate?: string;
     endDate?: string;
     period?: string;

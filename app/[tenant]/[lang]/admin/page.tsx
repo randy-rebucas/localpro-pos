@@ -12,6 +12,7 @@ import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { getDictionaryClient } from '../dictionaries-client';
 
 interface RecentTx {
   _id: string;
@@ -37,11 +38,11 @@ function fmt(n: number | undefined | null, symbol: string) {
   return `${symbol ?? ''}${safe.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-function greeting() {
+function greeting(dict: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
   const h = new Date().getHours();
-  if (h < 12) return 'Good morning';
-  if (h < 17) return 'Good afternoon';
-  return 'Good evening';
+  if (h < 12) return dict?.admin?.goodMorning || 'Good morning';
+  if (h < 17) return dict?.admin?.goodAfternoon || 'Good afternoon';
+  return dict?.admin?.goodEvening || 'Good evening';
 }
 
 export default function AdminDashboard() {
@@ -60,6 +61,11 @@ export default function AdminDashboard() {
 
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+
+  useEffect(() => {
+    getDictionaryClient(lang as 'en' | 'es').then(setDict);
+  }, [lang]);
 
   const todayStr = new Date().toLocaleDateString('en-PH', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
@@ -69,7 +75,7 @@ export default function AdminDashboard() {
     try {
       const [statsRes, txRes, productsRes, customersRes, lowStockRes] = await Promise.allSettled([
         fetch(`/api/transactions/stats?period=today`),
-        fetch(`/api/transactions?limit=5`),
+        fetch(`/api/transactions?limit=10`),
         fetch(`/api/products?page=1&limit=1`),
         fetch(`/api/customers?limit=1`),
         fetch(`/api/inventory/low-stock`),
@@ -92,7 +98,7 @@ export default function AdminDashboard() {
       if (txRes.status === 'fulfilled' && txRes.value.ok) {
         const json = await txRes.value.json();
         if (json.success) {
-          recentTransactions = (json.data || []).slice(0, 5);
+          recentTransactions = (json.data || []).slice(0, 10);
         }
       }
       if (productsRes.status === 'fulfilled' && productsRes.value.ok) {
@@ -131,42 +137,42 @@ export default function AdminDashboard() {
 
   const stats = [
     {
-      label: "Today's Revenue",
+      label: dict?.admin?.todaysRevenue || "Today's Revenue",
       value: data ? fmt(data.todayRevenue, currencySymbol) : '—',
-      sub: `${data?.todayTransactions ?? 0} transactions`,
+      sub: `${data?.todayTransactions ?? 0} ${dict?.admin?.transactionsSuffix || 'transactions'}`,
       icon: TrendingUp,
       tile: '#0f9d58',
     },
     {
-      label: 'Transactions Today',
+      label: dict?.admin?.transactionsToday || 'Transactions Today',
       value: data ? data.todayTransactions.toLocaleString() : '—',
-      sub: 'Completed sales',
+      sub: dict?.admin?.completedSales || 'Completed sales',
       icon: ShoppingCart,
       tile: '#e3a008',
     },
     {
-      label: 'Total Products',
+      label: dict?.admin?.totalProducts || 'Total Products',
       value: data ? data.totalProducts.toLocaleString() : '—',
-      sub: data?.lowStockCount ? `${data.lowStockCount} low stock` : 'All stocked',
+      sub: data?.lowStockCount ? `${data.lowStockCount} ${dict?.admin?.lowStockSuffix || 'low stock'}` : (dict?.admin?.allStocked || 'All stocked'),
       icon: Package,
       tile: '#1e70bf',
     },
     {
-      label: 'Total Customers',
+      label: dict?.admin?.totalCustomers || 'Total Customers',
       value: data ? data.totalCustomers.toLocaleString() : '—',
-      sub: 'Registered accounts',
+      sub: dict?.admin?.registeredAccounts || 'Registered accounts',
       icon: Users,
       tile: '#7a3fc9',
     },
   ];
 
   const quickActions = [
-    { label: 'New Transaction', href: base, icon: Store, primary: true },
-    { label: 'Add Product', href: `${base}/admin/products`, icon: Plus, primary: false },
-    { label: 'View Reports', href: `${base}/admin/reports`, icon: BarChart2, primary: false },
-    { label: 'Compliance Status', href: `${base}/admin/compliance`, icon: ShieldCheck, primary: false },
-    { label: 'Transactions', href: `${base}/admin/transactions`, icon: Receipt, primary: false },
-    { label: 'Inventory', href: `${base}/admin/inventory`, icon: Boxes, primary: false },
+    { label: dict?.admin?.newTransaction || 'New Transaction', href: base, icon: Store, primary: true },
+    { label: dict?.admin?.addProduct || 'Add Product', href: `${base}/admin/products`, icon: Plus, primary: false },
+    { label: dict?.admin?.viewReports || 'View Reports', href: `${base}/admin/reports`, icon: BarChart2, primary: false },
+    { label: dict?.admin?.complianceStatus || 'Compliance Status', href: `${base}/admin/compliance`, icon: ShieldCheck, primary: false },
+    { label: dict?.admin?.transactions || 'Transactions', href: `${base}/admin/transactions`, icon: Receipt, primary: false },
+    { label: dict?.nav?.inventory || 'Inventory', href: `${base}/admin/inventory`, icon: Boxes, primary: false },
   ];
 
   return (
@@ -176,7 +182,7 @@ export default function AdminDashboard() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 mb-2">
-              {greeting()}, {user?.name?.split(' ')[0] || 'there'}
+              {greeting(dict)}, {user?.name?.split(' ')[0] || 'there'}
             </h1>
             <p className="text-gray-600">{todayStr}</p>
           </div>
@@ -186,7 +192,7 @@ export default function AdminDashboard() {
             style={{ backgroundColor: primaryColor }}
           >
             <Store className="w-4 h-4" />
-            Open POS
+            {dict?.admin?.openPos || 'Open POS'}
           </Link>
         </div>
       </div>
@@ -200,7 +206,7 @@ export default function AdminDashboard() {
               className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-300 text-sm text-amber-700 hover:bg-amber-100 transition-colors"
             >
               <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-              {data.lowStockCount} product{data.lowStockCount !== 1 ? 's' : ''} low on stock
+              {(dict?.admin?.lowStockAlertMsg || '{count} product(s) low on stock').replace('{count}', String(data.lowStockCount))}
               <ArrowRight className="w-3.5 h-3.5 ml-1" />
             </Link>
           )}
@@ -210,7 +216,7 @@ export default function AdminDashboard() {
               className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-300 text-sm text-red-700 hover:bg-red-100 transition-colors"
             >
               <CalendarClock className="w-4 h-4 flex-shrink-0" />
-              {data.expiringCount} item{data.expiringCount !== 1 ? 's' : ''} expiring soon
+              {(dict?.admin?.expiringAlertMsg || '{count} item(s) expiring soon').replace('{count}', String(data.expiringCount))}
               <ArrowRight className="w-3.5 h-3.5 ml-1" />
             </Link>
           )}
@@ -248,13 +254,13 @@ export default function AdminDashboard() {
         {/* Recent transactions */}
         <div className="lg:col-span-2 bg-white border border-gray-300">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-            <h2 className="text-sm font-semibold text-gray-900">Recent Transactions</h2>
+            <h2 className="text-sm font-semibold text-gray-900">{dict?.admin?.recentTransactions || 'Recent Transactions'}</h2>
             <Link
               href={`${base}/admin/transactions`}
               className="text-xs font-medium hover:underline"
               style={{ color: primaryColor }}
             >
-              View all
+              {dict?.admin?.viewAll || 'View all'}
             </Link>
           </div>
           {loading ? (
@@ -264,17 +270,17 @@ export default function AdminDashboard() {
           ) : !data?.recentTransactions.length ? (
             <div className="text-center py-12">
               <Receipt className="w-8 h-8 mx-auto text-gray-200 mb-2" />
-              <p className="text-sm text-gray-400">No transactions today</p>
+              <p className="text-sm text-gray-400">{dict?.admin?.noTransactionsToday || 'No transactions today'}</p>
             </div>
           ) : (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="text-left px-5 py-2.5 text-xs font-medium text-gray-500">Receipt</th>
-                  <th className="text-left px-3 py-2.5 text-xs font-medium text-gray-500">Customer</th>
-                  <th className="text-left px-3 py-2.5 text-xs font-medium text-gray-500">Method</th>
-                  <th className="text-right px-5 py-2.5 text-xs font-medium text-gray-500">Amount</th>
-                  <th className="text-right px-5 py-2.5 text-xs font-medium text-gray-500">Date</th>
+                  <th className="text-left px-5 py-2.5 text-xs font-medium text-gray-500">{dict?.admin?.receiptCol || 'Receipt'}</th>
+                  <th className="text-left px-3 py-2.5 text-xs font-medium text-gray-500">{dict?.admin?.customerCol || 'Customer'}</th>
+                  <th className="text-left px-3 py-2.5 text-xs font-medium text-gray-500">{dict?.admin?.methodCol || 'Method'}</th>
+                  <th className="text-right px-5 py-2.5 text-xs font-medium text-gray-500">{dict?.admin?.amountCol || 'Amount'}</th>
+                  <th className="text-right px-5 py-2.5 text-xs font-medium text-gray-500">{dict?.admin?.dateCol || 'Date'}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -286,7 +292,7 @@ export default function AdminDashboard() {
                     <td className="px-3 py-3 text-gray-700 truncate max-w-[120px]">
                       {(typeof tx.customerId === 'object' && tx.customerId
                         ? `${tx.customerId.firstName ?? ''} ${tx.customerId.lastName ?? ''}`.trim()
-                        : '') || 'Walk-in'}
+                        : '') || (dict?.admin?.walkIn || 'Walk-in')}
                     </td>
                     <td className="px-3 py-3 text-gray-500 capitalize">{tx.paymentMethod}</td>
                     <td className="px-5 py-3 text-right font-semibold text-gray-900">
@@ -306,7 +312,7 @@ export default function AdminDashboard() {
         <div className="space-y-4">
           {/* Quick actions */}
           <div className="bg-white border border-gray-300 p-4">
-            <h2 className="text-sm font-semibold text-gray-900 mb-3">Quick Actions</h2>
+            <h2 className="text-sm font-semibold text-gray-900 mb-3">{dict?.admin?.quickActionsTitle || 'Quick Actions'}</h2>
             <div className="flex flex-col gap-1">
               {quickActions.map(a => {
                 const Icon = a.icon;
@@ -332,31 +338,35 @@ export default function AdminDashboard() {
           {/* Subscription */}
           {subscriptionStatus && (
             <div className="bg-white border border-gray-300 p-4">
-              <h2 className="text-sm font-semibold text-gray-900 mb-3">Subscription</h2>
+              <h2 className="text-sm font-semibold text-gray-900 mb-3">{dict?.admin?.subscriptionLabel || 'Subscription'}</h2>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-500">Plan</span>
+                  <span className="text-xs text-gray-500">{dict?.admin?.planLabel || 'Plan'}</span>
                   <span className="text-xs font-semibold text-gray-800 capitalize">
                     {subscriptionStatus.planName || 'Free'}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-500">Status</span>
+                  <span className="text-xs text-gray-500">{dict?.admin?.statusLabel || 'Status'}</span>
                   <span className={`text-xs font-semibold ${
                     subscriptionStatus.isTrial ? 'text-amber-600' : subscriptionStatus.isActive ? 'text-emerald-600' : 'text-red-500'
                   }`}>
-                    {subscriptionStatus.isTrial ? 'Trial' : subscriptionStatus.isActive ? 'Active' : 'Inactive'}
+                    {subscriptionStatus.isTrial
+                      ? (dict?.admin?.trialLabel || 'Trial')
+                      : subscriptionStatus.isActive
+                        ? (dict?.admin?.activeStatus || 'Active')
+                        : (dict?.admin?.inactiveStatus || 'Inactive')}
                   </span>
                 </div>
                 {businessType && (
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-gray-500">Business Type</span>
+                    <span className="text-xs text-gray-500">{dict?.admin?.businessTypeLabel || 'Business Type'}</span>
                     <span className="text-xs font-semibold text-gray-800 capitalize">{businessType}</span>
                   </div>
                 )}
                 {subscriptionStatus.isTrial && subscriptionStatus.trialEndDate && (
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-gray-500">Trial ends</span>
+                    <span className="text-xs text-gray-500">{dict?.admin?.trialEnds || 'Trial ends'}</span>
                     <span className="text-xs font-semibold text-amber-700">
                       {new Date(subscriptionStatus.trialEndDate).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}
                     </span>
@@ -367,7 +377,7 @@ export default function AdminDashboard() {
                 href={`${base}/admin/subscriptions`}
                 className="mt-3 flex items-center justify-center gap-2 w-full px-3 py-2 text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
               >
-                Manage Plan
+                {dict?.admin?.managePlan || 'Manage Plan'}
               </Link>
             </div>
           )}

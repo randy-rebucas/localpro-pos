@@ -4,6 +4,7 @@ import ProductBundle from '@/models/ProductBundle';
 import '@/models/Category'; // register schema for populate
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
@@ -14,6 +15,7 @@ export async function GET(
 ) {
   try {
     await connectDB();
+    await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
@@ -44,12 +46,16 @@ export async function PUT(
 ) {
   try {
     await connectDB();
-    await requireAuth(request);
+    const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
 
     if (!tenantId) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+    }
+
+    if (!(await hasTenantPermission(user.role, tenantId, 'bundles.manage'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
     const bundle = await ProductBundle.findOne({ _id: id, tenantId });
@@ -100,13 +106,17 @@ export async function DELETE(
 ) {
   try {
     await connectDB();
-    await requireAuth(request);
+    const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
+    }
+
+    if (!(await hasTenantPermission(user.role, tenantId, 'bundles.manage'))) {
+      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 
     const bundle = await ProductBundle.findOne({ _id: id, tenantId });

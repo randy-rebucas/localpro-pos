@@ -9,11 +9,14 @@ import { getDictionaryClient } from '../../dictionaries-client';
 import { hardwareService } from '@/lib/hardware';
 import { useHardwareSettings } from '@/hooks/useHardwareSettings';
 import { getSaveSuccessMessage, getSaveErrorMessage } from '@/lib/hardware-helpers';
+import { usePermissions } from '@/hooks/usePermissions';
 
 export default function HardwareAdminPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
+  const { canAccess } = usePermissions();
+  const canManage = canAccess('settings.manage');
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
 
   const { settings, loading, saving, message, setMessage, fetchSettings, updateHardwareConfig, saveSettings } =
@@ -102,36 +105,38 @@ export default function HardwareAdminPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
-            <div className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8">
-              <HardwareSettings 
+            <fieldset disabled={!canManage} className="bg-white border border-gray-300 p-5 sm:p-6 lg:p-8">
+              <HardwareSettings
                 hideSaveButton={true}
                 config={settings.hardwareConfig}
                 onChange={(hardwareConfig) => {
                   updateHardwareConfig(hardwareConfig);
                 }}
               />
-              <div className="flex justify-end pt-6 mt-8 border-t border-gray-200">
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="px-6 py-3 bg-brand text-white hover:bg-brand-hover font-semibold transition-all duration-200 border border-brand-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                  {saving ? (
-                    <>
-                      <div className="animate-spin h-5 w-5 border-b-2 border-white"></div>
-                      <span>{dict?.settings?.saving || 'Saving...'}</span>
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      <span>{dict?.admin?.saveHardwareSettings || 'Save Hardware Settings'}</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
+              {canManage && (
+                <div className="flex justify-end pt-6 mt-8 border-t border-gray-200">
+                  <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="px-6 py-3 bg-brand text-white hover:bg-brand-hover font-semibold transition-all duration-200 border border-brand-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {saving ? (
+                      <>
+                        <div className="animate-spin h-5 w-5 border-b-2 border-white"></div>
+                        <span>{dict?.settings?.saving || 'Saving...'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span>{dict?.admin?.saveHardwareSettings || 'Save Hardware Settings'}</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+            </fieldset>
           </div>
           <div className="lg:col-span-1">
             <HardwareStatusChecker showActions={false} autoRefresh={true} sidebar={true} />

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { updateStock } from '@/lib/stock';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
@@ -18,7 +19,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!tenantId) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
-    
+
+    if (!(await hasTenantPermission(user.role, tenantId, 'products.manage'))) {
+      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
+    }
+
     const body = await request.json();
     const { quantity, notes } = body;
     

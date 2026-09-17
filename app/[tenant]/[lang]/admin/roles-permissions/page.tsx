@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { usePermissions } from '@/hooks/usePermissions';
+import { getDictionaryClient } from '../../dictionaries-client';
 import {
   PERMISSIONS,
   PERMISSION_SECTIONS,
@@ -12,23 +13,29 @@ import {
   type RolePermissionOverrides,
 } from '@/lib/permissions';
 
-const ROLE_LABEL: Record<OverridableRole, string> = {
-  viewer: 'Viewer',
-  cashier: 'Cashier',
-  manager: 'Manager',
-};
-
 export default function RolesPermissionsPage() {
   const params = useParams();
   const tenant = params.tenant as string;
+  const lang = params.lang as 'en' | 'es';
   const { canAccess } = usePermissions();
   const canManage = canAccess('roles_permissions.manage');
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+
+  const ROLE_LABEL: Record<OverridableRole, string> = {
+    viewer: dict?.admin?.roleLabelViewer || 'Viewer',
+    cashier: dict?.admin?.roleLabelCashier || 'Cashier',
+    manager: dict?.admin?.roleLabelManager || 'Manager',
+  };
 
   const [overrides, setOverrides] = useState<RolePermissionOverrides>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [dirty, setDirty] = useState(false);
+
+  useEffect(() => {
+    getDictionaryClient(lang).then(setDict);
+  }, [lang]);
 
   const fetchOverrides = useCallback(async () => {
     setLoading(true);
@@ -39,14 +46,14 @@ export default function RolesPermissionsPage() {
       if (data.success) {
         setOverrides(data.data.overrides || {});
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to load role permissions' });
+        setMessage({ type: 'error', text: data.error || dict?.admin?.failedToLoadRolePermissions || 'Failed to load role permissions' });
       }
     } catch {
-      setMessage({ type: 'error', text: 'Failed to load role permissions. Please check your connection.' });
+      setMessage({ type: 'error', text: dict?.admin?.failedToLoadRolePermissionsConnection || 'Failed to load role permissions. Please check your connection.' });
     } finally {
       setLoading(false);
     }
-  }, [tenant]);
+  }, [tenant, dict]);
 
   useEffect(() => {
     fetchOverrides();
@@ -93,13 +100,13 @@ export default function RolesPermissionsPage() {
       if (data.success) {
         setOverrides(data.data.overrides || {});
         setDirty(false);
-        setMessage({ type: 'success', text: 'Role permissions saved successfully' });
+        setMessage({ type: 'success', text: dict?.admin?.rolePermissionsSaved || 'Role permissions saved successfully' });
         setTimeout(() => setMessage(null), 3000);
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to save role permissions' });
+        setMessage({ type: 'error', text: data.error || dict?.admin?.failedToSaveRolePermissions || 'Failed to save role permissions' });
       }
     } catch {
-      setMessage({ type: 'error', text: 'Failed to save role permissions. Please check your connection.' });
+      setMessage({ type: 'error', text: dict?.admin?.failedToSaveRolePermissionsConnection || 'Failed to save role permissions. Please check your connection.' });
     } finally {
       setSaving(false);
     }
@@ -112,7 +119,7 @@ export default function RolesPermissionsPage() {
       <div className="flex items-center justify-center py-24">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
         </div>
       </div>
     );
@@ -122,9 +129,9 @@ export default function RolesPermissionsPage() {
     return (
       <div className="px-4 sm:px-6 py-6">
         <div className="bg-red-50 border-2 border-red-300 p-6">
-          <h2 className="text-lg font-bold text-red-800 mb-1">Access Restricted</h2>
+          <h2 className="text-lg font-bold text-red-800 mb-1">{dict?.admin?.accessRestricted || 'Access Restricted'}</h2>
           <p className="text-sm text-red-700">
-            You don&apos;t have permission to manage roles and permissions. Contact an admin or owner.
+            {dict?.admin?.accessRestrictedRolesPermissions || "You don't have permission to manage roles and permissions. Contact an admin or owner."}
           </p>
         </div>
       </div>
@@ -135,10 +142,9 @@ export default function RolesPermissionsPage() {
     <div>
       <div className="px-4 sm:px-6 py-6">
         <div className="mb-6 sm:mb-8">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Roles & Permissions</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">{dict?.admin?.rolesPermissionsTitle || 'Roles & Permissions'}</h1>
           <p className="text-gray-600">
-            Control which features viewer, cashier, and manager accounts can access. Owner, admin, and
-            super admin accounts always have full access and cannot be restricted.
+            {dict?.admin?.rolesPermissionsDescription || 'Control which features viewer, cashier, and manager accounts can access. Owner, admin, and super admin accounts always have full access and cannot be restricted.'}
           </p>
         </div>
 
@@ -156,9 +162,7 @@ export default function RolesPermissionsPage() {
 
         <div className="mb-6 p-4 bg-brand-soft border-2 border-teal-300">
           <p className="text-sm text-brand-navy">
-            Checked = that role can access the feature. Unchecked cells that differ from the default are
-            marked <span className="font-semibold">(custom)</span> — click the small reset link to revert
-            to the default for that role.
+            {dict?.admin?.rolesPermissionsCheckedBanner || 'Checked = that role can access the feature. Unchecked cells that differ from the default are marked (custom) — click the small reset link to revert to the default for that role.'}
           </p>
         </div>
 
@@ -167,7 +171,7 @@ export default function RolesPermissionsPage() {
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                  Feature
+                  {dict?.admin?.featureCol || 'Feature'}
                 </th>
                 {OVERRIDABLE_ROLES.map((role) => (
                   <th
@@ -210,9 +214,9 @@ export default function RolesPermissionsPage() {
                                   type="button"
                                   onClick={() => resetToDefault(role, perm.key)}
                                   className="text-[10px] text-brand hover:text-brand-hover"
-                                  title="Reset to default"
+                                  title={dict?.admin?.resetToDefaultTitle || 'Reset to default'}
                                 >
-                                  (custom)
+                                  {dict?.admin?.customLabel || '(custom)'}
                                 </button>
                               )}
                             </div>
@@ -237,14 +241,14 @@ export default function RolesPermissionsPage() {
             {saving ? (
               <>
                 <div className="animate-spin h-5 w-5 border-b-2 border-white"></div>
-                <span>Saving...</span>
+                <span>{dict?.common?.saving || 'Saving...'}</span>
               </>
             ) : (
               <>
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
-                <span>Save Changes</span>
+                <span>{dict?.admin?.saveChanges || 'Save Changes'}</span>
               </>
             )}
           </button>

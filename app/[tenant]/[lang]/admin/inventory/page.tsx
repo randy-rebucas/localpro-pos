@@ -15,6 +15,7 @@ import { getDefaultTenantSettings } from '@/lib/currency';
 import { getBusinessTypeConfig } from '@/lib/business-types';
 import { getBusinessType, supportsFeature } from '@/lib/business-type-helpers';
 import { useInventoryPage } from '@/hooks/useInventoryPage';
+import { usePermissions } from '@/hooks/usePermissions';
 import type { TranslationDict } from '@/types/dictionary';
 
 export default function AdminInventoryPage() {
@@ -42,6 +43,8 @@ export default function AdminInventoryPage() {
 
   const inventoryEnabled = supportsFeature(settings ?? undefined, 'inventory');
   const businessTypeConfig = settings ? getBusinessTypeConfig(getBusinessType(settings)) : null;
+  const { canAccess } = usePermissions();
+  const canManage = canAccess('inventory.manage');
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -97,6 +100,19 @@ export default function AdminInventoryPage() {
   }
 
   const invDict = dict.inventory ?? {};
+
+  if (!canManage) {
+    return (
+      <div className="px-4 sm:px-6 py-6">
+        <div className="bg-red-50 border-2 border-red-300 p-6">
+          <h2 className="text-lg font-bold text-red-800 mb-1">{dict?.admin?.accessRestricted || 'Access Restricted'}</h2>
+          <p className="text-sm text-red-700">
+            {dict?.admin?.accessRestrictedInventory || "You don't have permission to view inventory. Contact an admin or owner."}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (!inventoryEnabled) {
     return (

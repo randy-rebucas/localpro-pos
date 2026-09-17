@@ -6,6 +6,7 @@ import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { UtensilsCrossed, AlertTriangle } from 'lucide-react';
 import { getDictionaryClient } from '../../dictionaries-client';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface RestaurantCompliance {
   fdaFoodBusinessLicense?: string;
@@ -52,6 +53,8 @@ export default function RestaurantCompliancePage() {
   const tenant = params.tenant as string;
   const lang = params.lang as string;
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const { canAccess } = usePermissions();
+  const canManage = canAccess('restaurant_compliance.manage');
 
   const [data, setData] = useState<RestaurantCompliance>({});
   const [loading, setLoading] = useState(true);
@@ -108,15 +111,23 @@ export default function RestaurantCompliancePage() {
           >
             {dict?.admin?.complianceStatus || 'Compliance Status'}
           </Link>
-          <button
-            onClick={handleSave}
-            disabled={saving || loading}
-            className="px-4 py-2 text-sm font-medium bg-brand text-white border border-brand-hover hover:bg-brand-hover disabled:opacity-50 transition-colors"
-          >
-            {saving ? (dict?.admin?.saving || 'Saving...') : (dict?.admin?.saveSettings || 'Save Settings')}
-          </button>
+          {canManage && (
+            <button
+              onClick={handleSave}
+              disabled={saving || loading}
+              className="px-4 py-2 text-sm font-medium bg-brand text-white border border-brand-hover hover:bg-brand-hover disabled:opacity-50 transition-colors"
+            >
+              {saving ? (dict?.admin?.saving || 'Saving...') : (dict?.admin?.saveSettings || 'Save Settings')}
+            </button>
+          )}
         </div>
       </div>
+
+      {!loading && !canManage && (
+        <div className="mb-6 p-3 bg-yellow-50 border border-yellow-300 text-sm text-yellow-800">
+          {dict?.admin?.rcReadOnlyNotice || "You don't have permission to change restaurant compliance settings. Contact an admin or manager."}
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-24">
@@ -143,7 +154,7 @@ export default function RestaurantCompliancePage() {
           </aside>
 
           {/* Right — form sections */}
-          <div className="flex-1 min-w-0 space-y-4">
+          <fieldset disabled={!canManage} className="flex-1 min-w-0 space-y-4">
 
             {/* FDA Food Business License */}
             <div className="bg-white border border-gray-300">
@@ -218,7 +229,7 @@ export default function RestaurantCompliancePage() {
               </div>
             </div>
 
-          </div>
+          </fieldset>
         </div>
       )}
     </div>

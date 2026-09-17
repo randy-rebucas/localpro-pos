@@ -8,6 +8,8 @@ import connectDB from '@/lib/mongodb';
 import Tenant from '@/models/Tenant';
 import { fetchExchangeRates } from '@/lib/multi-currency';
 import { getCurrentUser } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
+import { createAuditLog, AuditActions } from '@/lib/audit';
 import { logger } from '@/lib/logger';
 
 export async function GET(
@@ -60,23 +62,22 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if user is admin or manager
-    if (user.role !== 'admin' && user.role !== 'manager' && user.role !== 'owner' && user.role !== 'super_admin') {
-      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
-    }
-
     const { slug } = await params;
     const body = await request.json();
     const { action } = body;
 
     await connectDB();
-    console.log(`Received exchange rate update request for tenant ${slug} with action: ${action}`);
+
     const tenant = await Tenant.findOne({ slug });
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
     if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
+
+    if (!(await hasTenantPermission(user.role, tenant._id.toString(), 'settings.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
@@ -121,6 +122,15 @@ export async function POST(
       tenant.markModified('settings.multiCurrency');
       await tenant.save();
 
+      await createAuditLog(request, {
+        tenantId: tenant._id,
+        userId: user.userId,
+        action: AuditActions.UPDATE,
+        entityType: 'exchange_rates',
+        entityId: tenant._id.toString(),
+        changes: { source: 'api', exchangeRates: rates },
+      });
+
       return NextResponse.json({
         success: true,
         data: { exchangeRates: rates, lastUpdated: new Date() },
@@ -153,6 +163,15 @@ export async function POST(
 
       tenant.markModified('settings.multiCurrency');
       await tenant.save();
+
+      await createAuditLog(request, {
+        tenantId: tenant._id,
+        userId: user.userId,
+        action: AuditActions.UPDATE,
+        entityType: 'exchange_rates',
+        entityId: tenant._id.toString(),
+        changes: { source: 'manual', exchangeRates },
+      });
 
       return NextResponse.json({
         success: true,

@@ -14,6 +14,7 @@ import { formatDateTime, formatDate as formatTenantDate } from '@/lib/formatting
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   useReportsData,
   type ReportTab,
@@ -35,6 +36,8 @@ export default function AdminReportsPage() {
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
   const { settings } = useTenantSettings();
+  const { canAccess } = usePermissions();
+  const canGenerateZReading = canAccess('reports.z_reading');
   const primaryColor = settings?.primaryColor || '#35979c';
   const COLORS = [primaryColor, ...DEFAULT_COLORS.filter(c => c !== primaryColor)].slice(0, 5);
   const [dict, setDict] = useState<TranslationDict | null>(null);
@@ -205,6 +208,7 @@ export default function AdminReportsPage() {
             onGenerate={handleGenerateZReading}
             generating={generatingZReading}
             settings={settings}
+            canGenerate={canGenerateZReading}
           />
         );
       default:
@@ -227,7 +231,7 @@ export default function AdminReportsPage() {
         {/* Filters sidebar */}
         <aside className="w-full lg:w-56 shrink-0">
           <div className="bg-white border border-gray-300 p-4 lg:sticky lg:top-6">
-            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Filters</h2>
+            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">{dict.reports?.filters || 'Filters'}</h2>
             <div className="flex flex-col gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -601,7 +605,19 @@ function ProfitLossView({ summary, dict, primaryColor, colors }: { summary: Prof
   );
 }
 
+const CASH_DRAWER_PAGE_SIZE = 10;
+
 function CashDrawerReportView({ reports, dict, settings }: { reports: CashDrawerReport[]; dict: any; settings: ReturnType<typeof useTenantSettings>['settings'] }) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const [page, setPage] = useState(1);
+  const [prevReports, setPrevReports] = useState(reports);
+  if (reports !== prevReports) {
+    setPrevReports(reports);
+    setPage(1);
+  }
+  const totalPages = Math.max(1, Math.ceil(reports.length / CASH_DRAWER_PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pagedReports = reports.slice((currentPage - 1) * CASH_DRAWER_PAGE_SIZE, currentPage * CASH_DRAWER_PAGE_SIZE);
+
   return (
     <div className="space-y-6">
       <div className="bg-white border border-gray-300 overflow-hidden">
@@ -619,7 +635,7 @@ function CashDrawerReportView({ reports, dict, settings }: { reports: CashDrawer
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {reports.map((report, index) => (
+            {pagedReports.map((report, index) => (
               <tr key={report.sessionId || `session-${index}`}>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDateTime(report.openingTime, settings || getDefaultTenantSettings())}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -652,6 +668,27 @@ function CashDrawerReportView({ reports, dict, settings }: { reports: CashDrawer
           </tbody>
         </table>
       </div>
+      {totalPages > 1 && (
+        <div className="flex justify-center gap-2">
+          <button
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+            className="px-4 py-2 border border-gray-300 disabled:opacity-50 bg-white"
+          >
+            {dict.transactions?.previous || dict.common?.previous || 'Previous'}
+          </button>
+          <span className="px-4 py-2 text-sm text-gray-700">
+            {dict.transactions?.page || dict.admin?.page || 'Page'} {currentPage} {dict.transactions?.of || dict.admin?.of || 'of'} {totalPages}
+          </span>
+          <button
+            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+            disabled={currentPage === totalPages}
+            className="px-4 py-2 border border-gray-300 disabled:opacity-50 bg-white"
+          >
+            {dict.transactions?.next || dict.common?.next || 'Next'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -699,21 +736,23 @@ function XReadingView({ data, dict, primaryColor }: { data: XReadingData; dict: 
   );
 }
 
-function ZReadingView({ readings, dict, primaryColor, onGenerate, generating, settings }: { readings: ZReadingRecord[]; dict: any; primaryColor: string; onGenerate: () => void; generating: boolean; settings: ReturnType<typeof useTenantSettings>['settings'] }) { // eslint-disable-line @typescript-eslint/no-explicit-any
+function ZReadingView({ readings, dict, primaryColor, onGenerate, generating, settings, canGenerate }: { readings: ZReadingRecord[]; dict: any; primaryColor: string; onGenerate: () => void; generating: boolean; settings: ReturnType<typeof useTenantSettings>['settings']; canGenerate: boolean }) { // eslint-disable-line @typescript-eslint/no-explicit-any
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <p className="text-sm text-gray-500 max-w-2xl">
           {dict.reports?.zReadingDesc || 'The official end-of-day sales report. Generating one locks in today\'s totals against the Grand Total accumulator — only one can be generated per business day.'}
         </p>
-        <button
-          onClick={onGenerate}
-          disabled={generating}
-          className="shrink-0 px-4 py-2 text-sm font-medium text-white transition-colors disabled:opacity-50"
-          style={{ backgroundColor: primaryColor }}
-        >
-          {generating ? (dict.common?.loading || 'Generating...') : (dict.reports?.generateZReading || 'Generate Z-Reading for Today')}
-        </button>
+        {canGenerate && (
+          <button
+            onClick={onGenerate}
+            disabled={generating}
+            className="shrink-0 px-4 py-2 text-sm font-medium text-white transition-colors disabled:opacity-50"
+            style={{ backgroundColor: primaryColor }}
+          >
+            {generating ? (dict.common?.loading || 'Generating...') : (dict.reports?.generateZReading || 'Generate Z-Reading for Today')}
+          </button>
+        )}
       </div>
       <div className="bg-white border border-gray-300 overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
@@ -757,7 +796,19 @@ function ZReadingView({ readings, dict, primaryColor, onGenerate, generating, se
   );
 }
 
+const SALES_JOURNAL_PAGE_SIZE = 10;
+
 function SalesJournalView({ data, dict, primaryColor, onExport }: { data: SalesJournalData; dict: any; primaryColor: string; onExport: (format: 'csv' | 'excel' | 'pdf') => void }) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const [page, setPage] = useState(1);
+  const [prevEntries, setPrevEntries] = useState(data.entries);
+  if (data.entries !== prevEntries) {
+    setPrevEntries(data.entries);
+    setPage(1);
+  }
+  const totalPages = Math.max(1, Math.ceil(data.entries.length / SALES_JOURNAL_PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pagedEntries = data.entries.slice((currentPage - 1) * SALES_JOURNAL_PAGE_SIZE, currentPage * SALES_JOURNAL_PAGE_SIZE);
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-6">
@@ -822,7 +873,7 @@ function SalesJournalView({ data, dict, primaryColor, onExport }: { data: SalesJ
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {data.entries.map((entry, index) => (
+            {pagedEntries.map((entry, index) => (
               <tr key={entry.receiptNumber || `journal-${index}`}>
                 <td className="px-4 py-3 whitespace-nowrap text-sm font-mono text-gray-900">{entry.receiptNumber || '-'}</td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{entry.date}</td>
@@ -851,6 +902,27 @@ function SalesJournalView({ data, dict, primaryColor, onExport }: { data: SalesJ
           </tbody>
         </table>
       </div>
+      {totalPages > 1 && (
+        <div className="flex justify-center gap-2">
+          <button
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+            className="px-4 py-2 border border-gray-300 disabled:opacity-50 bg-white"
+          >
+            {dict.transactions?.previous || dict.common?.previous || 'Previous'}
+          </button>
+          <span className="px-4 py-2 text-sm text-gray-700">
+            {dict.transactions?.page || dict.admin?.page || 'Page'} {currentPage} {dict.transactions?.of || dict.admin?.of || 'of'} {totalPages}
+          </span>
+          <button
+            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+            disabled={currentPage === totalPages}
+            className="px-4 py-2 border border-gray-300 disabled:opacity-50 bg-white"
+          >
+            {dict.transactions?.next || dict.common?.next || 'Next'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

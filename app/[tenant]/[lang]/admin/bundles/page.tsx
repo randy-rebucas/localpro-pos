@@ -8,6 +8,7 @@ import { getDictionaryClient } from '../../dictionaries-client';
 import Currency from '@/components/Currency';
 import dynamic from 'next/dynamic';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import { getBusinessTypeConfig } from '@/lib/business-types';
 import { getBusinessType } from '@/lib/business-type-helpers';
 import { useBundlesList, type Bundle, type BundleItem } from '@/hooks/useBundlesList';
@@ -70,6 +71,8 @@ export default function BundlesPage() {
   const { settings } = useTenantSettings();
   const businessTypeConfig = settings ? getBusinessTypeConfig(getBusinessType(settings)) : null;
   const bundlesAllowed = businessTypeConfig?.productTypes?.includes('bundle') ?? true;
+  const { canAccess } = usePermissions();
+  const canManage = canAccess('bundles.manage');
 
   const { bundles, loading, fetchBundles, deleteBundle, toggleBundleStatus, bulkToggleStatus } = useBundlesList();
   const { analytics, loading: analyticsLoading, fetchAnalytics: fetchAnalyticsData } = useBundlesAnalytics();
@@ -308,6 +311,19 @@ export default function BundlesPage() {
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!canManage) {
+    return (
+      <div className="px-4 sm:px-6 py-6">
+        <div className="bg-red-50 border-2 border-red-300 p-6">
+          <h2 className="text-lg font-bold text-red-800 mb-1">{dict?.admin?.accessRestricted || 'Access Restricted'}</h2>
+          <p className="text-sm text-red-700">
+            {dict?.admin?.accessRestrictedBundles || "You don't have permission to manage bundles. Contact an admin or owner."}
+          </p>
         </div>
       </div>
     );
@@ -805,7 +821,7 @@ function BundleModal({
   onSave: () => void;
   dict: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }) {
-  const { formData, setFormData, error, submitting, handleSubmit: submitForm } = useBundleForm(bundle);
+  const { formData, setFormData, error, submitting, handleSubmit: submitForm } = useBundleForm(bundle, dict);
   const [productSearch, setProductSearch] = useState('');
   const [showProductSuggestions, setShowProductSuggestions] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);

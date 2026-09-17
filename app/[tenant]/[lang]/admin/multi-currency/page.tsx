@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { useMultiCurrencySettings } from '@/hooks/useMultiCurrencySettings';
 import { useExchangeRateFetch } from '@/hooks/useExchangeRateFetch';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   getSaveSuccessMessage,
   getSaveErrorMessage,
@@ -17,6 +18,8 @@ export default function MultiCurrencyPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
+  const { canAccess } = usePermissions();
+  const canManage = canAccess('settings.manage');
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
 
   const { settings, loading, saving, message, setMessage, fetchSettings, updateSetting, saveSettings } =
@@ -99,7 +102,7 @@ export default function MultiCurrencyPage() {
           </div>
         )}
 
-        <div className="bg-white border border-gray-300 p-6 space-y-6">
+        <fieldset disabled={!canManage} className="bg-white border border-gray-300 p-6 space-y-6">
           <div>
             <h2 className="text-xl font-bold text-gray-900 mb-4">
               {dict?.admin?.exchangeRateSource || 'Exchange Rate Source'}
@@ -209,28 +212,30 @@ export default function MultiCurrencyPage() {
             </div>
           )}
 
-          <div className="flex justify-end pt-6 mt-8 border-t border-gray-200">
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="px-6 py-3 bg-brand text-white hover:bg-brand-hover font-semibold transition-all duration-200 border border-brand-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {saving ? (
-                <>
-                  <div className="animate-spin h-5 w-5 border-b-2 border-white"></div>
-                  <span>{dict?.common?.saving || 'Saving...'}</span>
-                </>
-              ) : (
-                <>
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  <span>{dict?.common?.save || 'Save Settings'}</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
+          {canManage && (
+            <div className="flex justify-end pt-6 mt-8 border-t border-gray-200">
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="px-6 py-3 bg-brand text-white hover:bg-brand-hover font-semibold transition-all duration-200 border border-brand-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {saving ? (
+                  <>
+                    <div className="animate-spin h-5 w-5 border-b-2 border-white"></div>
+                    <span>{dict?.common?.saving || 'Saving...'}</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span>{dict?.common?.save || 'Save Settings'}</span>
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+        </fieldset>
       </div>
     </div>
   );

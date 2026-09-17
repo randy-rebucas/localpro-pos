@@ -6,6 +6,7 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { checkPharmacyFeatureAccess } from '@/lib/subscription';
 
 export async function GET(
   request: NextRequest,
@@ -67,6 +68,15 @@ export async function PUT(
 
     if (!(await hasTenantPermission(user.role, tenant._id.toString(), 'pharmacy_compliance.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
+
+    try {
+      await checkPharmacyFeatureAccess(tenant._id.toString(), 'enablePharmacyCompliance');
+    } catch (featureError: unknown) {
+      return NextResponse.json(
+        { success: false, error: featureError instanceof Error ? featureError.message : 'Feature not available' },
+        { status: 403 }
+      );
     }
 
     const body = await request.json();

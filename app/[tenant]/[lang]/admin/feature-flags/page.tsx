@@ -7,6 +7,7 @@ import { getDictionaryClient } from '../../dictionaries-client';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getBusinessTypeConfig } from '@/lib/business-types';
 import { getBusinessType } from '@/lib/business-type-helpers';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useFeatureFlagsSettings } from '@/hooks/useFeatureFlagsSettings';
 import {
   getSaveSuccessMessage,
@@ -23,6 +24,8 @@ export default function FeatureFlagsPage() {
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const { settings: tenantSettings } = useTenantSettings();
   const businessTypeConfig = tenantSettings ? getBusinessTypeConfig(getBusinessType(tenantSettings)) : null;
+  const { canAccess } = usePermissions();
+  const canManage = canAccess('settings.manage');
 
   const { settings, loading, saving, message, setMessage, fetchSettings, updateSetting, saveSettings } =
     useFeatureFlagsSettings(tenant);
@@ -109,13 +112,13 @@ export default function FeatureFlagsPage() {
               </svg>
               <div>
                 <h3 className="text-lg font-semibold text-brand-navy-deep mb-2">
-                  Current Business Type: {businessTypeConfig.name}
+                  {(dict?.admin?.currentBusinessTypeLabel || 'Current Business Type: {name}').replace('{name}', businessTypeConfig.name)}
                 </h3>
                 <p className="text-brand-navy mb-2">
                   {businessTypeConfig.description}
                 </p>
                 <p className="text-sm text-brand-hover">
-                  Default features for this business type are auto-configured. You can override them below.
+                  {dict?.admin?.businessTypeAutoConfiguredNote || 'Default features for this business type are auto-configured. You can override them below.'}
                 </p>
               </div>
             </div>
@@ -135,8 +138,9 @@ export default function FeatureFlagsPage() {
                       type="checkbox"
                       id={flagKey}
                       checked={isChecked}
+                      disabled={!canManage}
                       onChange={(e) => updateSetting(flagKey, e.target.checked)}
-                      className="checkbox-win8 h-5 w-5 cursor-pointer"
+                      className="checkbox-win8 h-5 w-5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                     <label htmlFor={flagKey} className="ml-3 flex-1">
                       <div className="text-sm font-medium text-gray-900">
@@ -153,27 +157,29 @@ export default function FeatureFlagsPage() {
           </section>
 
           {/* Save Button */}
-          <div className="flex justify-end pt-6 mt-8 border-t border-gray-200">
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="px-6 py-3 bg-brand text-white hover:bg-brand-hover font-semibold transition-all duration-200 border border-brand-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {saving ? (
-                <>
-                  <div className="animate-spin h-5 w-5 border-b-2 border-white"></div>
-                  <span>{dict?.settings?.saving || 'Saving...'}</span>
-                </>
-              ) : (
-                <>
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  <span>{dict?.admin?.saveFeatureFlags || 'Save Feature Flags'}</span>
-                </>
-              )}
-            </button>
-          </div>
+          {canManage && (
+            <div className="flex justify-end pt-6 mt-8 border-t border-gray-200">
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="px-6 py-3 bg-brand text-white hover:bg-brand-hover font-semibold transition-all duration-200 border border-brand-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {saving ? (
+                  <>
+                    <div className="animate-spin h-5 w-5 border-b-2 border-white"></div>
+                    <span>{dict?.settings?.saving || 'Saving...'}</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span>{dict?.admin?.saveFeatureFlags || 'Save Feature Flags'}</span>
+                  </>
+                )}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

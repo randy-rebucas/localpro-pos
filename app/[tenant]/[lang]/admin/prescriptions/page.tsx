@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { FileText, Plus, ChevronRight, CheckCircle, Clock, XCircle } from 'lucide-react';
+import { getDictionaryClient } from '../../dictionaries-client';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface PrescriptionItem {
   productId?: string;
@@ -45,18 +47,26 @@ const STATUS_STYLES: Record<string, string> = {
   cancelled: 'bg-gray-100 text-gray-600',
 };
 
-const STATUS_LABEL: Record<string, string> = {
-  pending: 'Pending',
-  partially_dispensed: 'Partial',
-  dispensed: 'Dispensed',
-  expired: 'Expired',
-  cancelled: 'Cancelled',
-};
-
 export default function PrescriptionsPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as string;
+  const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const { canAccess } = usePermissions();
+  const canCreate = canAccess('prescriptions.create');
+  const canDispense = canAccess('prescriptions.dispense');
+
+  useEffect(() => {
+    getDictionaryClient(lang as 'en' | 'es').then(setDict);
+  }, [lang]);
+
+  const STATUS_LABEL: Record<string, string> = {
+    pending: dict?.admin?.rxStatusPending || 'Pending',
+    partially_dispensed: dict?.admin?.rxStatusPartial || 'Partial',
+    dispensed: dict?.admin?.rxStatusDispensed || 'Dispensed',
+    expired: dict?.admin?.rxStatusExpired || 'Expired',
+    cancelled: dict?.admin?.rxStatusCancelled || 'Cancelled',
+  };
 
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [loading, setLoading] = useState(true);
@@ -166,12 +176,14 @@ export default function PrescriptionsPage() {
             <p className="text-sm text-gray-500 mt-0.5">Manage and dispense Rx prescriptions</p>
           </div>
         </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-brand text-white border border-brand-hover hover:bg-brand-hover transition-colors"
-        >
-          <Plus className="w-4 h-4" /> New Prescription
-        </button>
+        {canCreate && (
+          <button
+            onClick={() => setShowCreate(true)}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-brand text-white border border-brand-hover hover:bg-brand-hover transition-colors"
+          >
+            <Plus className="w-4 h-4" /> New Prescription
+          </button>
+        )}
       </div>
 
       {/* Status filters */}
@@ -265,7 +277,7 @@ export default function PrescriptionsPage() {
                 ))}
               </div>
 
-              {!['dispensed', 'expired', 'cancelled'].includes(selected.status) && (
+              {canDispense && !['dispensed', 'expired', 'cancelled'].includes(selected.status) && (
                 <button
                   onClick={handleDispense}
                   disabled={dispensingIndexes.length === 0 || dispensing}

@@ -4,6 +4,7 @@ import connectDB from '@/lib/mongodb';
 import Customer from '@/models/Customer';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { getCurrentUser } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { checkFeatureAccess } from '@/lib/subscription';
 import { handleApiError } from '@/lib/error-handler';
 
@@ -25,6 +26,10 @@ export async function GET(request: NextRequest) {
     const tenantId = await getTenantIdFromRequest(request);
     if (!tenantId) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+    }
+
+    if (!(await hasTenantPermission(user.role, tenantId, 'loyalty.manage'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
     try {

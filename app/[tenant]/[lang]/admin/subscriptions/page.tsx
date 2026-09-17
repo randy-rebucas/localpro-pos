@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { CreditCard, AlertTriangle, ArrowUp, Receipt, CheckCircle } from 'lucide-react';
 import { useConfirm } from '@/lib/confirm';
@@ -24,12 +25,14 @@ export default function SubscriptionsPage() {
 
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [activeTab, setActiveTab] = useState<'subscription' | 'billing'>('subscription');
-  const { subscription, billingHistory, loading, billingLoading, fetchSubscription, fetchBillingHistory } = useSubscriptionManager();
+  const { subscription, billingHistory, loading, billingLoading, error, billingError, fetchSubscription, fetchBillingHistory } = useSubscriptionManager();
   const { subscriptionStatus, refreshSubscription } = useSubscription(); // eslint-disable-line @typescript-eslint/no-unused-vars
   const { Dialog: ConfirmDialog } = useConfirm();
   const { settings } = useTenantSettings();
   const tenantSettings = settings || getDefaultTenantSettings();
   const primaryColor = tenantSettings.primaryColor || '#35979c';
+  const { canAccess } = usePermissions();
+  const canManage = canAccess('subscriptions.manage');
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -46,6 +49,19 @@ export default function SubscriptionsPage() {
             style={{ borderTop: `2px solid ${primaryColor}`, borderRight: `2px solid ${primaryColor}`, borderBottom: '2px solid transparent', borderLeft: `2px solid ${primaryColor}` }}
           />
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!canManage) {
+    return (
+      <div className="px-4 sm:px-6 py-6">
+        <div className="bg-red-50 border-2 border-red-300 p-6">
+          <h2 className="text-lg font-bold text-red-800 mb-1">{dict?.admin?.accessRestricted || 'Access Restricted'}</h2>
+          <p className="text-sm text-red-700">
+            {dict?.admin?.accessRestrictedSubscriptions || "You don't have permission to manage subscriptions. Contact an admin or owner."}
+          </p>
         </div>
       </div>
     );
@@ -129,7 +145,20 @@ export default function SubscriptionsPage() {
                   )}
                 </div>
 
-                {subscription ? (
+                {error ? (
+                  <div className="text-center py-12">
+                    <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-red-300" />
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">{dict?.admin?.failedToLoadSubscription || 'Failed to Load Subscription'}</h3>
+                    <p className="text-gray-500 text-sm mb-6">{error}</p>
+                    <button
+                      onClick={() => fetchSubscription()}
+                      className="inline-flex items-center px-4 py-2 text-sm font-medium text-white transition-colors"
+                      style={{ background: primaryColor }}
+                    >
+                      {dict?.common?.retry || 'Retry'}
+                    </button>
+                  </div>
+                ) : subscription ? (
                   <div className="space-y-6">
                     {/* Usage Limits */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -265,7 +294,19 @@ export default function SubscriptionsPage() {
                   </button>
                 </div>
 
-                {billingHistory.length > 0 ? (
+                {billingError ? (
+                  <div className="text-center py-10">
+                    <AlertTriangle className="h-10 w-10 mx-auto mb-3 text-red-300" />
+                    <p className="text-gray-500 text-sm mb-4">{billingError}</p>
+                    <button
+                      onClick={() => fetchBillingHistory()}
+                      className="text-sm font-medium transition-colors"
+                      style={{ color: primaryColor }}
+                    >
+                      {dict?.common?.retry || 'Retry'}
+                    </button>
+                  </div>
+                ) : billingHistory.length > 0 ? (
                   <div className="space-y-3">
                     {billingHistory.map((transaction) => (
                       <div key={transaction._id} className="flex items-center justify-between p-4 border border-gray-100 bg-gray-50">

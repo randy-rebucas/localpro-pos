@@ -44,20 +44,21 @@ export async function PUT(
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId } = authResult;
     const { id } = await params;
+    const t = await getValidationTranslatorFromRequest(request);
 
     if (!(await hasTenantPermission(authResult.user.role, authResult.tenantId, 'expenses.manage'))) {
-      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 
     const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
     const { allowed } = checkRateLimit(`write:expenses:${tenantId}:${ip}`, 30, 60_000);
     if (!allowed) {
-      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
+      return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
     }
 
     const expense = await Expense.findOne({ _id: id, tenantId });
     if (!expense) {
-      return NextResponse.json({ success: false, error: 'Expense not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.expenseNotFound', 'Expense not found') }, { status: 404 });
     }
 
     const body = await request.json();
@@ -102,13 +103,13 @@ export async function DELETE(
     const t = await getValidationTranslatorFromRequest(request);
 
     if (!(await hasTenantPermission(authResult.user.role, authResult.tenantId, 'expenses.manage'))) {
-      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 
     const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
     const { allowed } = checkRateLimit(`write:expenses:${tenantId}:${ip}`, 30, 60_000);
     if (!allowed) {
-      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
+      return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
     }
 
     const expense = await Expense.findOneAndUpdate(

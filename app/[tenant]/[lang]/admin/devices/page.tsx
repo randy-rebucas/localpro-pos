@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { getAssignedDeviceId, setAssignedDeviceId } from '@/lib/device-identity';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface Device {
   _id: string;
@@ -18,16 +19,24 @@ interface Device {
   createdAt: string;
 }
 
-const emptyForm: { label: string; serialNumber: string; terminalId: string; ptuNumber: string; ptuStatus: 'pending' | 'approved' } = {
-  label: '', serialNumber: '', terminalId: '', ptuNumber: '', ptuStatus: 'pending',
+interface Branch {
+  _id: string;
+  name: string;
+}
+
+const emptyForm: { label: string; serialNumber: string; terminalId: string; branchId: string; ptuNumber: string; ptuStatus: 'pending' | 'approved' } = {
+  label: '', serialNumber: '', terminalId: '', branchId: '', ptuNumber: '', ptuStatus: 'pending',
 };
 
 export default function DevicesPage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
+  const { canAccess } = usePermissions();
+  const canManage = canAccess('devices.manage');
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [devices, setDevices] = useState<Device[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingDevice, setEditingDevice] = useState<Device | null>(null);
@@ -47,7 +56,7 @@ export default function DevicesPage() {
   const fetchDevices = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/devices?tenant=${tenant}`, { credentials: 'include' });
+      const res = await fetch('/api/devices', { credentials: 'include' });
       const data = await res.json();
       if (data.success) {
         setDevices(data.data || []);
@@ -59,11 +68,24 @@ export default function DevicesPage() {
     } finally {
       setLoading(false);
     }
-  }, [tenant, dict]);
+  }, [dict]);
+
+  const fetchBranches = useCallback(async () => {
+    try {
+      const res = await fetch('/api/branches?isActive=true', { credentials: 'include' });
+      const data = await res.json();
+      if (data.success) {
+        setBranches(data.data || []);
+      }
+    } catch {
+      // Non-fatal: branch dropdown just stays empty if this fails.
+    }
+  }, []);
 
   useEffect(() => {
     fetchDevices();
-  }, [fetchDevices]);
+    fetchBranches();
+  }, [fetchDevices, fetchBranches]);
 
   const openAddModal = () => {
     setEditingDevice(null);
@@ -78,6 +100,7 @@ export default function DevicesPage() {
       label: device.label,
       serialNumber: device.serialNumber,
       terminalId: device.terminalId,
+      branchId: typeof device.branchId === 'string' ? device.branchId : device.branchId?._id || '',
       ptuNumber: device.ptuNumber || '',
       ptuStatus: device.ptuStatus,
     });
@@ -90,13 +113,13 @@ export default function DevicesPage() {
     setSaving(true);
     setError('');
     try {
-      const url = editingDevice ? `/api/devices/${editingDevice._id}?tenant=${tenant}` : `/api/devices?tenant=${tenant}`;
+      const url = editingDevice ? `/api/devices/${editingDevice._id}` : '/api/devices';
       const method = editingDevice ? 'PUT' : 'POST';
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, branchId: formData.branchId || undefined }),
       });
       const data = await res.json();
       if (data.success) {
@@ -118,7 +141,7 @@ export default function DevicesPage() {
       .replace('{label}', device.label);
     if (!confirm(confirmMsg)) return;
     try {
-      const res = await fetch(`/api/devices/${device._id}?tenant=${tenant}`, {
+      const res = await fetch(`/api/devices/${device._id}`, {
         method: 'DELETE',
         credentials: 'include',
       });
@@ -183,12 +206,14 @@ export default function DevicesPage() {
       <div className="bg-white border border-gray-300 p-6">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold text-gray-900">{dict.admin?.devicesSectionTitle || 'Devices'}</h2>
-          <button
-            onClick={openAddModal}
-            className="px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium border border-brand-hover"
-          >
-            {dict.admin?.registerDevice || 'Register Device'}
-          </button>
+          {canManage && (
+            <button
+              onClick={openAddModal}
+              className="px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium border border-brand-hover"
+            >
+              {dict.admin?.registerDevice || 'Register Device'}
+            </button>
+          )}
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
@@ -197,6 +222,7 @@ export default function DevicesPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.deviceLabel || 'Label'}</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.deviceTerminalId || 'Terminal ID'}</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.deviceSerialNumber || 'Serial Number'}</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.deviceBranch || 'Branch'}</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.devicePtuNumber || 'PTU/AC No.'}</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.admin?.status || 'Status'}</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.common?.actions || 'Actions'}</th>
@@ -208,6 +234,9 @@ export default function DevicesPage() {
                   <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{device.label}</td>
                   <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">{device.terminalId}</td>
                   <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">{device.serialNumber}</td>
+                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {typeof device.branchId === 'object' ? device.branchId?.name : branches.find((b) => b._id === device.branchId)?.name || '-'}
+                  </td>
                   <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{device.ptuNumber || '-'}</td>
                   <td className="px-4 py-4 whitespace-nowrap">
                     <span className={`px-2 py-1 text-xs font-semibold border ${
@@ -224,15 +253,17 @@ export default function DevicesPage() {
                   </td>
                   <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex gap-2 flex-wrap">
-                      <button onClick={() => openEditModal(device)} className="text-brand hover:text-brand-navy-deep">
-                        {dict.common?.edit || 'Edit'}
-                      </button>
+                      {canManage && (
+                        <button onClick={() => openEditModal(device)} className="text-brand hover:text-brand-navy-deep">
+                          {dict.common?.edit || 'Edit'}
+                        </button>
+                      )}
                       {device.isActive && assignedDeviceId !== device._id && (
                         <button onClick={() => handleAssignThisBrowser(device)} className="text-blue-600 hover:text-blue-900">
                           {dict.admin?.assignThisBrowser || 'Assign this browser'}
                         </button>
                       )}
-                      {device.isActive && (
+                      {canManage && device.isActive && (
                         <button onClick={() => handleDeactivate(device)} className="text-orange-600 hover:text-orange-900">
                           {dict.admin?.deactivate || 'Deactivate'}
                         </button>
@@ -291,6 +322,19 @@ export default function DevicesPage() {
                       className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
                     />
                   </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{dict.admin?.deviceBranch || 'Branch'}</label>
+                  <select
+                    value={formData.branchId}
+                    onChange={(e) => setFormData({ ...formData, branchId: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand bg-white"
+                  >
+                    <option value="">{dict.admin?.deviceNoBranch || 'Unassigned'}</option>
+                    {branches.map((b) => (
+                      <option key={b._id} value={b._id}>{b.name}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>

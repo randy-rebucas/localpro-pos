@@ -19,6 +19,7 @@ import {
   isAuditLogEmpty,
   shouldShowPagination,
 } from '@/lib/audit-helpers';
+import { usePermissions } from '@/hooks/usePermissions';
 import toast from 'react-hot-toast';
 
 export default function AuditLogsPage() {
@@ -31,6 +32,9 @@ export default function AuditLogsPage() {
   const { auditLogs, pagination, loading: auditLoading, fetch: fetchAuditLogs } = useAuditLogs();
   const { filters, handleFilterChange } = useAuditFilters();
   const { users, loading: usersLoading, fetch: fetchUsers } = useAuditUsers();
+  const { canAccess } = usePermissions();
+  const canView = canAccess('audit_logs.view');
+  const canExport = canAccess('audit_logs.export');
 
   // Load dictionary
   useEffect(() => {
@@ -96,6 +100,19 @@ export default function AuditLogsPage() {
     );
   }
 
+  if (!canView) {
+    return (
+      <div className="px-4 sm:px-6 py-6">
+        <div className="bg-red-50 border-2 border-red-300 p-6">
+          <h2 className="text-lg font-bold text-red-800 mb-1">{dict?.admin?.accessRestricted || 'Access Restricted'}</h2>
+          <p className="text-sm text-red-700">
+            {dict?.admin?.accessRestrictedAuditLogs || "You don't have permission to view audit logs. Contact an admin or owner."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="px-4 sm:px-6 py-6">
 
@@ -107,20 +124,22 @@ export default function AuditLogsPage() {
           </h1>
           <p className="text-sm text-gray-500 mt-0.5">{dict.admin?.auditLogsSubtitle || 'View system activity and changes'}</p>
         </div>
-        <div className="flex gap-2 shrink-0">
-          <button
-            onClick={() => handleExport('csv')}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
-          >
-            {dict.admin?.exportCSV || 'Export CSV'}
-          </button>
-          <button
-            onClick={() => handleExport('json')}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
-          >
-            {dict.admin?.exportJSON || 'Export JSON'}
-          </button>
-        </div>
+        {canExport && (
+          <div className="flex gap-2 shrink-0">
+            <button
+              onClick={() => handleExport('csv')}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
+            >
+              {dict.admin?.exportCSV || 'Export CSV'}
+            </button>
+            <button
+              onClick={() => handleExport('json')}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
+            >
+              {dict.admin?.exportJSON || 'Export JSON'}
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="flex gap-6 items-start">
@@ -155,7 +174,7 @@ export default function AuditLogsPage() {
                   type="text"
                   value={filters.entityType}
                   onChange={(e) => handleFilterChangeWrapper('entityType', e.target.value)}
-                  placeholder="e.g. product, user"
+                  placeholder={dict.admin?.entityTypePlaceholder || 'e.g. product, user'}
                   className="w-full px-3 py-2 border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand"
                 />
               </div>
@@ -202,9 +221,9 @@ export default function AuditLogsPage() {
           {/* Stats */}
           {pagination.total > 0 && (
             <div className="bg-white border border-gray-300 p-4">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Results</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{dict.admin?.auditLogsResultsLabel || 'Results'}</p>
               <p className="text-2xl font-bold text-gray-900">{pagination.total}</p>
-              <p className="text-xs text-gray-400 mt-0.5">total log entries</p>
+              <p className="text-xs text-gray-400 mt-0.5">{dict.admin?.auditLogsTotalEntries || 'total log entries'}</p>
             </div>
           )}
         </aside>

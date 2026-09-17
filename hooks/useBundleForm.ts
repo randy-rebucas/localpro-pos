@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import type { Bundle, BundleItem } from './useBundlesList';
+import { type TranslationDict } from '@/types/dictionary';
 
 export interface BundleFormData {
   name: string;
@@ -11,7 +12,8 @@ export interface BundleFormData {
   items: BundleItem[];
 }
 
-export function useBundleForm(bundleToEdit?: Bundle | null) {
+export function useBundleForm(bundleToEdit?: Bundle | null, dict?: TranslationDict | null) {
+  const t = (key: string, fallback: string) => dict?.validation?.[key] || fallback;
   const [formData, setFormData] = useState<BundleFormData>({
     name: bundleToEdit?.name || '',
     description: bundleToEdit?.description || '',
@@ -33,7 +35,7 @@ export function useBundleForm(bundleToEdit?: Bundle | null) {
       setError('');
       
       if (formData.items.length === 0) {
-        const errMsg = 'At least one item is required';
+        const errMsg = t('bundleItemsRequired', 'At least one item is required');
         setError(errMsg);
         onError?.(errMsg);
         return;
@@ -88,7 +90,8 @@ export function useBundleForm(bundleToEdit?: Bundle | null) {
         setSubmitting(false);
       }
     },
-    [bundleToEdit, formData]
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `t` is derived purely from `dict`, already listed
+    [bundleToEdit, formData, dict]
   );
 
   const resetForm = useCallback(() => {

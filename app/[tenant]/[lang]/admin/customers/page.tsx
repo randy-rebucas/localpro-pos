@@ -22,6 +22,7 @@ import {
 } from '@/lib/customers-helpers';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { supportsFeature } from '@/lib/business-type-helpers';
+import { usePermissions } from '@/hooks/usePermissions';
 
 export default function CustomersPage() {
   const params = useParams();
@@ -49,6 +50,10 @@ export default function CustomersPage() {
   const { settings } = useTenantSettings();
   const enableOnAccountSales = settings?.enableOnAccountSales === true;
   const enableLoyalty = supportsFeature(settings ?? undefined, 'loyalty');
+  const { canAccess } = usePermissions();
+  const canManage = canAccess('customers.manage');
+  const canEdit = canAccess('customers.edit');
+  const canBalancePayments = canAccess('customers.balance_payments');
 
   const {
     customers,
@@ -262,12 +267,14 @@ export default function CustomersPage() {
                 <option value="false">{dict?.common?.inactive || 'Inactive'}</option>
               </select>
             </div>
-            <button
-              onClick={openCreate}
-              className="px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium border border-brand-hover whitespace-nowrap"
-            >
-              {dict?.common?.add || 'Add'} {dict?.admin?.customer || 'Customer'}
-            </button>
+            {canManage && (
+              <button
+                onClick={openCreate}
+                className="px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium border border-brand-hover whitespace-nowrap"
+              >
+                {dict?.common?.add || 'Add'} {dict?.admin?.customer || 'Customer'}
+              </button>
+            )}
             <Link
               href={`/${tenant}/${lang}/admin/file-upload`}
               className="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium border border-gray-300 inline-flex items-center gap-2 transition-colors whitespace-nowrap"
@@ -341,22 +348,30 @@ export default function CustomersPage() {
                         </div>
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap">
-                        <button
-                          onClick={() => handleToggleStatus(customer)}
-                          className={`px-2 py-1 text-xs font-semibold border ${getStatusBadgeClass(customer.isActive)}`}
-                        >
-                          {getStatusLabel(customer.isActive, dict)}
-                        </button>
+                        {canEdit ? (
+                          <button
+                            onClick={() => handleToggleStatus(customer)}
+                            className={`px-2 py-1 text-xs font-semibold border ${getStatusBadgeClass(customer.isActive)}`}
+                          >
+                            {getStatusLabel(customer.isActive, dict)}
+                          </button>
+                        ) : (
+                          <span className={`px-2 py-1 text-xs font-semibold border ${getStatusBadgeClass(customer.isActive)}`}>
+                            {getStatusLabel(customer.isActive, dict)}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm">
                         <div className="flex flex-wrap gap-2">
-                          <button
-                            onClick={() => openEdit(customer)}
-                            className="text-brand hover:text-brand-navy font-medium"
-                          >
-                            {dict?.common?.edit || 'Edit'}
-                          </button>
-                          {enableOnAccountSales && customer.isActive && (Number(customer.accountBalance) || 0) > 0 && (
+                          {canEdit && (
+                            <button
+                              onClick={() => openEdit(customer)}
+                              className="text-brand hover:text-brand-navy font-medium"
+                            >
+                              {dict?.common?.edit || 'Edit'}
+                            </button>
+                          )}
+                          {canBalancePayments && enableOnAccountSales && customer.isActive && (Number(customer.accountBalance) || 0) > 0 && (
                             <button
                               type="button"
                               onClick={() => openBalancePayment(customer)}
@@ -365,13 +380,16 @@ export default function CustomersPage() {
                               {dict?.admin?.recordBalancePayment || 'Record payment'}
                             </button>
                           )}
-                          {customer.isActive && (
+                          {canEdit && customer.isActive && (
                             <button
                               onClick={() => handleDelete(customer)}
                               className="text-red-600 hover:text-red-800 font-medium"
                             >
                               {dict?.common?.delete || 'Delete'}
                             </button>
+                          )}
+                          {!canEdit && !canBalancePayments && (
+                            <span className="text-gray-400">-</span>
                           )}
                         </div>
                       </td>

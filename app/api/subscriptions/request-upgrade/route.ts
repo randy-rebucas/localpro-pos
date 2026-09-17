@@ -5,6 +5,7 @@ import SubscriptionPlan from '@/models/SubscriptionPlan';
 import Tenant from '@/models/Tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { requireAuth } from '@/lib/auth';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
 
@@ -21,6 +22,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
         { status: 404 }
+      );
+    }
+
+    if (!(await hasTenantPermission(user.role, tenantId, 'subscriptions.manage'))) {
+      return NextResponse.json(
+        { success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') },
+        { status: 403 }
       );
     }
 

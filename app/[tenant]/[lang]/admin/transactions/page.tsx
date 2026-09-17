@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 import Currency from '@/components/Currency';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import { getDefaultTenantSettings } from '@/lib/currency';
 
 interface Transaction {
@@ -59,6 +60,8 @@ export default function TransactionsPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const { settings: tenantSettings } = useTenantSettings();
   const primaryColor = (tenantSettings || getDefaultTenantSettings()).primaryColor || '#35979c';
+  const { canAccess } = usePermissions();
+  const canView = canAccess('transactions.view');
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -69,7 +72,7 @@ export default function TransactionsPage() {
   const fetchTransactions = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/transactions?page=${page}&limit=50`, { credentials: 'include' });
+      const res = await fetch(`/api/transactions?page=${page}&limit=10`, { credentials: 'include' });
       const data = await res.json();
       if (data.success) {
         setTransactions(data.data || []);
@@ -103,6 +106,19 @@ export default function TransactionsPage() {
             }}
           />
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!canView) {
+    return (
+      <div className="px-4 sm:px-6 py-6">
+        <div className="bg-red-50 border-2 border-red-300 p-6">
+          <h2 className="text-lg font-bold text-red-800 mb-1">{dict?.admin?.accessRestricted || 'Access Restricted'}</h2>
+          <p className="text-sm text-red-700">
+            {dict?.admin?.accessRestrictedTransactions || "You don't have permission to view transactions. Contact an admin or owner."}
+          </p>
         </div>
       </div>
     );

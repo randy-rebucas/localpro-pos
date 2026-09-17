@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { useCategoriesList, type Category } from '@/hooks/useCategoriesList';
 import { useCategoryForm } from '@/hooks/useCategoryForm';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   getStatusBadgeClasses,
   getStatusLabel,
@@ -22,6 +23,8 @@ export default function CategoriesPage() {
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const { canAccess } = usePermissions();
+  const canManage = canAccess('categories.manage');
 
   const { categories, loading, fetchCategories, toggleCategoryStatus } = useCategoriesList();
 
@@ -76,15 +79,17 @@ export default function CategoriesPage() {
         <div className="bg-white border border-gray-300 p-6">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold text-gray-900">{dict.admin?.categories || 'Categories'}</h2>
-            <button
-              onClick={() => {
-                setEditingCategory(null);
-                setShowCategoryModal(true);
-              }}
-              className="px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium border border-brand-hover"
-            >
-              {dict.common?.add || 'Add'} {dict.admin?.category || 'Category'}
-            </button>
+            {canManage && (
+              <button
+                onClick={() => {
+                  setEditingCategory(null);
+                  setShowCategoryModal(true);
+                }}
+                className="px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium border border-brand-hover"
+              >
+                {dict.common?.add || 'Add'} {dict.admin?.category || 'Category'}
+              </button>
+            )}
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -107,23 +112,27 @@ export default function CategoriesPage() {
                       </span>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            setEditingCategory(category);
-                            setShowCategoryModal(true);
-                          }}
-                          className="text-brand hover:text-brand-navy-deep"
-                        >
-                          {dict.common?.edit || 'Edit'}
-                        </button>
-                        <button
-                          onClick={() => handleToggleCategoryStatus(category)}
-                          className={`${getActionButtonColor(category.isActive)}`}
-                        >
-                          {getActionButtonLabel(category.isActive, dict)}
-                        </button>
-                      </div>
+                      {canManage ? (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              setEditingCategory(category);
+                              setShowCategoryModal(true);
+                            }}
+                            className="text-brand hover:text-brand-navy-deep"
+                          >
+                            {dict.common?.edit || 'Edit'}
+                          </button>
+                          <button
+                            onClick={() => handleToggleCategoryStatus(category)}
+                            className={`${getActionButtonColor(category.isActive)}`}
+                          >
+                            {getActionButtonLabel(category.isActive, dict)}
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
                     </td>
                   </tr>
                 ))}

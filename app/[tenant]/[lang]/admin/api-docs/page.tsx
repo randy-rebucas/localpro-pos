@@ -40,39 +40,39 @@ export default function ApiDocsPage() {
 
   const apiEndpoints = [
     {
-      category: 'Products',
+      category: dict?.apiDocs?.categoryProducts || 'Products',
       endpoints: [
-        { method: 'GET', path: '/api/products', description: 'List all products' },
-        { method: 'POST', path: '/api/products', description: 'Create a new product' },
-        { method: 'GET', path: '/api/products/:id', description: 'Get product details' },
-        { method: 'PUT', path: '/api/products/:id', description: 'Update a product' },
-        { method: 'DELETE', path: '/api/products/:id', description: 'Delete a product' },
+        { method: 'GET', path: '/api/products', description: dict?.apiDocs?.descProductsList || 'List all products' },
+        { method: 'POST', path: '/api/products', description: dict?.apiDocs?.descProductsCreate || 'Create a new product' },
+        { method: 'GET', path: '/api/products/:id', description: dict?.apiDocs?.descProductsGet || 'Get product details' },
+        { method: 'PUT', path: '/api/products/:id', description: dict?.apiDocs?.descProductsUpdate || 'Update a product' },
+        { method: 'DELETE', path: '/api/products/:id', description: dict?.apiDocs?.descProductsDelete || 'Delete a product' },
       ],
     },
     {
-      category: 'Transactions',
+      category: dict?.apiDocs?.categoryTransactions || 'Transactions',
       endpoints: [
-        { method: 'GET', path: '/api/transactions', description: 'List all transactions' },
-        { method: 'POST', path: '/api/transactions', description: 'Create a new transaction' },
-        { method: 'GET', path: '/api/transactions/:id', description: 'Get transaction details' },
+        { method: 'GET', path: '/api/transactions', description: dict?.apiDocs?.descTransactionsList || 'List all transactions' },
+        { method: 'POST', path: '/api/transactions', description: dict?.apiDocs?.descTransactionsCreate || 'Create a new transaction' },
+        { method: 'GET', path: '/api/transactions/:id', description: dict?.apiDocs?.descTransactionsGet || 'Get transaction details' },
       ],
     },
     {
-      category: 'Customers',
+      category: dict?.apiDocs?.categoryCustomers || 'Customers',
       endpoints: [
-        { method: 'GET', path: '/api/customers', description: 'List all customers' },
-        { method: 'POST', path: '/api/customers', description: 'Create a new customer' },
-        { method: 'GET', path: '/api/customers/:id', description: 'Get customer details' },
-        { method: 'PUT', path: '/api/customers/:id', description: 'Update a customer' },
-        { method: 'DELETE', path: '/api/customers/:id', description: 'Delete a customer' },
+        { method: 'GET', path: '/api/customers', description: dict?.apiDocs?.descCustomersList || 'List all customers' },
+        { method: 'POST', path: '/api/customers', description: dict?.apiDocs?.descCustomersCreate || 'Create a new customer' },
+        { method: 'GET', path: '/api/customers/:id', description: dict?.apiDocs?.descCustomersGet || 'Get customer details' },
+        { method: 'PUT', path: '/api/customers/:id', description: dict?.apiDocs?.descCustomersUpdate || 'Update a customer' },
+        { method: 'DELETE', path: '/api/customers/:id', description: dict?.apiDocs?.descCustomersDelete || 'Delete a customer' },
       ],
     },
     {
-      category: 'Inventory',
+      category: dict?.apiDocs?.categoryInventory || 'Inventory',
       endpoints: [
-        { method: 'GET', path: '/api/inventory/stock', description: 'Get stock levels' },
-        { method: 'POST', path: '/api/inventory/adjust', description: 'Adjust stock levels' },
-        { method: 'GET', path: '/api/inventory/movements', description: 'Get stock movements' },
+        { method: 'GET', path: '/api/inventory/stock', description: dict?.apiDocs?.descInventoryStock || 'Get stock levels' },
+        { method: 'POST', path: '/api/inventory/adjust', description: dict?.apiDocs?.descInventoryAdjust || 'Adjust stock levels' },
+        { method: 'GET', path: '/api/inventory/movements', description: dict?.apiDocs?.descInventoryMovements || 'Get stock movements' },
       ],
     },
   ];

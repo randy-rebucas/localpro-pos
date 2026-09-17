@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb';
 import StockMovement from '@/models/StockMovement';
 import Product from '@/models/Product';
 import { requireTenantAccess } from '@/lib/api-tenant';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
 import { checkFeatureAccess } from '@/lib/subscription';
 
@@ -17,7 +18,11 @@ export async function GET(request: NextRequest) {
 
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
-    const { tenantId } = authResult;
+    const { tenantId, user } = authResult;
+
+    if (!(await hasTenantPermission(user.role, tenantId, 'inventory.manage'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
 
     // Check if inventory feature is enabled in subscription
     try {

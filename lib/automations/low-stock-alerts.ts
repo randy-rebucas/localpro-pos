@@ -8,6 +8,7 @@ import Tenant from '@/models/Tenant';
 import { getLowStockProducts } from '@/lib/stock';
 import { sendEmail, sendSMS } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
+import { renderNotificationTemplate } from '@/lib/notification-templates';
 import { AutomationResult } from './types';
 
 export interface LowStockAlertOptions {
@@ -82,19 +83,41 @@ export async function sendLowStockAlerts(
 
         // Prepare alert message
         const companyName = tenantSettings?.companyName || tenant.name || 'Business';
+        const emailTemplate = tenantSettings?.notificationTemplates?.email?.lowStockAlert;
+        const smsTemplate = tenantSettings?.notificationTemplates?.sms?.lowStockAlert;
+
+        // The configured template's variables ({{productName}}, {{currentStock}}, ...) are
+        // per-product, so render one line per product with it (falling back to the default
+        // bullet format when no template is set) rather than ignoring the tenant's template.
         const productList = lowStockProducts
           .slice(0, 20) // Limit to 20 products in email
-          .map(
-            (product: any) => // eslint-disable-line @typescript-eslint/no-explicit-any
-              `- ${product.name}${product.sku ? ` (SKU: ${product.sku})` : ''}: ${product.currentStock || 0} units (Threshold: ${product.threshold || threshold})`
-          )
+          .map((product: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+            const vars = {
+              productName: product.name,
+              sku: product.sku || '',
+              currentStock: product.currentStock || 0,
+              threshold: product.threshold || threshold,
+            };
+            if (emailTemplate) {
+              const body = emailTemplate.includes('|') ? emailTemplate.split('|')[1] : emailTemplate;
+              return renderNotificationTemplate(body, vars, tenantSettings);
+            }
+            return `- ${product.name}${product.sku ? ` (SKU: ${product.sku})` : ''}: ${product.currentStock || 0} units (Threshold: ${product.threshold || threshold})`;
+          })
           .join('\n');
 
         const moreProducts = lowStockProducts.length > 20
           ? `\n... and ${lowStockProducts.length - 20} more products`
           : '';
 
-        const emailSubject = `Low Stock Alert - ${lowStockProducts.length} Product${lowStockProducts.length > 1 ? 's' : ''}`;
+        const emailSubject = emailTemplate && emailTemplate.includes('|')
+          ? renderNotificationTemplate(emailTemplate.split('|')[0], {
+              productName: lowStockProducts[0].name,
+              currentStock: lowStockProducts[0].currentStock || 0,
+              threshold: lowStockProducts[0].threshold || threshold,
+              sku: lowStockProducts[0].sku || '',
+            }, tenantSettings)
+          : `Low Stock Alert - ${lowStockProducts.length} Product${lowStockProducts.length > 1 ? 's' : ''}`;
         const emailBody = `Low Stock Alert for ${companyName}
 
 The following products are running low on stock:
@@ -105,7 +128,19 @@ Please review your inventory and consider reordering these items.
 
 This is an automated alert from your POS system.`;
 
-        const smsBody = `Low Stock Alert: ${lowStockProducts.length} product${lowStockProducts.length > 1 ? 's' : ''} below threshold. Check your POS system for details.`;
+        const smsBody = smsTemplate
+          ? lowStockProducts
+              .slice(0, 3)
+              .map((product: any) => // eslint-disable-line @typescript-eslint/no-explicit-any
+                renderNotificationTemplate(smsTemplate, {
+                  productName: product.name,
+                  sku: product.sku || '',
+                  currentStock: product.currentStock || 0,
+                  threshold: product.threshold || threshold,
+                }, tenantSettings)
+              )
+              .join(' | ')
+          : `Low Stock Alert: ${lowStockProducts.length} product${lowStockProducts.length > 1 ? 's' : ''} below threshold. Check your POS system for details.`;
 
         // Get recipient email/phone from tenant settings
         const recipientEmail = tenantSettings?.email;

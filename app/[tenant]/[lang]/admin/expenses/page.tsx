@@ -7,6 +7,7 @@ import { getDictionaryClient } from '../../dictionaries-client';
 import { type TranslationDict } from '@/types/dictionary';
 import Currency from '@/components/Currency';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useExpensesList, type Expense } from '@/hooks/useExpensesList';
 import { useExpensesForm, type ExpenseFormData } from '@/hooks/useExpensesForm';
 import {
@@ -27,6 +28,8 @@ export default function ExpensesPage() {
   const [dict, setDict] = useState<TranslationDict | null>(null);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const { canAccess } = usePermissions();
+  const canManage = canAccess('expenses.manage');
 
   const {
     expenses,
@@ -148,15 +151,17 @@ export default function ExpensesPage() {
         <div className="bg-white border border-gray-300 p-6">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold text-gray-900">{dict.admin?.expenses || 'Expenses'}</h2>
-            <button
-              onClick={() => {
-                setEditingExpense(null);
-                setShowExpenseModal(true);
-              }}
-              className="px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium border border-brand-hover"
-            >
-              {dict.common?.add || 'Add'} {dict.admin?.expense || 'Expense'}
-            </button>
+            {canManage && (
+              <button
+                onClick={() => {
+                  setEditingExpense(null);
+                  setShowExpenseModal(true);
+                }}
+                className="px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium border border-brand-hover"
+              >
+                {dict.common?.add || 'Add'} {dict.admin?.expense || 'Expense'}
+              </button>
+            )}
           </div>
 
           {/* Filters */}
@@ -252,24 +257,28 @@ export default function ExpensesPage() {
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{userName}</td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => {
-                              setEditingExpense(expense);
-                              setShowExpenseModal(true);
-                            }}
-                            className="text-brand hover:text-brand-navy-deep"
-                          >
-                            {dict.common?.edit || 'Edit'}
-                          </button>
-                          <button
-                            onClick={() => handleDeleteExpense(expense._id)}
-                            disabled={deletingId === expense._id}
-                            className="text-red-600 hover:text-red-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {deletingId === expense._id ? (dict.common?.deleting || 'Deleting...') : (dict.common?.delete || 'Delete')}
-                          </button>
-                        </div>
+                        {canManage ? (
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => {
+                                setEditingExpense(expense);
+                                setShowExpenseModal(true);
+                              }}
+                              className="text-brand hover:text-brand-navy-deep"
+                            >
+                              {dict.common?.edit || 'Edit'}
+                            </button>
+                            <button
+                              onClick={() => handleDeleteExpense(expense._id)}
+                              disabled={deletingId === expense._id}
+                              className="text-red-600 hover:text-red-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {deletingId === expense._id ? (dict.common?.deleting || 'Deleting...') : (dict.common?.delete || 'Delete')}
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
                       </td>
                     </tr>
                   );
@@ -320,7 +329,7 @@ function ExpenseModal({
   createExpense: (form: ExpenseFormData) => Promise<true | string>;
   updateExpense: (id: string, form: ExpenseFormData) => Promise<true | string>;
 }) {
-  const { formData, setFormData, error, submitting, handleSubmit, initializeForm, resetForm } = useExpensesForm();
+  const { formData, setFormData, error, submitting, handleSubmit, initializeForm, resetForm } = useExpensesForm(dict);
 
   useEffect(() => {
     if (expense) {

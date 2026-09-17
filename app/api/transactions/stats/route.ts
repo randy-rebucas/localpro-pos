@@ -2,18 +2,38 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Transaction from '@/models/Transaction';
 import Expense from '@/models/Expense';
-import { getTenantIdFromRequest, TenantAccessViolationError, handleTenantAccessViolation } from '@/lib/api-tenant';
+import { requireTenantAccess, TenantAccessViolationError, handleTenantAccessViolation } from '@/lib/api-tenant';
+import { hasTenantPermission } from '@/lib/permissions-server';
+import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import mongoose from 'mongoose';
 
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
-    const tenantId = await getTenantIdFromRequest(request);
-    
-    if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+    // Require authentication — financial data must not be public
+    let tenantId: string;
+    let role: string;
+    try {
+      const tenantAccess = await requireTenantAccess(request);
+      tenantId = tenantAccess.tenantId;
+      role = tenantAccess.user.role;
+    } catch (authError: unknown) {
+      const t = await getValidationTranslatorFromRequest(request);
+      const msg = authError instanceof Error ? authError.message : '';
+      return NextResponse.json(
+        { success: false, error: msg.includes('Forbidden') ? t('validation.forbidden', 'Forbidden') : t('validation.unauthorized', 'Unauthorized') },
+        { status: msg.includes('Forbidden') ? 403 : 401 }
+      );
     }
-    
+
+    const t = await getValidationTranslatorFromRequest(request);
+    if (!(await hasTenantPermission(role, tenantId, 'transactions.view'))) {
+      return NextResponse.json(
+        { success: false, error: t('validation.forbidden', 'Forbidden') },
+        { status: 403 }
+      );
+    }
+
     // Convert tenantId string to ObjectId for proper querying
     const tenantObjectId = new mongoose.Types.ObjectId(tenantId);
     

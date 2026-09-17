@@ -8,6 +8,8 @@ import connectDB from '@/lib/mongodb';
 import Tenant from '@/models/Tenant';
 import { getCurrentUser } from '@/lib/auth';
 import { logger } from '@/lib/logger';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { createAuditLog, AuditActions } from '@/lib/audit';
 
 export async function GET(
   request: NextRequest,
@@ -55,6 +57,11 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
+    const rl = checkRateLimit(`holidays:${user.userId}`, 20, 60_000);
+    if (!rl.allowed) {
+      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
+    }
+
     const { slug } = await params;
     const body = await request.json();
     const { name, date, type, recurring, isBusinessClosed } = body;
@@ -96,7 +103,6 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    const holidays = tenant.settings.holidays || [];
     const newHoliday: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
       id: `holiday_${Date.now()}`,
       name,
@@ -111,26 +117,35 @@ export async function POST(
     } else if (type === 'recurring') {
       newHoliday.recurring = recurring;
       // For recurring holidays, we can use a placeholder date or pattern-based date
-      newHoliday.date = recurring?.month && recurring?.dayOfMonth 
+      newHoliday.date = recurring?.month && recurring?.dayOfMonth
         ? `${new Date().getFullYear()}-${String(recurring.month).padStart(2, '0')}-${String(recurring.dayOfMonth).padStart(2, '0')}`
         : '';
     }
 
-    holidays.push(newHoliday);
-
-    tenant.settings.holidays = holidays;
-    tenant.markModified('settings.holidays');
-    
     try {
-      await tenant.save();
+      // Atomic $push avoids clobbering concurrent edits to other holidays
+      // (the previous read-modify-write of the whole array + tenant.save() could lose them)
+      await Tenant.updateOne(
+        { _id: tenant._id },
+        { $push: { 'settings.holidays': newHoliday } }
+      );
       logger.info('Holiday saved successfully:', newHoliday);
     } catch (saveError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       logger.error('Error saving holiday to database:', saveError);
-      return NextResponse.json({ 
-        success: false, 
-        error: `Failed to save holiday: ${saveError.message || 'Database error'}` 
+      return NextResponse.json({
+        success: false,
+        error: `Failed to save holiday: ${saveError.message || 'Database error'}`
       }, { status: 500 });
     }
+
+    await createAuditLog(request, {
+      tenantId: tenant._id,
+      userId: user.userId,
+      action: AuditActions.CREATE,
+      entityType: 'holiday',
+      entityId: newHoliday.id,
+      changes: newHoliday,
+    });
 
     return NextResponse.json({
       success: true,
@@ -156,6 +171,11 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
+    const rl = checkRateLimit(`holidays:${user.userId}`, 20, 60_000);
+    if (!rl.allowed) {
+      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
+    }
+
     const { slug } = await params;
     const body = await request.json();
     const { id, ...updates } = body;
@@ -176,31 +196,45 @@ export async function PUT(
     }
 
     const holidays = tenant.settings.holidays || [];
-    const holidayIndex = holidays.findIndex((h: any) => h.id === id); // eslint-disable-line @typescript-eslint/no-explicit-any
+    const existing = holidays.find((h: any) => h.id === id); // eslint-disable-line @typescript-eslint/no-explicit-any
 
-    if (holidayIndex === -1) {
+    if (!existing) {
       return NextResponse.json({ success: false, error: 'Holiday not found' }, { status: 404 });
     }
 
-    holidays[holidayIndex] = { ...holidays[holidayIndex], ...updates };
+    const updatedHoliday = { ...existing, ...updates };
 
-    tenant.settings.holidays = holidays;
-    tenant.markModified('settings.holidays');
-    
     try {
-      await tenant.save();
-      logger.info('Holiday updated successfully:', holidays[holidayIndex]);
+      // Positional $set on the matched entry avoids clobbering concurrent edits
+      // to other holidays (the previous full-array overwrite + tenant.save() could lose them)
+      const result = await Tenant.updateOne(
+        { _id: tenant._id, 'settings.holidays.id': id },
+        { $set: { 'settings.holidays.$': updatedHoliday } }
+      );
+      if (result.matchedCount === 0) {
+        return NextResponse.json({ success: false, error: 'Holiday not found' }, { status: 404 });
+      }
+      logger.info('Holiday updated successfully:', updatedHoliday);
     } catch (saveError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       logger.error('Error saving holiday update to database:', saveError);
-      return NextResponse.json({ 
-        success: false, 
-        error: `Failed to update holiday: ${saveError.message || 'Database error'}` 
+      return NextResponse.json({
+        success: false,
+        error: `Failed to update holiday: ${saveError.message || 'Database error'}`
       }, { status: 500 });
     }
 
+    await createAuditLog(request, {
+      tenantId: tenant._id,
+      userId: user.userId,
+      action: AuditActions.UPDATE,
+      entityType: 'holiday',
+      entityId: id,
+      changes: updates,
+    });
+
     return NextResponse.json({
       success: true,
-      data: holidays[holidayIndex],
+      data: updatedHoliday,
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Error updating holiday:', error);
@@ -220,6 +254,11 @@ export async function DELETE(
 
     if (user.role !== 'admin' && user.role !== 'manager' && user.role !== 'owner' && user.role !== 'super_admin') {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
+
+    const rl = checkRateLimit(`holidays:${user.userId}`, 20, 60_000);
+    if (!rl.allowed) {
+      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
     const { slug } = await params;
@@ -242,25 +281,35 @@ export async function DELETE(
     }
 
     const holidays = tenant.settings.holidays || [];
-    const filtered = holidays.filter((h: any) => h.id !== id); // eslint-disable-line @typescript-eslint/no-explicit-any
+    const stillExists = holidays.some((h: any) => h.id === id); // eslint-disable-line @typescript-eslint/no-explicit-any
 
-    if (filtered.length === holidays.length) {
+    if (!stillExists) {
       return NextResponse.json({ success: false, error: 'Holiday not found' }, { status: 404 });
     }
 
-    tenant.settings.holidays = filtered;
-    tenant.markModified('settings.holidays');
-    
     try {
-      await tenant.save();
+      // Atomic $pull avoids clobbering concurrent edits to other holidays
+      // (the previous full-array overwrite + tenant.save() could lose them)
+      await Tenant.updateOne(
+        { _id: tenant._id },
+        { $pull: { 'settings.holidays': { id } } }
+      );
       logger.info('Holiday deleted successfully');
     } catch (saveError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       logger.error('Error saving holiday deletion to database:', saveError);
-      return NextResponse.json({ 
-        success: false, 
-        error: `Failed to delete holiday: ${saveError.message || 'Database error'}` 
+      return NextResponse.json({
+        success: false,
+        error: `Failed to delete holiday: ${saveError.message || 'Database error'}`
       }, { status: 500 });
     }
+
+    await createAuditLog(request, {
+      tenantId: tenant._id,
+      userId: user.userId,
+      action: AuditActions.DELETE,
+      entityType: 'holiday',
+      entityId: id,
+    });
 
     return NextResponse.json({ success: true });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any

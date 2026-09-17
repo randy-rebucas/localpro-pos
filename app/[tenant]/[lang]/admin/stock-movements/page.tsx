@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import { supportsFeature } from '@/lib/business-type-helpers';
 import { getBusinessTypeConfig } from '@/lib/business-types';
 import { getBusinessType } from '@/lib/business-type-helpers';
@@ -27,6 +28,8 @@ export default function StockMovementsPage() {
   const { settings } = useTenantSettings();
   const inventoryEnabled = supportsFeature(settings ?? undefined, 'inventory');
   const businessTypeConfig = settings ? getBusinessTypeConfig(getBusinessType(settings)) : null;
+  const { canAccess } = usePermissions();
+  const canManage = canAccess('stock_movements.manage');
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -42,6 +45,19 @@ export default function StockMovementsPage() {
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-b-2 border-brand"></div>
           <p className="mt-4 text-gray-600">{dict?.common?.loading || 'Loading...'}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!canManage) {
+    return (
+      <div className="px-4 sm:px-6 py-6">
+        <div className="bg-red-50 border-2 border-red-300 p-6">
+          <h2 className="text-lg font-bold text-red-800 mb-1">{dict?.admin?.accessRestricted || 'Access Restricted'}</h2>
+          <p className="text-sm text-red-700">
+            {dict?.admin?.accessRestrictedStockMovements || "You don't have permission to view stock movements. Contact an admin or owner."}
+          </p>
         </div>
       </div>
     );

@@ -20,6 +20,7 @@ import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { supportsFeature } from '@/lib/business-type-helpers';
 import { useProductsCatalog, type CatalogProduct } from '@/hooks/useProductsCatalog';
+import { usePermissions } from '@/hooks/usePermissions';
 import type { TranslationDict } from '@/types/dictionary';
 
 const ProductModal = dynamic(() => import('@/components/ProductModal'), {
@@ -55,6 +56,8 @@ export default function ProductsPage() {
   const { settings } = useTenantSettings();
   const primaryColor = (settings || getDefaultTenantSettings()).primaryColor || '#35979c';
   const inventoryEnabled = supportsFeature(settings ?? undefined, 'inventory');
+  const { canAccess } = usePermissions();
+  const canManage = canAccess('products.manage');
 
   const { products, status, error, refetch } = useProductsCatalog(tenant, search);
 
@@ -180,7 +183,9 @@ export default function ProductsPage() {
           action={
             search
               ? { label: productsDict.clearSearch || 'Clear search', onClick: () => setSearch('') }
-              : { label: productsDict.addProduct || 'Add Product', onClick: () => setIsModalOpen(true) }
+              : canManage
+                ? { label: productsDict.addProduct || 'Add Product', onClick: () => setIsModalOpen(true) }
+                : undefined
           }
           className="bg-white border border-gray-300"
         />
@@ -300,7 +305,7 @@ export default function ProductsPage() {
                 </div>
 
                 <div className="flex gap-2 actions-touch-visible transition-opacity duration-200">
-                  {inventoryEnabled && (
+                  {inventoryEnabled && canManage && (
                     <button
                       onClick={() => handleRefill(product)}
                       className="flex-1 py-2.5 bg-green-600 text-white hover:bg-green-700 active:bg-green-800 transition-all duration-200 border border-green-700 flex items-center justify-center touch-manipulation min-h-[44px]"
@@ -322,27 +327,31 @@ export default function ProductsPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h1v12H4V6zm2 0h1v12H6V6zm3 0h2v12H9V6zm3 0h1v12h-1V6zm2 0h2v12h-2V6zm3 0h1v12h-1V6z" />
                     </svg>
                   </button>
-                  <button
-                    onClick={() => handleEdit(product)}
-                    style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
-                    className="flex-1 py-2.5 text-white active:opacity-80 transition-all duration-200 border flex items-center justify-center touch-manipulation min-h-[44px] hover:opacity-90"
-                    title={dict.common.edit}
-                    aria-label={dict.common.edit}
-                  >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={() => handleDelete(product._id)}
-                    className="flex-1 py-2.5 bg-red-600 text-white hover:bg-red-700 active:bg-red-800 transition-all duration-200 border border-red-700 flex items-center justify-center touch-manipulation min-h-[44px]"
-                    title={dict.common.delete}
-                    aria-label={dict.common.delete}
-                  >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
+                  {canManage && (
+                    <>
+                      <button
+                        onClick={() => handleEdit(product)}
+                        style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
+                        className="flex-1 py-2.5 text-white active:opacity-80 transition-all duration-200 border flex items-center justify-center touch-manipulation min-h-[44px] hover:opacity-90"
+                        title={dict.common.edit}
+                        aria-label={dict.common.edit}
+                      >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => handleDelete(product._id)}
+                        className="flex-1 py-2.5 bg-red-600 text-white hover:bg-red-700 active:bg-red-800 transition-all duration-200 border border-red-700 flex items-center justify-center touch-manipulation min-h-[44px]"
+                        title={dict.common.delete}
+                        aria-label={dict.common.delete}
+                      >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -420,7 +429,7 @@ export default function ProductsPage() {
                   </span>
                 )}
                 <div className="flex gap-1.5 actions-touch-visible transition-opacity duration-200">
-                  {inventoryEnabled && (
+                  {inventoryEnabled && canManage && (
                     <button
                       onClick={() => handleRefill(product)}
                       className="px-2.5 py-1.5 bg-green-600 text-white hover:bg-green-700 active:bg-green-800 transition-all duration-200 border border-green-700 flex items-center justify-center touch-manipulation min-h-[36px] sm:min-h-0"
@@ -442,27 +451,31 @@ export default function ProductsPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h1v12H4V6zm2 0h1v12H6V6zm3 0h2v12H9V6zm3 0h1v12h-1V6zm2 0h2v12h-2V6zm3 0h1v12h-1V6z" />
                     </svg>
                   </button>
-                  <button
-                    onClick={() => handleEdit(product)}
-                    style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
-                    className="px-2.5 py-1.5 text-white active:opacity-80 transition-all duration-200 border flex items-center justify-center touch-manipulation min-h-[36px] sm:min-h-0 hover:opacity-90"
-                    title={dict.common.edit}
-                    aria-label={dict.common.edit}
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={() => handleDelete(product._id)}
-                    className="px-2.5 py-1.5 bg-red-600 text-white hover:bg-red-700 active:bg-red-800 transition-all duration-200 border border-red-700 flex items-center justify-center touch-manipulation min-h-[36px] sm:min-h-0"
-                    title={dict.common.delete}
-                    aria-label={dict.common.delete}
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
+                  {canManage && (
+                    <>
+                      <button
+                        onClick={() => handleEdit(product)}
+                        style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
+                        className="px-2.5 py-1.5 text-white active:opacity-80 transition-all duration-200 border flex items-center justify-center touch-manipulation min-h-[36px] sm:min-h-0 hover:opacity-90"
+                        title={dict.common.edit}
+                        aria-label={dict.common.edit}
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => handleDelete(product._id)}
+                        className="px-2.5 py-1.5 bg-red-600 text-white hover:bg-red-700 active:bg-red-800 transition-all duration-200 border border-red-700 flex items-center justify-center touch-manipulation min-h-[36px] sm:min-h-0"
+                        title={dict.common.delete}
+                        aria-label={dict.common.delete}
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -480,19 +493,21 @@ export default function ProductsPage() {
       <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">{productsDict.title}</h1>
-          <button
-            onClick={() => setIsModalOpen(true)}
-            style={{
-              backgroundColor: primaryColor,
-              borderColor: primaryColor,
-            }}
-            className="w-full sm:w-auto text-white px-5 py-2.5 font-semibold transition-all duration-200 border flex items-center justify-center gap-2 hover:opacity-90"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            {productsDict.addProduct}
-          </button>
+          {canManage && (
+            <button
+              onClick={() => setIsModalOpen(true)}
+              style={{
+                backgroundColor: primaryColor,
+                borderColor: primaryColor,
+              }}
+              className="w-full sm:w-auto text-white px-5 py-2.5 font-semibold transition-all duration-200 border flex items-center justify-center gap-2 hover:opacity-90"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              {productsDict.addProduct}
+            </button>
+          )}
         </div>
 
         <div className="mb-6 flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-center">

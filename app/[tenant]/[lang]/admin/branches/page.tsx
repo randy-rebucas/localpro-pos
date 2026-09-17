@@ -8,6 +8,7 @@ import { getDictionaryClient } from '../../dictionaries-client';
 import { useBranchesList, type Branch } from '@/hooks/useBranchesList';
 import { useBranchForm } from '@/hooks/useBranchForm';
 import { useUsersList } from '@/hooks/useUsersList';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   getStatusColor,
   formatAddress,
@@ -22,6 +23,8 @@ export default function BranchesPage() {
   const [dict, setDict] = useState<Record<string, any> | null>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [showBranchModal, setShowBranchModal] = useState(false);
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
+  const { canAccess } = usePermissions();
+  const canManage = canAccess('branches.manage');
 
   const { branches, loading, fetchBranches, toggleBranchStatus } = useBranchesList();
   const { users: staff, fetchUsers } = useUsersList();
@@ -79,15 +82,17 @@ export default function BranchesPage() {
         <div className="bg-white border border-gray-300 p-6">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold text-gray-900">{dict.admin?.branches || 'Branches'}</h2>
-            <button
-              onClick={() => {
-                setEditingBranch(null);
-                setShowBranchModal(true);
-              }}
-              className="px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium border border-brand-hover"
-            >
-              {dict.common?.add || 'Add'} {dict.admin?.branch || 'Branch'}
-            </button>
+            {canManage && (
+              <button
+                onClick={() => {
+                  setEditingBranch(null);
+                  setShowBranchModal(true);
+                }}
+                className="px-4 py-2 bg-brand text-white hover:bg-brand-hover font-medium border border-brand-hover"
+              >
+                {dict.common?.add || 'Add'} {dict.admin?.branch || 'Branch'}
+              </button>
+            )}
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -114,23 +119,27 @@ export default function BranchesPage() {
                       </span>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            setEditingBranch(branch);
-                            setShowBranchModal(true);
-                          }}
-                          className="text-brand hover:text-brand-navy-deep"
-                        >
-                          {dict.common?.edit || 'Edit'}
-                        </button>
-                        <button
-                          onClick={() => handleToggleBranchStatus(branch)}
-                          className={branch.isActive ? 'text-orange-600 hover:text-orange-900' : 'text-green-600 hover:text-green-900'}
-                        >
-                          {branch.isActive ? (dict.admin?.deactivate || 'Deactivate') : (dict.admin?.activate || 'Activate')}
-                        </button>
-                      </div>
+                      {canManage ? (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              setEditingBranch(branch);
+                              setShowBranchModal(true);
+                            }}
+                            className="text-brand hover:text-brand-navy-deep"
+                          >
+                            {dict.common?.edit || 'Edit'}
+                          </button>
+                          <button
+                            onClick={() => handleToggleBranchStatus(branch)}
+                            className={branch.isActive ? 'text-orange-600 hover:text-orange-900' : 'text-green-600 hover:text-green-900'}
+                          >
+                            {branch.isActive ? (dict.admin?.deactivate || 'Deactivate') : (dict.admin?.activate || 'Activate')}
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
                     </td>
                   </tr>
                 ))}

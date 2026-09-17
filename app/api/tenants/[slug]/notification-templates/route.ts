@@ -9,6 +9,8 @@ import Tenant from '@/models/Tenant';
 import { validateNotificationTemplate } from '@/lib/notification-templates';
 import { getCurrentUser } from '@/lib/auth';
 import { logger } from '@/lib/logger';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { createAuditLog, AuditActions } from '@/lib/audit';
 
 export async function GET(
   request: NextRequest,
@@ -56,6 +58,11 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
+    const rl = checkRateLimit(`notification-templates:${user.userId}`, 20, 60_000);
+    if (!rl.allowed) {
+      return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
+    }
+
     const { slug } = await params;
     const body = await request.json();
     const { type, category, subcategory, subject, body: templateBody } = body;
@@ -81,25 +88,28 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    const templates = tenant.settings.notificationTemplates || {};
     const key = subcategory || category;
+    const value = type === 'email' && subject ? `${subject}|${templateBody}` : templateBody;
 
-    if (type === 'email') {
-      templates.email = templates.email || {};
-      if (subject) {
-        // Store subject and body together
-        templates.email[key as keyof typeof templates.email] = `${subject}|${templateBody}`;
-      } else {
-        templates.email[key as keyof typeof templates.email] = templateBody;
-      }
-    } else if (type === 'sms') {
-      templates.sms = templates.sms || {};
-      templates.sms[key as keyof typeof templates.sms] = templateBody;
-    }
+    // Atomic $set on the specific dot-path avoids clobbering concurrent edits to
+    // other template categories (a full read-modify-write of the whole
+    // notificationTemplates object + tenant.save() could lose them).
+    await Tenant.updateOne(
+      { _id: tenant._id },
+      { $set: { [`settings.notificationTemplates.${type}.${key}`]: value } }
+    );
 
-    tenant.settings.notificationTemplates = templates;
-    tenant.markModified('settings.notificationTemplates');
-    await tenant.save();
+    const updatedTenant = await Tenant.findOne({ _id: tenant._id }).select('settings.notificationTemplates').lean();
+    const templates = updatedTenant?.settings?.notificationTemplates || {};
+
+    await createAuditLog(request, {
+      tenantId: tenant._id,
+      userId: user.userId,
+      action: AuditActions.UPDATE,
+      entityType: 'notification_template',
+      entityId: `${type}.${key}`,
+      changes: { subject, body: templateBody },
+    });
 
     return NextResponse.json({
       success: true,

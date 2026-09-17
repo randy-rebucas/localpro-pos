@@ -38,6 +38,37 @@ export function calculateBIRDiscount(
   };
 }
 
+export interface TaxRegion {
+  country?: string;
+  state?: string;
+  city?: string;
+  zipCode?: string;
+}
+
+/**
+ * Whether a tax rule's (optional) region scoping matches the transaction's region.
+ * A rule with no region fields set applies everywhere (backward compatible with
+ * rules created before region scoping). A rule with region fields set only
+ * matches when every field it specifies matches the given region.
+ */
+function ruleMatchesRegion(rule: { region?: { country?: string; state?: string; city?: string; zipCodes?: string[] } }, region?: TaxRegion): boolean {
+  const r = rule.region;
+  if (!r || (!r.country && !r.state && !r.city && (!r.zipCodes || r.zipCodes.length === 0))) {
+    return true; // No region scoping on this rule — applies everywhere
+  }
+  if (!region) return false; // Rule is region-scoped but no transaction region is known
+
+  const eq = (a?: string, b?: string) => !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
+
+  if (r.country && !eq(r.country, region.country)) return false;
+  if (r.state && !eq(r.state, region.state)) return false;
+  if (r.city && !eq(r.city, region.city)) return false;
+  if (r.zipCodes && r.zipCodes.length > 0) {
+    if (!region.zipCode || !r.zipCodes.some((z) => z.trim() === region.zipCode?.trim())) return false;
+  }
+  return true;
+}
+
 /**
  * Calculate tax amount for a transaction
  * Uses TaxRule model if available, otherwise falls back to Tenant settings
@@ -54,7 +85,8 @@ export async function calculateTax(
     subtotal?: number;
   }>,
   tenantSettings?: ITenantSettings,
-  discountCategory?: string
+  discountCategory?: string,
+  region?: TaxRegion
 ): Promise<{ taxAmount: number; taxRate: number; taxLabel: string; taxableAmount: number; exemptAmount: number; zeroRatedAmount: number }> {
   // Default values
   let taxAmount = 0;
@@ -138,6 +170,10 @@ export async function calculateTax(
         );
       }
 
+      if (applies && !ruleMatchesRegion(rule, region)) {
+        applies = false;
+      }
+
       if (applies) {
         taxRate = Math.min(Math.max(rule.rate, 0), 100); // Clamp rate 0-100
         taxLabel = rule.label;
@@ -174,7 +210,8 @@ export async function getProductTaxRate(
   tenantId: string,
   productId: string,
   productType: 'regular' | 'bundle' | 'service',
-  categoryId?: string
+  categoryId?: string,
+  region?: TaxRegion
 ): Promise<number> {
   const taxRules = await TaxRule.find({
     tenantId,
@@ -197,6 +234,10 @@ export async function getProductTaxRate(
 
       if (rule.productIds && rule.productIds.length > 0) {
         applies = rule.productIds.some(prodId => prodId.toString() === productId);
+      }
+
+      if (applies && !ruleMatchesRegion(rule, region)) {
+        applies = false;
       }
 
       if (applies) {

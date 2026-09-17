@@ -11,6 +11,7 @@ import { getBusinessTypeConfig } from '@/lib/business-types';
 import { getBusinessType } from '@/lib/business-type-helpers';
 import { useDiscountsList, type Discount } from '@/hooks/useDiscountsList';
 import { useDiscountsForm } from '@/hooks/useDiscountsForm';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   getStatusBadgeClass,
   getStatusLabel,
@@ -27,6 +28,8 @@ export default function DiscountsPage() {
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [showDiscountModal, setShowDiscountModal] = useState(false);
   const [editingDiscount, setEditingDiscount] = useState<Discount | null>(null);
+  const { canAccess } = usePermissions();
+  const canManage = canAccess('discounts.manage');
 
   const {
     discounts,
@@ -121,7 +124,7 @@ export default function DiscountsPage() {
         <div className="bg-white border border-gray-300 p-6">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold text-gray-900">{dict.admin?.discounts || 'Discounts'}</h2>
-            {discountsEnabled && (
+            {discountsEnabled && canManage && (
               <button
                 onClick={() => {
                   clearMessage();
@@ -185,30 +188,34 @@ export default function DiscountsPage() {
                         </span>
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => {
-                              clearMessage();
-                              setEditingDiscount(discount);
-                              setShowDiscountModal(true);
-                            }}
-                            className="text-brand hover:text-brand-navy-deep"
-                          >
-                            {dict.common?.edit || 'Edit'}
-                          </button>
-                          <button
-                            onClick={() => handleToggleDiscountStatus(discount)}
-                            className={getToggleButtonClass(discount.isActive)}
-                          >
-                            {getToggleButtonLabel(discount.isActive, dict)}
-                          </button>
-                          <button
-                            onClick={() => handleDeleteDiscount(discount._id)}
-                            className="text-red-600 hover:text-red-900"
-                          >
-                            {dict.common?.delete || 'Delete'}
-                          </button>
-                        </div>
+                        {canManage ? (
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => {
+                                clearMessage();
+                                setEditingDiscount(discount);
+                                setShowDiscountModal(true);
+                              }}
+                              className="text-brand hover:text-brand-navy-deep"
+                            >
+                              {dict.common?.edit || 'Edit'}
+                            </button>
+                            <button
+                              onClick={() => handleToggleDiscountStatus(discount)}
+                              className={getToggleButtonClass(discount.isActive)}
+                            >
+                              {getToggleButtonLabel(discount.isActive, dict)}
+                            </button>
+                            <button
+                              onClick={() => handleDeleteDiscount(discount._id)}
+                              className="text-red-600 hover:text-red-900"
+                            >
+                              {dict.common?.delete || 'Delete'}
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
                       </td>
                     </tr>
                   );

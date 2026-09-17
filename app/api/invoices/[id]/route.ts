@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Invoice from '@/models/Invoice';
-import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
+import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 
@@ -11,11 +11,11 @@ export async function GET(
 ) {
   try {
     await connectDB();
-    const tenantId = await getTenantIdFromRequest(request);
+    const { tenantId, user } = await requireTenantAccess(request);
     const { id } = await params;
-    
-    if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found or access denied' }, { status: 403 });
+
+    if (!(await hasTenantPermission(user.role, tenantId, 'invoices.manage'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
     const invoice = await Invoice.findOne({

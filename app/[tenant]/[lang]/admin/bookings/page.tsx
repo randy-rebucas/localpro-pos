@@ -14,6 +14,7 @@ import { useBookingsList, type Booking } from '@/hooks/useBookingsList';
 import { useBookingForm } from '@/hooks/useBookingForm';
 import { useStaffList } from '@/hooks/useStaffList';
 import { useBookingDetail, type BookingUpdate } from '@/hooks/useBookingDetail';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   getStatusColor,
   formatBookingDateTime,
@@ -34,6 +35,9 @@ export default function BookingsPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterStaff, setFilterStaff] = useState<string>('all');
+  const { canAccess } = usePermissions();
+  const canManage = canAccess('bookings.manage');
+  const canSendReminders = canAccess('bookings.send_reminders');
 
   const { settings } = useTenantSettings();
   const { subscriptionStatus } = useSubscription();
@@ -135,17 +139,19 @@ export default function BookingsPage() {
             </h1>
             <p className="text-sm text-gray-500">{dict?.admin?.bookingsSubtitle || 'Manage appointments and bookings'}</p>
           </div>
-          <button
-            type="button"
-            disabled={!bookingEnabled}
-            onClick={() => bookingEnabled && setShowCreateModal(true)}
-            className="px-4 py-2 bg-brand text-white hover:bg-brand-hover transition-colors flex items-center gap-2 border border-brand-hover disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-brand"
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            {dict?.admin?.newBooking || 'New Booking'}
-          </button>
+          {canManage && (
+            <button
+              type="button"
+              disabled={!bookingEnabled}
+              onClick={() => bookingEnabled && setShowCreateModal(true)}
+              className="px-4 py-2 bg-brand text-white hover:bg-brand-hover transition-colors flex items-center gap-2 border border-brand-hover disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-brand"
+            >
+              <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              {dict?.admin?.newBooking || 'New Booking'}
+            </button>
+          )}
         </div>
 
         {!bookingEnabled && (
@@ -210,7 +216,7 @@ export default function BookingsPage() {
           <div className="bg-white border border-gray-300 overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-gray-900">{dict?.admin?.allBookings || 'All Bookings'}</h2>
-              <span className="text-xs text-gray-400">{bookings.length} {bookings.length === 1 ? 'booking' : 'bookings'}</span>
+              <span className="text-xs text-gray-400">{bookings.length} {bookings.length === 1 ? (dict?.admin?.bookingSingular || 'booking') : (dict?.admin?.bookingPlural || 'bookings')}</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -268,7 +274,7 @@ export default function BookingsPage() {
                           >
                             {dict?.common?.view || 'View'}
                           </button>
-                          {(booking.status === 'pending' || booking.status === 'confirmed') && (
+                          {canSendReminders && (booking.status === 'pending' || booking.status === 'confirmed') && (
                             <button
                               onClick={() => handleSendReminder(booking._id)}
                               className="text-green-600 hover:text-green-900"
@@ -366,10 +372,11 @@ export default function BookingsPage() {
                 <label className="block text-sm font-medium text-gray-700">{dict?.admin?.staff || 'Staff'}</label>
                 <select
                   value={selectedBooking.staffId?._id || ''}
+                  disabled={!canManage}
                   onChange={(e) => {
                     handleUpdateBooking(selectedBooking._id, { staffId: e.target.value || undefined });
                   }}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <option value="">{dict?.admin?.unassigned || 'Unassigned'}</option>
                   {staff.map((s) => (
@@ -383,7 +390,7 @@ export default function BookingsPage() {
                 <label className="block text-sm font-medium text-gray-700">{dict?.admin?.status || 'Status'}</label>
                 <select
                   value={selectedBooking.status}
-                  disabled={!isBookingStatusEditable(selectedBooking.status)}
+                  disabled={!canManage || !isBookingStatusEditable(selectedBooking.status)}
                   onChange={(e) => {
                     handleUpdateBooking(selectedBooking._id, { status: e.target.value as Booking['status'] });
                   }}
@@ -403,18 +410,22 @@ export default function BookingsPage() {
                 </div>
               )}
               <div className="flex gap-2 pt-4 border-t border-gray-200">
-                <button
-                  onClick={() => handleSendReminder(selectedBooking._id)}
-                  className="flex-1 px-4 py-2 bg-green-600 text-white hover:bg-green-700 transition-colors border border-green-700"
-                >
-                  {dict?.admin?.sendReminder || 'Send Reminder'}
-                </button>
-                <button
-                  onClick={() => handleDeleteBooking(selectedBooking._id)}
-                  className="flex-1 px-4 py-2 bg-red-600 text-white hover:bg-red-700 transition-colors border border-red-700"
-                >
-                  {dict?.common?.cancelBooking || 'Cancel Booking'}
-                </button>
+                {canSendReminders && (
+                  <button
+                    onClick={() => handleSendReminder(selectedBooking._id)}
+                    className="flex-1 px-4 py-2 bg-green-600 text-white hover:bg-green-700 transition-colors border border-green-700"
+                  >
+                    {dict?.admin?.sendReminder || 'Send Reminder'}
+                  </button>
+                )}
+                {canManage && (
+                  <button
+                    onClick={() => handleDeleteBooking(selectedBooking._id)}
+                    className="flex-1 px-4 py-2 bg-red-600 text-white hover:bg-red-700 transition-colors border border-red-700"
+                  >
+                    {dict?.common?.cancelBooking || 'Cancel Booking'}
+                  </button>
+                )}
               </div>
             </div>
           </div>

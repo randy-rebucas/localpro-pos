@@ -46,9 +46,9 @@ export const useSampleDataManager = (tenant: string) => {
     }
   }, [tenant]);
 
-  const installSampleData = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+  const installSampleData = useCallback(async (items?: string[]): Promise<{ success: boolean; error?: string }> => {
     if (installing) return { success: false, error: 'Installation already in progress' };
-    
+
     setInstalling(true);
     setMessage(null);
     setInstallResults(null);
@@ -61,7 +61,7 @@ export const useSampleDataManager = (tenant: string) => {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ skipExisting: true }),
+        body: JSON.stringify({ skipExisting: true, items }),
         signal: controller.signal,
       });
       const data = await res.json();

@@ -79,6 +79,8 @@ export const useSubscriptionManager = () => {
   const [billingHistory, setBillingHistory] = useState<BillingTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [billingLoading, setBillingLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [billingError, setBillingError] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const fetchSubscription = useCallback(async () => {
@@ -88,14 +90,18 @@ export const useSubscriptionManager = () => {
 
     try {
       setLoading(true);
+      setError(null);
       const res = await fetch('/api/subscriptions/current', { credentials: 'include', signal: controller.signal });
       const data = await res.json();
       if (data.success) {
         setSubscription(data.data);
+      } else {
+        setError(data.error || 'Failed to fetch subscription');
       }
-    } catch (error) {
-      if ((error as Error).name !== 'AbortError') {
-        console.error('Error fetching subscription:', error);
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        console.error('Error fetching subscription:', err);
+        setError('Failed to fetch subscription');
       }
     } finally {
       clearTimeout(timeoutId);
@@ -110,14 +116,18 @@ export const useSubscriptionManager = () => {
 
     try {
       setBillingLoading(true);
+      setBillingError(null);
       const res = await fetch('/api/subscriptions/billing-history', { credentials: 'include', signal: controller.signal });
       const data = await res.json();
       if (data.success) {
         setBillingHistory(data.data || []);
+      } else {
+        setBillingError(data.error || 'Failed to fetch billing history');
       }
-    } catch (error) {
-      if ((error as Error).name !== 'AbortError') {
-        console.error('Error fetching billing history:', error);
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        console.error('Error fetching billing history:', err);
+        setBillingError('Failed to fetch billing history');
       }
     } finally {
       clearTimeout(timeoutId);
@@ -130,6 +140,8 @@ export const useSubscriptionManager = () => {
     billingHistory,
     loading,
     billingLoading,
+    error,
+    billingError,
     fetchSubscription,
     fetchBillingHistory,
   };

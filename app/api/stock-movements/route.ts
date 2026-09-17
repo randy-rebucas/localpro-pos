@@ -3,17 +3,22 @@ import connectDB from '@/lib/mongodb';
 import StockMovement from '@/models/StockMovement';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
-    await requireAuth(request);
+    const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
-    
+
     if (!tenantId) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
+    }
+
+    if (!(await hasTenantPermission(user.role, tenantId, 'stock_movements.manage'))) {
+      return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 
     const searchParams = request.nextUrl.searchParams;

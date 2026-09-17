@@ -9,6 +9,7 @@ import { validateEmail, validatePassword } from '@/lib/validation';
 import { handleApiError } from '@/lib/error-handler';
 import { revokeAllUserTokens } from '@/lib/token-blacklist';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -61,6 +62,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     if (!(await hasTenantPermission(actingUser.role, tenantId, 'users.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
+
+    const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
+    const { allowed } = checkRateLimit(`write:users:${tenantId}:${ip}`, 20, 60_000);
+    if (!allowed) {
+      return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
     }
 
     const body = await request.json();
@@ -224,33 +231,41 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  let t: (key: string, fallback: string) => string;
   try {
     await connectDB();
     const actingUser = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
+    t = await getValidationTranslatorFromRequest(request);
 
     if (!tenantId) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
     if (!(await hasTenantPermission(actingUser.role, tenantId, 'users.delete'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
+    const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
+    const { allowed } = checkRateLimit(`write:users:${tenantId}:${ip}`, 20, 60_000);
+    if (!allowed) {
+      return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
+    }
+
     const user = await User.findOne({ _id: id, tenantId }).lean();
     if (!user) {
-      return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: t('validation.userNotFound', 'User not found') }, { status: 404 });
     }
 
     // SECURITY: can't delete your own account, and can't delete a user
     // ranked above you (e.g. an admin deleting an owner).
     if (id === actingUser.userId) {
-      return NextResponse.json({ success: false, error: 'You cannot delete your own account' }, { status: 400 });
+      return NextResponse.json({ success: false, error: t('validation.cannotDeleteSelf', 'You cannot delete your own account') }, { status: 400 });
     }
     if (getRoleRank(user.role) > getRoleRank(actingUser.role)) {
       return NextResponse.json(
-        { success: false, error: 'You cannot delete a user with a higher role than your own' },
+        { success: false, error: t('validation.cannotDeleteHigherRole', 'You cannot delete a user with a higher role than your own') },
         { status: 403 }
       );
     }
@@ -265,7 +280,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       });
       if (remainingActiveAdmins === 0) {
         return NextResponse.json(
-          { success: false, error: 'Cannot delete the last active owner/admin for this tenant' },
+          { success: false, error: t('validation.cannotDeleteLastAdmin', 'Cannot delete the last active owner/admin for this tenant') },
           { status: 400 }
         );
       }

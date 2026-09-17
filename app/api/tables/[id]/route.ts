@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Table from '@/models/Table';
 import { requireTenantAccess } from '@/lib/api-tenant';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
+import { getTenantSettingsById } from '@/lib/tenant';
 
 export async function GET(
   request: NextRequest,
@@ -36,8 +38,31 @@ export async function PATCH(
     await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
-    const { tenantId } = authResult;
+    const { tenantId, user } = authResult;
     const { id } = await params;
+
+    const body = await request.json();
+    let { name, capacity } = body;
+    const { status, isActive, currentOrderId } = body;
+
+    // Renaming, resizing, or (de)activating a table is floor-plan configuration
+    // (tables.configure, manager+); changing status/currentOrderId is ordinary
+    // POS table service any staff with tables.manage (cashier+) already does.
+    const isConfigChange = name !== undefined || capacity !== undefined || isActive !== undefined;
+    const requiredPermission = isConfigChange ? 'tables.configure' : 'tables.manage';
+    if (!(await hasTenantPermission(user.role, tenantId, requiredPermission))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
+
+    if (isConfigChange) {
+      const tenantSettings = await getTenantSettingsById(tenantId);
+      if (tenantSettings?.enableTableManagement === false) {
+        return NextResponse.json(
+          { success: false, error: 'Table management is turned off for this store. Enable it under Settings → Feature Flags.' },
+          { status: 403 }
+        );
+      }
+    }
 
     const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
     const { allowed } = checkRateLimit(`write:tables:${tenantId}:${ip}`, 60, 60_000);
@@ -49,10 +74,6 @@ export async function PATCH(
     if (!table) {
       return NextResponse.json({ success: false, error: 'Table not found' }, { status: 404 });
     }
-
-    const body = await request.json();
-    let { name, capacity } = body;
-    const { status, isActive, currentOrderId } = body;
 
     // Input validation
     if (name !== undefined && name !== null) {
@@ -112,8 +133,12 @@ export async function DELETE(
     await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
-    const { tenantId } = authResult;
+    const { tenantId, user } = authResult;
     const { id } = await params;
+
+    if (!(await hasTenantPermission(user.role, tenantId, 'tables.configure'))) {
+      return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
 
     const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
     const { allowed } = checkRateLimit(`write:tables:${tenantId}:${ip}`, 30, 60_000);

@@ -8,6 +8,7 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateEmail, validatePassword } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkSubscriptionLimit, SubscriptionService } from '@/lib/subscription';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
@@ -80,11 +81,17 @@ export async function POST(request: NextRequest) {
       throw authError;
     }
 
-    const body = await request.json();
-    const { email, password, name, role } = body;
-
     // Get translation function
     t = await getValidationTranslatorFromRequest(request);
+
+    const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
+    const { allowed } = checkRateLimit(`write:users:${tenantId}:${ip}`, 20, 60_000);
+    if (!allowed) {
+      return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
+    }
+
+    const body = await request.json();
+    const { email, password, name, role } = body;
 
     // Validation
     if (!email || !password || !name) {

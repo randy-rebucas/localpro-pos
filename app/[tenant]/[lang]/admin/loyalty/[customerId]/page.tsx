@@ -12,6 +12,7 @@ import {
   getAdjustPointsErrorMessage,
 } from '@/lib/loyalty-customer-helpers';
 import { getDictionaryClient } from '../../../dictionaries-client';
+import { usePermissions } from '@/hooks/usePermissions';
 
 export default function LoyaltyCustomerPage() {
   const params = useParams();
@@ -19,6 +20,9 @@ export default function LoyaltyCustomerPage() {
   const lang = params.lang as 'en' | 'es';
   const customerId = params.customerId as string;
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const { canAccess } = usePermissions();
+  const canView = canAccess('loyalty.manage');
+  const canAdjust = canAccess('loyalty.adjust');
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -38,6 +42,19 @@ export default function LoyaltyCustomerPage() {
       showToast.error(getAdjustPointsErrorMessage(result.error));
     }
   };
+
+  if (!canView) {
+    return (
+      <div className="px-4 sm:px-6 py-6">
+        <div className="bg-red-50 border-2 border-red-300 p-6">
+          <h2 className="text-lg font-bold text-red-800 mb-1">{dict?.admin?.accessRestricted || 'Access Restricted'}</h2>
+          <p className="text-sm text-red-700">
+            {dict?.admin?.accessRestrictedLoyalty || "You don't have permission to view loyalty. Contact an admin or owner."}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -72,32 +89,34 @@ export default function LoyaltyCustomerPage() {
             </div>
 
             {/* Manual Adjustment */}
-            <div className="bg-white shadow p-6 mb-6">
-              <h2 className="text-base font-semibold text-gray-800 mb-3">{dict?.loyalty?.manualAdjustment || 'Manual Adjustment'}</h2>
-              <form onSubmit={handleAdjust} className="flex flex-col sm:flex-row gap-3">
-                <input
-                  type="number"
-                  placeholder={dict?.loyalty?.pointsPlaceholder || 'Points (+ to add, - to deduct)'}
-                  value={form.points}
-                  onChange={(e) => updateForm({ points: e.target.value })}
-                  className="border border-gray-300 px-3 py-2 text-sm w-full sm:w-48 focus:outline-none focus:ring-2 focus:ring-brand"
-                />
-                <input
-                  type="text"
-                  placeholder={dict?.loyalty?.reasonPlaceholder || 'Reason / description'}
-                  value={form.description}
-                  onChange={(e) => updateForm({ description: e.target.value })}
-                  className="border border-gray-300 px-3 py-2 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-brand"
-                />
-                <button
-                  type="submit"
-                  disabled={adjusting}
-                  className="bg-brand text-white px-5 py-2 text-sm font-medium hover:bg-brand-hover disabled:opacity-60 whitespace-nowrap"
-                >
-                  {adjusting ? (dict?.admin?.saving || 'Saving...') : (dict?.loyalty?.apply || 'Apply')}
-                </button>
-              </form>
-            </div>
+            {canAdjust && (
+              <div className="bg-white shadow p-6 mb-6">
+                <h2 className="text-base font-semibold text-gray-800 mb-3">{dict?.loyalty?.manualAdjustment || 'Manual Adjustment'}</h2>
+                <form onSubmit={handleAdjust} className="flex flex-col sm:flex-row gap-3">
+                  <input
+                    type="number"
+                    placeholder={dict?.loyalty?.pointsPlaceholder || 'Points (+ to add, - to deduct)'}
+                    value={form.points}
+                    onChange={(e) => updateForm({ points: e.target.value })}
+                    className="border border-gray-300 px-3 py-2 text-sm w-full sm:w-48 focus:outline-none focus:ring-2 focus:ring-brand"
+                  />
+                  <input
+                    type="text"
+                    placeholder={dict?.loyalty?.reasonPlaceholder || 'Reason / description'}
+                    value={form.description}
+                    onChange={(e) => updateForm({ description: e.target.value })}
+                    className="border border-gray-300 px-3 py-2 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-brand"
+                  />
+                  <button
+                    type="submit"
+                    disabled={adjusting}
+                    className="bg-brand text-white px-5 py-2 text-sm font-medium hover:bg-brand-hover disabled:opacity-60 whitespace-nowrap"
+                  >
+                    {adjusting ? (dict?.admin?.saving || 'Saving...') : (dict?.loyalty?.apply || 'Apply')}
+                  </button>
+                </form>
+              </div>
+            )}
 
             {/* History */}
             <div className="bg-white shadow p-6">

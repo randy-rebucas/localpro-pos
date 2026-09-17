@@ -6,6 +6,7 @@ let indexesEnsured = false;
 
 const LEGACY_RECEIPT_INDEX = 'receiptNumber_1';
 const CHANNEL_SYNC_INDEX = 'tenantId_1_channelSyncKey_1';
+const IDEMPOTENCY_INDEX = 'tenantId_1_idempotencyKey_1';
 
 /**
  * Reconcile transaction indexes:
@@ -29,6 +30,14 @@ export async function ensureTransactionIndexes(): Promise<void> {
     logger.info('Unset empty channelSyncKey on transactions', { count: cleanup.modifiedCount });
   }
 
+  const idempotencyCleanup = await collection.updateMany(
+    { $or: [{ idempotencyKey: null }, { idempotencyKey: '' }] },
+    { $unset: { idempotencyKey: '' } }
+  );
+  if (idempotencyCleanup.modifiedCount > 0) {
+    logger.info('Unset empty idempotencyKey on transactions', { count: idempotencyCleanup.modifiedCount });
+  }
+
   const indexes = await collection.indexes();
 
   const legacyReceipt = indexes.find((idx) => idx.name === LEGACY_RECEIPT_INDEX);
@@ -49,6 +58,14 @@ export async function ensureTransactionIndexes(): Promise<void> {
     await collection.dropIndex(CHANNEL_SYNC_INDEX);
     logger.info(
       'Dropped legacy transactions channelSyncKey index (recreating with partial filter)'
+    );
+  }
+
+  const idempotencyIdx = indexes.find((idx) => idx.name === IDEMPOTENCY_INDEX);
+  if (idempotencyIdx?.sparse && !idempotencyIdx.partialFilterExpression) {
+    await collection.dropIndex(IDEMPOTENCY_INDEX);
+    logger.info(
+      'Dropped legacy transactions idempotencyKey sparse index (recreating with partial filter)'
     );
   }
 

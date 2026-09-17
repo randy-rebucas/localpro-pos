@@ -8,6 +8,7 @@ import { getDictionaryClient } from '../../dictionaries-client';
 import { useBirFeatures } from '@/hooks/useBirFeatures';
 import { useBirSettings } from '@/hooks/useBirSettings';
 import { useCasReport } from '@/hooks/useCasReport';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   ptuExpiringSoon,
   isValidCasDateRange,
@@ -41,6 +42,8 @@ export default function BirCompliancePage() {
   const params = useParams();
   const tenant = params.tenant as string;
   const lang = params.lang as 'en' | 'es';
+  const { canAccess } = usePermissions();
+  const canManage = canAccess('bir_compliance.manage');
 
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -195,6 +198,7 @@ export default function BirCompliancePage() {
                 </label>
                 <input
                   type="text"
+                  disabled={!canManage}
                   value={birSettings.birTin}
                   onChange={(e) => setBirSettings({ ...birSettings, birTin: e.target.value })}
                   placeholder="000-000-000-000"
@@ -205,6 +209,7 @@ export default function BirCompliancePage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">{dict?.bir?.ptuNumber || 'PTU Number'}</label>
                 <input
                   type="text"
+                  disabled={!canManage}
                   value={birSettings.birPtuNumber}
                   onChange={(e) => setBirSettings({ ...birSettings, birPtuNumber: e.target.value })}
                   placeholder="e.g. POS-0001-2024"
@@ -216,6 +221,7 @@ export default function BirCompliancePage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">{dict?.bir?.ptuIssuedDate || 'PTU Issued Date'}</label>
                   <input
                     type="date"
+                    disabled={!canManage}
                     value={birSettings.birPtuIssuedDate}
                     onChange={(e) => setBirSettings({ ...birSettings, birPtuIssuedDate: e.target.value })}
                     className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand focus:border-brand"
@@ -225,6 +231,7 @@ export default function BirCompliancePage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">{dict?.bir?.ptuExpiryDate || 'PTU Expiry Date'}</label>
                   <input
                     type="date"
+                    disabled={!canManage}
                     value={birSettings.birPtuExpiryDate}
                     onChange={(e) => setBirSettings({ ...birSettings, birPtuExpiryDate: e.target.value })}
                     className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand focus:border-brand"
@@ -233,7 +240,7 @@ export default function BirCompliancePage() {
               </div>
               <button
                 onClick={handleSavePtuSettings}
-                disabled={saving || !birFeatures?.ptuAssistance}
+                disabled={!canManage || saving || !birFeatures?.ptuAssistance}
                 className="w-full bg-brand text-white px-4 py-2 text-sm font-medium hover:bg-brand-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {saving ? (dict?.admin?.saving || 'Saving...') : (dict?.bir?.savePtuSettings || 'Save PTU Settings')}
