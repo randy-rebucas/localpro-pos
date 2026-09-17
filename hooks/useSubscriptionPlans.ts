@@ -40,6 +40,7 @@ export interface SubscriptionPlan {
   };
   isActive: boolean;
   isCustom: boolean;
+  availableToNewTenants?: boolean;
 }
 
 export type SubscriptionStatus = 'loading' | 'ready' | 'error';

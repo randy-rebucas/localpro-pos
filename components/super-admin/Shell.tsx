@@ -90,6 +90,13 @@ function IconBackups() {
     </svg>
   );
 }
+function IconBilling() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 8.25v10.5a1.5 1.5 0 0 0 1.5 1.5h16.5a1.5 1.5 0 0 0 1.5-1.5V8.25M2.25 8.25l1.148-3.444A1.5 1.5 0 0 1 4.826 3.75h14.348a1.5 1.5 0 0 1 1.428 1.056L21.75 8.25M6 15h4" />
+    </svg>
+  );
+}
 function IconSettings() {
   return (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
@@ -105,6 +112,7 @@ const NAV_ITEMS = [
   { label: 'Subscriptions', href: '/super-admin/subscriptions', Icon: IconSubscriptions },
   { label: 'Plans', href: '/super-admin/plans', Icon: IconPlans },
   { label: 'Coupons', href: '/super-admin/coupons', Icon: IconCoupons },
+  { label: 'Billing', href: '/super-admin/billing', Icon: IconBilling },
   { label: 'Analytics', href: '/super-admin/analytics', Icon: IconAnalytics },
   { label: 'Users', href: '/super-admin/users', Icon: IconUsers },
   { label: 'Business Types', href: '/super-admin/business-types', Icon: IconBusinessTypes },

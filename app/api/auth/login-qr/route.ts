@@ -4,11 +4,22 @@ import User from '@/models/User';
 import { generateToken } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   let t: (key: string, fallback: string) => string;
   try {
+    // Rate limiting: 10 attempts per 15 minutes per IP (matches password login)
+    const ip = getClientIp(request);
+    const rl = checkRateLimit(`login-qr:${ip}`, 10, 15 * 60 * 1000);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { success: false, error: 'Too many login attempts. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.resetAfterMs / 1000)) } }
+      );
+    }
+
     await connectDB();
     const body = await request.json();
     const { qrToken, tenantSlug } = body;

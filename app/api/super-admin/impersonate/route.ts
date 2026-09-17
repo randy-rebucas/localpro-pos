@@ -51,13 +51,14 @@ export async function POST(request: NextRequest) {
 
     const u = targetUser as { _id: unknown; email: string; role: string; tenantId?: unknown };
 
-    // Generate a short-lived token (1 hour) with an impersonation flag
+    // Generate a short-lived token (1 hour) tagged with the impersonating admin
     const token = generateToken({
       userId: String(u._id),
       tenantId: String(u.tenantId),
       email: u.email,
       role: u.role,
-    });
+      impersonatedBy: adminUser.userId,
+    }, { expiresIn: '1h' });
 
     const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '';
     await SuperAdminAction.create({
@@ -71,10 +72,9 @@ export async function POST(request: NextRequest) {
       userAgent: request.headers.get('user-agent') || '',
     });
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       data: {
-        token,
         user: {
           id: String(u._id),
           email: u.email,
@@ -83,6 +83,19 @@ export async function POST(request: NextRequest) {
         },
       },
     });
+
+    // Stored under a separate cookie name from the admin's own 'auth-token'
+    // session so starting impersonation doesn't log the admin out of the
+    // super-admin panel in other tabs on the same browser.
+    response.cookies.set('impersonation-token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60, // 1 hour, matches the token's own expiry
+    });
+
+    return response;
   } catch (error: unknown) {
     if (error instanceof Error && (error.message === 'Unauthorized' || error.message.includes('Forbidden'))) {
       return NextResponse.json(

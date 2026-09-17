@@ -311,7 +311,11 @@ export function proxy(request: NextRequest) {
       }
     }
 
+    // An active impersonation session takes priority over the admin's own
+    // session cookie — they're stored under separate names so starting an
+    // impersonation never clobbers the super-admin's own login.
     const token =
+      request.cookies.get('impersonation-token')?.value ||
       request.cookies.get('auth-token')?.value ||
       request.headers.get('authorization')?.replace('Bearer ', '');
 

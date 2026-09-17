@@ -9,7 +9,8 @@ export async function GET(request: NextRequest) {
     const t = await getValidationTranslatorFromRequest(request);
 
     // Check for a token first; if none exists return 200 with no user (not a 401)
-    const hasToken = !!(request.cookies.get('auth-token')?.value ||
+    const hasToken = !!(request.cookies.get('impersonation-token')?.value ||
+      request.cookies.get('auth-token')?.value ||
       request.headers.get('authorization')?.replace('Bearer ', ''));
 
     const user = await getCurrentUser(request);
@@ -39,6 +40,7 @@ export async function GET(request: NextRequest) {
         email: userDoc.email,
         name: userDoc.name,
         role: userDoc.role,
+        impersonatedBy: user.impersonatedBy,
       },
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any

@@ -145,7 +145,7 @@ export default function CouponsPage() {
               <button
                 key={v}
                 onClick={() => setActiveFilter(v)}
-                className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${activeFilter === v ? 'bg-brand-teal text-white border-brand-teal' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}
+                className={`px-3 py-1.5 text-sm border transition-colors ${activeFilter === v ? 'bg-brand-teal text-white border-brand-teal' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}
               >
                 {v === '' ? 'All' : v === 'true' ? 'Active' : 'Inactive'}
               </button>
@@ -153,7 +153,7 @@ export default function CouponsPage() {
           </div>
           <button
             onClick={openCreate}
-            className="px-4 py-2 bg-brand-teal text-white rounded-lg text-sm font-medium hover:bg-brand-teal/90 transition-colors"
+            className="px-4 py-2 bg-brand-teal text-white text-sm font-medium hover:bg-brand-teal/90 transition-colors"
           >
             + Create Coupon
           </button>
@@ -165,7 +165,7 @@ export default function CouponsPage() {
         ) : coupons.length === 0 ? (
           <div className="text-center py-12 text-gray-400">No coupons found.</div>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white shadow-sm">
+          <div className="overflow-x-auto border border-gray-100 bg-white">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wide">
                 <tr>
@@ -188,7 +188,7 @@ export default function CouponsPage() {
                     <td className="px-4 py-3 text-gray-600">{fmt(c.validFrom)}</td>
                     <td className="px-4 py-3 text-gray-600">{c.validUntil ? fmt(c.validUntil) : '—'}</td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium border ${c.isActive ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
+                      <span className={`inline-flex px-2 py-0.5 text-xs font-medium border ${c.isActive ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
                         {c.isActive ? 'Active' : 'Inactive'}
                       </span>
                     </td>
@@ -211,7 +211,7 @@ export default function CouponsPage() {
         {/* Form Modal */}
         {showForm && (
           <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg">
+            <div className="bg-white w-full max-w-lg">
               <div className="flex items-center justify-between px-6 py-4 border-b">
                 <h2 className="font-semibold text-gray-900">{editingId ? 'Edit Coupon' : 'Create Coupon'}</h2>
                 <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600">✕</button>
@@ -221,7 +221,7 @@ export default function CouponsPage() {
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Code *</label>
                     <input
-                      className="w-full border rounded-lg px-3 py-2 text-sm uppercase"
+                      className="w-full border px-3 py-2 text-sm uppercase"
                       value={form.code}
                       onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
                       placeholder="SUMMER20"
@@ -231,7 +231,7 @@ export default function CouponsPage() {
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Discount Type *</label>
                     <select
-                      className="w-full border rounded-lg px-3 py-2 text-sm"
+                      className="w-full border px-3 py-2 text-sm"
                       value={form.discountType}
                       onChange={(e) => setForm({ ...form, discountType: e.target.value as 'percentage' | 'fixed' })}
                     >
@@ -246,7 +246,7 @@ export default function CouponsPage() {
                     <label className="block text-xs font-medium text-gray-600 mb-1">Discount Value *</label>
                     <input
                       type="number"
-                      className="w-full border rounded-lg px-3 py-2 text-sm"
+                      className="w-full border px-3 py-2 text-sm"
                       value={form.discountValue}
                       onChange={(e) => setForm({ ...form, discountValue: Number(e.target.value) })}
                       min={0}
@@ -256,7 +256,7 @@ export default function CouponsPage() {
                     <label className="block text-xs font-medium text-gray-600 mb-1">Max Uses</label>
                     <input
                       type="number"
-                      className="w-full border rounded-lg px-3 py-2 text-sm"
+                      className="w-full border px-3 py-2 text-sm"
                       value={form.maxUses}
                       onChange={(e) => setForm({ ...form, maxUses: e.target.value })}
                       placeholder="Unlimited"
@@ -268,7 +268,7 @@ export default function CouponsPage() {
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Description</label>
                   <input
-                    className="w-full border rounded-lg px-3 py-2 text-sm"
+                    className="w-full border px-3 py-2 text-sm"
                     value={form.description}
                     onChange={(e) => setForm({ ...form, description: e.target.value })}
                     placeholder="Optional description"
@@ -280,7 +280,7 @@ export default function CouponsPage() {
                     <label className="block text-xs font-medium text-gray-600 mb-1">Valid From *</label>
                     <input
                       type="date"
-                      className="w-full border rounded-lg px-3 py-2 text-sm"
+                      className="w-full border px-3 py-2 text-sm"
                       value={form.validFrom}
                       onChange={(e) => setForm({ ...form, validFrom: e.target.value })}
                     />
@@ -289,7 +289,7 @@ export default function CouponsPage() {
                     <label className="block text-xs font-medium text-gray-600 mb-1">Valid Until</label>
                     <input
                       type="date"
-                      className="w-full border rounded-lg px-3 py-2 text-sm"
+                      className="w-full border px-3 py-2 text-sm"
                       value={form.validUntil}
                       onChange={(e) => setForm({ ...form, validUntil: e.target.value })}
                     />
@@ -297,11 +297,11 @@ export default function CouponsPage() {
                 </div>
               </div>
               <div className="flex gap-3 px-6 py-4 border-t justify-end">
-                <button onClick={() => setShowForm(false)} className="px-4 py-2 text-sm border rounded-lg hover:bg-gray-50">Cancel</button>
+                <button onClick={() => setShowForm(false)} className="px-4 py-2 text-sm border hover:bg-gray-50">Cancel</button>
                 <button
                   onClick={save}
                   disabled={saving || !form.code || !form.discountValue}
-                  className="px-4 py-2 text-sm bg-brand-teal text-white rounded-lg hover:bg-brand-teal/90 disabled:opacity-50"
+                  className="px-4 py-2 text-sm bg-brand-teal text-white hover:bg-brand-teal/90 disabled:opacity-50"
                 >
                   {saving ? 'Saving…' : editingId ? 'Save Changes' : 'Create Coupon'}
                 </button>

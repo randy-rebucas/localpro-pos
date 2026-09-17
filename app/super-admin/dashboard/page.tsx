@@ -69,8 +69,8 @@ export default function SuperAdminDashboard() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
             {[...Array(4)].map((_, i) => (
               <div key={i} className="bg-white border border-gray-200 p-5 animate-pulse">
-                <div className="h-4 bg-gray-200 rounded w-24 mb-3" />
-                <div className="h-8 bg-gray-200 rounded w-12" />
+                <div className="h-4 bg-gray-200 w-24 mb-3" />
+                <div className="h-8 bg-gray-200 w-12" />
               </div>
             ))}
           </div>
@@ -97,7 +97,7 @@ export default function SuperAdminDashboard() {
             <Link
               key={link.href}
               href={link.href}
-              className="bg-white border border-gray-200 p-5 hover:border-teal-300 hover:shadow-sm transition-all group"
+              className="bg-white border border-gray-200 p-5 hover:border-teal-300 transition-all group"
             >
               <div className="flex items-start gap-3">
                 <span className="text-2xl">{link.icon}</span>

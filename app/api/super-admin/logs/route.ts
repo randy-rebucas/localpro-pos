@@ -3,12 +3,13 @@ import connectDB from '@/lib/mongodb';
 import AuditLog from '@/models/AuditLog';
 import Tenant from '@/models/Tenant';
 import { requireRole } from '@/lib/auth';
+import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
-    await requireRole(request, ['super_admin']);
+    const user = await requireRole(request, ['super_admin']);
 
     const { searchParams } = new URL(request.url);
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
@@ -85,6 +86,27 @@ export async function GET(request: NextRequest) {
           return `"${ts}","${tenant}","${log.action || ''}","${log.entityType || ''}","${log.entityId || ''}","${user}","${log.ipAddress || ''}"`;
         }),
       ].join('\n');
+
+      // Bulk-exporting audit logs — potentially across every tenant — is
+      // itself a sensitive action worth its own trail (mirrors the
+      // tenant-scoped export at api/audit-logs/export/route.ts).
+      const Tenant = (await import('@/models/Tenant')).default;
+      const defaultTenant = await Tenant.findOne({ slug: 'default' }).select('_id').lean();
+      if (defaultTenant) {
+        await createAuditLog(request, {
+          tenantId: defaultTenant._id,
+          userId: user.userId,
+          action: AuditActions.AUDIT_LOG_EXPORT,
+          entityType: 'audit_log',
+          metadata: {
+            format: 'csv',
+            tenantSlug: tenantSlug || null,
+            startDate: startDate || null,
+            endDate: endDate || null,
+            entryCount: logs.length,
+          },
+        });
+      }
 
       return new NextResponse(csvRows, {
         headers: {

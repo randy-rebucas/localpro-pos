@@ -4,6 +4,7 @@ import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 import { requireAuth } from '@/lib/auth';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 
 /**
@@ -57,6 +58,15 @@ export async function POST(request: NextRequest) {
   let t: (key: string, fallback: string) => string;
   try {
     const user = await requireAuth(request);
+
+    const rl = checkRateLimit(`qr-code:regenerate:${user.userId}`, 10, 60 * 60 * 1000);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { success: false, error: 'Too many requests. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.resetAfterMs / 1000)) } }
+      );
+    }
+
     await connectDB();
     t = await getValidationTranslatorFromRequest(request); // eslint-disable-line @typescript-eslint/no-unused-vars
 

@@ -4,6 +4,7 @@ import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
 import Category from '@/models/Category';
 import { requireTenantAccess } from '@/lib/api-tenant';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateBulkProductUpdate, type BulkProductUpdates } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -22,10 +23,12 @@ export async function PUT(request: NextRequest) {
 
     let tenantId: string;
     let userId: string;
+    let userRole: string;
     try {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
       userId = tenantAccess.user.userId;
+      userRole = tenantAccess.user.role;
     } catch (authError: unknown) {
       const message = authError instanceof Error ? authError.message : 'Unauthorized';
       if (message.includes('Unauthorized') || message.includes('Forbidden')) {
@@ -35,6 +38,13 @@ export async function PUT(request: NextRequest) {
         );
       }
       throw authError;
+    }
+
+    if (!(await hasTenantPermission(userRole, tenantId, 'products.manage'))) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden: Insufficient permissions' },
+        { status: 403 }
+      );
     }
 
     const ip = request.headers.get('x-forwarded-for') ?? 'unknown';

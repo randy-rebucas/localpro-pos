@@ -64,7 +64,7 @@ export default function SuperAdminLoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-md">
-        <div className="bg-white border border-gray-200 shadow-sm p-8">
+        <div className="bg-white border border-gray-200 p-8">
           <div className="mb-8 text-center">
             <div className="inline-flex items-center justify-center w-14 h-14 bg-brand text-white text-2xl font-bold mb-4">
               SA

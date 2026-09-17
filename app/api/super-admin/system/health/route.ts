@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import { requireRole } from '@/lib/auth';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import mongoose from 'mongoose';
 
 const KEY_COLLECTIONS = [
@@ -18,6 +19,15 @@ const KEY_COLLECTIONS = [
 
 export async function GET(request: NextRequest) {
   try {
+    const ip = getClientIp(request);
+    const rl = checkRateLimit(`super-admin-health:${ip}`, 20, 60 * 1000);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { success: false, error: 'Too many requests. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.resetAfterMs / 1000)) } }
+      );
+    }
+
     await connectDB();
     await requireRole(request, ['super_admin']);
 

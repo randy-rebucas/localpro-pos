@@ -7,6 +7,10 @@ export async function GET(request: NextRequest) { // eslint-disable-line @typesc
   try {
     await connectDB();
 
+    // This route has no auth/tenant context, so it can't tell a grandfathered
+    // subscriber apart from a first-time browser — it returns all active plans
+    // and leaves the availableToNewTenants decision to callers that *do* know
+    // the requesting tenant's current plan (see subscription/page.tsx).
     const plans = await SubscriptionPlan.find({ isActive: true })
       .sort({ 'price.monthly': 1 })
       .lean();

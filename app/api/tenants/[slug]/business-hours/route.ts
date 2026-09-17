@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Tenant from '@/models/Tenant';
 import { getCurrentUser } from '@/lib/auth';
+import { roleAtLeast } from '@/lib/permissions';
 import { logger } from '@/lib/logger';
 
 export async function GET(
@@ -51,7 +52,7 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (user.role !== 'admin' && user.role !== 'manager' && user.role !== 'owner' && user.role !== 'super_admin') {
+    if (!roleAtLeast(user.role, 'manager')) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 

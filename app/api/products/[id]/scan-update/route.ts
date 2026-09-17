@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
 import { requireTenantAccess } from '@/lib/api-tenant';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
@@ -40,6 +41,13 @@ export async function PATCH(
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId } = authResult;
+
+    if (!(await hasTenantPermission(authResult.user.role, tenantId, 'products.manage'))) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden: Insufficient permissions' },
+        { status: 403 }
+      );
+    }
 
     const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
     const { allowed } = checkRateLimit(`scan-update:${tenantId}:${ip}`, 60, 60_000);

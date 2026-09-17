@@ -67,7 +67,7 @@ function isValidSessionData(data: unknown): data is SessionData {
   );
 }
 
-export function useCustomerDisplaySession(sessionId: string | null) {
+export function useCustomerDisplaySession(sessionId: string | null, tenant: string | null) {
   const [sessionData, setSessionData] = useState<SessionData>(EMPTY_SESSION);
   const [status, setStatus] = useState<SessionStatus>('loading');
   const [error, setError] = useState<SessionError | null>(null);
@@ -85,14 +85,14 @@ export function useCustomerDisplaySession(sessionId: string | null) {
   }, [sessionId]);
 
   const refetch = useCallback(async () => {
-    if (!sessionId || !abortControllerRef.current) return;
+    if (!sessionId || !tenant || !abortControllerRef.current) return;
 
     setError(null);
     setStatus('loading');
     setRetryCount(0);
 
     try {
-      const res = await fetch(`/api/pos/session/${sessionId}`, {
+      const res = await fetch(`/api/pos/session/${sessionId}?tenant=${encodeURIComponent(tenant)}`, {
         signal: abortControllerRef.current.signal,
       });
 
@@ -131,10 +131,10 @@ export function useCustomerDisplaySession(sessionId: string | null) {
       setError({ code: 'failedToConnect' });
       setStatus('error');
     }
-  }, [sessionId]);
+  }, [sessionId, tenant]);
 
   useEffect(() => {
-    if (!sessionId || sessionData.paymentStatus === 'completed') return;
+    if (!sessionId || !tenant || sessionData.paymentStatus === 'completed') return;
 
     refetch();
 
@@ -144,7 +144,7 @@ export function useCustomerDisplaySession(sessionId: string | null) {
     );
     const interval = setInterval(refetch, intervalMs);
     return () => clearInterval(interval);
-  }, [refetch, sessionId, sessionData.paymentStatus, retryCount]);
+  }, [refetch, sessionId, tenant, sessionData.paymentStatus, retryCount]);
 
   return { sessionData, status, error, refetch };
 }

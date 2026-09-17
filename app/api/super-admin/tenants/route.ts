@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import connectDB from '@/lib/mongodb';
 import Tenant from '@/models/Tenant';
 import Subscription from '@/models/Subscription';
@@ -102,57 +103,68 @@ export async function POST(request: NextRequest) {
     if (email) settings = { ...settings, email };
     if (businessType) settings = applyBusinessTypeDefaults(settings, businessType);
 
-    const tenant = await Tenant.create({
-      slug,
-      name,
-      settings,
-      isActive: true,
-      onboardingStatus: 'in_progress',
-      createdBy: user.userId,
-    });
-
-    // Auto-provision: find starter plan and create a trial subscription
+    // Tenant + trial subscription + billing event + owner user must all land
+    // together or not at all — a partial provision (e.g. tenant created but
+    // owner account creation fails) leaves an orphaned tenant nobody can log
+    // into, or a subscription with no billing event backing it.
     const starterPlan = await SubscriptionPlan.findOne({ tier: 'starter', isActive: true }).lean();
-    let subscription = null;
-    if (starterPlan) {
-      const trialEnd = new Date();
-      trialEnd.setDate(trialEnd.getDate() + trialDays);
-      subscription = await Subscription.create({
-        tenantId: tenant._id,
-        planId: starterPlan._id,
-        status: 'trial',
-        isTrial: true,
-        trialEndDate: trialEnd,
-        nextBillingDate: trialEnd,
-        billingCycle: 'monthly',
-      });
-      await BillingEvent.create({
-        tenantId: tenant._id,
-        subscriptionId: subscription._id,
-        type: 'trial_started',
-        amount: 0,
-        currency: currency || 'PHP',
-        description: `Trial started for ${trialDays} days on ${(starterPlan as { name: string }).name} plan`,
-        recordedBy: user.userId,
-      });
-    }
+    const existingUser = ownerEmail ? await User.findOne({ email: ownerEmail.toLowerCase() }).lean() : null;
+    const tempPassword = (ownerEmail && !existingUser) ? crypto.randomBytes(8).toString('hex') : null;
 
-    // Auto-provision: create owner user if ownerEmail provided
-    let ownerUser = null;
-    let tempPassword = null;
-    if (ownerEmail) {
-      const existingUser = await User.findOne({ email: ownerEmail.toLowerCase() }).lean();
-      if (!existingUser) {
-        tempPassword = crypto.randomBytes(8).toString('hex');
-        ownerUser = await User.create({
+    const session = await mongoose.startSession();
+    let tenant, subscription = null, ownerUser = null;
+    try {
+      session.startTransaction();
+
+      [tenant] = await Tenant.create([{
+        slug,
+        name,
+        settings,
+        isActive: true,
+        onboardingStatus: 'in_progress',
+        createdBy: user.userId,
+      }], { session });
+
+      if (starterPlan) {
+        const trialEnd = new Date();
+        trialEnd.setDate(trialEnd.getDate() + trialDays);
+        [subscription] = await Subscription.create([{
+          tenantId: tenant._id,
+          planId: starterPlan._id,
+          status: 'trial',
+          isTrial: true,
+          trialEndDate: trialEnd,
+          nextBillingDate: trialEnd,
+          billingCycle: 'monthly',
+        }], { session });
+        await BillingEvent.create([{
+          tenantId: tenant._id,
+          subscriptionId: subscription._id,
+          type: 'trial_started',
+          amount: 0,
+          currency: currency || 'PHP',
+          description: `Trial started for ${trialDays} days on ${(starterPlan as { name: string }).name} plan`,
+          recordedBy: user.userId,
+        }], { session });
+      }
+
+      if (ownerEmail && tempPassword) {
+        [ownerUser] = await User.create([{
           email: ownerEmail.toLowerCase(),
           password: tempPassword,
           name: ownerName || name,
           role: 'owner',
           tenantId: tenant._id,
           isActive: true,
-        });
+        }], { session });
       }
+
+      await session.commitTransaction();
+    } catch (e) {
+      await session.abortTransaction();
+      throw e;
+    } finally {
+      session.endSession();
     }
 
     await createAuditLog(request, {

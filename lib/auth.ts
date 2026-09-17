@@ -11,6 +11,7 @@ export interface JWTPayload {
   tenantId: string;
   email: string;
   role: string;
+  impersonatedBy?: string;
 }
 
 const JWT_SECRET: string = (() => {
@@ -28,8 +29,8 @@ const JWT_SECRET: string = (() => {
 /**
  * Generate JWT token for user
  */
-export function generateToken(payload: JWTPayload): string {
-  const expiresIn = process.env.JWT_EXPIRES_IN || '7d';
+export function generateToken(payload: JWTPayload, options?: { expiresIn?: string }): string {
+  const expiresIn = options?.expiresIn || process.env.JWT_EXPIRES_IN || '7d';
   return jwt.sign(payload, JWT_SECRET, {
     expiresIn,
   } as jwt.SignOptions);
@@ -54,9 +55,13 @@ export async function getCurrentUser(request: NextRequest): Promise<{
   tenantId: string;
   email: string;
   role: string;
+  impersonatedBy?: string;
 } | null> {
   try {
-    const token = request.cookies.get('auth-token')?.value || 
+    // An active impersonation session takes priority over the admin's own
+    // session cookie — see proxy.ts for why they're kept as separate cookies.
+    const token = request.cookies.get('impersonation-token')?.value ||
+                  request.cookies.get('auth-token')?.value ||
                   request.headers.get('authorization')?.replace('Bearer ', '');
 
     if (!token) {

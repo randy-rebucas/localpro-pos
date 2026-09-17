@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import ToastProvider from "@/components/ToastProvider";
 import ServiceWorkerRegistration from "@/components/ServiceWorkerRegistration";
+import ImpersonationBanner from "@/components/ImpersonationBanner";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -66,6 +67,7 @@ export default function RootLayout({
         <AuthProvider>
           <ServiceWorkerRegistration />
           <ToastProvider />
+          <ImpersonationBanner />
           {children}
         </AuthProvider>
       </body>

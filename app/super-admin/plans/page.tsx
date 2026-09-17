@@ -211,13 +211,13 @@ export default function PlansPage() {
     <SuperAdminShell title="Subscription Plans">
       <div className="space-y-4">
         <div className="flex justify-end">
-          <button onClick={openCreate} className="px-4 py-2 bg-brand-teal text-white rounded-lg text-sm font-medium hover:bg-brand-teal/90">
+          <button onClick={openCreate} className="px-4 py-2 bg-brand-teal text-white text-sm font-medium hover:bg-brand-teal/90">
             + New Plan
           </button>
         </div>
 
         {message && (
-          <div className={`p-3 border rounded-xl text-sm ${message.type === 'success' ? 'bg-green-50 border-green-300 text-green-800' : 'bg-red-50 border-red-300 text-red-800'}`}>
+          <div className={`p-3 border text-sm ${message.type === 'success' ? 'bg-green-50 border-green-300 text-green-800' : 'bg-red-50 border-red-300 text-red-800'}`}>
             {message.text}
           </div>
         )}
@@ -292,7 +292,7 @@ export default function PlansPage() {
       {/* Create / Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white border border-gray-200 shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-white border border-gray-200 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <h2 className="text-xl font-bold text-gray-900 mb-5">
                 {editingPlan ? 'Edit Plan' : 'Create Plan'}
@@ -381,7 +381,7 @@ export default function PlansPage() {
                       <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                         <input type="checkbox" checked={formData.availableToNewTenants}
                           onChange={e => setFormData(f => ({ ...f, availableToNewTenants: e.target.checked }))}
-                          className="rounded" />
+                          className="checkbox-win8" />
                         Available to new tenants
                       </label>
                     </div>
@@ -416,7 +416,7 @@ export default function PlansPage() {
                           type="checkbox"
                           checked={formData.features[key] as boolean}
                           onChange={e => setFeature(key, e.target.checked)}
-                          className="rounded border-gray-300 text-brand"
+                          className="checkbox-win8"
                         />
                         {label}
                       </label>
@@ -434,7 +434,7 @@ export default function PlansPage() {
                           type="checkbox"
                           checked={formData.birCompliance[key]}
                           onChange={e => setBir(key, e.target.checked)}
-                          className="rounded border-gray-300 text-brand"
+                          className="checkbox-win8"
                         />
                         {label}
                       </label>
@@ -448,7 +448,7 @@ export default function PlansPage() {
                     type="checkbox"
                     checked={formData.isActive}
                     onChange={e => setFormData(f => ({ ...f, isActive: e.target.checked }))}
-                    className="rounded border-gray-300 text-brand"
+                    className="checkbox-win8"
                   />
                   Plan is active (visible to tenants)
                 </label>

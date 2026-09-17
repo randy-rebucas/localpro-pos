@@ -31,11 +31,13 @@ export default function PaymentSuccessPage() {
 
     let planId: string | null = null;
     let billingCycle: string | null = null;
+    let couponCode: string | null = null;
     const planData = localStorage.getItem('paypal_subscription_plan');
     if (planData) {
       const parsed = JSON.parse(planData);
       planId = parsed.planId;
       billingCycle = parsed.billingCycle;
+      couponCode = parsed.couponCode || null;
     } else {
       planId = searchParams.get('planId');
       billingCycle = searchParams.get('billingCycle') || 'monthly';
@@ -59,6 +61,7 @@ export default function PaymentSuccessPage() {
           planId,
           billingCycle,
           paypalOrderId: orderId,
+          couponCode: couponCode || undefined,
         }),
       });
       const data = await response.json();

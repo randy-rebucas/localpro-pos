@@ -34,29 +34,86 @@ export default function SubscriptionPage() {
   const { plans, currentPlanName, status, error, refetch } = useSubscriptionPlans();
   const [selectedPlan, setSelectedPlan] = useState<string>('');
   const [upgrading, setUpgrading] = useState(false);
+  const [couponCode, setCouponCode] = useState('');
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [couponApplying, setCouponApplying] = useState(false);
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    code: string;
+    discountType: 'percentage' | 'fixed';
+    discountValue: number;
+    appliesTo: 'all_plans' | 'specific_plans';
+    planIds: string[];
+  } | null>(null);
   const { settings } = useTenantSettings();
   const tenantSettings = settings || getDefaultTenantSettings();
   const primaryColor = tenantSettings.primaryColor || '#35979c';
 
   const currentPlan = plans.find((p) => p.name === currentPlanName);
   const currentPlanId = currentPlan?._id ?? null;
-  const visiblePlans = plans.filter((plan) => plan.tier !== 'enterprise');
+  // A plan marked unavailable to new tenants stays offered to whoever is
+  // already grandfathered on it, but is hidden from everyone else picking a
+  // plan for the first time.
+  const visiblePlans = plans.filter((plan) =>
+    plan.tier !== 'enterprise' &&
+    (plan.availableToNewTenants !== false || plan._id === currentPlanId)
+  );
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
   }, [lang]);
+
+  const applyCoupon = async () => {
+    const trimmed = couponCode.trim();
+    if (!trimmed) return;
+    setCouponApplying(true);
+    setCouponError(null);
+    try {
+      const res = await fetch('/api/coupons/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ code: trimmed }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setAppliedCoupon(data.data);
+      } else {
+        setAppliedCoupon(null);
+        setCouponError(data.error || 'Invalid coupon code');
+      }
+    } catch {
+      setAppliedCoupon(null);
+      setCouponError('Failed to validate coupon');
+    } finally {
+      setCouponApplying(false);
+    }
+  };
+
+  // Preview only — the server independently re-validates and re-computes
+  // this in create-payment/activate, so a stale/tampered client value here
+  // can't actually change what gets charged.
+  const discountedPrice = (plan: { _id: string; price: { monthly: number } }): number | null => {
+    if (!appliedCoupon) return null;
+    if (appliedCoupon.appliesTo === 'specific_plans' && !appliedCoupon.planIds.includes(plan._id)) return null;
+    const discount = appliedCoupon.discountType === 'percentage'
+      ? plan.price.monthly * (appliedCoupon.discountValue / 100)
+      : appliedCoupon.discountValue;
+    return Math.max(0, Math.round((plan.price.monthly - discount) * 100) / 100);
+  };
 
   const handleUpgrade = async (planId: string, billingCycle: 'monthly' | 'yearly' = 'monthly') => {
     const selectedPlanData = plans.find((p) => p._id === planId);
     if (!selectedPlanData) return;
 
     setUpgrading(true);
+    setCouponError(null);
     try {
+      const trimmedCoupon = couponCode.trim();
       const response = await fetch('/api/paypal/create-payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ planId, billingCycle }),
+        body: JSON.stringify({ planId, billingCycle, couponCode: trimmedCoupon || undefined }),
       });
 
       const data = await response.json();
@@ -69,6 +126,7 @@ export default function SubscriptionPage() {
             billingCycle,
             amount: data.data.amount,
             currency: data.data.currency,
+            couponCode: data.data.couponCode,
           })
         );
 
@@ -76,6 +134,8 @@ export default function SubscriptionPage() {
           (link: { rel: string; href: string }) => link.rel === 'approve'
         );
         window.location.href = approveLink.href;
+      } else if (trimmedCoupon) {
+        setCouponError(data.error || 'Invalid coupon code');
       } else {
         showToast.error(
           data.error || dict?.subscription?.failedToCreatePayment || 'Failed to create payment'
@@ -155,6 +215,42 @@ export default function SubscriptionPage() {
       <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         {pageHeader}
 
+        <div className="mb-6 max-w-sm">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            {subDict.couponCode || 'Coupon code'}
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={couponCode}
+              onChange={(e) => {
+                setCouponCode(e.target.value.toUpperCase());
+                setCouponError(null);
+                if (appliedCoupon) setAppliedCoupon(null);
+              }}
+              placeholder={subDict.couponCodePlaceholder || 'Optional'}
+              className="flex-1 px-3 py-2 border border-gray-300 text-sm uppercase focus:ring-2 focus:ring-brand"
+            />
+            <button
+              type="button"
+              onClick={applyCoupon}
+              disabled={couponApplying || !couponCode.trim() || !!appliedCoupon}
+              className="px-4 py-2 text-sm font-medium border disabled:opacity-50"
+              style={{ borderColor: primaryColor, color: primaryColor }}
+            >
+              {couponApplying ? '…' : appliedCoupon ? subDict.applied || 'Applied' : subDict.apply || 'Apply'}
+            </button>
+          </div>
+          {couponError && <p className="mt-1 text-sm text-red-600">{couponError}</p>}
+          {appliedCoupon && (
+            <p className="mt-1 text-sm text-green-600">
+              {subDict.couponApplied || 'Coupon applied'}: {appliedCoupon.code} (
+              {appliedCoupon.discountType === 'percentage' ? `${appliedCoupon.discountValue}%` : `₱${appliedCoupon.discountValue}`}
+              {' '}{subDict.off || 'off'})
+            </p>
+          )}
+        </div>
+
         {visiblePlans.length === 0 ? (
           <div className="bg-white border border-gray-300">
             <EmptyState
@@ -203,9 +299,26 @@ export default function SubscriptionPage() {
                         </div>
                         <h3 className="text-lg font-bold text-gray-900">{plan.name}</h3>
                         <div className="mt-1">
-                          <span className="text-3xl font-bold text-gray-900">
-                            {plan.price.currency} {plan.price.monthly.toLocaleString()}
-                          </span>
+                          {(() => {
+                            const discounted = discountedPrice(plan);
+                            if (discounted === null) {
+                              return (
+                                <span className="text-3xl font-bold text-gray-900">
+                                  {plan.price.currency} {plan.price.monthly.toLocaleString()}
+                                </span>
+                              );
+                            }
+                            return (
+                              <>
+                                <span className="text-base text-gray-400 line-through mr-2">
+                                  {plan.price.currency} {plan.price.monthly.toLocaleString()}
+                                </span>
+                                <span className="text-3xl font-bold text-green-600">
+                                  {plan.price.currency} {discounted.toLocaleString()}
+                                </span>
+                              </>
+                            );
+                          })()}
                           <span className="text-sm text-gray-500 ml-1">
                             {subDict.perMonth || '/month'}
                           </span>

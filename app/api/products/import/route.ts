@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
 import Category from '@/models/Category';
 import { requireTenantAccess } from '@/lib/api-tenant';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
@@ -64,14 +65,23 @@ export async function POST(request: NextRequest) {
     await connectDB();
 
     let tenantId: string;
+    let userRole: string;
     try {
       const tenantAccess = await requireTenantAccess(request);
       tenantId = tenantAccess.tenantId;
+      userRole = tenantAccess.user.role;
     } catch (authError: unknown) {
       const msg = (authError as Error).message ?? '';
       return NextResponse.json(
         { success: false, error: msg },
         { status: msg.includes('Unauthorized') ? 401 : 403 }
+      );
+    }
+
+    if (!(await hasTenantPermission(userRole, tenantId, 'products.manage'))) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden: Insufficient permissions' },
+        { status: 403 }
       );
     }
 

@@ -36,8 +36,17 @@ export async function GET(
   try {
     await connectDB();
     const { sessionId } = await params;
+    const tenant = request.nextUrl.searchParams.get('tenant');
+
+    if (!tenant) {
+      return NextResponse.json(
+        { success: false, error: 'Missing tenant' },
+        { status: 400 }
+      );
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const session = await PosSession.findOne({ sessionId }).lean() as any;
+    const session = await PosSession.findOne({ sessionId, tenant }).lean() as any;
 
     if (!session) {
       return NextResponse.json(

@@ -8,6 +8,7 @@ import BillingEvent from '@/models/BillingEvent';
 import { requireAuth } from '@/lib/auth';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { capturePayment } from '@/lib/paypal';
+import { validateCoupon, applyCouponDiscount, incrementCouponUsage, CouponError } from '@/lib/coupons';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { planId, billingCycle = 'monthly', paypalOrderId } = body;
+    const { planId, billingCycle = 'monthly', paypalOrderId, couponCode } = body;
 
     if (!planId) {
       return NextResponse.json(
@@ -70,9 +71,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const expectedAmount = billingCycle === 'yearly'
+    let expectedAmount = billingCycle === 'yearly'
       ? plan.price.monthly * 12 * 0.9
       : plan.price.monthly;
+
+    // Re-validate the coupon server-side rather than trusting the discounted
+    // amount the client remembers from create-payment — the client only
+    // dictates which coupon was used, not how much discount it's worth.
+    let coupon: Awaited<ReturnType<typeof validateCoupon>> | null = null;
+    if (couponCode) {
+      try {
+        coupon = await validateCoupon(couponCode, planId);
+        expectedAmount = applyCouponDiscount(expectedAmount, coupon);
+      } catch (e) {
+        if (e instanceof CouponError) {
+          return NextResponse.json({ success: false, error: e.message }, { status: 400 });
+        }
+        throw e;
+      }
+    }
 
     let captureResult;
     try {
@@ -197,13 +214,20 @@ export async function POST(request: NextRequest) {
             amount: expectedAmount,
             currency: plan.price.currency,
             description: wasTrial
-              ? `Trial converted to ${plan.name} (${billingCycle}) via PayPal`
-              : `Plan activated/changed to ${plan.name} (${billingCycle}) via PayPal`,
+              ? `Trial converted to ${plan.name} (${billingCycle}) via PayPal${coupon ? ` (coupon ${coupon.code})` : ''}`
+              : `Plan activated/changed to ${plan.name} (${billingCycle}) via PayPal${coupon ? ` (coupon ${coupon.code})` : ''}`,
             transactionId: paypalOrderId,
           },
         ],
         { session }
       );
+
+      // Reserve the coupon's use in the same transaction as the charge it
+      // discounted — if the payment write rolls back, the use shouldn't be
+      // consumed either.
+      if (coupon) {
+        await incrementCouponUsage(coupon._id, session);
+      }
 
       await session.commitTransaction();
     } catch (e) {
@@ -240,6 +264,7 @@ export async function POST(request: NextRequest) {
         currency: plan.price.currency,
         wasTrial,
         paypalOrderId,
+        couponCode: coupon?.code,
       },
     });
 

@@ -105,6 +105,7 @@ export default function SubscriptionsPage() {
     if (action === 'suspend') body.graceDays = actionGraceDays ? parseInt(actionGraceDays) : undefined;
     if (action === 'pause') { body.pauseReason = actionReason; body.pauseDays = actionDays ? parseInt(actionDays) : undefined; }
     if (action === 'record-payment') { body.amount = parseFloat(actionAmount); body.notes = actionReason; body.transactionId = actionTxId; }
+    if (action === 'activate' && sub.status === 'cancelled') body.reactivationReason = actionReason;
 
     try {
       const res = await fetch(`/api/super-admin/subscriptions/${tenantSlug}`, {
@@ -136,18 +137,18 @@ export default function SubscriptionsPage() {
     <SuperAdminShell title="Subscriptions">
       <div className="space-y-4">
         {/* Filters */}
-        <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm flex flex-col sm:flex-row gap-3">
+        <div className="bg-white border border-gray-100 p-4 flex flex-col sm:flex-row gap-3">
           <input
             type="text"
             placeholder="Filter by tenant slug…"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-teal/30 w-full sm:w-56"
+            className="px-3 py-2 border border-gray-200 text-sm focus:ring-2 focus:ring-brand-teal/30 w-full sm:w-56"
           />
           <select
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-teal/30 bg-white"
+            className="px-3 py-2 border border-gray-200 text-sm focus:ring-2 focus:ring-brand-teal/30 bg-white"
           >
             <option value="">All statuses</option>
             {['active', 'trial', 'paused', 'suspended', 'cancelled', 'inactive'].map(s => (
@@ -162,7 +163,7 @@ export default function SubscriptionsPage() {
         ) : subscriptions.length === 0 ? (
           <div className="text-center py-12 text-gray-400">No subscriptions found.</div>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white shadow-sm">
+          <div className="overflow-x-auto border border-gray-100 bg-white">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wide">
                 <tr>
@@ -180,13 +181,13 @@ export default function SubscriptionsPage() {
                     </td>
                     <td className="px-4 py-3">
                       {sub.planId ? (
-                        <span className={`px-2 py-0.5 text-xs font-medium border rounded-full capitalize ${TIER_BADGE[sub.planId.tier] || 'bg-gray-100 text-gray-700 border-gray-200'}`}>
+                        <span className={`px-2 py-0.5 text-xs font-medium border capitalize ${TIER_BADGE[sub.planId.tier] || 'bg-gray-100 text-gray-700 border-gray-200'}`}>
                           {sub.planId.name}
                         </span>
                       ) : <span className="text-xs text-gray-400 italic">No plan</span>}
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 text-xs font-semibold border rounded-full capitalize ${STATUS_BADGE[sub.status] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                      <span className={`px-2 py-0.5 text-xs font-semibold border capitalize ${STATUS_BADGE[sub.status] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
                         {sub.status}
                       </span>
                       {sub.cancellationReason && <div className="text-xs text-gray-400 mt-0.5 truncate max-w-[120px]" title={sub.cancellationReason}>{sub.cancellationReason}</div>}
@@ -222,7 +223,7 @@ export default function SubscriptionsPage() {
       {/* Action Modal */}
       {actionModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
+          <div className="bg-white w-full max-w-sm">
             <div className="flex items-center justify-between px-6 py-4 border-b">
               <h2 className="font-semibold text-gray-900 capitalize">{actionModal.action.replace(/-/g, ' ')}</h2>
               <button onClick={() => setActionModal(null)} className="text-gray-400 hover:text-gray-600">✕</button>
@@ -235,7 +236,7 @@ export default function SubscriptionsPage() {
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Plan</label>
                     <select value={actionPlanId} onChange={e => setActionPlanId(e.target.value)}
-                      className="w-full border rounded-lg px-3 py-2 text-sm">
+                      className="w-full border px-3 py-2 text-sm">
                       <option value="">— choose —</option>
                       {plans.map(p => <option key={p._id} value={p._id}>{p.name} ({p.tier})</option>)}
                     </select>
@@ -243,7 +244,7 @@ export default function SubscriptionsPage() {
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Next Billing Date</label>
                     <input type="date" value={actionBillingDate} onChange={e => setActionBillingDate(e.target.value)}
-                      className="w-full border rounded-lg px-3 py-2 text-sm" />
+                      className="w-full border px-3 py-2 text-sm" />
                   </div>
                 </>
               )}
@@ -252,7 +253,7 @@ export default function SubscriptionsPage() {
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Extend by (days)</label>
                   <input type="number" min="1" max="365" value={actionDays} onChange={e => setActionDays(e.target.value)}
-                    className="w-full border rounded-lg px-3 py-2 text-sm" />
+                    className="w-full border px-3 py-2 text-sm" />
                 </div>
               )}
 
@@ -261,7 +262,7 @@ export default function SubscriptionsPage() {
                   <label className="block text-xs font-medium text-gray-600 mb-1">Cancellation Reason</label>
                   <textarea value={actionReason} onChange={e => setActionReason(e.target.value)} rows={3}
                     placeholder="Optional reason for cancellation…"
-                    className="w-full border rounded-lg px-3 py-2 text-sm resize-none" />
+                    className="w-full border px-3 py-2 text-sm resize-none" />
                 </div>
               )}
 
@@ -270,7 +271,7 @@ export default function SubscriptionsPage() {
                   <label className="block text-xs font-medium text-gray-600 mb-1">Grace Period (days, optional)</label>
                   <input type="number" min="0" max="90" value={actionGraceDays} onChange={e => setActionGraceDays(e.target.value)}
                     placeholder="0 = no grace period"
-                    className="w-full border rounded-lg px-3 py-2 text-sm" />
+                    className="w-full border px-3 py-2 text-sm" />
                 </div>
               )}
 
@@ -280,12 +281,12 @@ export default function SubscriptionsPage() {
                     <label className="block text-xs font-medium text-gray-600 mb-1">Pause Reason</label>
                     <input value={actionReason} onChange={e => setActionReason(e.target.value)}
                       placeholder="e.g. Customer requested break"
-                      className="w-full border rounded-lg px-3 py-2 text-sm" />
+                      className="w-full border px-3 py-2 text-sm" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Auto-resume after (days, optional)</label>
                     <input type="number" min="1" value={actionDays} onChange={e => setActionDays(e.target.value)}
-                      className="w-full border rounded-lg px-3 py-2 text-sm" />
+                      className="w-full border px-3 py-2 text-sm" />
                   </div>
                 </>
               )}
@@ -296,33 +297,47 @@ export default function SubscriptionsPage() {
                     <label className="block text-xs font-medium text-gray-600 mb-1">Amount (₱) *</label>
                     <input type="number" min="0" step="0.01" value={actionAmount} onChange={e => setActionAmount(e.target.value)}
                       placeholder="0.00"
-                      className="w-full border rounded-lg px-3 py-2 text-sm" />
+                      className="w-full border px-3 py-2 text-sm" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Transaction ID</label>
                     <input value={actionTxId} onChange={e => setActionTxId(e.target.value)}
                       placeholder="Optional"
-                      className="w-full border rounded-lg px-3 py-2 text-sm" />
+                      className="w-full border px-3 py-2 text-sm" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
                     <input value={actionReason} onChange={e => setActionReason(e.target.value)}
                       placeholder="Optional notes"
-                      className="w-full border rounded-lg px-3 py-2 text-sm" />
+                      className="w-full border px-3 py-2 text-sm" />
                   </div>
                 </>
               )}
 
-              {['activate', 'resume'].includes(actionModal.action) && (
+              {actionModal.action === 'activate' && actionModal.sub.status === 'cancelled' && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Reactivation Reason *</label>
+                  <textarea value={actionReason} onChange={e => setActionReason(e.target.value)} rows={3}
+                    placeholder="Why is this cancelled subscription being reactivated?"
+                    className="w-full border px-3 py-2 text-sm resize-none" />
+                </div>
+              )}
+
+              {['activate', 'resume'].includes(actionModal.action) && actionModal.sub.status !== 'cancelled' && (
                 <p className="text-sm text-gray-600">Confirm to <strong>{actionModal.action}</strong> this subscription?</p>
               )}
             </div>
             <div className="flex gap-3 px-6 py-4 border-t justify-end">
-              <button onClick={() => setActionModal(null)} className="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">Cancel</button>
+              <button onClick={() => setActionModal(null)} className="px-4 py-2 border text-sm hover:bg-gray-50">Cancel</button>
               <button
                 onClick={executeAction}
-                disabled={actionSaving || (actionModal.action === 'assign-plan' && !actionPlanId) || (actionModal.action === 'record-payment' && !actionAmount)}
-                className="px-4 py-2 bg-brand-teal text-white rounded-lg text-sm font-medium hover:bg-brand-teal/90 disabled:opacity-50"
+                disabled={
+                  actionSaving ||
+                  (actionModal.action === 'assign-plan' && !actionPlanId) ||
+                  (actionModal.action === 'record-payment' && !actionAmount) ||
+                  (actionModal.action === 'activate' && actionModal.sub.status === 'cancelled' && !actionReason.trim())
+                }
+                className="px-4 py-2 bg-brand-teal text-white text-sm font-medium hover:bg-brand-teal/90 disabled:opacity-50"
               >
                 {actionSaving ? 'Saving…' : 'Confirm'}
               </button>

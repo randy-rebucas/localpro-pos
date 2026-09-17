@@ -5,6 +5,7 @@ import Subscription from '@/models/Subscription';
 import BillingEvent from '@/models/BillingEvent';
 import SuperAdminAction from '@/models/SuperAdminAction';
 import { requireRole } from '@/lib/auth';
+import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
 
 async function resolveTenant(slug: string) {
@@ -98,6 +99,16 @@ export async function POST(
       transactionId,
       invoiceUrl,
       recordedBy: adminUser.userId,
+    });
+
+    await createAuditLog(request, {
+      tenantId: tenant._id as string,
+      userId: adminUser.userId,
+      action: AuditActions.CREATE,
+      entityType: 'billing_event',
+      entityId: event._id.toString(),
+      changes: { type, amount, transactionId, invoiceUrl },
+      metadata: { recordedBy: adminUser.userId, role: 'super_admin' },
     });
 
     const ip = request.headers.get('x-forwarded-for') || '';

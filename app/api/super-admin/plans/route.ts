@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb';
 import SubscriptionPlan from '@/models/SubscriptionPlan';
 import Subscription from '@/models/Subscription';
 import { requireRole } from '@/lib/auth';
+import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(request: NextRequest) {
@@ -37,7 +38,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
-    await requireRole(request, ['super_admin']);
+    const user = await requireRole(request, ['super_admin']);
 
     const body = await request.json();
     const { name, tier, description, price, features, birCompliance, isActive, isCustom, availableToNewTenants, yearlyDiscount } = body;
@@ -69,6 +70,20 @@ export async function POST(request: NextRequest) {
       availableToNewTenants: availableToNewTenants !== undefined ? availableToNewTenants : true,
       yearlyDiscount: yearlyDiscount || 0,
     });
+
+    const Tenant = (await import('@/models/Tenant')).default;
+    const defaultTenant = await Tenant.findOne({ slug: 'default' }).select('_id').lean();
+    if (defaultTenant) {
+      await createAuditLog(request, {
+        tenantId: defaultTenant._id,
+        userId: user.userId,
+        action: AuditActions.CREATE,
+        entityType: 'subscription_plan',
+        entityId: plan._id.toString(),
+        changes: { name, tier, price },
+        metadata: { createdBy: user.userId, role: 'super_admin' },
+      });
+    }
 
     return NextResponse.json({ success: true, data: plan }, { status: 201 });
   } catch (error: unknown) {

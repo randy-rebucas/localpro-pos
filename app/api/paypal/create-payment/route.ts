@@ -5,6 +5,7 @@ import { requireAuth } from '@/lib/auth';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { getTenantSlugFromRequest } from '@/lib/api-tenant';
 import { createSubscriptionPayment } from '@/lib/paypal';
+import { validateCoupon, applyCouponDiscount, CouponError } from '@/lib/coupons';
 import { logger } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { planId, billingCycle = 'monthly' } = body;
+    const { planId, billingCycle = 'monthly', couponCode } = body;
 
     if (!planId) {
       return NextResponse.json(
@@ -43,9 +44,21 @@ export async function POST(request: NextRequest) {
     }
 
     // Calculate amount based on billing cycle
-    const amount = billingCycle === 'yearly'
+    let amount = billingCycle === 'yearly'
       ? plan.price.monthly * 12 * 0.9 // 10% discount for yearly
       : plan.price.monthly;
+
+    if (couponCode) {
+      try {
+        const coupon = await validateCoupon(couponCode, planId);
+        amount = applyCouponDiscount(amount, coupon);
+      } catch (e) {
+        if (e instanceof CouponError) {
+          return NextResponse.json({ success: false, error: e.message }, { status: 400 });
+        }
+        throw e;
+      }
+    }
 
     // Create PayPal payment order
     const paypalOrder = await createSubscriptionPayment(planId, amount, plan.price.currency, tenantSlug, 'en', billingCycle);
@@ -59,6 +72,7 @@ export async function POST(request: NextRequest) {
         amount,
         currency: plan.price.currency,
         billingCycle,
+        couponCode: couponCode || undefined,
       },
     });
 

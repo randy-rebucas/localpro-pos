@@ -8,8 +8,11 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser(request);
 
-    // Revoke the token so it cannot be reused even if intercepted
-    const token = request.cookies.get('auth-token')?.value ||
+    // Revoke the token so it cannot be reused even if intercepted.
+    // Impersonation sessions live under a separate cookie — prefer it so
+    // "sign out" during impersonation ends that session, not the admin's own.
+    const token = request.cookies.get('impersonation-token')?.value ||
+                  request.cookies.get('auth-token')?.value ||
                   request.headers.get('authorization')?.replace('Bearer ', '');
     if (token) {
       await revokeToken(token, 7 * 86400, 'logout'); // match JWT_EXPIRES_IN default
@@ -29,7 +32,8 @@ export async function POST(request: NextRequest) {
 
     const response = NextResponse.json({ success: true, message: 'Logged out successfully' });
     response.cookies.delete('auth-token');
-    
+    response.cookies.delete('impersonation-token');
+
     return response;
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     const t = await getValidationTranslatorFromRequest(request);

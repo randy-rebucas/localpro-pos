@@ -8,6 +8,7 @@ interface User {
   email: string;
   name: string;
   role: 'owner' | 'admin' | 'manager' | 'cashier' | 'viewer' | 'super_admin';
+  impersonatedBy?: string;
 }
 
 interface AuthContextType {

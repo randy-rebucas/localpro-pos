@@ -39,7 +39,7 @@ export default function CustomerDisplay() {
   const sessionId = searchParams.get('session');
 
   const [dict, setDict] = useState<TranslationDict | null>(null);
-  const { sessionData, status, error: sessionError, refetch } = useCustomerDisplaySession(sessionId);
+  const { sessionData, status, error: sessionError, refetch } = useCustomerDisplaySession(sessionId, tenant);
   const [showPaymentScreen, setShowPaymentScreen] = useState(false);
 
   useEffect(() => {

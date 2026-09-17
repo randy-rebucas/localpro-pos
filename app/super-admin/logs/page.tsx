@@ -109,38 +109,38 @@ export default function LogsPage() {
     <SuperAdminShell title="Audit Logs">
       <div className="space-y-4">
         {/* Filters */}
-        <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm space-y-3">
+        <div className="bg-white border border-gray-100 p-4 space-y-3">
           <div className="flex flex-wrap gap-3">
             <input type="text" placeholder="Tenant slug" value={tenantSlug} onChange={e => setTenantSlug(e.target.value)}
-              className="px-3 py-2 border border-gray-200 rounded-lg text-sm w-36" />
+              className="px-3 py-2 border border-gray-200 text-sm w-36" />
             <input type="text" placeholder="Action (e.g. create)" value={action} onChange={e => setAction(e.target.value)}
-              className="px-3 py-2 border border-gray-200 rounded-lg text-sm w-44" />
+              className="px-3 py-2 border border-gray-200 text-sm w-44" />
             <input type="text" placeholder="Entity type" value={entityType} onChange={e => setEntityType(e.target.value)}
-              className="px-3 py-2 border border-gray-200 rounded-lg text-sm w-36" />
+              className="px-3 py-2 border border-gray-200 text-sm w-36" />
             <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
-              className="px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+              className="px-3 py-2 border border-gray-200 text-sm" />
             <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
-              className="px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+              className="px-3 py-2 border border-gray-200 text-sm" />
             <select value={limit} onChange={e => { setLimit(Number(e.target.value)); setPage(1); }}
-              className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
+              className="px-3 py-2 border border-gray-200 text-sm bg-white">
               {PAGE_SIZES.map(s => <option key={s} value={s}>{s} / page</option>)}
             </select>
           </div>
           <div className="flex flex-wrap gap-2 items-center">
             {PRESETS.map(p => (
               <button key={p.label} onClick={() => { const { start, end } = applyPreset(p.days); setStartDate(start); setEndDate(end); setPage(1); }}
-                className="px-3 py-1 text-xs border rounded-lg text-gray-600 hover:bg-gray-50">
+                className="px-3 py-1 text-xs border text-gray-600 hover:bg-gray-50">
                 {p.label}
               </button>
             ))}
-            <button onClick={clearFilters} className="px-3 py-1 text-xs border rounded-lg text-gray-400 hover:bg-gray-50">Clear</button>
+            <button onClick={clearFilters} className="px-3 py-1 text-xs border text-gray-400 hover:bg-gray-50">Clear</button>
             <div className="ml-auto flex gap-2">
               <button onClick={() => { setPage(1); fetchLogs(); }}
-                className="px-4 py-1.5 bg-brand-teal text-white rounded-lg text-sm font-medium hover:bg-brand-teal/90">
+                className="px-4 py-1.5 bg-brand-teal text-white text-sm font-medium hover:bg-brand-teal/90">
                 Search
               </button>
               <button onClick={downloadCsv} disabled={csvLoading || loading}
-                className="px-4 py-1.5 border rounded-lg text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                className="px-4 py-1.5 border text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50">
                 {csvLoading ? 'Exporting…' : '↓ CSV'}
               </button>
             </div>
@@ -156,7 +156,7 @@ export default function LogsPage() {
         ) : logs.length === 0 ? (
           <div className="text-center py-12 text-gray-400">No audit logs found.</div>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white shadow-sm">
+          <div className="overflow-x-auto border border-gray-100 bg-white">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wide">
                 <tr>
@@ -179,7 +179,7 @@ export default function LogsPage() {
                         ) : <span className="text-xs text-gray-400">—</span>}
                       </td>
                       <td className="px-4 py-3">
-                        <span className="text-xs font-mono bg-gray-100 px-1.5 py-0.5 rounded text-gray-700">{log.action}</span>
+                        <span className="text-xs font-mono bg-gray-100 px-1.5 py-0.5 text-gray-700">{log.action}</span>
                       </td>
                       <td className="px-4 py-3 text-xs text-gray-500">
                         <span className="font-medium">{log.entityType}</span>
@@ -207,7 +207,7 @@ export default function LogsPage() {
                       <tr>
                         <td colSpan={7} className="px-4 py-3 bg-gray-50">
                           <div className="text-xs font-semibold text-gray-500 mb-1">Changes</div>
-                          <div className="bg-white border border-gray-100 rounded-lg p-3 overflow-x-auto max-h-60">
+                          <div className="bg-white border border-gray-100 p-3 overflow-x-auto max-h-60">
                             <table className="text-xs w-full">
                               <tbody>
                                 {Object.entries(log.changes!).map(([key, val]) => (
@@ -236,9 +236,9 @@ export default function LogsPage() {
               <span>Page {pagination.page} of {pagination.pages}</span>
               <div className="flex gap-2">
                 <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}
-                  className="px-3 py-1 border rounded-lg disabled:opacity-40 hover:bg-gray-50">← Prev</button>
+                  className="px-3 py-1 border disabled:opacity-40 hover:bg-gray-50">← Prev</button>
                 <button disabled={page >= pagination.pages} onClick={() => setPage(p => p + 1)}
-                  className="px-3 py-1 border rounded-lg disabled:opacity-40 hover:bg-gray-50">Next →</button>
+                  className="px-3 py-1 border disabled:opacity-40 hover:bg-gray-50">Next →</button>
               </div>
             </div>
           </div>

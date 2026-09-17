@@ -3,6 +3,9 @@ import connectDB from '@/lib/mongodb';
 import SubscriptionPlan from '@/models/SubscriptionPlan';
 import { requireRole } from '@/lib/auth';
 import { handleApiError } from '@/lib/error-handler';
+import { createAuditLog, AuditActions } from '@/lib/audit';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import Tenant from '@/models/Tenant';
 
 const DEFAULT_PLANS = [
   {
@@ -145,8 +148,17 @@ const DEFAULT_PLANS = [
 
 export async function POST(request: NextRequest) {
   try {
+    const ip = getClientIp(request);
+    const rl = checkRateLimit(`super-admin-seed:${ip}`, 10, 60 * 1000);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { success: false, error: 'Too many requests. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.resetAfterMs / 1000)) } }
+      );
+    }
+
     await connectDB();
-    await requireRole(request, ['super_admin']);
+    const user = await requireRole(request, ['super_admin']);
 
     const body = await request.json();
     const { target } = body;
@@ -169,6 +181,19 @@ export async function POST(request: NextRequest) {
         );
         seeded.push(`plan:${planData.tier}`);
       }
+    }
+
+    const defaultTenant = await Tenant.findOne({ slug: 'default' }).select('_id').lean();
+    if (defaultTenant) {
+      await createAuditLog(request, {
+        tenantId: defaultTenant._id,
+        userId: user.userId,
+        action: AuditActions.UPDATE,
+        entityType: 'system_seed',
+        entityId: target,
+        changes: { seeded },
+        metadata: { updatedBy: user.userId, role: 'super_admin' },
+      });
     }
 
     return NextResponse.json({ success: true, seeded });

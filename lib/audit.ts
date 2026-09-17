@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import mongoose from 'mongoose';
 import connectDB from './mongodb';
 import AuditLog from '@/models/AuditLog';
-import { getCurrentUser } from './auth';
+import { getCurrentUser, verifyToken } from './auth';
 import { logger } from '@/lib/logger';
 
 export interface AuditLogData {
@@ -42,6 +42,16 @@ export async function createAuditLog(
     // resolve one (and pass its userId/tenantId through) earlier in the handler.
     const user = (data.userId && data.tenantId) ? null : await getCurrentUser(request);
     const resolvedUserId = data.userId ?? user?.userId;
+
+    // Tag entries made during a super-admin impersonation session so the audit
+    // trail shows who was really acting, not just the impersonated account.
+    // Decoded from the token directly (no DB hit) since callers may have
+    // already resolved `user` to skip the getCurrentUser lookup above.
+    const tokenValue = request.cookies.get('impersonation-token')?.value ||
+      request.cookies.get('auth-token')?.value ||
+      request.headers.get('authorization')?.replace('Bearer ', '');
+    const impersonatedBy = user?.impersonatedBy ?? (tokenValue ? verifyToken(tokenValue)?.impersonatedBy : undefined);
+    const metadata = impersonatedBy ? { ...data.metadata, impersonatedBy } : data.metadata;
 
     // Get tenantId from parameter, user, or request
     let tenantId: string | mongoose.Types.ObjectId;
@@ -111,7 +121,7 @@ export async function createAuditLog(
       entityType: data.entityType,
       entityId: data.entityId,
       changes: data.changes,
-      metadata: data.metadata,
+      metadata,
       ipAddress,
       userAgent,
     });

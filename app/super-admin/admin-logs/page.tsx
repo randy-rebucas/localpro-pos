@@ -68,16 +68,16 @@ export default function AdminLogsPage() {
     <SuperAdminShell title="Admin Action Log">
       <div className="space-y-4">
         {/* Filters */}
-        <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
+        <div className="bg-white border border-gray-100 p-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
             <input
-              className="border rounded-lg px-3 py-2 text-sm"
+              className="border px-3 py-2 text-sm"
               placeholder="Filter by action…"
               value={filters.action}
               onChange={(e) => { setFilters(f => ({ ...f, action: e.target.value })); setPage(1); }}
             />
             <select
-              className="border rounded-lg px-3 py-2 text-sm"
+              className="border px-3 py-2 text-sm"
               value={filters.targetType}
               onChange={(e) => { setFilters(f => ({ ...f, targetType: e.target.value })); setPage(1); }}
             >
@@ -86,20 +86,20 @@ export default function AdminLogsPage() {
                 <option key={t} value={t}>{t}</option>
               ))}
             </select>
-            <input type="date" className="border rounded-lg px-3 py-2 text-sm" value={filters.startDate}
+            <input type="date" className="border px-3 py-2 text-sm" value={filters.startDate}
               onChange={(e) => { setFilters(f => ({ ...f, startDate: e.target.value })); setPage(1); }} />
-            <input type="date" className="border rounded-lg px-3 py-2 text-sm" value={filters.endDate}
+            <input type="date" className="border px-3 py-2 text-sm" value={filters.endDate}
               onChange={(e) => { setFilters(f => ({ ...f, endDate: e.target.value })); setPage(1); }} />
           </div>
           <div className="flex gap-2">
             {PRESETS.map(p => (
               <button key={p.label} onClick={() => applyPreset(p)}
-                className="px-3 py-1 text-xs border rounded-lg text-gray-600 hover:bg-gray-50 transition-colors">
+                className="px-3 py-1 text-xs border text-gray-600 hover:bg-gray-50 transition-colors">
                 {p.label}
               </button>
             ))}
             <button onClick={() => { setFilters({ action: '', targetType: '', startDate: '', endDate: '' }); setPage(1); }}
-              className="px-3 py-1 text-xs border rounded-lg text-gray-400 hover:bg-gray-50 transition-colors">
+              className="px-3 py-1 text-xs border text-gray-400 hover:bg-gray-50 transition-colors">
               Clear
             </button>
             <span className="ml-auto text-xs text-gray-400 self-center">{total.toLocaleString()} records</span>
@@ -112,7 +112,7 @@ export default function AdminLogsPage() {
         ) : logs.length === 0 ? (
           <div className="text-center py-12 text-gray-400">No admin actions found.</div>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white shadow-sm">
+          <div className="overflow-x-auto border border-gray-100 bg-white">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wide">
                 <tr>
@@ -137,7 +137,7 @@ export default function AdminLogsPage() {
                         ) : <span className="text-gray-400 text-xs">System</span>}
                       </td>
                       <td className="px-4 py-3">
-                        <span className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-700">{log.action}</span>
+                        <span className="font-mono text-xs bg-gray-100 px-2 py-0.5 text-gray-700">{log.action}</span>
                       </td>
                       <td className="px-4 py-3 text-xs text-gray-600">
                         {log.targetType && <span className="font-medium">{log.targetType}</span>}
@@ -159,7 +159,7 @@ export default function AdminLogsPage() {
                     {expanded === log._id && log.changes && (
                       <tr key={`${log._id}-exp`} className="bg-gray-50">
                         <td colSpan={7} className="px-4 py-3">
-                          <pre className="text-xs text-gray-700 bg-white rounded-lg p-3 border border-gray-100 overflow-x-auto max-h-48">
+                          <pre className="text-xs text-gray-700 bg-white p-3 border border-gray-100 overflow-x-auto max-h-48">
                             {JSON.stringify(log.changes, null, 2)}
                           </pre>
                         </td>
@@ -176,10 +176,10 @@ export default function AdminLogsPage() {
         {pages > 1 && (
           <div className="flex justify-center gap-2">
             <button disabled={page === 1} onClick={() => setPage(p => p - 1)}
-              className="px-3 py-1.5 text-sm border rounded-lg disabled:opacity-40 hover:bg-gray-50">← Prev</button>
+              className="px-3 py-1.5 text-sm border disabled:opacity-40 hover:bg-gray-50">← Prev</button>
             <span className="px-3 py-1.5 text-sm text-gray-600">Page {page} of {pages}</span>
             <button disabled={page === pages} onClick={() => setPage(p => p + 1)}
-              className="px-3 py-1.5 text-sm border rounded-lg disabled:opacity-40 hover:bg-gray-50">Next →</button>
+              className="px-3 py-1.5 text-sm border disabled:opacity-40 hover:bg-gray-50">Next →</button>
           </div>
         )}
       </div>
