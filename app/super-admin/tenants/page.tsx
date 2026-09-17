@@ -271,7 +271,7 @@ export default function TenantsPage() {
               <form onSubmit={handleSave}>
                 <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
                   <h2 className="font-semibold text-gray-900">{editingTenant ? 'Edit Tenant' : 'Create New Tenant'}</h2>
-                  <button type="button" onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+                  <button type="button" onClick={() => setShowModal(false)} aria-label="Close" className="text-gray-400 hover:text-gray-600"><svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg></button>
                 </div>
                 <div className="p-6 space-y-4">
                   {!editingTenant && (

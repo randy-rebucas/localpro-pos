@@ -228,7 +228,7 @@ export default function SubscriptionsPage() {
           <div className="bg-white w-full max-w-sm">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
               <h2 className="font-semibold text-gray-900 capitalize">{actionModal.action.replace(/-/g, ' ')}</h2>
-              <button onClick={() => setActionModal(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+              <button onClick={() => setActionModal(null)} aria-label="Close" className="text-gray-400 hover:text-gray-600"><svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg></button>
             </div>
             <div className="p-6 space-y-4">
               <p className="text-sm text-gray-500">Tenant: <span className="font-medium text-gray-800">{actionModal.sub.tenantId?.name}</span></p>
