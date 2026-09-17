@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { SuperAdminShell } from '@/components/super-admin/Shell';
 import { showToast } from '@/lib/toast';
 
 interface AppUser {
@@ -135,7 +134,7 @@ export default function UsersPage() {
   const formatDate = (d?: string) => d ? new Date(d).toLocaleDateString() : '—';
 
   return (
-    <SuperAdminShell>
+    <>
       <div className="p-6 w-full">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Users</h1>
@@ -334,6 +333,6 @@ export default function UsersPage() {
           </div>
         </div>
       )}
-    </SuperAdminShell>
+    </>
   );
 }

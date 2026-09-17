@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { SuperAdminShell } from '@/components/super-admin/Shell';
 
 interface AdminLog {
   _id: string;
@@ -65,7 +64,6 @@ export default function AdminLogsPage() {
   const pages = Math.ceil(total / LIMIT);
 
   return (
-    <SuperAdminShell title="Admin Action Log">
       <div className="space-y-4">
         {/* Filters */}
         <div className="bg-white border border-gray-100 p-4">
@@ -183,6 +181,5 @@ export default function AdminLogsPage() {
           </div>
         )}
       </div>
-    </SuperAdminShell>
   );
 }

@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { SuperAdminShell } from '@/components/super-admin/Shell';
 import { showToast } from '@/lib/toast';
 
 interface Tenant {
@@ -150,7 +149,7 @@ export default function TenantsPage() {
   };
 
   return (
-    <SuperAdminShell title="Tenants">
+    <>
       <div className="space-y-4">
         {/* Header */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -360,6 +359,6 @@ export default function TenantsPage() {
           </div>
         </div>
       )}
-    </SuperAdminShell>
+    </>
   );
 }

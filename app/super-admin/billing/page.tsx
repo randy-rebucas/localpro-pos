@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { SuperAdminShell } from '@/components/super-admin/Shell';
 import { showToast } from '@/lib/toast';
 
 interface BillingEvent {
@@ -128,7 +127,7 @@ export default function BillingPage() {
     new Date(d).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
   return (
-    <SuperAdminShell title="Billing">
+    <>
       <div className="space-y-4">
         <form onSubmit={handleSearch} className="bg-white border border-gray-100 p-4 flex flex-wrap gap-3 items-end">
           <div>
@@ -313,6 +312,6 @@ export default function BillingPage() {
           </div>
         </div>
       )}
-    </SuperAdminShell>
+    </>
   );
 }

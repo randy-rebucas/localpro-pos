@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { SuperAdminShell } from '@/components/super-admin/Shell';
 import { showToast } from '@/lib/toast';
 
 interface AnalyticsData {
@@ -122,7 +121,6 @@ export default function AnalyticsPage() {
     : 1;
 
   return (
-    <SuperAdminShell title="Analytics">
       <div className="space-y-5">
         {/* Date range + actions */}
         <div className="bg-white border border-gray-200 p-4 flex flex-wrap items-center gap-3">
@@ -281,7 +279,6 @@ export default function AnalyticsPage() {
           </>
         ) : null}
       </div>
-    </SuperAdminShell>
   );
 }
 

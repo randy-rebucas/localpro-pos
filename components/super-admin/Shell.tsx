@@ -122,19 +122,37 @@ const NAV_ITEMS = [
   { label: 'Settings', href: '/super-admin/settings', Icon: IconSettings },
 ];
 
-export function SuperAdminShell({ children, title }: { children: React.ReactNode; title?: string }) {
+const PAGE_TITLES: Record<string, string> = {
+  '/super-admin/tenants': 'Tenants',
+  '/super-admin/subscriptions': 'Subscriptions',
+  '/super-admin/plans': 'Subscription Plans',
+  '/super-admin/coupons': 'Coupons & Discounts',
+  '/super-admin/billing': 'Billing',
+  '/super-admin/analytics': 'Analytics',
+  '/super-admin/logs': 'Audit Logs',
+  '/super-admin/admin-logs': 'Admin Action Log',
+};
+
+// Cached across client-side navigations so the shell never blanks out to a
+// spinner when it's re-rendered (only refetched once per full page load).
+let cachedUser: User | null = null;
+
+export function SuperAdminShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(cachedUser);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const title = PAGE_TITLES[pathname];
 
   useEffect(() => {
+    if (cachedUser) return;
     fetch('/api/super-admin/auth/me', { credentials: 'include' })
       .then(res => res.json())
       .then(data => {
         if (!data.success || !data.user) {
           router.replace('/super-admin/login');
         } else {
+          cachedUser = data.user;
           setUser(data.user);
         }
       })
@@ -142,6 +160,7 @@ export function SuperAdminShell({ children, title }: { children: React.ReactNode
   }, [router]);
 
   const handleLogout = async () => {
+    cachedUser = null;
     await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
     router.push('/super-admin/login');
   };

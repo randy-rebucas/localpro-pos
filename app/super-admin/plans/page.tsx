@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { SuperAdminShell } from '@/components/super-admin/Shell';
 
 interface PlanFeatures {
   maxUsers: number;
@@ -208,7 +207,7 @@ export default function PlansPage() {
   const formatLimit = (v: number) => v === -1 ? '∞' : v.toLocaleString();
 
   return (
-    <SuperAdminShell title="Subscription Plans">
+    <>
       <div className="space-y-4">
         <div className="flex justify-end">
           <button onClick={openCreate} className="px-4 py-2 bg-brand-teal text-white text-sm font-medium hover:bg-brand-teal/90">
@@ -468,6 +467,6 @@ export default function PlansPage() {
           </div>
         </div>
       )}
-    </SuperAdminShell>
+    </>
   );
 }

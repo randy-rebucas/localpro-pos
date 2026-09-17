@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { SuperAdminShell } from '@/components/super-admin/Shell';
 
 interface CollectionStat {
   name: string;
@@ -67,7 +66,6 @@ export default function SettingsPage() {
   };
 
   return (
-    <SuperAdminShell>
       <div className="p-6 w-full space-y-8">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
@@ -195,6 +193,5 @@ export default function SettingsPage() {
           </div>
         </section>
       </div>
-    </SuperAdminShell>
   );
 }

@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { SuperAdminShell } from '@/components/super-admin/Shell';
 
 interface Stats {
   totalTenants: number;
@@ -57,7 +56,6 @@ export default function SuperAdminDashboard() {
   ];
 
   return (
-    <SuperAdminShell>
       <div className="p-6 w-full">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
@@ -110,6 +108,5 @@ export default function SuperAdminDashboard() {
           ))}
         </div>
       </div>
-    </SuperAdminShell>
   );
 }

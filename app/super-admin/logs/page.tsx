@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { SuperAdminShell } from '@/components/super-admin/Shell';
 import { showToast } from '@/lib/toast';
 
 interface AuditLog {
@@ -106,7 +105,6 @@ export default function LogsPage() {
   };
 
   return (
-    <SuperAdminShell title="Audit Logs">
       <div className="space-y-4">
         {/* Filters */}
         <div className="bg-white border border-gray-100 p-4 space-y-3">
@@ -244,6 +242,5 @@ export default function LogsPage() {
           </div>
         )}
       </div>
-    </SuperAdminShell>
   );
 }

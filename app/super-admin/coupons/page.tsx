@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { SuperAdminShell } from '@/components/super-admin/Shell';
 import { showToast } from '@/lib/toast';
 
 interface Coupon {
@@ -136,7 +135,6 @@ export default function CouponsPage() {
   const fmt = (d: string) => new Date(d).toLocaleDateString();
 
   return (
-    <SuperAdminShell title="Coupons & Discounts">
       <div className="space-y-4">
         {/* Header */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -310,6 +308,5 @@ export default function CouponsPage() {
           </div>
         )}
       </div>
-    </SuperAdminShell>
   );
 }

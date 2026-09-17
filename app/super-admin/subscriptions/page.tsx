@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { SuperAdminShell } from '@/components/super-admin/Shell';
 import { showToast } from '@/lib/toast';
 
 interface Plan { _id: string; name: string; tier: string; }
@@ -134,7 +133,7 @@ export default function SubscriptionsPage() {
   const fmt = (d?: string) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) : '—';
 
   return (
-    <SuperAdminShell title="Subscriptions">
+    <>
       <div className="space-y-4">
         {/* Filters */}
         <div className="bg-white border border-gray-100 p-4 flex flex-col sm:flex-row gap-3">
@@ -345,6 +344,6 @@ export default function SubscriptionsPage() {
           </div>
         </div>
       )}
-    </SuperAdminShell>
+    </>
   );
 }

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { SuperAdminShell } from '@/components/super-admin/Shell';
 
 interface BackupFile {
   name: string;
@@ -193,7 +192,6 @@ export default function BackupsPage() {
   };
 
   return (
-    <SuperAdminShell>
       <div className="p-6 w-full space-y-8">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Database Backups</h1>
@@ -424,7 +422,6 @@ export default function BackupsPage() {
           </div>
         </section>
       </div>
-    </SuperAdminShell>
   );
 }
 

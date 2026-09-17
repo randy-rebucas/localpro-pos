@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { SuperAdminShell } from '@/components/super-admin/Shell';
 
 interface BusinessTypeConfig {
   type: string;
@@ -36,7 +35,6 @@ export default function BusinessTypesPage() {
   }, []);
 
   return (
-    <SuperAdminShell>
       <div className="p-6 w-full">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Business Types</h1>
@@ -104,6 +102,5 @@ export default function BusinessTypesPage() {
           </div>
         )}
       </div>
-    </SuperAdminShell>
   );
 }
