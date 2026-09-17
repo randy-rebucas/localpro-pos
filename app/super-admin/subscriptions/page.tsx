@@ -142,12 +142,12 @@ export default function SubscriptionsPage() {
             placeholder="Filter by tenant slug…"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="px-3 py-2 border border-gray-200 text-sm focus:ring-2 focus:ring-brand-teal/30 w-full sm:w-56"
+            className="px-3 py-2 border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand w-full sm:w-56"
           />
           <select
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-200 text-sm focus:ring-2 focus:ring-brand-teal/30 bg-white"
+            className="px-3 py-2 border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand bg-white"
           >
             <option value="">All statuses</option>
             {['active', 'trial', 'paused', 'suspended', 'cancelled', 'inactive'].map(s => (
@@ -158,7 +158,10 @@ export default function SubscriptionsPage() {
 
         {/* Table */}
         {loading ? (
-          <div className="text-center py-12 text-gray-400">Loading…</div>
+          <div className="text-center py-12">
+            <div className="inline-block animate-spin h-6 w-6 border-2 border-brand border-t-transparent rounded-full" />
+            <p className="mt-3 text-gray-400 text-sm">Loading subscriptions…</p>
+          </div>
         ) : subscriptions.length === 0 ? (
           <div className="text-center py-12 text-gray-400">No subscriptions found.</div>
         ) : (
@@ -201,7 +204,7 @@ export default function SubscriptionsPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1.5">
-                        <button onClick={() => openAction(sub, 'assign-plan')} className="text-xs text-brand-teal hover:underline font-medium">Plan</button>
+                        <button onClick={() => openAction(sub, 'assign-plan')} className="text-xs text-brand hover:underline font-medium">Plan</button>
                         <button onClick={() => openAction(sub, 'extend-trial')} className="text-xs text-yellow-600 hover:underline">+Trial</button>
                         <button onClick={() => openAction(sub, 'record-payment')} className="text-xs text-green-600 hover:underline">Payment</button>
                         {sub.status !== 'active' && <button onClick={() => openAction(sub, 'activate')} className="text-xs text-green-700 hover:underline">Activate</button>}
@@ -223,7 +226,7 @@ export default function SubscriptionsPage() {
       {actionModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white w-full max-w-sm">
-            <div className="flex items-center justify-between px-6 py-4 border-b">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
               <h2 className="font-semibold text-gray-900 capitalize">{actionModal.action.replace(/-/g, ' ')}</h2>
               <button onClick={() => setActionModal(null)} className="text-gray-400 hover:text-gray-600">✕</button>
             </div>
@@ -235,7 +238,7 @@ export default function SubscriptionsPage() {
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Plan</label>
                     <select value={actionPlanId} onChange={e => setActionPlanId(e.target.value)}
-                      className="w-full border px-3 py-2 text-sm">
+                      className="w-full border border-gray-200 px-3 py-2 text-sm">
                       <option value="">— choose —</option>
                       {plans.map(p => <option key={p._id} value={p._id}>{p.name} ({p.tier})</option>)}
                     </select>
@@ -243,7 +246,7 @@ export default function SubscriptionsPage() {
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Next Billing Date</label>
                     <input type="date" value={actionBillingDate} onChange={e => setActionBillingDate(e.target.value)}
-                      className="w-full border px-3 py-2 text-sm" />
+                      className="w-full border border-gray-200 px-3 py-2 text-sm" />
                   </div>
                 </>
               )}
@@ -252,7 +255,7 @@ export default function SubscriptionsPage() {
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Extend by (days)</label>
                   <input type="number" min="1" max="365" value={actionDays} onChange={e => setActionDays(e.target.value)}
-                    className="w-full border px-3 py-2 text-sm" />
+                    className="w-full border border-gray-200 px-3 py-2 text-sm" />
                 </div>
               )}
 
@@ -261,7 +264,7 @@ export default function SubscriptionsPage() {
                   <label className="block text-xs font-medium text-gray-600 mb-1">Cancellation Reason</label>
                   <textarea value={actionReason} onChange={e => setActionReason(e.target.value)} rows={3}
                     placeholder="Optional reason for cancellation…"
-                    className="w-full border px-3 py-2 text-sm resize-none" />
+                    className="w-full border border-gray-200 px-3 py-2 text-sm resize-none" />
                 </div>
               )}
 
@@ -270,7 +273,7 @@ export default function SubscriptionsPage() {
                   <label className="block text-xs font-medium text-gray-600 mb-1">Grace Period (days, optional)</label>
                   <input type="number" min="0" max="90" value={actionGraceDays} onChange={e => setActionGraceDays(e.target.value)}
                     placeholder="0 = no grace period"
-                    className="w-full border px-3 py-2 text-sm" />
+                    className="w-full border border-gray-200 px-3 py-2 text-sm" />
                 </div>
               )}
 
@@ -280,12 +283,12 @@ export default function SubscriptionsPage() {
                     <label className="block text-xs font-medium text-gray-600 mb-1">Pause Reason</label>
                     <input value={actionReason} onChange={e => setActionReason(e.target.value)}
                       placeholder="e.g. Customer requested break"
-                      className="w-full border px-3 py-2 text-sm" />
+                      className="w-full border border-gray-200 px-3 py-2 text-sm" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Auto-resume after (days, optional)</label>
                     <input type="number" min="1" value={actionDays} onChange={e => setActionDays(e.target.value)}
-                      className="w-full border px-3 py-2 text-sm" />
+                      className="w-full border border-gray-200 px-3 py-2 text-sm" />
                   </div>
                 </>
               )}
@@ -296,19 +299,19 @@ export default function SubscriptionsPage() {
                     <label className="block text-xs font-medium text-gray-600 mb-1">Amount (₱) *</label>
                     <input type="number" min="0" step="0.01" value={actionAmount} onChange={e => setActionAmount(e.target.value)}
                       placeholder="0.00"
-                      className="w-full border px-3 py-2 text-sm" />
+                      className="w-full border border-gray-200 px-3 py-2 text-sm" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Transaction ID</label>
                     <input value={actionTxId} onChange={e => setActionTxId(e.target.value)}
                       placeholder="Optional"
-                      className="w-full border px-3 py-2 text-sm" />
+                      className="w-full border border-gray-200 px-3 py-2 text-sm" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
                     <input value={actionReason} onChange={e => setActionReason(e.target.value)}
                       placeholder="Optional notes"
-                      className="w-full border px-3 py-2 text-sm" />
+                      className="w-full border border-gray-200 px-3 py-2 text-sm" />
                   </div>
                 </>
               )}
@@ -318,7 +321,7 @@ export default function SubscriptionsPage() {
                   <label className="block text-xs font-medium text-gray-600 mb-1">Reactivation Reason *</label>
                   <textarea value={actionReason} onChange={e => setActionReason(e.target.value)} rows={3}
                     placeholder="Why is this cancelled subscription being reactivated?"
-                    className="w-full border px-3 py-2 text-sm resize-none" />
+                    className="w-full border border-gray-200 px-3 py-2 text-sm resize-none" />
                 </div>
               )}
 
@@ -326,8 +329,8 @@ export default function SubscriptionsPage() {
                 <p className="text-sm text-gray-600">Confirm to <strong>{actionModal.action}</strong> this subscription?</p>
               )}
             </div>
-            <div className="flex gap-3 px-6 py-4 border-t justify-end">
-              <button onClick={() => setActionModal(null)} className="px-4 py-2 border text-sm hover:bg-gray-50">Cancel</button>
+            <div className="flex gap-3 px-6 py-4 border-t border-gray-100 justify-end">
+              <button onClick={() => setActionModal(null)} className="px-4 py-2 border border-gray-200 text-sm hover:bg-gray-50">Cancel</button>
               <button
                 onClick={executeAction}
                 disabled={
@@ -336,7 +339,7 @@ export default function SubscriptionsPage() {
                   (actionModal.action === 'record-payment' && !actionAmount) ||
                   (actionModal.action === 'activate' && actionModal.sub.status === 'cancelled' && !actionReason.trim())
                 }
-                className="px-4 py-2 bg-brand-teal text-white text-sm font-medium hover:bg-brand-teal/90 disabled:opacity-50"
+                className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover disabled:opacity-50 transition-colors"
               >
                 {actionSaving ? 'Saving…' : 'Confirm'}
               </button>

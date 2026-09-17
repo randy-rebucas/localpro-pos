@@ -35,11 +35,6 @@ const ONBOARDING_BADGE: Record<string, string> = {
   in_progress: 'bg-yellow-50 text-yellow-700 border-yellow-200',
   complete: 'bg-green-50 text-green-700 border-green-200',
 };
-const ONBOARDING_LABEL: Record<string, string> = {
-  not_started: 'Not Started',
-  in_progress: 'In Progress',
-  complete: 'Complete',
-};
 
 export default function TenantsPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -155,7 +150,7 @@ export default function TenantsPage() {
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex gap-3">
             <input type="text" placeholder="Search by name or slug…" value={search} onChange={e => setSearch(e.target.value)}
-              className="px-3 py-2 border border-gray-200 text-sm w-56 focus:ring-2 focus:ring-brand-teal/30" />
+              className="px-3 py-2 border border-gray-200 text-sm w-56 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand" />
             <select value={activeFilter} onChange={e => setActiveFilter(e.target.value)}
               className="px-3 py-2 border border-gray-200 text-sm bg-white">
               <option value="">All statuses</option>
@@ -163,14 +158,17 @@ export default function TenantsPage() {
               <option value="false">Inactive only</option>
             </select>
           </div>
-          <button onClick={openCreate} className="px-4 py-2 bg-brand-teal text-white text-sm font-medium hover:bg-brand-teal/90">
+          <button onClick={openCreate} className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover transition-colors">
             + New Tenant
           </button>
         </div>
 
         {/* Table */}
         {loading ? (
-          <div className="text-center py-12 text-gray-400">Loading…</div>
+          <div className="text-center py-12">
+            <div className="inline-block animate-spin h-6 w-6 border-2 border-brand border-t-transparent rounded-full" />
+            <p className="mt-3 text-gray-400 text-sm">Loading tenants…</p>
+          </div>
         ) : tenants.length === 0 ? (
           <div className="text-center py-12 text-gray-400">{search || activeFilter ? 'No tenants match your filters.' : 'No tenants yet.'}</div>
         ) : (
@@ -215,7 +213,7 @@ export default function TenantsPage() {
                     <td className="px-4 py-3 text-xs text-gray-500">{new Date(t.createdAt).toLocaleDateString()}</td>
                     <td className="px-4 py-3">
                       <div className="flex gap-2 flex-wrap">
-                        <button onClick={() => openEdit(t)} className="text-xs text-brand-teal hover:underline">Edit</button>
+                        <button onClick={() => openEdit(t)} className="text-xs text-brand hover:underline">Edit</button>
                         <button onClick={() => toggleActive(t)} className={`text-xs hover:underline ${t.isActive ? 'text-red-500' : 'text-green-600'}`}>
                           {t.isActive ? 'Deactivate' : 'Activate'}
                         </button>
@@ -232,13 +230,13 @@ export default function TenantsPage() {
 
             {/* Pagination */}
             {pagination.pages > 1 && (
-              <div className="border-t px-4 py-3 flex items-center justify-between text-sm text-gray-500">
+              <div className="border-t border-gray-100 px-4 py-3 flex items-center justify-between text-sm text-gray-500">
                 <span>Showing {(pagination.page - 1) * pagination.limit + 1}–{Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total}</span>
                 <div className="flex gap-2">
                   <button disabled={pagination.page === 1} onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))}
-                    className="px-3 py-1 border disabled:opacity-40 hover:bg-gray-50">← Prev</button>
+                    className="px-3 py-1 border border-gray-200 disabled:opacity-40 hover:bg-gray-50">← Prev</button>
                   <button disabled={pagination.page >= pagination.pages} onClick={() => setPagination(p => ({ ...p, page: p.page + 1 }))}
-                    className="px-3 py-1 border disabled:opacity-40 hover:bg-gray-50">Next →</button>
+                    className="px-3 py-1 border border-gray-200 disabled:opacity-40 hover:bg-gray-50">Next →</button>
                 </div>
               </div>
             )}
@@ -267,11 +265,11 @@ export default function TenantsPage() {
                     <p className="text-xs text-yellow-500 mt-1">Share this with the tenant and ask them to change it immediately.</p>
                   </div>
                 )}
-                <button onClick={() => setShowModal(false)} className="w-full py-2 bg-brand-teal text-white text-sm">Done</button>
+                <button onClick={() => setShowModal(false)} className="w-full py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover transition-colors">Done</button>
               </div>
             ) : (
               <form onSubmit={handleSave}>
-                <div className="flex items-center justify-between px-6 py-4 border-b">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
                   <h2 className="font-semibold text-gray-900">{editingTenant ? 'Edit Tenant' : 'Create New Tenant'}</h2>
                   <button type="button" onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
                 </div>
@@ -280,25 +278,25 @@ export default function TenantsPage() {
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">Slug *</label>
                       <input required value={formData.slug} onChange={e => setFormData({ ...formData, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') })}
-                        className="w-full border px-3 py-2 text-sm" placeholder="my-store" />
+                        className="w-full border border-gray-200 px-3 py-2 text-sm" placeholder="my-store" />
                       <p className="text-xs text-gray-400 mt-1">Lowercase letters, numbers, hyphens only</p>
                     </div>
                   )}
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Name *</label>
                     <input required value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full border px-3 py-2 text-sm" placeholder="My Store" />
+                      className="w-full border border-gray-200 px-3 py-2 text-sm" placeholder="My Store" />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">Currency</label>
                       <input value={formData.currency} maxLength={3} onChange={e => setFormData({ ...formData, currency: e.target.value.toUpperCase() })}
-                        className="w-full border px-3 py-2 text-sm" placeholder="PHP" />
+                        className="w-full border border-gray-200 px-3 py-2 text-sm" placeholder="PHP" />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">Language</label>
                       <select value={formData.language} onChange={e => setFormData({ ...formData, language: e.target.value })}
-                        className="w-full border px-3 py-2 text-sm bg-white">
+                        className="w-full border border-gray-200 px-3 py-2 text-sm bg-white">
                         <option value="en">English</option>
                         <option value="es">Español</option>
                       </select>
@@ -307,7 +305,7 @@ export default function TenantsPage() {
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Business Type</label>
                     <select value={formData.businessType} onChange={e => setFormData({ ...formData, businessType: e.target.value })}
-                      className="w-full border px-3 py-2 text-sm bg-white">
+                      className="w-full border border-gray-200 px-3 py-2 text-sm bg-white">
                       {['general', 'retail', 'restaurant', 'laundry', 'service'].map(t => (
                         <option key={t} value={t} className="capitalize">{t.charAt(0).toUpperCase() + t.slice(1)}</option>
                       ))}
@@ -316,12 +314,12 @@ export default function TenantsPage() {
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Contact Email</label>
                     <input type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })}
-                      className="w-full border px-3 py-2 text-sm" placeholder="contact@store.com" />
+                      className="w-full border border-gray-200 px-3 py-2 text-sm" placeholder="contact@store.com" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Internal Notes</label>
                     <textarea value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} rows={2}
-                      className="w-full border px-3 py-2 text-sm resize-none" placeholder="Internal notes about this tenant…" />
+                      className="w-full border border-gray-200 px-3 py-2 text-sm resize-none" placeholder="Internal notes about this tenant…" />
                   </div>
                   {!editingTenant && (
                     <>
@@ -330,27 +328,27 @@ export default function TenantsPage() {
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1">Owner Email (creates account)</label>
                         <input type="email" value={formData.ownerEmail} onChange={e => setFormData({ ...formData, ownerEmail: e.target.value })}
-                          className="w-full border px-3 py-2 text-sm" placeholder="owner@store.com" />
+                          className="w-full border border-gray-200 px-3 py-2 text-sm" placeholder="owner@store.com" />
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
                           <label className="block text-xs font-medium text-gray-600 mb-1">Owner Name</label>
                           <input value={formData.ownerName} onChange={e => setFormData({ ...formData, ownerName: e.target.value })}
-                            className="w-full border px-3 py-2 text-sm" placeholder="Jane Doe" />
+                            className="w-full border border-gray-200 px-3 py-2 text-sm" placeholder="Jane Doe" />
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-gray-600 mb-1">Trial Days</label>
                           <input type="number" min="1" max="365" value={formData.trialDays} onChange={e => setFormData({ ...formData, trialDays: e.target.value })}
-                            className="w-full border px-3 py-2 text-sm" />
+                            className="w-full border border-gray-200 px-3 py-2 text-sm" />
                         </div>
                       </div>
                     </>
                   )}
                   {formError && <div className="bg-red-50 border border-red-200 text-red-700 text-sm p-3">{formError}</div>}
                 </div>
-                <div className="flex gap-3 px-6 py-4 border-t justify-end">
-                  <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 border text-sm hover:bg-gray-50">Cancel</button>
-                  <button type="submit" disabled={saving} className="px-4 py-2 bg-brand-teal text-white text-sm font-medium hover:bg-brand-teal/90 disabled:opacity-50">
+                <div className="flex gap-3 px-6 py-4 border-t border-gray-100 justify-end">
+                  <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 border border-gray-200 text-sm hover:bg-gray-50">Cancel</button>
+                  <button type="submit" disabled={saving} className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover disabled:opacity-50 transition-colors">
                     {saving ? 'Saving…' : editingTenant ? 'Save Changes' : 'Create Tenant'}
                   </button>
                 </div>
