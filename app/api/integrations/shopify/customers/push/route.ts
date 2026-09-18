@@ -7,7 +7,6 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { requireEcommerceIntegrationFeature } from '@/lib/ecommerce/require-ecommerce-feature';
 import { getShopifyAccessTokenForIntegration } from '@/lib/ecommerce/shopify-token';
 import { shopifyUpsertCustomer } from '@/lib/ecommerce/shopify-customer';
-import type { ICustomer } from '@/models/Customer';
 
 export async function POST(request: NextRequest) {
   try {
@@ -35,14 +34,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'No active Shopify integration' }, { status: 400 });
     }
 
-    // NOTE: shopify-customer.ts is still Mongoose-based (out of scope for this
-    // migration pass) and expects a Mongoose document. Bridge the Prisma customer
-    // row into that shape until that lib is migrated to Prisma.
-    // lib/ecommerce/shopify-token.ts is already Prisma-based — pass the row directly.
-    const customerDoc = { ...customer, _id: customer.id } as unknown as ICustomer;
-
     const accessToken = await getShopifyAccessTokenForIntegration(integration);
-    const { shopifyCustomerId } = await shopifyUpsertCustomer(integration.shopDomain, accessToken, customerDoc);
+    const { shopifyCustomerId } = await shopifyUpsertCustomer(integration.shopDomain, accessToken, customer);
 
     if (!customer.shopifyCustomerId) {
       await prisma.customer.update({ where: { id: customer.id }, data: { shopifyCustomerId } });

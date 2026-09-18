@@ -12,7 +12,6 @@ import { requireEcommerceProviderConnectAllowed } from '@/lib/ecommerce/tenant-i
 import { checkRateLimit } from '@/lib/rate-limit';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
-import type { ITenantEcommerceIntegration } from '@/models/TenantEcommerceIntegration';
 
 export async function POST(request: NextRequest) {
   try {
@@ -72,11 +71,7 @@ export async function POST(request: NextRequest) {
     });
 
     try {
-      // NOTE: lib/ecommerce/register-woo-webhooks.ts is still Mongoose-based (out of scope
-      // for this migration pass) and expects a Mongoose document. Bridge the Prisma row
-      // into that shape until that lib is migrated to Prisma.
-      const integrationDoc = { ...integration, _id: integration.id } as unknown as ITenantEcommerceIntegration;
-      await registerWooCommerceWebhooks(integrationDoc, signingSecret, {
+      await registerWooCommerceWebhooks(integration, signingSecret, {
         publicAppBaseUrl: getPublicAppUrl(request),
       });
     } catch {

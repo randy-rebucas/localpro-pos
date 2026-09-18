@@ -13,7 +13,6 @@ import {
   shopifyUpdateProduct,
   shopifyPushInitialInventory,
 } from '@/lib/ecommerce/shopify-product-push';
-import type { IProduct } from '@/models/Product';
 
 export async function POST(request: NextRequest) {
   try {
@@ -43,12 +42,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'No active Shopify integration' }, { status: 400 });
     }
 
-    // NOTE: shopify-product-push.ts is still Mongoose-based (out of scope for
-    // this migration pass) and expects a Mongoose document. Bridge the Prisma
-    // product row into that shape until that lib is migrated to Prisma.
-    // lib/ecommerce/shopify-token.ts is already Prisma-based — pass the row directly.
-    const productDoc = { ...product, _id: product.id } as unknown as IProduct;
-
     const accessToken = await getShopifyAccessTokenForIntegration(integration);
     const existingListing = await prisma.productChannelListing.findFirst({
       where: { tenantId: user.tenantId, productId, provider: 'shopify' },
@@ -68,7 +61,7 @@ export async function POST(request: NextRequest) {
       externalVariantId = existingListing.externalVariantId || '';
       inventoryItemId = existingListing.inventoryItemId || '';
     } else {
-      const created = await shopifyCreateProduct(integration.shopDomain, accessToken, productDoc);
+      const created = await shopifyCreateProduct(integration.shopDomain, accessToken, product);
       externalProductId = created.externalProductId;
       externalVariantId = created.externalVariantId;
       inventoryItemId = created.inventoryItemId;

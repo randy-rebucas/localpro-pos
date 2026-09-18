@@ -114,12 +114,31 @@ export async function POST(
     const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
 
     if (action === 'init' && !session) {
-      // Create a brand-new session
-      session = await prisma.posSession.create({
-        data: {
+      // Create a brand-new session. Uses upsert (not create) because two
+      // concurrent init calls for the same sessionId (React double-invoking
+      // effects, a double-submit) can both observe `!session` above and race
+      // to create — the loser would otherwise hit a unique-constraint error
+      // on sessionId instead of just converging on the same session.
+      session = await prisma.posSession.upsert({
+        where: { sessionId },
+        create: {
           id: randomUUID(),
           sessionId,
           tenant,
+          cart: (data?.cart ?? []) as Prisma.InputJsonValue,
+          subtotal: (data?.subtotal as number | undefined) ?? 0,
+          discount: (data?.discount ?? null) as Prisma.InputJsonValue | undefined,
+          taxAmount: data?.taxAmount as number | undefined,
+          taxRate: data?.taxRate as number | undefined,
+          taxLabel: data?.taxLabel as string | undefined,
+          tip: (data?.tip as number | undefined) ?? 0,
+          total: (data?.total as number | undefined) ?? 0,
+          paymentMethod: (data?.paymentMethod as string | undefined) ?? null,
+          paymentStatus: 'pending',
+          lastUpdate: new Date(),
+          expiresAt,
+        },
+        update: {
           cart: (data?.cart ?? []) as Prisma.InputJsonValue,
           subtotal: (data?.subtotal as number | undefined) ?? 0,
           discount: (data?.discount ?? null) as Prisma.InputJsonValue | undefined,

@@ -124,7 +124,7 @@ export interface XReadingData {
 }
 
 export interface ZReadingRecord {
-  _id: string;
+  id: string;
   businessDate: string;
   beginningGT: number;
   endingGT: number;

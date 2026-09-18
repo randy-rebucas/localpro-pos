@@ -69,9 +69,16 @@ export function formatNumber(
   numberFormat: ITenantSettings['numberFormat']
 ): string {
   const { decimalSeparator, thousandsSeparator, decimalPlaces } = numberFormat;
-  
+
+  // `amount` may arrive as a string here even though the type says `number`:
+  // Prisma's Decimal fields serialize to JSON strings (Decimal.toJSON()
+  // returns a string, not a number), so any value that round-tripped through
+  // an API response can be a numeric string rather than a real number.
+  const numericAmount = typeof amount === 'number' ? amount : Number(amount);
+  const safeAmount = Number.isFinite(numericAmount) ? numericAmount : 0;
+
   // Round to specified decimal places
-  const rounded = Number(amount.toFixed(decimalPlaces));
+  const rounded = Number(safeAmount.toFixed(decimalPlaces));
   
   // Split integer and decimal parts
   const parts = rounded.toString().split('.');

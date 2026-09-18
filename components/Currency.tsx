@@ -27,7 +27,12 @@ export default function Currency({
 }: CurrencyProps) {
   const { settings } = useTenantSettings();
   const tenantSettings = settings || getDefaultTenantSettings();
-  const formatted = formatCurrencyUtil(amount, tenantSettings);
+  // `amount` may arrive as a numeric string: Prisma Decimal fields serialize
+  // to JSON strings, so any value that round-tripped through an API response
+  // can be a string even though the prop type says `number`.
+  const numericAmount = typeof amount === 'number' ? amount : Number(amount);
+  const safeAmount = Number.isFinite(numericAmount) ? numericAmount : 0;
+  const formatted = formatCurrencyUtil(safeAmount, tenantSettings);
 
   const mc = settings?.multiCurrency;
   const showConversions =
@@ -44,7 +49,7 @@ export default function Currency({
         mc!.displayCurrencies!.map((currency) => {
           if (currency === tenantSettings.currency) return null;
           const converted = convertCurrency(
-            amount,
+            safeAmount,
             tenantSettings.currency || 'PHP',
             currency,
             mc!.exchangeRates as Record<string, number>,

@@ -1,6 +1,5 @@
 import { getPublicAppUrl } from '@/lib/ecommerce/public-url';
 import { wooFetchJson, wooDelete } from '@/lib/ecommerce/woocommerce-api';
-import type { ITenantEcommerceIntegration } from '@/models/TenantEcommerceIntegration';
 import { getWooCommerceCredentials } from '@/lib/ecommerce/integration-credentials';
 import { logger } from '@/lib/logger';
 
@@ -42,7 +41,7 @@ async function removeExistingPosWebhooks(
 }
 
 export async function registerWooCommerceWebhooks(
-  integration: ITenantEcommerceIntegration,
+  integration: { id: string; siteUrl: string | null; credentialsEncrypted: string },
   signingSecretPlain: string,
   options?: { publicAppBaseUrl?: string }
 ): Promise<void> {
@@ -50,8 +49,8 @@ export async function registerWooCommerceWebhooks(
   if (!site) return;
   const cred = getWooCommerceCredentials(integration);
   const base = (options?.publicAppBaseUrl ?? getPublicAppUrl()).replace(/\/$/, '');
-  const delivery = `${base}/api/webhooks/woocommerce/${integration._id.toString()}`;
-  const intId = String(integration._id);
+  const delivery = `${base}/api/webhooks/woocommerce/${integration.id}`;
+  const intId = integration.id;
 
   await removeExistingPosWebhooks(site, cred.consumerKey, cred.consumerSecret, intId);
 

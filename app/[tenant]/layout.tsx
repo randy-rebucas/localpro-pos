@@ -1,8 +1,9 @@
 import { ReactNode } from 'react';
+import { randomUUID } from 'crypto';
 import { getTenantBySlug } from '@/lib/tenant';
 import { notFound, redirect } from 'next/navigation';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/db';
+import { Prisma } from '@prisma/client';
 import { verifyToken } from '@/lib/auth';
 import { cookies, headers } from 'next/headers';
 
@@ -15,28 +16,33 @@ export async function generateStaticParams() {
 }
 
 async function ensureDefaultTenant() {
-  await connectDB();
-  const existing = await Tenant.findOne({ slug: 'default' });
-  
+  const existing = await prisma.tenant.findFirst({ where: { slug: 'default' } });
+
   if (!existing) {
     try {
       // Create default tenant if it doesn't exist
-      await Tenant.create({
-        slug: 'default',
-        name: 'Default Store',
-        settings: {
-          currency: 'USD',
-          timezone: 'Asia/Manila',
-          language: 'en',
-          primaryColor: '#35979c',
+      const tenantId = randomUUID();
+      await prisma.tenant.create({
+        data: {
+          id: tenantId,
+          slug: 'default',
+          name: 'Default Store',
+          isActive: true,
+          settings: {
+            create: {
+              currency: 'USD',
+              timezone: 'Asia/Manila',
+              language: 'en',
+              primaryColor: '#35979c',
+            },
+          },
         },
-        isActive: true,
       });
-    } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      // If duplicate key error (11000), another parallel process already created it
+    } catch (error: unknown) {
+      // If unique-constraint violation (P2002), another parallel process already created it
       // This can happen during build/prerendering when multiple pages are generated in parallel
       // It's safe to ignore this error and continue
-      if (error.code !== 11000) {
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')) {
         // Re-throw if it's a different error
         throw error;
       }
@@ -75,11 +81,11 @@ export default async function TenantLayout({
   }
   
   // Get full tenant details including domain/subdomain for domain ownership check
-  await connectDB();
-  const requestedTenant = await Tenant.findById(tenant._id)
-    .select('_id slug domain subdomain')
-    .lean();
-  
+  const requestedTenant = await prisma.tenant.findUnique({
+    where: { id: tenant._id },
+    select: { id: true, slug: true, domain: true, subdomain: true },
+  });
+
   if (!requestedTenant) {
     notFound();
   }
@@ -100,13 +106,14 @@ export default async function TenantLayout({
         
         if (payload && payload.tenantId) {
           // Get user's tenant with domain/subdomain info
-          const userTenant = await Tenant.findById(payload.tenantId)
-            .select('_id slug domain subdomain')
-            .lean();
-          
+          const userTenant = await prisma.tenant.findUnique({
+            where: { id: payload.tenantId },
+            select: { id: true, slug: true, domain: true, subdomain: true },
+          });
+
           if (userTenant) {
-            const userTenantId = userTenant._id.toString();
-            const requestedTenantId = requestedTenant._id.toString();
+            const userTenantId = userTenant.id;
+            const requestedTenantId = requestedTenant.id;
             
             // PRIMARY CHECK: User's tenant ID must match requested tenant ID
             if (userTenantId !== requestedTenantId) {

@@ -776,7 +776,7 @@ function ZReadingView({ readings, dict, primaryColor, onGenerate, generating, se
               </tr>
             ) : (
               readings.map((r) => (
-                <tr key={r._id}>
+                <tr key={r.id}>
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{formatTenantDate(r.businessDate, settings || getDefaultTenantSettings())}</td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-500"><Currency amount={r.beginningGT} /></td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900 font-medium"><Currency amount={r.endingGT} /></td>

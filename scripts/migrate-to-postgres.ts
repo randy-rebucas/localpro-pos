@@ -83,10 +83,29 @@ const ONLY = (() => {
 })();
 
 const BATCH_SIZE = 500;
+const INT4_MAX = 2147483647;
 
 // ── Logging helpers ─────────────────────────────────────────────────────
 const log = (msg: string) => console.log(msg);
 const section = (msg: string) => console.log(`\n=== ${msg} ===`);
+
+/**
+ * Clamp a stock-like integer to Postgres INT4 range. Source data has a small
+ * number of pharmacy products with obviously-corrupt stock counts (10 billion
+ * to 100 quadrillion — a data-entry/import bug in the source app, not a real
+ * inventory level). Clamping to INT4_MAX keeps the value unmistakably wrong
+ * (still ~2.1 billion units) rather than crashing the migration or silently
+ * losing precision via a schema type change; the tenant corrects the real
+ * count afterward via the existing product-edit UI.
+ */
+function clampInt32(v: number | null | undefined, label: string, id: string): number {
+  const n = v ?? 0;
+  if (n > INT4_MAX || n < -INT4_MAX) {
+    log(`  WARN: ${label} ${id} has out-of-range value ${n}, clamped to ${INT4_MAX}`);
+    return INT4_MAX;
+  }
+  return n;
+}
 
 type Failure = { entity: string; error: string };
 const failures: Failure[] = [];
@@ -747,7 +766,30 @@ async function migrateCategories() {
 }
 
 async function migrateProducts() {
-  const products = await Product.find().lean();
+  const allProducts = await Product.find().lean();
+  const products = allProducts.filter((p) => {
+    if (!oid(p.tenantId)) {
+      log(`  SKIPPED Product ${p._id} ("${p.name}"): no tenantId (orphaned record, not migrated)`);
+      return false;
+    }
+    return true;
+  });
+
+  // Mongo never enforced barcode uniqueness; the new schema does
+  // (@@unique([tenantId, barcode])). Null out the barcode on every duplicate
+  // past the first per (tenantId, barcode) so the product still migrates —
+  // losing a stale/duplicate barcode is safer than losing the product.
+  const seenBarcodes = new Set<string>();
+  for (const p of products as any[]) { // eslint-disable-line @typescript-eslint/no-explicit-any
+    if (!p.barcode) continue;
+    const key = `${String(p.tenantId)}::${p.barcode}`;
+    if (seenBarcodes.has(key)) {
+      log(`  WARN: Product ${p._id} ("${p.name}") has duplicate barcode "${p.barcode}" for its tenant — barcode cleared, product still migrated`);
+      p.barcode = null;
+    } else {
+      seenBarcodes.add(key);
+    }
+  }
 
   await batchCreate('products', products, batch =>
     prisma.product.createMany({
@@ -758,7 +800,7 @@ async function migrateProducts() {
         name: p.name,
         description: p.description ?? null,
         price: p.price,
-        stock: p.stock ?? 0,
+        stock: clampInt32(p.stock, 'Product.stock', String(p._id)),
         sku: p.sku ?? null,
         barcode: p.barcode ?? null,
         category: p.category ?? null,
@@ -770,7 +812,7 @@ async function migrateProducts() {
         zeroRated: p.zeroRated ?? false,
         trackInventory: p.trackInventory ?? true,
         allowOutOfStockSales: p.allowOutOfStockSales ?? false,
-        lowStockThreshold: p.lowStockThreshold ?? null,
+        lowStockThreshold: p.lowStockThreshold != null ? clampInt32(p.lowStockThreshold, 'Product.lowStockThreshold', String(p._id)) : null,
         pinned: p.pinned ?? false,
         isActive: p.isActive ?? true,
         createdAt: p.createdAt ?? new Date(),
@@ -788,7 +830,7 @@ async function migrateProducts() {
       type: v.type ?? null,
       sku: v.sku ?? null,
       price: v.price ?? null,
-      stock: v.stock ?? 0,
+      stock: clampInt32(v.stock, 'Product.variations[].stock', String(p._id)),
     }))
   );
   await batchCreate('product_variations', variationRows, batch =>
@@ -800,7 +842,7 @@ async function migrateProducts() {
       id: bs._id ? String(bs._id) : `${String(p._id)}-bs-${idx}`,
       productId: oidRequired(p._id, 'Product._id'),
       branchId: oidRequired(bs.branchId, 'Product.branchStock[].branchId'),
-      stock: bs.stock ?? 0,
+      stock: clampInt32(bs.stock, 'Product.branchStock[].stock', String(p._id)),
     }))
   );
   await batchCreate('product_branch_stock', branchStockRows, batch =>
@@ -1594,7 +1636,17 @@ async function migrateSavedCarts() {
 }
 
 async function migrateStockMovements() {
-  const movements = await StockMovement.find().lean();
+  const allMovements = await StockMovement.find().lean();
+  const existingProductIds = new Set(
+    (await prisma.product.findMany({ select: { id: true } })).map((p) => p.id)
+  );
+  const movements = allMovements.filter((m: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+    if (!existingProductIds.has(String(m.productId))) {
+      log(`  SKIPPED StockMovement ${m._id}: references product ${m.productId} which no longer exists (deleted product, orphaned history record)`);
+      return false;
+    }
+    return true;
+  });
   await batchCreate('stock_movements', movements, batch =>
     prisma.stockMovement.createMany({
       skipDuplicates: true,
@@ -1607,9 +1659,9 @@ async function migrateStockMovements() {
         variationColor: m.variation?.color ?? null,
         variationType: m.variation?.type ?? null,
         type: m.type,
-        quantity: m.quantity,
-        previousStock: m.previousStock,
-        newStock: m.newStock,
+        quantity: clampInt32(m.quantity, 'StockMovement.quantity', String(m._id)),
+        previousStock: clampInt32(m.previousStock, 'StockMovement.previousStock', String(m._id)),
+        newStock: clampInt32(m.newStock, 'StockMovement.newStock', String(m._id)),
         reason: m.reason ?? null,
         transactionId: oid(m.transactionId),
         userId: oid(m.userId),
@@ -1777,7 +1829,14 @@ async function migrateBookings() {
 // ── Transactions (core POS sale record) ─────────────────────────────────
 
 async function migrateTransactions() {
-  const transactions = await Transaction.find().lean();
+  const allTransactions = await Transaction.find().lean();
+  const transactions = allTransactions.filter((t) => {
+    if (!oid(t.tenantId)) {
+      log(`  SKIPPED Transaction ${t._id}: no tenantId (orphaned record, not migrated)`);
+      return false;
+    }
+    return true;
+  });
 
   await batchCreate('transactions', transactions, batch =>
     prisma.transaction.createMany({
@@ -1832,15 +1891,24 @@ async function migrateTransactions() {
     })
   );
 
+  const existingProductIds = new Set(
+    (await prisma.product.findMany({ select: { id: true } })).map((p) => p.id)
+  );
+
   const itemRows: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
   const modifierRows: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
   for (const t of transactions) {
     ((t.items ?? []) as any[]).forEach((it, idx) => { // eslint-disable-line @typescript-eslint/no-explicit-any
       const itemId = it._id ? String(it._id) : `${String(t._id)}-item-${idx}`;
+      const rawProductId = oid(it.product);
+      const productId = rawProductId && existingProductIds.has(rawProductId) ? rawProductId : null;
+      if (rawProductId && !productId) {
+        log(`  WARN: TransactionItem ${itemId} references product ${rawProductId} which no longer exists — productId cleared, line item still migrated`);
+      }
       itemRows.push({
         id: itemId,
         transactionId: oidRequired(t._id, 'Transaction._id'),
-        productId: oid(it.product),
+        productId,
         variationId: null, // Mongo TransactionItem has no variation ref field; left null (see report)
         name: it.name,
         price: it.price,
