@@ -34,7 +34,7 @@ export default function BusinessHoursManager({ settings, tenant, onUpdate, dict 
         const hours = data.data || {};
         setSchedule(hours.schedule || {});
         setSpecialHours(hours.specialHours || []);
-        setTimezone(hours.timezone || settings.timezone || 'UTC');
+        setTimezone(hours.timezone || settings.timezone || 'Asia/Manila');
       }
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       setMessage({ type: 'error', text: error.message || dict?.businessHours?.failedToLoad || 'Failed to load business hours' });

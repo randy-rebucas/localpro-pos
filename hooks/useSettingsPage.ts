@@ -12,7 +12,7 @@ function mergeDefaultSettings(data: Partial<ITenantSettings>): ITenantSettings {
     currencyPosition: 'before',
     dateFormat: 'MM/DD/YYYY',
     timeFormat: '12h',
-    timezone: 'UTC',
+    timezone: 'Asia/Manila',
     language: 'en',
     numberFormat: {
       decimalSeparator: '.',

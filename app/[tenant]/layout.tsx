@@ -26,7 +26,7 @@ async function ensureDefaultTenant() {
         name: 'Default Store',
         settings: {
           currency: 'USD',
-          timezone: 'UTC',
+          timezone: 'Asia/Manila',
           language: 'en',
           primaryColor: '#35979c',
         },

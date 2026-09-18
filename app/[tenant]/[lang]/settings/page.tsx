@@ -99,7 +99,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (settings && status === 'ready' && !detecting) {
       const isDefault =
-        settings.timezone === 'UTC' &&
+        settings.timezone === 'Asia/Manila' &&
         settings.currency === 'USD' &&
         settings.dateFormat === 'MM/DD/YYYY';
 
@@ -536,7 +536,7 @@ export default function SettingsPage() {
                       </label>
                       <input
                         type="text"
-                        value={settings.timezone || 'UTC'}
+                        value={settings.timezone || 'Asia/Manila'}
                         onChange={(e) => updateSetting('timezone', e.target.value)}
                         className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand transition-all bg-white"
                         placeholder={settingsDict.timezonePlaceholder || 'America/New_York'}

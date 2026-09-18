@@ -144,7 +144,7 @@ export default function AdminSettingsPage() {
           taxId: s.taxId ?? '',
           registrationNumber: s.registrationNumber ?? '',
           language: s.language ?? 'en',
-          timezone: s.timezone ?? 'UTC',
+          timezone: s.timezone ?? 'Asia/Manila',
           currency: s.currency ?? 'PHP',
           currencySymbol: s.currencySymbol ?? '₱',
           currencyPosition: s.currencyPosition ?? 'before',
