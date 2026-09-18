@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
       metadata: { success: true, method: 'qr' },
     });
 
-    // Set cookie
+    // Set httpOnly cookie — do NOT return token in body (XSS risk)
     const response = NextResponse.json({
       success: true,
       data: {
@@ -94,7 +94,6 @@ export async function POST(request: NextRequest) {
           name: user.name,
           role: user.role,
         },
-        token,
       },
     });
 

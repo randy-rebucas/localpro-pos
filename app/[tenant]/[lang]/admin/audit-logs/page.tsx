@@ -280,7 +280,7 @@ export default function AuditLogsPage() {
                         return (
                           <tr key={log._id} className="hover:bg-gray-50">
                             <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-500">
-                              {formatAuditTimestamp(log.createdAt)}
+                              {formatAuditTimestamp(log.createdAt, lang)}
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap">
                               <p className="text-sm font-medium text-gray-900">{userName}</p>

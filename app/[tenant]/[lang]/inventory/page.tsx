@@ -18,6 +18,7 @@ import { getDefaultTenantSettings } from '@/lib/currency';
 import { getBusinessTypeConfig } from '@/lib/business-types';
 import { getBusinessType, supportsFeature } from '@/lib/business-type-helpers';
 import { useInventoryPage } from '@/hooks/useInventoryPage';
+import { usePermissions } from '@/hooks/usePermissions';
 import type { TranslationDict } from '@/types/dictionary';
 
 export default function InventoryPage() {
@@ -32,6 +33,8 @@ export default function InventoryPage() {
   const [stockRefreshTrigger, setStockRefreshTrigger] = useState(0);
   const [auditGenerating, setAuditGenerating] = useState(false);
   const [auditError, setAuditError] = useState<string | null>(null);
+  const { canAccess } = usePermissions();
+  const canViewPredictions = canAccess('inventory.manage');
 
   const {
     branches,
@@ -42,7 +45,7 @@ export default function InventoryPage() {
     predictionsStatus,
     predictionsError,
     refetchPredictions,
-  } = useInventoryPage(tenant);
+  } = useInventoryPage(tenant, undefined, canViewPredictions);
 
   const inventoryEnabled =
     supportsFeature(settings ?? undefined, 'inventory') &&
@@ -290,6 +293,7 @@ export default function InventoryPage() {
               </div>
             </div>
 
+            {canViewPredictions && (
             <div className="bg-white border border-gray-300">
               <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide flex items-center gap-1.5">
@@ -379,6 +383,7 @@ export default function InventoryPage() {
                 </ul>
               )}
             </div>
+            )}
 
             <div className="bg-white border border-gray-300">
               <div className="px-4 py-3 border-b border-gray-200">

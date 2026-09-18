@@ -4,6 +4,7 @@ import SubscriptionPlan from '@/models/SubscriptionPlan';
 import { requireAuth } from '@/lib/auth';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { getTenantSlugFromRequest } from '@/lib/api-tenant';
+import { hasTenantPermission } from '@/lib/permissions-server';
 import { createSubscriptionPayment } from '@/lib/paypal';
 import { validateCoupon, applyCouponDiscount, CouponError } from '@/lib/coupons';
 import { logger } from '@/lib/logger';
@@ -13,7 +14,7 @@ export async function POST(request: NextRequest) {
     await connectDB();
 
     // Require authentication
-    const user = await requireAuth(request); // eslint-disable-line @typescript-eslint/no-unused-vars
+    const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const tenantSlug = await getTenantSlugFromRequest(request);
 
@@ -21,6 +22,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { success: false, error: 'Tenant not found' },
         { status: 404 }
+      );
+    }
+
+    if (!(await hasTenantPermission(user.role, tenantId, 'subscriptions.manage'))) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden: Insufficient permissions' },
+        { status: 403 }
       );
     }
 

@@ -20,7 +20,7 @@ export interface StockPrediction {
 
 export type FetchStatus = 'loading' | 'ready' | 'error';
 
-export function useInventoryPage(tenant: string, branchId?: string) {
+export function useInventoryPage(tenant: string, branchId?: string, canViewPredictions = true) {
   const [branches, setBranches] = useState<InventoryBranch[]>([]);
   const [branchesStatus, setBranchesStatus] = useState<FetchStatus>('loading');
   const [branchesError, setBranchesError] = useState<string | null>(null);
@@ -52,6 +52,11 @@ export function useInventoryPage(tenant: string, branchId?: string) {
   }, [tenant]);
 
   const refetchPredictions = useCallback(async () => {
+    if (!canViewPredictions) {
+      setStockPredictions([]);
+      setPredictionsStatus('ready');
+      return;
+    }
     setPredictionsStatus('loading');
     setPredictionsError(null);
     try {
@@ -75,7 +80,7 @@ export function useInventoryPage(tenant: string, branchId?: string) {
       setPredictionsError('Failed to load predictions');
       setPredictionsStatus('error');
     }
-  }, [tenant, branchId]);
+  }, [tenant, branchId, canViewPredictions]);
 
   useEffect(() => {
     refetchBranches();

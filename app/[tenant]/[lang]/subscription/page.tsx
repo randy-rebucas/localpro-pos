@@ -13,6 +13,7 @@ import ErrorState from '@/components/ui/ErrorState';
 import EmptyState from '@/components/ui/EmptyState';
 import SubscriptionPlansSkeleton from '@/components/subscription/SubscriptionPlansSkeleton';
 import { useSubscriptionPlans } from '@/hooks/useSubscriptionPlans';
+import { usePermissions } from '@/hooks/usePermissions';
 import type { TranslationDict } from '@/types/dictionary';
 import {
   Users,
@@ -47,6 +48,8 @@ export default function SubscriptionPage() {
   const { settings } = useTenantSettings();
   const tenantSettings = settings || getDefaultTenantSettings();
   const primaryColor = tenantSettings.primaryColor || '#35979c';
+  const { canAccess } = usePermissions();
+  const canManageSubscription = canAccess('subscriptions.manage');
 
   const currentPlan = plans.find((p) => p.name === currentPlanName);
   const currentPlanId = currentPlan?._id ?? null;
@@ -154,6 +157,27 @@ export default function SubscriptionPage() {
   }
 
   const subDict = dict.subscription ?? {};
+
+  if (!canManageSubscription) {
+    return (
+      <div>
+        <Navbar />
+        <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+          <div className="min-h-[40vh] flex items-center justify-center">
+            <div className="text-center max-w-md">
+              <div className="text-6xl mb-4">🔒</div>
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">
+                {dict?.components?.protectedRoute?.accessDenied || 'Access Denied'}
+              </h1>
+              <p className="text-gray-600 mb-4">
+                {subDict.noPermission || 'You don\'t have permission to manage the subscription. Required role: admin or higher.'}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const formatLimit = (value: number, label: string) =>
     value === -1 ? `${subDict.unlimited || 'Unlimited'} ${label}` : `${value} ${label}`;

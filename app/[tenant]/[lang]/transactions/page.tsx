@@ -14,7 +14,7 @@ import { getDictionaryClient } from '../dictionaries-client';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { getDefaultTenantSettings } from '@/lib/currency';
-import { formatDateTime } from '@/lib/formatting';
+import { formatDate, formatDateTime } from '@/lib/formatting';
 import { hardwareService } from '@/lib/hardware';
 import {
   useTransactionsCatalog,
@@ -293,15 +293,15 @@ export default function TransactionsPage() {
       tin: settings?.birTin,
       businessStyle: settings?.birBusinessStyle,
       ptuNumber: settings?.birPtuNumber,
-      ptuDate: settings?.birPtuIssuedDate ? new Date(settings.birPtuIssuedDate).toLocaleDateString() : undefined,
-      ptuValidUntil: settings?.birPtuExpiryDate ? new Date(settings.birPtuExpiryDate).toLocaleDateString() : undefined,
+      ptuDate: settings?.birPtuIssuedDate ? formatDate(settings.birPtuIssuedDate, settings) : undefined,
+      ptuValidUntil: settings?.birPtuExpiryDate ? formatDate(settings.birPtuExpiryDate, settings) : undefined,
       minNumber: settings?.birMinNumber,
       terminalSN: transaction.deviceSerialNumber || settings?.birTerminalSN,
       terminalId: transaction.terminalId,
       systemProvider: settings?.birSystemProvider,
       accreditationNo: settings?.birAccreditationNo,
-      accreditationDate: settings?.birAccreditationDate ? new Date(settings.birAccreditationDate).toLocaleDateString() : undefined,
-      accreditationValidUntil: settings?.birAccreditationValidUntil ? new Date(settings.birAccreditationValidUntil).toLocaleDateString() : undefined,
+      accreditationDate: settings?.birAccreditationDate ? formatDate(settings.birAccreditationDate, settings) : undefined,
+      accreditationValidUntil: settings?.birAccreditationValidUntil ? formatDate(settings.birAccreditationValidUntil, settings) : undefined,
       isVAT,
       // Senior Citizen / PWD discount block
       scPwdName: isScPwd ? transaction.scPwdName : undefined,

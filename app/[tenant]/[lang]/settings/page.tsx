@@ -19,6 +19,7 @@ import ErrorState from '@/components/ui/ErrorState';
 import InlineBanner from '@/components/ui/InlineBanner';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { useSettingsPage } from '@/hooks/useSettingsPage';
+import { usePermissions } from '@/hooks/usePermissions';
 import type { TranslationDict } from '@/types/dictionary';
 
 export default function SettingsPage() {
@@ -28,6 +29,8 @@ export default function SettingsPage() {
   const lang = params.lang as 'en' | 'es';
   const { settings: tenantSettings } = useTenantSettings();
   const primaryColor = (tenantSettings || getDefaultTenantSettings()).primaryColor || '#35979c';
+  const { canAccess } = usePermissions();
+  const canManageSettings = canAccess('settings.manage');
   const [dict, setDict] = useState<TranslationDict | null>(null);
   const {
     settings,
@@ -247,6 +250,22 @@ export default function SettingsPage() {
   const settingsDict = (dict.settings ?? {}) as Record<string, string | undefined> & {
     tabs?: Record<string, string | undefined>;
   };
+
+  if (!canManageSettings) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center max-w-md">
+          <div className="text-6xl mb-4">🔒</div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">
+            {dict?.components?.protectedRoute?.accessDenied || 'Access Denied'}
+          </h1>
+          <p className="text-gray-600 mb-4">
+            {settingsDict.noPermission || 'You don\'t have permission to access store settings. Required role: manager or higher.'}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const pageHeader = (
     <div className="mb-6 sm:mb-8">

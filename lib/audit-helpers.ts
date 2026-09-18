@@ -27,9 +27,10 @@ export function extractUserInfo(userId: unknown): { name: string; email: string 
   return { name: 'System', email: '' };
 }
 
-export function formatAuditTimestamp(dateString: string): string {
+export function formatAuditTimestamp(dateString: string, lang: 'en' | 'es' = 'en'): string {
   try {
-    return new Date(dateString).toLocaleString();
+    const date = new Date(dateString);
+    return date.toLocaleDateString(lang === 'es' ? 'es-ES' : 'en-US') + ' ' + date.toLocaleTimeString(lang === 'es' ? 'es-ES' : 'en-US', { hour12: true });
   } catch {
     return dateString;
   }

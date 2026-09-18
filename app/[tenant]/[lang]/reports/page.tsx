@@ -15,6 +15,7 @@ import { formatDateTime, formatDate as formatTenantDate } from '@/lib/formatting
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import toast from 'react-hot-toast';
 import {
   useReportsData,
@@ -39,6 +40,15 @@ export default function ReportsPage() {
   const { settings } = useTenantSettings();
   const primaryColor = settings?.primaryColor || '#35979c';
   const COLORS = [primaryColor, ...DEFAULT_COLORS.filter(c => c !== primaryColor)].slice(0, 5);
+  const { canAccess } = usePermissions();
+  const canViewReports = canAccess('reports.view');
+  const canViewXReading = canAccess('reports.x_reading');
+  const canViewZReading = canAccess('reports.z_reading');
+  const visibleTabs = (['sales', 'products', 'vat', 'profit-loss', 'cash-drawer', 'sales-journal', 'x-reading', 'z-reading'] as const).filter((tab) => {
+    if (tab === 'x-reading') return canViewXReading;
+    if (tab === 'z-reading') return canViewZReading;
+    return canViewReports;
+  });
   const [dict, setDict] = useState<TranslationDict | null>(null);
   const [activeTab, setActiveTab] = useState<ReportTab>('sales');
   const [period, setPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
@@ -77,6 +87,12 @@ export default function ReportsPage() {
     setEndDate(end.toISOString().split('T')[0]);
     setStartDate(start.toISOString().split('T')[0]);
   }, [lang]);
+
+  useEffect(() => {
+    if (visibleTabs.length > 0 && !visibleTabs.includes(activeTab)) {
+      setActiveTab(visibleTabs[0]);
+    }
+  }, [visibleTabs, activeTab]);
 
   const handlePeriodChange = (newPeriod: 'daily' | 'weekly' | 'monthly') => {
     setPeriod(newPeriod);
@@ -141,6 +157,10 @@ export default function ReportsPage() {
   );
 
   const renderTabContent = () => {
+    if (visibleTabs.length === 0) {
+      return renderEmptyState((reportsDict.noPermission as string | undefined) || 'You don\'t have permission to view reports');
+    }
+
     if (status === 'loading') {
       return <ReportsTabSkeleton />;
     }
@@ -208,6 +228,7 @@ export default function ReportsPage() {
             onGenerate={handleGenerateZReading}
             generating={generatingZReading}
             settings={settings}
+            canGenerate={canViewZReading}
           />
         );
       default:
@@ -323,7 +344,7 @@ export default function ReportsPage() {
               <div className="bg-white border border-gray-300 overflow-hidden">
                 <div className="border-b border-gray-200">
                   <nav className="flex overflow-x-auto" aria-label={dict?.common?.tabs || 'Tabs'}>
-                    {(['sales', 'products', 'vat', 'profit-loss', 'cash-drawer', 'sales-journal', 'x-reading', 'z-reading'] as const).map((tab) => (
+                    {visibleTabs.map((tab) => (
                       <button
                         key={tab}
                         onClick={() => setActiveTab(tab)}
@@ -818,21 +839,23 @@ function XReadingView({ data, dict, primaryColor }: { data: XReadingData; dict: 
   );
 }
 
-function ZReadingView({ readings, dict, primaryColor, onGenerate, generating, settings }: { readings: ZReadingRecord[]; dict: any; primaryColor: string; onGenerate: () => void; generating: boolean; settings: ReturnType<typeof useTenantSettings>['settings'] }) { // eslint-disable-line @typescript-eslint/no-explicit-any
+function ZReadingView({ readings, dict, primaryColor, onGenerate, generating, settings, canGenerate }: { readings: ZReadingRecord[]; dict: any; primaryColor: string; onGenerate: () => void; generating: boolean; settings: ReturnType<typeof useTenantSettings>['settings']; canGenerate: boolean }) { // eslint-disable-line @typescript-eslint/no-explicit-any
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <p className="text-sm text-gray-500 max-w-2xl">
           {dict.reports?.zReadingDesc || 'The official end-of-day sales report. Generating one locks in today\'s totals against the Grand Total accumulator — only one can be generated per business day.'}
         </p>
-        <button
-          onClick={onGenerate}
-          disabled={generating}
-          className="shrink-0 px-4 py-2 text-sm font-medium text-white transition-colors disabled:opacity-50"
-          style={{ backgroundColor: primaryColor }}
-        >
-          {generating ? (dict.common?.loading || 'Generating...') : (dict.reports?.generateZReading || 'Generate Z-Reading for Today')}
-        </button>
+        {canGenerate && (
+          <button
+            onClick={onGenerate}
+            disabled={generating}
+            className="shrink-0 px-4 py-2 text-sm font-medium text-white transition-colors disabled:opacity-50"
+            style={{ backgroundColor: primaryColor }}
+          >
+            {generating ? (dict.common?.loading || 'Generating...') : (dict.reports?.generateZReading || 'Generate Z-Reading for Today')}
+          </button>
+        )}
       </div>
       <div className="bg-white border border-gray-300 overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">

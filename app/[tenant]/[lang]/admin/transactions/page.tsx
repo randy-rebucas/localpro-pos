@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getDictionaryClient } from '../../dictionaries-client';
 import Currency from '@/components/Currency';
+import FormattedDate from '@/components/FormattedDate';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { getDefaultTenantSettings } from '@/lib/currency';
@@ -167,7 +168,7 @@ export default function TransactionsPage() {
                       {transaction.receiptNumber || '-'}
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(transaction.createdAt).toLocaleString(undefined, { hour12: true })}
+                      <FormattedDate date={transaction.createdAt} includeTime={true} />
                     </td>
                     <td className="px-4 py-4 text-sm text-gray-500">
                       {transaction.items.length} {transaction.items.length === 1 ? (dict.transactions?.item || 'item') : (dict.transactions?.items || 'items')}
@@ -302,7 +303,7 @@ function TransactionDetailModal({
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-500">{dict.transactions?.date || dict.admin?.date || 'Date'}</label>
-                <div className="text-lg">{new Date(transaction.createdAt).toLocaleString(undefined, { hour12: true })}</div>
+                <div className="text-lg"><FormattedDate date={transaction.createdAt} includeTime={true} /></div>
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-500">{dict.admin?.status || 'Status'}</label>
