@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Subscription, { SubscriptionStatus } from '@/models/Subscription';
+import prisma from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import type { SubscriptionStatus, Prisma } from '@prisma/client';
 
 // Legal next-states for each current subscription status. Prevents e.g. flipping
 // a cancelled subscription straight back to active without going through the
@@ -23,16 +23,18 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const t = await getValidationTranslatorFromRequest(request);
     // Cross-tenant subscription lookup by id — super_admin only
     await requireRole(request, ['super_admin']);
     const { id } = await params;
 
-    const subscription = await Subscription.findById(id)
-      .populate('tenantId', 'slug name settings')
-      .populate('planId', 'name tier price features birCompliance isCustom')
-      .lean();
+    const subscription = await prisma.subscription.findUnique({
+      where: { id },
+      include: {
+        tenant: { select: { id: true, slug: true, name: true, settings: true } },
+        plan: true,
+      },
+    });
 
     if (!subscription) {
       return NextResponse.json(
@@ -42,8 +44,8 @@ export async function GET(
     }
 
     return NextResponse.json({ success: true, data: subscription });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ success: false, error: (error as Error).message }, { status: 500 });
   }
 }
 
@@ -52,7 +54,6 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const t = await getValidationTranslatorFromRequest(request);
     // Cross-tenant subscription mutation by id — super_admin only
     await requireRole(request, ['super_admin']);
@@ -61,7 +62,7 @@ export async function PUT(
     const body = await request.json();
     const { status, billingCycle, autoRenew, planId } = body;
 
-    const subscription = await Subscription.findById(id);
+    const subscription = await prisma.subscription.findUnique({ where: { id } });
     if (!subscription) {
       return NextResponse.json(
         { success: false, error: t('validation.subscriptionNotFound', 'Subscription not found') },
@@ -70,7 +71,7 @@ export async function PUT(
     }
 
     const currentStatus = subscription.status;
-    const changes: any = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const changes: Prisma.SubscriptionUpdateInput = {};
 
     // Update status if provided, validating the transition is legal from the
     // subscription's current status before mutating.
@@ -121,30 +122,26 @@ export async function PUT(
 
     // Update plan if provided
     if (planId) {
-      // Verify plan exists
-      const SubscriptionPlan = (await import('@/models/SubscriptionPlan')).default;
-      const plan = await SubscriptionPlan.findById(planId);
+      const plan = await prisma.subscriptionPlan.findUnique({ where: { id: planId } });
       if (!plan || !plan.isActive) {
         return NextResponse.json(
           { success: false, error: t('validation.subscriptionPlanNotFoundOrInactive', 'Subscription plan not found or inactive') },
           { status: 404 }
         );
       }
-      changes.planId = planId;
+      changes.plan = { connect: { id: planId } };
     }
 
     // Precondition on the status read above so a concurrent PUT (e.g. an admin
     // cancelling while the expiry cron suspends the same subscription) can't
     // silently clobber the other's change — whichever request loses the race
     // gets a 409 instead of a last-write-wins overwrite.
-    const updatedSubscription = await Subscription.findOneAndUpdate(
-      { _id: id, status: currentStatus },
-      changes,
-      { new: true }
-    ).populate('tenantId', 'slug name')
-     .populate('planId', 'name tier price features birCompliance isCustom');
+    const updateResult = await prisma.subscription.updateMany({
+      where: { id, status: currentStatus },
+      data: changes,
+    });
 
-    if (!updatedSubscription) {
+    if (updateResult.count === 0) {
       return NextResponse.json(
         {
           success: false,
@@ -157,17 +154,25 @@ export async function PUT(
       );
     }
 
+    const updatedSubscription = await prisma.subscription.findUnique({
+      where: { id },
+      include: {
+        tenant: { select: { id: true, slug: true, name: true } },
+        plan: true,
+      },
+    });
+
     await createAuditLog(request, {
       tenantId: subscription.tenantId,
       action: AuditActions.UPDATE,
       entityType: 'subscription',
-      entityId: subscription._id.toString(),
+      entityId: subscription.id,
       changes,
     });
 
     return NextResponse.json({ success: true, data: updatedSubscription });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+  } catch (error: unknown) {
+    return NextResponse.json({ success: false, error: (error as Error).message }, { status: 400 });
   }
 }
 
@@ -176,34 +181,35 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const t = await getValidationTranslatorFromRequest(request);
     // Cross-tenant subscription cancellation by id — super_admin only
     await requireRole(request, ['super_admin']);
     const { id } = await params;
 
-    const subscription = await Subscription.findOneAndUpdate(
-      { _id: id, isActive: true },
-      { isActive: false, status: 'cancelled', cancelledAt: new Date() },
-      { new: true }
-    );
-    if (!subscription) {
+    const updateResult = await prisma.subscription.updateMany({
+      where: { id, isActive: true },
+      data: { isActive: false, status: 'cancelled', cancelledAt: new Date() },
+    });
+
+    if (updateResult.count === 0) {
       return NextResponse.json(
         { success: false, error: t('validation.subscriptionNotFound', 'Subscription not found') },
         { status: 404 }
       );
     }
 
+    const subscription = await prisma.subscription.findUnique({ where: { id } });
+
     await createAuditLog(request, {
-      tenantId: subscription.tenantId,
+      tenantId: subscription!.tenantId,
       action: AuditActions.DELETE,
       entityType: 'subscription',
-      entityId: subscription._id.toString(),
+      entityId: id,
       changes: { softDeleted: true },
     });
 
     return NextResponse.json({ success: true, message: 'Subscription deleted successfully' });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+  } catch (error: unknown) {
+    return NextResponse.json({ success: false, error: (error as Error).message }, { status: 400 });
   }
 }

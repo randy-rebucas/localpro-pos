@@ -3,11 +3,7 @@
  * Remind customers about saved/abandoned carts
  */
 
-import connectDB from '@/lib/mongodb';
-import SavedCart from '@/models/SavedCart';
-import Transaction from '@/models/Transaction';
-import Tenant from '@/models/Tenant';
-import User from '@/models/User'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import prisma from '@/lib/db';
 import { sendEmail } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { AutomationResult } from './types';
@@ -23,8 +19,6 @@ export interface AbandonedCartOptions {
 export async function sendAbandonedCartReminders(
   options: AbandonedCartOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -40,10 +34,10 @@ export async function sendAbandonedCartReminders(
     // Get tenants to process
     let tenants;
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await prisma.tenant.findUnique({ where: { id: options.tenantId } });
       tenants = tenant ? [tenant] : [];
     } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
+      tenants = await prisma.tenant.findMany({ where: { isActive: true } });
     }
 
     if (tenants.length === 0) {
@@ -56,7 +50,7 @@ export async function sendAbandonedCartReminders(
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
+        const tenantId = tenant.id;
         const tenantSettings = await getTenantSettingsById(tenantId);
 
         // Skip if email notifications disabled
@@ -66,29 +60,36 @@ export async function sendAbandonedCartReminders(
 
         // Find saved carts that haven't been converted to transactions
         // Carts saved more than X hours ago
-        const abandonedCarts = await SavedCart.find({
-          tenantId,
-          updatedAt: { $lte: cutoffTime },
-        })
-          .populate('userId', 'name email')
-          .sort({ updatedAt: -1 })
-          .limit(100) // Limit to prevent too many emails
-          .lean();
+        const abandonedCarts = await prisma.savedCart.findMany({
+          where: {
+            tenantId,
+            updatedAt: { lte: cutoffTime },
+          },
+          include: {
+            user: { select: { name: true, email: true } },
+            items: true,
+          },
+          orderBy: { updatedAt: 'desc' },
+          take: 100, // Limit to prevent too many emails
+        });
 
         for (const cart of abandonedCarts) {
           try {
-            const user = cart.userId as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+            const user = cart.user;
             if (!user || !user.email) {
               continue; // Skip if no user or email
             }
 
             // Check if cart was already converted to transaction
             // (This is a simple check - in production, you might want to track this better)
-            const recentTransactions = await Transaction.find({
-              tenantId,
-              userId: user._id,
-              createdAt: { $gte: cart.updatedAt },
-            }).limit(1).lean();
+            const recentTransactions = await prisma.transaction.findMany({
+              where: {
+                tenantId,
+                userId: cart.userId,
+                createdAt: { gte: cart.updatedAt },
+              },
+              take: 1,
+            });
 
             if (recentTransactions.length > 0) {
               continue; // Cart was likely completed
@@ -100,7 +101,7 @@ export async function sendAbandonedCartReminders(
             // Build cart items list
             const itemsList = cart.items
               .slice(0, 10) // Limit to 10 items in email
-              .map(item => `  - ${item.name} x${item.quantity} - $${(item.price * item.quantity).toFixed(2)}`)
+              .map(item => `  - ${item.name} x${item.quantity} - $${(Number(item.price) * item.quantity).toFixed(2)}`)
               .join('\n');
 
             const moreItems = cart.items.length > 10 ? `\n  ... and ${cart.items.length - 10} more items` : '';
@@ -128,23 +129,23 @@ export async function sendAbandonedCartReminders(
     </div>
 
     <p>Hello ${user.name || 'Valued Customer'},</p>
-    
+
     <p>We noticed you saved a cart ${hoursSinceSaved} hour${hoursSinceSaved > 1 ? 's' : ''} ago but haven't completed your purchase yet.</p>
-    
+
     <div class="cart-items">
       <h3>Your Saved Cart:</h3>
       <pre style="font-family: Arial, sans-serif;">${itemsList}${moreItems}</pre>
-      <div class="total">Total: $${cart.total.toFixed(2)}</div>
+      <div class="total">Total: $${Number(cart.total).toFixed(2)}</div>
     </div>
-    
+
     <p>Don't miss out! Complete your purchase now.</p>
-    
+
     <p style="text-align: center;">
       <a href="${tenantSettings?.website || '#'}" class="button">Complete Purchase</a>
     </p>
-    
+
     <p>If you have any questions, please contact us.</p>
-    
+
     <div class="footer">
       <p>This is an automated reminder from ${companyName}.</p>
       <p>If you've already completed this purchase, please ignore this email.</p>
@@ -164,7 +165,7 @@ export async function sendAbandonedCartReminders(
             totalReminders++;
           } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             totalFailed++;
-            results.errors?.push(`Cart ${cart._id}: ${error.message}`);
+            results.errors?.push(`Cart ${cart.id}: ${error.message}`);
           }
         }
       } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any

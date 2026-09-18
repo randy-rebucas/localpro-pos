@@ -1,7 +1,5 @@
-import TaxRule from '@/models/TaxRule';
-import Tenant, { ITenantSettings } from '@/models/Tenant';
-import Product from '@/models/Product'; // eslint-disable-line @typescript-eslint/no-unused-vars
-import { ITenant } from '@/models/Tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import prisma from '@/lib/db';
+import type { ITenantSettings } from '@/models/Tenant';
 
 /**
  * BIR (Bureau of Internal Revenue) Philippines discount rates
@@ -51,20 +49,23 @@ export interface TaxRegion {
  * rules created before region scoping). A rule with region fields set only
  * matches when every field it specifies matches the given region.
  */
-function ruleMatchesRegion(rule: { region?: { country?: string; state?: string; city?: string; zipCodes?: string[] } }, region?: TaxRegion): boolean {
-  const r = rule.region;
-  if (!r || (!r.country && !r.state && !r.city && (!r.zipCodes || r.zipCodes.length === 0))) {
+function ruleMatchesRegion(
+  rule: { regionCountry: string | null; regionState: string | null; regionCity: string | null; regionZipCodes: string[] },
+  region?: TaxRegion
+): boolean {
+  const { regionCountry, regionState, regionCity, regionZipCodes } = rule;
+  if (!regionCountry && !regionState && !regionCity && regionZipCodes.length === 0) {
     return true; // No region scoping on this rule — applies everywhere
   }
   if (!region) return false; // Rule is region-scoped but no transaction region is known
 
-  const eq = (a?: string, b?: string) => !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
+  const eq = (a?: string | null, b?: string) => !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
 
-  if (r.country && !eq(r.country, region.country)) return false;
-  if (r.state && !eq(r.state, region.state)) return false;
-  if (r.city && !eq(r.city, region.city)) return false;
-  if (r.zipCodes && r.zipCodes.length > 0) {
-    if (!region.zipCode || !r.zipCodes.some((z) => z.trim() === region.zipCode?.trim())) return false;
+  if (regionCountry && !eq(regionCountry, region.country)) return false;
+  if (regionState && !eq(regionState, region.state)) return false;
+  if (regionCity && !eq(regionCity, region.city)) return false;
+  if (regionZipCodes.length > 0) {
+    if (!region.zipCode || !regionZipCodes.some((z) => z.trim() === region.zipCode?.trim())) return false;
   }
   return true;
 }
@@ -133,10 +134,11 @@ export async function calculateTax(
   }
 
   // Try to get tax rules from TaxRule model first
-  const taxRules = await TaxRule.find({
-    tenantId,
-    isActive: true,
-  }).sort({ priority: -1 }).lean();
+  const taxRules = await prisma.taxRule.findMany({
+    where: { tenantId, isActive: true },
+    orderBy: { priority: 'desc' },
+    include: { categories: true, products: true },
+  });
 
   // Only calculate tax on the taxable portion (excludes VAT-exempt items)
   if (taxRules.length > 0) {
@@ -155,19 +157,17 @@ export async function calculateTax(
       } else if (rule.appliesTo === 'services') {
         applies = taxableItems.some(item => item.productType === 'service');
       } else if (rule.appliesTo === 'categories') {
-        if (rule.categoryIds && rule.categoryIds.length > 0) {
-          applies = taxableItems.some(item =>
-            item.categoryId && rule.categoryIds?.some(catId => catId.toString() === item.categoryId)
-          );
+        if (rule.categories.length > 0) {
+          const categoryIds = new Set(rule.categories.map((c) => c.categoryId));
+          applies = taxableItems.some(item => item.categoryId && categoryIds.has(item.categoryId));
         }
-        // If no categoryIds specified on a category rule, skip to next rule
+        // If no categories specified on a category rule, skip to next rule
       }
 
-      // Product-specific rules override appliesTo (only if productIds are specified)
-      if (rule.productIds && rule.productIds.length > 0) {
-        applies = taxableItems.some(item =>
-          item.productId && rule.productIds?.some(prodId => prodId.toString() === item.productId)
-        );
+      // Product-specific rules override appliesTo (only if products are specified)
+      if (rule.products.length > 0) {
+        const productIds = new Set(rule.products.map((p) => p.productId));
+        applies = taxableItems.some(item => item.productId && productIds.has(item.productId));
       }
 
       if (applies && !ruleMatchesRegion(rule, region)) {
@@ -175,7 +175,7 @@ export async function calculateTax(
       }
 
       if (applies) {
-        taxRate = Math.min(Math.max(rule.rate, 0), 100); // Clamp rate 0-100
+        taxRate = Math.min(Math.max(Number(rule.rate), 0), 100); // Clamp rate 0-100
         taxLabel = rule.label;
         taxAmount = (taxableAmount * taxRate) / 100;
         // Ensure tax doesn't exceed taxable amount
@@ -213,10 +213,11 @@ export async function getProductTaxRate(
   categoryId?: string,
   region?: TaxRegion
 ): Promise<number> {
-  const taxRules = await TaxRule.find({
-    tenantId,
-    isActive: true,
-  }).sort({ priority: -1 }).lean();
+  const taxRules = await prisma.taxRule.findMany({
+    where: { tenantId, isActive: true },
+    orderBy: { priority: 'desc' },
+    include: { categories: true, products: true },
+  });
 
   if (taxRules.length > 0) {
     for (const rule of taxRules) {
@@ -229,11 +230,11 @@ export async function getProductTaxRate(
       } else if (rule.appliesTo === 'services' && productType === 'service') {
         applies = true;
       } else if (rule.appliesTo === 'categories' && categoryId) {
-        applies = rule.categoryIds?.some(catId => catId.toString() === categoryId) || false;
+        applies = rule.categories.some((c) => c.categoryId === categoryId);
       }
 
-      if (rule.productIds && rule.productIds.length > 0) {
-        applies = rule.productIds.some(prodId => prodId.toString() === productId);
+      if (rule.products.length > 0) {
+        applies = rule.products.some((p) => p.productId === productId);
       }
 
       if (applies && !ruleMatchesRegion(rule, region)) {
@@ -241,15 +242,15 @@ export async function getProductTaxRate(
       }
 
       if (applies) {
-        return rule.rate;
+        return Number(rule.rate);
       }
     }
   }
 
   // Fall back to tenant settings
-  const tenant = await Tenant.findById(tenantId).lean();
-  if (tenant?.settings?.taxEnabled && tenant.settings.taxRate) {
-    return tenant.settings.taxRate;
+  const tenantSettings = await prisma.tenantSettings.findUnique({ where: { tenantId } });
+  if (tenantSettings?.taxEnabled && tenantSettings.taxRate) {
+    return Number(tenantSettings.taxRate);
   }
 
   return 0;

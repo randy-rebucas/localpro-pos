@@ -1,18 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import SubscriptionPlan from '@/models/SubscriptionPlan';
+import prisma from '@/lib/db';
 import { requireRole, getCurrentUser } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
+import type { Prisma } from '@prisma/client';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const { id } = await params;
 
-    const plan = await SubscriptionPlan.findById(id).lean();
+    const plan = await prisma.subscriptionPlan.findUnique({ where: { id } });
     if (!plan) {
       return NextResponse.json(
         { success: false, error: 'Subscription plan not found' },
@@ -21,8 +20,8 @@ export async function GET(
     }
 
     return NextResponse.json({ success: true, data: plan });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ success: false, error: (error as Error).message }, { status: 500 });
   }
 }
 
@@ -31,12 +30,11 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     await requireRole(request, ['super_admin']); // global plan catalog — super_admin only
     const currentUser = await getCurrentUser(request);
     const { id } = await params;
 
-    const plan = await SubscriptionPlan.findById(id);
+    const plan = await prisma.subscriptionPlan.findUnique({ where: { id } });
     if (!plan) {
       return NextResponse.json(
         { success: false, error: 'Subscription plan not found' },
@@ -47,63 +45,47 @@ export async function PUT(
     const body = await request.json();
     const { name, description, price, features, birCompliance, isActive, isCustom } = body;
 
-    const changes: Record<string, unknown> = {};
+    const changes: Prisma.SubscriptionPlanUpdateInput = {};
 
-    if (name !== undefined) {
-      changes.name = name;
-    }
-
-    if (description !== undefined) {
-      changes.description = description;
-    }
+    if (name !== undefined) changes.name = name;
+    if (description !== undefined) changes.description = description;
 
     if (price !== undefined) {
-      changes.price = {
-        monthly: price.monthly ?? plan.price.monthly,
-        setupFee: price.setupFee ?? plan.price.setupFee ?? 0,
-        currency: price.currency ?? plan.price.currency,
-      };
+      changes.priceMonthly = price.monthly ?? plan.priceMonthly;
+      changes.priceSetupFee = price.setupFee ?? plan.priceSetupFee ?? 0;
+      changes.priceCurrency = price.currency ?? plan.priceCurrency;
     }
 
     if (features !== undefined) {
-      changes.features = {
-        maxUsers: features.maxUsers ?? plan.features.maxUsers,
-        maxBranches: features.maxBranches ?? plan.features.maxBranches,
-        maxProducts: features.maxProducts ?? plan.features.maxProducts,
-        maxTransactions: features.maxTransactions ?? plan.features.maxTransactions,
-        enableInventory: features.enableInventory ?? plan.features.enableInventory,
-        enableCategories: features.enableCategories ?? plan.features.enableCategories,
-        enableDiscounts: features.enableDiscounts ?? plan.features.enableDiscounts,
-        enableLoyaltyProgram: features.enableLoyaltyProgram ?? plan.features.enableLoyaltyProgram,
-        enableCustomerManagement: features.enableCustomerManagement ?? plan.features.enableCustomerManagement,
-        enableBookingScheduling: features.enableBookingScheduling ?? plan.features.enableBookingScheduling,
-        enableReports: features.enableReports ?? plan.features.enableReports,
-        enableMultiBranch: features.enableMultiBranch ?? plan.features.enableMultiBranch,
-        enableHardwareIntegration: features.enableHardwareIntegration ?? plan.features.enableHardwareIntegration,
-        prioritySupport: features.prioritySupport ?? plan.features.prioritySupport,
-        customIntegrations: features.customIntegrations ?? plan.features.customIntegrations,
-        dedicatedAccountManager: features.dedicatedAccountManager ?? plan.features.dedicatedAccountManager,
-      };
+      changes.maxUsers = features.maxUsers ?? plan.maxUsers;
+      changes.maxBranches = features.maxBranches ?? plan.maxBranches;
+      changes.maxProducts = features.maxProducts ?? plan.maxProducts;
+      changes.maxTransactions = features.maxTransactions ?? plan.maxTransactions;
+      changes.enableInventory = features.enableInventory ?? plan.enableInventory;
+      changes.enableCategories = features.enableCategories ?? plan.enableCategories;
+      changes.enableDiscounts = features.enableDiscounts ?? plan.enableDiscounts;
+      changes.enableLoyaltyProgram = features.enableLoyaltyProgram ?? plan.enableLoyaltyProgram;
+      changes.enableCustomerManagement = features.enableCustomerManagement ?? plan.enableCustomerManagement;
+      changes.enableBookingScheduling = features.enableBookingScheduling ?? plan.enableBookingScheduling;
+      changes.enableReports = features.enableReports ?? plan.enableReports;
+      changes.enableMultiBranch = features.enableMultiBranch ?? plan.enableMultiBranch;
+      changes.enableHardwareIntegration = features.enableHardwareIntegration ?? plan.enableHardwareIntegration;
+      changes.prioritySupport = features.prioritySupport ?? plan.prioritySupport;
+      changes.customIntegrations = features.customIntegrations ?? plan.customIntegrations;
+      changes.dedicatedAccountManager = features.dedicatedAccountManager ?? plan.dedicatedAccountManager;
     }
 
     if (birCompliance !== undefined) {
-      changes.birCompliance = {
-        ptuAssistance: birCompliance.ptuAssistance ?? plan.birCompliance?.ptuAssistance ?? false,
-        receiptFormatting: birCompliance.receiptFormatting ?? plan.birCompliance?.receiptFormatting ?? false,
-        birDocumentation: birCompliance.birDocumentation ?? plan.birCompliance?.birDocumentation ?? false,
-        casReporting: birCompliance.casReporting ?? plan.birCompliance?.casReporting ?? false,
-        auditTrailSystem: birCompliance.auditTrailSystem ?? plan.birCompliance?.auditTrailSystem ?? false,
-        monthlySupport: birCompliance.monthlySupport ?? plan.birCompliance?.monthlySupport ?? false,
-      };
+      changes.birPtuAssistance = birCompliance.ptuAssistance ?? plan.birPtuAssistance ?? false;
+      changes.birReceiptFormatting = birCompliance.receiptFormatting ?? plan.birReceiptFormatting ?? false;
+      changes.birDocumentation = birCompliance.birDocumentation ?? plan.birDocumentation ?? false;
+      changes.birCasReporting = birCompliance.casReporting ?? plan.birCasReporting ?? false;
+      changes.birAuditTrailSystem = birCompliance.auditTrailSystem ?? plan.birAuditTrailSystem ?? false;
+      changes.birMonthlySupport = birCompliance.monthlySupport ?? plan.birMonthlySupport ?? false;
     }
 
-    if (typeof isActive === 'boolean') {
-      changes.isActive = isActive;
-    }
-
-    if (typeof isCustom === 'boolean') {
-      changes.isCustom = isCustom;
-    }
+    if (typeof isActive === 'boolean') changes.isActive = isActive;
+    if (typeof isCustom === 'boolean') changes.isCustom = isCustom;
 
     if (Object.keys(changes).length === 0) {
       return NextResponse.json(
@@ -112,11 +94,10 @@ export async function PUT(
       );
     }
 
-    const updatedPlan = await SubscriptionPlan.findByIdAndUpdate(
-      id,
-      changes,
-      { new: true, runValidators: true }
-    ).lean();
+    const updatedPlan = await prisma.subscriptionPlan.update({
+      where: { id },
+      data: changes,
+    });
 
     await createAuditLog(request, {
       tenantId: currentUser?.tenantId || '',
@@ -128,14 +109,14 @@ export async function PUT(
     });
 
     return NextResponse.json({ success: true, data: updatedPlan });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (error.code === 11000) {
+  } catch (error: unknown) {
+    if ((error as { code?: string }).code === 'P2002') {
       return NextResponse.json(
         { success: false, error: 'Plan tier already exists' },
         { status: 400 }
       );
     }
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+    return NextResponse.json({ success: false, error: (error as Error).message }, { status: 400 });
   }
 }
 
@@ -144,12 +125,11 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     await requireRole(request, ['super_admin']); // global plan catalog — super_admin only
     const deleteUser = await getCurrentUser(request);
     const { id } = await params;
 
-    const plan = await SubscriptionPlan.findById(id);
+    const plan = await prisma.subscriptionPlan.findUnique({ where: { id } });
     if (!plan) {
       return NextResponse.json(
         { success: false, error: 'Subscription plan not found' },
@@ -158,15 +138,13 @@ export async function DELETE(
     }
 
     // Check if any active subscriptions use this plan
-    const Subscription = (await import('@/models/Subscription')).default;
-    const activeCount = await Subscription.countDocuments({
-      planId: id,
-      status: { $in: ['active', 'trial'] },
+    const activeCount = await prisma.subscription.count({
+      where: { planId: id, status: { in: ['active', 'trial'] } },
     });
 
     if (activeCount > 0) {
       // Soft delete — deactivate instead of removing
-      await SubscriptionPlan.findByIdAndUpdate(id, { isActive: false });
+      await prisma.subscriptionPlan.update({ where: { id }, data: { isActive: false } });
 
       await createAuditLog(request, {
         tenantId: deleteUser?.tenantId || '',
@@ -185,7 +163,7 @@ export async function DELETE(
     }
 
     // Hard delete if no active subscriptions
-    await SubscriptionPlan.findByIdAndDelete(id);
+    await prisma.subscriptionPlan.delete({ where: { id } });
 
     await createAuditLog(request, {
       tenantId: deleteUser?.tenantId || '',
@@ -197,7 +175,7 @@ export async function DELETE(
     });
 
     return NextResponse.json({ success: true, message: 'Subscription plan deleted' });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+  } catch (error: unknown) {
+    return NextResponse.json({ success: false, error: (error as Error).message }, { status: 400 });
   }
 }

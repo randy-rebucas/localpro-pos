@@ -1,40 +1,25 @@
+import { randomUUID } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import mongoose from 'mongoose';
+import prisma from '@/lib/db';
+import { Prisma } from '@prisma/client';
 import { logger } from '@/lib/logger';
 
-// MongoDB-backed POS session for serverless compatibility
-const posSessionSchema = new mongoose.Schema({
-  sessionId: { type: String, required: true, unique: true, index: true },
-  tenant: { type: String, required: true },
-  cart: { type: Array, default: [] },
-  subtotal: { type: Number, default: 0 },
-  discount: { type: mongoose.Schema.Types.Mixed, default: null },
-  taxAmount: { type: Number },
-  taxRate: { type: Number },
-  taxLabel: { type: String },
-  tip: { type: Number, default: 0 },
-  total: { type: Number, default: 0 },
-  paymentMethod: { type: String, default: null },
-  paymentStatus: { type: String, enum: ['pending', 'processing', 'completed', 'failed'], default: 'pending' },
-  lastUpdate: { type: Number, default: Date.now },
-}, {
-  timestamps: true,
-  // TTL index: auto-delete sessions older than 1 hour
-  expireAfterSeconds: 3600,
-});
+// Postgres has no native TTL; sessions are created/refreshed with a 1hr
+// expiresAt and must be purged by a scheduled cleanup job (see the
+// PosSession model comment in prisma/schema.prisma). This route no longer
+// relies on the database to auto-delete expired rows, so expired sessions
+// are also treated as "not found" here.
+const SESSION_TTL_MS = 60 * 60 * 1000;
 
-// Add TTL index on createdAt
-posSessionSchema.index({ lastUpdate: 1 }, { expireAfterSeconds: 3600 });
-
-const PosSession = mongoose.models.PosSession || mongoose.model('PosSession', posSessionSchema);
+function isExpired(expiresAt: Date): boolean {
+  return expiresAt.getTime() <= Date.now();
+}
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ sessionId: string }> }
 ) {
   try {
-    await connectDB();
     const { sessionId } = await params;
     const tenant = request.nextUrl.searchParams.get('tenant');
 
@@ -45,10 +30,9 @@ export async function GET(
       );
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const session = await PosSession.findOne({ sessionId, tenant }).lean() as any;
+    const session = await prisma.posSession.findUnique({ where: { sessionId } });
 
-    if (!session) {
+    if (!session || session.tenant !== tenant || isExpired(session.expiresAt)) {
       return NextResponse.json(
         { success: false, error: 'Session not found' },
         { status: 404 }
@@ -60,16 +44,16 @@ export async function GET(
       data: {
         sessionId,
         cart: session.cart,
-        subtotal: session.subtotal,
+        subtotal: Number(session.subtotal),
         discount: session.discount,
-        taxAmount: session.taxAmount,
-        taxRate: session.taxRate,
+        taxAmount: session.taxAmount != null ? Number(session.taxAmount) : session.taxAmount,
+        taxRate: session.taxRate != null ? Number(session.taxRate) : session.taxRate,
         taxLabel: session.taxLabel,
-        tip: session.tip,
-        total: session.total,
+        tip: Number(session.tip),
+        total: Number(session.total),
         paymentMethod: session.paymentMethod,
         paymentStatus: session.paymentStatus,
-        lastUpdate: session.lastUpdate,
+        lastUpdate: session.lastUpdate.getTime(),
       },
     }, {
       headers: {
@@ -91,7 +75,6 @@ export async function POST(
   { params }: { params: Promise<{ sessionId: string }> }
 ) {
   try {
-    await connectDB();
     const { sessionId } = await params;
 
     let body: { tenant?: string; action?: string; data?: Record<string, unknown> };
@@ -113,7 +96,10 @@ export async function POST(
       );
     }
 
-    let session = await PosSession.findOne({ sessionId });
+    let session = await prisma.posSession.findUnique({ where: { sessionId } });
+    if (session && isExpired(session.expiresAt)) {
+      session = null;
+    }
 
     // Once a session belongs to a tenant, no caller may reassign it to a different
     // tenant — the client-supplied `tenant` field is otherwise unauthenticated and
@@ -125,102 +111,124 @@ export async function POST(
       );
     }
 
+    const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+
     if (action === 'init' && !session) {
       // Create a brand-new session
-      session = await PosSession.create({
-        sessionId,
-        tenant,
-        cart: data?.cart || [],
-        subtotal: data?.subtotal || 0,
-        discount: data?.discount || null,
-        taxAmount: data?.taxAmount,
-        taxRate: data?.taxRate,
-        taxLabel: data?.taxLabel,
-        tip: data?.tip || 0,
-        total: data?.total || 0,
-        paymentMethod: data?.paymentMethod || null,
-        paymentStatus: 'pending',
-        lastUpdate: Date.now(),
+      session = await prisma.posSession.create({
+        data: {
+          id: randomUUID(),
+          sessionId,
+          tenant,
+          cart: (data?.cart ?? []) as Prisma.InputJsonValue,
+          subtotal: (data?.subtotal as number | undefined) ?? 0,
+          discount: (data?.discount ?? null) as Prisma.InputJsonValue | undefined,
+          taxAmount: data?.taxAmount as number | undefined,
+          taxRate: data?.taxRate as number | undefined,
+          taxLabel: data?.taxLabel as string | undefined,
+          tip: (data?.tip as number | undefined) ?? 0,
+          total: (data?.total as number | undefined) ?? 0,
+          paymentMethod: (data?.paymentMethod as string | undefined) ?? null,
+          paymentStatus: 'pending',
+          lastUpdate: new Date(),
+          expiresAt,
+        },
       });
     } else if (action === 'init' && session) {
       // Reset an existing session owned by the same tenant
-      session = await PosSession.findOneAndUpdate(
-        { sessionId },
-        {
-          cart: data?.cart || [],
-          subtotal: data?.subtotal || 0,
-          discount: data?.discount || null,
-          taxAmount: data?.taxAmount,
-          taxRate: data?.taxRate,
-          taxLabel: data?.taxLabel,
-          tip: data?.tip || 0,
-          total: data?.total || 0,
-          paymentMethod: data?.paymentMethod || null,
+      session = await prisma.posSession.update({
+        where: { sessionId },
+        data: {
+          cart: (data?.cart ?? []) as Prisma.InputJsonValue,
+          subtotal: (data?.subtotal as number | undefined) ?? 0,
+          discount: (data?.discount ?? null) as Prisma.InputJsonValue | undefined,
+          taxAmount: data?.taxAmount as number | undefined,
+          taxRate: data?.taxRate as number | undefined,
+          taxLabel: data?.taxLabel as string | undefined,
+          tip: (data?.tip as number | undefined) ?? 0,
+          total: (data?.total as number | undefined) ?? 0,
+          paymentMethod: (data?.paymentMethod as string | undefined) ?? null,
           paymentStatus: 'pending',
-          lastUpdate: Date.now(),
+          lastUpdate: new Date(),
+          expiresAt,
         },
-        { new: true }
-      );
+      });
     } else if (action === 'update-cart' && !session) {
       // Auto-create session if it doesn't exist (handles race condition where cart syncs before init completes)
-      session = await PosSession.findOneAndUpdate(
-        { sessionId },
-        {
+      session = await prisma.posSession.upsert({
+        where: { sessionId },
+        create: {
+          id: randomUUID(),
           sessionId,
           tenant,
-          cart: data?.cart || [],
-          subtotal: data?.subtotal || 0,
-          discount: null,
-          taxAmount: data?.taxAmount || 0,
-          taxRate: data?.taxRate || 0,
-          taxLabel: data?.taxLabel || 'Tax',
+          cart: (data?.cart ?? []) as Prisma.InputJsonValue,
+          subtotal: (data?.subtotal as number | undefined) ?? 0,
+          discount: Prisma.JsonNull,
+          taxAmount: (data?.taxAmount as number | undefined) ?? 0,
+          taxRate: (data?.taxRate as number | undefined) ?? 0,
+          taxLabel: (data?.taxLabel as string | undefined) ?? 'Tax',
           tip: 0,
-          total: data?.total || 0,
+          total: (data?.total as number | undefined) ?? 0,
           paymentMethod: null,
           paymentStatus: 'pending',
-          lastUpdate: Date.now(),
+          lastUpdate: new Date(),
+          expiresAt,
         },
-        { upsert: true, new: true }
-      );
+        update: {
+          sessionId,
+          tenant,
+          cart: (data?.cart ?? []) as Prisma.InputJsonValue,
+          subtotal: (data?.subtotal as number | undefined) ?? 0,
+          discount: Prisma.JsonNull,
+          taxAmount: (data?.taxAmount as number | undefined) ?? 0,
+          taxRate: (data?.taxRate as number | undefined) ?? 0,
+          taxLabel: (data?.taxLabel as string | undefined) ?? 'Tax',
+          tip: 0,
+          total: (data?.total as number | undefined) ?? 0,
+          paymentMethod: null,
+          paymentStatus: 'pending',
+          lastUpdate: new Date(),
+          expiresAt,
+        },
+      });
     } else if (session) {
-      const updates: Record<string, unknown> = { lastUpdate: Date.now() };
+      const updates: Prisma.PosSessionUpdateInput = { lastUpdate: new Date(), expiresAt };
 
       if (action === 'update-cart' && data) {
-        if (data.cart) updates.cart = data.cart;
-        if (data.subtotal != null) updates.subtotal = data.subtotal;
-        if (data.taxAmount != null) updates.taxAmount = data.taxAmount;
-        if (data.taxRate != null) updates.taxRate = data.taxRate;
-        if (data.taxLabel != null) updates.taxLabel = data.taxLabel;
-        if (data.total != null) updates.total = data.total;
+        if (data.cart) updates.cart = data.cart as Prisma.InputJsonValue;
+        if (data.subtotal != null) updates.subtotal = data.subtotal as number;
+        if (data.taxAmount != null) updates.taxAmount = data.taxAmount as number;
+        if (data.taxRate != null) updates.taxRate = data.taxRate as number;
+        if (data.taxLabel != null) updates.taxLabel = data.taxLabel as string;
+        if (data.total != null) updates.total = data.total as number;
       } else if (action === 'update-discount' && data) {
-        updates.discount = data.discount;
-        if (data.taxAmount != null) updates.taxAmount = data.taxAmount;
-        if (data.total != null) updates.total = data.total;
+        updates.discount = (data.discount ?? Prisma.JsonNull) as Prisma.InputJsonValue;
+        if (data.taxAmount != null) updates.taxAmount = data.taxAmount as number;
+        if (data.total != null) updates.total = data.total as number;
       } else if (action === 'update-tip' && data) {
-        updates.tip = data.tip ?? 0;
-        if (data.total != null) updates.total = data.total;
+        updates.tip = (data.tip as number | undefined) ?? 0;
+        if (data.total != null) updates.total = data.total as number;
       } else if (action === 'update-payment-method' && data) {
-        updates.paymentMethod = data.paymentMethod || null;
+        updates.paymentMethod = (data.paymentMethod as string | undefined) ?? null;
       } else if (action === 'update-payment-status' && data) {
-        updates.paymentStatus = data.status || 'pending';
+        updates.paymentStatus = (data.status as string | undefined) ?? 'pending';
       } else if (action === 'clear') {
         updates.cart = [];
         updates.subtotal = 0;
-        updates.discount = null;
-        updates.taxAmount = 0;
-        updates.taxRate = undefined;
-        updates.taxLabel = undefined;
+        updates.discount = Prisma.JsonNull;
+        updates.taxAmount = null;
+        updates.taxRate = null;
+        updates.taxLabel = null;
         updates.tip = 0;
         updates.total = 0;
         updates.paymentMethod = null;
         updates.paymentStatus = 'pending';
       }
 
-      session = await PosSession.findOneAndUpdate(
-        { sessionId },
-        { $set: updates },
-        { new: true }
-      );
+      session = await prisma.posSession.update({
+        where: { sessionId },
+        data: updates,
+      });
     } else {
       return NextResponse.json(
         { success: false, error: 'Session not found. Please reinitialize.' },
@@ -233,13 +241,13 @@ export async function POST(
       data: {
         sessionId,
         cart: session.cart,
-        subtotal: session.subtotal,
+        subtotal: Number(session.subtotal),
         discount: session.discount,
-        taxAmount: session.taxAmount,
-        taxRate: session.taxRate,
+        taxAmount: session.taxAmount != null ? Number(session.taxAmount) : session.taxAmount,
+        taxRate: session.taxRate != null ? Number(session.taxRate) : session.taxRate,
         taxLabel: session.taxLabel,
-        tip: session.tip,
-        total: session.total,
+        tip: Number(session.tip),
+        total: Number(session.total),
         paymentMethod: session.paymentMethod,
         paymentStatus: session.paymentStatus,
       },

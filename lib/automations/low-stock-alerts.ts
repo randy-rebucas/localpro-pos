@@ -3,8 +3,7 @@
  * Sends notifications when products reach low stock thresholds
  */
 
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/db';
 import { getLowStockProducts } from '@/lib/stock';
 import { sendEmail, sendSMS } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
@@ -22,8 +21,6 @@ export interface LowStockAlertOptions {
 export async function sendLowStockAlerts(
   options: LowStockAlertOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -36,15 +33,21 @@ export async function sendLowStockAlerts(
     // Get tenants to process
     let tenants;
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await prisma.tenant.findUnique({ where: { id: options.tenantId } });
       tenants = tenant ? [tenant] : [];
     } else {
       // Get all active tenants with inventory enabled
-      tenants = await Tenant.find({
-        status: 'active',
-        'settings.enableInventory': true,
-        'settings.lowStockAlert': true,
-      }).lean();
+      tenants = await prisma.tenant.findMany({
+        where: {
+          isActive: true,
+          settings: {
+            is: {
+              enableInventory: true,
+              lowStockAlert: true,
+            },
+          },
+        },
+      });
     }
 
     if (tenants.length === 0) {
@@ -57,7 +60,7 @@ export async function sendLowStockAlerts(
 
     for (const tenant of tenants) {
       try {
-        const tenantSettings = await getTenantSettingsById(tenant._id.toString());
+        const tenantSettings = await getTenantSettingsById(tenant.id);
 
         // Skip if notifications disabled
         if (!tenantSettings?.emailNotifications && !tenantSettings?.smsNotifications) {
@@ -72,7 +75,7 @@ export async function sendLowStockAlerts(
         // Get low stock products
         const threshold = options.threshold || tenantSettings?.lowStockThreshold || 10;
         const lowStockProducts = await getLowStockProducts(
-          tenant._id.toString(),
+          tenant.id,
           undefined,
           threshold
         );

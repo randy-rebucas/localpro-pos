@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import LoyaltyConfig from '@/models/LoyaltyConfig';
+import prisma from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -11,8 +10,6 @@ import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
-
     const user = await getCurrentUser(request);
     if (!user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
@@ -34,7 +31,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const config = await LoyaltyConfig.findOne({ tenantId }).lean();
+    const config = await prisma.loyaltyConfig.findUnique({ where: { tenantId } });
 
     // Return defaults if not yet configured
     if (!config) {
@@ -50,7 +47,14 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({ success: true, data: config });
+    return NextResponse.json({
+      success: true,
+      data: {
+        ...config,
+        pointsPerPeso: Number(config.pointsPerPeso),
+        pesoPerPoint: Number(config.pesoPerPoint),
+      },
+    });
   } catch (error) {
     return handleApiError(error, 'Failed to fetch loyalty config');
   }
@@ -58,8 +62,6 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    await connectDB();
-
     const user = await getCurrentUser(request);
     if (!user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
@@ -108,22 +110,29 @@ export async function PUT(request: NextRequest) {
     if (minRedemption !== undefined) updates.minRedemption = minRedemption;
     if (isEnabled !== undefined) updates.isEnabled = isEnabled;
 
-    const config = await LoyaltyConfig.findOneAndUpdate(
-      { tenantId },
-      { $set: updates },
-      { upsert: true, new: true }
-    );
+    const config = await prisma.loyaltyConfig.upsert({
+      where: { tenantId },
+      update: updates,
+      create: { tenantId, ...updates },
+    });
 
     await createAuditLog(request, {
       tenantId: tenantId.toString(),
       userId: user.userId,
       action: AuditActions.UPDATE,
       entityType: 'loyalty_config',
-      entityId: config._id.toString(),
+      entityId: config.tenantId,
       changes: updates,
     });
 
-    return NextResponse.json({ success: true, data: config });
+    return NextResponse.json({
+      success: true,
+      data: {
+        ...config,
+        pointsPerPeso: Number(config.pointsPerPeso),
+        pesoPerPoint: Number(config.pesoPerPoint),
+      },
+    });
   } catch (error) {
     return handleApiError(error, 'Failed to update loyalty config');
   }

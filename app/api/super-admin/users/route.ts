@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
-import Tenant from '@/models/Tenant';
+import { Prisma } from '@prisma/client';
+import prisma from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     await requireRole(request, ['super_admin']);
 
     const { searchParams } = new URL(request.url);
@@ -18,22 +16,22 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || '';
 
     // Build query — always exclude super_admin accounts
-    const query: Record<string, unknown> = { role: { $ne: 'super_admin' } };
+    const where: Prisma.UserWhereInput = { role: { not: 'super_admin' } };
 
-    if (role) query.role = role;
+    if (role) where.role = role as Prisma.UserWhereInput['role'];
 
     if (search) {
-      query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
       ];
     }
 
     // Resolve tenantSlug → tenantId
     if (tenantSlug) {
-      const tenant = await Tenant.findOne({ slug: tenantSlug }).select('_id').lean();
+      const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug }, select: { id: true } });
       if (tenant) {
-        query.tenantId = (tenant as { _id: unknown })._id;
+        where.tenantId = tenant.id;
       } else {
         return NextResponse.json({
           success: true,
@@ -44,14 +42,24 @@ export async function GET(request: NextRequest) {
     }
 
     const [users, total] = await Promise.all([
-      User.find(query)
-        .populate('tenantId', 'slug name')
-        .select('name email role isActive lastLogin createdAt tenantId')
-        .sort({ createdAt: -1 })
-        .skip((page - 1) * limit)
-        .limit(limit)
-        .lean(),
-      User.countDocuments(query),
+      prisma.user.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          isActive: true,
+          lastLogin: true,
+          createdAt: true,
+          tenantId: true,
+          tenant: { select: { slug: true, name: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.user.count({ where }),
     ]);
 
     return NextResponse.json({

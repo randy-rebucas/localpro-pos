@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Subscription from '@/models/Subscription';
-import SubscriptionPlan from '@/models/SubscriptionPlan';
-import Tenant from '@/models/Tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import prisma from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -11,7 +8,6 @@ import { logger } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const t = await getValidationTranslatorFromRequest(request);
 
     // Require authentication for upgrade requests
@@ -42,8 +38,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify the requested plan exists and is active
-    const requestedPlanDoc = await SubscriptionPlan.findOne({ _id: planId, isActive: true });
+    // Verify the requested plan exists and is active (global catalog)
+    const requestedPlanDoc = await prisma.subscriptionPlan.findFirst({ where: { id: planId, isActive: true } });
     if (!requestedPlanDoc) {
       return NextResponse.json(
         { success: false, error: t('validation.requestedPlanNotFound', 'Requested plan not found or not available') },
@@ -51,10 +47,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get current subscription
-    const currentSubscription = await Subscription.findOne({ tenantId })
-      .populate('planId', 'name tier')
-      .lean();
+    // Get current subscription — scoped to this tenant only
+    const currentSubscription = await prisma.subscription.findUnique({
+      where: { tenantId },
+      include: { plan: { select: { id: true, name: true, tier: true } } },
+    });
 
     if (!currentSubscription) {
       return NextResponse.json(
@@ -64,7 +61,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if already on this plan
-    if (currentSubscription.planId._id.toString() === planId) {
+    if (currentSubscription.plan.id === planId) {
       return NextResponse.json(
         { success: false, error: t('validation.alreadyOnPlan', 'You are already on this plan') },
         { status: 400 }
@@ -98,11 +95,11 @@ export async function POST(request: NextRequest) {
       },
     });
 
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  } catch (error: unknown) {
     logger.error('Error requesting upgrade:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
-      { success: false, error: error.message || t('validation.upgradeRequestFailed', 'Failed to submit upgrade request') },
+      { success: false, error: (error as Error).message || t('validation.upgradeRequestFailed', 'Failed to submit upgrade request') },
       { status: 500 }
     );
   }

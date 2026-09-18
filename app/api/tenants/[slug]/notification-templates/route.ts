@@ -4,13 +4,44 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/db';
 import { validateNotificationTemplate } from '@/lib/notification-templates';
 import { getCurrentUser } from '@/lib/auth';
 import { logger } from '@/lib/logger';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { createAuditLog, AuditActions } from '@/lib/audit';
+
+// Maps the old Mongoose `settings.notificationTemplates.<type>.<category>` dot-path
+// to the flattened TenantSettings column (see prisma/schema.prisma).
+const TEMPLATE_COLUMN_MAP: Record<string, Record<string, string>> = {
+  email: {
+    bookingConfirmation: 'emailBookingConfirmationTemplate',
+    bookingReminder: 'emailBookingReminderTemplate',
+    bookingCancellation: 'emailBookingCancellationTemplate',
+    lowStockAlert: 'emailLowStockAlertTemplate',
+    attendanceAlert: 'emailAttendanceAlertTemplate',
+  },
+  sms: {
+    bookingConfirmation: 'smsBookingConfirmationTemplate',
+    bookingReminder: 'smsBookingReminderTemplate',
+    bookingCancellation: 'smsBookingCancellationTemplate',
+    lowStockAlert: 'smsLowStockAlertTemplate',
+  },
+};
+
+function templatesFromSettings(settings: Record<string, unknown> | null | undefined) {
+  const result: Record<string, Record<string, string>> = {};
+  for (const [type, categories] of Object.entries(TEMPLATE_COLUMN_MAP)) {
+    for (const [key, column] of Object.entries(categories)) {
+      const value = settings?.[column];
+      if (value !== null && value !== undefined) {
+        result[type] = result[type] || {};
+        result[type][key] = value as string;
+      }
+    }
+  }
+  return result;
+}
 
 export async function GET(
   request: NextRequest,
@@ -23,20 +54,18 @@ export async function GET(
     }
 
     const { slug } = await params;
-    await connectDB();
-
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await prisma.tenant.findFirst({ where: { slug }, include: { settings: true } });
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
     return NextResponse.json({
       success: true,
-      data: tenant.settings.notificationTemplates || {},
+      data: templatesFromSettings(tenant.settings as unknown as Record<string, unknown>),
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Error fetching notification templates:', error);
@@ -77,33 +106,33 @@ export async function PUT(
       return NextResponse.json({ success: false, error: validation.error }, { status: 400 });
     }
 
-    await connectDB();
-
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await prisma.tenant.findFirst({ where: { slug } });
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
     const key = subcategory || category;
     const value = type === 'email' && subject ? `${subject}|${templateBody}` : templateBody;
 
-    // Atomic $set on the specific dot-path avoids clobbering concurrent edits to
-    // other template categories (a full read-modify-write of the whole
-    // notificationTemplates object + tenant.save() could lose them).
-    await Tenant.updateOne(
-      { _id: tenant._id },
-      { $set: { [`settings.notificationTemplates.${type}.${key}`]: value } }
-    );
+    const column = TEMPLATE_COLUMN_MAP[type]?.[key];
+    if (!column) {
+      return NextResponse.json({ success: false, error: `Unknown notification template category: ${type}.${key}` }, { status: 400 });
+    }
 
-    const updatedTenant = await Tenant.findOne({ _id: tenant._id }).select('settings.notificationTemplates').lean();
-    const templates = updatedTenant?.settings?.notificationTemplates || {};
+    const updated = await prisma.tenantSettings.upsert({
+      where: { tenantId: tenant.id },
+      create: { tenantId: tenant.id, [column]: value },
+      update: { [column]: value },
+    });
+
+    const templates = templatesFromSettings(updated as unknown as Record<string, unknown>);
 
     await createAuditLog(request, {
-      tenantId: tenant._id,
+      tenantId: tenant.id,
       userId: user.userId,
       action: AuditActions.UPDATE,
       entityType: 'notification_template',

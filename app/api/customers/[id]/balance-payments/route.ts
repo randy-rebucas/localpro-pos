@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import mongoose from 'mongoose';
-import type { Types } from 'mongoose';
-import connectDB from '@/lib/mongodb';
-import Customer from '@/models/Customer';
-import CustomerBalancePayment from '@/models/CustomerBalancePayment';
+import { randomUUID } from 'crypto';
+import { Prisma } from '@prisma/client';
+import prisma from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -19,7 +17,6 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const { id: customerId } = await params;
 
     let tenantId: string;
@@ -41,7 +38,7 @@ export async function GET(
     }
 
     const t = await getValidationTranslatorFromRequest(request);
-    const customer = await Customer.findOne({ _id: customerId, tenantId }).select('_id').lean();
+    const customer = await prisma.customer.findFirst({ where: { id: customerId, tenantId }, select: { id: true } });
     if (!customer) {
       return NextResponse.json({ success: false, error: t('validation.customerNotFound', 'Customer not found') }, { status: 404 });
     }
@@ -49,12 +46,16 @@ export async function GET(
     const rawLimit = parseInt(request.nextUrl.searchParams.get('limit') || '20', 10);
     const limit = Math.min(Math.max(1, rawLimit), 100);
 
-    const payments = await CustomerBalancePayment.find({ tenantId, customerId })
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .lean();
+    const payments = await prisma.customerBalancePayment.findMany({
+      where: { tenantId, customerId },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
 
-    return NextResponse.json({ success: true, data: payments });
+    return NextResponse.json({
+      success: true,
+      data: payments.map((p) => ({ ...p, _id: p.id, amount: Number(p.amount) })),
+    });
   } catch (error: unknown) {
     logger.error('balance-payments GET:', error);
     const message = error instanceof Error ? error.message : 'Failed to fetch balance payments';
@@ -69,7 +70,6 @@ export async function POST(
   let idempotencyKeyForConflictCheck: string | undefined;
   let tenantIdForConflictCheck: string | undefined;
   try {
-    await connectDB();
     const { id: customerId } = await params;
     const t = await getValidationTranslatorFromRequest(request);
 
@@ -117,9 +117,9 @@ export async function POST(
     tenantIdForConflictCheck = tenantId;
 
     if (idempotencyKey) {
-      const existing = await CustomerBalancePayment.findOne({ tenantId, idempotencyKey }).lean();
+      const existing = await prisma.customerBalancePayment.findFirst({ where: { tenantId, idempotencyKey } });
       if (existing) {
-        return NextResponse.json({ success: true, data: existing }, { status: 200 });
+        return NextResponse.json({ success: true, data: { ...existing, _id: existing.id, amount: Number(existing.amount) } }, { status: 200 });
       }
     }
 
@@ -136,63 +136,62 @@ export async function POST(
       );
     }
 
-    const session = await mongoose.startSession();
-    let record;
     let balanceBefore = 0;
     let balanceAfter = 0;
-    try {
-      session.startTransaction();
 
-      const customer = await Customer.findOne({ _id: customerId, tenantId, isActive: true }).session(session);
+    // Guard against a "not found or inactive" / "exceeds balance" early-exit
+    // response being generated from inside the transaction closure.
+    let earlyResponse: NextResponse | null = null;
+
+    const record = await prisma.$transaction(async (tx) => {
+      const customer = await tx.customer.findFirst({ where: { id: customerId, tenantId, isActive: true } });
       if (!customer) {
-        await session.abortTransaction();
-        return NextResponse.json(
+        earlyResponse = NextResponse.json(
           { success: false, error: t('validation.customerNotFound', 'Customer not found or inactive') },
           { status: 404 }
         );
+        return null;
       }
 
-      balanceBefore = customer.accountBalance ?? 0;
+      balanceBefore = Number(customer.accountBalance ?? 0);
       if (amount - balanceBefore > 0.01) {
-        await session.abortTransaction();
-        return NextResponse.json(
+        earlyResponse = NextResponse.json(
           {
             success: false,
             error: t('validation.paymentExceedsBalance', "Amount cannot exceed the customer's outstanding balance"),
           },
           { status: 400 }
         );
+        return null;
       }
 
-      const [created] = await CustomerBalancePayment.create(
-        [
-          {
-            tenantId,
-            customerId: customer._id,
-            amount,
-            method: method as (typeof VALID_METHODS)[number],
-            notes,
-            recordedBy: new mongoose.Types.ObjectId(userId) as Types.ObjectId,
-            ...(idempotencyKey ? { idempotencyKey } : {}),
-          },
-        ],
-        { session }
-      );
-      record = created;
+      const created = await tx.customerBalancePayment.create({
+        data: {
+          id: randomUUID(),
+          tenantId,
+          customerId: customer.id,
+          amount,
+          method: method as (typeof VALID_METHODS)[number],
+          notes,
+          recordedById: userId,
+          ...(idempotencyKey ? { idempotencyKey } : {}),
+        },
+      });
 
-      await Customer.updateOne(
-        { _id: customerId, tenantId },
-        { $inc: { accountBalance: -amount } },
-        { session }
-      );
+      await tx.customer.update({
+        where: { id: customerId },
+        data: { accountBalance: { decrement: amount } },
+      });
       balanceAfter = balanceBefore - amount;
 
-      await session.commitTransaction();
-    } catch (e) {
-      await session.abortTransaction();
-      throw e;
-    } finally {
-      session.endSession();
+      return created;
+    });
+
+    if (earlyResponse) {
+      return earlyResponse;
+    }
+    if (!record) {
+      throw new Error('Failed to create balance payment');
     }
 
     await createAuditLog(request, {
@@ -200,7 +199,7 @@ export async function POST(
       userId,
       action: AuditActions.PAYMENT_CREATE,
       entityType: 'customer_balance_payment',
-      entityId: record._id.toString(),
+      entityId: record.id,
       changes: {
         customerId,
         amount,
@@ -210,24 +209,31 @@ export async function POST(
       },
     });
 
-    return NextResponse.json({ success: true, data: record }, { status: 201 });
+    return NextResponse.json(
+      { success: true, data: { ...record, _id: record.id, amount: Number(record.amount) } },
+      { status: 201 }
+    );
   } catch (error: unknown) {
     // A concurrent duplicate request (same idempotencyKey) raced us and won —
     // return that payment instead of a generic failure.
     if (
       idempotencyKeyForConflictCheck &&
-      error &&
-      typeof error === 'object' &&
-      'code' in error &&
-      (error as { code?: number }).code === 11000 &&
-      String((error as { message?: string }).message || '').includes('idempotencyKey')
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002' &&
+      Array.isArray((error.meta as { target?: string[] })?.target) &&
+      (error.meta as { target?: string[] }).target?.includes('idempotencyKey')
     ) {
-      const existing = await CustomerBalancePayment.findOne({
-        tenantId: tenantIdForConflictCheck,
-        idempotencyKey: idempotencyKeyForConflictCheck,
-      }).lean();
+      const existing = await prisma.customerBalancePayment.findFirst({
+        where: {
+          tenantId: tenantIdForConflictCheck,
+          idempotencyKey: idempotencyKeyForConflictCheck,
+        },
+      });
       if (existing) {
-        return NextResponse.json({ success: true, data: existing }, { status: 200 });
+        return NextResponse.json(
+          { success: true, data: { ...existing, _id: existing.id, amount: Number(existing.amount) } },
+          { status: 200 }
+        );
       }
     }
     logger.error('balance-payments POST:', error);

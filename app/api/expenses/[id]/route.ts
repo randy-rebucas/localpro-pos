@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Expense from '@/models/Expense';
+import prisma from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -13,16 +12,16 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId } = authResult;
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
 
-    const expense = await Expense.findOne({ _id: id, tenantId })
-      .populate('userId', 'name email')
-      .lean();
+    const expense = await prisma.expense.findFirst({
+      where: { id, tenantId },
+      include: { user: { select: { name: true, email: true } } },
+    });
 
     if (!expense) {
       return NextResponse.json({ success: false, error: t('validation.expenseNotFound', 'Expense not found') }, { status: 404 });
@@ -39,7 +38,6 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId } = authResult;
@@ -56,32 +54,35 @@ export async function PUT(
       return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
     }
 
-    const expense = await Expense.findOne({ _id: id, tenantId });
-    if (!expense) {
+    const existingExpense = await prisma.expense.findFirst({ where: { id, tenantId } });
+    if (!existingExpense) {
       return NextResponse.json({ success: false, error: t('validation.expenseNotFound', 'Expense not found') }, { status: 404 });
     }
 
     const body = await request.json();
     const { name, description, amount, date, paymentMethod, receipt, notes } = body;
 
-    const oldData = expense.toObject();
+    const data: any = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-    if (name) expense.name = name;
-    if (description) expense.description = description;
-    if (amount !== undefined) expense.amount = parseFloat(amount);
-    if (date) expense.date = new Date(date);
-    if (paymentMethod) expense.paymentMethod = paymentMethod;
-    if (receipt !== undefined) expense.receipt = receipt;
-    if (notes !== undefined) expense.notes = notes;
+    if (name) data.name = name;
+    if (description) data.description = description;
+    if (amount !== undefined) data.amount = parseFloat(amount);
+    if (date) data.date = new Date(date);
+    if (paymentMethod) data.paymentMethod = paymentMethod;
+    if (receipt !== undefined) data.receipt = receipt;
+    if (notes !== undefined) data.notes = notes;
 
-    await expense.save();
+    const expense = await prisma.expense.update({
+      where: { id, tenantId },
+      data,
+    });
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.UPDATE,
       entityType: 'expense',
-      entityId: expense._id.toString(),
-      changes: { before: oldData, after: expense.toObject() },
+      entityId: expense.id,
+      changes: { before: existingExpense, after: expense },
     });
 
     return NextResponse.json({ success: true, data: expense });
@@ -95,7 +96,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId } = authResult;
@@ -112,21 +112,21 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
     }
 
-    const expense = await Expense.findOneAndUpdate(
-      { _id: id, tenantId, isActive: true },
-      { isActive: false },
-      { new: true }
-    );
-    if (!expense) {
+    const { count } = await prisma.expense.updateMany({
+      where: { id, tenantId, isActive: true },
+      data: { isActive: false },
+    });
+    if (count === 0) {
       return NextResponse.json({ success: false, error: t('validation.expenseNotFound', 'Expense not found') }, { status: 404 });
     }
+    const expense = await prisma.expense.findFirst({ where: { id, tenantId } });
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.DELETE,
       entityType: 'expense',
-      entityId: expense._id.toString(),
-      changes: { name: expense.name, description: expense.description, amount: expense.amount, softDeleted: true },
+      entityId: id,
+      changes: { name: expense?.name, description: expense?.description, amount: expense?.amount, softDeleted: true },
     });
 
     return NextResponse.json({ success: true, message: t('validation.expenseDeleted', 'Expense deleted successfully') });

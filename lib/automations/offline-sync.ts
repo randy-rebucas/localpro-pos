@@ -3,10 +3,8 @@
  * Processes queued offline transactions and creates real Transaction records.
  */
 
-import connectDB from '@/lib/mongodb';
-import OfflineTransaction from '@/models/OfflineTransaction';
-import Transaction from '@/models/Transaction';
-import Tenant from '@/models/Tenant';
+import { randomUUID } from 'crypto';
+import prisma from '@/lib/db';
 import { generateReceiptNumber } from '@/lib/receipt';
 import { AutomationResult } from './types';
 
@@ -17,14 +15,12 @@ export interface OfflineSyncOptions {
 
 /**
  * Sync pending offline transactions.
- * Finds all OfflineTransaction documents with syncStatus 'pending' or 'failed'
+ * Finds all OfflineTransaction records with syncStatus 'pending' or 'failed'
  * (below maxRetries), creates proper Transaction records, and marks them synced.
  */
 export async function syncOfflineTransactions(
   options: OfflineSyncOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const maxRetries = options.maxRetries ?? 3;
 
   const results: AutomationResult = {
@@ -39,35 +35,38 @@ export async function syncOfflineTransactions(
     // Get tenants to process
     let tenantIds: string[];
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).select('_id').lean();
+      const tenant = await prisma.tenant.findUnique({ where: { id: options.tenantId }, select: { id: true } });
       if (!tenant) {
         results.message = `Tenant ${options.tenantId} not found`;
         return results;
       }
       tenantIds = [options.tenantId];
     } else {
-      const tenants = await Tenant.find({ status: 'active' }).select('_id').lean();
-      tenantIds = tenants.map(t => t._id.toString());
+      const tenants = await prisma.tenant.findMany({ where: { isActive: true }, select: { id: true } });
+      tenantIds = tenants.map(t => t.id);
     }
 
     for (const tenantId of tenantIds) {
       // Find pending offline transactions, ordered oldest-first
-      const pending = await OfflineTransaction.find({
-        tenantId,
-        syncStatus: { $in: ['pending', 'failed'] },
-        retryCount: { $lt: maxRetries },
-        isActive: true,
-      })
-        .sort({ offlineCreatedAt: 1 })
-        .limit(100) // Process in batches of 100
-        .lean();
+      const pending = await prisma.offlineTransaction.findMany({
+        where: {
+          tenantId,
+          syncStatus: { in: ['pending', 'failed'] },
+          retryCount: { lt: maxRetries },
+          isActive: true,
+        },
+        orderBy: { offlineCreatedAt: 'asc' },
+        take: 100, // Process in batches of 100
+        include: { items: true },
+      });
 
       for (const offline of pending) {
-        const offlineId = offline._id.toString();
+        const offlineId = offline.id;
 
         // Mark as processing to prevent duplicate processing
-        await OfflineTransaction.findByIdAndUpdate(offlineId, {
-          syncStatus: 'processing',
+        await prisma.offlineTransaction.update({
+          where: { id: offlineId },
+          data: { syncStatus: 'processing' },
         });
 
         try {
@@ -76,7 +75,8 @@ export async function syncOfflineTransactions(
 
           // Build the transaction items matching Transaction schema
           const items = offline.items.map(item => ({
-            product: item.productId,
+            id: randomUUID(),
+            productId: item.productId ?? undefined,
             name: item.name,
             price: item.price,
             quantity: item.quantity,
@@ -84,33 +84,39 @@ export async function syncOfflineTransactions(
           }));
 
           // Create the real transaction, using offline timestamp as the creation time
-          const transaction = await Transaction.create({
-            tenantId: offline.tenantId,
-            branchId: offline.branchId,
-            items,
-            subtotal: offline.subtotal,
-            discountCode: offline.discountCode,
-            discountCategory: offline.discountCategory,
-            discountAmount: offline.discountAmount,
-            taxExemptAmount: offline.taxExemptAmount ?? 0,
-            taxAmount: offline.taxAmount ?? 0,
-            total: offline.total,
-            paymentMethod: offline.paymentMethod,
-            cashReceived: offline.cashReceived,
-            change: offline.change,
-            status: 'completed',
-            customerId: offline.customerId,
-            userId: offline.userId,
-            receiptNumber,
-            notes: offline.notes,
-            isActive: true,
+          const transaction = await prisma.transaction.create({
+            data: {
+              id: randomUUID(),
+              tenantId: offline.tenantId,
+              branchId: offline.branchId ?? undefined,
+              subtotal: offline.subtotal,
+              discountCode: offline.discountCode ?? undefined,
+              discountCategory: offline.discountCategory ?? undefined,
+              discountAmount: offline.discountAmount ?? undefined,
+              taxExemptAmount: offline.taxExemptAmount ?? 0,
+              taxAmount: offline.taxAmount ?? 0,
+              total: offline.total,
+              paymentMethod: offline.paymentMethod as any,
+              cashReceived: offline.cashReceived ?? undefined,
+              change: offline.change ?? undefined,
+              status: 'completed',
+              customerId: offline.customerId ?? undefined,
+              userId: offline.userId ?? undefined,
+              receiptNumber,
+              notes: offline.notes ?? undefined,
+              isActive: true,
+              items: { create: items },
+            },
           });
 
           // Mark offline transaction as synced
-          await OfflineTransaction.findByIdAndUpdate(offlineId, {
-            syncStatus: 'synced',
-            syncedTransactionId: transaction._id,
-            syncError: undefined,
+          await prisma.offlineTransaction.update({
+            where: { id: offlineId },
+            data: {
+              syncStatus: 'synced',
+              syncedTransactionId: transaction.id,
+              syncError: null,
+            },
           });
 
           results.processed++;
@@ -119,10 +125,13 @@ export async function syncOfflineTransactions(
           const nextRetry = (offline.retryCount ?? 0) + 1;
           const nextStatus = nextRetry >= maxRetries ? 'failed' : 'pending';
 
-          await OfflineTransaction.findByIdAndUpdate(offlineId, {
-            syncStatus: nextStatus,
-            retryCount: nextRetry,
-            syncError: message,
+          await prisma.offlineTransaction.update({
+            where: { id: offlineId },
+            data: {
+              syncStatus: nextStatus,
+              retryCount: nextRetry,
+              syncError: message,
+            },
           });
 
           results.failed++;

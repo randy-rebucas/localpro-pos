@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
-import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
+import prisma from '@/lib/db';
 import { requireAuth, getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
@@ -18,7 +17,6 @@ export async function GET(
 ) {
   let t: (key: string, fallback: string) => string;
   try {
-    await connectDB();
     const authUser = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
@@ -35,8 +33,11 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
-    const user = await User.findOne({ _id: id, tenantId }).select('qrToken name email');
-    
+    const user = await prisma.user.findFirst({
+      where: { id, tenantId },
+      select: { qrToken: true, name: true, email: true },
+    });
+
     if (!user) {
       return NextResponse.json(
         { success: false, error: t('validation.userNotFound', 'User not found') },
@@ -47,7 +48,7 @@ export async function GET(
     if (!user.qrToken) {
       // Generate QR token if it doesn't exist
       const newQrToken = crypto.randomBytes(32).toString('hex');
-      await User.findByIdAndUpdate(id, { qrToken: newQrToken });
+      await prisma.user.update({ where: { id }, data: { qrToken: newQrToken } });
       return NextResponse.json({
         success: true,
         data: {
@@ -85,7 +86,6 @@ export async function POST(
 ) {
   let t: (key: string, fallback: string) => string;
   try {
-    await connectDB();
     const authUser = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
@@ -104,7 +104,7 @@ export async function POST(
     }
 
     // Verify user exists and belongs to same tenant
-    const user = await User.findOne({ _id: id, tenantId });
+    const user = await prisma.user.findFirst({ where: { id, tenantId } });
     if (!user) {
       return NextResponse.json(
         { success: false, error: t('validation.userNotFound', 'User not found') },
@@ -115,7 +115,7 @@ export async function POST(
     // Generate new QR token
     const newQrToken = crypto.randomBytes(32).toString('hex');
 
-    await User.findByIdAndUpdate(id, { qrToken: newQrToken });
+    await prisma.user.update({ where: { id }, data: { qrToken: newQrToken } });
 
     await createAuditLog(request, {
       tenantId,
@@ -142,4 +142,3 @@ export async function POST(
     );
   }
 }
-

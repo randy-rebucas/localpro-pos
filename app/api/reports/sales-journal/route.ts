@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
+import prisma from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
-import Transaction from '@/models/Transaction';
-import Tenant from '@/models/Tenant';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkFeatureAccess } from '@/lib/subscription';
 import { arrayToCSV } from '@/lib/export';
@@ -13,7 +11,6 @@ import { resolveTenantDateRange, DEFAULT_TENANT_TIMEZONE } from '@/lib/timezone'
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
@@ -36,9 +33,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const tenantDoc = await Tenant.findById(tenantId).select('settings.timezone settings.timeFormat').lean();
-    const tenantTz = tenantDoc?.settings?.timezone || DEFAULT_TENANT_TIMEZONE;
-    const tenantTimeFormat = tenantDoc?.settings?.timeFormat || '12h';
+    const tenantSettings = await prisma.tenantSettings.findUnique({
+      where: { tenantId },
+      select: { timezone: true, timeFormat: true },
+    });
+    const tenantTz = tenantSettings?.timezone || DEFAULT_TENANT_TIMEZONE;
+    const tenantTimeFormat = tenantSettings?.timeFormat || '12h';
 
     const searchParams = request.nextUrl.searchParams;
     const { startDate, endDate } = resolveTenantDateRange(
@@ -49,26 +49,30 @@ export async function GET(request: NextRequest) {
     const format = searchParams.get('format') || 'json'; // json, csv
 
     // Query transactions for the date range
-    const transactions = await Transaction.find({
-      tenantId,
-      createdAt: { $gte: startDate, $lte: endDate },
-    })
-      .sort({ createdAt: -1 })
-      .lean();
+    const transactions = await prisma.transaction.findMany({
+      where: {
+        tenantId,
+        createdAt: { gte: startDate, lte: endDate },
+      },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        items: { select: { name: true } },
+      },
+    });
 
     // Map to sales journal format
-    const journalEntries = transactions.map((txn: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+    const journalEntries = transactions.map((txn) => ({
       receiptNumber: txn.receiptNumber || '',
       date: new Date(txn.createdAt).toLocaleDateString('en-CA', { timeZone: tenantTz }),
       time: new Date(txn.createdAt).toLocaleTimeString('en-US', { timeZone: tenantTz, hour12: tenantTimeFormat === '12h' }),
-      items: txn.items?.map((item: any) => item.name).join('; ') || '', // eslint-disable-line @typescript-eslint/no-explicit-any
+      items: txn.items?.map((item) => item.name).join('; ') || '',
       itemCount: txn.items?.length || 0,
-      subtotal: txn.subtotal || 0,
+      subtotal: Number(txn.subtotal ?? 0),
       discountCategory: txn.discountCategory || '',
-      discountAmount: txn.discountAmount || 0,
-      taxExemptAmount: txn.taxExemptAmount || 0,
-      taxAmount: txn.taxAmount || 0,
-      total: txn.total || 0,
+      discountAmount: Number(txn.discountAmount ?? 0),
+      taxExemptAmount: Number(txn.taxExemptAmount ?? 0),
+      taxAmount: Number(txn.taxAmount ?? 0),
+      total: Number(txn.total ?? 0),
       paymentMethod: txn.paymentMethod || '',
       status: txn.status || '',
     }));

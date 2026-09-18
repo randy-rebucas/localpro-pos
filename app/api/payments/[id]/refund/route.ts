@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Payment from '@/models/Payment';
-import Transaction from '@/models/Transaction';
+import prisma from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -11,20 +9,18 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const tenantAccess = await requireTenantAccess(request);
     const { tenantId, user } = tenantAccess;
     if (!(await hasTenantPermission(user.role, tenantId, 'refunds.process'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
     const { id: paymentId } = await params;
-    
+
     const { refundReason } = await request.json();
 
     // Find payment
-    const payment = await Payment.findOne({
-      _id: paymentId,
-      tenantId,
+    const payment = await prisma.payment.findFirst({
+      where: { id: paymentId, tenantId },
     });
 
     if (!payment) {
@@ -47,11 +43,10 @@ export async function POST(
     // on-account balance. Refunding it here would leave the transaction, stock,
     // and reports out of sync with the payment ledger.
     if (payment.transactionId) {
-      const linkedTransaction = await Transaction.findOne({
-        _id: payment.transactionId,
-        tenantId,
-        status: 'completed',
-      }).select('_id');
+      const linkedTransaction = await prisma.transaction.findFirst({
+        where: { id: payment.transactionId, tenantId, status: 'completed' },
+        select: { id: true },
+      });
       if (linkedTransaction) {
         return NextResponse.json(
           {
@@ -65,26 +60,21 @@ export async function POST(
 
     // Atomic claim: guards against a double-submit/retry refunding the same
     // payment twice before either request's write lands.
-    const claimed = await Payment.findOneAndUpdate(
-      { _id: paymentId, tenantId, status: { $ne: 'refunded' } },
-      {
-        $set: {
-          status: 'refunded',
-          refundedAt: new Date(),
-          ...(refundReason ? { refundReason } : {}),
-        },
+    const claimResult = await prisma.payment.updateMany({
+      where: { id: paymentId, tenantId, status: { not: 'refunded' } },
+      data: {
+        status: 'refunded',
+        refundedAt: new Date(),
+        ...(refundReason ? { refundReason } : {}),
       },
-      { new: true }
-    );
-    if (!claimed) {
+    });
+    if (claimResult.count === 0) {
       return NextResponse.json(
         { success: false, error: 'Payment already refunded' },
         { status: 409 }
       );
     }
-    payment.status = claimed.status;
-    payment.refundedAt = claimed.refundedAt;
-    payment.refundReason = claimed.refundReason;
+    const claimed = await prisma.payment.findFirst({ where: { id: paymentId, tenantId } });
 
     // Create audit log
     await createAuditLog(request, {
@@ -92,14 +82,14 @@ export async function POST(
       userId: user.userId,
       action: AuditActions.PAYMENT_REFUND,
       entityType: 'payment',
-      entityId: payment._id.toString(),
+      entityId: paymentId,
       changes: {
         status: 'refunded',
         refundReason,
       },
     });
 
-    return NextResponse.json({ success: true, data: payment });
+    return NextResponse.json({ success: true, data: claimed });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'Failed to process refund';
     if (msg.includes('Unauthorized') || msg.includes('Forbidden')) {

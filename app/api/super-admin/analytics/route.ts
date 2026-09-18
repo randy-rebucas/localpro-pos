@@ -1,15 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Subscription from '@/models/Subscription';
-import '@/models/SubscriptionPlan';
-import Transaction from '@/models/Transaction';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     await requireRole(request, ['super_admin']);
 
     const { searchParams } = new URL(request.url);
@@ -33,47 +28,57 @@ export async function GET(request: NextRequest) {
     const prevEnd = new Date(rangeStart.getTime());
 
     // ── MRR: sum of active/trial subscriptions × plan monthly price ────────
-    const activeSubscriptions = await Subscription.find({
-      status: { $in: ['active', 'trial'] },
-    }).populate<{ planId: { price: { monthly: number } } | null }>('planId', 'price').lean();
+    const activeSubscriptions = await prisma.subscription.findMany({
+      where: { status: { in: ['active', 'trial'] } },
+      select: { plan: { select: { priceMonthly: true } } },
+    });
 
     const mrr = activeSubscriptions.reduce((sum, sub) => {
-      const plan = sub.planId as { price: { monthly: number } } | null;
-      return sum + (plan?.price?.monthly || 0);
+      return sum + Number(sub.plan?.priceMonthly || 0);
     }, 0);
 
     // ── Plan distribution ─────────────────────────────────────────────────
-    const planCounts = await Subscription.aggregate([
-      { $match: { status: { $in: ['active', 'trial'] } } },
-      { $group: { _id: '$planId', count: { $sum: 1 } } },
-      { $lookup: { from: 'subscriptionplans', localField: '_id', foreignField: '_id', as: 'plan' } },
-      { $unwind: { path: '$plan', preserveNullAndEmptyArrays: true } },
-      { $project: { tier: { $ifNull: ['$plan.tier', 'unknown'] }, name: { $ifNull: ['$plan.name', 'Unknown'] }, count: 1 } },
-      { $sort: { count: -1 } },
-    ]);
+    const planGroups = await prisma.subscription.groupBy({
+      by: ['planId'],
+      where: { status: { in: ['active', 'trial'] } },
+      _count: { _all: true },
+    });
+    const planIds = planGroups.map((g) => g.planId);
+    const plans = await prisma.subscriptionPlan.findMany({
+      where: { id: { in: planIds } },
+      select: { id: true, tier: true, name: true },
+    });
+    const planById = new Map(plans.map((p) => [p.id, p]));
+    const planCounts = planGroups
+      .map((g) => ({
+        tier: planById.get(g.planId)?.tier || 'unknown',
+        name: planById.get(g.planId)?.name || 'Unknown',
+        count: g._count._all,
+      }))
+      .sort((a, b) => b.count - a.count);
 
     // ── Transaction stats ─────────────────────────────────────────────────
     const [txLast30, txLast90, txTotal, txInRange, txPrevRange] = await Promise.all([
-      Transaction.countDocuments({ status: 'completed', createdAt: { $gte: thirtyDaysAgo } }),
-      Transaction.countDocuments({ status: 'completed', createdAt: { $gte: ninetyDaysAgo } }),
-      Transaction.countDocuments({ status: 'completed' }),
-      Transaction.countDocuments({ status: 'completed', createdAt: { $gte: rangeStart, $lte: rangeEnd } }),
-      Transaction.countDocuments({ status: 'completed', createdAt: { $gte: prevStart, $lte: prevEnd } }),
+      prisma.transaction.count({ where: { status: 'completed', createdAt: { gte: thirtyDaysAgo } } }),
+      prisma.transaction.count({ where: { status: 'completed', createdAt: { gte: ninetyDaysAgo } } }),
+      prisma.transaction.count({ where: { status: 'completed' } }),
+      prisma.transaction.count({ where: { status: 'completed', createdAt: { gte: rangeStart, lte: rangeEnd } } }),
+      prisma.transaction.count({ where: { status: 'completed', createdAt: { gte: prevStart, lte: prevEnd } } }),
     ]);
 
     // ── Revenue in custom range + previous period for MoM ────────────────
     const [revenueAgg, revenuePrevAgg] = await Promise.all([
-      Transaction.aggregate([
-        { $match: { status: 'completed', createdAt: { $gte: rangeStart, $lte: rangeEnd } } },
-        { $group: { _id: null, total: { $sum: '$total' } } },
-      ]),
-      Transaction.aggregate([
-        { $match: { status: 'completed', createdAt: { $gte: prevStart, $lte: prevEnd } } },
-        { $group: { _id: null, total: { $sum: '$total' } } },
-      ]),
+      prisma.transaction.aggregate({
+        where: { status: 'completed', createdAt: { gte: rangeStart, lte: rangeEnd } },
+        _sum: { total: true },
+      }),
+      prisma.transaction.aggregate({
+        where: { status: 'completed', createdAt: { gte: prevStart, lte: prevEnd } },
+        _sum: { total: true },
+      }),
     ]);
-    const revenueLastMonth = revenueAgg[0]?.total || 0;
-    const revenuePrevPeriod = revenuePrevAgg[0]?.total || 0;
+    const revenueLastMonth = Number(revenueAgg._sum.total || 0);
+    const revenuePrevPeriod = Number(revenuePrevAgg._sum.total || 0);
     const revenueChange = revenuePrevPeriod > 0
       ? ((revenueLastMonth - revenuePrevPeriod) / revenuePrevPeriod) * 100
       : null;
@@ -84,59 +89,50 @@ export async function GET(request: NextRequest) {
     twelveMonthsAgo.setDate(1);
     twelveMonthsAgo.setHours(0, 0, 0, 0);
 
-    const tenantGrowth = await Tenant.aggregate([
-      { $match: { createdAt: { $gte: twelveMonthsAgo } } },
-      {
-        $group: {
-          _id: {
-            year: { $year: '$createdAt' },
-            month: { $month: '$createdAt' },
-          },
-          count: { $sum: 1 },
-        },
-      },
-      { $sort: { '_id.year': 1, '_id.month': 1 } },
-      {
-        $project: {
-          _id: 0,
-          month: {
-            $dateToString: {
-              format: '%Y-%m',
-              date: {
-                $dateFromParts: { year: '$_id.year', month: '$_id.month', day: 1 },
-              },
-            },
-          },
-          count: 1,
-        },
-      },
-    ]);
+    const newTenants = await prisma.tenant.findMany({
+      where: { createdAt: { gte: twelveMonthsAgo } },
+      select: { createdAt: true },
+    });
+    const growthByMonth = new Map<string, number>();
+    for (const t of newTenants) {
+      const key = `${t.createdAt.getFullYear()}-${String(t.createdAt.getMonth() + 1).padStart(2, '0')}`;
+      growthByMonth.set(key, (growthByMonth.get(key) || 0) + 1);
+    }
+    const tenantGrowth = Array.from(growthByMonth.entries())
+      .sort(([a], [b]) => (a < b ? -1 : 1))
+      .map(([month, count]) => ({ month, count }));
 
     // ── Top 10 tenants by transaction volume ─────────────────────────────
-    const topTenants = await Transaction.aggregate([
-      { $match: { status: 'completed' } },
-      { $group: { _id: '$tenantId', txCount: { $sum: 1 }, revenue: { $sum: '$total' } } },
-      { $sort: { txCount: -1 } },
-      { $limit: 10 },
-      { $lookup: { from: 'tenants', localField: '_id', foreignField: '_id', as: 'tenant' } },
-      { $unwind: { path: '$tenant', preserveNullAndEmptyArrays: true } },
-      {
-        $project: {
-          _id: 0,
-          tenantId: '$_id',
-          name: { $ifNull: ['$tenant.name', 'Unknown'] },
-          slug: { $ifNull: ['$tenant.slug', ''] },
-          txCount: 1,
-          revenue: 1,
-        },
-      },
-    ]);
+    const txGroups = await prisma.transaction.groupBy({
+      by: ['tenantId'],
+      where: { status: 'completed' },
+      _count: { _all: true },
+      _sum: { total: true },
+      orderBy: { _count: { tenantId: 'desc' } },
+      take: 10,
+    });
+    const tenantIds = txGroups.map((g) => g.tenantId);
+    const tenants = await prisma.tenant.findMany({
+      where: { id: { in: tenantIds } },
+      select: { id: true, name: true, slug: true },
+    });
+    const tenantById = new Map(tenants.map((t) => [t.id, t]));
+    const topTenants = txGroups
+      .map((g) => ({
+        tenantId: g.tenantId,
+        name: tenantById.get(g.tenantId)?.name || 'Unknown',
+        slug: tenantById.get(g.tenantId)?.slug || '',
+        txCount: g._count._all,
+        revenue: Number(g._sum.total || 0),
+      }))
+      .sort((a, b) => b.txCount - a.txCount);
 
     // ── Subscription status breakdown ─────────────────────────────────────
-    const statusBreakdown = await Subscription.aggregate([
-      { $group: { _id: '$status', count: { $sum: 1 } } },
-      { $project: { _id: 0, status: '$_id', count: 1 } },
-    ]);
+    const statusGroups = await prisma.subscription.groupBy({
+      by: ['status'],
+      _count: { _all: true },
+    });
+    const statusBreakdown = statusGroups.map((g) => ({ status: g.status, count: g._count._all }));
 
     const responseData = {
       mrr,

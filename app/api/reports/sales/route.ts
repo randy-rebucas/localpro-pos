@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
+import prisma from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { getSalesReport } from '@/lib/analytics';
-import Tenant from '@/models/Tenant';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkFeatureAccess } from '@/lib/subscription';
 import { logger } from '@/lib/logger';
@@ -12,7 +11,6 @@ import { getTenantDayBoundaries, DEFAULT_TENANT_TIMEZONE } from '@/lib/timezone'
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
@@ -35,8 +33,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const tenantDoc = await Tenant.findById(tenantId).select('settings.timezone').lean();
-    const tenantTz = tenantDoc?.settings?.timezone || DEFAULT_TENANT_TIMEZONE;
+    const tenantSettings = await prisma.tenantSettings.findUnique({
+      where: { tenantId },
+      select: { timezone: true },
+    });
+    const tenantTz = tenantSettings?.timezone || DEFAULT_TENANT_TIMEZONE;
     const searchParams = request.nextUrl.searchParams;
     const period = (searchParams.get('period') || 'daily') as 'daily' | 'weekly' | 'monthly';
     const startDateParam = searchParams.get('startDate');

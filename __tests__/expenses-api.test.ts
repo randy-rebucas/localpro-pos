@@ -9,8 +9,22 @@ import { NextRequest } from 'next/server';
 // Mocks
 // ---------------------------------------------------------------------------
 
-vi.mock('@/lib/mongodb', () => ({
-  default: vi.fn().mockResolvedValue(undefined),
+const mockExpenseFindMany = vi.fn();
+const mockExpenseFindFirst = vi.fn();
+const mockExpenseCreate = vi.fn();
+const mockExpenseUpdate = vi.fn();
+const mockExpenseUpdateMany = vi.fn();
+
+vi.mock('@/lib/db', () => ({
+  default: {
+    expense: {
+      findMany: (...args: unknown[]) => mockExpenseFindMany(...args),
+      findFirst: (...args: unknown[]) => mockExpenseFindFirst(...args),
+      create: (...args: unknown[]) => mockExpenseCreate(...args),
+      update: (...args: unknown[]) => mockExpenseUpdate(...args),
+      updateMany: (...args: unknown[]) => mockExpenseUpdateMany(...args),
+    },
+  },
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
@@ -38,20 +52,6 @@ vi.mock('@/lib/api-tenant', () => ({
 const mockHasTenantPermission = vi.fn();
 vi.mock('@/lib/permissions-server', () => ({
   hasTenantPermission: (...args: unknown[]) => mockHasTenantPermission(...args),
-}));
-
-const mockExpenseFind = vi.fn();
-const mockExpenseFindOne = vi.fn();
-const mockExpenseFindOneAndUpdate = vi.fn();
-const mockExpenseCreate = vi.fn();
-
-vi.mock('@/models/Expense', () => ({
-  default: {
-    find: (...args: unknown[]) => mockExpenseFind(...args),
-    findOne: (...args: unknown[]) => mockExpenseFindOne(...args),
-    findOneAndUpdate: (...args: unknown[]) => mockExpenseFindOneAndUpdate(...args),
-    create: (...args: unknown[]) => mockExpenseCreate(...args),
-  },
 }));
 
 import { GET, POST } from '@/app/api/expenses/route';
@@ -102,18 +102,17 @@ beforeEach(() => {
 describe('GET /api/expenses', () => {
   it('scopes the query to the authenticated tenant and excludes soft-deleted rows', async () => {
     authAs(TENANT_A);
-    const leanMock = vi.fn().mockResolvedValue([{ _id: 'e1', tenantId: TENANT_A }]);
-    const sortMock = vi.fn().mockReturnValue({ lean: leanMock });
-    const populateMock = vi.fn().mockReturnValue({ sort: sortMock });
-    mockExpenseFind.mockReturnValue({ populate: populateMock });
+    mockExpenseFindMany.mockResolvedValue([{ id: 'e1', tenantId: TENANT_A }]);
 
     const res = await GET(createRequest('/api/expenses'));
     const { status, body } = await parseResponse(res);
 
     expect(status).toBe(200);
     expect(body.success).toBe(true);
-    expect(mockExpenseFind).toHaveBeenCalledWith(
-      expect.objectContaining({ tenantId: TENANT_A, isActive: { $ne: false } })
+    expect(mockExpenseFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ tenantId: TENANT_A, isActive: { not: false } }),
+      })
     );
   });
 });
@@ -156,7 +155,7 @@ describe('POST /api/expenses', () => {
 
   it('creates the expense scoped to the authenticated tenant and user', async () => {
     authAs(TENANT_A, 'owner', 'user-42');
-    mockExpenseCreate.mockResolvedValue({ _id: 'e1', ...validPayload });
+    mockExpenseCreate.mockResolvedValue({ id: 'e1', ...validPayload });
 
     const res = await POST(createRequest('/api/expenses', 'POST', validPayload));
     const { status, body } = await parseResponse(res);
@@ -164,7 +163,9 @@ describe('POST /api/expenses', () => {
     expect(status).toBe(201);
     expect(body.success).toBe(true);
     expect(mockExpenseCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ tenantId: TENANT_A, userId: 'user-42', amount: 49.99 })
+      expect.objectContaining({
+        data: expect.objectContaining({ tenantId: TENANT_A, userId: 'user-42', amount: 49.99 }),
+      })
     );
   });
 });
@@ -176,7 +177,7 @@ describe('POST /api/expenses', () => {
 describe('PUT /api/expenses/:id', () => {
   it('404s when the expense does not belong to the caller tenant', async () => {
     authAs(TENANT_B);
-    mockExpenseFindOne.mockResolvedValue(null);
+    mockExpenseFindFirst.mockResolvedValue(null);
 
     const res = await PUT(createRequest('/api/expenses/e1', 'PUT', { name: 'Renamed' }), {
       params: Promise.resolve({ id: 'e1' }),
@@ -184,7 +185,7 @@ describe('PUT /api/expenses/:id', () => {
     const { status } = await parseResponse(res);
 
     expect(status).toBe(404);
-    expect(mockExpenseFindOne).toHaveBeenCalledWith({ _id: 'e1', tenantId: TENANT_B });
+    expect(mockExpenseFindFirst).toHaveBeenCalledWith({ where: { id: 'e1', tenantId: TENANT_B } });
   });
 
   it('rejects update when the caller lacks expenses.manage', async () => {
@@ -197,30 +198,26 @@ describe('PUT /api/expenses/:id', () => {
     const { status } = await parseResponse(res);
 
     expect(status).toBe(403);
-    expect(mockExpenseFindOne).not.toHaveBeenCalled();
+    expect(mockExpenseFindFirst).not.toHaveBeenCalled();
   });
 
   it('updates only the fields provided', async () => {
     authAs(TENANT_A);
-    const save = vi.fn().mockResolvedValue(undefined);
-    const expense = {
-      _id: 'e1',
-      name: 'Old Name',
-      amount: 10,
-      toObject: () => ({ name: 'Old Name', amount: 10 }),
-      save,
-    };
-    mockExpenseFindOne.mockResolvedValue(expense);
+    const expense = { id: 'e1', name: 'Old Name', amount: 10 };
+    mockExpenseFindFirst.mockResolvedValue(expense);
+    mockExpenseUpdate.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
+      Promise.resolve({ ...expense, ...data })
+    );
 
     const res = await PUT(createRequest('/api/expenses/e1', 'PUT', { name: 'New Name' }), {
       params: Promise.resolve({ id: 'e1' }),
     });
-    const { status } = await parseResponse(res);
+    const { status, body } = await parseResponse(res);
 
     expect(status).toBe(200);
-    expect(expense.name).toBe('New Name');
-    expect(expense.amount).toBe(10);
-    expect(save).toHaveBeenCalled();
+    expect((body.data as { name: string }).name).toBe('New Name');
+    expect((body.data as { amount: number }).amount).toBe(10);
+    expect(mockExpenseUpdate).toHaveBeenCalled();
   });
 });
 
@@ -231,7 +228,8 @@ describe('PUT /api/expenses/:id', () => {
 describe('DELETE /api/expenses/:id', () => {
   it('soft-deletes by setting isActive to false via findOneAndUpdate', async () => {
     authAs(TENANT_A);
-    mockExpenseFindOneAndUpdate.mockResolvedValue({ _id: 'e1', name: 'Office Supplies', amount: 49.99 });
+    mockExpenseUpdateMany.mockResolvedValue({ count: 1 });
+    mockExpenseFindFirst.mockResolvedValue({ id: 'e1', name: 'Office Supplies', amount: 49.99 });
 
     const res = await DELETE(createRequest('/api/expenses/e1', 'DELETE'), {
       params: Promise.resolve({ id: 'e1' }),
@@ -240,16 +238,15 @@ describe('DELETE /api/expenses/:id', () => {
 
     expect(status).toBe(200);
     expect(body.success).toBe(true);
-    expect(mockExpenseFindOneAndUpdate).toHaveBeenCalledWith(
-      { _id: 'e1', tenantId: TENANT_A, isActive: true },
-      { isActive: false },
-      { new: true }
-    );
+    expect(mockExpenseUpdateMany).toHaveBeenCalledWith({
+      where: { id: 'e1', tenantId: TENANT_A, isActive: true },
+      data: { isActive: false },
+    });
   });
 
   it('404s for an expense outside the caller tenant or already deleted', async () => {
     authAs(TENANT_B);
-    mockExpenseFindOneAndUpdate.mockResolvedValue(null);
+    mockExpenseUpdateMany.mockResolvedValue({ count: 0 });
 
     const res = await DELETE(createRequest('/api/expenses/e1', 'DELETE'), {
       params: Promise.resolve({ id: 'e1' }),
@@ -269,6 +266,6 @@ describe('DELETE /api/expenses/:id', () => {
     const { status } = await parseResponse(res);
 
     expect(status).toBe(403);
-    expect(mockExpenseFindOneAndUpdate).not.toHaveBeenCalled();
+    expect(mockExpenseUpdateMany).not.toHaveBeenCalled();
   });
 });

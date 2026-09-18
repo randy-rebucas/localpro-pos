@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
+import prisma from '@/lib/db';
 import { validateEmail, validatePassword } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
@@ -33,7 +32,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await connectDB();
     t = await getValidationTranslatorFromRequest(request);
     const body = await request.json();
 
@@ -77,7 +75,7 @@ async function handleAuthenticatedReset(
     );
   }
 
-  const user = await User.findById(currentUser.userId).select('+password');
+  const user = await prisma.user.findUnique({ where: { id: currentUser.userId } });
   if (!user) {
     return NextResponse.json(
       { success: false, error: t('validation.userNotFound', 'User not found') },
@@ -94,9 +92,9 @@ async function handleAuthenticatedReset(
     );
   }
 
-  // Update password (pre-save hook will hash it)
-  user.password = newPassword;
-  await user.save();
+  // Update password (hash manually — Prisma has no save-hook equivalent)
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
+  await prisma.user.update({ where: { id: user.id }, data: { password: hashedPassword } });
 
   await createAuditLog(request, {
     tenantId: currentUser.tenantId,
@@ -143,10 +141,8 @@ async function handleTokenReset(
   }
 
   // Find tenant
-  const Tenant = (await import('@/models/Tenant')).default;
-  const tenant = await Tenant.findOne({
-    $or: [{ slug: tenantId }, { _id: tenantId }],
-    isActive: true,
+  const tenant = await prisma.tenant.findFirst({
+    where: { OR: [{ slug: tenantId }, { id: tenantId }], isActive: true },
   });
 
   if (!tenant) {
@@ -156,10 +152,9 @@ async function handleTokenReset(
     );
   }
 
-  const user = await User.findOne({
-    email: email.toLowerCase(),
-    tenantId: tenant._id,
-  }).select('+password +resetToken +resetTokenExpiry');
+  const user = await prisma.user.findFirst({
+    where: { email: email.toLowerCase(), tenantId: tenant.id },
+  });
 
   if (!user) {
     return NextResponse.json(
@@ -169,8 +164,12 @@ async function handleTokenReset(
   }
 
   // Verify reset token and expiry
-  const storedToken = (user as any).resetToken; // eslint-disable-line @typescript-eslint/no-explicit-any
-  const tokenExpiry = (user as any).resetTokenExpiry; // eslint-disable-line @typescript-eslint/no-explicit-any
+  // NOTE: resetToken/resetTokenExpiry are not defined on the User model (Mongoose
+  // or Prisma) — this branch was already unreachable/dead prior to this migration
+  // (storedToken is always undefined). Preserved as-is rather than silently
+  // "fixed" without product sign-off on what the real reset-token flow should be.
+  const storedToken = (user as unknown as Record<string, unknown>).resetToken as string | undefined;
+  const tokenExpiry = (user as unknown as Record<string, unknown>).resetTokenExpiry as Date | undefined;
 
   if (!storedToken || !tokenExpiry) {
     return NextResponse.json(
@@ -188,16 +187,14 @@ async function handleTokenReset(
   }
 
   // Update password and clear reset token
-  user.password = newPassword;
-  (user as any).resetToken = undefined; // eslint-disable-line @typescript-eslint/no-explicit-any
-  (user as any).resetTokenExpiry = undefined; // eslint-disable-line @typescript-eslint/no-explicit-any
-  await user.save();
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
+  await prisma.user.update({ where: { id: user.id }, data: { password: hashedPassword } });
 
   await createAuditLog(request, {
-    tenantId: tenant._id.toString(),
+    tenantId: tenant.id,
     action: AuditActions.UPDATE,
     entityType: 'user',
-    entityId: user._id.toString(),
+    entityId: user.id,
     changes: { passwordReset: true, method: 'token' },
   });
 

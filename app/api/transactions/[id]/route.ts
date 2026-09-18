@@ -1,15 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Transaction from '@/models/Transaction';
-import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
-import { requireAuth } from '@/lib/auth'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import prisma from '@/lib/db';
+import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await connectDB();
     // SECURITY: Validate tenant access for authenticated requests
     let tenantId: string;
     try {
@@ -27,16 +24,19 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
-    
-    const transaction = await Transaction.findOne({ _id: id, tenantId, isActive: { $ne: false } })
-      .populate('items.product', 'name sku')
-      .populate('userId', 'name email')
-      .lean();
-    
+
+    const transaction = await prisma.transaction.findFirst({
+      where: { id, tenantId, isActive: { not: false } },
+      include: {
+        items: { include: { product: { select: { name: true, sku: true } }, modifiers: true } },
+        user: { select: { name: true, email: true } },
+      },
+    });
+
     if (!transaction) {
       return NextResponse.json({ success: false, error: t('validation.transactionNotFound', 'Transaction not found') }, { status: 404 });
     }
-    
+
     return NextResponse.json({ success: true, data: transaction });
   } catch (error: unknown) {
     const t = await getValidationTranslatorFromRequest(request);
@@ -50,7 +50,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await connectDB();
     // SECURITY: Validate tenant access for authenticated requests
     let tenantId: string;
     try {
@@ -74,7 +73,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const body = await request.json();
     const t = await getValidationTranslatorFromRequest(request);
 
-    const transaction = await Transaction.findOne({ _id: id, tenantId });
+    const transaction = await prisma.transaction.findFirst({ where: { id, tenantId } });
     if (!transaction) {
       return NextResponse.json({ success: false, error: t('validation.transactionNotFound', 'Transaction not found') }, { status: 404 });
     }
@@ -103,17 +102,17 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (body.status === 'cancelled') {
       // Atomic claim: guards against a concurrent void/refund racing on the
       // same transaction (double-click, retry) before either write lands.
-      const claimed = await Transaction.findOneAndUpdate(
-        { _id: id, tenantId, status: transaction.status },
-        { $set: { status: 'cancelled' } },
-        { new: true }
-      );
-      if (!claimed) {
+      const claimResult = await prisma.transaction.updateMany({
+        where: { id, tenantId, status: transaction.status },
+        data: { status: 'cancelled' },
+      });
+      if (claimResult.count === 0) {
         return NextResponse.json(
           { success: false, error: t('validation.transactionAlreadyFinalized', 'This transaction has already been voided or refunded and cannot be modified') },
           { status: 409 }
         );
       }
+      const claimed = await prisma.transaction.findFirst({ where: { id, tenantId } });
       const oldStatus = transaction.status;
 
       await createAuditLog(request, {
@@ -144,4 +143,3 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ success: false, error: msg }, { status: 400 });
   }
 }
-

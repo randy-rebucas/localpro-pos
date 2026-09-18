@@ -1,5 +1,14 @@
-import connectDB from './mongodb';
-import Tenant from '@/models/Tenant';
+/**
+ * ⚠️ TENANT-ISOLATION CRITICAL FILE ⚠️
+ * These helpers resolve which tenant a request belongs to and are relied on
+ * throughout the app to scope every query with `tenantId`. This file has a
+ * documented history of a cross-tenant data leak (subscriptions endpoints
+ * previously leaked cross-tenant data because tenant scoping was dropped).
+ * Any change here must preserve tenant scoping in every function — never
+ * return or resolve a tenant without an explicit, exact match on slug /
+ * subdomain / domain / id, and never widen a `where` clause.
+ */
+import prisma from '@/lib/db';
 import { ITenantSettings } from '@/models/Tenant';
 import { logger } from '@/lib/logger';
 
@@ -21,9 +30,11 @@ export interface TenantInfo {
  */
 export async function getTenantSettingsById(tenantId: string): Promise<ITenantSettings | null> {
   try {
-    await connectDB();
-    const tenant = await Tenant.findById(tenantId).select('settings').lean();
-    return tenant?.settings || null;
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { settings: true },
+    });
+    return (tenant?.settings as unknown as ITenantSettings) || null;
   } catch (error) {
     logger.error('Error fetching tenant settings:', error);
     return null;
@@ -35,18 +46,26 @@ export async function getTenantSettingsById(tenantId: string): Promise<ITenantSe
  */
 export async function getTenantBySlug(slug: string): Promise<TenantInfo | null> {
   try {
-    await connectDB();
-    const tenant = await Tenant.findOne({ slug, isActive: true }).lean();
-    
+    const tenant = await prisma.tenant.findFirst({
+      where: { slug, isActive: true },
+      include: { settings: true },
+    });
+
     if (!tenant) {
       return null;
     }
 
     return {
-      _id: tenant._id.toString(),
+      _id: tenant.id,
       slug: tenant.slug,
       name: tenant.name,
-      settings: tenant.settings,
+      settings: {
+        currency: tenant.settings?.currency ?? 'USD',
+        timezone: tenant.settings?.timezone ?? 'Asia/Manila',
+        language: (tenant.settings?.language as 'en' | 'es') ?? 'en',
+        logo: tenant.settings?.logo ?? undefined,
+        primaryColor: tenant.settings?.primaryColor ?? undefined,
+      },
     };
   } catch (error) {
     logger.error('Error fetching tenant:', error);
@@ -61,30 +80,35 @@ export async function getTenantBySlug(slug: string): Promise<TenantInfo | null> 
 export async function getTenantFromHost(host: string): Promise<TenantInfo | null> {
   try {
     if (!host) return null;
-    
+
     // Extract subdomain or use default
     const subdomain = host.split('.')[0];
-    
+
     if (subdomain && subdomain !== 'www' && subdomain !== 'localhost' && subdomain !== '127.0.0.1') {
-      await connectDB();
-      const tenant = await Tenant.findOne({ 
-        $or: [
-          { subdomain: subdomain },
-          { domain: host }
-        ],
-        isActive: true 
-      }).lean();
-      
+      const tenant = await prisma.tenant.findFirst({
+        where: {
+          OR: [{ subdomain }, { domain: host }],
+          isActive: true,
+        },
+        include: { settings: true },
+      });
+
       if (tenant) {
         return {
-          _id: tenant._id.toString(),
+          _id: tenant.id,
           slug: tenant.slug,
           name: tenant.name,
-          settings: tenant.settings,
+          settings: {
+            currency: tenant.settings?.currency ?? 'USD',
+            timezone: tenant.settings?.timezone ?? 'Asia/Manila',
+            language: (tenant.settings?.language as 'en' | 'es') ?? 'en',
+            logo: tenant.settings?.logo ?? undefined,
+            primaryColor: tenant.settings?.primaryColor ?? undefined,
+          },
         };
       }
     }
-    
+
     return null;
   } catch (error) {
     logger.error('Error fetching tenant from host:', error);
@@ -99,4 +123,3 @@ export async function getTenantId(slug: string): Promise<string | null> {
   const tenant = await getTenantBySlug(slug);
   return tenant?._id || null;
 }
-

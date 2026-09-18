@@ -1,18 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Transaction from '@/models/Transaction';
-import Product from '@/models/Product';
+import prisma from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { handleApiError } from '@/lib/error-handler';
-import mongoose from 'mongoose';
 
 const HISTORY_DAYS = 90;
 const MAX_SUGGESTIONS = 5;
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
-
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId } = authResult;
@@ -24,13 +19,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, data: [] });
     }
 
-    const cartProductIds = productIdsParam
-      .split(',')
-      .filter(Boolean)
-      .map((id) => {
-        try { return new mongoose.Types.ObjectId(id); } catch { return null; }
-      })
-      .filter((id): id is mongoose.Types.ObjectId => id !== null);
+    const cartProductIds = productIdsParam.split(',').filter(Boolean);
 
     if (cartProductIds.length === 0) {
       return NextResponse.json({ success: true, data: [] });
@@ -39,65 +28,74 @@ export async function GET(request: NextRequest) {
     const since = new Date();
     since.setDate(since.getDate() - HISTORY_DAYS);
 
-    // Find transactions that contain at least one cart product
-    const coOccurrences = await Transaction.aggregate([
-      {
-        $match: {
+    // Find transactions (scoped to this tenant) that contain at least one
+    // cart product within the history window.
+    const cartTransactionItems = await prisma.transactionItem.findMany({
+      where: {
+        productId: { in: cartProductIds },
+        transaction: {
           tenantId,
           status: 'completed',
-          createdAt: { $gte: since },
-          'items.product': { $in: cartProductIds },
+          createdAt: { gte: since },
         },
       },
-      // Flatten items
-      { $unwind: '$items' },
-      // Keep only items NOT in the cart
-      {
-        $match: {
-          'items.product': { $nin: cartProductIds, $ne: null },
-        },
-      },
-      // Count co-occurrence frequency per product
-      {
-        $group: {
-          _id: '$items.product',
-          score: { $sum: 1 },
-        },
-      },
-      { $sort: { score: -1 } },
-      { $limit: MAX_SUGGESTIONS * 2 }, // fetch extras to filter out-of-stock
-    ]);
+      select: { transactionId: true },
+      distinct: ['transactionId'],
+    });
 
-    if (coOccurrences.length === 0) {
+    if (cartTransactionItems.length === 0) {
       return NextResponse.json({ success: true, data: [] });
     }
 
-    const suggestedIds = coOccurrences.map((c) => c._id);
-    const scoreMap = new Map<string, number>(
-      coOccurrences.map((c) => [String(c._id), c.score])
-    );
+    const transactionIds = cartTransactionItems.map((t) => t.transactionId);
 
-    const suggestedProducts = await Product.find(
-      {
-        _id: { $in: suggestedIds },
-        tenantId,
-        isActive: { $ne: false },
-        $or: [{ stock: { $gt: 0 } }, { allowOutOfStockSales: true }],
+    // Items from those same transactions that are NOT already in the cart —
+    // frequency of co-occurrence becomes the suggestion score.
+    const coOccurringItems = await prisma.transactionItem.findMany({
+      where: {
+        transactionId: { in: transactionIds },
+        productId: { notIn: cartProductIds },
+        NOT: { productId: null },
       },
-      { _id: 1, name: 1, price: 1, stock: 1, image: 1, category: 1 }
-    ).lean();
+      select: { productId: true },
+    });
+
+    if (coOccurringItems.length === 0) {
+      return NextResponse.json({ success: true, data: [] });
+    }
+
+    const scoreMap = new Map<string, number>();
+    for (const item of coOccurringItems) {
+      if (!item.productId) continue;
+      scoreMap.set(item.productId, (scoreMap.get(item.productId) ?? 0) + 1);
+    }
+
+    const suggestedIds = Array.from(scoreMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, MAX_SUGGESTIONS * 2) // fetch extras to filter out-of-stock
+      .map(([productId]) => productId);
+
+    const suggestedProducts = await prisma.product.findMany({
+      where: {
+        id: { in: suggestedIds },
+        tenantId,
+        isActive: true,
+        OR: [{ stock: { gt: 0 } }, { allowOutOfStockSales: true }],
+      },
+      select: { id: true, name: true, price: true, stock: true, image: true, category: true },
+    });
 
     const sorted = suggestedProducts
-      .sort((a, b) => (scoreMap.get(String(b._id)) ?? 0) - (scoreMap.get(String(a._id)) ?? 0))
+      .sort((a, b) => (scoreMap.get(b.id) ?? 0) - (scoreMap.get(a.id) ?? 0))
       .slice(0, MAX_SUGGESTIONS)
       .map((p) => ({
-        productId: String(p._id),
+        productId: p.id,
         name: p.name,
-        price: p.price,
+        price: Number(p.price),
         stock: p.stock,
         image: p.image ?? null,
         category: p.category ?? null,
-        score: scoreMap.get(String(p._id)) ?? 0,
+        score: scoreMap.get(p.id) ?? 0,
       }));
 
     return NextResponse.json({ success: true, data: sorted });

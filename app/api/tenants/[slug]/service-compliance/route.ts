@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
@@ -18,16 +17,31 @@ export async function GET(
     if (!user) return NextResponse.json({ success: false, error: t('validation.unauthorized', 'Unauthorized') }, { status: 401 });
 
     const { slug } = await params;
-    await connectDB();
-
-    const tenant = await Tenant.findOne({ slug, isActive: true }).lean();
+    const tenant = await prisma.tenant.findFirst({
+      where: { slug, isActive: true },
+      include: { settings: true, practitionerLicenses: true },
+    });
     if (!tenant) return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden') }, { status: 403 });
     }
 
-    return NextResponse.json({ success: true, data: tenant.settings?.serviceCompliance ?? {} });
+    return NextResponse.json({
+      success: true,
+      data: {
+        dohAccreditation: tenant.settings?.serviceDohAccreditation ?? undefined,
+        dohAccreditationExpiry: tenant.settings?.serviceDohAccreditationExpiry ?? undefined,
+        practitionerLicenses: tenant.practitionerLicenses.map((l) => ({
+          id: l.id,
+          name: l.name ?? undefined,
+          licenseType: l.licenseType ?? undefined,
+          prcNumber: l.prcNumber ?? undefined,
+          ptrNumber: l.ptrNumber ?? undefined,
+          licenseExpiry: l.licenseExpiry ?? undefined,
+        })),
+      },
+    });
   } catch (error: unknown) {
     return handleApiError(error, t('validation.fetchServiceComplianceFailed', 'Failed to fetch service compliance'));
   }
@@ -50,31 +64,55 @@ export async function PUT(
     if (!rl.allowed) return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
 
     const { slug } = await params;
-    await connectDB();
-
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await prisma.tenant.findFirst({ where: { slug } });
     if (!tenant) return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden') }, { status: 403 });
     }
 
     const body = await request.json();
 
-    if (!tenant.settings.serviceCompliance) tenant.settings.serviceCompliance = {} as never;
-    const sc = tenant.settings.serviceCompliance as Record<string, unknown>;
+    const settingsData: Record<string, unknown> = {};
+    if (body.dohAccreditation !== undefined) settingsData.serviceDohAccreditation = body.dohAccreditation || null;
+    if (body.dohAccreditationExpiry !== undefined) {
+      settingsData.serviceDohAccreditationExpiry = body.dohAccreditationExpiry ? new Date(body.dohAccreditationExpiry) : null;
+    }
 
-    if (body.dohAccreditation !== undefined) sc.dohAccreditation = body.dohAccreditation || undefined;
-    if (body.dohAccreditationExpiry !== undefined) sc.dohAccreditationExpiry = body.dohAccreditationExpiry ? new Date(body.dohAccreditationExpiry) : undefined;
-    if (body.practitionerLicenses !== undefined) sc.practitionerLicenses = body.practitionerLicenses;
+    await prisma.$transaction(async (tx) => {
+      if (Object.keys(settingsData).length > 0) {
+        await tx.tenantSettings.upsert({
+          where: { tenantId: tenant.id },
+          create: { tenantId: tenant.id, ...settingsData },
+          update: settingsData,
+        });
+      }
 
-    tenant.markModified('settings');
-    await tenant.save();
+      // Full-array replace of practitionerLicenses[], matching the previous
+      // Mongoose shallow-assign semantics (caller sends the complete list).
+      if (body.practitionerLicenses !== undefined) {
+        await tx.tenantPractitionerLicense.deleteMany({ where: { tenantId: tenant.id } });
+        const licenses = Array.isArray(body.practitionerLicenses) ? body.practitionerLicenses : [];
+        if (licenses.length > 0) {
+          await tx.tenantPractitionerLicense.createMany({
+            data: licenses.map((l: { id?: string; name?: string; licenseType?: string; prcNumber?: string; ptrNumber?: string; licenseExpiry?: string }, idx: number) => ({
+              id: l.id || `${tenant.id}_lic_${idx}_${Date.now()}`,
+              tenantId: tenant.id,
+              name: l.name ?? null,
+              licenseType: l.licenseType ?? null,
+              prcNumber: l.prcNumber ?? null,
+              ptrNumber: l.ptrNumber ?? null,
+              licenseExpiry: l.licenseExpiry ? new Date(l.licenseExpiry) : null,
+            })),
+          });
+        }
+      }
+    });
 
     await createAuditLog(request, {
-      tenantId: tenant._id, userId: user.userId,
+      tenantId: tenant.id, userId: user.userId,
       action: AuditActions.UPDATE, entityType: 'service_compliance',
-      entityId: tenant._id.toString(), changes: body,
+      entityId: tenant.id, changes: body,
     });
 
     return NextResponse.json({ success: true });

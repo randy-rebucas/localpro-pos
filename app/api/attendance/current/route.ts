@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Attendance from '@/models/Attendance';
+import prisma from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -12,7 +11,6 @@ import { logger } from '@/lib/logger';
 export async function GET(request: NextRequest) {
   try {
     const user = await requireAuth(request);
-    await connectDB();
 
     // Manager+ can look up another employee's active session (e.g. the admin
     // attendance page polling every employee's current clock-in status);
@@ -21,13 +19,14 @@ export async function GET(request: NextRequest) {
     const isManagerPlus = await hasTenantPermission(user.role, user.tenantId, 'attendance.manage');
     const targetUserId = requestedUserId && isManagerPlus ? requestedUserId : user.userId;
 
-    const activeSession = await Attendance.findOne({
-      userId: targetUserId,
-      tenantId: user.tenantId,
-      clockOut: null,
-    })
-      .sort({ clockIn: -1 })
-      .lean();
+    const activeSession = await prisma.attendance.findFirst({
+      where: {
+        userId: targetUserId,
+        tenantId: user.tenantId,
+        clockOut: null,
+      },
+      orderBy: { clockIn: 'desc' },
+    });
 
     if (!activeSession) {
       return NextResponse.json({
@@ -48,13 +47,13 @@ export async function GET(request: NextRequest) {
         currentHours: roundedHours,
       },
     });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  } catch (error: unknown) {
     logger.error('Get current attendance error:', error);
     const t = await getValidationTranslatorFromRequest(request);
+    const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { success: false, error: error.message || t('validation.failedToGetCurrentAttendance', 'Failed to get current attendance') },
-      { status: error.message === 'Unauthorized' ? 401 : 500 }
+      { success: false, error: message || t('validation.failedToGetCurrentAttendance', 'Failed to get current attendance') },
+      { status: message === 'Unauthorized' ? 401 : 500 }
     );
   }
 }
-

@@ -1,12 +1,16 @@
 import { NextRequest } from 'next/server';
-import mongoose from 'mongoose';
-import connectDB from './mongodb';
-import AuditLog from '@/models/AuditLog';
+import { randomUUID } from 'crypto';
+import type { Types as MongooseTypes } from 'mongoose';
+import prisma from '@/lib/db';
 import { getCurrentUser, verifyToken } from './auth';
 import { logger } from '@/lib/logger';
 
+// Callers across app/api/** are migrated to Prisma incrementally; until every
+// route is rewritten, some still pass a Mongoose ObjectId here (from models
+// not yet ported). Accept both shapes and normalize to a plain string below
+// so this stays a drop-in replacement during the transition.
 export interface AuditLogData {
-  tenantId: string | mongoose.Types.ObjectId;
+  tenantId: string | MongooseTypes.ObjectId;
   userId?: string;
   action: string;
   entityType: string;
@@ -26,13 +30,11 @@ export interface AuditLogData {
 export async function createAuditLog(
   request: NextRequest,
   data: Omit<AuditLogData, 'userId'> & {
-    tenantId?: string | mongoose.Types.ObjectId;
+    tenantId?: string | MongooseTypes.ObjectId;
     userId?: string;
   }
 ): Promise<void> {
   try {
-    await connectDB();
-
     const ipAddress = request.headers.get('x-forwarded-for') ||
                      request.headers.get('x-real-ip') ||
                      'unknown';
@@ -54,11 +56,12 @@ export async function createAuditLog(
     const metadata = impersonatedBy ? { ...data.metadata, impersonatedBy } : data.metadata;
 
     // Get tenantId from parameter, user, or request
-    let tenantId: string | mongoose.Types.ObjectId;
+    let tenantId: string;
 
     if (data.tenantId) {
-      // Use provided tenantId (could be ObjectId or string)
-      tenantId = data.tenantId;
+      // Use provided tenantId — normalize a Mongoose ObjectId (from
+      // not-yet-migrated callers) down to a plain string id.
+      tenantId = data.tenantId.toString();
     } else if (user) {
       // Get from authenticated user
       tenantId = user.tenantId;
@@ -66,29 +69,26 @@ export async function createAuditLog(
       // Try to get from URL (only for non-API routes)
       const url = new URL(request.url);
       const pathname = url.pathname;
-      
+
       // Skip API routes - they don't have tenant slugs in the path
       if (pathname.startsWith('/api/')) {
         // For API routes without tenant info, try to find default tenant
-        const Tenant = (await import('@/models/Tenant')).default;
-        const defaultTenant = await Tenant.findOne({ slug: 'default' }).lean();
+        const defaultTenant = await prisma.tenant.findFirst({ where: { slug: 'default' } });
         if (defaultTenant) {
-          tenantId = defaultTenant._id;
+          tenantId = defaultTenant.id;
         } else {
           // Can't create audit log without tenant
           console.warn('Cannot create audit log: no tenant available for API route:', pathname);
           return;
         }
       } else {
-        // For non-API routes, extract tenant slug and convert to ObjectId
+        // For non-API routes, extract tenant slug
         const tenantMatch = pathname.match(/\/([^/]+)\//);
         const tenantSlug = tenantMatch ? tenantMatch[1] : 'default';
-        
-        // Convert slug to ObjectId
-        const Tenant = (await import('@/models/Tenant')).default;
-        const tenant = await Tenant.findOne({ slug: tenantSlug }).lean();
+
+        const tenant = await prisma.tenant.findFirst({ where: { slug: tenantSlug } });
         if (tenant) {
-          tenantId = tenant._id;
+          tenantId = tenant.id;
         } else {
           console.warn('Cannot create audit log: tenant not found for slug:', tenantSlug);
           return;
@@ -96,34 +96,35 @@ export async function createAuditLog(
       }
     }
 
-    // Ensure tenantId is an ObjectId
-    if (typeof tenantId === 'string') {
-      // Check if it's already a valid ObjectId string
-      if (mongoose.Types.ObjectId.isValid(tenantId)) {
-        tenantId = new mongoose.Types.ObjectId(tenantId);
+    // If a caller passed a slug instead of an actual tenant id, resolve it
+    // (Postgres tenant ids are not ObjectId-shaped, so we can't cheaply
+    // detect "looks like an id" the way the old Mongo code did — instead we
+    // trust ids passed by authenticated callers/requireAuth, and only
+    // fall back to a slug lookup when the direct id lookup below misses).
+    const tenantExists = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { id: true } });
+    if (!tenantExists) {
+      const bySlug = await prisma.tenant.findFirst({ where: { slug: tenantId } });
+      if (bySlug) {
+        tenantId = bySlug.id;
       } else {
-        // It's a slug, need to look up the tenant
-        const Tenant = (await import('@/models/Tenant')).default;
-        const tenant = await Tenant.findOne({ slug: tenantId }).lean();
-        if (tenant) {
-          tenantId = tenant._id;
-        } else {
-          console.warn('Cannot create audit log: tenant not found for slug:', tenantId);
-          return;
-        }
+        console.warn('Cannot create audit log: tenant not found for id/slug:', tenantId);
+        return;
       }
     }
 
-    await AuditLog.create({
-      tenantId,
-      userId: resolvedUserId,
-      action: data.action,
-      entityType: data.entityType,
-      entityId: data.entityId,
-      changes: data.changes,
-      metadata,
-      ipAddress,
-      userAgent,
+    await prisma.auditLog.create({
+      data: {
+        id: randomUUID(),
+        tenantId,
+        userId: resolvedUserId,
+        action: data.action,
+        entityType: data.entityType,
+        entityId: data.entityId,
+        changes: data.changes,
+        metadata,
+        ipAddress,
+        userAgent,
+      },
     });
   } catch (error) {
     // Don't throw - audit logging should not break the application
@@ -173,4 +174,3 @@ export const AuditActions = {
   DEVICE_DELETE: 'device.delete',
   SUBSCRIPTION_ACTIVATE: 'subscription.activate',
 } as const;
-

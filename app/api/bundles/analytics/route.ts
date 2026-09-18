@@ -1,17 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import ProductBundle from '@/models/ProductBundle';
-import Transaction from '@/models/Transaction';
+import prisma from '@/lib/db';
+import { Prisma } from '@prisma/client';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { logger } from '@/lib/logger';
 
 /**
  * Get bundle analytics - sales performance metrics
+ *
+ * NOTE: the original Mongoose `TransactionItem` schema had no `bundleId`
+ * field (it was read off the doc as `(item as any).bundleId` but never
+ * declared on `TransactionItemSchema`, so Mongoose's default `strict: true`
+ * meant it was never actually persisted — this matching logic was already a
+ * dead code path in production). The Prisma `TransactionItem` model
+ * likewise has no `bundleId` column, so the same (already-inert) matching
+ * logic is preserved as-is below for behavioral parity rather than invented.
  */
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const { tenantId, user } = await requireTenantAccess(request);
 
     if (!(await hasTenantPermission(user.role, tenantId, 'bundles.manage'))) {
@@ -23,31 +29,38 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get('endDate');
     const bundleId = searchParams.get('bundleId');
 
-    // Build date query
-    const dateQuery: any = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (startDate) dateQuery.$gte = new Date(startDate);
+    // Build date filter
+    const dateFilter: Prisma.DateTimeFilter = {};
+    if (startDate) dateFilter.gte = new Date(startDate);
     if (endDate) {
       const end = new Date(endDate);
       end.setHours(23, 59, 59, 999);
-      dateQuery.$lte = end;
+      dateFilter.lte = end;
     }
 
     // Get all transactions in the date range
-    const transactionQuery: any = { tenantId, status: 'completed' }; // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (Object.keys(dateQuery).length > 0) {
-      transactionQuery.createdAt = dateQuery;
+    const transactionWhere: Prisma.TransactionWhereInput = { tenantId, status: 'completed' };
+    if (Object.keys(dateFilter).length > 0) {
+      transactionWhere.createdAt = dateFilter;
     }
 
-    const transactions = await Transaction.find(transactionQuery)
-      .select('items createdAt total')
-      .lean();
+    const transactions = await prisma.transaction.findMany({
+      where: transactionWhere,
+      select: {
+        id: true,
+        createdAt: true,
+        total: true,
+        items: { select: { quantity: true, subtotal: true } },
+      },
+    });
 
     // Get all bundles
-    const bundleQuery: any = { tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (bundleId) bundleQuery._id = bundleId;
-    const bundles = await ProductBundle.find(bundleQuery)
-      .select('_id name price')
-      .lean();
+    const bundleWhere: Prisma.ProductBundleWhereInput = { tenantId };
+    if (bundleId) bundleWhere.id = bundleId;
+    const bundles = await prisma.productBundle.findMany({
+      where: bundleWhere,
+      select: { id: true, name: true, price: true },
+    });
 
     // Calculate analytics for each bundle
     const analytics = bundles.map(bundle => {
@@ -60,8 +73,8 @@ export async function GET(request: NextRequest) {
         transaction.items.forEach((item: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
           // Check if item has bundleId (stored but not in schema)
           const itemBundleId = (item as any).bundleId; // eslint-disable-line @typescript-eslint/no-explicit-any
-          if (itemBundleId && itemBundleId.toString() === bundle._id.toString()) {
-            totalSales += item.subtotal;
+          if (itemBundleId && itemBundleId.toString() === bundle.id.toString()) {
+            totalSales += Number(item.subtotal);
             totalQuantity += item.quantity;
             transactionCount++;
           }
@@ -72,7 +85,7 @@ export async function GET(request: NextRequest) {
       const averageQuantity = transactionCount > 0 ? totalQuantity / transactionCount : 0;
 
       return {
-        bundleId: bundle._id,
+        bundleId: bundle.id,
         bundleName: bundle.name,
         bundlePrice: bundle.price,
         totalSales,
@@ -80,7 +93,7 @@ export async function GET(request: NextRequest) {
         transactionCount,
         averageOrderValue,
         averageQuantity,
-        revenuePerUnit: totalQuantity > 0 ? totalSales / totalQuantity : bundle.price,
+        revenuePerUnit: totalQuantity > 0 ? totalSales / totalQuantity : Number(bundle.price),
       };
     });
 
@@ -93,10 +106,10 @@ export async function GET(request: NextRequest) {
       totalSales: analytics.reduce((sum, a) => sum + a.totalSales, 0),
       totalQuantity: analytics.reduce((sum, a) => sum + a.totalQuantity, 0),
       totalTransactions: new Set(
-        transactions.flatMap(t => 
+        transactions.flatMap(t =>
           t.items
             .filter((item: any) => (item as any).bundleId) // eslint-disable-line @typescript-eslint/no-explicit-any
-            .map((_item: any) => t._id.toString()) // eslint-disable-line @typescript-eslint/no-explicit-any
+            .map((_item: any) => t.id.toString()) // eslint-disable-line @typescript-eslint/no-explicit-any
         )
       ).size,
     };

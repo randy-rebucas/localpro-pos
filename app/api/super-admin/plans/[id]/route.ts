@@ -1,16 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import SubscriptionPlan from '@/models/SubscriptionPlan';
-import Subscription from '@/models/Subscription';
+import prisma from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
-import Tenant from '@/models/Tenant';
-import mongoose from 'mongoose';
+import type { Prisma } from '@prisma/client';
 
-async function defaultTenantId(): Promise<mongoose.Types.ObjectId | undefined> {
-  const t = await Tenant.findOne({ slug: 'default' }).select('_id').lean();
-  return t?._id;
+async function defaultTenantId(): Promise<string | undefined> {
+  const t = await prisma.tenant.findUnique({ where: { slug: 'default' }, select: { id: true } });
+  return t?.id;
 }
 
 export async function GET(
@@ -18,11 +15,10 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     await requireRole(request, ['super_admin']);
 
     const { id } = await params;
-    const plan = await SubscriptionPlan.findById(id).lean();
+    const plan = await prisma.subscriptionPlan.findUnique({ where: { id } });
     if (!plan) {
       return NextResponse.json({ success: false, error: 'Plan not found' }, { status: 404 });
     }
@@ -44,13 +40,12 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const user = await requireRole(request, ['super_admin']);
 
     const { id } = await params;
     const body = await request.json();
 
-    const existingPlan = await SubscriptionPlan.findById(id).lean();
+    const existingPlan = await prisma.subscriptionPlan.findUnique({ where: { id } });
     if (!existingPlan) {
       return NextResponse.json({ success: false, error: 'Plan not found' }, { status: 404 });
     }
@@ -63,14 +58,57 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'Plan tier cannot be changed after creation' }, { status: 400 });
     }
 
-    const plan = await SubscriptionPlan.findByIdAndUpdate(
-      id,
-      { $set: body },
-      { new: true, runValidators: true }
-    );
-    if (!plan) {
-      return NextResponse.json({ success: false, error: 'Plan not found' }, { status: 404 });
+    const { name, description, price, features, birCompliance, isActive, isCustom, availableToNewTenants, yearlyDiscount } = body;
+
+    const changes: Prisma.SubscriptionPlanUpdateInput = {};
+
+    if (name !== undefined) changes.name = name;
+    if (description !== undefined) changes.description = description;
+
+    if (price !== undefined) {
+      changes.priceMonthly = price.monthly ?? existingPlan.priceMonthly;
+      changes.priceSetupFee = price.setupFee ?? existingPlan.priceSetupFee ?? 0;
+      changes.priceCurrency = price.currency ?? existingPlan.priceCurrency;
     }
+
+    if (features !== undefined) {
+      changes.maxUsers = features.maxUsers ?? existingPlan.maxUsers;
+      changes.maxBranches = features.maxBranches ?? existingPlan.maxBranches;
+      changes.maxProducts = features.maxProducts ?? existingPlan.maxProducts;
+      changes.maxTransactions = features.maxTransactions ?? existingPlan.maxTransactions;
+      changes.enableInventory = features.enableInventory ?? existingPlan.enableInventory;
+      changes.enableCategories = features.enableCategories ?? existingPlan.enableCategories;
+      changes.enableDiscounts = features.enableDiscounts ?? existingPlan.enableDiscounts;
+      changes.enableLoyaltyProgram = features.enableLoyaltyProgram ?? existingPlan.enableLoyaltyProgram;
+      changes.enableCustomerManagement = features.enableCustomerManagement ?? existingPlan.enableCustomerManagement;
+      changes.enableBookingScheduling = features.enableBookingScheduling ?? existingPlan.enableBookingScheduling;
+      changes.enableTableManagement = features.enableTableManagement ?? existingPlan.enableTableManagement;
+      changes.enableReports = features.enableReports ?? existingPlan.enableReports;
+      changes.enableMultiBranch = features.enableMultiBranch ?? existingPlan.enableMultiBranch;
+      changes.enableHardwareIntegration = features.enableHardwareIntegration ?? existingPlan.enableHardwareIntegration;
+      changes.prioritySupport = features.prioritySupport ?? existingPlan.prioritySupport;
+      changes.customIntegrations = features.customIntegrations ?? existingPlan.customIntegrations;
+      changes.dedicatedAccountManager = features.dedicatedAccountManager ?? existingPlan.dedicatedAccountManager;
+    }
+
+    if (birCompliance !== undefined) {
+      changes.birPtuAssistance = birCompliance.ptuAssistance ?? existingPlan.birPtuAssistance ?? false;
+      changes.birReceiptFormatting = birCompliance.receiptFormatting ?? existingPlan.birReceiptFormatting ?? false;
+      changes.birDocumentation = birCompliance.birDocumentation ?? existingPlan.birDocumentation ?? false;
+      changes.birCasReporting = birCompliance.casReporting ?? existingPlan.birCasReporting ?? false;
+      changes.birAuditTrailSystem = birCompliance.auditTrailSystem ?? existingPlan.birAuditTrailSystem ?? false;
+      changes.birMonthlySupport = birCompliance.monthlySupport ?? existingPlan.birMonthlySupport ?? false;
+    }
+
+    if (isActive !== undefined) changes.isActive = isActive;
+    if (isCustom !== undefined) changes.isCustom = isCustom;
+    if (availableToNewTenants !== undefined) changes.availableToNewTenants = availableToNewTenants;
+    if (yearlyDiscount !== undefined) changes.yearlyDiscount = yearlyDiscount;
+
+    const plan = await prisma.subscriptionPlan.update({
+      where: { id },
+      data: changes,
+    });
 
     const tenantId = await defaultTenantId();
     if (tenantId) {
@@ -79,7 +117,7 @@ export async function PUT(
         userId: user.userId,
         action: AuditActions.UPDATE,
         entityType: 'subscription_plan',
-        entityId: plan._id.toString(),
+        entityId: plan.id,
         changes: body,
         metadata: { updatedBy: user.userId, role: 'super_admin' },
       });
@@ -102,41 +140,44 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const user = await requireRole(request, ['super_admin']);
 
     const { id } = await params;
-    const plan = await SubscriptionPlan.findById(id);
+    const plan = await prisma.subscriptionPlan.findUnique({ where: { id } });
     if (!plan) {
       return NextResponse.json({ success: false, error: 'Plan not found' }, { status: 404 });
     }
 
     // Check for active/trial subscriptions referencing this plan
-    const activeCount = await Subscription.countDocuments({
-      planId: id,
-      status: { $in: ['active', 'trial'] },
+    const activeCount = await prisma.subscription.count({
+      where: {
+        planId: id,
+        status: { in: ['active', 'trial'] },
+      },
     });
 
     const tenantId = await defaultTenantId();
 
     if (activeCount > 0) {
       // Soft-delete: mark inactive instead of hard delete
-      plan.isActive = false;
-      await plan.save();
+      const updatedPlan = await prisma.subscriptionPlan.update({
+        where: { id },
+        data: { isActive: false },
+      });
       if (tenantId) {
         await createAuditLog(request, {
           tenantId,
           userId: user.userId,
           action: AuditActions.UPDATE,
           entityType: 'subscription_plan',
-          entityId: plan._id.toString(),
+          entityId: plan.id,
           changes: { isActive: { from: true, to: false } },
           metadata: { reason: 'delete_blocked_soft_deactivated', activeSubscriptions: activeCount, updatedBy: user.userId, role: 'super_admin' },
         });
       }
       return NextResponse.json({
         success: true,
-        data: plan,
+        data: updatedPlan,
         message: `Plan deactivated (${activeCount} active subscription(s) reference it). Hard delete blocked.`,
       });
     }
@@ -147,13 +188,13 @@ export async function DELETE(
         userId: user.userId,
         action: AuditActions.DELETE,
         entityType: 'subscription_plan',
-        entityId: plan._id.toString(),
+        entityId: plan.id,
         changes: { name: plan.name, tier: plan.tier },
         metadata: { deletedBy: user.userId, role: 'super_admin' },
       });
     }
 
-    await plan.deleteOne();
+    await prisma.subscriptionPlan.delete({ where: { id } });
     return NextResponse.json({ success: true, message: 'Plan deleted' });
   } catch (error: unknown) {
     if (error instanceof Error && (error.message === 'Unauthorized' || error.message.includes('Forbidden'))) {

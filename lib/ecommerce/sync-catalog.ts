@@ -1,9 +1,6 @@
-import mongoose from 'mongoose';
-import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
-import ProductChannelListing from '@/models/ProductChannelListing';
-import TenantEcommerceIntegration from '@/models/TenantEcommerceIntegration';
-import type { ITenantEcommerceIntegration } from '@/models/TenantEcommerceIntegration';
+import { randomUUID } from 'crypto';
+import prisma from '@/lib/db';
+import type { Prisma } from '@prisma/client';
 import { getWooCommerceCredentials } from '@/lib/ecommerce/integration-credentials';
 import { getShopifyAccessTokenForIntegration } from '@/lib/ecommerce/shopify-token';
 import { shopifyFetchAllCatalogProducts } from '@/lib/ecommerce/shopify-catalog';
@@ -11,45 +8,54 @@ import { wooFetchAllCatalogProducts } from '@/lib/ecommerce/woocommerce-catalog'
 import type { NormalizedCatalogVariant } from '@/lib/ecommerce/types';
 import { logger } from '@/lib/logger';
 
+type ProductWithVariations = Prisma.ProductGetPayload<{ include: { variations: true } }>;
+
 async function findProductBySku(
-  tenantId: mongoose.Types.ObjectId,
+  tenantId: string,
   sku: string | null
 ): Promise<{
-  product: InstanceType<typeof Product>;
+  product: ProductWithVariations;
   variation?: { size?: string; color?: string; type?: string };
 } | null> {
   if (!sku?.trim()) return null;
   const s = sku.trim();
-  const withVar = await Product.findOne({
-    tenantId,
-    isActive: true,
-    hasVariations: true,
-    variations: { $elemMatch: { sku: s } },
+  const withVar = await prisma.product.findFirst({
+    where: {
+      tenantId,
+      isActive: true,
+      hasVariations: true,
+      variations: { some: { sku: s } },
+    },
+    include: { variations: true },
   });
   if (withVar?.variations) {
     const v = withVar.variations.find((x) => (x.sku || '').trim() === s);
     if (v) {
       return {
         product: withVar,
-        variation: { size: v.size, color: v.color, type: v.type },
+        variation: { size: v.size || undefined, color: v.color || undefined, type: v.type || undefined },
       };
     }
   }
-  const direct = await Product.findOne({ tenantId, sku: s, isActive: true });
+  const direct = await prisma.product.findFirst({
+    where: { tenantId, sku: s, isActive: true },
+    include: { variations: true },
+  });
   return direct ? { product: direct } : null;
 }
 
 async function createProductFromVariant(
-  tenantId: mongoose.Types.ObjectId,
+  tenantId: string,
   v: NormalizedCatalogVariant,
   title: string,
   productImageUrl?: string | null
-): Promise<InstanceType<typeof Product>> {
+): Promise<ProductWithVariations> {
   const name = v.title || title;
   const stock = v.inventoryQuantity != null ? Math.max(0, Math.floor(v.inventoryQuantity)) : 0;
   const image = (v.imageUrl || productImageUrl || '').trim() || undefined;
-  const [p] = await Product.create([
-    {
+  const p = await prisma.product.create({
+    data: {
+      id: randomUUID(),
       tenantId,
       name: name.slice(0, 200),
       price: v.price,
@@ -62,17 +68,17 @@ async function createProductFromVariant(
       taxExempt: false,
       isActive: true,
     },
-  ]);
+    include: { variations: true },
+  });
   return p;
 }
 
 export async function runCatalogSync(params: {
-  integration: ITenantEcommerceIntegration;
+  integration: { id: string; tenantId: string; provider: 'shopify' | 'woocommerce'; shopDomain: string | null; siteUrl: string | null; credentialsEncrypted: string };
   autoCreateProducts: boolean;
 }): Promise<{ linked: number; created: number; skipped: number }> {
-  await connectDB();
   const { integration, autoCreateProducts } = params;
-  const tenantId = integration.tenantId as mongoose.Types.ObjectId;
+  const tenantId = integration.tenantId;
   let linked = 0;
   let created = 0;
   let skipped = 0;
@@ -105,27 +111,41 @@ export async function runCatalogSync(params: {
 
         const channelImage = (v.imageUrl || cp.imageUrl || '').trim();
         if (channelImage && !(match.product.image || '').trim()) {
-          await Product.updateOne({ _id: match.product._id }, { $set: { image: channelImage } });
+          await prisma.product.update({ where: { id: match.product.id }, data: { image: channelImage } });
           match.product.image = channelImage;
         }
 
-        await ProductChannelListing.findOneAndUpdate(
-          {
+        await prisma.productChannelListing.upsert({
+          where: {
+            tenantId_provider_externalVariantId: {
+              tenantId,
+              provider: integration.provider,
+              externalVariantId: v.externalVariantId,
+            },
+          },
+          update: {
+            productId: match.product.id,
+            externalProductId: v.externalProductId,
+            inventoryItemId: v.inventoryItemId,
+            sku: v.sku || undefined,
+            variationSize: match.variation?.size,
+            variationColor: match.variation?.color,
+            variationType: match.variation?.type,
+          },
+          create: {
+            id: randomUUID(),
             tenantId,
             provider: integration.provider,
             externalVariantId: v.externalVariantId,
+            productId: match.product.id,
+            externalProductId: v.externalProductId,
+            inventoryItemId: v.inventoryItemId,
+            sku: v.sku || undefined,
+            variationSize: match.variation?.size,
+            variationColor: match.variation?.color,
+            variationType: match.variation?.type,
           },
-          {
-            $set: {
-              productId: match.product._id,
-              externalProductId: v.externalProductId,
-              inventoryItemId: v.inventoryItemId,
-              sku: v.sku || undefined,
-              variation: match.variation,
-            },
-          },
-          { upsert: true, new: true }
-        );
+        });
         linked += 1;
       } catch (e) {
         logger.error('sync catalog variant error', { err: e, variant: v.externalVariantId });
@@ -134,10 +154,10 @@ export async function runCatalogSync(params: {
     }
   }
 
-  await TenantEcommerceIntegration.updateOne(
-    { _id: integration._id },
-    { $set: { lastSyncAt: new Date(), lastError: undefined } }
-  );
+  await prisma.tenantEcommerceIntegration.update({
+    where: { id: integration.id },
+    data: { lastSyncAt: new Date(), lastError: null },
+  });
 
   return { linked, created, skipped };
 }

@@ -4,8 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/db';
 import { validateTemplate } from '@/lib/receipt-templates';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -27,26 +26,31 @@ export async function GET(
     }
 
     const { slug } = await params;
-    await connectDB();
-
-    const tenant = await Tenant.findOne({ slug }).lean();
+    const tenant = await prisma.tenant.findFirst({
+      where: { slug },
+      include: { settings: true, receiptTemplates: true },
+    });
     if (!tenant) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
     // Tenant isolation
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden') }, { status: 403 });
     }
-
-    const templates = tenant.settings.receiptTemplates?.templates || [];
-    const defaultTemplateId = tenant.settings.receiptTemplates?.default;
 
     return NextResponse.json({
       success: true,
       data: {
-        templates,
-        default: defaultTemplateId,
+        templates: tenant.receiptTemplates.map((tpl) => ({
+          id: tpl.id,
+          name: tpl.name,
+          html: tpl.html,
+          isDefault: tpl.isDefault,
+          createdAt: tpl.createdAt,
+          updatedAt: tpl.updatedAt,
+        })),
+        default: tenant.settings?.receiptDefaultTemplateId ?? undefined,
       },
     });
   } catch (error: unknown) {
@@ -76,21 +80,19 @@ export async function POST(
     }
 
     const { slug } = await params;
-    await connectDB();
-
-    const tenant = await Tenant.findOne({ slug }).lean();
+    const tenant = await prisma.tenant.findFirst({ where: { slug } });
     if (!tenant) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
     // Tenant isolation
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden') }, { status: 403 });
     }
 
     // Feature gate
     try {
-      await checkBirFeatureAccess(tenant._id.toString(), 'receiptFormatting');
+      await checkBirFeatureAccess(tenant.id, 'receiptFormatting');
     } catch (featureError: unknown) {
       return NextResponse.json(
         { success: false, error: (featureError as Error).message },
@@ -110,49 +112,43 @@ export async function POST(
       return NextResponse.json({ success: false, error: validation.error }, { status: 400 });
     }
 
-    const newTemplate = {
-      id: `template_${Date.now()}`,
-      name,
-      html,
-      isDefault: isDefault || false,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+    const id = `template_${Date.now()}`;
 
-    // Atomic push (+ atomic default-flag clear when applicable) instead of a
-    // read-mutate-save on the whole document, so two concurrent template writes
-    // (e.g. two browser tabs) can't clobber each other's array changes.
-    if (isDefault) {
-      await Tenant.updateOne(
-        { slug },
-        { $set: { 'settings.receiptTemplates.templates.$[].isDefault': false } }
-      );
-      await Tenant.updateOne(
-        { slug },
-        {
-          $push: { 'settings.receiptTemplates.templates': newTemplate },
-          $set: { 'settings.receiptTemplates.default': newTemplate.id },
-        }
-      );
-    } else {
-      await Tenant.updateOne(
-        { slug },
-        { $push: { 'settings.receiptTemplates.templates': newTemplate } }
-      );
-    }
+    // Transactional so the "clear other defaults" + "insert + set default" steps
+    // can't be interleaved by a concurrent write on the same tenant (matches
+    // the previous atomic multi-step Mongoose updateOne() sequence).
+    const created = await prisma.$transaction(async (tx) => {
+      if (isDefault) {
+        await tx.tenantReceiptTemplate.updateMany({
+          where: { tenantId: tenant.id },
+          data: { isDefault: false },
+        });
+      }
+      const tpl = await tx.tenantReceiptTemplate.create({
+        data: { id, tenantId: tenant.id, name, html, isDefault: !!isDefault },
+      });
+      if (isDefault) {
+        await tx.tenantSettings.upsert({
+          where: { tenantId: tenant.id },
+          create: { tenantId: tenant.id, receiptDefaultTemplateId: id },
+          update: { receiptDefaultTemplateId: id },
+        });
+      }
+      return tpl;
+    });
 
     await createAuditLog(request, {
-      tenantId: tenant._id,
+      tenantId: tenant.id,
       userId: user.userId,
       action: AuditActions.CREATE,
       entityType: 'receipt_template',
-      entityId: newTemplate.id,
+      entityId: created.id,
       changes: { name, isDefault },
     });
 
     return NextResponse.json({
       success: true,
-      data: newTemplate,
+      data: created,
     });
   } catch (error: unknown) {
     return handleApiError(error, 'Failed to create receipt template');
@@ -195,70 +191,57 @@ export async function PUT(
       }
     }
 
-    await connectDB();
-
-    const tenant = await Tenant.findOne({ slug }).lean();
+    const tenant = await prisma.tenant.findFirst({ where: { slug }, include: { settings: true } });
     if (!tenant) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
     // Tenant isolation
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden') }, { status: 403 });
     }
 
-    const templates = tenant.settings.receiptTemplates?.templates || [];
-    const existingTemplate = templates.find((tpl) => tpl.id === id);
-
+    const existingTemplate = await prisma.tenantReceiptTemplate.findFirst({ where: { id, tenantId: tenant.id } });
     if (!existingTemplate) {
       return NextResponse.json({ success: false, error: t('validation.templateNotFound', 'Template not found') }, { status: 404 });
     }
 
-    // Atomic per-element update via arrayFilters instead of a read-mutate-save
-    // on the whole document, so a concurrent edit to a different template (or
-    // the same one) can't be silently lost.
-    const elemSet: Record<string, unknown> = { 'settings.receiptTemplates.templates.$[elem].updatedAt': new Date() };
-    if (name) elemSet['settings.receiptTemplates.templates.$[elem].name'] = name;
-    if (html) elemSet['settings.receiptTemplates.templates.$[elem].html'] = html;
+    const data: Record<string, unknown> = {};
+    if (name) data.name = name;
+    if (html) data.html = html;
 
-    if (isDefault !== undefined) {
-      if (isDefault) {
-        await Tenant.updateOne(
-          { slug },
-          { $set: { 'settings.receiptTemplates.templates.$[].isDefault': false } }
-        );
-        elemSet['settings.receiptTemplates.templates.$[elem].isDefault'] = true;
-        elemSet['settings.receiptTemplates.default'] = id;
-        await Tenant.updateOne(
-          { slug },
-          { $set: elemSet },
-          { arrayFilters: [{ 'elem.id': id }] }
-        );
-      } else {
-        elemSet['settings.receiptTemplates.templates.$[elem].isDefault'] = false;
-        const unset: Record<string, ''> = {};
-        if (tenant.settings.receiptTemplates?.default === id) {
-          unset['settings.receiptTemplates.default'] = '';
+    const updated = await prisma.$transaction(async (tx) => {
+      if (isDefault !== undefined) {
+        if (isDefault) {
+          await tx.tenantReceiptTemplate.updateMany({
+            where: { tenantId: tenant.id },
+            data: { isDefault: false },
+          });
+          data.isDefault = true;
+          await tx.tenantSettings.upsert({
+            where: { tenantId: tenant.id },
+            create: { tenantId: tenant.id, receiptDefaultTemplateId: id },
+            update: { receiptDefaultTemplateId: id },
+          });
+        } else {
+          data.isDefault = false;
+          if (tenant.settings?.receiptDefaultTemplateId === id) {
+            await tx.tenantSettings.update({
+              where: { tenantId: tenant.id },
+              data: { receiptDefaultTemplateId: null },
+            });
+          }
         }
-        await Tenant.updateOne(
-          { slug },
-          { $set: elemSet, ...(Object.keys(unset).length ? { $unset: unset } : {}) },
-          { arrayFilters: [{ 'elem.id': id }] }
-        );
       }
-    } else {
-      await Tenant.updateOne(
-        { slug },
-        { $set: elemSet },
-        { arrayFilters: [{ 'elem.id': id }] }
-      );
-    }
 
-    const updatedTenant = await Tenant.findOne({ slug }, { 'settings.receiptTemplates': 1 }).lean();
-    const updatedTemplate = updatedTenant?.settings.receiptTemplates?.templates?.find((tpl) => tpl.id === id);
+      return tx.tenantReceiptTemplate.update({
+        where: { id },
+        data,
+      });
+    });
 
     await createAuditLog(request, {
-      tenantId: tenant._id,
+      tenantId: tenant.id,
       userId: user.userId,
       action: AuditActions.UPDATE,
       entityType: 'receipt_template',
@@ -268,7 +251,7 @@ export async function PUT(
 
     return NextResponse.json({
       success: true,
-      data: updatedTemplate,
+      data: updated,
     });
   } catch (error: unknown) {
     return handleApiError(error, 'Failed to update receipt template');
@@ -304,39 +287,33 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: t('validation.templateIdRequired', 'Template ID is required') }, { status: 400 });
     }
 
-    await connectDB();
-
-    const tenant = await Tenant.findOne({ slug }).lean();
+    const tenant = await prisma.tenant.findFirst({ where: { slug }, include: { settings: true } });
     if (!tenant) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
     // Tenant isolation
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden') }, { status: 403 });
     }
 
-    const templates = tenant.settings.receiptTemplates?.templates || [];
-    const exists = templates.some((tpl) => tpl.id === id);
-
+    const exists = await prisma.tenantReceiptTemplate.findFirst({ where: { id, tenantId: tenant.id } });
     if (!exists) {
       return NextResponse.json({ success: false, error: t('validation.templateNotFound', 'Template not found') }, { status: 404 });
     }
 
-    // Atomic $pull instead of read-filter-save so a concurrent template write
-    // to the same document can't be lost.
-    await Tenant.updateOne(
-      { slug },
-      {
-        $pull: { 'settings.receiptTemplates.templates': { id } },
-        ...(tenant.settings.receiptTemplates?.default === id
-          ? { $unset: { 'settings.receiptTemplates.default': '' } }
-          : {}),
+    await prisma.$transaction(async (tx) => {
+      await tx.tenantReceiptTemplate.deleteMany({ where: { id, tenantId: tenant.id } });
+      if (tenant.settings?.receiptDefaultTemplateId === id) {
+        await tx.tenantSettings.update({
+          where: { tenantId: tenant.id },
+          data: { receiptDefaultTemplateId: null },
+        });
       }
-    );
+    });
 
     await createAuditLog(request, {
-      tenantId: tenant._id,
+      tenantId: tenant.id,
       userId: user.userId,
       action: AuditActions.DELETE,
       entityType: 'receipt_template',

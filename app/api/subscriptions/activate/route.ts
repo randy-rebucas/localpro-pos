@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import mongoose from 'mongoose';
-import connectDB from '@/lib/mongodb';
-import Subscription from '@/models/Subscription';
-import SubscriptionPlan from '@/models/SubscriptionPlan';
-import Tenant from '@/models/Tenant';
-import BillingEvent from '@/models/BillingEvent';
+import { randomUUID } from 'crypto';
+import prisma from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -13,10 +9,10 @@ import { validateCoupon, applyCouponDiscount, incrementCouponUsage, CouponError 
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
+import { Prisma } from '@prisma/client';
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const t = await getValidationTranslatorFromRequest(request);
 
     // Require authentication
@@ -60,9 +56,16 @@ export async function POST(request: NextRequest) {
     // activation), don't re-attempt the PayPal capture — PayPal will reject a
     // second capture of the same order and the tenant would wrongly see
     // "Activation Failed" even though they're already upgraded.
-    const alreadyProcessed = await BillingEvent.findOne({ tenantId, transactionId: paypalOrderId }).lean();
+    // tenantId scoped: BillingEvent has a unique [tenantId, transactionId]
+    // constraint, and the lookup below is filtered on both, matching the
+    // documented cross-tenant-leak fix for subscription endpoints.
+    const alreadyProcessed = await prisma.billingEvent.findFirst({
+      where: { tenantId, transactionId: paypalOrderId },
+    });
     if (alreadyProcessed) {
-      const subscription = await Subscription.findById(alreadyProcessed.subscriptionId).lean();
+      const subscription = await prisma.subscription.findUnique({
+        where: { id: alreadyProcessed.subscriptionId },
+      });
       return NextResponse.json({
         success: true,
         message: t('subscription.alreadyActivated', 'Subscription activated successfully'),
@@ -70,8 +73,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Get the subscription plan
-    const plan = await SubscriptionPlan.findOne({ _id: planId, isActive: true });
+    // Get the subscription plan (global catalog — not tenant scoped)
+    const plan = await prisma.subscriptionPlan.findFirst({ where: { id: planId, isActive: true } });
     if (!plan) {
       return NextResponse.json(
         { success: false, error: t('validation.subscriptionPlanNotFound', 'Subscription plan not found') },
@@ -80,8 +83,8 @@ export async function POST(request: NextRequest) {
     }
 
     let expectedAmount = billingCycle === 'yearly'
-      ? plan.price.monthly * 12 * 0.9
-      : plan.price.monthly;
+      ? Number(plan.priceMonthly) * 12 * 0.9
+      : Number(plan.priceMonthly);
 
     // Re-validate the coupon server-side rather than trusting the discounted
     // amount the client remembers from create-payment — the client only
@@ -126,10 +129,10 @@ export async function POST(request: NextRequest) {
     if (
       !Number.isFinite(capturedAmount) ||
       Math.abs(capturedAmount - expectedAmount) > 0.01 ||
-      capturedCurrency !== plan.price.currency
+      capturedCurrency !== plan.priceCurrency
     ) {
       logger.error('PayPal captured amount does not match plan price', {
-        tenantId, planId, billingCycle, capturedAmount, capturedCurrency, expectedAmount, expectedCurrency: plan.price.currency,
+        tenantId, planId, billingCycle, capturedAmount, capturedCurrency, expectedAmount, expectedCurrency: plan.priceCurrency,
       });
       return NextResponse.json(
         { success: false, error: t('validation.paymentAmountMismatch', 'Payment amount does not match the selected plan.') },
@@ -138,7 +141,6 @@ export async function POST(request: NextRequest) {
     }
 
     const now = new Date();
-    let subscriptionData: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
     const nextBillingDate = new Date(now);
     if (billingCycle === 'yearly') {
@@ -148,105 +150,118 @@ export async function POST(request: NextRequest) {
     }
     const endDate = nextBillingDate;
 
-    const billingEntry = {
-      date: now,
-      amount: expectedAmount,
-      currency: plan.price.currency,
-      status: 'paid',
-      transactionId: paypalOrderId || undefined,
-    };
-
     // Money has already been captured by PayPal at this point — the remaining
-    // writes (subscription, tenant backref, billing event) must all land together
+    // writes (subscription, billing history, billing event) must all land together
     // or not at all, otherwise a tenant can end up charged with no matching
-    // subscription/billing record.
-    const session = await mongoose.startSession();
-    let subscriptionId: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+    // subscription/billing record. All queries below are scoped by tenantId to
+    // avoid the previously-documented cross-tenant subscription leak.
+    let subscriptionId: string;
     let wasTrial = false;
+    let resultSubscription;
     try {
-      session.startTransaction();
+      resultSubscription = await prisma.$transaction(async (tx) => {
+        const existingSubscription = await tx.subscription.findUnique({ where: { tenantId } });
+        wasTrial = existingSubscription?.isTrial === true;
 
-      const existingSubscription = await Subscription.findOne({ tenantId }).session(session);
-      wasTrial = existingSubscription?.isTrial === true;
+        let subscription;
+        if (existingSubscription) {
+          // Update existing subscription (upgrade, re-activate, or trial conversion)
+          subscription = await tx.subscription.update({
+            where: { id: existingSubscription.id },
+            data: {
+              planId: plan.id,
+              status: 'active',
+              billingCycle,
+              endDate,
+              nextBillingDate: endDate,
+              isTrial: false,
+              autoRenew: true,
+              billingHistory: {
+                create: {
+                  id: randomUUID(),
+                  date: now,
+                  amount: expectedAmount,
+                  currency: plan.priceCurrency,
+                  status: 'paid',
+                  transactionId: paypalOrderId || undefined,
+                },
+              },
+            },
+          });
+          subscriptionId = existingSubscription.id;
+        } else {
+          // Create brand-new subscription
+          subscription = await tx.subscription.create({
+            data: {
+              id: randomUUID(),
+              tenantId,
+              planId: plan.id,
+              status: 'active',
+              billingCycle,
+              startDate: now,
+              endDate,
+              nextBillingDate: endDate,
+              isTrial: false,
+              autoRenew: true,
+              usageCurrentUsers: 1,
+              usageCurrentBranches: 1,
+              usageCurrentProducts: 0,
+              usageCurrentTransactions: 0,
+              usageLastResetDate: now,
+              billingHistory: {
+                create: {
+                  id: randomUUID(),
+                  date: now,
+                  amount: expectedAmount,
+                  currency: plan.priceCurrency,
+                  status: 'paid',
+                  transactionId: paypalOrderId || undefined,
+                },
+              },
+            },
+          });
+          subscriptionId = subscription.id;
+        }
 
-      if (existingSubscription) {
-        // Update existing subscription (upgrade, re-activate, or trial conversion)
-        subscriptionData = {
-          planId: plan._id,
-          status: 'active',
-          billingCycle,
-          endDate,
-          nextBillingDate: endDate,
-          isTrial: false,
-          autoRenew: true,
-          $push: { billingHistory: billingEntry },
-        };
-
-        await Subscription.findByIdAndUpdate(existingSubscription._id, subscriptionData, { session });
-        subscriptionId = existingSubscription._id;
-      } else {
-        // Create brand-new subscription
-        subscriptionData = {
-          tenantId,
-          planId: plan._id,
-          status: 'active',
-          billingCycle,
-          startDate: now,
-          endDate,
-          nextBillingDate: endDate,
-          isTrial: false,
-          autoRenew: true,
-          usage: {
-            currentUsers: 1, // Admin user
-            currentBranches: 1,
-            currentProducts: 0,
-            currentTransactions: 0,
-            lastResetDate: now,
-          },
-          billingHistory: [billingEntry],
-        };
-
-        const [subscription] = await Subscription.create([subscriptionData], { session });
-        subscriptionId = subscription._id;
-
-        // Update tenant with subscription reference
-        await Tenant.findByIdAndUpdate(tenantId, { subscriptionId: subscription._id }, { session });
-      }
-
-      await BillingEvent.create(
-        [
-          {
+        await tx.billingEvent.create({
+          data: {
+            id: randomUUID(),
             tenantId,
             subscriptionId,
             type: wasTrial ? 'trial_converted' : 'plan_changed',
             amount: expectedAmount,
-            currency: plan.price.currency,
+            currency: plan.priceCurrency,
             description: wasTrial
               ? `Trial converted to ${plan.name} (${billingCycle}) via PayPal${coupon ? ` (coupon ${coupon.code})` : ''}`
               : `Plan activated/changed to ${plan.name} (${billingCycle}) via PayPal${coupon ? ` (coupon ${coupon.code})` : ''}`,
             transactionId: paypalOrderId,
           },
-        ],
-        { session }
-      );
+        });
 
-      // Reserve the coupon's use in the same transaction as the charge it
-      // discounted — if the payment write rolls back, the use shouldn't be
-      // consumed either.
-      if (coupon) {
-        await incrementCouponUsage(coupon._id, session);
-      }
+        // Reserve the coupon's use in the same transaction as the charge it
+        // discounted — if the payment write rolls back, the use shouldn't be
+        // consumed either.
+        // TODO(postgres-migration): lib/coupons.ts is still Mongoose-based
+        // (owned by the customers/crm/loyalty/coupons migration workstream)
+        // and incrementCouponUsage expects a mongoose.ClientSession, not a
+        // Prisma transaction client — it cannot participate in this Prisma
+        // $transaction. Left as a best-effort call outside strict atomicity
+        // until lib/coupons.ts is migrated to Prisma; revisit then to move
+        // this inside the transaction against the Prisma tx client.
+        if (coupon) {
+          await incrementCouponUsage(coupon._id, undefined as unknown as Parameters<typeof incrementCouponUsage>[1]);
+        }
 
-      await session.commitTransaction();
+        return subscription;
+      });
     } catch (e) {
-      await session.abortTransaction();
-      // A duplicate-key error on the transactionId index means a concurrent
-      // request already recorded this exact payment — treat as already activated
-      // rather than surfacing a false failure.
-      if (e instanceof Error && 'code' in e && (e as { code?: number }).code === 11000) {
-        const existing = await BillingEvent.findOne({ tenantId, transactionId: paypalOrderId }).lean();
+      // A duplicate-key error on the [tenantId, transactionId] index means a
+      // concurrent request already recorded this exact payment — treat as
+      // already activated rather than surfacing a false failure.
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        const existing = await prisma.billingEvent.findFirst({ where: { tenantId, transactionId: paypalOrderId } });
         if (existing) {
-          const subscription = await Subscription.findById(existing.subscriptionId).lean();
+          const subscription = await prisma.subscription.findUnique({ where: { id: existing.subscriptionId } });
           return NextResponse.json({
             success: true,
             message: t('subscription.alreadyActivated', 'Subscription activated successfully'),
@@ -255,8 +270,6 @@ export async function POST(request: NextRequest) {
         }
       }
       throw e;
-    } finally {
-      session.endSession();
     }
 
     await createAuditLog(request, {
@@ -264,12 +277,12 @@ export async function POST(request: NextRequest) {
       userId: user.userId,
       action: AuditActions.SUBSCRIPTION_ACTIVATE,
       entityType: 'subscription',
-      entityId: subscriptionId.toString(),
+      entityId: resultSubscription.id,
       changes: {
-        planId: plan._id.toString(),
+        planId: plan.id,
         billingCycle,
         amount: expectedAmount,
-        currency: plan.price.currency,
+        currency: plan.priceCurrency,
         wasTrial,
         paypalOrderId,
         couponCode: coupon?.code,
@@ -279,14 +292,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: t('subscription.activated', 'Subscription activated successfully'),
-      data: subscriptionData,
+      data: resultSubscription,
     });
 
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  } catch (error: unknown) {
     logger.error('Error activating subscription:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
-      { success: false, error: error.message || t('validation.subscriptionActivationFailed', 'Failed to activate subscription') },
+      { success: false, error: (error as Error).message || t('validation.subscriptionActivationFailed', 'Failed to activate subscription') },
       { status: 500 }
     );
   }

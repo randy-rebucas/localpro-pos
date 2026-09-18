@@ -1,9 +1,6 @@
-import connectDB from '@/lib/mongodb';
-import Subscription from '@/models/Subscription';
-import SubscriptionPlan from '@/models/SubscriptionPlan';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/db';
 import { logger } from '@/lib/logger';
-import mongoose from 'mongoose'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import type { Subscription, SubscriptionPlan } from '@prisma/client';
 
 export interface SubscriptionLimits {
   maxUsers: number;
@@ -61,8 +58,8 @@ export interface SubscriptionStatus {
     currentTransactions: number;
   };
   billingCycle: 'monthly' | 'yearly';
-  trialEndDate?: Date;
-  nextBillingDate?: Date;
+  trialEndDate?: Date | null;
+  nextBillingDate?: Date | null;
 }
 
 export class SubscriptionService {
@@ -71,43 +68,47 @@ export class SubscriptionService {
    */
   static async getSubscriptionStatus(tenantId: string): Promise<SubscriptionStatus | null> {
     try {
-      await connectDB();
-
-      const subscription = await Subscription.findOne({ tenantId })
-        .populate('planId', 'name tier price features birCompliance pharmacyCompliance')
-        .lean();
+      // CRITICAL: findUnique on tenantId (unique 1:1) keeps this scoped to
+      // exactly one tenant — never a findFirst/list query that could leak
+      // another tenant's subscription. See documented cross-tenant leak
+      // history in subscriptions endpoints.
+      const subscription = await prisma.subscription.findUnique({
+        where: { tenantId },
+      });
 
       if (!subscription) {
         return null;
       }
 
-      type PopulatedPlan = {
-        name: string;
-        features: SubscriptionLimits & SubscriptionFeatures;
-        birCompliance?: BirComplianceFeatures;
-      };
-      let plan = subscription.planId as unknown as PopulatedPlan | null;
+      let plan: SubscriptionPlan | null = await prisma.subscriptionPlan.findUnique({
+        where: { id: subscription.planId },
+      });
+
       const now = new Date();
 
       // Handle orphaned planId (plan was deleted/recreated)
-      if (!plan || !plan.features) {
-        const fallbackPlan = await SubscriptionPlan.findOne({ tier: 'starter', isActive: true }).lean();
+      if (!plan) {
+        const fallbackPlan = await prisma.subscriptionPlan.findFirst({
+          where: { tier: 'starter', isActive: true },
+        });
         if (fallbackPlan) {
           // Reassign subscription to the current starter plan
-          await Subscription.findByIdAndUpdate(subscription._id, { planId: fallbackPlan._id });
-          plan = fallbackPlan as PopulatedPlan;
+          await prisma.subscription.update({
+            where: { id: subscription.id },
+            data: { planId: fallbackPlan.id },
+          });
+          plan = fallbackPlan;
         } else {
           // Subscription exists but plan data is unavailable — return a safe fallback
           // so onboarding is not blocked by a null status.
           logger.warn('Subscription has missing plan; using fallback status', { tenantId });
-          const now = new Date();
           return {
             isActive: subscription.status === 'active',
             isTrial: subscription.isTrial || subscription.status === 'trial',
             isExpired: subscription.endDate ? now > subscription.endDate : false,
             isTrialExpired: subscription.trialEndDate ? now > subscription.trialEndDate : false,
             planName: 'Starter',
-            billingCycle: subscription.billingCycle,
+            billingCycle: subscription.billingCycle as 'monthly' | 'yearly',
             trialEndDate: subscription.trialEndDate,
             nextBillingDate: subscription.nextBillingDate,
             limits: {
@@ -145,7 +146,12 @@ export class SubscriptionService {
               expiryTracking: false,
               pdeaReporting: false,
             },
-            usage: subscription.usage,
+            usage: {
+              currentUsers: subscription.usageCurrentUsers,
+              currentBranches: subscription.usageCurrentBranches,
+              currentProducts: subscription.usageCurrentProducts,
+              currentTransactions: subscription.usageCurrentTransactions,
+            },
           };
         }
       }
@@ -156,45 +162,50 @@ export class SubscriptionService {
         isExpired: subscription.endDate ? now > subscription.endDate : false,
         isTrialExpired: subscription.trialEndDate ? now > subscription.trialEndDate : false,
         planName: plan.name,
-        billingCycle: subscription.billingCycle,
+        billingCycle: subscription.billingCycle as 'monthly' | 'yearly',
         trialEndDate: subscription.trialEndDate,
         nextBillingDate: subscription.nextBillingDate,
         limits: {
-          maxUsers: plan.features.maxUsers,
-          maxBranches: plan.features.maxBranches,
-          maxProducts: plan.features.maxProducts,
-          maxTransactions: plan.features.maxTransactions,
+          maxUsers: plan.maxUsers,
+          maxBranches: plan.maxBranches,
+          maxProducts: plan.maxProducts,
+          maxTransactions: plan.maxTransactions,
         },
         features: {
-          enableInventory: plan.features.enableInventory,
-          enableCategories: plan.features.enableCategories,
-          enableDiscounts: plan.features.enableDiscounts,
-          enableLoyaltyProgram: plan.features.enableLoyaltyProgram,
-          enableCustomerManagement: plan.features.enableCustomerManagement,
-          enableBookingScheduling: plan.features.enableBookingScheduling,
-          enableReports: plan.features.enableReports,
-          enableMultiBranch: plan.features.enableMultiBranch,
-          enableHardwareIntegration: plan.features.enableHardwareIntegration,
-          prioritySupport: plan.features.prioritySupport,
-          customIntegrations: plan.features.customIntegrations,
-          dedicatedAccountManager: plan.features.dedicatedAccountManager,
-          enableTableManagement: plan.features.enableTableManagement ?? false,
+          enableInventory: plan.enableInventory,
+          enableCategories: plan.enableCategories,
+          enableDiscounts: plan.enableDiscounts,
+          enableLoyaltyProgram: plan.enableLoyaltyProgram,
+          enableCustomerManagement: plan.enableCustomerManagement,
+          enableBookingScheduling: plan.enableBookingScheduling,
+          enableReports: plan.enableReports,
+          enableMultiBranch: plan.enableMultiBranch,
+          enableHardwareIntegration: plan.enableHardwareIntegration,
+          prioritySupport: plan.prioritySupport,
+          customIntegrations: plan.customIntegrations,
+          dedicatedAccountManager: plan.dedicatedAccountManager,
+          enableTableManagement: plan.enableTableManagement ?? false,
         },
         birCompliance: {
-          ptuAssistance: plan.birCompliance?.ptuAssistance ?? false,
-          receiptFormatting: plan.birCompliance?.receiptFormatting ?? false,
-          birDocumentation: plan.birCompliance?.birDocumentation ?? false,
-          casReporting: plan.birCompliance?.casReporting ?? false,
-          auditTrailSystem: plan.birCompliance?.auditTrailSystem ?? false,
-          monthlySupport: plan.birCompliance?.monthlySupport ?? false,
+          ptuAssistance: plan.birPtuAssistance ?? false,
+          receiptFormatting: plan.birReceiptFormatting ?? false,
+          birDocumentation: plan.birDocumentation ?? false,
+          casReporting: plan.birCasReporting ?? false,
+          auditTrailSystem: plan.birAuditTrailSystem ?? false,
+          monthlySupport: plan.birMonthlySupport ?? false,
         },
         pharmacyCompliance: {
-          enablePharmacyCompliance: (plan as any).pharmacyCompliance?.enablePharmacyCompliance ?? false, // eslint-disable-line @typescript-eslint/no-explicit-any
-          prescriptionManagement: (plan as any).pharmacyCompliance?.prescriptionManagement ?? false, // eslint-disable-line @typescript-eslint/no-explicit-any
-          expiryTracking: (plan as any).pharmacyCompliance?.expiryTracking ?? false, // eslint-disable-line @typescript-eslint/no-explicit-any
-          pdeaReporting: (plan as any).pharmacyCompliance?.pdeaReporting ?? false, // eslint-disable-line @typescript-eslint/no-explicit-any
+          enablePharmacyCompliance: plan.pharmacyComplianceEnabled ?? false,
+          prescriptionManagement: plan.prescriptionManagement ?? false,
+          expiryTracking: plan.expiryTracking ?? false,
+          pdeaReporting: (plan as unknown as { pdeaReporting?: boolean }).pdeaReporting ?? false,
         },
-        usage: subscription.usage,
+        usage: {
+          currentUsers: subscription.usageCurrentUsers,
+          currentBranches: subscription.usageCurrentBranches,
+          currentProducts: subscription.usageCurrentProducts,
+          currentTransactions: subscription.usageCurrentTransactions,
+        },
       };
 
       return status;
@@ -335,28 +346,29 @@ export class SubscriptionService {
     }>
   ): Promise<void> {
     try {
-      await connectDB();
-
       const updateObj: Record<string, number> = {};
 
       if (updates.users !== undefined) {
-        updateObj['usage.currentUsers'] = updates.users;
+        updateObj.usageCurrentUsers = updates.users;
       }
       if (updates.branches !== undefined) {
-        updateObj['usage.currentBranches'] = updates.branches;
+        updateObj.usageCurrentBranches = updates.branches;
       }
       if (updates.products !== undefined) {
-        updateObj['usage.currentProducts'] = updates.products;
+        updateObj.usageCurrentProducts = updates.products;
       }
       if (updates.transactions !== undefined) {
-        updateObj['usage.currentTransactions'] = updates.transactions;
+        updateObj.usageCurrentTransactions = updates.transactions;
       }
 
-      await Subscription.findOneAndUpdate(
-        { tenantId },
-        updateObj,
-        { upsert: false }
-      );
+      if (Object.keys(updateObj).length === 0) return;
+
+      // updateMany scoped by tenantId (not update-by-id) so a caller can
+      // never accidentally target another tenant's subscription row.
+      await prisma.subscription.updateMany({
+        where: { tenantId },
+        data: updateObj,
+      });
     } catch (error) {
       logger.error('Error updating subscription usage:', error);
     }
@@ -365,10 +377,12 @@ export class SubscriptionService {
   /**
    * Get all subscription plans
    */
-  static async getPlans(): Promise<Record<string, unknown>[]> {
+  static async getPlans(): Promise<SubscriptionPlan[]> {
     try {
-      await connectDB();
-      return await SubscriptionPlan.find({ isActive: true }).sort({ 'price.monthly': 1 }).lean();
+      return await prisma.subscriptionPlan.findMany({
+        where: { isActive: true },
+        orderBy: { priceMonthly: 'asc' },
+      });
     } catch (error) {
       logger.error('Error getting subscription plans:', error);
       return [];
@@ -386,73 +400,61 @@ export class SubscriptionService {
       billingCycle?: 'monthly' | 'yearly';
       startDate?: Date;
     } = {}
-  ): Promise<unknown> {
+  ): Promise<Subscription> {
     try {
-      await connectDB();
-
       const { isTrial = true, billingCycle = 'monthly', startDate = new Date() } = options;
 
-      // Check if tenant already has a subscription
-      const existingSubscription = await Subscription.findOne({
-        tenantId,
-        status: { $in: ['active', 'trial'] }
+      // Check if tenant already has a subscription (scoped by tenantId)
+      const existingSubscription = await prisma.subscription.findFirst({
+        where: {
+          tenantId,
+          status: { in: ['active', 'trial'] },
+        },
       });
 
       if (existingSubscription) {
         throw new Error('Tenant already has an active subscription');
       }
 
-      const subscriptionData: {
-        tenantId: string;
-        planId: string;
-        status: string;
-        billingCycle: string;
-        startDate: Date;
-        isTrial: boolean;
-        autoRenew: boolean;
-        usage: Record<string, unknown>;
-        trialEndDate?: Date;
-        nextBillingDate?: Date;
-      } = {
-        tenantId,
-        planId,
-        status: isTrial ? 'trial' : 'active',
-        billingCycle,
-        startDate,
-        isTrial,
-        autoRenew: true,
-        usage: {
-          currentUsers: 1,
-          currentBranches: 1,
-          currentProducts: 0,
-          currentTransactions: 0,
-          lastResetDate: startDate,
-        },
-      };
+      let trialEndDate: Date | undefined;
+      let nextBillingDate: Date;
 
-      // Set trial/billing dates
       if (isTrial) {
-        const trialEndDate = new Date(startDate);
+        trialEndDate = new Date(startDate);
         trialEndDate.setDate(trialEndDate.getDate() + 30);
-        subscriptionData.trialEndDate = trialEndDate;
-        subscriptionData.nextBillingDate = trialEndDate;
+        nextBillingDate = trialEndDate;
       } else {
-        const nextBilling = new Date(startDate);
+        nextBillingDate = new Date(startDate);
         if (billingCycle === 'yearly') {
-          nextBilling.setFullYear(nextBilling.getFullYear() + 1);
+          nextBillingDate.setFullYear(nextBillingDate.getFullYear() + 1);
         } else {
-          nextBilling.setMonth(nextBilling.getMonth() + 1);
+          nextBillingDate.setMonth(nextBillingDate.getMonth() + 1);
         }
-        subscriptionData.nextBillingDate = nextBilling;
       }
 
-      const subscription = await Subscription.create(subscriptionData);
-
-      // Update tenant with subscription reference
-      await Tenant.findByIdAndUpdate(tenantId, {
-        subscriptionId: subscription._id
+      const subscription = await prisma.subscription.create({
+        data: {
+          id: crypto.randomUUID(),
+          tenantId,
+          planId,
+          status: isTrial ? 'trial' : 'active',
+          billingCycle,
+          startDate,
+          isTrial,
+          autoRenew: true,
+          usageCurrentUsers: 1,
+          usageCurrentBranches: 1,
+          usageCurrentProducts: 0,
+          usageCurrentTransactions: 0,
+          usageLastResetDate: startDate,
+          trialEndDate,
+          nextBillingDate,
+        },
       });
 
+      // Note: unlike the Mongoose model, Tenant has no subscriptionId FK column —
+      // the relation is implicit via Subscription.tenantId (@unique), so no
+      // separate Tenant update is needed here.
       return subscription;
     } catch (error) {
       logger.error('Error creating subscription:', error);
@@ -465,21 +467,23 @@ export class SubscriptionService {
    * Returns the existing subscription if one is already active/trial.
    */
   static async ensureTrialSubscription(tenantId: string): Promise<{
-    subscription: InstanceType<typeof Subscription>;
+    subscription: Subscription;
     created: boolean;
   }> {
-    await connectDB();
-
-    const existing = await Subscription.findOne({
-      tenantId,
-      status: { $in: ['active', 'trial'] },
+    const existing = await prisma.subscription.findFirst({
+      where: {
+        tenantId,
+        status: { in: ['active', 'trial'] },
+      },
     });
 
     if (existing) {
       return { subscription: existing, created: false };
     }
 
-    const starterPlan = await SubscriptionPlan.findOne({ tier: 'starter', isActive: true });
+    const starterPlan = await prisma.subscriptionPlan.findFirst({
+      where: { tier: 'starter', isActive: true },
+    });
     if (!starterPlan) {
       throw new Error('Starter plan not available');
     }
@@ -489,33 +493,32 @@ export class SubscriptionService {
     trialEndDate.setDate(trialEndDate.getDate() + 14);
 
     try {
-      const subscription = await Subscription.create({
-        tenantId,
-        planId: starterPlan._id,
-        status: 'trial',
-        billingCycle: 'monthly',
-        startDate: now,
-        trialEndDate,
-        nextBillingDate: trialEndDate,
-        isTrial: true,
-        autoRenew: true,
-        usage: {
-          currentUsers: 1,
-          currentBranches: 1,
-          currentProducts: 0,
-          currentTransactions: 0,
-          lastResetDate: now,
+      const subscription = await prisma.subscription.create({
+        data: {
+          id: crypto.randomUUID(),
+          tenantId,
+          planId: starterPlan.id,
+          status: 'trial',
+          billingCycle: 'monthly',
+          startDate: now,
+          trialEndDate,
+          nextBillingDate: trialEndDate,
+          isTrial: true,
+          autoRenew: true,
+          usageCurrentUsers: 1,
+          usageCurrentBranches: 1,
+          usageCurrentProducts: 0,
+          usageCurrentTransactions: 0,
+          usageLastResetDate: now,
         },
-      });
-
-      await Tenant.findByIdAndUpdate(tenantId, {
-        subscriptionId: subscription._id,
       });
 
       return { subscription, created: true };
     } catch (error: unknown) {
-      if ((error as { code?: number }).code === 11000) {
-        const raced = await Subscription.findOne({ tenantId });
+      // Unique constraint violation (tenantId is @unique on Subscription) — a
+      // concurrent request already created one for this same tenant.
+      if ((error as { code?: string }).code === 'P2002') {
+        const raced = await prisma.subscription.findUnique({ where: { tenantId } });
         if (raced) {
           return { subscription: raced, created: false };
         }

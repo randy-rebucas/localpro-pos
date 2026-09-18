@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Device from '@/models/Device';
+import { randomUUID } from 'crypto';
+import prisma from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -10,7 +10,6 @@ import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId } = authResult;
@@ -18,16 +17,19 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const isActive = searchParams.get('isActive');
 
-    const query: any = { tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const where: Record<string, unknown> = { tenantId };
     if (searchParams.has('isActive')) {
-      query.isActive = isActive === 'true';
+      where.isActive = isActive === 'true';
     }
 
-    const devices = await Device.find(query)
-      .populate('branchId', 'name')
-      .populate('registeredBy', 'name email')
-      .sort({ terminalId: 1 })
-      .lean();
+    const devices = await prisma.device.findMany({
+      where,
+      include: {
+        branch: { select: { name: true } },
+        registeredBy: { select: { name: true, email: true } },
+      },
+      orderBy: { terminalId: 'asc' },
+    });
 
     return NextResponse.json({ success: true, data: devices });
   } catch (error) {
@@ -37,7 +39,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId, user } = authResult;
@@ -64,19 +65,22 @@ export async function POST(request: NextRequest) {
 
     let device;
     try {
-      device = await Device.create({
-        tenantId,
-        branchId: branchId || undefined,
-        label,
-        serialNumber,
-        terminalId,
-        ptuNumber: ptuNumber || undefined,
-        ptuStatus: ptuStatus || 'pending',
-        isActive: true,
-        registeredBy: user.userId,
+      device = await prisma.device.create({
+        data: {
+          id: randomUUID(),
+          tenantId,
+          branchId: branchId || undefined,
+          label,
+          serialNumber,
+          terminalId,
+          ptuNumber: ptuNumber || undefined,
+          ptuStatus: ptuStatus || 'pending',
+          isActive: true,
+          registeredById: user.userId,
+        },
       });
     } catch (createErr: unknown) {
-      if (createErr instanceof Error && 'code' in createErr && (createErr as { code?: number }).code === 11000) {
+      if (createErr instanceof Error && 'code' in createErr && (createErr as { code?: string }).code === 'P2002') {
         return NextResponse.json(
           { success: false, error: t('validation.deviceDuplicate', 'A device with this terminal ID or serial number already exists') },
           { status: 409 }
@@ -90,7 +94,7 @@ export async function POST(request: NextRequest) {
       userId: user.userId,
       action: AuditActions.DEVICE_CREATE,
       entityType: 'device',
-      entityId: device._id.toString(),
+      entityId: device.id,
       changes: { label, serialNumber, terminalId, branchId, ptuNumber, ptuStatus },
     });
 

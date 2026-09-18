@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import crypto from 'crypto';
-import connectDB from '@/lib/mongodb';
+import crypto, { randomUUID } from 'crypto';
+import prisma from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
-import TenantEcommerceIntegration from '@/models/TenantEcommerceIntegration';
 import { encryptCredentialsPayload } from '@/lib/ecommerce/crypto';
 import { wooFetchJson, normalizeWooCommerceSiteUrl } from '@/lib/ecommerce/woocommerce-api';
 import { registerWooCommerceWebhooks } from '@/lib/ecommerce/register-woo-webhooks';
@@ -13,11 +12,10 @@ import { requireEcommerceProviderConnectAllowed } from '@/lib/ecommerce/tenant-i
 import { checkRateLimit } from '@/lib/rate-limit';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
-import mongoose from 'mongoose';
+import type { ITenantEcommerceIntegration } from '@/models/TenantEcommerceIntegration';
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const t = await getValidationTranslatorFromRequest(request);
     const { tenantId, user } = await requireTenantAccess(request);
     if (!(await hasTenantPermission(user.role, tenantId, 'integrations.manage'))) {
@@ -53,28 +51,39 @@ export async function POST(request: NextRequest) {
     const credEnc = encryptCredentialsPayload({ consumerKey, consumerSecret });
     const whEnc = encryptCredentialsPayload({ secret: signingSecret });
 
-    const tenantObjectId = new mongoose.Types.ObjectId(tenantId);
-    const integration = await TenantEcommerceIntegration.findOneAndUpdate(
-      { tenantId: tenantObjectId, provider: 'woocommerce' },
-      {
-        $set: {
-          siteUrl: normalized,
-          credentialsEncrypted: credEnc,
-          webhookSecretEncrypted: whEnc,
-          isActive: true,
-          lastError: undefined,
-        },
-        $setOnInsert: { tenantId: tenantObjectId, provider: 'woocommerce' },
+    const integration = await prisma.tenantEcommerceIntegration.upsert({
+      where: { tenantId_provider: { tenantId, provider: 'woocommerce' } },
+      update: {
+        siteUrl: normalized,
+        credentialsEncrypted: credEnc,
+        webhookSecretEncrypted: whEnc,
+        isActive: true,
+        lastError: null,
       },
-      { upsert: true, new: true }
-    );
+      create: {
+        id: randomUUID(),
+        tenantId,
+        provider: 'woocommerce',
+        siteUrl: normalized,
+        credentialsEncrypted: credEnc,
+        webhookSecretEncrypted: whEnc,
+        isActive: true,
+      },
+    });
 
     try {
-      await registerWooCommerceWebhooks(integration, signingSecret, {
+      // NOTE: lib/ecommerce/register-woo-webhooks.ts is still Mongoose-based (out of scope
+      // for this migration pass) and expects a Mongoose document. Bridge the Prisma row
+      // into that shape until that lib is migrated to Prisma.
+      const integrationDoc = { ...integration, _id: integration.id } as unknown as ITenantEcommerceIntegration;
+      await registerWooCommerceWebhooks(integrationDoc, signingSecret, {
         publicAppBaseUrl: getPublicAppUrl(request),
       });
     } catch {
-      await integration.updateOne({ $set: { lastError: 'webhook_registration_failed' } });
+      await prisma.tenantEcommerceIntegration.update({
+        where: { id: integration.id },
+        data: { lastError: 'webhook_registration_failed' },
+      });
     }
 
     await createAuditLog(request, {
@@ -82,7 +91,7 @@ export async function POST(request: NextRequest) {
       userId: user.userId,
       action: AuditActions.UPDATE,
       entityType: 'ecommerce_integration',
-      entityId: integration._id.toString(),
+      entityId: integration.id,
       changes: { provider: 'woocommerce', siteUrl: normalized },
     });
 

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
+import prisma from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
-import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
 import { validateEmail, validatePassword } from '@/lib/validation';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { revokeAllUserTokens } from '@/lib/token-blacklist';
@@ -14,15 +14,18 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 export async function GET(request: NextRequest) {
   try {
     const currentUser = await getCurrentUser(request);
-    
+
     if (!currentUser) {
       return NextResponse.json({ success: false, error: 'Not authenticated' }, { status: 401 });
     }
 
-    await connectDB();
-    let user = await User.findById(currentUser.userId)
-      .select('-password')
-      .lean();
+    let user = await prisma.user.findUnique({
+      where: { id: currentUser.userId },
+      select: {
+        id: true, email: true, name: true, role: true, isActive: true,
+        createdAt: true, lastLogin: true, qrToken: true, tenantId: true,
+      },
+    });
 
     if (!user || !user.isActive) {
       return NextResponse.json({ success: false, error: 'User not found or inactive' }, { status: 401 });
@@ -31,31 +34,38 @@ export async function GET(request: NextRequest) {
     // Generate QR token if it doesn't exist
     if (!user.qrToken) {
       const newQrToken = crypto.randomBytes(32).toString('hex');
-      await User.findByIdAndUpdate(currentUser.userId, { qrToken: newQrToken });
-      user = await User.findById(currentUser.userId).select('-password').lean();
-      
+      await prisma.user.update({ where: { id: currentUser.userId }, data: { qrToken: newQrToken } });
+      user = await prisma.user.findUnique({
+        where: { id: currentUser.userId },
+        select: {
+          id: true, email: true, name: true, role: true, isActive: true,
+          createdAt: true, lastLogin: true, qrToken: true, tenantId: true,
+        },
+      });
+
       if (!user) {
         return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
       }
     }
 
     // Get tenant slug and name
-    const Tenant = (await import('@/models/Tenant')).default;
-    const tenant = await Tenant.findById(user.tenantId).select('slug name').lean();
+    const tenant = user.tenantId
+      ? await prisma.tenant.findUnique({ where: { id: user.tenantId }, select: { slug: true, name: true } })
+      : null;
     const tenantSlug = tenant?.slug || null;
     const tenantName = tenant?.name || null;
 
     return NextResponse.json({
       success: true,
       user: {
-        _id: user._id,
+        _id: user.id,
         email: user.email,
         name: user.name,
         role: user.role,
         createdAt: user.createdAt,
         lastLogin: user.lastLogin,
         qrToken: user.qrToken || null,
-        tenantId: user.tenantId?.toString() || null,
+        tenantId: user.tenantId || null,
         tenantSlug,
         tenantName,
       },
@@ -72,26 +82,21 @@ export async function PUT(request: NextRequest) {
   let t: (key: string, fallback: string) => string;
   try {
     const currentUser = await getCurrentUser(request);
-    
+
     if (!currentUser) {
       return NextResponse.json({ success: false, error: 'Not authenticated' }, { status: 401 });
     }
 
-    await connectDB();
     const body = await request.json();
     const { email, password, name, currentPassword } = body;
 
     // Get translation function
     t = await getValidationTranslatorFromRequest(request);
 
-    // Fetch as a document (with password) so password changes go through the
-    // pre('save') hash hook — findByIdAndUpdate skips document middleware and
-    // would otherwise write the new password in plaintext.
-    const userDoc = await User.findById(currentUser.userId).select('+password');
-    if (!userDoc || !userDoc.isActive) {
+    const oldUser = await prisma.user.findUnique({ where: { id: currentUser.userId } });
+    if (!oldUser || !oldUser.isActive) {
       return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
     }
-    const oldUser = userDoc.toObject();
 
     // Build update object
     const updateData: Record<string, unknown> = {};
@@ -128,7 +133,7 @@ export async function PUT(request: NextRequest) {
         );
       }
 
-      const isPasswordValid = await userDoc.comparePassword(currentPassword);
+      const isPasswordValid = await bcrypt.compare(currentPassword, oldUser.password);
       if (!isPasswordValid) {
         return NextResponse.json(
           { success: false, error: t('validation.currentPasswordIncorrect', 'Current password is incorrect') },
@@ -145,7 +150,7 @@ export async function PUT(request: NextRequest) {
           { status: 400 }
         );
       }
-      updateData.password = password;
+      updateData.password = await bcrypt.hash(password, 10);
     }
 
     if (Object.keys(updateData).length === 0) {
@@ -155,11 +160,7 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // Assign through the document instance and save() so the pre('save')
-    // hash hook runs for password changes.
-    Object.assign(userDoc, updateData);
-    await userDoc.save();
-    const user = userDoc.toObject();
+    const user = await prisma.user.update({ where: { id: oldUser.id }, data: updateData });
 
     // Revoke all existing tokens when password is changed
     if (updateData.password) {
@@ -188,11 +189,11 @@ export async function PUT(request: NextRequest) {
       entityId: currentUser.userId,
       changes,
     });
-    
-    return NextResponse.json({ 
-      success: true, 
+
+    return NextResponse.json({
+      success: true,
       data: {
-        _id: user._id,
+        _id: user.id,
         email: user.email,
         name: user.name,
         role: user.role,
@@ -202,7 +203,7 @@ export async function PUT(request: NextRequest) {
       }
     });
   } catch (error: unknown) {
-    if ((error as Record<string, unknown>).code === 11000) {
+    if ((error as Record<string, unknown>).code === 'P2002') {
       return NextResponse.json(
         { success: false, error: 'User with this email already exists' },
         { status: 400 }
@@ -211,4 +212,3 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ success: false, error: 'Failed to update profile' }, { status: 500 });
   }
 }
-

@@ -3,12 +3,9 @@
  * Automatically calculate and update customer lifetime value
  */
 
-import connectDB from '@/lib/mongodb';
-import Customer from '@/models/Customer';
-import Transaction from '@/models/Transaction';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/db';
 import { AutomationResult } from './types';
-import mongoose from 'mongoose';
+import type { Prisma } from '@prisma/client';
 
 export interface CustomerLifetimeValueOptions {
   tenantId?: string;
@@ -21,8 +18,6 @@ export interface CustomerLifetimeValueOptions {
 export async function calculateCustomerLifetimeValue(
   options: CustomerLifetimeValueOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -37,10 +32,10 @@ export async function calculateCustomerLifetimeValue(
     // Get tenants to process
     let tenants;
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await prisma.tenant.findUnique({ where: { id: options.tenantId } });
       tenants = tenant ? [tenant] : [];
     } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
+      tenants = await prisma.tenant.findMany({ where: { isActive: true } });
     }
 
     if (tenants.length === 0) {
@@ -53,43 +48,38 @@ export async function calculateCustomerLifetimeValue(
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
+        const tenantId = tenant.id;
 
         // Get all customers
-        const customers = await Customer.find({ tenantId }).lean();
+        const customers = await prisma.customer.findMany({ where: { tenantId } });
 
         for (const customer of customers) {
           try {
             // Calculate total spent from transactions
-            // Match by customer email or customer ID (if transactions have customerId field)
-            const transactions = await Transaction.aggregate([
-              {
-                $match: {
-                  tenantId: new mongoose.Types.ObjectId(tenantId),
-                  status: 'completed',
-                  // Match by email in notes or customerId if field exists
-                  $or: [
-                    customer.email ? { notes: { $regex: customer.email, $options: 'i' } } : {},
-                    // Add customerId match if field exists in Transaction model
-                  ],
-                },
-              },
-              {
-                $group: {
-                  _id: null,
-                  totalSpent: { $sum: '$total' },
-                  transactionCount: { $sum: 1 },
-                  firstPurchase: { $min: '$createdAt' },
-                  lastPurchase: { $max: '$createdAt' },
-                },
-              },
-            ]);
+            // Match by customer email (matched against notes, same heuristic as
+            // the original Mongoose $regex match) since transactions don't
+            // reliably carry a customerId for legacy records.
+            const where: Prisma.TransactionWhereInput = {
+              tenantId,
+              status: 'completed',
+            };
+            if (customer.email) {
+              where.notes = { contains: customer.email, mode: 'insensitive' };
+            }
 
-            const clvData = transactions[0] || {
-              totalSpent: 0,
-              transactionCount: 0,
-              firstPurchase: null,
-              lastPurchase: null,
+            const agg = await prisma.transaction.aggregate({
+              where,
+              _sum: { total: true },
+              _count: { _all: true },
+              _min: { createdAt: true },
+              _max: { createdAt: true },
+            });
+
+            const clvData = {
+              totalSpent: Number(agg._sum.total || 0),
+              transactionCount: agg._count._all,
+              firstPurchase: agg._min.createdAt,
+              lastPurchase: agg._max.createdAt,
             };
 
             // Calculate average order value
@@ -108,18 +98,21 @@ export async function calculateCustomerLifetimeValue(
 
             if (updateCustomers) {
               // Update customer record
-              await Customer.findByIdAndUpdate(customer._id, {
-                totalSpent: clvData.totalSpent,
-                lastPurchaseDate: clvData.lastPurchase ? new Date(clvData.lastPurchase) : undefined,
-                // Store CLV in notes or custom field (if model supports it)
-                notes: customer.notes || '',
+              await prisma.customer.update({
+                where: { id: customer.id },
+                data: {
+                  totalSpent: clvData.totalSpent,
+                  lastPurchaseDate: clvData.lastPurchase ? new Date(clvData.lastPurchase) : undefined,
+                  // Store CLV in notes or custom field (if model supports it)
+                  notes: customer.notes || '',
+                },
               });
             }
 
             totalUpdated++;
           } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             totalFailed++;
-            results.errors?.push(`Customer ${customer._id}: ${error.message}`);
+            results.errors?.push(`Customer ${customer.id}: ${error.message}`);
           }
         }
       } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any

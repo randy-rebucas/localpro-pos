@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Customer from '@/models/Customer';
+import { randomUUID } from 'crypto';
+import prisma from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -9,12 +9,32 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
 import { parseCreditLimitInput } from '@/lib/customer-credit';
 
+function toCustomerJSON(c: { addresses: Array<{ id: string; street: string | null; city: string | null; state: string | null; zipCode: string | null; country: string | null; isDefault: boolean }>; totalSpent: unknown; loyaltyPointsBalance: unknown; accountBalance: unknown; creditLimit: unknown; id: string; [key: string]: unknown }) {
+  const { addresses, ...rest } = c;
+  return {
+    ...rest,
+    _id: c.id,
+    totalSpent: Number(c.totalSpent),
+    loyaltyPointsBalance: Number(c.loyaltyPointsBalance),
+    accountBalance: Number(c.accountBalance),
+    creditLimit: c.creditLimit != null ? Number(c.creditLimit as number) : undefined,
+    addresses: addresses.map((a) => ({
+      _id: a.id,
+      street: a.street ?? undefined,
+      city: a.city ?? undefined,
+      state: a.state ?? undefined,
+      zipCode: a.zipCode ?? undefined,
+      country: a.country ?? undefined,
+      isDefault: a.isDefault,
+    })),
+  };
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const { id } = await params;
 
     // Require authentication to prevent unauthenticated customer lookups
@@ -26,13 +46,16 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Tenant not found or access denied' }, { status: 403 });
     }
 
-    const customer = await Customer.findOne({ _id: id, tenantId, isActive: { $ne: false } }).lean();
+    const customer = await prisma.customer.findFirst({
+      where: { id, tenantId, isActive: { not: false } },
+      include: { addresses: true },
+    });
 
     if (!customer) {
       return NextResponse.json({ success: false, error: 'Customer not found' }, { status: 404 });
     }
-    
-    return NextResponse.json({ success: true, data: customer });
+
+    return NextResponse.json({ success: true, data: toCustomerJSON(customer) });
   } catch (error) {
     return handleApiError(error, 'Failed to fetch customer');
   }
@@ -43,7 +66,6 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const { id } = await params;
     // SECURITY: Validate tenant access for authenticated requests
     let tenantId: string;
@@ -74,26 +96,27 @@ export async function PATCH(
       return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
-    const customer = await Customer.findOne({ _id: id, tenantId });
+    const existing = await prisma.customer.findFirst({ where: { id, tenantId } });
 
-    if (!customer) {
+    if (!existing) {
       return NextResponse.json({ success: false, error: t('validation.customerNotFound', 'Customer not found') }, { status: 404 });
     }
 
     const body = await request.json();
     const oldData = {
-      firstName: customer.firstName,
-      lastName: customer.lastName,
-      email: customer.email,
-      creditLimit: customer.creditLimit ?? null,
+      firstName: existing.firstName,
+      lastName: existing.lastName,
+      email: existing.email,
+      creditLimit: existing.creditLimit != null ? Number(existing.creditLimit) : null,
     };
-    
-    if (body.firstName !== undefined) customer.firstName = body.firstName.trim();
-    if (body.lastName !== undefined) customer.lastName = body.lastName.trim();
+
+    const data: Record<string, unknown> = {};
+    if (body.firstName !== undefined) data.firstName = body.firstName.trim();
+    if (body.lastName !== undefined) data.lastName = body.lastName.trim();
     if (body.email !== undefined) {
       const email = body.email.toLowerCase().trim();
-      if (email && email !== customer.email) {
-        const existingCustomer = await Customer.findOne({ tenantId, email, _id: { $ne: id } });
+      if (email && email !== existing.email) {
+        const existingCustomer = await prisma.customer.findFirst({ where: { tenantId, email, id: { not: id } } });
         if (existingCustomer) {
           return NextResponse.json(
             { success: false, error: t('validation.emailAlreadyExists', 'Email already exists') },
@@ -101,14 +124,27 @@ export async function PATCH(
           );
         }
       }
-      customer.email = email;
+      data.email = email;
     }
-    if (body.phone !== undefined) customer.phone = body.phone?.trim();
-    if (body.addresses !== undefined) customer.addresses = body.addresses;
-    if (body.dateOfBirth !== undefined) customer.dateOfBirth = body.dateOfBirth ? new Date(body.dateOfBirth) : undefined;
-    if (body.notes !== undefined) customer.notes = body.notes?.trim();
-    if (body.tags !== undefined) customer.tags = body.tags;
-    if (body.isActive !== undefined) customer.isActive = body.isActive;
+    if (body.phone !== undefined) data.phone = body.phone?.trim();
+    if (body.addresses !== undefined) {
+      data.addresses = {
+        deleteMany: {},
+        create: (body.addresses || []).map((a: { street?: string; city?: string; state?: string; zipCode?: string; country?: string; isDefault?: boolean }) => ({
+          id: randomUUID(),
+          street: a.street,
+          city: a.city,
+          state: a.state,
+          zipCode: a.zipCode,
+          country: a.country,
+          isDefault: a.isDefault ?? false,
+        })),
+      };
+    }
+    if (body.dateOfBirth !== undefined) data.dateOfBirth = body.dateOfBirth ? new Date(body.dateOfBirth) : null;
+    if (body.notes !== undefined) data.notes = body.notes?.trim();
+    if (body.tags !== undefined) data.tags = body.tags;
+    if (body.isActive !== undefined) data.isActive = body.isActive;
     if (body.creditLimit !== undefined) {
       const cl = parseCreditLimitInput(body.creditLimit);
       if (cl === undefined) {
@@ -119,31 +155,35 @@ export async function PATCH(
           { status: 400 }
         );
       } else if (cl === null) {
-        customer.set('creditLimit', undefined);
+        data.creditLimit = null;
       } else {
-        customer.creditLimit = cl;
+        data.creditLimit = cl;
       }
     }
 
-    await customer.save();
-    
+    const customer = await prisma.customer.update({
+      where: { id },
+      data,
+      include: { addresses: true },
+    });
+
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.UPDATE,
       entityType: 'customer',
-      entityId: customer._id.toString(),
+      entityId: customer.id,
       changes: {
         old: oldData,
         new: {
           firstName: customer.firstName,
           lastName: customer.lastName,
           email: customer.email,
-          creditLimit: customer.creditLimit ?? null,
+          creditLimit: customer.creditLimit != null ? Number(customer.creditLimit) : null,
         },
       },
     });
-    
-    return NextResponse.json({ success: true, data: customer });
+
+    return NextResponse.json({ success: true, data: toCustomerJSON(customer) });
   } catch (error) {
     return handleApiError(error, 'Failed to update customer');
   }
@@ -154,7 +194,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const { id } = await params;
     // SECURITY: Validate tenant access for authenticated requests
     let tenantId: string;
@@ -186,15 +225,14 @@ export async function DELETE(
     }
 
     // Soft delete - set isActive to false
-    const customer = await Customer.findOne({ _id: id, tenantId });
-    
-    if (!customer) {
+    const existing = await prisma.customer.findFirst({ where: { id, tenantId } });
+
+    if (!existing) {
       return NextResponse.json({ success: false, error: t('validation.customerNotFound', 'Customer not found') }, { status: 404 });
     }
-    
-    customer.isActive = false;
-    await customer.save();
-    
+
+    const customer = await prisma.customer.update({ where: { id }, data: { isActive: false } });
+
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.DELETE,

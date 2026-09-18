@@ -1,14 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Campaign from '@/models/Campaign';
-import Customer from '@/models/Customer';
-import Transaction from '@/models/Transaction';
+import prisma from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
 import { sendEmail, sendSMS } from '@/lib/notifications';
-import mongoose from 'mongoose';
 
 const SEND_BATCH_SIZE = 25;
 
@@ -49,8 +45,6 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
-
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId, user } = authResult;
@@ -59,50 +53,55 @@ export async function POST(
     }
 
     const { id } = await params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return NextResponse.json({ success: false, error: 'Invalid campaign ID' }, { status: 400 });
-    }
 
-    // Atomically claim the campaign before sending anything: a plain find()
+    // Atomically claim the campaign before sending anything: a plain findFirst()
     // followed by a later status check is a race — two concurrent clicks (or
     // two admins) could both read 'draft' and each blast the full segment.
-    // Claiming via findOneAndUpdate makes only one request win the send.
-    const campaign = await Campaign.findOneAndUpdate(
-      { _id: id, tenantId, status: { $in: ['draft', 'failed'] } },
-      { $set: { status: 'sent' } },
-      { new: true }
-    );
-    if (!campaign) {
-      const exists = await Campaign.exists({ _id: id, tenantId });
+    // updateMany's row count tells us whether *this* request won the claim.
+    const claim = await prisma.campaign.updateMany({
+      where: { id, tenantId, status: { in: ['draft', 'failed'] } },
+      data: { status: 'sent' },
+    });
+    if (claim.count === 0) {
+      const exists = await prisma.campaign.findFirst({ where: { id, tenantId }, select: { id: true } });
       return NextResponse.json(
         { success: false, error: exists ? 'Campaign already sent' : 'Campaign not found' },
         { status: exists ? 409 : 404 }
       );
     }
+    const campaign = await prisma.campaign.findFirstOrThrow({ where: { id, tenantId } });
 
     // Resolve recipients — fetch all active customers with contact info
-    const contactField = campaign.channel === 'email' ? { email: { $exists: true, $ne: '' } } : { phone: { $exists: true, $ne: '' } };
-    const candidates = await Customer.find(
-      { tenantId, isActive: true, ...contactField },
-      { _id: 1, email: 1, phone: 1, lastPurchaseDate: 1, loyaltyPointsBalance: 1, totalSpent: 1 }
-    ).lean();
+    const candidates = await prisma.customer.findMany({
+      where: {
+        tenantId,
+        isActive: true,
+        ...(campaign.channel === 'email'
+          ? { email: { not: null, notIn: [''] } }
+          : { phone: { not: null, notIn: [''] } }),
+      },
+      select: { id: true, email: true, phone: true, lastPurchaseDate: true, loyaltyPointsBalance: true, totalSpent: true },
+    });
 
     // Real order counts per customer — must match the same logic /api/crm/segments
     // uses, so who actually receives a segment's campaign matches who the admin
-    // saw in that segment when composing it. (aggregate() requires an explicit
-    // ObjectId cast — tenantId here is a string, unlike the auto-cast .find() above.)
-    const tenantObjectId = new mongoose.Types.ObjectId(tenantId);
-    const orderStats = await Transaction.aggregate([
-      { $match: { tenantId: tenantObjectId, status: 'completed' } },
-      { $group: { _id: '$customerId', orderCount: { $sum: 1 } } },
-    ]);
+    // saw in that segment when composing it.
+    const orderStats = await prisma.transaction.groupBy({
+      by: ['customerId'],
+      where: { tenantId, status: 'completed' },
+      _count: { _all: true },
+    });
     const orderCountMap = new Map<string, number>(
-      orderStats.filter((s) => s._id != null).map((s) => [String(s._id), s.orderCount])
+      orderStats.filter((s) => s.customerId != null).map((s) => [s.customerId as string, s._count._all])
     );
 
     const recipients = candidates.filter((c) => {
-      const orderCount = orderCountMap.get(String(c._id)) ?? 0;
-      return matchesSegment(campaign.segment, c, orderCount);
+      const orderCount = orderCountMap.get(c.id) ?? 0;
+      return matchesSegment(campaign.segment, {
+        lastPurchaseDate: c.lastPurchaseDate ?? undefined,
+        loyaltyPointsBalance: Number(c.loyaltyPointsBalance ?? 0),
+        totalSpent: Number(c.totalSpent ?? 0),
+      }, orderCount);
     });
 
     // Deliver via the existing multi-provider notification layer (lib/notifications.ts),
@@ -115,7 +114,7 @@ export async function POST(
       const results = await Promise.allSettled(
         batch.map((recipient) =>
           campaign.channel === 'email'
-            ? sendEmail({ to: recipient.email as string, subject: campaign.subject, message: campaign.body, type: 'email' })
+            ? sendEmail({ to: recipient.email as string, subject: campaign.subject ?? undefined, message: campaign.body, type: 'email' })
             : sendSMS({ to: recipient.phone as string, message: campaign.body, type: 'sms' })
         )
       );
@@ -128,16 +127,20 @@ export async function POST(
       }
     }
 
-    campaign.status = sentCount > 0 ? 'sent' : 'failed';
-    campaign.sentCount = sentCount;
-    campaign.sentAt = new Date();
-    await campaign.save();
+    await prisma.campaign.update({
+      where: { id: campaign.id },
+      data: {
+        status: sentCount > 0 ? 'sent' : 'failed',
+        sentCount,
+        sentAt: new Date(),
+      },
+    });
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.UPDATE,
       entityType: 'campaign',
-      entityId: String(campaign._id),
+      entityId: campaign.id,
       changes: { action: 'send', sentCount, failedCount, channel: campaign.channel, segment: campaign.segment },
     });
 

@@ -1,7 +1,15 @@
-import mongoose from 'mongoose';
-import Coupon, { ICoupon } from '@/models/Coupon';
+import prisma from '@/lib/db';
+import { Prisma, type Coupon, type CouponPlan } from '@prisma/client';
 
 export class CouponError extends Error {}
+
+/**
+ * `validateCoupon`'s resolved shape. `_id` is a compatibility alias for
+ * `id` (kept so existing callers written against the pre-migration Mongoose
+ * `ICoupon._id` shape — e.g. app/api/subscriptions/activate/route.ts's
+ * `incrementCouponUsage(coupon._id, ...)` call — keep working unchanged).
+ */
+export type ResolvedCoupon = Coupon & { plans: CouponPlan[]; _id: string };
 
 /**
  * Validates a coupon code, optionally against a specific plan purchase. Does
@@ -12,10 +20,13 @@ export class CouponError extends Error {}
  * `planId` is optional so this can also back a preview (e.g. "Apply" on a
  * pricing page showing several plans at once, before one is picked) — when
  * omitted, plan-eligibility isn't checked and callers are expected to filter
- * eligible plans themselves using the returned coupon's appliesTo/planIds.
+ * eligible plans themselves using the returned coupon's appliesTo/plans.
  */
-export async function validateCoupon(code: string, planId?: string): Promise<InstanceType<typeof Coupon>> {
-  const coupon = await Coupon.findOne({ code: code.toUpperCase() });
+export async function validateCoupon(code: string, planId?: string): Promise<ResolvedCoupon> {
+  const coupon = await prisma.coupon.findUnique({
+    where: { code: code.toUpperCase() },
+    include: { plans: true },
+  });
   if (!coupon) throw new CouponError('Coupon code not found');
   if (!coupon.isActive) throw new CouponError('This coupon is no longer active');
 
@@ -28,37 +39,56 @@ export async function validateCoupon(code: string, planId?: string): Promise<Ins
   }
 
   if (planId && coupon.appliesTo === 'specific_plans') {
-    const applies = coupon.planIds.some((id) => id.toString() === planId);
+    const applies = coupon.plans.some((p) => p.planId === planId);
     if (!applies) throw new CouponError('This coupon does not apply to the selected plan');
   }
 
-  return coupon;
+  return { ...coupon, _id: coupon.id };
 }
 
 /** Applies a coupon's discount to a base amount, floored at 0. */
-export function applyCouponDiscount(baseAmount: number, coupon: Pick<ICoupon, 'discountType' | 'discountValue'>): number {
+export function applyCouponDiscount(
+  baseAmount: number,
+  coupon: Pick<Coupon, 'discountType' | 'discountValue'>
+): number {
+  const discountValue = Number(coupon.discountValue);
   const discount = coupon.discountType === 'percentage'
-    ? baseAmount * (coupon.discountValue / 100)
-    : coupon.discountValue;
+    ? baseAmount * (discountValue / 100)
+    : discountValue;
   return Math.max(0, Math.round((baseAmount - discount) * 100) / 100);
 }
 
 /**
- * Atomically reserves one use of the coupon, inside the caller's transaction
- * session. The maxUses precondition is enforced by the filter itself (not a
- * read-then-write), so two concurrent checkouts against the last remaining
- * use can't both succeed.
+ * Atomically reserves one use of the coupon. The maxUses precondition is
+ * enforced by the update's WHERE clause itself (evaluated atomically by
+ * Postgres at update time, not a read-then-write), so two concurrent
+ * checkouts against the last remaining use can't both succeed.
+ *
+ * `client` accepts an in-flight `prisma.$transaction` callback client so
+ * this can participate in a caller's transaction; it defaults to the global
+ * Prisma client when omitted (matching the old Mongoose "session optional"
+ * behavior).
  */
-export async function incrementCouponUsage(couponId: mongoose.Types.ObjectId, session: mongoose.ClientSession): Promise<void> {
-  const result = await Coupon.updateOne(
-    {
-      _id: couponId,
-      $or: [{ maxUses: { $exists: false } }, { $expr: { $lt: ['$usedCount', '$maxUses'] } }],
+export async function incrementCouponUsage(
+  couponId: string,
+  client: Prisma.TransactionClient | typeof prisma = prisma
+): Promise<void> {
+  const coupon = await client.coupon.findUnique({
+    where: { id: couponId },
+    select: { maxUses: true },
+  });
+  if (!coupon) {
+    throw new CouponError('This coupon has reached its usage limit');
+  }
+
+  const result = await client.coupon.updateMany({
+    where: {
+      id: couponId,
+      ...(coupon.maxUses == null ? {} : { usedCount: { lt: coupon.maxUses } }),
     },
-    { $inc: { usedCount: 1 } },
-    { session }
-  );
-  if (result.modifiedCount === 0) {
+    data: { usedCount: { increment: 1 } },
+  });
+  if (result.count === 0) {
     throw new CouponError('This coupon has reached its usage limit');
   }
 }

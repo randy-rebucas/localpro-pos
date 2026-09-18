@@ -1,19 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Attendance from '@/models/Attendance';
-import User from '@/models/User'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import prisma from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
-import { sendEmail } from '@/lib/notifications'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import { sendAttendanceNotification } from '@/lib/notifications';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
+
+interface AttendanceNotification {
+  type: 'missing_clock_out' | 'late_arrival';
+  userId: string;
+  userName: string;
+  userEmail: string | null;
+  attendanceId: string;
+  clockInTime: Date;
+  expectedTime?: Date;
+  hoursSinceClockIn?: string;
+  minutesLate?: number;
+  message: string;
+}
 
 /**
  * Get attendance notifications - late arrivals, missing clock-outs
  */
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
@@ -23,40 +33,46 @@ export async function GET(request: NextRequest) {
     }
 
     // Get tenant settings for notification defaults
-    const Tenant = (await import('@/models/Tenant')).default;
-    const tenant = await Tenant.findById(tenantId).select('settings').lean();
-    
+    const tenantSettings = await prisma.tenantSettings.findUnique({
+      where: { tenantId },
+      select: {
+        attendanceExpectedStartTime: true,
+        attendanceMaxHoursWithoutClockOut: true,
+      },
+    });
+
     const searchParams = request.nextUrl.searchParams;
-    const attendanceSettings = tenant?.settings?.attendanceNotifications || {};
-    const expectedStartTime = searchParams.get('expectedStartTime') || attendanceSettings.expectedStartTime || '09:00'; // Default 9 AM
+    const expectedStartTime =
+      searchParams.get('expectedStartTime') || tenantSettings?.attendanceExpectedStartTime || '09:00'; // Default 9 AM
     const maxHoursWithoutClockOut = parseFloat(
-      searchParams.get('maxHoursWithoutClockOut') || 
-      String(attendanceSettings.maxHoursWithoutClockOut || 12)
+      searchParams.get('maxHoursWithoutClockOut') ||
+      String(tenantSettings?.attendanceMaxHoursWithoutClockOut ?? 12)
     ); // Default 12 hours
 
     // Get all active sessions (clocked in but not out)
-    const activeSessions = await Attendance.find({
-      tenantId,
-      clockOut: null,
-    })
-      .populate('userId', 'name email')
-      .lean();
+    const activeSessions = await prisma.attendance.findMany({
+      where: {
+        tenantId,
+        clockOut: null,
+      },
+      include: { user: { select: { id: true, name: true, email: true } } },
+    });
 
     const now = new Date();
-    const notifications: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const notifications: AttendanceNotification[] = [];
 
     // Check for missing clock-outs (sessions that are too long)
-    activeSessions.forEach((session: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+    activeSessions.forEach((session) => {
       const clockInTime = new Date(session.clockIn);
       const hoursSinceClockIn = (now.getTime() - clockInTime.getTime()) / (1000 * 60 * 60);
 
       if (hoursSinceClockIn > maxHoursWithoutClockOut) {
         notifications.push({
           type: 'missing_clock_out',
-          userId: session.userId._id || session.userId,
-          userName: typeof session.userId === 'object' ? session.userId.name : 'Unknown',
-          userEmail: typeof session.userId === 'object' ? session.userId.email : null,
-          attendanceId: session._id,
+          userId: session.user?.id || session.userId,
+          userName: session.user?.name || 'Unknown',
+          userEmail: session.user?.email || null,
+          attendanceId: session.id,
           clockInTime: session.clockIn,
           hoursSinceClockIn: hoursSinceClockIn.toFixed(2),
           message: `Employee has been clocked in for ${hoursSinceClockIn.toFixed(1)} hours without clocking out`,
@@ -70,17 +86,18 @@ export async function GET(request: NextRequest) {
     const todayEnd = new Date();
     todayEnd.setHours(23, 59, 59, 999);
 
-    const todayAttendances = await Attendance.find({
-      tenantId,
-      clockIn: { $gte: todayStart, $lte: todayEnd },
-    })
-      .populate('userId', 'name email')
-      .lean();
+    const todayAttendances = await prisma.attendance.findMany({
+      where: {
+        tenantId,
+        clockIn: { gte: todayStart, lte: todayEnd },
+      },
+      include: { user: { select: { id: true, name: true, email: true } } },
+    });
 
     // Parse expected start time (HH:MM format)
     const [expectedHour, expectedMinute] = expectedStartTime.split(':').map(Number);
 
-    todayAttendances.forEach((attendance: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+    todayAttendances.forEach((attendance) => {
       const clockInTime = new Date(attendance.clockIn);
       const expectedClockIn = new Date(clockInTime);
       expectedClockIn.setHours(expectedHour, expectedMinute, 0, 0);
@@ -91,10 +108,10 @@ export async function GET(request: NextRequest) {
         if (minutesLate > 15) {
           notifications.push({
             type: 'late_arrival',
-            userId: attendance.userId._id || attendance.userId,
-            userName: typeof attendance.userId === 'object' ? attendance.userId.name : 'Unknown',
-            userEmail: typeof attendance.userId === 'object' ? attendance.userId.email : null,
-            attendanceId: attendance._id,
+            userId: attendance.user?.id || attendance.userId,
+            userName: attendance.user?.name || 'Unknown',
+            userEmail: attendance.user?.email || null,
+            attendanceId: attendance.id,
             clockInTime: attendance.clockIn,
             expectedTime: expectedClockIn,
             minutesLate: Math.round(minutesLate),
@@ -122,9 +139,10 @@ export async function GET(request: NextRequest) {
         },
       },
     });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  } catch (error: unknown) {
     logger.error('Error fetching attendance notifications:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    const message = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
 
@@ -133,38 +151,30 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
-    
+
     if (!tenantId) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
-    
+
     const body = await request.json();
     const { notifications } = body; // Array of notification objects
-    
+
     if (!notifications || !Array.isArray(notifications) || notifications.length === 0) {
       return NextResponse.json(
         { success: false, error: t('validation.notificationsArrayRequired', 'Notifications array is required') },
         { status: 400 }
       );
     }
-    
-    const searchParams = request.nextUrl.searchParams;
-    const expectedStartTime = searchParams.get('expectedStartTime') || '09:00'; // eslint-disable-line @typescript-eslint/no-unused-vars
-    const maxHoursWithoutClockOut = parseFloat(searchParams.get('maxHoursWithoutClockOut') || '12'); // eslint-disable-line @typescript-eslint/no-unused-vars
-    
-    // Import the sendAttendanceNotification function
-    const { sendAttendanceNotification } = await import('@/lib/notifications');
-    
+
     const results = {
       sent: 0,
       failed: 0,
       errors: [] as string[],
     };
-    
+
     // Send email for each notification that has an email address
     for (const notification of notifications) {
       if (notification.userEmail) {
@@ -179,23 +189,24 @@ export async function POST(request: NextRequest) {
             expectedTime: notification.expectedTime,
             message: notification.message,
           });
-          
+
           if (sent) {
             results.sent++;
           } else {
             results.failed++;
             results.errors.push(`Failed to send email to ${notification.userEmail}`);
           }
-        } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+        } catch (error: unknown) {
           results.failed++;
-          results.errors.push(`Error sending to ${notification.userEmail}: ${error.message}`);
+          const message = error instanceof Error ? error.message : String(error);
+          results.errors.push(`Error sending to ${notification.userEmail}: ${message}`);
         }
       } else {
         results.failed++;
         results.errors.push(`No email address for ${notification.userName}`);
       }
     }
-    
+
     return NextResponse.json({
       success: true,
       message: `Sent ${results.sent} email(s) successfully${results.failed > 0 ? `, ${results.failed} failed` : ''}`,
@@ -206,8 +217,9 @@ export async function POST(request: NextRequest) {
         errors: results.errors.length > 0 ? results.errors : undefined,
       },
     });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  } catch (error: unknown) {
     logger.error('Error sending attendance notifications:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    const message = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }

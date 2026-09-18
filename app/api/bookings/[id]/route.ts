@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import mongoose from 'mongoose';
-import connectDB from '@/lib/mongodb';
-import Booking from '@/models/Booking';
-import User from '@/models/User';
+import prisma from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -24,6 +21,13 @@ class BookingConflictError extends Error {
   }
 }
 
+// Prisma's BookingStatus enum stores `no_show` (mapped to the db value
+// 'no-show'); the rest of the app (lib/bookings-helpers.ts, UI) uses the
+// hyphenated literal 'no-show'. Normalize at the boundary.
+function toAppStatus(status: string): BookingStatus {
+  return (status === 'no_show' ? 'no-show' : status) as BookingStatus;
+}
+
 /**
  * GET - Get a single booking by ID
  */
@@ -32,7 +36,6 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const user = await getCurrentUser(request);
     const t = await getValidationTranslatorFromRequest(request);
     if (!user) {
@@ -51,9 +54,10 @@ export async function GET(
     }
 
     const { id } = await params;
-    const booking = await Booking.findOne({ _id: id, tenantId })
-      .populate('staffId', 'name email')
-      .lean();
+    const booking = await prisma.booking.findFirst({
+      where: { id, tenantId },
+      include: { staff: { select: { name: true, email: true } } },
+    });
 
     if (!booking) {
       return NextResponse.json(
@@ -81,7 +85,6 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const user = await getCurrentUser(request);
     const t = await getValidationTranslatorFromRequest(request);
     if (!user) {
@@ -112,7 +115,7 @@ export async function PUT(
     }
 
     const { id } = await params;
-    const existingBooking = await Booking.findOne({ _id: id, tenantId });
+    const existingBooking = await prisma.booking.findFirst({ where: { id, tenantId } });
 
     if (!existingBooking) {
       return NextResponse.json(
@@ -138,7 +141,7 @@ export async function PUT(
     const oldStatus = existingBooking.status;
     const oldStartTime = existingBooking.startTime;
 
-    if (status !== undefined && !isValidBookingStatusTransition(oldStatus as BookingStatus, status)) {
+    if (status !== undefined && !isValidBookingStatusTransition(toAppStatus(oldStatus), status)) {
       return NextResponse.json(
         {
           success: false,
@@ -182,7 +185,7 @@ export async function PUT(
 
     // Verify staff exists if provided
     if (staffId) {
-      const staff = await User.findOne({ _id: staffId, tenantId, isActive: true });
+      const staff = await prisma.user.findFirst({ where: { id: staffId, tenantId, isActive: true } });
       if (!staff) {
         return NextResponse.json(
           { success: false, error: t('validation.staffNotFound', 'Staff member not found or inactive') },
@@ -191,13 +194,13 @@ export async function PUT(
       }
     }
 
-    // Build the update and apply it inside a transaction so the conflict
-    // check and the write happen back-to-back: findByIdAndUpdate would skip
-    // the model's pre('save') overlap re-check entirely (that hook only runs
-    // on .save()/.create()), which let concurrent reschedules double-book
-    // the same staff member. Using existingBooking.save() here means the
-    // overlap check always runs immediately before the write commits.
-    const updateData: any = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
+    // Build the update and apply it inside a transaction so the overlap
+    // conflict check and the write happen back-to-back on the same snapshot.
+    // The original Mongoose model's pre('save') hook re-checked staff overlap
+    // immediately before every .save() commit; there's no equivalent
+    // model-level hook in Postgres, so the same re-check is made explicit
+    // here, inside prisma.$transaction, right before the update.
+    const updateData: Record<string, unknown> = {};
     if (customerName !== undefined) updateData.customerName = customerName;
     if (customerEmail !== undefined) updateData.customerEmail = customerEmail;
     if (customerPhone !== undefined) updateData.customerPhone = customerPhone;
@@ -210,23 +213,24 @@ export async function PUT(
     if (notes !== undefined) updateData.notes = notes;
     if (status !== undefined) updateData.status = status;
 
-    const session = await mongoose.startSession();
     let updatedBooking;
     try {
-      await session.withTransaction(async () => {
+      await prisma.$transaction(async (tx) => {
         if (startTime || duration) {
-          const conflictingBookings = await Booking.find({
-            tenantId,
-            _id: { $ne: id },
-            status: { $in: ['pending', 'confirmed'] },
-            startTime: { $lt: newEndTime },
-            endTime: { $gt: newStartTime },
-          }).session(session);
+          const conflictingBookings = await tx.booking.findMany({
+            where: {
+              tenantId,
+              id: { not: id },
+              status: { in: ['pending', 'confirmed'] },
+              startTime: { lt: newEndTime },
+              endTime: { gt: newStartTime },
+            },
+          });
 
           const checkStaffId = staffId || existingBooking.staffId;
           if (checkStaffId) {
             const staffConflicts = conflictingBookings.filter(
-              (booking) => booking.staffId?.toString() === checkStaffId.toString()
+              (booking) => booking.staffId === checkStaffId
             );
             if (staffConflicts.length > 0) {
               throw new BookingConflictError(
@@ -237,13 +241,13 @@ export async function PUT(
           }
         }
 
-        existingBooking.set(updateData);
-        // Re-checked by the model's pre('save') hook too (staff overlap),
-        // using this same session/snapshot.
-        await existingBooking.save({ session });
+        await tx.booking.update({ where: { id }, data: updateData });
       });
 
-      updatedBooking = await Booking.findById(id).populate('staffId', 'name email');
+      updatedBooking = await prisma.booking.findUnique({
+        where: { id },
+        include: { staff: { select: { name: true, email: true } } },
+      });
     } catch (txError) {
       if (txError instanceof BookingConflictError) {
         return NextResponse.json(
@@ -252,8 +256,6 @@ export async function PUT(
         );
       }
       throw txError;
-    } finally {
-      await session.endSession();
     }
 
     // Send notifications based on status changes
@@ -263,26 +265,26 @@ export async function PUT(
         if (status === 'confirmed' && !existingBooking.confirmationSent) {
           await sendBookingConfirmation({
             customerName: updatedBooking!.customerName,
-            customerEmail: updatedBooking!.customerEmail,
-            customerPhone: updatedBooking!.customerPhone,
+            customerEmail: updatedBooking!.customerEmail ?? undefined,
+            customerPhone: updatedBooking!.customerPhone ?? undefined,
             serviceName: updatedBooking!.serviceName,
             startTime: updatedBooking!.startTime,
             endTime: updatedBooking!.endTime,
-            staffName: updatedBooking!.staffName,
-            notes: updatedBooking!.notes,
+            staffName: updatedBooking!.staffName ?? undefined,
+            notes: updatedBooking!.notes ?? undefined,
             bookingId: id,
           }, tenantSettings || undefined);
-          await Booking.findByIdAndUpdate(id, { confirmationSent: true });
+          await prisma.booking.update({ where: { id }, data: { confirmationSent: true } });
         } else if (status === 'cancelled') {
           await sendBookingCancellation({
             customerName: updatedBooking!.customerName,
-            customerEmail: updatedBooking!.customerEmail,
-            customerPhone: updatedBooking!.customerPhone,
+            customerEmail: updatedBooking!.customerEmail ?? undefined,
+            customerPhone: updatedBooking!.customerPhone ?? undefined,
             serviceName: updatedBooking!.serviceName,
             startTime: oldStartTime,
             endTime: existingBooking.endTime,
-            staffName: existingBooking.staffName,
-            notes: existingBooking.notes,
+            staffName: existingBooking.staffName ?? undefined,
+            notes: existingBooking.notes ?? undefined,
             bookingId: id,
           }, tenantSettings || undefined);
         }
@@ -320,7 +322,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const user = await getCurrentUser(request);
     const t = await getValidationTranslatorFromRequest(request);
     if (!user) {
@@ -344,7 +345,7 @@ export async function DELETE(
     }
 
     const { id } = await params;
-    const booking = await Booking.findOne({ _id: id, tenantId });
+    const booking = await prisma.booking.findFirst({ where: { id, tenantId } });
 
     if (!booking) {
       return NextResponse.json(
@@ -358,13 +359,13 @@ export async function DELETE(
       try {
         await sendBookingCancellation({
           customerName: booking.customerName,
-          customerEmail: booking.customerEmail,
-          customerPhone: booking.customerPhone,
+          customerEmail: booking.customerEmail ?? undefined,
+          customerPhone: booking.customerPhone ?? undefined,
           serviceName: booking.serviceName,
           startTime: booking.startTime,
           endTime: booking.endTime,
-          staffName: booking.staffName,
-          notes: booking.notes,
+          staffName: booking.staffName ?? undefined,
+          notes: booking.notes ?? undefined,
           bookingId: id,
         });
       } catch (notificationError) {
@@ -372,9 +373,10 @@ export async function DELETE(
       }
     }
 
-    booking.isActive = false;
-    booking.status = 'cancelled';
-    await booking.save();
+    await prisma.booking.update({
+      where: { id },
+      data: { isActive: false, status: 'cancelled' },
+    });
 
     await createAuditLog(request, {
       tenantId,
@@ -395,4 +397,3 @@ export async function DELETE(
     );
   }
 }
-

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import ProductBundle from '@/models/ProductBundle';
+import prisma from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -12,7 +11,6 @@ import { logger } from '@/lib/logger';
  */
 export async function PUT(request: NextRequest) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
 
@@ -43,10 +41,10 @@ export async function PUT(request: NextRequest) {
 
     const isActive = action === 'activate';
 
-    const result = await ProductBundle.updateMany(
-      { _id: { $in: bundleIds }, tenantId },
-      { $set: { isActive } }
-    );
+    const result = await prisma.productBundle.updateMany({
+      where: { id: { in: bundleIds }, tenantId },
+      data: { isActive },
+    });
 
     // Create audit log for bulk operation
     await createAuditLog(request, {
@@ -57,14 +55,14 @@ export async function PUT(request: NextRequest) {
       changes: {
         bundleIds,
         action,
-        count: result.modifiedCount,
+        count: result.count,
       },
     });
 
     return NextResponse.json({
       success: true,
-      message: `${result.modifiedCount} bundle(s) ${action}d successfully`,
-      modifiedCount: result.modifiedCount,
+      message: `${result.count} bundle(s) ${action}d successfully`,
+      modifiedCount: result.count,
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Error in bulk bundle operation:', error);

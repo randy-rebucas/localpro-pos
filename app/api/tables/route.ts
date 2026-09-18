@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Table from '@/models/Table';
+import { randomUUID } from 'crypto';
+import prisma from '@/lib/db';
+import type { Prisma, TableStatus } from '@prisma/client';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -10,7 +11,6 @@ import { getTenantSettingsById } from '@/lib/tenant';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId, user } = authResult;
@@ -23,29 +23,29 @@ export async function GET(request: NextRequest) {
     const branchId = searchParams.get('branchId');
     const status = searchParams.get('status');
 
-    const query: Record<string, unknown> = { tenantId };
-    
+    const where: Prisma.PosTableWhereInput = { tenantId };
+
     // Filter by active status (default to active only)
     if (isActive === null || isActive === undefined) {
-      query.isActive = true;
+      where.isActive = true;
     } else if (isActive === 'all') {
       // No filter
     } else {
-      query.isActive = isActive === 'true';
+      where.isActive = isActive === 'true';
     }
 
     if (branchId) {
-      query.branchId = branchId;
+      where.branchId = branchId;
     }
 
     if (status) {
       const validStatuses = ['open', 'occupied', 'check-requested'];
       if (validStatuses.includes(status)) {
-        query.status = status;
+        where.status = status as TableStatus;
       }
     }
 
-    const tables = await Table.find(query).sort({ name: 1 }).lean();
+    const tables = await prisma.posTable.findMany({ where, orderBy: { name: 'asc' } });
 
     return NextResponse.json({ success: true, data: tables });
   } catch (error) {
@@ -55,7 +55,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId, user } = authResult;
@@ -99,20 +98,23 @@ export async function POST(request: NextRequest) {
       capacity = cap;
     }
 
-    const table = await Table.create({
-      tenantId,
-      name,
-      capacity: capacity || undefined,
-      branchId: branchId || undefined,
-      status: 'open',
-      isActive: true,
+    const table = await prisma.posTable.create({
+      data: {
+        id: randomUUID(),
+        tenantId,
+        name,
+        capacity: capacity || undefined,
+        branchId: branchId || undefined,
+        status: 'open',
+        isActive: true,
+      },
     });
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.CREATE,
       entityType: 'table',
-      entityId: table._id.toString(),
+      entityId: table.id,
       changes: { name: table.name, capacity: table.capacity },
     });
 

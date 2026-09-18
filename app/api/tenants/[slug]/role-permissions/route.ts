@@ -5,8 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -24,14 +23,12 @@ export async function GET(
     }
 
     const { slug } = await params;
-    await connectDB();
-
-    const tenant = await Tenant.findOne({ slug }).lean();
+    const tenant = await prisma.tenant.findFirst({ where: { slug } });
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
@@ -39,10 +36,12 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
+    const override = await prisma.tenantRolePermissionOverride.findUnique({ where: { tenantId: tenant.id } });
+
     return NextResponse.json({
       success: true,
       data: {
-        overrides: tenant.settings?.rolePermissionOverrides || {},
+        overrides: (override?.overrides as RolePermissionOverrides | undefined) || {},
         permissions: PERMISSIONS,
         overridableRoles: OVERRIDABLE_ROLES,
       },
@@ -93,28 +92,30 @@ export async function PUT(
       }
     }
 
-    await connectDB();
-
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await prisma.tenant.findFirst({ where: { slug } });
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    const previous = tenant.settings?.rolePermissionOverrides || {};
-    tenant.settings.rolePermissionOverrides = sanitized;
-    tenant.markModified('settings.rolePermissionOverrides');
-    await tenant.save();
+    const previousRecord = await prisma.tenantRolePermissionOverride.findUnique({ where: { tenantId: tenant.id } });
+    const previous = (previousRecord?.overrides as RolePermissionOverrides | undefined) || {};
+
+    await prisma.tenantRolePermissionOverride.upsert({
+      where: { tenantId: tenant.id },
+      create: { tenantId: tenant.id, overrides: sanitized },
+      update: { overrides: sanitized },
+    });
 
     await createAuditLog(request, {
-      tenantId: tenant._id,
+      tenantId: tenant.id,
       userId: user.userId,
       action: AuditActions.UPDATE,
       entityType: 'role_permissions',
-      entityId: tenant._id.toString(),
+      entityId: tenant.id,
       changes: { before: previous, after: sanitized },
     });
 

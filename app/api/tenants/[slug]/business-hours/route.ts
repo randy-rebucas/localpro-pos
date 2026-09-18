@@ -4,8 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { roleAtLeast } from '@/lib/permissions';
 import { logger } from '@/lib/logger';
@@ -21,20 +20,45 @@ export async function GET(
     }
 
     const { slug } = await params;
-    await connectDB();
-
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await prisma.tenant.findFirst({
+      where: { slug },
+      include: {
+        settings: true,
+        businessHours: { include: { breaks: true } },
+        specialHours: true,
+      },
+    });
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
+
+    const schedule: Record<string, unknown> = {};
+    for (const day of tenant.businessHours) {
+      schedule[String(day.dayOfWeek)] = {
+        enabled: day.enabled,
+        openTime: day.openTime,
+        closeTime: day.closeTime,
+        breaks: day.breaks.map((b) => ({ start: b.start, end: b.end })),
+      };
     }
 
     return NextResponse.json({
       success: true,
-      data: tenant.settings.businessHours || {},
+      data: {
+        timezone: tenant.settings?.businessHoursTimezone ?? null,
+        schedule,
+        specialHours: tenant.specialHours.map((sh) => ({
+          date: sh.date,
+          enabled: sh.enabled,
+          openTime: sh.openTime,
+          closeTime: sh.closeTime,
+          note: sh.note,
+        })),
+      },
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Error fetching business hours:', error);
@@ -60,30 +84,111 @@ export async function PUT(
     const body = await request.json();
     const { schedule, specialHours, timezone } = body;
 
-    await connectDB();
-
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await prisma.tenant.findFirst({ where: { slug } });
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    tenant.settings.businessHours = {
-      ...tenant.settings.businessHours,
-      ...(timezone !== undefined && { timezone }),
-      ...(schedule !== undefined && { schedule }),
-      ...(specialHours !== undefined && { specialHours }),
-    };
+    await prisma.$transaction(async (tx) => {
+      if (timezone !== undefined) {
+        await tx.tenantSettings.upsert({
+          where: { tenantId: tenant.id },
+          create: { tenantId: tenant.id, businessHoursTimezone: timezone },
+          update: { businessHoursTimezone: timezone },
+        });
+      }
 
-    tenant.markModified('settings.businessHours');
-    await tenant.save();
+      if (schedule !== undefined) {
+        for (const [dayKey, dayValueRaw] of Object.entries(schedule as Record<string, any>)) { // eslint-disable-line @typescript-eslint/no-explicit-any
+          const dayOfWeek = Number(dayKey);
+          if (Number.isNaN(dayOfWeek)) continue;
+          const dayValue = dayValueRaw as { enabled?: boolean; openTime?: string; closeTime?: string; breaks?: { start: string; end: string }[] };
+
+          const businessHour = await tx.tenantBusinessHour.upsert({
+            where: { tenantId_dayOfWeek: { tenantId: tenant.id, dayOfWeek } },
+            create: {
+              id: `${tenant.id}_bh_${dayOfWeek}`,
+              tenantId: tenant.id,
+              dayOfWeek,
+              enabled: dayValue.enabled ?? true,
+              openTime: dayValue.openTime ?? null,
+              closeTime: dayValue.closeTime ?? null,
+            },
+            update: {
+              enabled: dayValue.enabled ?? true,
+              openTime: dayValue.openTime ?? null,
+              closeTime: dayValue.closeTime ?? null,
+            },
+          });
+
+          if (dayValue.breaks !== undefined) {
+            await tx.tenantBusinessHourBreak.deleteMany({ where: { businessHourId: businessHour.id } });
+            if (Array.isArray(dayValue.breaks) && dayValue.breaks.length > 0) {
+              await tx.tenantBusinessHourBreak.createMany({
+                data: dayValue.breaks.map((b, idx) => ({
+                  id: `${businessHour.id}_brk_${idx}_${Date.now()}`,
+                  businessHourId: businessHour.id,
+                  start: b.start,
+                  end: b.end,
+                })),
+              });
+            }
+          }
+        }
+      }
+
+      if (specialHours !== undefined) {
+        // Full-array replace, matching the previous Mongoose shallow-merge
+        // semantics (the caller always sends the complete special hours list).
+        await tx.tenantSpecialHours.deleteMany({ where: { tenantId: tenant.id } });
+        if (Array.isArray(specialHours) && specialHours.length > 0) {
+          await tx.tenantSpecialHours.createMany({
+            data: specialHours.map((sh: { date: string; enabled?: boolean; openTime?: string; closeTime?: string; note?: string }, idx: number) => ({
+              id: `${tenant.id}_sh_${idx}_${Date.now()}`,
+              tenantId: tenant.id,
+              date: sh.date,
+              enabled: sh.enabled ?? true,
+              openTime: sh.openTime ?? null,
+              closeTime: sh.closeTime ?? null,
+              note: sh.note ?? null,
+            })),
+          });
+        }
+      }
+    });
+
+    const updated = await prisma.tenant.findFirst({
+      where: { id: tenant.id },
+      include: { settings: true, businessHours: { include: { breaks: true } }, specialHours: true },
+    });
+
+    const responseSchedule: Record<string, unknown> = {};
+    for (const day of updated?.businessHours ?? []) {
+      responseSchedule[String(day.dayOfWeek)] = {
+        enabled: day.enabled,
+        openTime: day.openTime,
+        closeTime: day.closeTime,
+        breaks: day.breaks.map((b) => ({ start: b.start, end: b.end })),
+      };
+    }
 
     return NextResponse.json({
       success: true,
-      data: tenant.settings.businessHours,
+      data: {
+        timezone: updated?.settings?.businessHoursTimezone ?? null,
+        schedule: responseSchedule,
+        specialHours: (updated?.specialHours ?? []).map((sh) => ({
+          date: sh.date,
+          enabled: sh.enabled,
+          openTime: sh.openTime,
+          closeTime: sh.closeTime,
+          note: sh.note,
+        })),
+      },
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Error updating business hours:', error);

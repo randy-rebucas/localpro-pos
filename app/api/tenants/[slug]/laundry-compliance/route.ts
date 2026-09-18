@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
@@ -18,16 +17,24 @@ export async function GET(
     if (!user) return NextResponse.json({ success: false, error: t('validation.unauthorized', 'Unauthorized') }, { status: 401 });
 
     const { slug } = await params;
-    await connectDB();
-
-    const tenant = await Tenant.findOne({ slug, isActive: true }).lean();
+    const tenant = await prisma.tenant.findFirst({ where: { slug, isActive: true }, include: { settings: true } });
     if (!tenant) return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden') }, { status: 403 });
     }
 
-    return NextResponse.json({ success: true, data: tenant.settings?.laundryCompliance ?? {} });
+    const s = tenant.settings;
+    return NextResponse.json({
+      success: true,
+      data: {
+        environmentalComplianceCertificate: s?.environmentalComplianceCertificate ?? undefined,
+        eccExpiry: s?.eccExpiry ?? undefined,
+        wastewaterDischargePermit: s?.wastewaterDischargePermit ?? undefined,
+        wastewaterPermitExpiry: s?.wastewaterPermitExpiry ?? undefined,
+        solidWasteManagementPlan: s?.solidWasteManagementPlan ?? undefined,
+      },
+    });
   } catch (error: unknown) {
     return handleApiError(error, t('validation.fetchLaundryComplianceFailed', 'Failed to fetch laundry compliance'));
   }
@@ -50,12 +57,10 @@ export async function PUT(
     if (!rl.allowed) return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
 
     const { slug } = await params;
-    await connectDB();
-
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await prisma.tenant.findFirst({ where: { slug } });
     if (!tenant) return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden') }, { status: 403 });
     }
 
@@ -63,20 +68,21 @@ export async function PUT(
     const dateFields = ['eccExpiry', 'wastewaterPermitExpiry'];
     const stringFields = ['environmentalComplianceCertificate', 'wastewaterDischargePermit'];
 
-    if (!tenant.settings.laundryCompliance) tenant.settings.laundryCompliance = {} as never;
-    const lc = tenant.settings.laundryCompliance as Record<string, unknown>;
+    const data: Record<string, unknown> = {};
+    for (const f of stringFields) { if (body[f] !== undefined) data[f] = body[f] || null; }
+    for (const f of dateFields) { if (body[f] !== undefined) data[f] = body[f] ? new Date(body[f]) : null; }
+    if (body.solidWasteManagementPlan !== undefined) data.solidWasteManagementPlan = body.solidWasteManagementPlan;
 
-    for (const f of stringFields) { if (body[f] !== undefined) lc[f] = body[f] || undefined; }
-    for (const f of dateFields) { if (body[f] !== undefined) lc[f] = body[f] ? new Date(body[f]) : undefined; }
-    if (body.solidWasteManagementPlan !== undefined) lc.solidWasteManagementPlan = body.solidWasteManagementPlan;
-
-    tenant.markModified('settings');
-    await tenant.save();
+    await prisma.tenantSettings.upsert({
+      where: { tenantId: tenant.id },
+      create: { tenantId: tenant.id, ...data },
+      update: data,
+    });
 
     await createAuditLog(request, {
-      tenantId: tenant._id, userId: user.userId,
+      tenantId: tenant.id, userId: user.userId,
       action: AuditActions.UPDATE, entityType: 'laundry_compliance',
-      entityId: tenant._id.toString(), changes: body,
+      entityId: tenant.id, changes: body,
     });
 
     return NextResponse.json({ success: true });

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import { Prisma } from '@prisma/client';
+import prisma from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
@@ -8,11 +8,10 @@ import { applyBusinessTypeDefaults } from '@/lib/business-types';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
-    await connectDB();
     await requireRole(request, ['super_admin']);
     const { slug } = await params;
 
-    const tenant = await Tenant.findOne({ slug }).lean();
+    const tenant = await prisma.tenant.findUnique({ where: { slug }, include: { settings: true } });
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
@@ -31,11 +30,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
-    await connectDB();
     const user = await requireRole(request, ['super_admin']);
     const { slug } = await params;
 
-    const oldTenant = await Tenant.findOne({ slug }).lean();
+    const oldTenant = await prisma.tenant.findUnique({ where: { slug }, include: { settings: true } });
     if (!oldTenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
@@ -57,35 +55,56 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (onboardingStatus !== undefined) updateData.onboardingStatus = onboardingStatus;
     if (notes !== undefined) updateData.notes = notes;
 
+    let mergedSettings: Record<string, unknown> | undefined;
     if (settings !== undefined) {
       const currentBusinessType = oldTenant.settings?.businessType;
       const newBusinessType = settings.businessType;
-      let mergedSettings = { ...oldTenant.settings, ...settings };
+      mergedSettings = { ...(oldTenant.settings || {}), ...settings };
       if (newBusinessType && newBusinessType !== currentBusinessType) {
         mergedSettings = applyBusinessTypeDefaults(mergedSettings, newBusinessType);
       }
-      updateData.settings = mergedSettings;
+      // tenantId is the settings table's own PK/FK, not an updatable field
+      delete (mergedSettings as Record<string, unknown>).tenantId;
     }
 
-    const tenant = await Tenant.findOneAndUpdate({ slug }, updateData, { new: true, runValidators: true });
-    if (!tenant) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+    let tenant;
+    try {
+      tenant = await prisma.tenant.update({
+        where: { slug },
+        data: {
+          ...updateData,
+          ...(mergedSettings !== undefined
+            ? {
+                settings: {
+                  upsert: {
+                    create: { ...(mergedSettings as any), tenantId: undefined }, // eslint-disable-line @typescript-eslint/no-explicit-any
+                    update: mergedSettings as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+                  },
+                },
+              }
+            : {}),
+        },
+        include: { settings: true },
+      });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
+        return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+      }
+      throw e;
     }
 
     const changes: Record<string, unknown> = {};
     Object.keys(updateData).forEach(key => {
-      if (key !== 'settings') {
-        changes[key] = { old: oldTenant[key as keyof typeof oldTenant], new: updateData[key] };
-      }
+      changes[key] = { old: (oldTenant as Record<string, unknown>)[key], new: updateData[key] };
     });
     if (settings) changes.settings = { updated: true };
 
     await createAuditLog(request, {
-      tenantId: tenant._id,
+      tenantId: tenant.id,
       userId: user.userId,
       action: AuditActions.UPDATE,
       entityType: 'tenant',
-      entityId: tenant._id.toString(),
+      entityId: tenant.id,
       changes,
       metadata: { updatedBy: user.userId, role: 'super_admin' },
     });
@@ -99,9 +118,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           { status: error.message === 'Unauthorized' ? 401 : 403 }
         );
       }
-      if ((error as NodeJS.ErrnoException).code === '11000') {
-        return NextResponse.json({ success: false, error: 'Domain or subdomain already exists' }, { status: 400 });
-      }
+    }
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return NextResponse.json({ success: false, error: 'Domain or subdomain already exists' }, { status: 400 });
     }
     return handleApiError(error);
   }

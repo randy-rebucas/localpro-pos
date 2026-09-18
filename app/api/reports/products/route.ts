@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
+import prisma from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { getProductPerformance } from '@/lib/analytics';
-import Product from '@/models/Product'; // Ensure Product model is registered
-import Transaction from '@/models/Transaction'; // Ensure Transaction model is registered
-import Tenant from '@/models/Tenant';
-import mongoose from 'mongoose';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkFeatureAccess } from '@/lib/subscription';
 import { logger } from '@/lib/logger';
@@ -15,7 +11,6 @@ import { resolveTenantDateRange, DEFAULT_TENANT_TIMEZONE } from '@/lib/timezone'
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
@@ -38,25 +33,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Ensure models are registered by checking mongoose.models
-    // This is necessary for populate to work in Next.js serverless functions
-    // Accessing the models ensures their registration code has executed
-    if (!mongoose.models.Product) {
-      // Force model registration by accessing the model's modelName property
-      // This ensures the Product module's registration code has run
-      const _productName = Product.modelName;
-    }
-    if (!mongoose.models.Transaction) {
-      // Force model registration by accessing the model's modelName property
-      const _transactionName = Transaction.modelName;
-    }
-
-    const tenantDoc = await Tenant.findById(tenantId).select('settings.timezone').lean();
+    const tenantSettings = await prisma.tenantSettings.findUnique({
+      where: { tenantId },
+      select: { timezone: true },
+    });
     const searchParams = request.nextUrl.searchParams;
     const { startDate, endDate } = resolveTenantDateRange(
       searchParams.get('startDate'),
       searchParams.get('endDate'),
-      tenantDoc?.settings?.timezone || DEFAULT_TENANT_TIMEZONE
+      tenantSettings?.timezone || DEFAULT_TENANT_TIMEZONE
     );
     const limit = parseInt(searchParams.get('limit') || '10', 10);
 

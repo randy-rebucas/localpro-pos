@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
+import prisma from '@/lib/db';
+import { Prisma } from '@prisma/client';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { handleApiError } from '@/lib/error-handler';
 
@@ -10,8 +10,6 @@ import { handleApiError } from '@/lib/error-handler';
  */
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
-
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const tenantId = authResult.tenantId;
@@ -24,22 +22,24 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, exists: false });
     }
 
-    const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const query: Record<string, unknown> = {
+    const where: Prisma.ProductWhereInput = {
       tenantId,
-      isActive: { $ne: false },
-      name: { $regex: `^${escapedName}$`, $options: 'i' },
+      isActive: { not: false },
+      name: { equals: name, mode: 'insensitive' },
     };
     if (excludeId) {
-      query._id = { $ne: excludeId };
+      where.id = { not: excludeId };
     }
 
-    const existing = await Product.findOne(query).select('_id name sku stock').lean();
+    const existing = await prisma.product.findFirst({
+      where,
+      select: { id: true, name: true, sku: true, stock: true },
+    });
 
     return NextResponse.json({
       success: true,
       exists: !!existing,
-      product: existing || undefined,
+      product: existing ? { ...existing, _id: existing.id } : undefined,
     });
   } catch (error) {
     return handleApiError(error, 'Failed to check for duplicate product');

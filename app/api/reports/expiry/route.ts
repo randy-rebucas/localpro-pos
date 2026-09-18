@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getTenantDayBoundaries, DEFAULT_TENANT_TIMEZONE } from '@/lib/timezone';
+import type { DrugSchedule } from '@prisma/client';
 
 export async function GET(request: NextRequest) {
   try {
@@ -19,48 +18,82 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    await connectDB();
-
     // Get tenant's configured alert days, fallback to query param or 90
-    const tenant = await Tenant.findOne({ _id: user.tenantId }).lean();
-    const defaultAlertDays = tenant?.settings?.pharmacyCompliance?.expiryAlertDays ?? 90;
+    const tenantSettings = await prisma.tenantSettings.findUnique({
+      where: { tenantId: user.tenantId },
+      select: { expiryAlertDays: true, timezone: true },
+    });
+    const defaultAlertDays = tenantSettings?.expiryAlertDays ?? 90;
     const { searchParams } = new URL(request.url);
     const alertDays = Number(searchParams.get('days') ?? defaultAlertDays);
-    const scheduleFilter = searchParams.get('schedule'); // otc | rx | dangerous
+    const scheduleFilter = searchParams.get('schedule') as DrugSchedule | null; // otc | rx | dangerous
 
-    const today = getTenantDayBoundaries(new Date(), tenant?.settings?.timezone || DEFAULT_TENANT_TIMEZONE).start;
+    const today = getTenantDayBoundaries(new Date(), tenantSettings?.timezone || DEFAULT_TENANT_TIMEZONE).start;
     const alertDate = new Date(today);
     alertDate.setDate(alertDate.getDate() + alertDays);
 
-    const baseFilter: Record<string, unknown> = {
-      tenantId: user.tenantId,
-      isActive: true,
-      expiryDate: { $exists: true, $ne: null },
-    };
-    if (scheduleFilter) baseFilter.drugSchedule = scheduleFilter;
+    // Pharmacy fields (expiryDate, drugSchedule, genericName, batchNumber) live
+    // on the ProductPharmacyDetails child table in Postgres, not on Product.
+    const pharmacyDetailsWhere = scheduleFilter ? { drugSchedule: scheduleFilter } : {};
+
+    const select = {
+      id: true,
+      name: true,
+      sku: true,
+      stock: true,
+      pharmacyDetails: {
+        select: {
+          genericName: true,
+          batchNumber: true,
+          expiryDate: true,
+          drugSchedule: true,
+        },
+      },
+    } as const;
 
     // Fetch both already-expired and expiring-within-alertDays
     const [expired, expiring] = await Promise.all([
-      Product.find({ ...baseFilter, expiryDate: { $lt: today } })
-        .select('name genericName sku batchNumber expiryDate stock drugSchedule')
-        .sort({ expiryDate: 1 })
-        .lean(),
-      Product.find({ ...baseFilter, expiryDate: { $gte: today, $lte: alertDate } })
-        .select('name genericName sku batchNumber expiryDate stock drugSchedule')
-        .sort({ expiryDate: 1 })
-        .lean(),
+      prisma.product.findMany({
+        where: {
+          tenantId: user.tenantId,
+          isActive: true,
+          pharmacyDetails: { expiryDate: { not: null, lt: today }, ...pharmacyDetailsWhere },
+        },
+        select,
+        orderBy: { pharmacyDetails: { expiryDate: 'asc' } },
+      }),
+      prisma.product.findMany({
+        where: {
+          tenantId: user.tenantId,
+          isActive: true,
+          pharmacyDetails: { expiryDate: { not: null, gte: today, lte: alertDate }, ...pharmacyDetailsWhere },
+        },
+        select,
+        orderBy: { pharmacyDetails: { expiryDate: 'asc' } },
+      }),
     ]);
 
     const now = Date.now();
 
-    const mapProduct = (p: Record<string, unknown>) => {
-      const expiryDate = p.expiryDate as Date;
+    const mapProduct = (p: (typeof expired)[number]) => {
+      const expiryDate = p.pharmacyDetails!.expiryDate!;
       const daysUntilExpiry = Math.ceil((expiryDate.getTime() - now) / 86400000);
       let status: 'expired' | 'critical' | 'warning';
       if (daysUntilExpiry < 0) status = 'expired';
       else if (daysUntilExpiry <= 30) status = 'critical';
       else status = 'warning';
-      return { ...p, daysUntilExpiry, status };
+      return {
+        id: p.id,
+        name: p.name,
+        sku: p.sku,
+        stock: p.stock,
+        genericName: p.pharmacyDetails!.genericName,
+        batchNumber: p.pharmacyDetails!.batchNumber,
+        expiryDate: p.pharmacyDetails!.expiryDate,
+        drugSchedule: p.pharmacyDetails!.drugSchedule,
+        daysUntilExpiry,
+        status,
+      };
     };
 
     await createAuditLog(request, {

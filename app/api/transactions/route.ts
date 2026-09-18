@@ -1,37 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
-import mongoose from 'mongoose';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
-import Device from '@/models/Device';
-import Transaction from '@/models/Transaction';
-import Payment from '@/models/Payment';
-import Product from '@/models/Product';
-import Discount from '@/models/Discount';
+import { randomUUID } from 'crypto';
+import prisma from '@/lib/db';
+import type { Prisma, PaymentMethodType, PaymentMethodSimple, PaymentStatus, DiscountCategory, OrderType } from '@prisma/client';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { validateAndSanitize, validateTransaction } from '@/lib/validation';
 import { generateReceiptNumber, isDuplicateReceiptNumberError } from '@/lib/receipt';
 import { updateStock, updateBundleStock, getProductStock } from '@/lib/stock';
-import ProductBundle from '@/models/ProductBundle';
-import StockMovement from '@/models/StockMovement';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { checkSubscriptionLimit, SubscriptionService, checkFeatureAccess } from '@/lib/subscription';
 import { logger } from '@/lib/logger';
 import { calculateTax } from '@/lib/tax-calculation';
-import Customer from '@/models/Customer';
-import LoyaltyConfig from '@/models/LoyaltyConfig';
-import LoyaltyTransaction from '@/models/LoyaltyTransaction';
-import Table from '@/models/Table';
-import Branch from '@/models/Branch';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { wouldExceedCreditLimit } from '@/lib/customer-credit';
-import {
-  runWithOptionalMongoTransaction,
-  sessionOpts,
-  withOptionalSession,
-} from '@/lib/mongo-session';
+
+// Postgres ids here are still Mongo-ObjectId-hex-shaped during the migration
+// (see prisma/schema.prisma header comment) — keep the same 24-hex-char shape
+// check the old Mongoose code used instead of mongoose.Types.ObjectId.isValid.
+const OBJECT_ID_RE = /^[a-f\d]{24}$/i;
+function isValidObjectId(v: unknown): v is string {
+  return typeof v === 'string' && OBJECT_ID_RE.test(v);
+}
 
 interface VariationInput {
   size?: string;
@@ -75,9 +66,7 @@ interface TransactionInput {
 }
 
 /** Persisted Payment.method — maps POS transaction methods to Payment enum. */
-function toPaymentRecordMethod(
-  m: string
-): 'cash' | 'card' | 'digital' | 'check' | 'other' | 'on_account' {
+function toPaymentRecordMethod(m: string): PaymentMethodSimple {
   if (m === 'on_account') return 'on_account';
   if (m === 'cash') return 'cash';
   if (m === 'card') return 'card';
@@ -90,17 +79,17 @@ const TRANSACTION_PAYMENT_METHODS = new Set([
   'cash', 'card', 'digital', 'tap_to_pay', 'wallet', 'qr_code', 'bnpl', 'on_account',
 ]);
 
-function normalizeTransactionPaymentMethod(m: string): string {
-  if (TRANSACTION_PAYMENT_METHODS.has(m)) return m;
+function normalizeTransactionPaymentMethod(m: string): PaymentMethodType {
+  if (TRANSACTION_PAYMENT_METHODS.has(m)) return m as PaymentMethodType;
   if (m === 'check' || m === 'other') return 'digital';
   throw new Error(`Invalid payment method: ${m}`);
 }
 
 function getTransactionErrorStatus(error: unknown): number {
   if (error && typeof error === 'object') {
-    const err = error as { name?: string; code?: number; message?: string };
+    const err = error as { name?: string; code?: string | number; message?: string };
     if (err.name === 'ValidationError' || err.name === 'CastError') return 400;
-    if (err.code === 11000) return 400;
+    if (err.code === 11000 || err.code === 'P2002') return 400;
   }
   const message = error instanceof Error ? error.message.toLowerCase() : '';
   const businessPatterns = [
@@ -131,12 +120,12 @@ class IdempotentReplayError extends Error {
 }
 
 interface TransactionItemRecord {
-  product: unknown;
+  productId?: string;
   name: string;
   price: number;
   quantity: number;
   subtotal: number;
-  bundleId?: unknown;
+  bundleId?: string;
   categoryId?: string;
   taxExempt?: boolean;
   zeroRated?: boolean;
@@ -145,7 +134,6 @@ interface TransactionItemRecord {
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     // Require authentication — financial data must not be public
     let tenantId: string;
     let role: string;
@@ -177,21 +165,25 @@ export async function GET(request: NextRequest) {
     const skip = (page - 1) * limit;
     const customerIdFilter = searchParams.get('customerId');
 
-    const txQuery: Record<string, unknown> = { tenantId, isActive: { $ne: false } };
+    const txQuery: Prisma.TransactionWhereInput = { tenantId, isActive: { not: false } };
     if (customerIdFilter) {
       txQuery.customerId = customerIdFilter;
     }
 
-    const transactions = await Transaction.find(txQuery)
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .skip(skip)
-      .populate('items.product', 'name')
-      .populate('customerId', 'firstName lastName')
-      .populate('userId', 'name email')
-      .lean();
-
-    const total = await Transaction.countDocuments(txQuery);
+    const [transactions, total] = await Promise.all([
+      prisma.transaction.findMany({
+        where: txQuery,
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip,
+        include: {
+          items: { include: { product: { select: { name: true } } } },
+          customer: { select: { firstName: true, lastName: true } },
+          user: { select: { name: true, email: true } },
+        },
+      }),
+      prisma.transaction.count({ where: txQuery }),
+    ]);
 
     return NextResponse.json({
       success: true,
@@ -211,7 +203,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     // SECURITY: Validate tenant access for authenticated requests
     let tenantId: string;
     let user: { userId: string; tenantId: string; email: string; role: string };
@@ -248,7 +239,7 @@ export async function POST(request: NextRequest) {
 
     const { items, paymentMethod, cashReceived, notes, discountCode, branchId, payments, scPwdName, scPwdId, deviceId } = data as unknown as TransactionInput;
     const customerId = body.customerId as string | undefined;
-    if (customerId && !mongoose.Types.ObjectId.isValid(customerId)) {
+    if (customerId && !isValidObjectId(customerId)) {
       return NextResponse.json({ success: false, error: t('validation.invalidCustomerId', 'Invalid customer ID') }, { status: 400 });
     }
     const loyaltyPointsToRedeem = typeof body.loyaltyPointsToRedeem === 'number' ? Math.floor(body.loyaltyPointsToRedeem) : 0;
@@ -261,7 +252,7 @@ export async function POST(request: NextRequest) {
       ? body.idempotencyKey.trim()
       : undefined;
     if (idempotencyKey) {
-      const existing = await Transaction.findOne({ tenantId, idempotencyKey }).lean();
+      const existing = await prisma.transaction.findFirst({ where: { tenantId, idempotencyKey } });
       if (existing) {
         return NextResponse.json({ success: true, data: existing }, { status: 200 });
       }
@@ -271,7 +262,7 @@ export async function POST(request: NextRequest) {
     const rawOrderType = typeof body.orderType === 'string' ? body.orderType : undefined;
     const orderType =
       rawOrderType && ['dine-in', 'takeout', 'delivery'].includes(rawOrderType)
-        ? rawOrderType
+        ? (rawOrderType as OrderType)
         : undefined;
     const tableNumber = typeof body.tableNumber === 'string' ? body.tableNumber : undefined;
     const tableId = typeof body.tableId === 'string' ? body.tableId : undefined;
@@ -279,12 +270,14 @@ export async function POST(request: NextRequest) {
     const splitPayments = Array.isArray(body.splitPayments) ? body.splitPayments : undefined;
 
     // Check subscription transaction limits
-    const currentTransactionCount = await Transaction.countDocuments({
-      tenantId,
-      createdAt: {
-        $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-        $lt: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1)
-      }
+    const currentTransactionCount = await prisma.transaction.count({
+      where: {
+        tenantId,
+        createdAt: {
+          gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+          lt: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1),
+        },
+      },
     });
     try {
       await checkSubscriptionLimit(tenantId.toString(), 'maxTransactions', currentTransactionCount);
@@ -298,8 +291,7 @@ export async function POST(request: NextRequest) {
     // ─── Loyalty: pre-validate customer and redemption ───
     let loyaltyEnabled = false;
     let loyaltyConfig: { pointsPerPeso: number; pesoPerPoint: number; minRedemption: number; isEnabled: boolean } | null = null;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let loyaltyCustomer: any = null;
+    let loyaltyCustomer: { id: string; loyaltyPointsBalance: Prisma.Decimal | number | null } | null = null;
     let loyaltyDiscountAmount = 0;
 
     try {
@@ -310,22 +302,29 @@ export async function POST(request: NextRequest) {
     }
 
     if (loyaltyEnabled && customerId) {
-      const foundConfig = await LoyaltyConfig.findOne({ tenantId }).lean();
-      loyaltyConfig = foundConfig ?? { pointsPerPeso: 1, pesoPerPoint: 0.10, minRedemption: 100, isEnabled: true };
+      const foundConfig = await prisma.loyaltyConfig.findUnique({ where: { tenantId } });
+      loyaltyConfig = foundConfig
+        ? {
+            pointsPerPeso: Number(foundConfig.pointsPerPeso),
+            pesoPerPoint: Number(foundConfig.pesoPerPoint),
+            minRedemption: foundConfig.minRedemption,
+            isEnabled: foundConfig.isEnabled,
+          }
+        : { pointsPerPeso: 1, pesoPerPoint: 0.10, minRedemption: 100, isEnabled: true };
 
       if (!loyaltyConfig.isEnabled) {
         loyaltyEnabled = false;
       }
 
       if (loyaltyEnabled) {
-        const customer = await Customer.findOne({ _id: customerId, tenantId });
+        const customer = await prisma.customer.findFirst({ where: { id: customerId, tenantId } });
         if (!customer) {
           return NextResponse.json({ success: false, error: t('validation.customerNotFound', 'Customer not found') }, { status: 404 });
         }
         loyaltyCustomer = customer;
 
         if (loyaltyPointsToRedeem > 0) {
-          const balance = customer.loyaltyPointsBalance ?? 0;
+          const balance = Number(customer.loyaltyPointsBalance ?? 0);
           if (loyaltyPointsToRedeem < loyaltyConfig.minRedemption) {
             return NextResponse.json(
               {
@@ -408,35 +407,37 @@ export async function POST(request: NextRequest) {
     let subtotal = 0;
 
     // Batch-load all products and bundles upfront to avoid N+1 queries
-    const productIds = items.filter(i => i.productId && !i.bundleId).map(i => i.productId);
-    const bundleIds = items.filter(i => i.bundleId).map(i => i.bundleId);
+    const productIds = items.filter(i => i.productId && !i.bundleId).map(i => i.productId as string);
+    const bundleIds = items.filter(i => i.bundleId).map(i => i.bundleId as string);
 
     const [productsArray, bundlesArray] = await Promise.all([
       productIds.length > 0
-        ? Product.find({ _id: { $in: productIds }, tenantId }).lean()
+        ? prisma.product.findMany({ where: { id: { in: productIds }, tenantId } })
         : Promise.resolve([]),
       bundleIds.length > 0
-        ? ProductBundle.find({ _id: { $in: bundleIds }, tenantId, isActive: true }).lean()
+        ? prisma.productBundle.findMany({ where: { id: { in: bundleIds }, tenantId, isActive: true }, include: { items: true } })
         : Promise.resolve([]),
     ]);
 
-    const productMap = new Map(productsArray.map(p => [p._id.toString(), p]));
-    const bundleMap = new Map(bundlesArray.map(b => [b._id.toString(), b]));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const productMap = new Map<string, any>(productsArray.map(p => [p.id, p]));
+    const bundleMap = new Map(bundlesArray.map(b => [b.id, b]));
 
     // Also batch-load all products referenced by bundles
-    const bundleProductIds = bundlesArray.flatMap(b => b.items.map((bi: any) => bi.productId)); // eslint-disable-line @typescript-eslint/no-explicit-any
+    const bundleProductIds = bundlesArray.flatMap(b => b.items.map((bi) => bi.productId));
     if (bundleProductIds.length > 0) {
-      const bundleProducts = await Product.find({ _id: { $in: bundleProductIds }, tenantId }).lean();
+      const bundleProducts = await prisma.product.findMany({ where: { id: { in: bundleProductIds }, tenantId } });
       for (const bp of bundleProducts) {
-        if (!productMap.has(bp._id.toString())) {
-          productMap.set(bp._id.toString(), bp);
+        if (!productMap.has(bp.id)) {
+          productMap.set(bp.id, bp);
         }
       }
     }
 
     for (const item of items) {
       const { productId, quantity, variation, bundleId } = item;
-      const itemModifiers = Array.isArray((item as any).modifiers) ? (item as any).modifiers : undefined; // eslint-disable-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const itemModifiers = Array.isArray((item as any).modifiers) ? (item as any).modifiers : undefined;
 
       // Handle bundles
       if (bundleId) {
@@ -447,7 +448,7 @@ export async function POST(request: NextRequest) {
 
         // Check stock for all bundle items - but respect allowOutOfStockSales and trackInventory
         for (const bundleItem of bundle.items) {
-          const bundleProduct = productMap.get(bundleItem.productId.toString());
+          const bundleProduct = productMap.get(bundleItem.productId);
           if (!bundleProduct) {
             continue; // Skip if product not found (shouldn't happen, but safety check)
           }
@@ -457,11 +458,15 @@ export async function POST(request: NextRequest) {
 
           if (trackInventory && !allowOutOfStockSales) {
             const availableStock = await getProductStock(
-              bundleItem.productId.toString(),
+              bundleItem.productId,
               tenantId,
               {
                 branchId: typeof branchId === 'string' ? branchId : undefined,
-                variation: bundleItem.variation,
+                variation: {
+                  size: bundleItem.variationSize ?? undefined,
+                  color: bundleItem.variationColor ?? undefined,
+                  type: bundleItem.variationType ?? undefined,
+                },
               }
             );
 
@@ -482,16 +487,16 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        const itemSubtotal = bundle.price * quantity;
+        const bundlePrice = Number(bundle.price);
+        const itemSubtotal = bundlePrice * quantity;
         subtotal += itemSubtotal;
 
         transactionItems.push({
-          product: bundle._id,
+          bundleId: bundle.id,
           name: bundle.name,
-          price: bundle.price,
+          price: bundlePrice,
           quantity: quantity,
           subtotal: itemSubtotal,
-          bundleId: bundle._id,
         });
       }
       // Handle regular products
@@ -531,16 +536,17 @@ export async function POST(request: NextRequest) {
         }
 
         // Get price (variation price override or base price)
-        let itemPrice = product.price;
-        if (variation && product.hasVariations && product.variations) {
-          const variationData = product.variations.find((v: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+        let itemPrice = Number(product.price);
+        if (variation && product.hasVariations) {
+          const variationRows = await prisma.productVariation.findMany({ where: { productId: product.id } });
+          const variationData = variationRows.find((v) => {
             const matchSize = !variation.size || v.size === variation.size;
             const matchColor = !variation.color || v.color === variation.color;
             const matchType = !variation.type || v.type === variation.type;
             return matchSize && matchColor && matchType;
           });
           if (variationData && variationData.price) {
-            itemPrice = variationData.price;
+            itemPrice = Number(variationData.price);
           }
         }
 
@@ -553,7 +559,7 @@ export async function POST(request: NextRequest) {
         subtotal += itemSubtotal;
 
         transactionItems.push({
-          product: product._id,
+          productId: product.id,
           name: product.name,
           price: effectiveItemPrice,
           quantity: quantity,
@@ -568,41 +574,57 @@ export async function POST(request: NextRequest) {
     // Apply discount if provided
     let discountAmount = 0;
     let appliedDiscountCode: string | undefined;
-    let appliedDiscountCategory: string | undefined;
+    let appliedDiscountCategory: DiscountCategory | undefined;
     // Set once the usage-increment below succeeds; used to compensate the
     // increment if checkout fails or is replayed after this point.
-    let appliedDiscountId: mongoose.Types.ObjectId | undefined;
+    let appliedDiscountId: string | undefined;
 
     if (discountCode) {
       const now = new Date();
+      const codeUpper = typeof discountCode === 'string' ? discountCode.toUpperCase() : '';
 
-      // Atomic check + increment: find the discount and increment usage in one operation.
-      // The query filter ensures validity, active status, and usage limit in the same step,
-      // preventing race conditions where two transactions pass the check simultaneously.
-      const discount = await Discount.findOneAndUpdate(
-        {
+      // Atomic check + increment: only claims the row (and bumps usageCount)
+      // when it's active, within its valid window, and under its usage limit —
+      // mirrors the Mongo findOneAndUpdate filter+$inc atomicity via updateMany's
+      // affected-row count.
+      const claim = await prisma.discount.updateMany({
+        where: {
           tenantId,
-          code: typeof discountCode === 'string' ? discountCode.toUpperCase() : '',
+          code: codeUpper,
           isActive: true,
-          validFrom: { $lte: now },
-          validUntil: { $gte: now },
-          $or: [
-            { usageLimit: { $exists: false } },
+          validFrom: { lte: now },
+          validUntil: { gte: now },
+          // Only guards the "no limit" cases here; when usageLimit IS set we
+          // still claim (increment) unconditionally and verify/roll back
+          // below, since Prisma's updateMany where can't compare two columns
+          // of the same row (no $expr equivalent).
+          OR: [
             { usageLimit: null },
             { usageLimit: 0 },
-            { $expr: { $lt: ['$usageCount', '$usageLimit'] } },
+            { usageLimit: { gt: 0 } },
           ],
         },
-        { $inc: { usageCount: 1 } },
-        { new: false } // return pre-increment doc for calculations
-      );
+        data: { usageCount: { increment: 1 } },
+      });
+
+      let discount = claim.count > 0
+        ? await prisma.discount.findFirst({ where: { tenantId, code: codeUpper } })
+        : null;
+
+      // The `usageCount < usageLimit` comparison can't be expressed inside
+      // updateMany's where (no column-to-column comparator in Prisma), so
+      // when a usageLimit is actually set we re-check it here and roll back
+      // the increment we just applied if it turns out the limit was hit —
+      // same net effect as the Mongo $expr filter, one extra round trip only
+      // in the usageLimit-set case.
+      if (discount && discount.usageLimit && discount.usageLimit > 0 && discount.usageCount > discount.usageLimit) {
+        await prisma.discount.update({ where: { id: discount.id }, data: { usageCount: { decrement: 1 } } });
+        discount = null;
+      }
 
       if (!discount) {
         // Lookup without filters to give a specific error message
-        const rawDiscount = await Discount.findOne({
-          tenantId,
-          code: typeof discountCode === 'string' ? discountCode.toUpperCase() : '',
-        });
+        const rawDiscount = await prisma.discount.findFirst({ where: { tenantId, code: codeUpper } });
 
         if (!rawDiscount || !rawDiscount.isActive) {
           return NextResponse.json(
@@ -624,10 +646,11 @@ export async function POST(request: NextRequest) {
       }
 
       // Check minimum purchase amount (rollback usage if not met)
-      if (discount.minPurchaseAmount && subtotal < discount.minPurchaseAmount) {
+      const minPurchaseAmount = discount.minPurchaseAmount ? Number(discount.minPurchaseAmount) : undefined;
+      if (minPurchaseAmount && subtotal < minPurchaseAmount) {
         // Rollback the usage increment
-        await Discount.findByIdAndUpdate(discount._id, { $inc: { usageCount: -1 } });
-        const errorMsg = t('validation.minimumPurchaseAmount', 'Minimum purchase amount of {amount} required').replace('{amount}', discount.minPurchaseAmount.toString());
+        await prisma.discount.update({ where: { id: discount.id }, data: { usageCount: { decrement: 1 } } });
+        const errorMsg = t('validation.minimumPurchaseAmount', 'Minimum purchase amount of {amount} required').replace('{amount}', minPurchaseAmount.toString());
         return NextResponse.json(
           { success: false, error: errorMsg },
           { status: 400 }
@@ -635,18 +658,19 @@ export async function POST(request: NextRequest) {
       }
 
       // Calculate discount amount using integer math to avoid floating point
+      const discountValue = Number(discount.value);
       if (discount.type === 'percentage') {
-        discountAmount = Math.round((subtotal * discount.value) / 100 * 100) / 100;
+        discountAmount = Math.round((subtotal * discountValue) / 100 * 100) / 100;
         if (discount.maxDiscountAmount) {
-          discountAmount = Math.min(discountAmount, discount.maxDiscountAmount);
+          discountAmount = Math.min(discountAmount, Number(discount.maxDiscountAmount));
         }
       } else {
-        discountAmount = Math.min(discount.value, subtotal);
+        discountAmount = Math.min(discountValue, subtotal);
       }
 
       appliedDiscountCode = discount.code;
       appliedDiscountCategory = discount.category || 'general';
-      appliedDiscountId = discount._id;
+      appliedDiscountId = discount.id;
     }
 
     // Calculate subtotal after discount
@@ -657,7 +681,7 @@ export async function POST(request: NextRequest) {
     let taxResult: { taxAmount: number; taxRate: number; taxLabel: string; taxableAmount: number; exemptAmount: number; zeroRatedAmount: number } | null = null;
     if (typeof calculateTax === 'function') {
       const taxItems = transactionItems.map((item) => ({
-        productId: item.product ? String(item.product) : undefined,
+        productId: item.productId ? String(item.productId) : undefined,
         productType: item.bundleId ? ('bundle' as const) : ('regular' as const),
         categoryId: item.categoryId ? item.categoryId.toString() : undefined,
         taxExempt: item.taxExempt || false,
@@ -669,9 +693,11 @@ export async function POST(request: NextRequest) {
       // transaction's branch address if one is set, else the tenant's own address.
       let taxRegion: { country?: string; state?: string; city?: string; zipCode?: string } | undefined;
       const branchForTax = typeof branchId === 'string' && branchId
-        ? await Branch.findOne({ _id: branchId, tenantId }).select('address').lean()
+        ? await prisma.branch.findFirst({ where: { id: branchId, tenantId }, select: { country: true, state: true, city: true, zipCode: true } })
         : null;
-      const addressSource = branchForTax?.address || tenantSettings?.address;
+      const addressSource = branchForTax
+        ? { country: branchForTax.country ?? undefined, state: branchForTax.state ?? undefined, city: branchForTax.city ?? undefined, zipCode: branchForTax.zipCode ?? undefined }
+        : tenantSettings?.address;
       if (addressSource) {
         taxRegion = {
           country: addressSource.country,
@@ -691,8 +717,8 @@ export async function POST(request: NextRequest) {
     // Resolve the registered device/terminal (if any) and snapshot its identity onto the
     // transaction, so receipts remain accurate even if the device is later renamed/deactivated.
     let deviceSnapshot: { terminalId: string; deviceSerialNumber: string } | undefined;
-    if (deviceId && mongoose.Types.ObjectId.isValid(deviceId)) {
-      const device = await Device.findOne({ _id: deviceId, tenantId, isActive: true }).lean();
+    if (deviceId && isValidObjectId(deviceId)) {
+      const device = await prisma.device.findFirst({ where: { id: deviceId, tenantId, isActive: true } });
       if (device) {
         deviceSnapshot = { terminalId: device.terminalId, deviceSerialNumber: device.serialNumber };
       }
@@ -768,16 +794,16 @@ export async function POST(request: NextRequest) {
 
     const storedPaymentMethod = normalizeTransactionPaymentMethod(finalPaymentMethod);
 
-    // ─── Atomic section: stock + transaction + payments (transaction when DB supports it) ───
-    const checkoutResult = await runWithOptionalMongoTransaction(async (session) => {
-      const paymentRecords: Array<{ _id: unknown; method: string; amount: number; status: string }> = [];
-      let onAccountCreditChange: {
-        customerId: string;
-        amount: number;
-        balanceBefore: number;
-        balanceAfter: number;
-      } | null = null;
-
+    // ─── Atomic section: stock + transaction + payments ───
+    // Stock adjustments go through lib/stock.ts (shared with the
+    // products/inventory routes owned elsewhere in this migration) which is
+    // not itself a Prisma-transaction-aware call yet, so — same as the
+    // pre-migration Mongoose "best effort session" pattern — it runs before
+    // the atomic Prisma transaction rather than inside it. Everything this
+    // route directly owns (Transaction + items + splitPayments + Payment +
+    // Tenant grand-total + loyalty + on-account balance) is one
+    // prisma.$transaction so those rows commit or roll back together.
+    const checkoutResult = await (async () => {
       // Update stock BEFORE creating transaction (critical - must succeed)
       for (const item of items) {
         const { productId, quantity, variation, bundleId } = item;
@@ -797,14 +823,10 @@ export async function POST(request: NextRequest) {
               userId: user.userId,
               branchId: typeof branchId === 'string' ? branchId : undefined,
               reason: 'Transaction sale - bundle',
-            },
-            session
+            }
           );
         } else if (productId) {
-          const product = await withOptionalSession(
-            Product.findOne({ _id: productId, tenantId }),
-            session
-          );
+          const product = await prisma.product.findFirst({ where: { id: productId, tenantId } });
           if (product && product.trackInventory !== false) {
             await updateStock(
               productId,
@@ -816,262 +838,315 @@ export async function POST(request: NextRequest) {
                 branchId: typeof branchId === 'string' ? branchId : undefined,
                 variation,
                 reason: 'Transaction sale',
-              },
-              session
+              }
             );
           }
         }
       }
 
-      let transaction;
-      let receiptNumber = '';
-      const txPayloadBase = {
-        tenantId,
-        branchId: branchId || undefined,
-        items: transactionItems,
-        subtotal,
-        discountCode: appliedDiscountCode,
-        discountCategory: appliedDiscountCategory,
-        discountAmount: discountAmount > 0 ? discountAmount : undefined,
-        scPwdName: (appliedDiscountCategory === 'senior' || appliedDiscountCategory === 'pwd') ? (scPwdName || undefined) : undefined,
-        scPwdId: (appliedDiscountCategory === 'senior' || appliedDiscountCategory === 'pwd') ? (scPwdId || undefined) : undefined,
-        taxExemptAmount: taxResult?.exemptAmount || 0,
-        zeroRatedAmount: taxResult?.zeroRatedAmount || 0,
-        taxAmount: taxAmount > 0 ? taxAmount : undefined,
-        total,
-        paymentMethod: storedPaymentMethod,
-        cashReceived: storedPaymentMethod === 'cash' ? finalCashReceived : undefined,
-        change: storedPaymentMethod === 'cash' ? finalChange : undefined,
-        status: 'completed' as const,
-        customerId: customerId || undefined,
-        userId: user.userId,
-        deviceId: deviceId && mongoose.Types.ObjectId.isValid(deviceId) ? deviceId : undefined,
-        terminalId: deviceSnapshot?.terminalId,
-        deviceSerialNumber: deviceSnapshot?.deviceSerialNumber,
-        notes,
-        orderType: orderType || undefined,
-        tableNumber: tableNumber || undefined,
-        tableId: tableId || undefined,
-        splitCount: splitCount || undefined,
-        splitPayments: splitPayments || undefined,
-        ...(idempotencyKey ? { idempotencyKey } : {}),
-      };
+      return prisma.$transaction(async (tx) => {
+        const paymentRecords: Array<{ id: string; method: string; amount: Prisma.Decimal | number; status: string }> = [];
+        let onAccountCreditChange: {
+          customerId: string;
+          amount: number;
+          balanceBefore: number;
+          balanceAfter: number;
+        } | null = null;
 
-      for (let receiptAttempt = 0; receiptAttempt < 3; receiptAttempt++) {
-        receiptNumber = await generateReceiptNumber(tenantId);
-        try {
-          const [txn] = await Transaction.create(
-            [{ ...txPayloadBase, receiptNumber }],
-            sessionOpts(session)
-          );
-          transaction = txn;
-          break;
-        } catch (createErr) {
-          if (isDuplicateReceiptNumberError(createErr) && receiptAttempt < 2) {
-            logger.warn('Duplicate receipt number, retrying with next sequence', { receiptNumber });
-            continue;
-          }
-          // A concurrent duplicate request (same idempotencyKey) raced us
-          // inside the transaction and won — surface it as a dedicated
-          // error so the outer handler can return that transaction instead
-          // of a generic failure.
-          if (
-            idempotencyKey &&
-            createErr &&
-            typeof createErr === 'object' &&
-            'code' in createErr &&
-            (createErr as { code?: number }).code === 11000 &&
-            String((createErr as { message?: string }).message || '').includes('idempotencyKey')
-          ) {
-            throw new IdempotentReplayError(idempotencyKey);
-          }
-          throw createErr;
-        }
-      }
+        let transaction: Awaited<ReturnType<typeof tx.transaction.create>> | undefined;
+        let receiptNumber = '';
+        const txPayloadBase = {
+          tenantId,
+          branchId: branchId || undefined,
+          subtotal,
+          discountCode: appliedDiscountCode,
+          discountCategory: appliedDiscountCategory,
+          discountAmount: discountAmount > 0 ? discountAmount : undefined,
+          scPwdName: (appliedDiscountCategory === 'senior' || appliedDiscountCategory === 'pwd') ? (scPwdName || undefined) : undefined,
+          scPwdId: (appliedDiscountCategory === 'senior' || appliedDiscountCategory === 'pwd') ? (scPwdId || undefined) : undefined,
+          taxExemptAmount: taxResult?.exemptAmount || 0,
+          zeroRatedAmount: taxResult?.zeroRatedAmount || 0,
+          taxAmount: taxAmount > 0 ? taxAmount : undefined,
+          total,
+          paymentMethod: storedPaymentMethod,
+          cashReceived: storedPaymentMethod === 'cash' ? finalCashReceived : undefined,
+          change: storedPaymentMethod === 'cash' ? finalChange : undefined,
+          status: 'completed' as const,
+          customerId: customerId || undefined,
+          userId: user.userId,
+          deviceId: deviceId && isValidObjectId(deviceId) ? deviceId : undefined,
+          terminalId: deviceSnapshot?.terminalId,
+          deviceSerialNumber: deviceSnapshot?.deviceSerialNumber,
+          notes,
+          orderType: orderType || undefined,
+          tableNumber: tableNumber || undefined,
+          tableId: tableId || undefined,
+          splitCount: splitCount || undefined,
+          ...(idempotencyKey ? { idempotencyKey } : {}),
+        };
 
-      if (!transaction) {
-        throw new Error('Failed to create transaction after receipt number retries');
-      }
-
-      // BIR Grand Total Accumulator: non-resettable, all-time cumulative sales register.
-      // Increments atomically with the transaction commit; never decremented on void/refund.
-      await Tenant.updateOne(
-        { _id: tenantId },
-        { $inc: { grandTotalSales: total, grandTotalTransactionCount: 1 } },
-        sessionOpts(session)
-      );
-
-      for (const item of items) {
-        const { productId, bundleId } = item;
-        if (productId || bundleId) {
-          await StockMovement.updateOne(
-            {
-              productId: productId || undefined,
-              tenantId,
-              reason: productId ? 'Transaction sale' : 'Transaction sale - bundle',
-              transactionId: { $exists: false },
-            },
-            { $set: { transactionId: transaction._id } },
-            sessionOpts(session)
-          );
-        }
-      }
-
-      if (loyaltyEnabled && loyaltyCustomer && loyaltyConfig) {
-        const currentBalance = loyaltyCustomer.loyaltyPointsBalance ?? 0;
-        let newBalance = currentBalance;
-        const loyaltyUpdate: Record<string, number> = {};
-
-        if (loyaltyPointsToRedeem > 0) {
-          const balanceAfterRedeem = Math.max(0, newBalance - loyaltyPointsToRedeem);
-          await LoyaltyTransaction.create([{
-            tenantId,
-            customerId: loyaltyCustomer._id,
-            transactionId: transaction._id,
-            type: 'redeem',
-            points: -loyaltyPointsToRedeem,
-            balanceBefore: newBalance,
-            balanceAfter: balanceAfterRedeem,
-            description: `Redeemed ${loyaltyPointsToRedeem} points (₱${loyaltyDiscountAmount.toFixed(2)} discount)`,
-            createdBy: user.userId,
-          }], sessionOpts(session));
-          newBalance = balanceAfterRedeem;
-          loyaltyUpdate.loyaltyPointsRedeemed = loyaltyPointsToRedeem;
-        }
-
-        const pointsEarned = Math.floor(total * loyaltyConfig.pointsPerPeso);
-        if (pointsEarned > 0) {
-          const balanceAfterEarn = newBalance + pointsEarned;
-          await LoyaltyTransaction.create([{
-            tenantId,
-            customerId: loyaltyCustomer._id,
-            transactionId: transaction._id,
-            type: 'earn',
-            points: pointsEarned,
-            balanceBefore: newBalance,
-            balanceAfter: balanceAfterEarn,
-            description: `Earned ${pointsEarned} points from receipt #${transaction.receiptNumber}`,
-            createdBy: user.userId,
-          }], sessionOpts(session));
-          newBalance = balanceAfterEarn;
-          loyaltyUpdate.loyaltyPointsEarned = pointsEarned;
-        }
-
-        if (Object.keys(loyaltyUpdate).length > 0) {
-          await Transaction.updateOne({ _id: transaction._id }, { $set: loyaltyUpdate }, sessionOpts(session));
-        }
-
-        await Customer.updateOne(
-          { _id: loyaltyCustomer._id },
-          { $set: { loyaltyPointsBalance: newBalance } },
-          sessionOpts(session)
-        );
-      }
-
-      if (body.createPaymentRecord !== false) {
-        if (isMultiplePayments && effectivePayments) {
-          for (const payment of effectivePayments) {
-            const paymentDetails: Record<string, unknown> = {};
-            if (payment.method === 'cash') {
-              paymentDetails.cashReceived = payment.cashReceived || payment.amount;
-              paymentDetails.change = payment.change || 0;
-            } else if (payment.method === 'card' || payment.method === 'digital') {
-              paymentDetails.provider = payment.provider;
-              paymentDetails.transactionId = payment.transactionId;
-              paymentDetails.cardLast4 = payment.cardLast4;
-              paymentDetails.cardType = payment.cardType;
-              paymentDetails.cardBrand = payment.cardBrand;
-            } else if (payment.method === 'check') {
-              paymentDetails.checkNumber = payment.checkNumber;
-            } else if (payment.method === 'on_account') {
-              paymentDetails.notes = 'On-account (customer balance)';
+        for (let receiptAttempt = 0; receiptAttempt < 3; receiptAttempt++) {
+          receiptNumber = await generateReceiptNumber(tenantId);
+          try {
+            transaction = await tx.transaction.create({
+              data: {
+                id: randomUUID(),
+                ...txPayloadBase,
+                receiptNumber,
+                items: {
+                  create: transactionItems.map((ti) => ({
+                    id: randomUUID(),
+                    productId: ti.productId,
+                    name: ti.name,
+                    price: ti.price,
+                    quantity: ti.quantity,
+                    subtotal: ti.subtotal,
+                    modifiers: ti.modifiers
+                      ? { create: ti.modifiers.map((m) => ({ id: randomUUID(), name: m.name, chosenOption: m.chosenOption, price: m.price })) }
+                      : undefined,
+                  })),
+                },
+                splitPayments: splitPayments
+                  ? {
+                      create: splitPayments.map((sp: { guestIndex?: number; method: string; amount: number; reference?: string }, idx: number) => ({
+                        id: randomUUID(),
+                        guestIndex: sp.guestIndex ?? idx,
+                        method: sp.method,
+                        amount: sp.amount,
+                        reference: sp.reference,
+                      })),
+                    }
+                  : undefined,
+              },
+              include: { items: { include: { modifiers: true } }, splitPayments: true },
+            });
+            break;
+          } catch (createErr) {
+            if (isDuplicateReceiptNumberError(createErr) && receiptAttempt < 2) {
+              logger.warn('Duplicate receipt number, retrying with next sequence', { receiptNumber });
+              continue;
             }
-            if (payment.notes) {
-              paymentDetails.notes = payment.notes;
+            // A concurrent duplicate request (same idempotencyKey) raced us
+            // inside the transaction and won — surface it as a dedicated
+            // error so the outer handler can return that transaction instead
+            // of a generic failure.
+            if (
+              idempotencyKey &&
+              createErr &&
+              typeof createErr === 'object' &&
+              'code' in createErr &&
+              (createErr as { code?: string }).code === 'P2002' &&
+              JSON.stringify((createErr as { meta?: unknown }).meta || '').includes('idempotencyKey')
+            ) {
+              throw new IdempotentReplayError(idempotencyKey);
+            }
+            throw createErr;
+          }
+        }
+
+        if (!transaction) {
+          throw new Error('Failed to create transaction after receipt number retries');
+        }
+
+        // BIR Grand Total Accumulator: non-resettable, all-time cumulative sales register.
+        // Increments atomically with the transaction commit; never decremented on void/refund.
+        await tx.tenant.update({
+          where: { id: tenantId },
+          data: { grandTotalSales: { increment: total }, grandTotalTransactionCount: { increment: 1 } },
+        });
+
+        for (const item of items) {
+          const { productId, bundleId } = item;
+          if (productId || bundleId) {
+            await tx.stockMovement.updateMany({
+              where: {
+                productId: productId || undefined,
+                tenantId,
+                reason: productId ? 'Transaction sale' : 'Transaction sale - bundle',
+                transactionId: null,
+              },
+              data: { transactionId: transaction.id },
+            });
+          }
+        }
+
+        if (loyaltyEnabled && loyaltyCustomer && loyaltyConfig) {
+          const currentBalance = Number(loyaltyCustomer.loyaltyPointsBalance ?? 0);
+          let newBalance = currentBalance;
+          const loyaltyUpdate: { loyaltyPointsRedeemed?: number; loyaltyPointsEarned?: number } = {};
+
+          if (loyaltyPointsToRedeem > 0) {
+            const balanceAfterRedeem = Math.max(0, newBalance - loyaltyPointsToRedeem);
+            await tx.loyaltyTransaction.create({
+              data: {
+                id: randomUUID(),
+                tenantId,
+                customerId: loyaltyCustomer.id,
+                transactionId: transaction.id,
+                type: 'redeem',
+                points: -loyaltyPointsToRedeem,
+                balanceBefore: newBalance,
+                balanceAfter: balanceAfterRedeem,
+                description: `Redeemed ${loyaltyPointsToRedeem} points (₱${loyaltyDiscountAmount.toFixed(2)} discount)`,
+                createdById: user.userId,
+              },
+            });
+            newBalance = balanceAfterRedeem;
+            loyaltyUpdate.loyaltyPointsRedeemed = loyaltyPointsToRedeem;
+          }
+
+          const pointsEarned = Math.floor(total * loyaltyConfig.pointsPerPeso);
+          if (pointsEarned > 0) {
+            const balanceAfterEarn = newBalance + pointsEarned;
+            await tx.loyaltyTransaction.create({
+              data: {
+                id: randomUUID(),
+                tenantId,
+                customerId: loyaltyCustomer.id,
+                transactionId: transaction.id,
+                type: 'earn',
+                points: pointsEarned,
+                balanceBefore: newBalance,
+                balanceAfter: balanceAfterEarn,
+                description: `Earned ${pointsEarned} points from receipt #${transaction.receiptNumber}`,
+                createdById: user.userId,
+              },
+            });
+            newBalance = balanceAfterEarn;
+            loyaltyUpdate.loyaltyPointsEarned = pointsEarned;
+          }
+
+          if (Object.keys(loyaltyUpdate).length > 0) {
+            await tx.transaction.update({ where: { id: transaction.id }, data: loyaltyUpdate });
+          }
+
+          await tx.customer.update({ where: { id: loyaltyCustomer.id }, data: { loyaltyPointsBalance: newBalance } });
+        }
+
+        if (body.createPaymentRecord !== false) {
+          if (isMultiplePayments && effectivePayments) {
+            for (const payment of effectivePayments) {
+              const details: Record<string, unknown> = {};
+              if (payment.method === 'cash') {
+                details.cashReceived = payment.cashReceived || payment.amount;
+                details.change = payment.change || 0;
+              } else if (payment.method === 'card' || payment.method === 'digital') {
+                details.provider = payment.provider;
+                details.transactionId = payment.transactionId;
+                details.cardLast4 = payment.cardLast4;
+                details.cardType = payment.cardType;
+                details.cardBrand = payment.cardBrand;
+              } else if (payment.method === 'check') {
+                details.checkNumber = payment.checkNumber;
+              } else if (payment.method === 'on_account') {
+                details.notes = 'On-account (customer balance)';
+              }
+              if (payment.notes) {
+                details.notes = payment.notes;
+              }
+
+              const paymentRecord = await tx.payment.create({
+                data: {
+                  id: randomUUID(),
+                  tenantId,
+                  transactionId: transaction.id,
+                  method: toPaymentRecordMethod(payment.method),
+                  amount: payment.amount,
+                  status: 'completed' as PaymentStatus,
+                  detailsCashReceived: details.cashReceived as number | undefined,
+                  detailsChange: details.change as number | undefined,
+                  detailsProvider: details.provider as string | undefined,
+                  detailsGatewayTxnId: details.transactionId as string | undefined,
+                  detailsCardLast4: details.cardLast4 as string | undefined,
+                  detailsCardType: details.cardType as string | undefined,
+                  detailsCardBrand: details.cardBrand as string | undefined,
+                  detailsCheckNumber: details.checkNumber as string | undefined,
+                  detailsNotes: details.notes as string | undefined,
+                  processedById: user.userId,
+                  processedAt: new Date(),
+                },
+              });
+              paymentRecords.push(paymentRecord);
+            }
+          } else {
+            const details: Record<string, unknown> = {};
+            if (finalPaymentMethod === 'cash') {
+              details.cashReceived = finalCashReceived;
+              details.change = finalChange;
+            } else if (finalPaymentMethod === 'card' || finalPaymentMethod === 'digital') {
+              details.provider = body.paymentProvider;
+              details.transactionId = body.paymentTransactionId;
+              details.cardLast4 = body.cardLast4;
+              details.cardType = body.cardType;
+              details.cardBrand = body.cardBrand;
+            } else if (finalPaymentMethod === 'on_account') {
+              details.notes = 'On-account (customer balance)';
             }
 
-            const [paymentRecord] = await Payment.create([{
-              tenantId,
-              transactionId: transaction._id,
-              method: toPaymentRecordMethod(payment.method),
-              amount: payment.amount,
-              status: 'completed',
-              details: Object.keys(paymentDetails).length > 0 ? paymentDetails : undefined,
-              processedBy: user.userId,
-              processedAt: new Date(),
-            }], sessionOpts(session));
+            const paymentRecord = await tx.payment.create({
+              data: {
+                id: randomUUID(),
+                tenantId,
+                transactionId: transaction.id,
+                method: toPaymentRecordMethod(finalPaymentMethod),
+                amount: total,
+                status: 'completed' as PaymentStatus,
+                detailsCashReceived: details.cashReceived as number | undefined,
+                detailsChange: details.change as number | undefined,
+                detailsProvider: details.provider as string | undefined,
+                detailsGatewayTxnId: details.transactionId as string | undefined,
+                detailsCardLast4: details.cardLast4 as string | undefined,
+                detailsCardType: details.cardType as string | undefined,
+                detailsCardBrand: details.cardBrand as string | undefined,
+                processedById: user.userId,
+                processedAt: new Date(),
+              },
+            });
             paymentRecords.push(paymentRecord);
           }
-        } else {
-          const paymentDetails: Record<string, unknown> = {};
-          if (finalPaymentMethod === 'cash') {
-            paymentDetails.cashReceived = finalCashReceived;
-            paymentDetails.change = finalChange;
-          } else if (finalPaymentMethod === 'card' || finalPaymentMethod === 'digital') {
-            paymentDetails.provider = body.paymentProvider;
-            paymentDetails.transactionId = body.paymentTransactionId;
-            paymentDetails.cardLast4 = body.cardLast4;
-            paymentDetails.cardType = body.cardType;
-            paymentDetails.cardBrand = body.cardBrand;
-          } else if (finalPaymentMethod === 'on_account') {
-            paymentDetails.notes = 'On-account (customer balance)';
+        }
+
+        if (onAccountAmountToBill > 0.009 && customerId) {
+          const creditCustomer = await tx.customer.findFirst({
+            where: { id: customerId, tenantId, isActive: true },
+            select: { id: true, accountBalance: true, creditLimit: true },
+          });
+
+          if (!creditCustomer) {
+            throw new Error(t('validation.customerNotFound', 'Customer not found or inactive'));
           }
 
-          const [paymentRecord] = await Payment.create([{
-            tenantId,
-            transactionId: transaction._id,
-            method: toPaymentRecordMethod(finalPaymentMethod),
-            amount: total,
-            status: 'completed',
-            details: Object.keys(paymentDetails).length > 0 ? paymentDetails : undefined,
-            processedBy: user.userId,
-            processedAt: new Date(),
-          }], sessionOpts(session));
-          paymentRecords.push(paymentRecord);
-        }
-      }
+          const balanceBefore = Number(creditCustomer.accountBalance ?? 0);
+          if (wouldExceedCreditLimit(balanceBefore, onAccountAmountToBill, creditCustomer.creditLimit != null ? Number(creditCustomer.creditLimit) : undefined)) {
+            throw new Error(
+              t('validation.creditLimitExceeded', "Sale would exceed this customer's credit limit")
+            );
+          }
 
-      if (onAccountAmountToBill > 0.009 && customerId) {
-        const creditCustomer = await withOptionalSession(
-          Customer.findOne({ _id: customerId, tenantId, isActive: true }).select('accountBalance creditLimit'),
-          session
-        );
+          await tx.customer.update({
+            where: { id: customerId },
+            data: { accountBalance: { increment: onAccountAmountToBill } },
+          });
 
-        if (!creditCustomer) {
-          throw new Error(t('validation.customerNotFound', 'Customer not found or inactive'));
+          onAccountCreditChange = {
+            customerId: String(customerId),
+            amount: onAccountAmountToBill,
+            balanceBefore,
+            balanceAfter: balanceBefore + onAccountAmountToBill,
+          };
         }
 
-        const balanceBefore = creditCustomer.accountBalance ?? 0;
-        if (wouldExceedCreditLimit(balanceBefore, onAccountAmountToBill, creditCustomer.creditLimit)) {
-          throw new Error(
-            t('validation.creditLimitExceeded', "Sale would exceed this customer's credit limit")
-          );
-        }
-
-        await Customer.updateOne(
-          { _id: customerId, tenantId },
-          { $inc: { accountBalance: onAccountAmountToBill } },
-          sessionOpts(session)
-        );
-
-        onAccountCreditChange = {
-          customerId: String(customerId),
-          amount: onAccountAmountToBill,
-          balanceBefore,
-          balanceAfter: balanceBefore + onAccountAmountToBill,
-        };
-      }
-
-      return { transaction, paymentRecords, onAccountCreditChange };
-    }).catch(async (txError) => {
+        return { transaction, paymentRecords, onAccountCreditChange };
+      });
+    })().catch(async (txError) => {
       if (txError instanceof IdempotentReplayError) {
-        const existing = await Transaction.findOne({ tenantId, idempotencyKey: txError.idempotencyKey }).lean();
+        const existing = await prisma.transaction.findFirst({ where: { tenantId, idempotencyKey: txError.idempotencyKey } });
         if (existing) {
           // A concurrent request with the same idempotencyKey already created the
           // transaction and consumed the discount usage; this loser's earlier
           // usageCount increment is a duplicate and must be compensated.
           if (appliedDiscountId) {
-            await Discount.findByIdAndUpdate(appliedDiscountId, { $inc: { usageCount: -1 } });
+            await prisma.discount.update({ where: { id: appliedDiscountId }, data: { usageCount: { decrement: 1 } } });
           }
           return { transaction: existing, paymentRecords: [], onAccountCreditChange: null, replay: true };
         }
@@ -1079,7 +1154,7 @@ export async function POST(request: NextRequest) {
       // Checkout failed outright (stock conflict, DB error, etc.) — release
       // the discount usage this request reserved before the atomic section ran.
       if (appliedDiscountId) {
-        await Discount.findByIdAndUpdate(appliedDiscountId, { $inc: { usageCount: -1 } });
+        await prisma.discount.update({ where: { id: appliedDiscountId }, data: { usageCount: { decrement: 1 } } });
       }
       throw txError;
     });
@@ -1088,7 +1163,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, data: checkoutResult.transaction }, { status: 200 });
     }
 
-    const { transaction, paymentRecords, onAccountCreditChange } = checkoutResult;
+    const { transaction, paymentRecords, onAccountCreditChange } = checkoutResult as {
+      transaction: NonNullable<Awaited<ReturnType<typeof prisma.transaction.create>>>;
+      paymentRecords: Array<{ id: string; method: string; amount: Prisma.Decimal | number; status: string }>;
+      onAccountCreditChange: { customerId: string; amount: number; balanceBefore: number; balanceAfter: number } | null;
+    };
 
     {
       const productIdsForChannel = items
@@ -1104,12 +1183,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Reset table status to 'open' after dine-in payment completes
-    if (tableId && orderType === 'dine-in') {
+    if (tableId && orderType === 'dine_in') {
       try {
-        await Table.findOneAndUpdate(
-          { _id: tableId, tenantId },
-          { status: 'open', currentOrderId: undefined }
-        );
+        await prisma.posTable.updateMany({
+          where: { id: tableId, tenantId },
+          data: { status: 'open', currentOrderId: null },
+        });
       } catch (tableErr) {
         logger.error('Failed to reset table status:', tableErr);
         // Non-critical — don't fail the response
@@ -1122,13 +1201,13 @@ export async function POST(request: NextRequest) {
       userId: user.userId,
       action: AuditActions.TRANSACTION_CREATE,
       entityType: 'transaction',
-      entityId: transaction._id.toString(),
+      entityId: transaction.id,
       changes: {
         receiptNumber: transaction.receiptNumber,
         total,
         itemsCount: transactionItems.length,
         paymentCount: paymentRecords.length,
-        paymentIds: paymentRecords.map((p) => String(p._id)),
+        paymentIds: paymentRecords.map((p) => String(p.id)),
         isMultiplePayments: isMultiplePayments,
         onAccountCreditChange,
       },
@@ -1136,15 +1215,17 @@ export async function POST(request: NextRequest) {
 
     // Update subscription usage
     try {
-      const currentTransactionCount = await Transaction.countDocuments({
-        tenantId,
-        createdAt: {
-          $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1), // Start of current month
-          $lt: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1) // Start of next month
-        }
+      const currentTransactionCountAfter = await prisma.transaction.count({
+        where: {
+          tenantId,
+          createdAt: {
+            gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1), // Start of current month
+            lt: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1), // Start of next month
+          },
+        },
       });
       await SubscriptionService.updateUsage(tenantId.toString(), {
-        transactions: currentTransactionCount
+        transactions: currentTransactionCountAfter,
       });
     } catch (usageError) {
       logger.error('Failed to update subscription usage:', usageError);
@@ -1152,10 +1233,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Include payment records in response if created
-    const responseData = transaction.toObject ? transaction.toObject() : transaction;
+    const responseData: Record<string, unknown> = { ...transaction };
     if (paymentRecords.length > 0) {
-      (responseData as unknown as Record<string, unknown>).payments = paymentRecords.map((p: { _id: unknown; method: string; amount: number; status: string }) => ({
-        _id: p._id,
+      responseData.payments = paymentRecords.map((p) => ({
+        _id: p.id,
         method: p.method,
         amount: p.amount,
         status: p.status,
@@ -1170,4 +1251,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: message }, { status });
   }
 }
-

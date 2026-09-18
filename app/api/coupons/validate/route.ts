@@ -1,16 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
+import prisma from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
-import { validateCoupon, CouponError } from '@/lib/coupons';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+
+class CouponError extends Error {}
 
 // Preview-only: validates a coupon code and returns its discount shape so a
 // pricing page can show a discounted total before checkout. Never reserves a
 // use — that happens atomically in subscriptions/activate at actual payment
 // capture time.
+//
+// NOTE: this endpoint validates coupon existence/validity only (not
+// tenant-scoped data — Coupon is a global, non-tenant-scoped model used by
+// the super-admin billing system).
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     await requireAuth(request);
 
     // Coupon codes are typically short and guessable — throttle probing.
@@ -29,16 +33,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'code is required' }, { status: 400 });
     }
 
-    const coupon = await validateCoupon(code);
+    const coupon = await prisma.coupon.findUnique({
+      where: { code: code.toUpperCase() },
+      include: { plans: true },
+    });
+    if (!coupon) throw new CouponError('Coupon code not found');
+    if (!coupon.isActive) throw new CouponError('This coupon is no longer active');
+
+    const now = new Date();
+    if (coupon.validFrom && coupon.validFrom > now) throw new CouponError('This coupon is not yet valid');
+    if (coupon.validUntil && coupon.validUntil < now) throw new CouponError('This coupon has expired');
+
+    if (typeof coupon.maxUses === 'number' && coupon.usedCount >= coupon.maxUses) {
+      throw new CouponError('This coupon has reached its usage limit');
+    }
 
     return NextResponse.json({
       success: true,
       data: {
         code: coupon.code,
         discountType: coupon.discountType,
-        discountValue: coupon.discountValue,
+        discountValue: Number(coupon.discountValue),
         appliesTo: coupon.appliesTo,
-        planIds: coupon.planIds.map((id) => id.toString()),
+        planIds: coupon.plans.map((p) => p.planId),
       },
     });
   } catch (error: unknown) {

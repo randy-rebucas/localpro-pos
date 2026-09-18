@@ -1,19 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import SubscriptionPlan from '@/models/SubscriptionPlan';
+import { randomUUID } from 'crypto';
+import prisma from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 
 export async function GET(request: NextRequest) { // eslint-disable-line @typescript-eslint/no-unused-vars
   try {
-    await connectDB();
-
     // This route has no auth/tenant context, so it can't tell a grandfathered
     // subscriber apart from a first-time browser — it returns all active plans
-    // and leaves the availableToNewTenants decision to callers that *do* know
-    // the requesting tenant's current plan (see subscription/page.tsx).
-    const plans = await SubscriptionPlan.find({ isActive: true })
-      .sort({ 'price.monthly': 1 })
-      .lean();
+    // (SubscriptionPlan is a global catalog, not tenant-scoped) and leaves the
+    // availableToNewTenants decision to callers that *do* know the requesting
+    // tenant's current plan (see subscription/page.tsx).
+    const plans = await prisma.subscriptionPlan.findMany({
+      where: { isActive: true },
+      orderBy: { priceMonthly: 'asc' },
+    });
 
     return NextResponse.json({ success: true, data: plans });
   } catch (_error: unknown) {
@@ -23,7 +23,6 @@ export async function GET(request: NextRequest) { // eslint-disable-line @typesc
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     // Creating a global subscription plan tier (visible to every tenant) — super_admin only
     await requireRole(request, ['super_admin']);
 
@@ -38,7 +37,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if tier already exists
-    const existingPlan = await SubscriptionPlan.findOne({ tier });
+    const existingPlan = await prisma.subscriptionPlan.findUnique({ where: { tier } });
     if (existingPlan) {
       return NextResponse.json(
         { success: false, error: 'A plan with this tier already exists' },
@@ -46,16 +45,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const planData = {
-      name,
-      tier,
-      description,
-      price: {
-        monthly: price.monthly,
-        setupFee: price.setupFee || 0,
-        currency: price.currency || 'PHP',
-      },
-      features: {
+    const plan = await prisma.subscriptionPlan.create({
+      data: {
+        id: randomUUID(),
+        name,
+        tier,
+        description,
+        priceMonthly: price.monthly,
+        priceSetupFee: price.setupFee || 0,
+        priceCurrency: price.currency || 'PHP',
         maxUsers: features?.maxUsers || 1,
         maxBranches: features?.maxBranches || 1,
         maxProducts: features?.maxProducts || 0,
@@ -72,24 +70,20 @@ export async function POST(request: NextRequest) {
         prioritySupport: features?.prioritySupport ?? false,
         customIntegrations: features?.customIntegrations ?? false,
         dedicatedAccountManager: features?.dedicatedAccountManager ?? false,
-      },
-      birCompliance: {
-        ptuAssistance: birCompliance?.ptuAssistance ?? false,
-        receiptFormatting: birCompliance?.receiptFormatting ?? false,
+        birPtuAssistance: birCompliance?.ptuAssistance ?? false,
+        birReceiptFormatting: birCompliance?.receiptFormatting ?? false,
         birDocumentation: birCompliance?.birDocumentation ?? false,
-        casReporting: birCompliance?.casReporting ?? false,
-        auditTrailSystem: birCompliance?.auditTrailSystem ?? false,
-        monthlySupport: birCompliance?.monthlySupport ?? false,
+        birCasReporting: birCompliance?.casReporting ?? false,
+        birAuditTrailSystem: birCompliance?.auditTrailSystem ?? false,
+        birMonthlySupport: birCompliance?.monthlySupport ?? false,
+        isActive: true,
+        isCustom,
       },
-      isActive: true,
-      isCustom,
-    };
-
-    const plan = await SubscriptionPlan.create(planData);
+    });
 
     return NextResponse.json({ success: true, data: plan }, { status: 201 });
   } catch (error: unknown) {
-    if ((error as Record<string, unknown>).code === 11000) {
+    if ((error as { code?: string }).code === 'P2002') {
       return NextResponse.json(
         { success: false, error: 'Plan tier already exists' },
         { status: 400 }

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
@@ -19,20 +18,31 @@ export async function GET(
     }
 
     const { slug } = await params;
-    await connectDB();
-
-    const tenant = await Tenant.findOne({ slug, isActive: true }).lean();
+    const tenant = await prisma.tenant.findFirst({ where: { slug, isActive: true }, include: { settings: true } });
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
+    const s = tenant.settings;
     return NextResponse.json({
       success: true,
-      data: tenant.settings?.pharmacyCompliance ?? {},
+      data: {
+        pharmacistName: s?.pharmacistName ?? undefined,
+        pharmacistPRCNumber: s?.pharmacistPRCNumber ?? undefined,
+        pharmacistPTRNumber: s?.pharmacistPTRNumber ?? undefined,
+        fdaLTO: s?.fdaLTO ?? undefined,
+        fdaLTOExpiryDate: s?.fdaLTOExpiryDate ?? undefined,
+        dohAccreditation: s?.pharmacyDohAccreditation ?? undefined,
+        pdeaLicense: s?.pdeaLicense ?? undefined,
+        pdeaLicenseExpiry: s?.pdeaLicenseExpiry ?? undefined,
+        requirePrescriptionForRx: s?.requirePrescriptionForRx ?? undefined,
+        trackExpiryDates: s?.trackExpiryDates ?? undefined,
+        expiryAlertDays: s?.expiryAlertDays ?? undefined,
+      },
     });
   } catch (error: unknown) {
     return handleApiError(error, 'Failed to fetch pharmacy settings');
@@ -55,23 +65,21 @@ export async function PUT(
     }
 
     const { slug } = await params;
-    await connectDB();
-
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await prisma.tenant.findFirst({ where: { slug } });
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    if (!(await hasTenantPermission(user.role, tenant._id.toString(), 'pharmacy_compliance.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenant.id, 'pharmacy_compliance.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
     try {
-      await checkPharmacyFeatureAccess(tenant._id.toString(), 'enablePharmacyCompliance');
+      await checkPharmacyFeatureAccess(tenant.id, 'enablePharmacyCompliance');
     } catch (featureError: unknown) {
       return NextResponse.json(
         { success: false, error: featureError instanceof Error ? featureError.message : 'Feature not available' },
@@ -87,32 +95,33 @@ export async function PUT(
       requirePrescriptionForRx, trackExpiryDates, expiryAlertDays,
     } = body;
 
-    if (!tenant.settings.pharmacyCompliance) {
-      tenant.settings.pharmacyCompliance = {} as never;
-    }
+    const data: Record<string, unknown> = {};
+    if (pharmacistName !== undefined) data.pharmacistName = pharmacistName || null;
+    if (pharmacistPRCNumber !== undefined) data.pharmacistPRCNumber = pharmacistPRCNumber || null;
+    if (pharmacistPTRNumber !== undefined) data.pharmacistPTRNumber = pharmacistPTRNumber || null;
+    if (fdaLTO !== undefined) data.fdaLTO = fdaLTO || null;
+    if (fdaLTOExpiryDate !== undefined) data.fdaLTOExpiryDate = fdaLTOExpiryDate ? new Date(fdaLTOExpiryDate) : null;
+    // Note: source field is Mongoose `settings.pharmacyCompliance.dohAccreditation`;
+    // Prisma column is `pharmacyDohAccreditation` (see prisma/schema.prisma).
+    if (dohAccreditation !== undefined) data.pharmacyDohAccreditation = dohAccreditation || null;
+    if (pdeaLicense !== undefined) data.pdeaLicense = pdeaLicense || null;
+    if (pdeaLicenseExpiry !== undefined) data.pdeaLicenseExpiry = pdeaLicenseExpiry ? new Date(pdeaLicenseExpiry) : null;
+    if (requirePrescriptionForRx !== undefined) data.requirePrescriptionForRx = requirePrescriptionForRx;
+    if (trackExpiryDates !== undefined) data.trackExpiryDates = trackExpiryDates;
+    if (expiryAlertDays !== undefined) data.expiryAlertDays = Number(expiryAlertDays);
 
-    const pc = tenant.settings.pharmacyCompliance as Record<string, unknown>;
-    if (pharmacistName !== undefined) pc.pharmacistName = pharmacistName || undefined;
-    if (pharmacistPRCNumber !== undefined) pc.pharmacistPRCNumber = pharmacistPRCNumber || undefined;
-    if (pharmacistPTRNumber !== undefined) pc.pharmacistPTRNumber = pharmacistPTRNumber || undefined;
-    if (fdaLTO !== undefined) pc.fdaLTO = fdaLTO || undefined;
-    if (fdaLTOExpiryDate !== undefined) pc.fdaLTOExpiryDate = fdaLTOExpiryDate ? new Date(fdaLTOExpiryDate) : undefined;
-    if (dohAccreditation !== undefined) pc.dohAccreditation = dohAccreditation || undefined;
-    if (pdeaLicense !== undefined) pc.pdeaLicense = pdeaLicense || undefined;
-    if (pdeaLicenseExpiry !== undefined) pc.pdeaLicenseExpiry = pdeaLicenseExpiry ? new Date(pdeaLicenseExpiry) : undefined;
-    if (requirePrescriptionForRx !== undefined) pc.requirePrescriptionForRx = requirePrescriptionForRx;
-    if (trackExpiryDates !== undefined) pc.trackExpiryDates = trackExpiryDates;
-    if (expiryAlertDays !== undefined) pc.expiryAlertDays = Number(expiryAlertDays);
-
-    tenant.markModified('settings');
-    await tenant.save();
+    await prisma.tenantSettings.upsert({
+      where: { tenantId: tenant.id },
+      create: { tenantId: tenant.id, ...data },
+      update: data,
+    });
 
     await createAuditLog(request, {
-      tenantId: tenant._id,
+      tenantId: tenant.id,
       userId: user.userId,
       action: AuditActions.PHARMACY_SETTINGS_UPDATE,
       entityType: 'pharmacy_settings',
-      entityId: tenant._id.toString(),
+      entityId: tenant.id,
       changes: body,
     });
 

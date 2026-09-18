@@ -1,10 +1,7 @@
-import mongoose from 'mongoose';
-import connectDB from './mongodb';
-import Product from '@/models/Product';
-import ProductBundle from '@/models/ProductBundle';
-import StockMovement from '@/models/StockMovement';
+import { randomUUID } from 'crypto';
+import prisma from '@/lib/db';
+import type { Prisma } from '@prisma/client';
 import { logger } from '@/lib/logger';
-import { IProductVariation } from '@/models/Product'; // eslint-disable-line @typescript-eslint/no-unused-vars
 
 export interface StockUpdateOptions {
   transactionId?: string;
@@ -17,6 +14,33 @@ export interface StockUpdateOptions {
     color?: string;
     type?: string;
   };
+}
+
+/** Prisma client or an in-flight `prisma.$transaction` callback client. */
+type PrismaClientOrTx = typeof prisma | Prisma.TransactionClient;
+
+/**
+ * Typed as `unknown` (not `PrismaClientOrTx`) because a handful of callers
+ * (e.g. app/api/prescriptions/[id]/dispense/route.ts,
+ * lib/ecommerce/import-channel-order.ts) are still on the pre-Prisma
+ * Mongoose migration and pass a `mongoose.ClientSession` here — out of scope
+ * for this change. Once those callers move to Prisma this can tighten back
+ * to `PrismaClientOrTx | undefined`.
+ */
+type SessionArg = unknown;
+
+function resolveClient(tx: SessionArg): PrismaClientOrTx {
+  return (tx as PrismaClientOrTx | undefined) ?? prisma;
+}
+
+function matchesVariation(
+  v: { size: string | null; color: string | null; type: string | null },
+  variation?: { size?: string; color?: string; type?: string }
+): boolean {
+  const matchSize = !variation?.size || v.size === variation.size;
+  const matchColor = !variation?.color || v.color === variation.color;
+  const matchType = !variation?.type || v.type === variation.type;
+  return matchSize && matchColor && matchType;
 }
 
 /**
@@ -34,9 +58,10 @@ export async function getProductStock(
     };
   } = {}
 ): Promise<number> {
-  await connectDB();
-
-  const product = await Product.findOne({ _id: productId, tenantId });
+  const product = await prisma.product.findFirst({
+    where: { id: productId, tenantId },
+    include: { variations: true, branchStock: true },
+  });
   if (!product) {
     throw new Error('Product not found');
   }
@@ -47,18 +72,12 @@ export async function getProductStock(
   }
 
   // If product has variations, check variation stock
-  if (product.hasVariations && options.variation && product.variations) {
-    const variationOption = options.variation;
-    const variation = product.variations.find((v) => {
-      const matchSize = !variationOption.size || v.size === variationOption.size;
-      const matchColor = !variationOption.color || v.color === variationOption.color;
-      const matchType = !variationOption.type || v.type === variationOption.type;
-      return matchSize && matchColor && matchType;
-    });
+  if (product.hasVariations && options.variation && product.variations.length > 0) {
+    const variation = product.variations.find((v) => matchesVariation(v, options.variation));
 
     if (variation && variation.stock !== undefined) {
       // If branch-specific stock is requested
-      if (options.branchId && product.branchStock) {
+      if (options.branchId && product.branchStock.length > 0) {
         // For variations with branches, we'd need to extend the model
         // For now, return variation stock
         return variation.stock;
@@ -69,10 +88,8 @@ export async function getProductStock(
   }
 
   // If branch-specific stock is requested
-  if (options.branchId && product.branchStock) {
-    const branchStock = product.branchStock.find(
-      (bs) => bs.branchId.toString() === options.branchId
-    );
+  if (options.branchId && product.branchStock.length > 0) {
+    const branchStock = product.branchStock.find((bs) => bs.branchId === options.branchId);
     if (branchStock) {
       return branchStock.stock;
     }
@@ -93,13 +110,14 @@ export async function updateStock(
   quantity: number,
   type: 'sale' | 'purchase' | 'adjustment' | 'return' | 'damage' | 'transfer',
   options: StockUpdateOptions = {},
-  session?: mongoose.ClientSession
+  tx?: SessionArg
 ): Promise<void> {
-  await connectDB();
+  const client = resolveClient(tx);
 
-  const query = Product.findOne({ _id: productId, tenantId });
-  if (session) query.session(session);
-  const product = await query;
+  const product = await client.product.findFirst({
+    where: { id: productId, tenantId },
+    include: { variations: true, branchStock: true },
+  });
   if (!product) {
     throw new Error('Product not found');
   }
@@ -112,22 +130,16 @@ export async function updateStock(
 
   let previousStock: number;
   let newStock: number;
-  let updateField: string = 'stock';
 
   // Handle variations
-  if (product.hasVariations && options.variation && product.variations) {
-    const variationIndex = product.variations.findIndex((v) => {
-      const matchSize = !options.variation?.size || v.size === options.variation.size;
-      const matchColor = !options.variation?.color || v.color === options.variation.color;
-      const matchType = !options.variation?.type || v.type === options.variation.type;
-      return matchSize && matchColor && matchType;
-    });
+  if (product.hasVariations && options.variation && product.variations.length > 0) {
+    const variation = product.variations.find((v) => matchesVariation(v, options.variation));
 
-    if (variationIndex === -1) {
+    if (!variation) {
       throw new Error('Product variation not found');
     }
 
-    previousStock = product.variations[variationIndex].stock || 0;
+    previousStock = variation.stock || 0;
     newStock = previousStock + quantity;
 
     // Only check for negative stock if product doesn't allow out-of-stock sales
@@ -137,25 +149,29 @@ export async function updateStock(
       );
     }
 
-    product.variations[variationIndex].stock = newStock;
-    updateField = `variations.${variationIndex}.stock`;
+    await client.productVariation.update({
+      where: { id: variation.id },
+      data: { stock: newStock },
+    });
   }
   // Handle branch-specific stock
   else if (options.branchId && product.branchStock) {
-    const branchStockIndex = product.branchStock.findIndex(
-      (bs) => bs.branchId.toString() === options.branchId
-    );
+    const branchStock = product.branchStock.find((bs) => bs.branchId === options.branchId);
 
-    if (branchStockIndex === -1) {
+    if (!branchStock) {
       // Create new branch stock entry
-      product.branchStock.push({
-        branchId: options.branchId as any, // eslint-disable-line @typescript-eslint/no-explicit-any
-        stock: quantity,
-      });
       previousStock = 0;
       newStock = quantity;
+      await client.productBranchStock.create({
+        data: {
+          id: randomUUID(),
+          productId,
+          branchId: options.branchId,
+          stock: newStock,
+        },
+      });
     } else {
-      previousStock = product.branchStock[branchStockIndex].stock;
+      previousStock = branchStock.stock;
       newStock = previousStock + quantity;
 
       // Only check for negative stock if product doesn't allow out-of-stock sales
@@ -165,9 +181,11 @@ export async function updateStock(
         );
       }
 
-      product.branchStock[branchStockIndex].stock = newStock;
+      await client.productBranchStock.update({
+        where: { id: branchStock.id },
+        data: { stock: newStock },
+      });
     }
-    updateField = `branchStock.${branchStockIndex}.stock`; // eslint-disable-line @typescript-eslint/no-unused-vars
   }
   // Handle master stock
   else {
@@ -181,51 +199,35 @@ export async function updateStock(
       );
     }
 
-    product.stock = newStock;
-  }
-
-  // Mark nested arrays as modified if needed
-  if (product.isModified('variations')) {
-    product.markModified('variations');
-  }
-  if (product.isModified('branchStock')) {
-    product.markModified('branchStock');
-  }
-
-  try {
-    await product.save(session ? { session } : {});
-  } catch (err: unknown) {
-    if (err instanceof Error && err.name === 'VersionError') {
-      throw new Error(
-        `Stock for product ${productId} was updated by another request at the same time. Please retry.`
-      );
-    }
-    throw err;
+    await client.product.update({
+      where: { id: productId },
+      data: { stock: newStock },
+    });
   }
 
   // Log the update for debugging
   logger.info(`Stock updated: Product ${productId}, ${previousStock} -> ${newStock} (${quantity > 0 ? '+' : ''}${quantity})`);
 
   // Create stock movement record
-  const movementData = {
-    productId,
-    tenantId,
-    branchId: options.branchId,
-    variation: options.variation,
-    type,
-    quantity,
-    previousStock,
-    newStock,
-    reason: options.reason,
-    transactionId: options.transactionId,
-    userId: options.userId,
-    notes: options.notes,
-  };
-  if (session) {
-    await StockMovement.create([movementData], { session });
-  } else {
-    await StockMovement.create(movementData);
-  }
+  await client.stockMovement.create({
+    data: {
+      id: randomUUID(),
+      productId,
+      tenantId,
+      branchId: options.branchId,
+      variationSize: options.variation?.size,
+      variationColor: options.variation?.color,
+      variationType: options.variation?.type,
+      type,
+      quantity,
+      previousStock,
+      newStock,
+      reason: options.reason,
+      transactionId: options.transactionId,
+      userId: options.userId,
+      notes: options.notes,
+    },
+  });
 }
 
 /**
@@ -237,13 +239,14 @@ export async function updateBundleStock(
   quantity: number,
   type: 'sale' | 'purchase' | 'adjustment' | 'return' | 'damage' | 'transfer',
   options: StockUpdateOptions = {},
-  session?: mongoose.ClientSession
+  tx?: SessionArg
 ): Promise<void> {
-  await connectDB();
+  const client = resolveClient(tx);
 
-  const bundleQuery = ProductBundle.findOne({ _id: bundleId, tenantId });
-  if (session) bundleQuery.session(session);
-  const bundle = await bundleQuery;
+  const bundle = await client.productBundle.findFirst({
+    where: { id: bundleId, tenantId },
+    include: { items: true },
+  });
   if (!bundle) {
     throw new Error('Bundle not found');
   }
@@ -256,17 +259,24 @@ export async function updateBundleStock(
   for (const item of bundle.items) {
     const itemQuantity = item.quantity * quantity; // Multiply by bundle quantity
     await updateStock(
-      item.productId.toString(),
+      item.productId,
       tenantId,
       -itemQuantity, // Negative for sale, positive for purchase
       type,
       {
         ...options,
-        variation: item.variation,
+        variation:
+          item.variationSize || item.variationColor || item.variationType
+            ? {
+                size: item.variationSize ?? undefined,
+                color: item.variationColor ?? undefined,
+                type: item.variationType ?? undefined,
+              }
+            : undefined,
         reason: options.reason || `Bundle ${type}: ${bundle.name}`,
         notes: options.notes || `Part of bundle: ${bundle.name}`,
       },
-      session
+      client
     );
   }
 }
@@ -287,29 +297,28 @@ export async function getStockMovements(
     limit?: number;
   } = {}
 ) {
-  await connectDB();
+  const where: Prisma.StockMovementWhereInput = { productId, tenantId };
 
-  const query: any = { productId, tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
-  
   if (options.branchId) {
-    query.branchId = options.branchId;
+    where.branchId = options.branchId;
   }
 
   if (options.variation) {
-    const variationQuery: any = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (options.variation.size) variationQuery['variation.size'] = options.variation.size;
-    if (options.variation.color) variationQuery['variation.color'] = options.variation.color;
-    if (options.variation.type) variationQuery['variation.type'] = options.variation.type;
-    Object.assign(query, variationQuery);
+    if (options.variation.size) where.variationSize = options.variation.size;
+    if (options.variation.color) where.variationColor = options.variation.color;
+    if (options.variation.type) where.variationType = options.variation.type;
   }
 
-  return StockMovement.find(query)
-    .sort({ createdAt: -1 })
-    .limit(options.limit || 50)
-    .populate('userId', 'name email')
-    .populate('transactionId', 'receiptNumber total')
-    .populate('branchId', 'name code')
-    .lean();
+  return prisma.stockMovement.findMany({
+    where,
+    orderBy: { createdAt: 'desc' },
+    take: options.limit || 50,
+    include: {
+      user: { select: { name: true, email: true } },
+      transaction: { select: { receiptNumber: true, total: true } },
+      branch: { select: { name: true, code: true } },
+    },
+  });
 }
 
 /**
@@ -320,9 +329,7 @@ export async function checkLowStock(
   tenantId: string,
   threshold?: number
 ): Promise<boolean> {
-  await connectDB();
-
-  const product = await Product.findOne({ _id: productId, tenantId });
+  const product = await prisma.product.findFirst({ where: { id: productId, tenantId } });
   if (!product) {
     return false;
   }
@@ -345,13 +352,14 @@ export async function getLowStockProducts(
   branchId?: string,
   threshold?: number
 ): Promise<any[]> { // eslint-disable-line @typescript-eslint/no-explicit-any
-  await connectDB();
-
-  const products = await Product.find({
-    tenantId,
-    trackInventory: true,
-    isActive: { $ne: false },
-  }).lean();
+  const products = await prisma.product.findMany({
+    where: {
+      tenantId,
+      trackInventory: true,
+      isActive: { not: false },
+    },
+    include: { variations: true, branchStock: true },
+  });
 
   const lowStockProducts = [];
 
@@ -359,7 +367,7 @@ export async function getLowStockProducts(
     let isLowStock = false;
     let currentStock = 0;
 
-    if (product.hasVariations && product.variations) {
+    if (product.hasVariations && product.variations.length > 0) {
       // Check each variation
       for (const variation of product.variations) {
         const stock = variation.stock || 0;
@@ -369,10 +377,8 @@ export async function getLowStockProducts(
           currentStock = Math.min(currentStock || stock, stock);
         }
       }
-    } else if (branchId && product.branchStock) {
-      const branchStock = product.branchStock.find(
-        (bs) => bs.branchId.toString() === branchId
-      );
+    } else if (branchId && product.branchStock.length > 0) {
+      const branchStock = product.branchStock.find((bs) => bs.branchId === branchId);
       if (branchStock) {
         currentStock = branchStock.stock;
         const stockThreshold = threshold || product.lowStockThreshold || 10;

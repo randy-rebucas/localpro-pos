@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Booking from '@/models/Booking';
-import Tenant from '@/models/Tenant';
+import { randomUUID } from 'crypto';
+import prisma from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { validateEmail } from '@/lib/validation'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -15,7 +14,6 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 export async function POST(request: NextRequest) {
   let t: (key: string, fallback: string) => string;
   try {
-    await connectDB();
     t = await getValidationTranslatorFromRequest(request);
 
     const currentUser = await requireAuth(request);
@@ -29,11 +27,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Resolve tenant
-    const tenant = await Tenant.findOne({
-      $or: [{ slug: tenantId }, ...(tenantId.match(/^[0-9a-fA-F]{24}$/) ? [{ _id: tenantId }] : [])],
-      isActive: true,
-    }).lean();
+    // Resolve tenant (accept slug or id)
+    const tenant = await prisma.tenant.findFirst({
+      where: {
+        OR: [{ slug: tenantId }, { id: tenantId }],
+        isActive: true,
+      },
+    });
 
     if (!tenant) {
       return NextResponse.json(
@@ -43,8 +43,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get user details for customer info
-    const User = (await import('@/models/User')).default;
-    const user = await User.findById(currentUser.userId).lean();
+    const user = await prisma.user.findUnique({ where: { id: currentUser.userId } });
     if (!user) {
       return NextResponse.json(
         { success: false, error: t('validation.userNotFound', 'User not found') },
@@ -78,47 +77,61 @@ export async function POST(request: NextRequest) {
 
     const bookingEndTime = new Date(bookingStartTime.getTime() + durationMinutes * 60000);
 
-    // Check for time conflicts
-    const conflictQuery: Record<string, any> = { // eslint-disable-line @typescript-eslint/no-explicit-any
-      tenantId: tenant._id,
-      status: { $in: ['pending', 'confirmed'] },
-      $or: [
-        { startTime: { $lt: bookingEndTime }, endTime: { $gt: bookingStartTime } },
-      ],
-    };
+    // Create inside a transaction with an app-level overlap re-check so the
+    // conflict read and the insert share one snapshot (the original Mongoose
+    // model's pre('save') hook re-checked overlap immediately before every
+    // write; Postgres doesn't have that model-level hook, so we replicate
+    // the same guarantee explicitly here).
+    let booking;
+    try {
+      booking = await prisma.$transaction(async (tx) => {
+        const conflict = await tx.booking.findFirst({
+          where: {
+            tenantId: tenant.id,
+            status: { in: ['pending', 'confirmed'] },
+            startTime: { lt: bookingEndTime },
+            endTime: { gt: bookingStartTime },
+            ...(staffId ? { staffId } : {}),
+          },
+        });
 
-    if (staffId) {
-      conflictQuery.staffId = staffId;
+        if (conflict) {
+          throw new Error('TIME_SLOT_CONFLICT');
+        }
+
+        return tx.booking.create({
+          data: {
+            id: randomUUID(),
+            tenantId: tenant.id,
+            customerName: user.name,
+            customerEmail: user.email,
+            serviceName,
+            serviceDescription,
+            startTime: bookingStartTime,
+            endTime: bookingEndTime,
+            duration: durationMinutes,
+            staffId: staffId || undefined,
+            notes,
+            status: 'pending',
+          },
+        });
+      });
+    } catch (txError) {
+      if (txError instanceof Error && txError.message === 'TIME_SLOT_CONFLICT') {
+        return NextResponse.json(
+          { success: false, error: t('validation.timeSlotConflict', 'This time slot is not available') },
+          { status: 409 }
+        );
+      }
+      throw txError;
     }
-
-    const conflict = await Booking.findOne(conflictQuery).lean();
-    if (conflict) {
-      return NextResponse.json(
-        { success: false, error: t('validation.timeSlotConflict', 'This time slot is not available') },
-        { status: 409 }
-      );
-    }
-
-    const booking = await Booking.create({
-      tenantId: tenant._id,
-      customerName: user.name,
-      customerEmail: user.email,
-      serviceName,
-      serviceDescription,
-      startTime: bookingStartTime,
-      endTime: bookingEndTime,
-      duration: durationMinutes,
-      staffId: staffId || undefined,
-      notes,
-      status: 'pending',
-    });
 
     await createAuditLog(request, {
-      tenantId: tenant._id.toString(),
+      tenantId: tenant.id,
       userId: currentUser.userId,
       action: AuditActions.CREATE,
       entityType: 'booking',
-      entityId: booking._id.toString(),
+      entityId: booking.id,
       metadata: { source: 'client', userId: currentUser.userId },
     });
 
@@ -141,7 +154,6 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   let t: (key: string, fallback: string) => string;
   try {
-    await connectDB();
     t = await getValidationTranslatorFromRequest(request);
 
     const currentUser = await requireAuth(request);
@@ -165,10 +177,12 @@ export async function GET(request: NextRequest) {
     }
 
     // Resolve tenant
-    const tenant = await Tenant.findOne({
-      $or: [{ slug: tenantIdParam }, ...(tenantIdParam.match(/^[0-9a-fA-F]{24}$/) ? [{ _id: tenantIdParam }] : [])],
-      isActive: true,
-    }).lean();
+    const tenant = await prisma.tenant.findFirst({
+      where: {
+        OR: [{ slug: tenantIdParam }, { id: tenantIdParam }],
+        isActive: true,
+      },
+    });
 
     if (!tenant) {
       return NextResponse.json(
@@ -178,8 +192,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get user email to match bookings
-    const User = (await import('@/models/User')).default;
-    const user = await User.findById(userId).lean();
+    const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
       return NextResponse.json(
         { success: false, error: t('validation.userNotFound', 'User not found') },
@@ -188,18 +201,15 @@ export async function GET(request: NextRequest) {
     }
 
     const status = searchParams.get('status');
-    const filter: Record<string, any> = { // eslint-disable-line @typescript-eslint/no-explicit-any
-      tenantId: tenant._id,
-      customerEmail: user.email,
-    };
 
-    if (status) {
-      filter.status = status;
-    }
-
-    const bookings = await Booking.find(filter)
-      .sort({ startTime: -1 })
-      .lean();
+    const bookings = await prisma.booking.findMany({
+      where: {
+        tenantId: tenant.id,
+        customerEmail: user.email,
+        ...(status ? { status: status as never } : {}),
+      },
+      orderBy: { startTime: 'desc' },
+    });
 
     return NextResponse.json({ success: true, data: bookings });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any

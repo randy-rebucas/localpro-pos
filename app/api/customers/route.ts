@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import type { FilterQuery } from 'mongoose';
-import connectDB from '@/lib/mongodb';
-import Customer, { type ICustomer } from '@/models/Customer';
+import { randomUUID } from 'crypto';
+import prisma from '@/lib/db';
+import { Prisma } from '@prisma/client';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -12,10 +12,29 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
 import { parseCreditLimitInput } from '@/lib/customer-credit';
 
+function toCustomerJSON(c: Prisma.CustomerGetPayload<{ include: { addresses: true } }>) {
+  const { addresses, ...rest } = c;
+  return {
+    ...rest,
+    _id: c.id,
+    totalSpent: Number(c.totalSpent),
+    loyaltyPointsBalance: Number(c.loyaltyPointsBalance),
+    accountBalance: Number(c.accountBalance),
+    creditLimit: c.creditLimit != null ? Number(c.creditLimit) : undefined,
+    addresses: addresses.map((a) => ({
+      _id: a.id,
+      street: a.street ?? undefined,
+      city: a.city ?? undefined,
+      state: a.state ?? undefined,
+      zipCode: a.zipCode ?? undefined,
+      country: a.country ?? undefined,
+      isDefault: a.isDefault,
+    })),
+  };
+}
+
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
-
     // Require authentication to prevent unauthenticated customer enumeration
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
@@ -33,31 +52,32 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search');
     const isActive = searchParams.get('isActive');
 
-    const query: FilterQuery<ICustomer> = { tenantId };
+    const where: Prisma.CustomerWhereInput = { tenantId };
     if (searchParams.has('isActive')) {
-      query.isActive = isActive === 'true';
+      where.isActive = isActive === 'true';
     }
     if (search) {
-      const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      query.$or = [
-        { firstName: { $regex: escapedSearch, $options: 'i' } },
-        { lastName: { $regex: escapedSearch, $options: 'i' } },
-        { email: { $regex: escapedSearch, $options: 'i' } },
-        { phone: { $regex: escapedSearch, $options: 'i' } },
+      where.OR = [
+        { firstName: { contains: search, mode: 'insensitive' } },
+        { lastName: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { phone: { contains: search, mode: 'insensitive' } },
       ];
     }
-    
-    const customers = await Customer.find(query)
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .skip(skip)
-      .lean();
-    
-    const total = await Customer.countDocuments(query);
-    
+
+    const customers = await prisma.customer.findMany({
+      where,
+      include: { addresses: true },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      skip,
+    });
+
+    const total = await prisma.customer.count({ where });
+
     return NextResponse.json({
       success: true,
-      data: customers,
+      data: customers.map(toCustomerJSON),
       pagination: {
         total,
         page,
@@ -72,7 +92,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     // SECURITY: Validate tenant access for authenticated requests
     let tenantId: string;
     try {
@@ -132,7 +151,7 @@ export async function POST(request: NextRequest) {
     
     // Check email uniqueness if provided
     if (email) {
-      const existingCustomer = await Customer.findOne({ tenantId, email: email.toLowerCase() });
+      const existingCustomer = await prisma.customer.findFirst({ where: { tenantId, email: email.toLowerCase() } });
       if (existingCustomer) {
         return NextResponse.json(
           { success: false, error: t('validation.emailAlreadyExists', 'Email already exists') },
@@ -155,26 +174,40 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const customer = await Customer.create({
-      tenantId,
-      firstName: firstName.trim(),
-      lastName: lastName.trim(),
-      email: email?.toLowerCase().trim(),
-      phone: phone?.trim(),
-      addresses: addresses || [],
-      dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
-      notes: notes?.trim(),
-      tags: tags || [],
-      creditLimit: parsedCreditLimit,
-      isActive: true,
+    const customer = await prisma.customer.create({
+      data: {
+        id: randomUUID(),
+        tenantId,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        email: email?.toLowerCase().trim(),
+        phone: phone?.trim(),
+        addresses: {
+          create: (addresses || []).map((a: { street?: string; city?: string; state?: string; zipCode?: string; country?: string; isDefault?: boolean }) => ({
+            id: randomUUID(),
+            street: a.street,
+            city: a.city,
+            state: a.state,
+            zipCode: a.zipCode,
+            country: a.country,
+            isDefault: a.isDefault ?? false,
+          })),
+        },
+        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
+        notes: notes?.trim(),
+        tags: tags || [],
+        creditLimit: parsedCreditLimit,
+        isActive: true,
+      },
+      include: { addresses: true },
     });
-    
+
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.CREATE,
       entityType: 'customer',
-      entityId: customer._id.toString(),
-      changes: { firstName, lastName, email, creditLimit: customer.creditLimit ?? null },
+      entityId: customer.id,
+      changes: { firstName, lastName, email, creditLimit: customer.creditLimit != null ? Number(customer.creditLimit) : null },
     });
 
     // Send welcome email (#22 - New Customer Welcome Emails)
@@ -182,7 +215,7 @@ export async function POST(request: NextRequest) {
       try {
         const { sendCustomerWelcomeEmail } = await import('@/lib/automations/customer-welcome');
         sendCustomerWelcomeEmail({
-          customerId: customer._id.toString(),
+          customerId: customer.id,
           tenantId,
         }).catch((error) => {
           // Log error but don't fail customer creation
@@ -193,8 +226,8 @@ export async function POST(request: NextRequest) {
         logger.error('Error importing welcome email automation:', error);
       }
     }
-    
-    return NextResponse.json({ success: true, data: customer }, { status: 201 });
+
+    return NextResponse.json({ success: true, data: toCustomerJSON(customer) }, { status: 201 });
   } catch (error) {
     return handleApiError(error, 'Failed to create customer');
   }

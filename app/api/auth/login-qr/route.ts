@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
+import prisma from '@/lib/db';
 import { generateToken } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -20,7 +19,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await connectDB();
     const body = await request.json();
     const { qrToken, tenantSlug } = body;
     t = await getValidationTranslatorFromRequest(request);
@@ -34,9 +32,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Get tenant ID from slug
-    const Tenant = (await import('@/models/Tenant')).default;
-    const tenant = await Tenant.findOne({ slug: tenantSlug || 'default', isActive: true }).lean();
-    
+    const tenant = await prisma.tenant.findFirst({ where: { slug: tenantSlug || 'default', isActive: true } });
+
     if (!tenant) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFoundOrInactive', 'Tenant not found or inactive') },
@@ -45,15 +42,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Find user by QR token
-    const user = await User.findOne({ 
-      qrToken, 
-      tenantId: tenant._id, 
-      isActive: true 
+    const user = await prisma.user.findFirst({
+      where: { qrToken, tenantId: tenant.id, isActive: true },
     });
 
     if (!user) {
       await createAuditLog(request, {
-        tenantId: tenant._id,
+        tenantId: tenant.id,
         action: AuditActions.LOGIN,
         entityType: 'user',
         metadata: { success: false, reason: 'invalid_qr_token', method: 'qr' },
@@ -65,22 +60,22 @@ export async function POST(request: NextRequest) {
     }
 
     // Update last login
-    await User.findByIdAndUpdate(user._id, { lastLogin: new Date() });
+    await prisma.user.update({ where: { id: user.id }, data: { lastLogin: new Date() } });
 
     // Generate token
     const token = generateToken({
-      userId: user._id.toString(),
-      tenantId: tenant._id.toString(),
+      userId: user.id,
+      tenantId: tenant.id,
       email: user.email,
       role: user.role,
     });
 
     // Create audit log
     await createAuditLog(request, {
-      tenantId: tenant._id,
+      tenantId: tenant.id,
       action: AuditActions.LOGIN,
       entityType: 'user',
-      entityId: user._id.toString(),
+      entityId: user.id,
       metadata: { success: true, method: 'qr' },
     });
 
@@ -89,7 +84,7 @@ export async function POST(request: NextRequest) {
       success: true,
       data: {
         user: {
-          _id: user._id,
+          _id: user.id,
           email: user.email,
           name: user.name,
           role: user.role,
@@ -114,4 +109,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

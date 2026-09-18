@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Discount from '@/models/Discount';
+import { Prisma } from '@prisma/client';
+import prisma from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -8,18 +8,33 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
 
+function toDiscountJSON(d: {
+  id: string;
+  value: Prisma.Decimal;
+  minPurchaseAmount: Prisma.Decimal | null;
+  maxDiscountAmount: Prisma.Decimal | null;
+  [key: string]: unknown;
+}) {
+  return {
+    ...d,
+    _id: d.id,
+    value: Number(d.value),
+    minPurchaseAmount: d.minPurchaseAmount != null ? Number(d.minPurchaseAmount) : undefined,
+    maxDiscountAmount: d.maxDiscountAmount != null ? Number(d.maxDiscountAmount) : undefined,
+  };
+}
+
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await connectDB();
     const { tenantId } = await requireTenantAccess(request);
     const { id } = await params;
 
-    const discount = await Discount.findOne({ _id: id, tenantId }).lean();
+    const discount = await prisma.discount.findFirst({ where: { id, tenantId } });
     if (!discount) {
       return NextResponse.json({ success: false, error: 'Discount not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, data: discount });
+    return NextResponse.json({ success: true, data: toDiscountJSON(discount) });
   } catch (error) {
     return handleApiError(error, 'Failed to fetch discount');
   }
@@ -27,7 +42,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await connectDB();
     const { tenantId, user } = await requireTenantAccess(request);
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
@@ -42,13 +56,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
-    const discount = await Discount.findOne({ _id: id, tenantId });
+    const discount = await prisma.discount.findFirst({ where: { id, tenantId } });
     if (!discount) {
       return NextResponse.json({ success: false, error: t('validation.discountNotFound', 'Discount not found') }, { status: 404 });
     }
 
     const body = await request.json();
-    const updates: any = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const updates: Prisma.DiscountUpdateInput = {};
 
     // Code is immutable after creation — prevent accidental duplicate codes
     if (body.code !== undefined && body.code !== discount.code) {
@@ -94,8 +108,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (body.validUntil !== undefined) updates.validUntil = new Date(body.validUntil);
 
     // Validate date range
-    const effectiveFrom = updates.validFrom || discount.validFrom;
-    const effectiveUntil = updates.validUntil || discount.validUntil;
+    const effectiveFrom = (updates.validFrom as Date | undefined) || discount.validFrom;
+    const effectiveUntil = (updates.validUntil as Date | undefined) || discount.validUntil;
     if (effectiveFrom && effectiveUntil && new Date(effectiveFrom) >= new Date(effectiveUntil)) {
       return NextResponse.json(
         { success: false, error: t('validation.validUntilAfterFrom', 'End date must be after start date') },
@@ -106,8 +120,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (body.usageLimit !== undefined) updates.usageLimit = body.usageLimit;
     if (body.isActive !== undefined) updates.isActive = body.isActive;
 
-    Object.assign(discount, updates);
-    await discount.save();
+    const updated = await prisma.discount.update({
+      where: { id: discount.id },
+      data: updates,
+    });
 
     await createAuditLog(request, {
       tenantId,
@@ -117,7 +133,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       changes: updates,
     });
 
-    return NextResponse.json({ success: true, data: discount });
+    return NextResponse.json({ success: true, data: toDiscountJSON(updated) });
   } catch (error) {
     return handleApiError(error, 'Failed to update discount');
   }
@@ -125,7 +141,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await connectDB();
     const { tenantId, user } = await requireTenantAccess(request);
     const { id } = await params;
     const t = await getValidationTranslatorFromRequest(request);
@@ -140,7 +155,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
-    const discount = await Discount.findOne({ _id: id, tenantId });
+    const discount = await prisma.discount.findFirst({ where: { id, tenantId } });
     if (!discount) {
       return NextResponse.json({ success: false, error: t('validation.discountNotFound', 'Discount not found') }, { status: 404 });
     }
@@ -154,7 +169,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       return NextResponse.json({ success: false, error: errorMsg }, { status: 400 });
     }
 
-    await discount.deleteOne();
+    await prisma.discount.delete({ where: { id: discount.id } });
 
     await createAuditLog(request, {
       tenantId,
@@ -169,4 +184,3 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     return handleApiError(error, 'Failed to delete discount');
   }
 }
-

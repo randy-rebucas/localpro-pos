@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
-import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
+import prisma from '@/lib/db';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function GET(request: NextRequest) {
@@ -24,10 +23,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: t('validation.notAuthenticated', 'Not authenticated') }, { status: 401 });
     }
 
-    await connectDB();
-    const userDoc = await User.findById(user.userId)
-      .select('-password')
-      .lean();
+    const userDoc = await prisma.user.findUnique({
+      where: { id: user.userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        isActive: true,
+      },
+    });
 
     if (!userDoc || !userDoc.isActive) {
       return NextResponse.json({ success: false, error: t('validation.userNotFoundOrInactive', 'User not found or inactive') }, { status: 401 });
@@ -36,7 +41,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       user: {
-        _id: userDoc._id,
+        _id: userDoc.id,
         email: userDoc.email,
         name: userDoc.name,
         role: userDoc.role,
@@ -47,4 +52,3 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
-

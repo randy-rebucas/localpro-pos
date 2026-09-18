@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
-import Category from '@/models/Category';
+import { randomUUID } from 'crypto';
+import prisma from '@/lib/db';
+import { Prisma } from '@prisma/client';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -42,28 +42,31 @@ async function resolveCategoryId(
     return { categoryId: cached, category: categoryName.trim() };
   }
 
-  let category = await Category.findOne({
-    tenantId,
-    name: { $regex: new RegExp(`^${categoryName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+  let category = await prisma.category.findFirst({
+    where: {
+      tenantId,
+      name: { equals: categoryName.trim(), mode: 'insensitive' },
+    },
   });
 
   if (!category) {
-    category = await Category.create({
-      tenantId,
-      name: categoryName.trim(),
-      isActive: true,
+    category = await prisma.category.create({
+      data: {
+        id: randomUUID(),
+        tenantId,
+        name: categoryName.trim(),
+        isActive: true,
+      },
     });
   }
 
-  const id = category._id.toString();
+  const id = category.id;
   categoryCache.set(key, id);
   return { categoryId: id, category: category.name };
 }
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
-
     let tenantId: string;
     let userRole: string;
     try {
@@ -115,9 +118,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const existingProducts = await Product.find({ tenantId })
-      .select('sku barcode variations.sku')
-      .lean();
+    const existingProducts = await prisma.product.findMany({
+      where: { tenantId },
+      select: { sku: true, barcode: true, variations: { select: { sku: true } } },
+    });
 
     const tenantSkus = collectTenantSkus(existingProducts);
     const existingBarcodes = new Set(
@@ -148,7 +152,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const currentProductCount = await Product.countDocuments({ tenantId, isActive: true });
+    const currentProductCount = await prisma.product.count({ where: { tenantId, isActive: true } });
     try {
       await checkSubscriptionLimit(
         tenantId.toString(),
@@ -181,35 +185,42 @@ export async function POST(request: NextRequest) {
         }
 
         const createProduct = () =>
-          Product.create({
-            tenantId,
-            name: item.data.name,
-            description: item.data.description,
-            price: item.data.price,
-            stock: item.data.stock,
-            sku,
-            barcode: item.data.barcode,
-            category,
-            categoryId,
-            image: item.data.image,
-            productType: item.data.productType,
-            trackInventory: item.data.trackInventory,
-            taxExempt: item.data.taxExempt,
-            zeroRated: item.data.zeroRated,
-            lowStockThreshold: item.data.lowStockThreshold,
-            hasVariations: false,
-            isActive: true,
+          prisma.product.create({
+            data: {
+              id: randomUUID(),
+              tenantId,
+              name: item.data.name,
+              description: item.data.description,
+              price: item.data.price,
+              stock: item.data.stock,
+              sku,
+              barcode: item.data.barcode,
+              category,
+              categoryId,
+              image: item.data.image,
+              productType: item.data.productType as Prisma.ProductUncheckedCreateInput['productType'],
+              trackInventory: item.data.trackInventory,
+              taxExempt: item.data.taxExempt,
+              zeroRated: item.data.zeroRated,
+              lowStockThreshold: item.data.lowStockThreshold,
+              hasVariations: false,
+              isActive: true,
+            },
           });
 
         let product;
         try {
           product = await createProduct();
         } catch (err: unknown) {
-          const dup = err as { code?: number; keyPattern?: Record<string, unknown> };
-          if (dup.code === 11000 && !dup.keyPattern?.barcode) {
-            sku = generateUniqueProductSKU(item.data.name, tenantSkus);
-            item.data.sku = sku;
-            product = await createProduct();
+          if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+            const target = (err.meta?.target as string[] | undefined) ?? [];
+            if (!target.some((f) => f.includes('barcode'))) {
+              sku = generateUniqueProductSKU(item.data.name, tenantSkus);
+              item.data.sku = sku;
+              product = await createProduct();
+            } else {
+              throw err;
+            }
           } else {
             throw err;
           }
@@ -217,13 +228,12 @@ export async function POST(request: NextRequest) {
 
         tenantSkus.add(sku.toLowerCase());
 
-        created.push({ row: item.row, name: product.name, id: product._id.toString() });
+        created.push({ row: item.row, name: product.name, id: product.id });
       } catch (err: unknown) {
-        const error = err as { code?: number; keyPattern?: Record<string, unknown>; message?: string };
-        let message = error.message || 'Failed to create product';
-        if (error.code === 11000) {
-          if (error.keyPattern?.barcode) message = 'Barcode already exists';
-          else message = 'SKU already exists';
+        let message = err instanceof Error ? err.message : 'Failed to create product';
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+          const target = (err.meta?.target as string[] | undefined) ?? [];
+          message = target.some((f) => f.includes('barcode')) ? 'Barcode already exists' : 'SKU already exists';
         }
         failed.push({ row: item.row, name: item.data.name, error: message });
         logger.error('Product import row failed', { row: item.row, err });

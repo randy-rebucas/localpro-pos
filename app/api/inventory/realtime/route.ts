@@ -1,7 +1,5 @@
 import { NextRequest } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
-import StockMovement from '@/models/StockMovement';
+import prisma from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -13,7 +11,6 @@ import { logger } from '@/lib/logger';
  */
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
@@ -45,31 +42,33 @@ export async function GET(request: NextRequest) {
         
         const pollInterval = setInterval(async () => {
           try {
-            const query: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
+            const where: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
               tenantId,
-              createdAt: { $gt: lastCheck },
+              createdAt: { gt: lastCheck },
             };
-            
+
             if (productId) {
-              query.productId = productId;
-            }
-            
-            if (branchId) {
-              query.branchId = branchId;
+              where.productId = productId;
             }
 
-            const recentMovements = await StockMovement.find(query)
-              .sort({ createdAt: -1 })
-              .limit(50)
-              .lean();
+            if (branchId) {
+              where.branchId = branchId;
+            }
+
+            const recentMovements = await prisma.stockMovement.findMany({
+              where,
+              orderBy: { createdAt: 'desc' },
+              take: 50,
+            });
 
             if (recentMovements.length > 0) {
-              // Batch-load all referenced products in one query
+              // Batch-load all referenced products in one query (tenant-scoped)
               const productIds = [...new Set(recentMovements.map((m) => String(m.productId)))];
-              const products = await Product.find({ _id: { $in: productIds }, tenantId })
-                .select('_id')
-                .lean();
-              const productSet = new Set(products.map((p) => String(p._id)));
+              const products = await prisma.product.findMany({
+                where: { id: { in: productIds }, tenantId },
+                select: { id: true },
+              });
+              const productSet = new Set(products.map((p) => String(p.id)));
 
               for (const movement of recentMovements) {
                 if (productSet.has(String(movement.productId))) {
@@ -77,7 +76,11 @@ export async function GET(request: NextRequest) {
                     type: 'stock_update',
                     productId: movement.productId,
                     branchId: movement.branchId,
-                    variation: movement.variation,
+                    variation: {
+                      size: movement.variationSize ?? undefined,
+                      color: movement.variationColor ?? undefined,
+                      type: movement.variationType ?? undefined,
+                    },
                     movementType: movement.type,
                     quantity: movement.quantity,
                     newStock: movement.newStock,

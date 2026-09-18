@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Expense from '@/models/Expense';
+import { randomUUID } from 'crypto';
+import prisma from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -10,7 +10,6 @@ import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId } = authResult;
@@ -20,22 +19,23 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get('endDate');
     const name = searchParams.get('name');
 
-    const query: any = { tenantId, isActive: { $ne: false } }; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const where: any = { tenantId, isActive: { not: false } }; // eslint-disable-line @typescript-eslint/no-explicit-any
 
     if (startDate || endDate) {
-      query.date = {};
-      if (startDate) query.date.$gte = new Date(startDate);
-      if (endDate) query.date.$lte = new Date(endDate);
+      where.date = {};
+      if (startDate) where.date.gte = new Date(startDate);
+      if (endDate) where.date.lte = new Date(endDate);
     }
 
     if (name) {
-      query.name = name;
+      where.name = name;
     }
 
-    const expenses = await Expense.find(query)
-      .populate('userId', 'name email')
-      .sort({ date: -1 })
-      .lean();
+    const expenses = await prisma.expense.findMany({
+      where,
+      include: { user: { select: { name: true, email: true } } },
+      orderBy: { date: 'desc' },
+    });
 
     return NextResponse.json({ success: true, data: expenses });
   } catch (error) {
@@ -45,7 +45,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId, user } = authResult;
@@ -95,16 +94,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const expense = await Expense.create({
-      tenantId,
-      name: name.trim(),
-      description: description.trim(),
-      amount: amountValue,
-      date: date ? new Date(date) : new Date(),
-      paymentMethod: paymentMethod || 'cash',
-      receipt: receipt?.trim() || undefined,
-      notes: notes?.trim() || undefined,
-      userId,
+    const expense = await prisma.expense.create({
+      data: {
+        id: randomUUID(),
+        tenantId,
+        name: name.trim(),
+        description: description.trim(),
+        amount: amountValue,
+        date: date ? new Date(date) : new Date(),
+        paymentMethod: paymentMethod || 'cash',
+        receipt: receipt?.trim() || undefined,
+        notes: notes?.trim() || undefined,
+        userId,
+      },
     });
 
     await createAuditLog(request, {
@@ -112,7 +114,7 @@ export async function POST(request: NextRequest) {
       userId,
       action: AuditActions.CREATE,
       entityType: 'expense',
-      entityId: expense._id.toString(),
+      entityId: expense.id,
       changes: { name, description, amount },
     });
 

@@ -3,9 +3,7 @@
  * Sends welcome emails when new customers are added
  */
 
-import connectDB from '@/lib/mongodb';
-import Customer from '@/models/Customer';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/db';
 import { sendEmail } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { AutomationResult } from './types';
@@ -21,8 +19,6 @@ export interface CustomerWelcomeOptions {
 export async function sendCustomerWelcomeEmail(
   options: CustomerWelcomeOptions
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -32,7 +28,9 @@ export async function sendCustomerWelcomeEmail(
   };
 
   try {
-    const customer = await Customer.findById(options.customerId).lean();
+    const customer = await prisma.customer.findFirst({
+      where: { id: options.customerId, tenantId: options.tenantId },
+    });
     if (!customer) {
       results.success = false;
       results.message = 'Customer not found';
@@ -44,7 +42,7 @@ export async function sendCustomerWelcomeEmail(
       return results;
     }
 
-    const tenant = await Tenant.findById(options.tenantId).lean();
+    const tenant = await prisma.tenant.findUnique({ where: { id: options.tenantId } });
     if (!tenant) {
       results.success = false;
       results.message = 'Tenant not found';
@@ -85,15 +83,15 @@ export async function sendCustomerWelcomeEmail(
 
     <div class="content">
       <p>Hello ${customerName},</p>
-      
+
       <p>Thank you for joining us! We're excited to have you as a valued customer.</p>
-      
+
       ${tenantSettings?.enableLoyaltyProgram ? `
       <p><strong>Loyalty Program:</strong> As a member, you'll earn points with every purchase and enjoy exclusive benefits and rewards.</p>
       ` : ''}
-      
+
       <p>We're here to serve you and provide the best experience possible. If you have any questions or need assistance, please don't hesitate to reach out to us.</p>
-      
+
       ${tenantSettings?.phone ? `<p><strong>Contact Us:</strong> ${tenantSettings.phone}</p>` : ''}
       ${tenantSettings?.email ? `<p><strong>Email:</strong> ${tenantSettings.email}</p>` : ''}
       ${tenantSettings?.address ? `
@@ -101,9 +99,9 @@ export async function sendCustomerWelcomeEmail(
       ${[tenantSettings.address.street, tenantSettings.address.city, tenantSettings.address.state, tenantSettings.address.zipCode].filter(Boolean).join('<br>')}
       </p>
       ` : ''}
-      
+
       <p>We look forward to serving you!</p>
-      
+
       <p>Best regards,<br>
       The ${companyName} Team</p>
     </div>

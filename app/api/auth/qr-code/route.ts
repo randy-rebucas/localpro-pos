@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
-import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
+import prisma from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -14,11 +13,13 @@ export async function GET(request: NextRequest) {
   let t: (key: string, fallback: string) => string;
   try {
     const user = await requireAuth(request);
-    await connectDB();
     t = await getValidationTranslatorFromRequest(request);
 
-    const userDoc = await User.findById(user.userId).select('qrToken name email');
-    
+    let userDoc = await prisma.user.findUnique({
+      where: { id: user.userId },
+      select: { qrToken: true, name: true, email: true },
+    });
+
     if (!userDoc) {
       return NextResponse.json(
         { success: false, error: t('validation.userNotFound', 'User not found') },
@@ -29,8 +30,8 @@ export async function GET(request: NextRequest) {
     // Generate QR token if it doesn't exist
     if (!userDoc.qrToken) {
       const newQrToken = crypto.randomBytes(32).toString('hex');
-      await User.findByIdAndUpdate(user.userId, { qrToken: newQrToken });
-      userDoc.qrToken = newQrToken;
+      await prisma.user.update({ where: { id: user.userId }, data: { qrToken: newQrToken } });
+      userDoc = { ...userDoc, qrToken: newQrToken };
     }
 
     return NextResponse.json({
@@ -67,13 +68,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await connectDB();
     t = await getValidationTranslatorFromRequest(request); // eslint-disable-line @typescript-eslint/no-unused-vars
 
     // Generate new QR token (or create if doesn't exist)
     const newQrToken = crypto.randomBytes(32).toString('hex');
-    
-    await User.findByIdAndUpdate(user.userId, { qrToken: newQrToken });
+
+    await prisma.user.update({ where: { id: user.userId }, data: { qrToken: newQrToken } });
 
     return NextResponse.json({
       success: true,
@@ -90,4 +90,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

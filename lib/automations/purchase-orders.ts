@@ -3,9 +3,7 @@
  * Automatically generate purchase orders when stock hits reorder point
  */
 
-import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product'; // eslint-disable-line @typescript-eslint/no-unused-vars
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/db';
 import { getLowStockProducts } from '@/lib/stock';
 import { sendEmail } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
@@ -23,8 +21,6 @@ export interface PurchaseOrderOptions {
 export async function generatePurchaseOrders(
   options: PurchaseOrderOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -37,10 +33,10 @@ export async function generatePurchaseOrders(
     // Get tenants to process
     let tenants;
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await prisma.tenant.findUnique({ where: { id: options.tenantId } });
       tenants = tenant ? [tenant] : [];
     } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
+      tenants = await prisma.tenant.findMany({ where: { isActive: true } });
     }
 
     if (tenants.length === 0) {
@@ -53,7 +49,7 @@ export async function generatePurchaseOrders(
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
+        const tenantId = tenant.id;
         const tenantSettings = await getTenantSettingsById(tenantId);
 
         // Get products that need reordering
@@ -76,9 +72,9 @@ export async function generatePurchaseOrders(
         const purchaseOrderItems = productsToReorder.map((product: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
           // Calculate reorder quantity (if reorderQuantity field exists, use it; otherwise suggest threshold * 2)
           const reorderQuantity = product.reorderQuantity || ((product.threshold || 10) * 2);
-          
+
           return {
-            productId: product._id,
+            productId: product._id ?? product.id,
             name: product.name,
             sku: product.sku || 'N/A',
             currentStock: product.currentStock || 0,
@@ -114,7 +110,7 @@ export async function generatePurchaseOrders(
         // Send to tenant email for approval
         if (tenantSettings?.emailNotifications && tenantSettings?.email) {
           const companyName = tenantSettings?.companyName || tenant.name || 'Business';
-          
+
           const emailBody = `Purchase Order Generated for ${companyName}
 
 Order Number: ${orderNumber}
@@ -122,7 +118,7 @@ Date: ${orderDate.toLocaleDateString()}
 
 The following products need to be reordered:
 
-${purchaseOrderItems.map(item => 
+${purchaseOrderItems.map(item =>
   `- ${item.name} (SKU: ${item.sku})
   Current Stock: ${item.currentStock}
   Reorder Quantity: ${item.reorderQuantity}

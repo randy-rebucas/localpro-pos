@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
+import prisma from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { getVATReport } from '@/lib/analytics';
-import Tenant from '@/models/Tenant';
+import type { ITenantSettings } from '@/types/tenant';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkFeatureAccess } from '@/lib/subscription';
 import { logger } from '@/lib/logger';
@@ -12,7 +12,6 @@ import { resolveTenantDateRange, DEFAULT_TENANT_TIMEZONE } from '@/lib/timezone'
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
@@ -35,8 +34,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const tenant = await Tenant.findById(tenantId).lean();
-    if (!tenant) {
+    const tenantSettings = await prisma.tenantSettings.findUnique({
+      where: { tenantId },
+    });
+    if (!tenantSettings) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
@@ -44,10 +45,15 @@ export async function GET(request: NextRequest) {
     const { startDate, endDate } = resolveTenantDateRange(
       searchParams.get('startDate'),
       searchParams.get('endDate'),
-      tenant.settings?.timezone || DEFAULT_TENANT_TIMEZONE
+      tenantSettings.timezone || DEFAULT_TENANT_TIMEZONE
     );
 
-    const report = await getVATReport(tenantId, startDate, endDate, tenant.settings);
+    // getVATReport (lib/analytics.ts, not yet migrated) expects the legacy
+    // ITenantSettings shape; taxEnabled/taxRate are flat on both.
+    const report = await getVATReport(tenantId, startDate, endDate, {
+      taxEnabled: tenantSettings.taxEnabled,
+      taxRate: Number(tenantSettings.taxRate),
+    } as ITenantSettings);
 
     return NextResponse.json({ success: true, data: report });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any

@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Customer from '@/models/Customer';
-import TenantEcommerceIntegration from '@/models/TenantEcommerceIntegration';
+import prisma from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
@@ -9,6 +7,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { requireEcommerceIntegrationFeature } from '@/lib/ecommerce/require-ecommerce-feature';
 import { getShopifyAccessTokenForIntegration } from '@/lib/ecommerce/shopify-token';
 import { shopifyUpsertCustomer } from '@/lib/ecommerce/shopify-customer';
+import type { ICustomer } from '@/models/Customer';
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,11 +25,9 @@ export async function POST(request: NextRequest) {
     const { customerId } = await request.json() as { customerId: string };
     if (!customerId) return NextResponse.json({ success: false, error: 'customerId required' }, { status: 400 });
 
-    await connectDB();
-
     const [customer, integration] = await Promise.all([
-      Customer.findOne({ _id: customerId, tenantId: user.tenantId }),
-      TenantEcommerceIntegration.findOne({ tenantId: user.tenantId, provider: 'shopify', isActive: true }),
+      prisma.customer.findFirst({ where: { id: customerId, tenantId: user.tenantId } }),
+      prisma.tenantEcommerceIntegration.findFirst({ where: { tenantId: user.tenantId, provider: 'shopify', isActive: true } }),
     ]);
 
     if (!customer) return NextResponse.json({ success: false, error: 'Customer not found' }, { status: 404 });
@@ -38,12 +35,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'No active Shopify integration' }, { status: 400 });
     }
 
+    // NOTE: shopify-customer.ts is still Mongoose-based (out of scope for this
+    // migration pass) and expects a Mongoose document. Bridge the Prisma customer
+    // row into that shape until that lib is migrated to Prisma.
+    // lib/ecommerce/shopify-token.ts is already Prisma-based — pass the row directly.
+    const customerDoc = { ...customer, _id: customer.id } as unknown as ICustomer;
+
     const accessToken = await getShopifyAccessTokenForIntegration(integration);
-    const { shopifyCustomerId } = await shopifyUpsertCustomer(integration.shopDomain, accessToken, customer);
+    const { shopifyCustomerId } = await shopifyUpsertCustomer(integration.shopDomain, accessToken, customerDoc);
 
     if (!customer.shopifyCustomerId) {
-      customer.shopifyCustomerId = shopifyCustomerId;
-      await customer.save();
+      await prisma.customer.update({ where: { id: customer.id }, data: { shopifyCustomerId } });
     }
 
     return NextResponse.json({ success: true, data: { shopifyCustomerId } });

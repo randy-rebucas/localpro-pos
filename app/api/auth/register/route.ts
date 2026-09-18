@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
-import Tenant from '@/models/Tenant';
+import { randomUUID } from 'crypto';
+import bcrypt from 'bcryptjs';
+import prisma from '@/lib/db';
 import { validateEmail, validatePassword } from '@/lib/validation';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
@@ -28,7 +28,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await connectDB();
     const body = await request.json();
     const { name, email, password, tenantId } = body;
 
@@ -57,7 +56,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Check tenant exists and is active
-    const tenant = await Tenant.findOne({ $or: [ { slug: tenantId }, { _id: tenantId } ], isActive: true });
+    const tenant = await prisma.tenant.findFirst({
+      where: { OR: [{ slug: tenantId }, { id: tenantId }], isActive: true },
+    });
     if (!tenant) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found or inactive') },
@@ -66,7 +67,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user already exists
-    const existingUser = await User.findOne({ email: email.toLowerCase(), tenantId: tenant._id });
+    const existingUser = await prisma.user.findFirst({
+      where: { email: email.toLowerCase(), tenantId: tenant.id },
+    });
     if (existingUser) {
       return NextResponse.json(
         { success: false, error: t('validation.emailExists', 'An account with this email already exists for this tenant') },
@@ -75,33 +78,36 @@ export async function POST(request: NextRequest) {
     }
 
     // Create user (default role: "viewer")
-    const user = await User.create({
-      email: email.toLowerCase(),
-      password,
-      name,
-      role: 'viewer',
-      tenantId: tenant._id,
-      isActive: true,
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = await prisma.user.create({
+      data: {
+        id: randomUUID(),
+        email: email.toLowerCase(),
+        password: hashedPassword,
+        name,
+        role: 'viewer',
+        tenantId: tenant.id,
+        isActive: true,
+      },
     });
 
     await createAuditLog(request, {
-      tenantId: tenant._id,
+      tenantId: tenant.id,
       action: AuditActions.CREATE,
       entityType: 'user',
-      entityId: user._id.toString(),
+      entityId: user.id,
       changes: { email, name, role: 'viewer' },
     });
 
     // Issue JWT token
     const token = generateToken({
-        userId: user._id.toString(), 
-        tenantId: tenant._id.toString(), 
+        userId: user.id,
+        tenantId: tenant.id,
         role: user.role,
         email: user.email
     });
 
-    const userResponse = user.toObject();
-    const { password: _, ...userWithoutPassword } = userResponse;
+    const { password: _password, ...userWithoutPassword } = user;
 
     // Return token only via httpOnly cookie — not in body
     const response = NextResponse.json({
@@ -120,7 +126,7 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch (error: unknown) {
-    if ((error as Record<string, unknown>).code === 11000) {
+    if ((error as Record<string, unknown>).code === 'P2002') {
       return NextResponse.json(
         { success: false, error: 'User with this email already exists' },
         { status: 400 }

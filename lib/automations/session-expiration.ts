@@ -1,12 +1,11 @@
 /**
  * Automatic Session Expiration
- * Enhanced session management with activity tracking
+ * Enhanced session management with activity tracking, plus cleanup of
+ * expired customer-display PosSession records (replaces the Mongo TTL index
+ * — see the `expiresAt` comment on the PosSession model in schema.prisma).
  */
 
-import connectDB from '@/lib/mongodb';
-import AuditLog from '@/models/AuditLog';
-import User from '@/models/User';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/db';
 import { AutomationResult } from './types';
 
 export interface SessionExpirationOptions {
@@ -15,15 +14,16 @@ export interface SessionExpirationOptions {
 }
 
 /**
- * Check for expired sessions based on inactivity
- * Note: This is a simplified implementation using audit logs
- * In production, you might want a dedicated session tracking system
+ * Check for expired sessions based on inactivity, and purge expired
+ * PosSession (customer-display cart) records.
+ * Note: The user-inactivity portion is a simplified implementation using
+ * audit logs. In production, you might want a dedicated session tracking
+ * system. JWT tokens can't be invalidated server-side without a blacklist
+ * (see lib/token-blacklist.ts).
  */
 export async function expireInactiveSessions(
   options: SessionExpirationOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -36,17 +36,32 @@ export async function expireInactiveSessions(
     const inactivityHours = options.inactivityHours || 24;
     const cutoffTime = new Date(Date.now() - inactivityHours * 60 * 60 * 1000);
 
+    // Purge expired PosSession (customer-display kiosk cart) records.
+    // These are keyed by the tenant *slug*, not tenantId, so this cleanup
+    // is not tenant-scoped the way the rest of this file is — it simply
+    // deletes any globally-expired session row.
+    let purgedSessions = 0;
+    try {
+      const purged = await prisma.posSession.deleteMany({
+        where: { expiresAt: { lt: new Date() } },
+      });
+      purgedSessions = purged.count;
+    } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+      results.errors?.push(`PosSession cleanup: ${error.message}`);
+    }
+
     // Get tenants to process
     let tenants;
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await prisma.tenant.findUnique({ where: { id: options.tenantId } });
       tenants = tenant ? [tenant] : [];
     } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
+      tenants = await prisma.tenant.findMany({ where: { isActive: true } });
     }
 
     if (tenants.length === 0) {
-      results.message = 'No tenants found to process';
+      results.processed = purgedSessions;
+      results.message = `No tenants found to process. Purged ${purgedSessions} expired PosSession record(s).`;
       return results;
     }
 
@@ -55,20 +70,18 @@ export async function expireInactiveSessions(
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
+        const tenantId = tenant.id;
 
         // Get all active users
-        const users = await User.find({ tenantId, isActive: true }).lean();
+        const users = await prisma.user.findMany({ where: { tenantId, isActive: true } });
 
         for (const user of users) {
           try {
             // Get last activity from audit logs
-            const lastActivity = await AuditLog.findOne({
-              tenantId,
-              userId: user._id,
-            })
-              .sort({ createdAt: -1 })
-              .lean();
+            const lastActivity = await prisma.auditLog.findFirst({
+              where: { tenantId, userId: user.id },
+              orderBy: { createdAt: 'desc' },
+            });
 
             if (!lastActivity) {
               // No activity logged, check lastLogin
@@ -91,7 +104,7 @@ export async function expireInactiveSessions(
             }
           } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             totalFailed++;
-            results.errors?.push(`User ${user._id}: ${error.message}`);
+            results.errors?.push(`User ${user.id}: ${error.message}`);
           }
         }
       } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -100,9 +113,9 @@ export async function expireInactiveSessions(
       }
     }
 
-    results.processed = totalExpired;
+    results.processed = totalExpired + purgedSessions;
     results.failed = totalFailed;
-    results.message = `Found ${totalExpired} expired sessions${totalFailed > 0 ? `, ${totalFailed} failed` : ''}. Note: JWT tokens require a blacklist system for full session expiration.`;
+    results.message = `Found ${totalExpired} expired sessions and purged ${purgedSessions} expired PosSession record(s)${totalFailed > 0 ? `, ${totalFailed} failed` : ''}. Note: JWT tokens require a blacklist system for full session expiration.`;
 
     return results;
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any

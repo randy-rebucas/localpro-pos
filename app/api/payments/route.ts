@@ -1,17 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Payment from '@/models/Payment';
-import Transaction from '@/models/Transaction';
+import { randomUUID } from 'crypto';
+import prisma from '@/lib/db';
+import type { Prisma, PaymentMethodSimple } from '@prisma/client';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const tenantAccess = await requireTenantAccess(request);
     const { tenantId } = tenantAccess;
-    
+
     const searchParams = request.nextUrl.searchParams;
     const rawLimit = parseInt(searchParams.get('limit') || '50');
     const limit = Math.min(Math.max(1, rawLimit), 200);
@@ -21,29 +20,33 @@ export async function GET(request: NextRequest) {
     const method = searchParams.get('method');
     const transactionId = searchParams.get('transactionId');
 
-    const query: any = { tenantId, isActive: { $ne: false } }; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const where: Prisma.PaymentWhereInput = { tenantId, isActive: { not: false } };
 
     if (status) {
-      query.status = status;
+      where.status = status as Prisma.PaymentWhereInput['status'];
     }
-    
+
     if (method) {
-      query.method = method;
+      where.method = method as Prisma.PaymentWhereInput['method'];
     }
-    
+
     if (transactionId) {
-      query.transactionId = transactionId;
+      where.transactionId = transactionId;
     }
 
-    const payments = await Payment.find(query)
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .skip(skip)
-      .populate('transactionId', 'receiptNumber total')
-      .populate('processedBy', 'name email')
-      .lean();
-
-    const total = await Payment.countDocuments(query);
+    const [payments, total] = await Promise.all([
+      prisma.payment.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip,
+        include: {
+          transaction: { select: { receiptNumber: true, total: true } },
+          processedBy: { select: { name: true, email: true } },
+        },
+      }),
+      prisma.payment.count({ where }),
+    ]);
 
     return NextResponse.json({
       success: true,
@@ -66,7 +69,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const tenantAccess = await requireTenantAccess(request);
     const { tenantId, user } = tenantAccess;
 
@@ -74,7 +76,7 @@ export async function POST(request: NextRequest) {
     if (!rl.allowed) {
       return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
-    
+
     const body = await request.json();
     const { transactionId, method, amount, details } = body;
 
@@ -96,9 +98,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify transaction exists and belongs to tenant
-    const transaction = await Transaction.findOne({
-      _id: transactionId,
-      tenantId,
+    const transaction = await prisma.transaction.findFirst({
+      where: { id: transactionId, tenantId },
     });
 
     if (!transaction) {
@@ -108,16 +109,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const detailsInput = (details ?? {}) as Record<string, unknown>;
+
     // Create payment record
-    const payment = await Payment.create({
-      tenantId,
-      transactionId,
-      method,
-      amount,
-      details,
-      status: 'completed',
-      processedBy: user.userId,
-      processedAt: new Date(),
+    const payment = await prisma.payment.create({
+      data: {
+        id: randomUUID(),
+        tenantId,
+        transactionId,
+        method: method as PaymentMethodSimple,
+        amount,
+        detailsCardLast4: (detailsInput.cardLast4 as string | undefined) ?? undefined,
+        detailsCardType: (detailsInput.cardType as string | undefined) ?? undefined,
+        detailsCardBrand: (detailsInput.cardBrand as string | undefined) ?? undefined,
+        detailsGatewayTxnId: (detailsInput.gatewayTxnId as string | undefined) ?? (detailsInput.transactionId as string | undefined) ?? undefined,
+        detailsProvider: (detailsInput.provider as string | undefined) ?? undefined,
+        detailsCashReceived: (detailsInput.cashReceived as number | undefined) ?? undefined,
+        detailsChange: (detailsInput.change as number | undefined) ?? undefined,
+        detailsCheckNumber: (detailsInput.checkNumber as string | undefined) ?? undefined,
+        detailsNotes: (detailsInput.notes as string | undefined) ?? undefined,
+        status: 'completed',
+        processedById: user.userId,
+        processedAt: new Date(),
+      },
     });
 
     // Create audit log
@@ -126,7 +140,7 @@ export async function POST(request: NextRequest) {
       userId: user.userId,
       action: AuditActions.PAYMENT_CREATE,
       entityType: 'payment',
-      entityId: payment._id.toString(),
+      entityId: payment.id,
       changes: {
         transactionId: transactionId.toString(),
         method,

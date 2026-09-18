@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Category from '@/models/Category';
+import { randomUUID } from 'crypto';
+import prisma from '@/lib/db';
+import { Prisma } from '@prisma/client';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -9,7 +10,6 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     let tenantId: string;
     try {
       const tenantAccess = await requireTenantAccess(request);
@@ -22,9 +22,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const categories = await Category.find({ tenantId })
-      .sort({ name: 1 })
-      .lean();
+    const categories = await prisma.category.findMany({
+      where: { tenantId },
+      orderBy: { name: 'asc' },
+    });
 
     return NextResponse.json({ success: true, data: categories });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -34,7 +35,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     // SECURITY: Validate tenant access for authenticated requests
     let tenantId: string;
     try {
@@ -68,22 +68,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const category = await Category.create({
-      ...data,
-      tenantId,
+    const category = await prisma.category.create({
+      data: {
+        id: randomUUID(),
+        name: data.name as string,
+        description: data.description as string | undefined,
+        isActive: data.isActive as boolean | undefined,
+        tenantId,
+      },
     });
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.CREATE,
       entityType: 'category',
-      entityId: category._id.toString(),
+      entityId: category.id,
       changes: data,
     });
 
     return NextResponse.json({ success: true, data: category }, { status: 201 });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (error.code === 11000) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       const t = await getValidationTranslatorFromRequest(request);
       return NextResponse.json(
         { success: false, error: t('validation.categoryNameExists', 'Category with this name already exists') },
@@ -93,4 +98,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: error.message }, { status: 400 });
   }
 }
-

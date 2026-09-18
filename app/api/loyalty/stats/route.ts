@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import mongoose from 'mongoose';
-import connectDB from '@/lib/mongodb';
-import Customer from '@/models/Customer';
+import prisma from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -16,8 +14,6 @@ import { handleApiError } from '@/lib/error-handler';
  */
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
-
     const user = await getCurrentUser(request);
     if (!user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
@@ -41,24 +37,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const tenantObjectId = new mongoose.Types.ObjectId(tenantId);
-
-    const [result] = await Customer.aggregate([
-      { $match: { tenantId: tenantObjectId, loyaltyPointsBalance: { $gt: 0 } } },
-      {
-        $group: {
-          _id: null,
-          enrolledCount: { $sum: 1 },
-          totalPoints: { $sum: '$loyaltyPointsBalance' },
-        },
-      },
-    ]);
+    const result = await prisma.customer.aggregate({
+      where: { tenantId, loyaltyPointsBalance: { gt: 0 } },
+      _count: { _all: true },
+      _sum: { loyaltyPointsBalance: true },
+    });
 
     return NextResponse.json({
       success: true,
       data: {
-        enrolledCount: result?.enrolledCount ?? 0,
-        totalPoints: result?.totalPoints ?? 0,
+        enrolledCount: result._count._all ?? 0,
+        totalPoints: Number(result._sum.loyaltyPointsBalance ?? 0),
       },
     });
   } catch (error) {

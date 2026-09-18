@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Customer from '@/models/Customer';
-import Transaction from '@/models/Transaction';
+import prisma from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { handleApiError } from '@/lib/error-handler';
-import mongoose from 'mongoose';
 
 // RFM thresholds
 const VIP_SPEND_THRESHOLD = 5000;
@@ -15,8 +12,6 @@ const AT_RISK_DAYS = 30;
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
-
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId } = authResult;
@@ -27,26 +22,21 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(50, Math.max(1, parseInt(searchParams.get('limit') ?? '20')));
     const skip = (page - 1) * limit;
 
-    // Get order counts per customer
-    // NOTE: tenantId from requireTenantAccess() is a string, but Transaction.tenantId
-    // is stored as ObjectId — aggregate() pipelines don't auto-cast like .find() does,
-    // so this must be cast explicitly or the $match silently matches nothing.
-    const tenantObjectId = new mongoose.Types.ObjectId(tenantId);
-    const orderStats = await Transaction.aggregate([
-      { $match: { tenantId: tenantObjectId, status: 'completed' } },
-      {
-        $group: {
-          _id: '$customerId',
-          orderCount: { $sum: 1 },
-          totalSpent: { $sum: '$total' },
-        },
-      },
-    ]);
+    // Get order counts per customer, scoped to this tenant.
+    const orderStats = await prisma.transaction.groupBy({
+      by: ['customerId'],
+      where: { tenantId, status: 'completed' },
+      _count: { _all: true },
+      _sum: { total: true },
+    });
 
     const orderMap = new Map<string, { orderCount: number; totalSpent: number }>(
       orderStats
-        .filter((s) => s._id != null)
-        .map((s) => [String(s._id), { orderCount: s.orderCount, totalSpent: s.totalSpent }])
+        .filter((s) => s.customerId != null)
+        .map((s) => [
+          String(s.customerId),
+          { orderCount: s._count._all, totalSpent: Number(s._sum.total ?? 0) },
+        ])
     );
 
     const now = new Date();
@@ -55,11 +45,11 @@ export async function GET(request: NextRequest) {
 
     // Classify each customer
     const classifySegment = (c: {
-      _id: mongoose.Types.ObjectId;
-      lastPurchaseDate?: Date;
-      loyaltyPointsBalance?: number;
+      id: string;
+      lastPurchaseDate?: Date | null;
+      loyaltyPointsBalance?: number | null;
     }): string => {
-      const stats = orderMap.get(String(c._id));
+      const stats = orderMap.get(String(c.id));
       const orderCount = stats?.orderCount ?? 0;
       const totalSpent = stats?.totalSpent ?? 0;
       const lp = c.loyaltyPointsBalance ?? 0;
@@ -74,17 +64,27 @@ export async function GET(request: NextRequest) {
     };
 
     // Fetch all active customers (for counts)
-    const allCustomers = await Customer.find(
-      { tenantId, isActive: true },
-      { _id: 1, firstName: 1, lastName: 1, email: 1, phone: 1, lastPurchaseDate: 1, loyaltyPointsBalance: 1, totalSpent: 1, tags: 1 }
-    ).lean();
+    const allCustomers = await prisma.customer.findMany({
+      where: { tenantId, isActive: true },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        phone: true,
+        lastPurchaseDate: true,
+        loyaltyPointsBalance: true,
+        totalSpent: true,
+        tags: true,
+      },
+    });
 
     // Compute segment counts
     const counts: Record<string, number> = { all: 0, new: 0, regular: 0, vip: 0, at_risk: 0, lapsed: 0, prospect: 0 };
     const segmentedMap = new Map<string, typeof allCustomers>();
 
     for (const c of allCustomers) {
-      const seg = classifySegment(c as Parameters<typeof classifySegment>[0]);
+      const seg = classifySegment({ ...c, loyaltyPointsBalance: Number(c.loyaltyPointsBalance ?? 0) });
       counts.all++;
       counts[seg] = (counts[seg] ?? 0) + 1;
       const arr = segmentedMap.get(seg) ?? [];
@@ -103,8 +103,11 @@ export async function GET(request: NextRequest) {
     // Enrich with computed orderCount
     const enriched = filtered.slice(skip, skip + limit).map((c) => ({
       ...c,
-      orderCount: orderMap.get(String(c._id))?.orderCount ?? 0,
-      computedSegment: classifySegment(c as Parameters<typeof classifySegment>[0]),
+      _id: c.id,
+      totalSpent: Number(c.totalSpent ?? 0),
+      loyaltyPointsBalance: Number(c.loyaltyPointsBalance ?? 0),
+      orderCount: orderMap.get(String(c.id))?.orderCount ?? 0,
+      computedSegment: classifySegment({ ...c, loyaltyPointsBalance: Number(c.loyaltyPointsBalance ?? 0) }),
     }));
 
     return NextResponse.json({

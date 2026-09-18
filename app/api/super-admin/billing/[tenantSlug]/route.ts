@@ -1,15 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
-import Subscription from '@/models/Subscription';
-import BillingEvent from '@/models/BillingEvent';
-import SuperAdminAction from '@/models/SuperAdminAction';
+import { randomUUID } from 'crypto';
+import prisma from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
 
 async function resolveTenant(slug: string) {
-  return Tenant.findOne({ slug }).select('_id slug name').lean() as Promise<{ _id: unknown; slug: string; name: string } | null>;
+  return prisma.tenant.findUnique({ where: { slug }, select: { id: true, slug: true, name: true } });
 }
 
 // GET /api/super-admin/billing/[tenantSlug] — billing event history
@@ -18,7 +15,6 @@ export async function GET(
   { params }: { params: Promise<{ tenantSlug: string }> }
 ) {
   try {
-    await connectDB();
     await requireRole(request, ['super_admin']);
 
     const { tenantSlug } = await params;
@@ -32,12 +28,13 @@ export async function GET(
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20')));
 
     const [events, total] = await Promise.all([
-      BillingEvent.find({ tenantId: tenant._id })
-        .sort({ createdAt: -1 })
-        .skip((page - 1) * limit)
-        .limit(limit)
-        .lean(),
-      BillingEvent.countDocuments({ tenantId: tenant._id }),
+      prisma.billingEvent.findMany({
+        where: { tenantId: tenant.id },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.billingEvent.count({ where: { tenantId: tenant.id } }),
     ]);
 
     return NextResponse.json({
@@ -60,7 +57,6 @@ export async function POST(
   { params }: { params: Promise<{ tenantSlug: string }> }
 ) {
   try {
-    await connectDB();
     const adminUser = await requireRole(request, ['super_admin']);
 
     const { tenantSlug } = await params;
@@ -69,7 +65,7 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    const subscription = await Subscription.findOne({ tenantId: tenant._id }).lean();
+    const subscription = await prisma.subscription.findFirst({ where: { tenantId: tenant.id } });
     if (!subscription) {
       return NextResponse.json({ success: false, error: 'No subscription found for this tenant' }, { status: 404 });
     }
@@ -88,38 +84,44 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'amount is required' }, { status: 400 });
     }
 
-    const event = await BillingEvent.create({
-      tenantId: tenant._id,
-      subscriptionId: (subscription as { _id: unknown })._id,
-      type,
-      amount: Number(amount),
-      currency: 'PHP',
-      description,
-      notes,
-      transactionId,
-      invoiceUrl,
-      recordedBy: adminUser.userId,
+    const event = await prisma.billingEvent.create({
+      data: {
+        id: randomUUID(),
+        tenantId: tenant.id,
+        subscriptionId: subscription.id,
+        type,
+        amount: Number(amount),
+        currency: 'PHP',
+        description,
+        notes,
+        transactionId,
+        invoiceUrl,
+        recordedById: adminUser.userId,
+      },
     });
 
     await createAuditLog(request, {
-      tenantId: tenant._id as string,
+      tenantId: tenant.id,
       userId: adminUser.userId,
       action: AuditActions.CREATE,
       entityType: 'billing_event',
-      entityId: event._id.toString(),
+      entityId: event.id,
       changes: { type, amount, transactionId, invoiceUrl },
       metadata: { recordedBy: adminUser.userId, role: 'super_admin' },
     });
 
     const ip = request.headers.get('x-forwarded-for') || '';
-    await SuperAdminAction.create({
-      adminUserId: adminUser.userId,
-      action: 'billing.record',
-      targetType: 'Subscription',
-      targetId: String((subscription as { _id: unknown })._id),
-      description: `Recorded billing event "${type}" (${amount}) for tenant ${tenantSlug}`,
-      ipAddress: ip,
-      userAgent: request.headers.get('user-agent') || '',
+    await prisma.superAdminAction.create({
+      data: {
+        id: randomUUID(),
+        adminUserId: adminUser.userId,
+        action: 'billing.record',
+        targetType: 'Subscription',
+        targetId: subscription.id,
+        description: `Recorded billing event "${type}" (${amount}) for tenant ${tenantSlug}`,
+        ipAddress: ip,
+        userAgent: request.headers.get('user-agent') || '',
+      },
     });
 
     return NextResponse.json({ success: true, data: event }, { status: 201 });

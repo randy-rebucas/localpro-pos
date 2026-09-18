@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Table from '@/models/Table';
+import prisma from '@/lib/db';
+import type { TableStatus } from '@prisma/client';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -13,13 +13,12 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId } = authResult;
     const { id } = await params;
 
-    const table = await Table.findOne({ _id: id, tenantId }).lean();
+    const table = await prisma.posTable.findFirst({ where: { id, tenantId } });
     if (!table) {
       return NextResponse.json({ success: false, error: 'Table not found' }, { status: 404 });
     }
@@ -35,7 +34,6 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId, user } = authResult;
@@ -70,7 +68,7 @@ export async function PATCH(
       return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
-    const table = await Table.findOne({ _id: id, tenantId });
+    const table = await prisma.posTable.findFirst({ where: { id, tenantId } });
     if (!table) {
       return NextResponse.json({ success: false, error: 'Table not found' }, { status: 404 });
     }
@@ -101,25 +99,28 @@ export async function PATCH(
       }
     }
 
-    const oldData = table.toObject();
+    const oldData = table;
 
-    if (name !== undefined) table.name = name;
-    if (capacity !== undefined) table.capacity = capacity;
-    if (status !== undefined) table.status = status;
-    if (isActive !== undefined) table.isActive = isActive;
-    if (currentOrderId !== undefined) table.currentOrderId = currentOrderId || undefined;
-
-    await table.save();
+    const updated = await prisma.posTable.update({
+      where: { id: table.id },
+      data: {
+        ...(name !== undefined ? { name } : {}),
+        ...(capacity !== undefined ? { capacity } : {}),
+        ...(status !== undefined ? { status: status as TableStatus } : {}),
+        ...(isActive !== undefined ? { isActive } : {}),
+        ...(currentOrderId !== undefined ? { currentOrderId: currentOrderId || null } : {}),
+      },
+    });
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.UPDATE,
       entityType: 'table',
-      entityId: table._id.toString(),
-      changes: { before: oldData, after: table.toObject() },
+      entityId: table.id,
+      changes: { before: oldData, after: updated },
     });
 
-    return NextResponse.json({ success: true, data: table });
+    return NextResponse.json({ success: true, data: updated });
   } catch (error) {
     return handleApiError(error, 'Failed to update table');
   }
@@ -130,7 +131,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId, user } = authResult;
@@ -146,19 +146,18 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
-    const table = await Table.findOne({ _id: id, tenantId });
+    const table = await prisma.posTable.findFirst({ where: { id, tenantId } });
     if (!table) {
       return NextResponse.json({ success: false, error: 'Table not found' }, { status: 404 });
     }
 
-    table.isActive = false;
-    await table.save();
+    await prisma.posTable.update({ where: { id: table.id }, data: { isActive: false } });
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.DELETE,
       entityType: 'table',
-      entityId: table._id.toString(),
+      entityId: table.id,
       changes: { name: table.name },
     });
 

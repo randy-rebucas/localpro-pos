@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Invoice from '@/models/Invoice';
-import Transaction from '@/models/Transaction';
-import Customer from '@/models/Customer';
+import { randomUUID } from 'crypto';
+import prisma from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { generateInvoiceNumber } from '@/lib/receipt';
@@ -12,10 +10,9 @@ import { generateInvoiceNumber } from '@/lib/receipt';
  */
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const tenantAccess = await requireTenantAccess(request);
     const { tenantId, user } = tenantAccess; // eslint-disable-line @typescript-eslint/no-unused-vars
-    
+
     const body = await request.json();
     const { transactionId, customerId, dueDate, paymentTerms, notes } = body;
 
@@ -27,10 +24,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Get transaction
-    const transaction = await Transaction.findOne({
-      _id: transactionId,
-      tenantId,
-    }).lean();
+    const transaction = await prisma.transaction.findFirst({
+      where: { id: transactionId, tenantId },
+      include: { items: { include: { product: true } } },
+    });
 
     if (!transaction) {
       return NextResponse.json(
@@ -40,27 +37,29 @@ export async function POST(request: NextRequest) {
     }
 
     // Get customer info if customerId provided
-    let customerInfo = null;
+    let customerInfo: { name: string; email: string | null; phone: string | null; address?: any } | null = null; // eslint-disable-line @typescript-eslint/no-explicit-any
     if (customerId) {
-      const customer = await Customer.findOne({
-        _id: customerId,
-        tenantId,
-      }).lean();
+      const customer = await prisma.customer.findFirst({
+        where: { id: customerId, tenantId },
+        include: { addresses: true },
+      });
 
       if (customer) {
+        const defaultAddress = customer.addresses.length > 0
+          ? customer.addresses.find((addr) => addr.isDefault) || customer.addresses[0]
+          : undefined;
         customerInfo = {
           name: `${customer.firstName} ${customer.lastName}`.trim(),
           email: customer.email,
           phone: customer.phone,
-          address: customer.addresses && customer.addresses.length > 0 
-            ? customer.addresses.find((addr: any) => addr.isDefault) || customer.addresses[0] // eslint-disable-line @typescript-eslint/no-explicit-any
-            : undefined,
+          address: defaultAddress,
         };
       }
     }
 
     // Convert transaction items to invoice items
-    const invoiceItems = transaction.items.map((item: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+    const invoiceItems = transaction.items.map((item) => ({
+      id: randomUUID(),
       name: item.name,
       description: item.product?.name || '',
       quantity: item.quantity,
@@ -78,21 +77,32 @@ export async function POST(request: NextRequest) {
     const invoiceNumber = await generateInvoiceNumber(tenantId);
 
     // Create invoice
-    const invoice = await Invoice.create({
-      tenantId,
-      invoiceNumber,
-      transactionId: transaction._id,
-      customerId: customerId || undefined,
-      customerInfo,
-      items: invoiceItems,
-      subtotal: transaction.subtotal,
-      discountAmount: transaction.discountAmount || undefined,
-      taxAmount: transaction.taxAmount || 0,
-      total: transaction.total,
-      dueDate: invoiceDueDate,
-      paymentTerms: paymentTerms || 'Net 30',
-      status: 'draft',
-      notes: notes || undefined,
+    const invoice = await prisma.invoice.create({
+      data: {
+        id: randomUUID(),
+        tenantId,
+        invoiceNumber,
+        transactionId: transaction.id,
+        customerId: customerId || undefined,
+        snapshotName: customerInfo?.name,
+        snapshotEmail: customerInfo?.email,
+        snapshotPhone: customerInfo?.phone,
+        snapshotAddressStreet: customerInfo?.address?.street,
+        snapshotAddressCity: customerInfo?.address?.city,
+        snapshotAddressState: customerInfo?.address?.state,
+        snapshotAddressZipCode: customerInfo?.address?.zipCode,
+        snapshotAddressCountry: customerInfo?.address?.country,
+        items: { create: invoiceItems },
+        subtotal: transaction.subtotal,
+        discountAmount: transaction.discountAmount || undefined,
+        taxAmount: transaction.taxAmount || 0,
+        total: transaction.total,
+        dueDate: invoiceDueDate,
+        paymentTerms: paymentTerms || 'Net 30',
+        status: 'draft',
+        notes: notes || undefined,
+      },
+      include: { items: true },
     });
 
     // Create audit log
@@ -101,7 +111,7 @@ export async function POST(request: NextRequest) {
       userId: user.userId,
       action: AuditActions.INVOICE_CREATE,
       entityType: 'invoice',
-      entityId: invoice._id.toString(),
+      entityId: invoice.id,
       changes: {
         invoiceNumber,
         transactionId: transactionId.toString(),

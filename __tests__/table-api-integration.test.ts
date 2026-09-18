@@ -11,8 +11,21 @@ import { generateToken } from '@/lib/auth';
 // Mocks
 // ---------------------------------------------------------------------------
 
-vi.mock('@/lib/mongodb', () => ({
-  default: vi.fn().mockResolvedValue(undefined),
+vi.mock('@/lib/db', () => ({
+  default: {
+    user: {
+      findUnique: vi.fn(),
+    },
+    tenant: {
+      findUnique: vi.fn(),
+    },
+    posTable: {
+      findMany: vi.fn(),
+      findFirst: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+    },
+  },
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -28,12 +41,6 @@ vi.mock('@/lib/token-blacklist', () => ({
   isTokenIssuedBeforeRevocation: vi.fn().mockResolvedValue(false),
 }));
 
-vi.mock('@/models/User', () => ({
-  default: {
-    findById: vi.fn(),
-  },
-}));
-
 vi.mock('@/lib/rate-limit', () => ({
   checkRateLimit: vi.fn().mockReturnValue({ allowed: true, retryAfter: 0 }),
 }));
@@ -44,20 +51,6 @@ vi.mock('@/lib/audit', () => ({
     CREATE: 'CREATE',
     UPDATE: 'UPDATE',
     DELETE: 'DELETE',
-  },
-}));
-
-// Mock the Table model
-const mockTableFind = vi.fn();
-const mockTableFindOne = vi.fn();
-const mockTableCreate = vi.fn();
-
-vi.mock('@/models/Table', () => ({
-  default: {
-    find: mockTableFind,
-    findOne: mockTableFindOne,
-    create: mockTableCreate,
-    findByIdAndUpdate: vi.fn(),
   },
 }));
 

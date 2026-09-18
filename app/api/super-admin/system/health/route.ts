@@ -1,17 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
+import prisma from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
-import mongoose from 'mongoose';
 
-const KEY_COLLECTIONS = [
+// Postgres table names for the equivalent of the old Mongo KEY_COLLECTIONS list.
+const KEY_TABLES = [
   'tenants',
   'users',
   'subscriptions',
-  'subscriptionplans',
-  'auditlogs',
+  'subscription_plans',
+  'audit_logs',
   'products',
-  'orders',
   'customers',
   'categories',
   'branches',
@@ -28,30 +27,28 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    await connectDB();
     await requireRole(request, ['super_admin']);
 
     const start = Date.now();
-    const db = mongoose.connection.db;
-
-    if (!db) {
-      return NextResponse.json({ success: false, error: 'Database not connected' }, { status: 503 });
-    }
 
     // Ping
-    await db.admin().ping();
+    await prisma.$queryRaw`SELECT 1`;
     const latencyMs = Date.now() - start;
 
-    // Collection stats
-    const allCollections = await db.listCollections().toArray();
-    const collectionNames = allCollections.map(c => c.name);
+    // Table listing (equivalent of listCollections)
+    const allTables = await prisma.$queryRaw<{ tablename: string }[]>`
+      SELECT tablename FROM pg_tables WHERE schemaname = 'public'
+    `;
+    const tableNames = allTables.map((t) => t.tablename);
 
-    const statsPromises = KEY_COLLECTIONS
-      .filter(name => collectionNames.includes(name))
-      .map(async name => {
+    const statsPromises = KEY_TABLES
+      .filter((name) => tableNames.includes(name))
+      .map(async (name) => {
         try {
-          const stats = await db.collection(name).estimatedDocumentCount();
-          return { name, count: stats };
+          const result = await prisma.$queryRawUnsafe<{ count: bigint }[]>(
+            `SELECT COUNT(*)::bigint AS count FROM "${name}"`
+          );
+          return { name, count: Number(result[0]?.count ?? 0) };
         } catch {
           return { name, count: -1 };
         }
@@ -64,7 +61,7 @@ export async function GET(request: NextRequest) {
       data: {
         status: 'ok',
         latencyMs,
-        totalCollections: allCollections.length,
+        totalCollections: allTables.length,
         collections,
       },
     });

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
-import ZReading from '@/models/ZReading';
+import { randomUUID } from 'crypto';
+import { Prisma } from '@prisma/client';
+import prisma from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -14,7 +14,6 @@ import { logger } from '@/lib/logger';
 /** List historical Z-Readings for the tenant. */
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
@@ -30,11 +29,14 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const limit = Math.min(parseInt(searchParams.get('limit') || '30', 10), 100);
 
-    const readings = await ZReading.find({ tenantId })
-      .sort({ businessDate: -1 })
-      .limit(limit)
-      .populate('generatedBy', 'name email')
-      .lean();
+    const readings = await prisma.zReading.findMany({
+      where: { tenantId },
+      orderBy: { businessDate: 'desc' },
+      take: limit,
+      include: {
+        generatedBy: { select: { name: true, email: true } },
+      },
+    });
 
     return NextResponse.json({ success: true, data: readings });
   } catch (error: unknown) {
@@ -52,7 +54,6 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
@@ -73,14 +74,17 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const businessDate = startOfBusinessDay(body.date ? new Date(body.date) : new Date());
 
-    const existing = await ZReading.findOne({ tenantId, businessDate }).populate('generatedBy', 'name email').lean();
+    const existing = await prisma.zReading.findFirst({
+      where: { tenantId, branchId: null, businessDate },
+      include: { generatedBy: { select: { name: true, email: true } } },
+    });
     if (existing) {
       await createAuditLog(request, {
         tenantId,
         userId: user.userId,
         action: AuditActions.Z_READING_VIEW,
         entityType: 'z_reading',
-        entityId: existing._id.toString(),
+        entityId: existing.id,
         metadata: { businessDate: businessDate.toISOString(), reprint: true },
       });
       return NextResponse.json({ success: true, data: existing, reprint: true });
@@ -88,34 +92,40 @@ export async function POST(request: NextRequest) {
 
     const [aggregate, tenant] = await Promise.all([
       getDailySalesAggregate(tenantId, businessDate),
-      Tenant.findById(tenantId).select('grandTotalSales').lean(),
+      prisma.tenant.findUnique({ where: { id: tenantId }, select: { grandTotalSales: true } }),
     ]);
 
-    const endingGT = tenant?.grandTotalSales ?? 0;
+    const endingGT = Number(tenant?.grandTotalSales ?? 0);
     const beginningGT = Math.max(0, endingGT - aggregate.grossSales);
 
     let zReading;
     try {
-      zReading = await ZReading.create({
-        tenantId,
-        businessDate,
-        beginningGT,
-        endingGT,
-        grossSales: aggregate.grossSales,
-        vatableSales: aggregate.vatableSales,
-        vatAmount: aggregate.vatAmount,
-        vatExemptSales: aggregate.vatExemptSales,
-        zeroRatedSales: aggregate.zeroRatedSales,
-        discountTotal: aggregate.discountTotal,
-        transactionCount: aggregate.transactionCount,
-        voidCount: aggregate.voidCount,
-        generatedBy: user.userId,
-        generatedAt: new Date(),
+      zReading = await prisma.zReading.create({
+        data: {
+          id: randomUUID(),
+          tenantId,
+          businessDate,
+          beginningGT,
+          endingGT,
+          grossSales: aggregate.grossSales,
+          vatableSales: aggregate.vatableSales,
+          vatAmount: aggregate.vatAmount,
+          vatExemptSales: aggregate.vatExemptSales,
+          zeroRatedSales: aggregate.zeroRatedSales,
+          discountTotal: aggregate.discountTotal,
+          transactionCount: aggregate.transactionCount,
+          voidCount: aggregate.voidCount,
+          generatedById: user.userId,
+          generatedAt: new Date(),
+        },
       });
     } catch (createErr: unknown) {
-      // Unique index race: another request generated it first — return that one as a reprint.
-      if (createErr instanceof Error && 'code' in createErr && (createErr as { code?: number }).code === 11000) {
-        const race = await ZReading.findOne({ tenantId, businessDate }).populate('generatedBy', 'name email').lean();
+      // Unique constraint race: another request generated it first — return that one as a reprint.
+      if (createErr instanceof Prisma.PrismaClientKnownRequestError && createErr.code === 'P2002') {
+        const race = await prisma.zReading.findFirst({
+          where: { tenantId, branchId: null, businessDate },
+          include: { generatedBy: { select: { name: true, email: true } } },
+        });
         if (race) {
           return NextResponse.json({ success: true, data: race, reprint: true });
         }
@@ -128,7 +138,7 @@ export async function POST(request: NextRequest) {
       userId: user.userId,
       action: AuditActions.Z_READING_GENERATE,
       entityType: 'z_reading',
-      entityId: zReading._id.toString(),
+      entityId: zReading.id,
       changes: {
         businessDate: businessDate.toISOString(),
         grossSales: aggregate.grossSales,

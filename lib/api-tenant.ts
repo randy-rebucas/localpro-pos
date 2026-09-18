@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getTenantBySlug, getTenantFromHost, getTenantId } from './tenant';
 import { getCurrentUser } from './auth';
-import connectDB from './mongodb';
+import prisma from './db';
 
 /**
  * Custom error class for tenant access violations
@@ -50,9 +50,7 @@ export async function getTenantIdFromRequest(request: NextRequest): Promise<stri
             tenantSlug = requestedTenantSlug;
           } else {
             // If we can't get the slug from request, get it from the tenant ID
-            const Tenant = (await import('@/models/Tenant')).default;
-            await connectDB();
-            const tenant = await Tenant.findById(requestTenantId).select('slug').lean();
+            const tenant = await prisma.tenant.findUnique({ where: { id: requestTenantId }, select: { slug: true } });
             if (tenant && tenant.slug) {
               tenantSlug = tenant.slug;
             }
@@ -60,9 +58,7 @@ export async function getTenantIdFromRequest(request: NextRequest): Promise<stri
         } catch (e) {
           // If we can't get the slug, try to get it from the tenant ID
           try {
-            const Tenant = (await import('@/models/Tenant')).default;
-            await connectDB();
-            const tenant = await Tenant.findById(requestTenantId).select('slug').lean();
+            const tenant = await prisma.tenant.findUnique({ where: { id: requestTenantId }, select: { slug: true } });
             if (tenant && tenant.slug) {
               tenantSlug = tenant.slug;
             }
@@ -231,9 +227,7 @@ export async function requireTenantAccess(request: NextRequest): Promise<{
     // Get the tenant slug for redirect
     let tenantSlug = 'default';
     try {
-      const Tenant = (await import('@/models/Tenant')).default;
-      await connectDB();
-      const tenant = await Tenant.findById(requestTenantId).select('slug').lean();
+      const tenant = await prisma.tenant.findUnique({ where: { id: requestTenantId }, select: { slug: true } });
       if (tenant && tenant.slug) {
         tenantSlug = tenant.slug;
       }

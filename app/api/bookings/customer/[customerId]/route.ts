@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Booking from '@/models/Booking';
+import prisma from '@/lib/db';
 import { requireCustomerAuth } from '@/lib/auth-customer';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { requireBookingSchedulingAccess } from '@/lib/booking-scheduling-access';
@@ -18,9 +17,8 @@ export async function GET(
   { params }: { params: Promise<{ customerId: string }> }
 ) {
   try {
-    await connectDB();
     const t = await getValidationTranslatorFromRequest(request);
-    
+
     // Verify customer authentication
     const customer = await requireCustomerAuth(request);
     const { customerId } = await params;
@@ -46,9 +44,9 @@ export async function GET(
     const endDate = searchParams.get('endDate');
 
     // Build query
-    const query: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
+    const where: Record<string, unknown> = {
       tenantId: customer.tenantId,
-      $or: [
+      OR: [
         { customerEmail: customer.email },
         { customerPhone: customer.phone },
       ],
@@ -56,24 +54,22 @@ export async function GET(
 
     // Add status filter
     if (status) {
-      query.status = status;
+      where.status = status;
     }
 
     // Add date range filter
     if (startDate || endDate) {
-      query.startTime = {};
-      if (startDate) {
-        query.startTime.$gte = new Date(startDate);
-      }
-      if (endDate) {
-        query.startTime.$lte = new Date(endDate);
-      }
+      where.startTime = {
+        ...(startDate ? { gte: new Date(startDate) } : {}),
+        ...(endDate ? { lte: new Date(endDate) } : {}),
+      };
     }
 
-    const bookings = await Booking.find(query)
-      .populate('staffId', 'name email')
-      .sort({ startTime: -1 }) // Most recent first
-      .lean();
+    const bookings = await prisma.booking.findMany({
+      where,
+      include: { staff: { select: { name: true, email: true } } },
+      orderBy: { startTime: 'desc' }, // Most recent first
+    });
 
     return NextResponse.json({
       success: true,
@@ -81,7 +77,7 @@ export async function GET(
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('Get customer bookings error:', error);
-    
+
     if (error.message === 'Unauthorized') {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },

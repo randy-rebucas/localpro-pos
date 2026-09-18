@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
-import Category from '@/models/Category';
-import Product from '@/models/Product';
-import Customer from '@/models/Customer';
-import Discount from '@/models/Discount';
+import { randomUUID } from 'crypto';
+import prisma from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -201,32 +197,35 @@ export async function GET(
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const { slug } = await params;
 
-    const tenant = await Tenant.findOne({ slug, isActive: true }).lean();
+    const tenant = await prisma.tenant.findFirst({
+      where: { slug, isActive: true },
+      include: { settings: true },
+    });
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    if (!(await hasTenantPermission(user.role, tenant._id.toString(), 'sample_data.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenant.id, 'sample_data.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
-    const settings = (tenant as any).settings; // eslint-disable-line @typescript-eslint/no-explicit-any
-    const bizType: BizType = (settings?.businessType ?? 'general') as BizType;
+    const bizType: BizType = (tenant.settings?.businessType ?? 'general') as BizType;
     const config = SAMPLE_DATA[bizType] ?? SAMPLE_DATA.general;
 
     // Count what already exists
-    const existingCategories = await Category.countDocuments({ tenantId: tenant._id });
-    const existingProducts   = await Product.countDocuments({ tenantId: tenant._id });
-    const existingCustomers  = await Customer.countDocuments({ tenantId: tenant._id });
-    const existingDiscounts  = await Discount.countDocuments({ tenantId: tenant._id });
+    const [existingCategories, existingProducts, existingCustomers, existingDiscounts] = await Promise.all([
+      prisma.category.count({ where: { tenantId: tenant.id } }),
+      prisma.product.count({ where: { tenantId: tenant.id } }),
+      prisma.customer.count({ where: { tenantId: tenant.id } }),
+      prisma.discount.count({ where: { tenantId: tenant.id } }),
+    ]);
 
     return NextResponse.json({
       success: true,
@@ -265,7 +264,6 @@ export async function POST(
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const { slug } = await params;
 
@@ -276,22 +274,24 @@ export async function POST(
       ? new Set(body.items.filter((i: unknown) => itemTypes.includes(i as typeof itemTypes[number])))
       : new Set(itemTypes);
 
-    const tenant = await Tenant.findOne({ slug, isActive: true });
+    const tenant = await prisma.tenant.findFirst({
+      where: { slug, isActive: true },
+      include: { settings: true },
+    });
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    if (!(await hasTenantPermission(user.role, tenant._id.toString(), 'sample_data.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenant.id, 'sample_data.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
-    const tenantId = tenant._id;
-    const settings = (tenant as any).settings; // eslint-disable-line @typescript-eslint/no-explicit-any
-    const bizType: BizType = (settings?.businessType ?? 'general') as BizType;
+    const tenantId = tenant.id;
+    const bizType: BizType = (tenant.settings?.businessType ?? 'general') as BizType;
     const config = SAMPLE_DATA[bizType] ?? SAMPLE_DATA.general;
 
     const results = {
@@ -304,16 +304,18 @@ export async function POST(
     // ── Categories ──────────────────────────────────────────────────────────
     // Always resolved (even if "categories" itself wasn't selected) since products
     // link to them by categoryId — only the creation is skipped when deselected.
-    const categoryMap: Record<string, any> = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const categoryMap: Record<string, string> = {};
     if (requestedItems.has('categories') || requestedItems.has('products')) {
       for (const catDef of config.categories) {
-        const existing = await Category.findOne({ tenantId, name: catDef.name });
+        const existing = await prisma.category.findFirst({ where: { tenantId, name: catDef.name } });
         if (existing) {
-          categoryMap[catDef.name] = existing._id;
+          categoryMap[catDef.name] = existing.id;
           if (requestedItems.has('categories')) results.categories.skipped++;
         } else if (requestedItems.has('categories')) {
-          const cat = await Category.create({ ...catDef, tenantId, isActive: true });
-          categoryMap[catDef.name] = cat._id;
+          const cat = await prisma.category.create({
+            data: { id: randomUUID(), tenantId, name: catDef.name, description: catDef.description, isActive: true },
+          });
+          categoryMap[catDef.name] = cat.id;
           results.categories.created++;
         }
       }
@@ -322,18 +324,40 @@ export async function POST(
     // ── Products ────────────────────────────────────────────────────────────
     if (requestedItems.has('products')) {
       for (const prodDef of config.products) {
-        const { category: catName, ...rest } = prodDef;
-        const existing = await Product.findOne({ tenantId, name: rest.name });
+        const { category: catName, allergens, calories, protein, carbs, fat,
+          serviceType, weightBased, pickupDelivery, estimatedDuration,
+          serviceDuration, staffRequired, ...rest } = prodDef as Record<string, unknown>;
+        const existing = await prisma.product.findFirst({ where: { tenantId, name: rest.name as string } });
         if (existing && skipExisting) {
           results.products.skipped++;
           continue;
         }
 
-        await Product.create({
-          ...rest,
-          tenantId,
-          categoryId: categoryMap[catName],
-          category:   catName,
+        const productId = randomUUID();
+        await prisma.product.create({
+          data: {
+            id: productId,
+            tenantId,
+            name: rest.name as string,
+            description: rest.description as string | undefined,
+            price: rest.price as number,
+            stock: rest.stock as number,
+            sku: rest.sku as string | undefined,
+            productType: rest.productType as 'regular' | 'bundle' | 'service',
+            trackInventory: rest.trackInventory as boolean | undefined,
+            lowStockThreshold: rest.lowStockThreshold as number | undefined,
+            categoryId: categoryMap[catName as string],
+            category: catName as string | undefined,
+            ...(allergens || calories !== undefined || protein !== undefined || carbs !== undefined || fat !== undefined
+              ? { restaurantDetails: { create: { allergens: (allergens as string[]) ?? [], calories: calories as number | undefined, protein: protein as number | undefined, carbs: carbs as number | undefined, fat: fat as number | undefined } } }
+              : {}),
+            ...(serviceType || weightBased !== undefined || pickupDelivery !== undefined || estimatedDuration !== undefined
+              ? { laundryDetails: { create: { serviceType: serviceType as 'wash' | 'dry_clean' | 'press' | 'repair' | 'other' | undefined, weightBased: weightBased as boolean | undefined, pickupDelivery: pickupDelivery as boolean | undefined, estimatedDuration: estimatedDuration as number | undefined } } }
+              : {}),
+            ...(serviceDuration !== undefined || staffRequired !== undefined
+              ? { serviceDetails: { create: { serviceDuration: serviceDuration as number | undefined, staffRequired: (staffRequired as number | undefined) ?? 1 } } }
+              : {}),
+          },
         });
         results.products.created++;
       }
@@ -342,12 +366,23 @@ export async function POST(
     // ── Customers ───────────────────────────────────────────────────────────
     if (requestedItems.has('customers')) {
       for (const cust of config.customers) {
-        const existing = await Customer.findOne({ tenantId, firstName: cust.firstName, lastName: cust.lastName });
+        const existing = await prisma.customer.findFirst({ where: { tenantId, firstName: cust.firstName, lastName: cust.lastName } });
         if (existing && skipExisting) {
           results.customers.skipped++;
           continue;
         }
-        await Customer.create({ ...cust, tenantId, isActive: true });
+        await prisma.customer.create({
+          data: {
+            id: randomUUID(),
+            tenantId,
+            firstName: cust.firstName,
+            lastName: cust.lastName,
+            email: cust.email,
+            phone: cust.phone,
+            tags: cust.tags ?? [],
+            isActive: true,
+          },
+        });
         results.customers.created++;
       }
     }
@@ -358,19 +393,27 @@ export async function POST(
       const oneYear = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate());
 
       for (const discDef of config.discounts) {
-        const existing = await Discount.findOne({ tenantId, code: discDef.code.toUpperCase() });
+        const code = discDef.code.toUpperCase();
+        const existing = await prisma.discount.findFirst({ where: { tenantId, code } });
         if (existing && skipExisting) {
           results.discounts.skipped++;
           continue;
         }
-        await Discount.create({
-          ...discDef,
-          tenantId,
-          code:       discDef.code.toUpperCase(),
-          usageCount: 0,
-          isActive:   true,
-          validFrom:  now,
-          validUntil: oneYear,
+        await prisma.discount.create({
+          data: {
+            id: randomUUID(),
+            tenantId,
+            code,
+            name: discDef.name,
+            description: discDef.description,
+            type: discDef.type,
+            value: discDef.value,
+            minPurchaseAmount: discDef.minPurchaseAmount,
+            usageCount: 0,
+            isActive: true,
+            validFrom: now,
+            validUntil: oneYear,
+          },
         });
         results.discounts.created++;
       }
@@ -381,7 +424,7 @@ export async function POST(
       tenantId,
       action: AuditActions.UPDATE,
       entityType: 'tenant',
-      entityId: tenantId.toString(),
+      entityId: tenantId,
       metadata: { action: 'seed_sample_data', businessType: bizType, results },
     });
 

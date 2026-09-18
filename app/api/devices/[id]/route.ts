@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Device from '@/models/Device';
+import prisma from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -13,7 +12,6 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId, user } = authResult;
@@ -29,28 +27,28 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
-    const device = await Device.findOne({ _id: id, tenantId });
-    if (!device) {
+    const oldDevice = await prisma.device.findFirst({ where: { id, tenantId } });
+    if (!oldDevice) {
       return NextResponse.json({ success: false, error: t('validation.deviceNotFound', 'Device not found') }, { status: 404 });
     }
 
     const body = await request.json();
     const { label, serialNumber, terminalId, branchId, ptuNumber, ptuStatus, isActive } = body;
 
-    const oldData = device.toObject();
+    const updateData: Record<string, unknown> = {};
+    if (label !== undefined) updateData.label = label;
+    if (serialNumber !== undefined) updateData.serialNumber = serialNumber;
+    if (terminalId !== undefined) updateData.terminalId = terminalId;
+    if (branchId !== undefined) updateData.branchId = branchId || null;
+    if (ptuNumber !== undefined) updateData.ptuNumber = ptuNumber;
+    if (ptuStatus !== undefined) updateData.ptuStatus = ptuStatus;
+    if (isActive !== undefined) updateData.isActive = isActive;
 
-    if (label !== undefined) device.label = label;
-    if (serialNumber !== undefined) device.serialNumber = serialNumber;
-    if (terminalId !== undefined) device.terminalId = terminalId;
-    if (branchId !== undefined) device.branchId = branchId || undefined;
-    if (ptuNumber !== undefined) device.ptuNumber = ptuNumber;
-    if (ptuStatus !== undefined) device.ptuStatus = ptuStatus;
-    if (isActive !== undefined) device.isActive = isActive;
-
+    let device;
     try {
-      await device.save();
+      device = await prisma.device.update({ where: { id }, data: updateData });
     } catch (saveErr: unknown) {
-      if (saveErr instanceof Error && 'code' in saveErr && (saveErr as { code?: number }).code === 11000) {
+      if (saveErr instanceof Error && 'code' in saveErr && (saveErr as { code?: string }).code === 'P2002') {
         return NextResponse.json(
           { success: false, error: t('validation.deviceDuplicate', 'A device with this terminal ID or serial number already exists') },
           { status: 409 }
@@ -64,8 +62,8 @@ export async function PUT(
       userId: user.userId,
       action: AuditActions.DEVICE_UPDATE,
       entityType: 'device',
-      entityId: device._id.toString(),
-      changes: { before: oldData, after: device.toObject() },
+      entityId: device.id,
+      changes: { before: oldDevice, after: device },
     });
 
     return NextResponse.json({ success: true, data: device });
@@ -79,7 +77,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId, user } = authResult;
@@ -95,21 +92,20 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
 
-    const device = await Device.findOne({ _id: id, tenantId });
+    const device = await prisma.device.findFirst({ where: { id, tenantId } });
     if (!device) {
       return NextResponse.json({ success: false, error: t('validation.deviceNotFound', 'Device not found') }, { status: 404 });
     }
 
     // Soft delete — preserve device history for receipts/audit already issued
-    device.isActive = false;
-    await device.save();
+    await prisma.device.update({ where: { id }, data: { isActive: false } });
 
     await createAuditLog(request, {
       tenantId,
       userId: user.userId,
       action: AuditActions.DEVICE_DELETE,
       entityType: 'device',
-      entityId: device._id.toString(),
+      entityId: device.id,
       changes: { label: device.label, terminalId: device.terminalId },
     });
 

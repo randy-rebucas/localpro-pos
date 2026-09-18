@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Discount from '@/models/Discount';
+import prisma from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -11,7 +10,6 @@ import { ensureLegalDiscounts, LEGAL_DISCOUNT_CODES } from '@/lib/discount-seeds
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     await requireAuth(request);
 
     // Rate limit: 20 attempts per minute per IP
@@ -60,10 +58,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const discount = await Discount.findOne({
-      tenantId,
-      code: upperCode,
-      isActive: true,
+    const discount = await prisma.discount.findFirst({
+      where: {
+        tenantId,
+        code: upperCode,
+        isActive: true,
+      },
     });
 
     if (!discount) {
@@ -90,9 +90,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const minPurchaseAmount = discount.minPurchaseAmount != null ? Number(discount.minPurchaseAmount) : null;
+    const maxDiscountAmount = discount.maxDiscountAmount != null ? Number(discount.maxDiscountAmount) : null;
+    const value = Number(discount.value);
+
     // Check minimum purchase amount
-    if (discount.minPurchaseAmount && subtotal < discount.minPurchaseAmount) {
-      const errorMsg = t('validation.minimumPurchaseAmount', 'Minimum purchase amount of {amount} required').replace('{amount}', discount.minPurchaseAmount.toString());
+    if (minPurchaseAmount && subtotal < minPurchaseAmount) {
+      const errorMsg = t('validation.minimumPurchaseAmount', 'Minimum purchase amount of {amount} required').replace('{amount}', minPurchaseAmount.toString());
       return NextResponse.json(
         { success: false, error: errorMsg },
         { status: 400 }
@@ -102,12 +106,12 @@ export async function POST(request: NextRequest) {
     // Calculate discount amount
     let discountAmount = 0;
     if (discount.type === 'percentage') {
-      discountAmount = Math.round((subtotal * discount.value) / 100 * 100) / 100;
-      if (discount.maxDiscountAmount) {
-        discountAmount = Math.min(discountAmount, discount.maxDiscountAmount);
+      discountAmount = Math.round((subtotal * value) / 100 * 100) / 100;
+      if (maxDiscountAmount) {
+        discountAmount = Math.min(discountAmount, maxDiscountAmount);
       }
     } else {
-      discountAmount = Math.min(discount.value, subtotal);
+      discountAmount = Math.min(value, subtotal);
     }
 
     return NextResponse.json({
@@ -116,7 +120,7 @@ export async function POST(request: NextRequest) {
         code: discount.code,
         name: discount.name,
         type: discount.type,
-        value: discount.value,
+        value,
         category: discount.category,
         requiresIdVerification: discount.requiresIdVerification,
         discountAmount,

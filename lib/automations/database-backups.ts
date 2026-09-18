@@ -3,8 +3,6 @@
  * Scheduled automatic backups with optional S3 cloud upload
  */
 
-import connectDB from '@/lib/mongodb';
-import mongoose from 'mongoose';
 import { AutomationResult } from './types';
 
 // Lazy-load Node.js modules to prevent Turbopack from tracing the entire project.
@@ -13,6 +11,21 @@ import { AutomationResult } from './types';
 const _importFs = () => import('fs/promises');
 /* turbopackIgnore: true */
 const _importPath = () => import('path');
+/* turbopackIgnore: true */
+const _importChildProcess = () => import('child_process');
+
+/**
+ * Build a pg_dump/pg_restore/psql-compatible connection string from the same
+ * DATABASE_URL env var lib/db.ts's Prisma client uses (see prisma/schema.prisma's
+ * datasource block: `url = env("DATABASE_URL")`).
+ */
+function getPostgresConnectionString(): string {
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    throw new Error('DATABASE_URL is not set; cannot connect to Postgres for backup/restore');
+  }
+  return url;
+}
 
 export interface DatabaseBackupOptions {
   tenantId?: string; // If specified, backup only this tenant's data
@@ -26,8 +39,6 @@ export interface DatabaseBackupOptions {
 export async function createDatabaseBackup(
   options: DatabaseBackupOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -39,10 +50,14 @@ export async function createDatabaseBackup(
   try {
     const fs = await _importFs();
     const path = await _importPath();
+    const { execFile } = await _importChildProcess();
+    const { promisify } = await import('util');
+    const execFileAsync = promisify(execFile);
 
     const backupDir = options.backupPath || path.join(/*turbopackIgnore: true*/ process.cwd(), 'backups');
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const backupFileName = `backup-${timestamp}.json`;
+    // pg_dump custom format (-Fc): compressed, and restorable selectively with pg_restore.
+    const backupFileName = `backup-${timestamp}.dump`;
     const backupFilePath = path.join(backupDir, backupFileName);
 
     // Ensure backup directory exists
@@ -52,49 +67,30 @@ export async function createDatabaseBackup(
       // Directory might already exist
     }
 
-    // Get database connection
-    const db = mongoose.connection.db;
-    if (!db) {
-      throw new Error('Database connection not available');
+    const connectionString = getPostgresConnectionString();
+
+    if (options.tenantId) {
+      // pg_dump dumps whole tables/schemas, not row-filtered data — it has no
+      // equivalent of the old Mongo per-tenant `find({ tenantId })` export.
+      // Row-level, tenant-scoped exports would need per-table `COPY ... WHERE`
+      // (or a Prisma-driven JSON export); that's out of scope here, so a
+      // tenantId-scoped request still produces a full-database dump and we
+      // surface that clearly instead of silently ignoring the option.
+      results.errors?.push(
+        'tenantId option is not supported by pg_dump (table-level tool, no row filtering); produced a full-database backup instead.'
+      );
     }
 
-    // Get all collections
-    const collections = await db.listCollections().toArray();
-    const backupData: Record<string, any[]> = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
-
-    // Export each collection
-    for (const collectionInfo of collections) {
-      const collectionName = collectionInfo.name;
-      
-      // Skip system collections
-      if (collectionName.startsWith('system.')) {
-        continue;
-      }
-
-      // If tenantId specified, filter by tenant
-      if (options.tenantId) {
-        const collection = db.collection(collectionName);
-        const documents = await collection.find({ tenantId: new mongoose.Types.ObjectId(options.tenantId) }).toArray();
-        if (documents.length > 0) {
-          backupData[collectionName] = documents;
-        }
-      } else {
-        const collection = db.collection(collectionName);
-        const documents = await collection.find({}).limit(10000).toArray(); // Limit to prevent memory issues
-        if (documents.length > 0) {
-          backupData[collectionName] = documents;
-        }
-      }
-    }
-
-    // Write backup to file
-    await fs.writeFile(backupFilePath, JSON.stringify(backupData, null, 2), 'utf-8');
+    // mongodump -> pg_dump: full logical backup in custom (compressed, restorable) format.
+    //   mongodump --uri="<mongo uri>" --archive=<file> --gzip
+    //   pg_dump "<postgres connection string>" -Fc -f <file>
+    await execFileAsync('pg_dump', [connectionString, '-Fc', '-f', backupFilePath]);
 
     // Rotate old backups (keep last 7)
     try {
       const files = await fs.readdir(backupDir);
       const oldBackups = files
-        .filter(f => f.startsWith('backup-') && f.endsWith('.json'))
+        .filter(f => f.startsWith('backup-') && f.endsWith('.dump'))
         .sort()
         .reverse();
 
@@ -135,113 +131,60 @@ export async function createDatabaseBackup(
 }
 
 export interface DatabaseRestoreOptions {
-  backupFilePath: string; // Absolute path to the JSON backup file
-  clearExisting?: boolean; // Drop each collection's documents before inserting (default: false)
-  collections?: string[]; // Restore only these collections; omit to restore all
-  dryRun?: boolean; // Parse and count without writing to the database
-}
-
-export interface RestoreCollectionResult {
-  inserted: number;
-  cleared: number;
-  skipped?: boolean;
+  backupFilePath: string; // Absolute path to a pg_dump custom-format (-Fc) .dump file
+  clearExisting?: boolean; // Pass --clean to pg_restore (drop objects before recreating)
+  dryRun?: boolean; // List the dump's contents without writing to the database
 }
 
 export interface DatabaseRestoreResult {
   success: boolean;
   message: string;
   dryRun: boolean;
-  collections: Record<string, RestoreCollectionResult>;
   errors: string[];
 }
 
 /**
- * Restore database from a JSON backup file produced by createDatabaseBackup
+ * Restore the Postgres database from a pg_dump custom-format backup file
+ * produced by createDatabaseBackup. Note: unlike the old Mongo per-collection
+ * JSON restore, pg_restore operates on the whole dump — there is no
+ * collection-level filtering equivalent.
  */
 export async function restoreDatabaseBackup(
   options: DatabaseRestoreOptions
 ): Promise<DatabaseRestoreResult> {
-  await connectDB();
-
   const result: DatabaseRestoreResult = {
     success: true,
     message: '',
     dryRun: options.dryRun ?? false,
-    collections: {},
     errors: [],
   };
 
   try {
-    const fs = await _importFs();
-    const raw = await fs.readFile(options.backupFilePath, 'utf-8');
-    const backupData = JSON.parse(raw);
+    const { execFile } = await _importChildProcess();
+    const { promisify } = await import('util');
+    const execFileAsync = promisify(execFile);
 
-    // Support both formats: flat { collectionName: [...] } and wrapped { collections: { ... } }
-    const collectionsMap: Record<string, unknown[]> =
-      backupData.collections ?? backupData;
+    const connectionString = getPostgresConnectionString();
 
-    const db = mongoose.connection.db;
-    if (!db) throw new Error('Database connection not available');
-
-    const targetCollections = options.collections
-      ? options.collections
-      : Object.keys(collectionsMap);
-
-    for (const collectionName of targetCollections) {
-      const docs = collectionsMap[collectionName];
-      if (!Array.isArray(docs)) {
-        result.collections[collectionName] = { inserted: 0, cleared: 0, skipped: true };
-        continue;
-      }
-
-      if (options.dryRun) {
-        result.collections[collectionName] = { inserted: docs.length, cleared: 0 };
-        continue;
-      }
-
-      const collection = db.collection(collectionName);
-      let cleared = 0;
-
-      if (options.clearExisting) {
-        const del = await collection.deleteMany({});
-        cleared = del.deletedCount ?? 0;
-      }
-
-      let inserted = 0;
-      if (docs.length > 0) {
-        // Re-hydrate _id fields that were serialised as strings or plain objects
-        const hydrated = docs.map((doc: unknown) => {
-          const d = { ...(doc as Record<string, unknown>) };
-          if (d._id && typeof d._id === 'string' && mongoose.Types.ObjectId.isValid(d._id as string)) {
-            d._id = new mongoose.Types.ObjectId(d._id as string);
-          } else if (d._id && typeof d._id === 'object' && (d._id as Record<string, unknown>).$oid) {
-            d._id = new mongoose.Types.ObjectId((d._id as Record<string, unknown>).$oid as string);
-          }
-          return d;
-        });
-
-        // Insert in chunks to avoid hitting the 16 MB BSON limit per batch
-        const CHUNK = 500;
-        for (let i = 0; i < hydrated.length; i += CHUNK) {
-          try {
-            const res = await collection.insertMany(hydrated.slice(i, i + CHUNK), { ordered: false });
-            inserted += res.insertedCount;
-          } catch (err: unknown) {
-            // ordered:false — count what succeeded, record the rest as errors
-            const bulkErr = err as { result?: { insertedCount?: number }; message?: string };
-            inserted += bulkErr.result?.insertedCount ?? 0;
-            result.errors.push(`${collectionName} chunk ${i / CHUNK + 1}: ${bulkErr.message ?? err}`);
-          }
-        }
-      }
-
-      result.collections[collectionName] = { inserted, cleared };
+    if (options.dryRun) {
+      const { stdout } = await execFileAsync('pg_restore', ['--list', options.backupFilePath]);
+      const entryCount = stdout.split('\n').filter((l) => l.trim().length > 0).length;
+      result.message = `[DRY RUN] Backup contains ${entryCount} entries; no changes made`;
+      return result;
     }
 
-    const totalInserted = Object.values(result.collections).reduce((s, c) => s + c.inserted, 0);
-    const prefix = options.dryRun ? '[DRY RUN] Would restore' : 'Restored';
-    result.message = `${prefix} ${totalInserted} documents across ${Object.keys(result.collections).length} collection(s)`;
+    const args = [
+      options.backupFilePath,
+      '-d', connectionString,
+      '--no-owner',
+      '--no-privileges',
+    ];
+    if (options.clearExisting) {
+      args.push('--clean', '--if-exists');
+    }
 
+    await execFileAsync('pg_restore', args);
+    result.message = 'Database restored successfully';
     return result;
   } catch (err: unknown) {
     result.success = false;

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Category from '@/models/Category';
+import prisma from '@/lib/db';
+import { Prisma } from '@prisma/client';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -13,7 +13,6 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     await requireAuth(request);
     const t = await getValidationTranslatorFromRequest(request);
     const tenantId = await getTenantIdFromRequest(request);
@@ -23,7 +22,7 @@ export async function GET(
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
-    const category = await Category.findOne({ _id: id, tenantId }).lean();
+    const category = await prisma.category.findFirst({ where: { id, tenantId } });
 
     if (!category) {
       return NextResponse.json({ success: false, error: t('validation.categoryNotFound', 'Category not found') }, { status: 404 });
@@ -43,7 +42,6 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
@@ -58,7 +56,7 @@ export async function PUT(
 
     const { id } = await params;
 
-    const category = await Category.findOne({ _id: id, tenantId });
+    const category = await prisma.category.findFirst({ where: { id, tenantId } });
     if (!category) {
       return NextResponse.json({ success: false, error: t('validation.categoryNotFound', 'Category not found') }, { status: 404 });
     }
@@ -73,25 +71,26 @@ export async function PUT(
       );
     }
 
-    const oldData = category.toObject();
+    const oldData = category;
 
-    if (Object.prototype.hasOwnProperty.call(data, 'name') && typeof data.name === 'string') category.name = data.name;
-    if (Object.prototype.hasOwnProperty.call(data, 'description') && (typeof data.description === 'string' || typeof data.description === 'undefined')) category.description = data.description;
-    if (Object.prototype.hasOwnProperty.call(data, 'isActive') && typeof data.isActive === 'boolean') category.isActive = data.isActive;
+    const updateData: Prisma.CategoryUpdateInput = {};
+    if (Object.prototype.hasOwnProperty.call(data, 'name') && typeof data.name === 'string') updateData.name = data.name;
+    if (Object.prototype.hasOwnProperty.call(data, 'description') && (typeof data.description === 'string' || typeof data.description === 'undefined')) updateData.description = data.description;
+    if (Object.prototype.hasOwnProperty.call(data, 'isActive') && typeof data.isActive === 'boolean') updateData.isActive = data.isActive;
 
-    await category.save();
+    const updated = await prisma.category.update({ where: { id }, data: updateData });
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.UPDATE,
       entityType: 'category',
-      entityId: category._id.toString(),
-      changes: { before: oldData, after: category.toObject() },
+      entityId: updated.id,
+      changes: { before: oldData, after: updated },
     });
 
-    return NextResponse.json({ success: true, data: category });
+    return NextResponse.json({ success: true, data: updated });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (error.code === 11000) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       const t = await getValidationTranslatorFromRequest(request);
       return NextResponse.json(
         { success: false, error: t('validation.categoryNameExists', 'Category with this name already exists') },
@@ -107,7 +106,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
@@ -122,22 +120,20 @@ export async function DELETE(
 
     const { id } = await params;
 
-    const category = await Category.findOne({ _id: id, tenantId });
+    const category = await prisma.category.findFirst({ where: { id, tenantId } });
     if (!category) {
       return NextResponse.json({ success: false, error: t('validation.categoryNotFound', 'Category not found') }, { status: 404 });
     }
 
     // Soft delete - set isActive to false
-    const oldData = category.toObject(); // eslint-disable-line @typescript-eslint/no-unused-vars
-    category.isActive = false;
-    await category.save();
+    const updated = await prisma.category.update({ where: { id }, data: { isActive: false } });
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.DELETE,
       entityType: 'category',
-      entityId: category._id.toString(),
-      changes: { name: category.name },
+      entityId: updated.id,
+      changes: { name: updated.name },
     });
 
     return NextResponse.json({ success: true, message: t('validation.categoryDeactivated', 'Category deactivated') });
@@ -145,4 +141,3 @@ export async function DELETE(
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
-

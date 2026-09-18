@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import AuditLog from '@/models/AuditLog';
+import prisma from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -16,12 +15,12 @@ import { logger } from '@/lib/logger';
  * "raw file extract proving every transaction, void, and back-end change
  * without gaps" required for BIR accreditation.
  *
- * Note: AuditLog documents auto-expire after 90 days (see models/AuditLog.ts
- * TTL index) — export and archive periodically if longer retention is needed.
+ * Note: AuditLog rows auto-expire after 90 days via a scheduled cleanup job
+ * (see app/api/automations/audit-logs/cleanup) — export and archive
+ * periodically if longer retention is needed.
  */
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const t = await getValidationTranslatorFromRequest(request);
 
@@ -48,20 +47,19 @@ export async function GET(request: NextRequest) {
     if (searchParams.get('endDate')) endDate.setHours(23, 59, 59, 999);
     const format = searchParams.get('format') || 'json'; // json, csv
 
-    const query = {
+    const where = {
       tenantId: user.tenantId,
-      createdAt: { $gte: startDate, $lte: endDate },
+      createdAt: { gte: startDate, lte: endDate },
     };
 
-    const logs = await AuditLog.find(query)
-      .populate('userId', 'name email')
-      .sort({ createdAt: 1 }) // chronological, matching an electronic journal's expected order
-      .lean();
+    const logs = await prisma.auditLog.findMany({
+      where,
+      include: { user: { select: { name: true, email: true } } },
+      orderBy: { createdAt: 'asc' }, // chronological, matching an electronic journal's expected order
+    });
 
     const entries = logs.map((log) => {
-      const actor = log.userId && typeof log.userId === 'object'
-        ? (log.userId as unknown as { name?: string; email?: string })
-        : undefined;
+      const actor = log.user;
       return {
         timestamp: new Date(log.createdAt).toISOString(),
         action: log.action,

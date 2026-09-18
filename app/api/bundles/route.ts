@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import ProductBundle from '@/models/ProductBundle';
-import '@/models/Category'; // register schema for populate
+import { randomUUID } from 'crypto';
+import prisma from '@/lib/db';
+import { Prisma } from '@prisma/client';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -11,7 +11,6 @@ import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
@@ -29,41 +28,47 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
-    const query: any = { tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const where: Prisma.ProductBundleWhereInput = { tenantId };
     if (search) {
-      const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      query.$or = [
-        { name: { $regex: escapedSearch, $options: 'i' } },
-        { description: { $regex: escapedSearch, $options: 'i' } },
-        { sku: { $regex: escapedSearch, $options: 'i' } },
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+        { sku: { contains: search, mode: 'insensitive' } },
       ];
     }
     if (isActive !== null && isActive !== '') {
-      query.isActive = isActive === 'true';
+      where.isActive = isActive === 'true';
     }
     if (categoryId) {
-      query.categoryId = categoryId;
+      where.categoryId = categoryId;
     }
     if (minPrice || maxPrice) {
-      query.price = {};
-      if (minPrice) query.price.$gte = parseFloat(minPrice);
-      if (maxPrice) query.price.$lte = parseFloat(maxPrice);
+      where.price = {};
+      if (minPrice) (where.price as Prisma.DecimalFilter).gte = parseFloat(minPrice);
+      if (maxPrice) (where.price as Prisma.DecimalFilter).lte = parseFloat(maxPrice);
     }
     if (startDate || endDate) {
-      query.createdAt = {};
-      if (startDate) query.createdAt.$gte = new Date(startDate);
+      where.createdAt = {};
+      if (startDate) (where.createdAt as Prisma.DateTimeFilter).gte = new Date(startDate);
       if (endDate) {
         const end = new Date(endDate);
         end.setHours(23, 59, 59, 999);
-        query.createdAt.$lte = end;
+        (where.createdAt as Prisma.DateTimeFilter).lte = end;
       }
     }
 
-    const bundles = await ProductBundle.find(query)
-      .populate('items.productId', 'name price stock')
-      .populate('categoryId', 'name')
-      .sort({ createdAt: -1 })
-      .lean();
+    const bundles = await prisma.productBundle.findMany({
+      where,
+      include: {
+        items: {
+          include: {
+            product: { select: { id: true, name: true, price: true, stock: true } },
+          },
+        },
+        category: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
 
     return NextResponse.json({ success: true, data: bundles });
   } catch (_error: unknown) {
@@ -74,7 +79,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
@@ -97,31 +101,46 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const bundle = await ProductBundle.create({
-      tenantId,
-      name,
-      description,
-      price,
-      items,
-      sku,
-      categoryId,
-      image,
-      trackInventory: trackInventory !== false,
-      isActive: true,
+    const bundleId = randomUUID();
+    const bundle = await prisma.productBundle.create({
+      data: {
+        id: bundleId,
+        tenantId,
+        name,
+        description,
+        price,
+        sku,
+        categoryId,
+        image,
+        trackInventory: trackInventory !== false,
+        isActive: true,
+        items: {
+          create: items.map((item: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+            id: randomUUID(),
+            productId: item.productId,
+            productName: item.productName,
+            quantity: item.quantity,
+            variationSize: item.variation?.size,
+            variationColor: item.variation?.color,
+            variationType: item.variation?.type,
+          })),
+        },
+      },
+      include: { items: true },
     });
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.CREATE,
       entityType: 'bundle',
-      entityId: bundle._id.toString(),
+      entityId: bundle.id,
       changes: body,
     });
 
     return NextResponse.json({ success: true, data: bundle }, { status: 201 });
   } catch (error: unknown) {
     const t = await getValidationTranslatorFromRequest(request);
-    if ((error as Record<string, unknown>).code === 11000) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       return NextResponse.json(
         { success: false, error: t('validation.bundleSkuExists', 'Bundle with this SKU already exists') },
         { status: 400 }
@@ -131,4 +150,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: 'Failed to create bundle' }, { status: 400 });
   }
 }
-

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Discount from '@/models/Discount';
+import { randomUUID } from 'crypto';
+import { Prisma } from '@prisma/client';
+import prisma from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -10,9 +11,24 @@ import { ensureLegalDiscounts } from '@/lib/discount-seeds';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
 
+function toDiscountJSON(d: {
+  id: string;
+  value: Prisma.Decimal;
+  minPurchaseAmount: Prisma.Decimal | null;
+  maxDiscountAmount: Prisma.Decimal | null;
+  [key: string]: unknown;
+}) {
+  return {
+    ...d,
+    _id: d.id,
+    value: Number(d.value),
+    minPurchaseAmount: d.minPurchaseAmount != null ? Number(d.minPurchaseAmount) : undefined,
+    maxDiscountAmount: d.maxDiscountAmount != null ? Number(d.maxDiscountAmount) : undefined,
+  };
+}
+
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const { tenantId } = await requireTenantAccess(request);
 
     const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
@@ -28,21 +44,21 @@ export async function GET(request: NextRequest) {
     const code = searchParams.get('code');
     const activeOnly = searchParams.get('activeOnly') === 'true';
 
-    const query: any = { tenantId }; // eslint-disable-line @typescript-eslint/no-explicit-any
-    
+    const where: Prisma.DiscountWhereInput = { tenantId };
+
     if (code) {
-      query.code = code.toUpperCase();
+      where.code = code.toUpperCase();
     }
-    
+
     if (activeOnly) {
-      query.isActive = true;
-      query.validFrom = { $lte: new Date() };
-      query.validUntil = { $gte: new Date() };
+      where.isActive = true;
+      where.validFrom = { lte: new Date() };
+      where.validUntil = { gte: new Date() };
     }
 
-    const discounts = await Discount.find(query).sort({ createdAt: -1 });
+    const discounts = await prisma.discount.findMany({ where, orderBy: { createdAt: 'desc' } });
 
-    return NextResponse.json({ success: true, data: discounts });
+    return NextResponse.json({ success: true, data: discounts.map(toDiscountJSON) });
   } catch (error) {
     return handleApiError(error, 'Failed to fetch discounts');
   }
@@ -50,7 +66,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const { tenantId, user } = await requireTenantAccess(request);
     if (!(await hasTenantPermission(user.role, tenantId, 'discounts.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
@@ -65,9 +80,9 @@ export async function POST(request: NextRequest) {
     // Check if discounts feature is enabled in subscription
     try {
       await checkFeatureAccess(tenantId.toString(), 'enableDiscounts');
-    } catch (featureError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+    } catch (featureError: unknown) {
       return NextResponse.json(
-        { success: false, error: featureError.message },
+        { success: false, error: (featureError as Error).message },
         { status: 403 }
       );
     }
@@ -134,7 +149,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if code already exists for this tenant
-    const existing = await Discount.findOne({ tenantId, code: code.toUpperCase() });
+    const existing = await prisma.discount.findFirst({ where: { tenantId, code: code.toUpperCase() } });
     if (existing) {
       return NextResponse.json(
         { success: false, error: t('validation.discountCodeExists', 'Discount code already exists') },
@@ -142,35 +157,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const discount = await Discount.create({
-      tenantId,
-      code: code.toUpperCase(),
-      name,
-      description,
-      type,
-      value,
-      category: category || 'general',
-      requiresIdVerification: requiresIdVerification || false,
-      minPurchaseAmount,
-      maxDiscountAmount,
-      validFrom: new Date(validFrom),
-      validUntil: new Date(validUntil),
-      usageLimit,
-      isActive,
-      usageCount: 0,
+    const discount = await prisma.discount.create({
+      data: {
+        id: randomUUID(),
+        tenantId,
+        code: code.toUpperCase(),
+        name,
+        description,
+        type,
+        value,
+        category: category || 'general',
+        requiresIdVerification: requiresIdVerification || false,
+        minPurchaseAmount,
+        maxDiscountAmount,
+        validFrom: new Date(validFrom),
+        validUntil: new Date(validUntil),
+        usageLimit,
+        isActive,
+        usageCount: 0,
+      },
     });
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.DISCOUNT_CREATE,
       entityType: 'discount',
-      entityId: discount._id.toString(),
+      entityId: discount.id,
       changes: { code, type, value },
     });
 
-    return NextResponse.json({ success: true, data: discount }, { status: 201 });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (error.code === 11000) {
+    return NextResponse.json({ success: true, data: toDiscountJSON(discount) }, { status: 201 });
+  } catch (error: unknown) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       const t = await getValidationTranslatorFromRequest(request);
       return NextResponse.json(
         { success: false, error: t('validation.discountCodeExists', 'Discount code already exists') },
@@ -180,4 +198,3 @@ export async function POST(request: NextRequest) {
     return handleApiError(error, 'Failed to create discount');
   }
 }
-

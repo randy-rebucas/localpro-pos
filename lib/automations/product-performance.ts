@@ -3,11 +3,7 @@
  * Alert on product performance changes
  */
 
-import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
-import Transaction from '@/models/Transaction';
-import Tenant from '@/models/Tenant';
-import mongoose from 'mongoose';
+import prisma from '@/lib/db';
 import { sendEmail } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { AutomationResult } from './types';
@@ -24,8 +20,6 @@ export interface ProductPerformanceOptions {
 export async function analyzeProductPerformance(
   options: ProductPerformanceOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -42,10 +36,10 @@ export async function analyzeProductPerformance(
     // Get tenants to process
     let tenants;
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await prisma.tenant.findUnique({ where: { id: options.tenantId } });
       tenants = tenant ? [tenant] : [];
     } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
+      tenants = await prisma.tenant.findMany({ where: { isActive: true } });
     }
 
     if (tenants.length === 0) {
@@ -58,7 +52,7 @@ export async function analyzeProductPerformance(
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
+        const tenantId = tenant.id;
         const tenantSettings = await getTenantSettingsById(tenantId);
 
         // Skip if notifications disabled
@@ -67,7 +61,7 @@ export async function analyzeProductPerformance(
         }
 
         // Get all products
-        const products = await Product.find({ tenantId, trackInventory: true }).lean();
+        const products = await prisma.product.findMany({ where: { tenantId, trackInventory: true } });
 
         const slowMovingProducts: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
         const topPerformers: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -75,47 +69,33 @@ export async function analyzeProductPerformance(
         for (const product of products) {
           try {
             // Get sales for this product in the analysis period
-            const sales = await Transaction.aggregate([
-              {
-                $match: {
-                  tenantId: new mongoose.Types.ObjectId(tenantId),
-                  createdAt: { $gte: analysisStartDate },
+            const items = await prisma.transactionItem.findMany({
+              where: {
+                productId: product.id,
+                transaction: {
+                  tenantId,
                   status: 'completed',
-                  'items.product': product._id,
+                  createdAt: { gte: analysisStartDate },
                 },
               },
-              {
-                $unwind: '$items',
-              },
-              {
-                $match: {
-                  'items.product': product._id,
-                },
-              },
-              {
-                $group: {
-                  _id: null,
-                  totalQuantity: { $sum: '$items.quantity' },
-                  totalRevenue: { $sum: '$items.subtotal' },
-                },
-              },
-            ]);
+              select: { quantity: true, subtotal: true },
+            });
 
-            const salesData = sales[0] || { totalQuantity: 0, totalRevenue: 0 };
-            const salesCount = salesData.totalQuantity || 0;
-            const revenue = salesData.totalRevenue || 0;
+            const salesCount = items.reduce((sum, i) => sum + i.quantity, 0);
+            const revenue = items.reduce((sum, i) => sum + Number(i.subtotal), 0);
 
             // Get last sale date
-            const lastSale = await Transaction.findOne({
-              tenantId,
-              'items.product': product._id,
-              status: 'completed',
-            })
-              .sort({ createdAt: -1 })
-              .lean();
+            const lastItem = await prisma.transactionItem.findFirst({
+              where: {
+                productId: product.id,
+                transaction: { tenantId, status: 'completed' },
+              },
+              orderBy: { transaction: { createdAt: 'desc' } },
+              include: { transaction: { select: { createdAt: true } } },
+            });
 
-            const daysSinceLastSale = lastSale
-              ? Math.floor((Date.now() - new Date(lastSale.createdAt).getTime()) / (1000 * 60 * 60 * 24))
+            const daysSinceLastSale = lastItem
+              ? Math.floor((Date.now() - new Date(lastItem.transaction.createdAt).getTime()) / (1000 * 60 * 60 * 24))
               : daysToAnalyze;
 
             // Identify slow-moving products
@@ -148,12 +128,12 @@ export async function analyzeProductPerformance(
         // Send alerts if there are slow-moving products or top performers to report
         if (slowMovingProducts.length > 0 || topPerformers.length > 0) {
           const companyName = tenantSettings?.companyName || tenant.name || 'Business';
-          
-          const slowMovingList = slowMovingProducts.slice(0, 20).map(p => 
+
+          const slowMovingList = slowMovingProducts.slice(0, 20).map(p =>
             `- ${p.name}${p.sku ? ` (SKU: ${p.sku})` : ''}: No sales in ${p.daysSinceLastSale} days`
           ).join('\n');
 
-          const topPerformersList = topPerformers.slice(0, 10).map(p => 
+          const topPerformersList = topPerformers.slice(0, 10).map(p =>
             `- ${p.name}${p.sku ? ` (SKU: ${p.sku})` : ''}: $${p.revenue.toFixed(2)} revenue, ${p.salesCount} units sold`
           ).join('\n');
 

@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
-import ProductChannelListing from '@/models/ProductChannelListing';
-import TenantEcommerceIntegration from '@/models/TenantEcommerceIntegration';
+import { randomUUID } from 'crypto';
+import prisma from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
@@ -15,6 +13,7 @@ import {
   shopifyUpdateProduct,
   shopifyPushInitialInventory,
 } from '@/lib/ecommerce/shopify-product-push';
+import type { IProduct } from '@/models/Product';
 
 export async function POST(request: NextRequest) {
   try {
@@ -34,11 +33,9 @@ export async function POST(request: NextRequest) {
 
     if (!productId) return NextResponse.json({ success: false, error: 'productId required' }, { status: 400 });
 
-    await connectDB();
-
     const [product, integration] = await Promise.all([
-      Product.findOne({ _id: productId, tenantId: user.tenantId }),
-      TenantEcommerceIntegration.findOne({ tenantId: user.tenantId, provider: 'shopify', isActive: true }),
+      prisma.product.findFirst({ where: { id: productId, tenantId: user.tenantId } }),
+      prisma.tenantEcommerceIntegration.findFirst({ where: { tenantId: user.tenantId, provider: 'shopify', isActive: true } }),
     ]);
 
     if (!product) return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
@@ -46,11 +43,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'No active Shopify integration' }, { status: 400 });
     }
 
+    // NOTE: shopify-product-push.ts is still Mongoose-based (out of scope for
+    // this migration pass) and expects a Mongoose document. Bridge the Prisma
+    // product row into that shape until that lib is migrated to Prisma.
+    // lib/ecommerce/shopify-token.ts is already Prisma-based — pass the row directly.
+    const productDoc = { ...product, _id: product.id } as unknown as IProduct;
+
     const accessToken = await getShopifyAccessTokenForIntegration(integration);
-    const existingListing = await ProductChannelListing.findOne({
-      tenantId: user.tenantId,
-      productId,
-      provider: 'shopify',
+    const existingListing = await prisma.productChannelListing.findFirst({
+      where: { tenantId: user.tenantId, productId, provider: 'shopify' },
     });
 
     let externalProductId: string;
@@ -61,13 +62,13 @@ export async function POST(request: NextRequest) {
       await shopifyUpdateProduct(integration.shopDomain, accessToken, existingListing.externalProductId, {
         title: product.name,
         body_html: product.description || '',
-        price: product.price,
+        price: Number(product.price),
       });
       externalProductId = existingListing.externalProductId;
       externalVariantId = existingListing.externalVariantId || '';
       inventoryItemId = existingListing.inventoryItemId || '';
     } else {
-      const created = await shopifyCreateProduct(integration.shopDomain, accessToken, product);
+      const created = await shopifyCreateProduct(integration.shopDomain, accessToken, productDoc);
       externalProductId = created.externalProductId;
       externalVariantId = created.externalVariantId;
       inventoryItemId = created.inventoryItemId;
@@ -85,9 +86,21 @@ export async function POST(request: NextRequest) {
     }
 
     // Upsert the listing
-    await ProductChannelListing.findOneAndUpdate(
-      { tenantId: user.tenantId, productId, provider: 'shopify' },
-      {
+    await prisma.productChannelListing.upsert({
+      where: {
+        tenantId_provider_externalVariantId: {
+          tenantId: user.tenantId,
+          provider: 'shopify',
+          externalVariantId,
+        },
+      },
+      update: {
+        productId,
+        externalProductId,
+        inventoryItemId,
+      },
+      create: {
+        id: randomUUID(),
         tenantId: user.tenantId,
         productId,
         provider: 'shopify',
@@ -95,8 +108,7 @@ export async function POST(request: NextRequest) {
         externalVariantId,
         inventoryItemId,
       },
-      { upsert: true, new: true }
-    );
+    });
 
     await createAuditLog(request, {
       tenantId: user.tenantId,

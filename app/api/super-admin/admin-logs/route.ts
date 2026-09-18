@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import SuperAdminAction from '@/models/SuperAdminAction';
-import User from '@/models/User';
+import prisma from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { handleApiError } from '@/lib/error-handler';
 
 // GET /api/super-admin/admin-logs
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     await requireRole(request, ['super_admin']);
 
     const { searchParams } = new URL(request.url);
@@ -20,33 +17,43 @@ export async function GET(request: NextRequest) {
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
     const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '50')));
 
-    const query: Record<string, unknown> = {};
-    if (action) query.action = { $regex: action, $options: 'i' };
-    if (targetType) query.targetType = targetType;
-    if (adminId) query.adminUserId = adminId;
+    const where: Record<string, unknown> = {};
+    if (action) where.action = { contains: action, mode: 'insensitive' };
+    if (targetType) where.targetType = targetType;
+    if (adminId) where.adminUserId = adminId;
     if (startDate || endDate) {
       const dateFilter: Record<string, Date> = {};
-      if (startDate) dateFilter.$gte = new Date(startDate);
+      if (startDate) dateFilter.gte = new Date(startDate);
       if (endDate) {
         const end = new Date(endDate);
         end.setHours(23, 59, 59, 999);
-        dateFilter.$lte = end;
+        dateFilter.lte = end;
       }
-      query.createdAt = dateFilter;
+      where.createdAt = dateFilter;
     }
 
-    const [logs, total] = await Promise.all([
-      SuperAdminAction.find(query)
-        .populate('adminUserId', 'name email')
-        .sort({ createdAt: -1 })
-        .skip((page - 1) * limit)
-        .limit(limit)
-        .lean(),
-      SuperAdminAction.countDocuments(query),
+    const [rawLogs, total] = await Promise.all([
+      prisma.superAdminAction.findMany({
+        where,
+        include: {
+          adminUser: { select: { id: true, name: true, email: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.superAdminAction.count({ where }),
     ]);
 
-    // Inline populate since we need User ref
-    void User;
+    // Preserve the original Mongoose-populate response shape, where
+    // `adminUserId` was the populated { _id, name, email } object.
+    const logs = rawLogs.map((log) => ({
+      ...log,
+      adminUserId: log.adminUser
+        ? { _id: log.adminUser.id, name: log.adminUser.name, email: log.adminUser.email }
+        : null,
+      adminUser: undefined,
+    }));
 
     return NextResponse.json({
       success: true,

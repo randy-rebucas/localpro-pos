@@ -1,5 +1,4 @@
-import mongoose from 'mongoose';
-import Transaction from '@/models/Transaction';
+import prisma from '@/lib/db';
 
 export interface DailySalesAggregate {
   startDate: Date;
@@ -27,7 +26,7 @@ export function startOfBusinessDay(date: Date): Date {
  * (persisted, once-per-day) reports so their totals stay consistent.
  */
 export async function getDailySalesAggregate(
-  tenantId: string | mongoose.Types.ObjectId,
+  tenantId: string,
   businessDate: Date
 ): Promise<DailySalesAggregate> {
   const startDate = startOfBusinessDay(businessDate);
@@ -35,17 +34,27 @@ export async function getDailySalesAggregate(
   endDate.setDate(endDate.getDate() + 1);
 
   const [completed, voided] = await Promise.all([
-    Transaction.find({
-      tenantId,
-      status: 'completed',
-      createdAt: { $gte: startDate, $lt: endDate },
-    })
-      .select('subtotal total discountAmount taxAmount taxExemptAmount zeroRatedAmount')
-      .lean(),
-    Transaction.countDocuments({
-      tenantId,
-      status: { $in: ['cancelled', 'refunded'] },
-      createdAt: { $gte: startDate, $lt: endDate },
+    prisma.transaction.findMany({
+      where: {
+        tenantId,
+        status: 'completed',
+        createdAt: { gte: startDate, lt: endDate },
+      },
+      select: {
+        subtotal: true,
+        total: true,
+        discountAmount: true,
+        taxAmount: true,
+        taxExemptAmount: true,
+        zeroRatedAmount: true,
+      },
+    }),
+    prisma.transaction.count({
+      where: {
+        tenantId,
+        status: { in: ['cancelled', 'refunded'] },
+        createdAt: { gte: startDate, lt: endDate },
+      },
     }),
   ]);
 
@@ -57,12 +66,13 @@ export async function getDailySalesAggregate(
   let subtotalAfterDiscount = 0;
 
   for (const tx of completed) {
-    const subtotal = tx.subtotal ?? tx.total;
-    const discountAmount = tx.discountAmount ?? 0;
-    grossSales += tx.total;
-    vatAmount += tx.taxAmount ?? 0;
-    vatExemptSales += tx.taxExemptAmount ?? 0;
-    zeroRatedSales += tx.zeroRatedAmount ?? 0;
+    const total = Number(tx.total);
+    const subtotal = tx.subtotal != null ? Number(tx.subtotal) : total;
+    const discountAmount = tx.discountAmount != null ? Number(tx.discountAmount) : 0;
+    grossSales += total;
+    vatAmount += tx.taxAmount != null ? Number(tx.taxAmount) : 0;
+    vatExemptSales += tx.taxExemptAmount != null ? Number(tx.taxExemptAmount) : 0;
+    zeroRatedSales += tx.zeroRatedAmount != null ? Number(tx.zeroRatedAmount) : 0;
     discountTotal += discountAmount;
     subtotalAfterDiscount += subtotal - discountAmount;
   }

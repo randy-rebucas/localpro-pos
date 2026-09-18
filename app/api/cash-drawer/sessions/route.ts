@@ -1,18 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import CashDrawerSession from '@/models/CashDrawerSession';
+import { randomUUID } from 'crypto';
+import prisma from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
-import Transaction from '@/models/Transaction';
-import Expense from '@/models/Expense';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
@@ -31,18 +28,20 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '50', 10)));
     const skip = (page - 1) * limit;
 
-    const query: Record<string, unknown> = { tenantId };
+    const where: Record<string, unknown> = { tenantId };
     if (status) {
-      query.status = status;
+      where.status = status;
     }
 
     const [sessions, total] = await Promise.all([
-      CashDrawerSession.find(query)
-        .populate('userId', 'name email')
-        .sort({ openingTime: -1 })
-        .skip(skip)
-        .limit(limit),
-      CashDrawerSession.countDocuments(query),
+      prisma.cashDrawerSession.findMany({
+        where,
+        include: { user: { select: { name: true, email: true } } },
+        orderBy: { openingTime: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.cashDrawerSession.count({ where }),
     ]);
 
     return NextResponse.json({
@@ -59,7 +58,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
@@ -82,10 +80,12 @@ export async function POST(request: NextRequest) {
       }
       const roundedAmount = Math.round(amount * 100) / 100;
 
-      // Atomic check-and-create: prevent race condition where two requests
-      // both pass the "no open session" check simultaneously.
-      // findOneAndUpdate with upsert + unique index on {tenantId, status: 'open'} ensures only one.
-      const existing = await CashDrawerSession.findOne({ tenantId, status: 'open' });
+      // Check-and-create: prevent race condition where two requests both pass
+      // the "no open session" check simultaneously. Full atomicity against a
+      // concurrent open() relies on the Postgres partial unique index on
+      // {tenantId, status='open'} created at the migration-SQL level; this
+      // findFirst is the same best-effort guard the previous Mongoose code used.
+      const existing = await prisma.cashDrawerSession.findFirst({ where: { tenantId, status: 'open' } });
       if (existing) {
         return NextResponse.json(
           { success: false, error: t('validation.cashDrawerAlreadyOpen', 'There is already an open cash drawer session') },
@@ -95,17 +95,26 @@ export async function POST(request: NextRequest) {
 
       let session;
       try {
-        session = await CashDrawerSession.create({
-          tenantId,
-          userId: user.userId,
-          openingAmount: roundedAmount,
-          openingTime: new Date(),
-          status: 'open',
-          notes: notes || undefined,
+        session = await prisma.cashDrawerSession.create({
+          data: {
+            id: randomUUID(),
+            tenantId,
+            userId: user.userId,
+            openingAmount: roundedAmount,
+            openingTime: new Date(),
+            status: 'open',
+            notes: notes || undefined,
+          },
         });
       } catch (err: unknown) {
-        // Duplicate key error (11000) means another request created a session between check and create
-        if (err instanceof Error && 'code' in err && (err as { code: number }).code === 11000) {
+        // Duplicate key error (unique constraint) means another request created
+        // a session between check and create (guarded by the partial unique index).
+        if (
+          err &&
+          typeof err === 'object' &&
+          'code' in err &&
+          (err as { code?: string }).code === 'P2002'
+        ) {
           return NextResponse.json(
             { success: false, error: t('validation.cashDrawerAlreadyOpen', 'There is already an open cash drawer session') },
             { status: 400 }
@@ -119,7 +128,7 @@ export async function POST(request: NextRequest) {
         userId: user.userId,
         action: AuditActions.CREATE,
         entityType: 'cashDrawerSession',
-        entityId: session._id.toString(),
+        entityId: session.id,
         changes: { action: 'open', openingAmount: roundedAmount },
       });
 
@@ -137,17 +146,15 @@ export async function POST(request: NextRequest) {
       const actualClosingAmount = Math.round(amount * 100) / 100;
 
       // Find open session — prefer current user's session
-      let openSession = await CashDrawerSession.findOne({
-        tenantId,
-        userId: user.userId,
-        status: 'open',
+      let openSession = await prisma.cashDrawerSession.findFirst({
+        where: { tenantId, userId: user.userId, status: 'open' },
       });
       // Fallback: any open session (for managers closing another cashier's drawer)
       if (!openSession) {
         if (!(await hasTenantPermission(user.role, tenantId, 'cash_drawer.close'))) {
           return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
         }
-        openSession = await CashDrawerSession.findOne({ tenantId, status: 'open' });
+        openSession = await prisma.cashDrawerSession.findFirst({ where: { tenantId, status: 'open' } });
       }
 
       if (!openSession) {
@@ -159,30 +166,34 @@ export async function POST(request: NextRequest) {
 
       // Calculate expected amount — filter by the session's userId to avoid mixing cashiers
       const sessionEnd = new Date();
-      const sessionUserId = openSession.userId.toString();
+      const sessionUserId = openSession.userId;
 
       const [cashTransactions, cashExpenses] = await Promise.all([
-        Transaction.find({
-          tenantId,
-          userId: sessionUserId,
-          paymentMethod: 'cash',
-          createdAt: { $gte: openSession.openingTime, $lte: sessionEnd },
-          status: 'completed',
-        }).lean(),
-        Expense.find({
-          tenantId,
-          paymentMethod: 'cash',
-          date: { $gte: openSession.openingTime, $lte: sessionEnd },
-        }).lean(),
+        prisma.transaction.findMany({
+          where: {
+            tenantId,
+            userId: sessionUserId,
+            paymentMethod: 'cash',
+            createdAt: { gte: openSession.openingTime, lte: sessionEnd },
+            status: 'completed',
+          },
+        }),
+        prisma.expense.findMany({
+          where: {
+            tenantId,
+            paymentMethod: 'cash',
+            date: { gte: openSession.openingTime, lte: sessionEnd },
+          },
+        }),
       ]);
 
       // Use integer math (cents) to avoid floating point errors
-      const cashSalesCents = cashTransactions.reduce((sum, t) => sum + Math.round((t.total || 0) * 100), 0);
-      const totalVATCents = cashTransactions.reduce((sum, t) => sum + Math.round((t.taxAmount || 0) * 100), 0);
-      const totalDiscountsCents = cashTransactions.reduce((sum, t) => sum + Math.round((t.discountAmount || 0) * 100), 0);
-      const cashExpensesCents = cashExpenses.reduce((sum, e) => sum + Math.round((e.amount || 0) * 100), 0);
+      const cashSalesCents = cashTransactions.reduce((sum, tx) => sum + Math.round(Number(tx.total || 0) * 100), 0);
+      const totalVATCents = cashTransactions.reduce((sum, tx) => sum + Math.round(Number(tx.taxAmount || 0) * 100), 0);
+      const totalDiscountsCents = cashTransactions.reduce((sum, tx) => sum + Math.round(Number(tx.discountAmount || 0) * 100), 0);
+      const cashExpensesCents = cashExpenses.reduce((sum, e) => sum + Math.round(Number(e.amount || 0) * 100), 0);
 
-      const openingCents = Math.round(openSession.openingAmount * 100);
+      const openingCents = Math.round(Number(openSession.openingAmount) * 100);
       const expectedCents = openingCents + cashSalesCents - cashExpensesCents;
       const closingCents = Math.round(actualClosingAmount * 100);
       const differenceCents = closingCents - expectedCents;
@@ -192,39 +203,37 @@ export async function POST(request: NextRequest) {
       const overage = differenceCents > 0 ? differenceCents / 100 : 0;
 
       // Atomic claim: guards against a double-click/retry closing the same
-      // session twice before either write lands (findOne above is not atomic).
-      const closedSession = await CashDrawerSession.findOneAndUpdate(
-        { _id: openSession._id, tenantId, status: 'open' },
-        {
-          $set: {
-            closingAmount: actualClosingAmount,
-            expectedAmount,
-            shortage,
-            overage,
-            closingTime: sessionEnd,
-            status: 'closed',
-            totalVAT: totalVATCents / 100,
-            totalDiscounts: totalDiscountsCents / 100,
-            ...(notes ? { notes } : {}),
-          },
+      // session twice before either write lands (findFirst above is not atomic).
+      const claimResult = await prisma.cashDrawerSession.updateMany({
+        where: { id: openSession.id, tenantId, status: 'open' },
+        data: {
+          closingAmount: actualClosingAmount,
+          expectedAmount,
+          shortage,
+          overage,
+          closingTime: sessionEnd,
+          status: 'closed',
+          totalVAT: totalVATCents / 100,
+          totalDiscounts: totalDiscountsCents / 100,
+          ...(notes ? { notes } : {}),
         },
-        { new: true }
-      );
+      });
 
-      if (!closedSession) {
+      if (claimResult.count === 0) {
         return NextResponse.json(
           { success: false, error: t('validation.noOpenCashDrawerSession', 'No open cash drawer session found') },
           { status: 409 }
         );
       }
-      openSession = closedSession;
+      const closedSession = await prisma.cashDrawerSession.findFirst({ where: { id: openSession.id, tenantId } });
+      openSession = closedSession ?? openSession;
 
       await createAuditLog(request, {
         tenantId,
         userId: user.userId,
         action: AuditActions.UPDATE,
         entityType: 'cashDrawerSession',
-        entityId: openSession._id.toString(),
+        entityId: openSession.id,
         changes: {
           action: 'close',
           closingAmount: actualClosingAmount,

@@ -3,9 +3,14 @@
  */
 
 export const config = {
-  // Database
+  // Database (MongoDB — being migrated off, see prisma/schema.prisma)
   mongodb: {
     uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/pos-system',
+  },
+
+  // Database (PostgreSQL — migration target)
+  postgres: {
+    url: process.env.DATABASE_URL || 'postgresql://pos:pos@localhost:5432/pos_system',
   },
 
   // JWT

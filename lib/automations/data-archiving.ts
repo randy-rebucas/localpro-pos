@@ -3,11 +3,8 @@
  * Automatically archive old data to reduce database size
  */
 
-import connectDB from '@/lib/mongodb';
-import Transaction from '@/models/Transaction'; // eslint-disable-line @typescript-eslint/no-unused-vars
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/db';
 import { AutomationResult } from './types';
-import mongoose from 'mongoose';
 
 export interface DataArchivingOptions {
   tenantId?: string;
@@ -21,8 +18,6 @@ export interface DataArchivingOptions {
 export async function archiveOldData(
   options: DataArchivingOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -40,10 +35,10 @@ export async function archiveOldData(
     // Get tenants to process
     let tenants;
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await prisma.tenant.findUnique({ where: { id: options.tenantId } });
       tenants = tenant ? [tenant] : [];
     } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
+      tenants = await prisma.tenant.findMany({ where: { isActive: true } });
     }
 
     if (tenants.length === 0) {
@@ -54,44 +49,61 @@ export async function archiveOldData(
     let totalArchived = 0;
     let totalFailed = 0;
 
+    // Only the `transactions` table is supported for archiving today (Postgres table
+    // name, matching the Mongoose collection name this replaces). Other names are
+    // reported as unsupported rather than silently skipped.
+    const TABLE_MAP: Record<string, string> = { transactions: 'transactions' };
+    const SAFE_IDENT = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
-        const db = mongoose.connection.db;
-        if (!db) continue;
-
-        // Create archive collection if it doesn't exist
-        const archiveCollectionName = `${collections[0]}_archive`; // eslint-disable-line @typescript-eslint/no-unused-vars
+        const tenantId = tenant.id;
 
         for (const collectionName of collections) {
           try {
-            const collection = db.collection(collectionName);
-            
-            // Find old documents
-            const oldDocuments = await collection.find({
-              tenantId: new mongoose.Types.ObjectId(tenantId),
-              createdAt: { $lt: cutoffDate },
-            }).limit(1000).toArray(); // Process in batches
-
-            if (oldDocuments.length === 0) {
+            const tableName = TABLE_MAP[collectionName];
+            if (!tableName || !SAFE_IDENT.test(tableName)) {
+              results.errors?.push(`Collection ${collectionName}: unsupported for archiving`);
               continue;
             }
+            const archiveTable = `${tableName}_archive`;
 
-            // Move to archive collection
-            const archiveCollection = db.collection(`${collectionName}_archive`);
-            await archiveCollection.insertMany(oldDocuments.map(doc => ({
-              ...doc,
-              archivedAt: new Date(),
-              originalCollection: collectionName,
-            })));
+            const archived = await prisma.$transaction(async (tx) => {
+              // Ensure the archive table exists, shaped like the source table plus
+              // bookkeeping columns (created once; a no-op on subsequent runs).
+              await tx.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "${archiveTable}" (
+                  LIKE "${tableName}" INCLUDING ALL
+                );
+              `);
+              await tx.$executeRawUnsafe(`
+                ALTER TABLE "${archiveTable}"
+                  ADD COLUMN IF NOT EXISTS "archivedAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+                  ADD COLUMN IF NOT EXISTS "originalCollection" TEXT;
+              `);
 
-            // Delete from original collection
-            const ids = oldDocuments.map(doc => doc._id);
-            await collection.deleteMany({
-              _id: { $in: ids },
+              // Move old rows: insert into archive, then delete from source, scoped to tenant.
+              const inserted: Array<{ id: string }> = await tx.$queryRawUnsafe(`
+                INSERT INTO "${archiveTable}"
+                SELECT s.*, now() AS "archivedAt", $1 AS "originalCollection"
+                FROM "${tableName}" s
+                WHERE s."tenantId" = $2 AND s."createdAt" < $3
+                LIMIT 1000
+                RETURNING id;
+              `, collectionName, tenantId, cutoffDate);
+
+              if (inserted.length > 0) {
+                const ids = inserted.map((r) => r.id);
+                await tx.$executeRawUnsafe(
+                  `DELETE FROM "${tableName}" WHERE id = ANY($1::text[]);`,
+                  ids
+                );
+              }
+
+              return inserted.length;
             });
 
-            totalArchived += oldDocuments.length;
+            totalArchived += archived;
           } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             totalFailed++;
             results.errors?.push(`Collection ${collectionName}: ${error.message}`);

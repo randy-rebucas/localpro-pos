@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -8,12 +7,112 @@ import { handleApiError } from '@/lib/error-handler';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { applyBusinessTypeDefaults } from '@/lib/business-types';
 
+/**
+ * NOTE ON TRANSLATION GAP:
+ * The Mongoose `Tenant.settings` was a single Mixed sub-document, so the old
+ * PUT handler could take an arbitrary `settings` object from the request body
+ * and `$set` each top-level key directly (`settings.${key}`). In the Prisma
+ * schema, TenantSettings is a fully normalized table with named columns
+ * (some nested Mongoose paths were flattened, e.g. `settings.address.city`
+ * -> `addressCity`, `settings.hardware.printerType` -> `printerType`, etc. —
+ * see prisma/schema.prisma TenantSettings model comments). A byte-for-byte
+ * dynamic key passthrough is not possible against a fixed relational schema.
+ * This handler flattens the known nested legacy shapes (address, hardware,
+ * notificationTemplates, customTheme) into their Prisma column names and
+ * otherwise passes top-level keys straight through (the majority of settings
+ * keys were kept as same-named scalar columns). Keys that don't correspond
+ * to a TenantSettings column are ignored rather than thrown — callers that
+ * relied on arbitrary/unknown settings keys being persisted need dedicated
+ * follow-up once product confirms which of those keys are still needed.
+ */
+const NESTED_FLATTEN_MAP: Record<string, Record<string, string>> = {
+  address: {
+    street: 'addressStreet',
+    city: 'addressCity',
+    state: 'addressState',
+    zipCode: 'addressZipCode',
+    country: 'addressCountry',
+  },
+  hardware: {
+    printerType: 'printerType',
+    printerProfile: 'printerProfile',
+    printerVendorId: 'printerVendorId',
+    printerProductId: 'printerProductId',
+    printerIpAddress: 'printerIpAddress',
+    printerPortNumber: 'printerPortNumber',
+    barcodeScannerType: 'barcodeScannerType',
+    barcodeScannerEnabled: 'barcodeScannerEnabled',
+    qrReaderEnabled: 'qrReaderEnabled',
+    qrReaderCameraId: 'qrReaderCameraId',
+    cashDrawerEnabled: 'cashDrawerEnabled',
+    cashDrawerConnectedToPrinter: 'cashDrawerConnectedToPrinter',
+    touchscreenEnabled: 'touchscreenEnabled',
+  },
+  notificationTemplates: {
+    emailBookingConfirmation: 'emailBookingConfirmationTemplate',
+    emailBookingReminder: 'emailBookingReminderTemplate',
+    emailBookingCancellation: 'emailBookingCancellationTemplate',
+    emailLowStockAlert: 'emailLowStockAlertTemplate',
+    emailAttendanceAlert: 'emailAttendanceAlertTemplate',
+    smsBookingConfirmation: 'smsBookingConfirmationTemplate',
+    smsBookingReminder: 'smsBookingReminderTemplate',
+    smsBookingCancellation: 'smsBookingCancellationTemplate',
+    smsLowStockAlert: 'smsLowStockAlertTemplate',
+  },
+  customTheme: {
+    fontFamily: 'fontFamily',
+    fontSource: 'fontSource',
+    googleFontUrl: 'googleFontUrl',
+    customFontUrl: 'customFontUrl',
+    theme: 'theme',
+    customThemeCss: 'customThemeCss',
+    borderRadius: 'borderRadius',
+    customBorderRadius: 'customBorderRadius',
+  },
+  businessHours: {
+    timezone: 'businessHoursTimezone',
+  },
+};
+
+const KNOWN_SCALAR_KEYS = new Set([
+  'currency', 'currencySymbol', 'currencyPosition', 'dateFormat', 'timeFormat', 'timezone', 'language',
+  'decimalSeparator', 'thousandsSeparator', 'decimalPlaces', 'companyName', 'logo', 'favicon',
+  'primaryColor', 'secondaryColor', 'accentColor', 'backgroundColor', 'textColor', 'email', 'phone',
+  'website', 'receiptHeader', 'receiptFooter', 'receiptShowLogo', 'receiptShowAddress', 'receiptShowPhone',
+  'receiptShowEmail', 'receiptDefaultTemplateId', 'taxEnabled', 'taxRate', 'taxLabel', 'businessType',
+  'taxId', 'registrationNumber', 'lowStockThreshold', 'lowStockAlert', 'emailNotifications',
+  'smsNotifications', 'attendanceNotificationsEnabled', 'attendanceExpectedStartTime',
+  'attendanceMaxHoursWithoutClockOut', 'enableInventory', 'enableCategories', 'enableDiscounts',
+  'enableLoyaltyProgram', 'enableCustomerManagement', 'enableOnAccountSales', 'autoOpenDrawerOnShiftStart',
+  'autoOpenDrawerOnShiftEnd', 'enableBookingScheduling', 'enableTableManagement', 'ecommerceShopifyEnabled',
+  'ecommerceWooCommerceEnabled', 'multiCurrencyEnabled', 'displayCurrencies', 'exchangeRateSource',
+  'exchangeRateApiKey', 'exchangeRateLastUpdated',
+]);
+
+function flattenSettingsForPrisma(settings: Record<string, unknown>): Record<string, unknown> {
+  const flat: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(settings)) {
+    const nestedMap = NESTED_FLATTEN_MAP[key];
+    if (nestedMap && value && typeof value === 'object' && !Array.isArray(value)) {
+      for (const [nestedKey, nestedVal] of Object.entries(value as Record<string, unknown>)) {
+        const column = nestedMap[nestedKey];
+        if (column) flat[column] = nestedVal;
+      }
+      continue;
+    }
+    if (KNOWN_SCALAR_KEYS.has(key)) {
+      flat[key] = value;
+    }
+    // Unknown keys are dropped — see NOTE above.
+  }
+  return flat;
+}
+
 export async function GET(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
-    await connectDB();
     const { slug } = await params;
     const t = await getValidationTranslatorFromRequest(request);
-    const tenant = await Tenant.findOne({ slug }).lean();
+    const tenant = await prisma.tenant.findFirst({ where: { slug }, include: { settings: true } });
 
     if (!tenant) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
@@ -31,7 +130,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       user = null;
     }
     const isSameTenantOrAdmin =
-      !!user && (user.role === 'super_admin' || user.tenantId === tenant._id.toString());
+      !!user && (user.role === 'super_admin' || user.tenantId === tenant.id);
 
     if (isSameTenantOrAdmin) {
       return NextResponse.json({ success: true, data: tenant });
@@ -39,7 +138,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     return NextResponse.json({
       success: true,
-      data: { _id: tenant._id, slug: tenant.slug, name: tenant.name },
+      data: { _id: tenant.id, slug: tenant.slug, name: tenant.name },
     });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
@@ -48,7 +147,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const { slug } = await params;
     const t = await getValidationTranslatorFromRequest(request);
@@ -56,25 +154,20 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const body = await request.json();
     const { name, domain, subdomain, isActive, settings } = body;
 
-    const oldTenant = await Tenant.findOne({ slug }).lean();
+    const oldTenant = await prisma.tenant.findFirst({ where: { slug }, include: { settings: true } });
     if (!oldTenant) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== oldTenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== oldTenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    if (!(await hasTenantPermission(user.role, oldTenant._id.toString(), 'tenant_profile.manage'))) {
+    if (!(await hasTenantPermission(user.role, oldTenant.id, 'tenant_profile.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
-    const updateData: any = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
-    // Only $set the individual keys this request actually owns — a full
-    // `settings: mergedSettings` replace would clobber a concurrent write made
-    // through /api/tenants/[slug]/settings (which itself only $sets its own
-    // submitted keys) with this request's stale read of the rest of the doc.
-    const setPayload: Record<string, unknown> = {};
+    const updateData: Record<string, unknown> = {};
 
     if (name !== undefined) {
       if (!name.trim()) {
@@ -84,59 +177,58 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         );
       }
       updateData.name = name.trim();
-      setPayload.name = updateData.name;
     }
 
     if (domain !== undefined) {
       updateData.domain = domain.trim() || null;
-      setPayload.domain = updateData.domain;
     }
 
     if (subdomain !== undefined) {
       updateData.subdomain = subdomain.trim().toLowerCase() || null;
-      setPayload.subdomain = updateData.subdomain;
     }
 
     if (isActive !== undefined) {
       updateData.isActive = isActive;
-      setPayload.isActive = updateData.isActive;
     }
 
-    let settingsKeysToSet: string[] = [];
+    let settingsUpdate: Record<string, unknown> | undefined;
     if (settings !== undefined) {
       // Check if business type is being changed
-      const currentBusinessType = oldTenant.settings?.businessType;
+      const currentBusinessType = oldTenant.settings?.businessType ?? undefined;
       const newBusinessType = settings.businessType;
 
       let updatedSettings = settings;
-      settingsKeysToSet = Object.keys(settings);
 
       // Apply business type defaults if business type is being set or changed —
       // computed against a full merge (read-only, never written back wholesale)
       // so defaults resolve correctly, but only the resulting *changed* keys
-      // are added to the per-key $set alongside the submitted ones.
+      // are applied alongside the submitted ones.
       if (newBusinessType && newBusinessType !== currentBusinessType) {
-        const mergedSettings = { ...oldTenant.settings, ...settings };
+        const mergedSettings = { ...(oldTenant.settings ?? {}), ...settings };
         const withDefaults = applyBusinessTypeDefaults(mergedSettings, newBusinessType);
-        const defaultKeys = Object.keys(withDefaults).filter(
-          (key) => JSON.stringify(withDefaults[key]) !== JSON.stringify(mergedSettings[key])
-        );
         updatedSettings = withDefaults;
-        settingsKeysToSet = Array.from(new Set([...settingsKeysToSet, ...defaultKeys]));
       }
 
-      for (const key of settingsKeysToSet) {
-        setPayload[`settings.${key}`] = updatedSettings[key];
-      }
-      updateData.settings = { ...oldTenant.settings, ...updatedSettings };
+      settingsUpdate = flattenSettingsForPrisma(updatedSettings);
     }
 
-    const tenant = await Tenant.findOneAndUpdate(
-      { slug },
-      { $set: setPayload },
-      { new: true, runValidators: true }
-    );
-    
+    const tenant = await prisma.$transaction(async (tx) => {
+      const updated = await tx.tenant.update({
+        where: { id: oldTenant.id },
+        data: updateData,
+      });
+
+      if (settingsUpdate) {
+        await tx.tenantSettings.upsert({
+          where: { tenantId: oldTenant.id },
+          create: { tenantId: oldTenant.id, ...settingsUpdate },
+          update: settingsUpdate,
+        });
+      }
+
+      return tx.tenant.findUnique({ where: { id: updated.id }, include: { settings: true } });
+    });
+
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
@@ -144,7 +236,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     // Track changes
     const changes: Record<string, any> = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
     Object.keys(updateData).forEach(key => {
-      if (key !== 'settings' && oldTenant[key as keyof typeof oldTenant] !== updateData[key]) {
+      if (oldTenant[key as keyof typeof oldTenant] !== updateData[key]) {
         changes[key] = {
           old: oldTenant[key as keyof typeof oldTenant],
           new: updateData[key],
@@ -156,18 +248,18 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     await createAuditLog(request, {
-      tenantId: tenant._id,
+      tenantId: tenant.id,
       action: AuditActions.UPDATE,
       entityType: 'tenant',
-      entityId: tenant._id.toString(),
+      entityId: tenant.id,
       changes,
     });
-    
+
     return NextResponse.json({ success: true, data: tenant });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     const t = await getValidationTranslatorFromRequest(request);
-    if (error.code === 11000) {
-      const field = Object.keys(error.keyPattern)[0];
+    if (error.code === 'P2002') {
+      const field = error.meta?.target?.[0] || 'field';
       const errorMsg = t('validation.fieldAlreadyExists', '{field} already exists').replace('{field}', field);
       return NextResponse.json(
         { success: false, error: errorMsg },
@@ -186,35 +278,34 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const { slug } = await params;
     const t = await getValidationTranslatorFromRequest(request);
 
-    const tenant = await Tenant.findOne({ slug }).lean();
+    const tenant = await prisma.tenant.findFirst({ where: { slug } });
     if (!tenant) {
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    if (!(await hasTenantPermission(user.role, tenant._id.toString(), 'tenant_profile.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenant.id, 'tenant_profile.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
     // Soft delete - set isActive to false
-    await Tenant.findOneAndUpdate({ slug }, { isActive: false });
+    await prisma.tenant.update({ where: { id: tenant.id }, data: { isActive: false } });
 
     await createAuditLog(request, {
-      tenantId: tenant._id,
+      tenantId: tenant.id,
       action: AuditActions.DELETE,
       entityType: 'tenant',
-      entityId: tenant._id.toString(),
+      entityId: tenant.id,
       changes: { slug: tenant.slug, name: tenant.name },
     });
-    
+
     return NextResponse.json({ success: true, data: {} });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     if (error.message === 'Unauthorized' || error.message.includes('Forbidden')) {
@@ -226,4 +317,3 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     return handleApiError(error);
   }
 }
-

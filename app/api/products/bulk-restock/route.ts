@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import mongoose from 'mongoose';
-import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
+import prisma from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { updateStock } from '@/lib/stock';
@@ -24,8 +22,6 @@ interface RestockItem {
  */
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
-
     let tenantId: string;
     let userId: string;
     try {
@@ -74,7 +70,7 @@ export async function POST(request: NextRequest) {
     const validationErrors: Array<{ productId: string; error: string }> = [];
 
     for (const item of items) {
-      if (!item || !mongoose.Types.ObjectId.isValid(item.productId)) {
+      if (!item || typeof item.productId !== 'string' || item.productId.length === 0) {
         validationErrors.push({ productId: String(item?.productId), error: 'Invalid product ID' });
         continue;
       }
@@ -100,7 +96,10 @@ export async function POST(request: NextRequest) {
           reason: reason || 'Bulk restock',
           notes,
         });
-        const product = await Product.findOne({ _id: item.productId, tenantId }).select('stock').lean();
+        const product = await prisma.product.findFirst({
+          where: { id: item.productId, tenantId },
+          select: { stock: true },
+        });
         results.push({ productId: item.productId, newStock: product?.stock ?? 0 });
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Failed to restock';

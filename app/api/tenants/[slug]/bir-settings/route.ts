@@ -4,8 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
@@ -24,15 +23,16 @@ export async function GET(
     }
 
     const { slug } = await params;
-    await connectDB();
-
-    const tenant = await Tenant.findOne({ slug, isActive: true }).lean();
+    const tenant = await prisma.tenant.findFirst({
+      where: { slug, isActive: true },
+      include: { settings: true },
+    });
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
     // Tenant isolation
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
@@ -67,24 +67,22 @@ export async function PUT(
     }
 
     const { slug } = await params;
-    await connectDB();
-
-    const tenant = await Tenant.findOne({ slug });
+    const tenant = await prisma.tenant.findFirst({ where: { slug } });
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
     // Tenant isolation
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    if (!(await hasTenantPermission(user.role, tenant._id.toString(), 'bir_compliance.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenant.id, 'bir_compliance.manage'))) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
     try {
-      await checkBirFeatureAccess(tenant._id.toString(), 'ptuAssistance');
+      await checkBirFeatureAccess(tenant.id, 'ptuAssistance');
     } catch (featureError: unknown) {
       return NextResponse.json(
         { success: false, error: featureError instanceof Error ? featureError.message : 'Feature not available' },
@@ -103,24 +101,28 @@ export async function PUT(
       );
     }
 
-    if (birTin !== undefined) tenant.settings.birTin = birTin || undefined;
-    if (birPtuNumber !== undefined) tenant.settings.birPtuNumber = birPtuNumber || undefined;
+    const data: Record<string, unknown> = {};
+    if (birTin !== undefined) data.birTin = birTin || null;
+    if (birPtuNumber !== undefined) data.birPtuNumber = birPtuNumber || null;
     if (birPtuIssuedDate !== undefined) {
-      tenant.settings.birPtuIssuedDate = birPtuIssuedDate ? new Date(birPtuIssuedDate) : undefined;
+      data.birPtuIssuedDate = birPtuIssuedDate ? new Date(birPtuIssuedDate) : null;
     }
     if (birPtuExpiryDate !== undefined) {
-      tenant.settings.birPtuExpiryDate = birPtuExpiryDate ? new Date(birPtuExpiryDate) : undefined;
+      data.birPtuExpiryDate = birPtuExpiryDate ? new Date(birPtuExpiryDate) : null;
     }
 
-    tenant.markModified('settings');
-    await tenant.save();
+    await prisma.tenantSettings.upsert({
+      where: { tenantId: tenant.id },
+      create: { tenantId: tenant.id, ...data },
+      update: data,
+    });
 
     await createAuditLog(request, {
-      tenantId: tenant._id,
+      tenantId: tenant.id,
       userId: user.userId,
       action: AuditActions.UPDATE,
       entityType: 'bir_settings',
-      entityId: tenant._id.toString(),
+      entityId: tenant.id,
       changes: { birTin, birPtuNumber, birPtuIssuedDate, birPtuExpiryDate },
     });
 

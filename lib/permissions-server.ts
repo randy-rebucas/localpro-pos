@@ -1,5 +1,5 @@
-import Tenant from '@/models/Tenant';
-import { hasPermission, isAlwaysAllowedRole } from '@/lib/permissions';
+import prisma from '@/lib/db';
+import { hasPermission, isAlwaysAllowedRole, RolePermissionOverrides } from '@/lib/permissions';
 
 /**
  * Server-side effective permission check — loads the tenant's configured
@@ -14,6 +14,9 @@ export async function hasTenantPermission(
   if (isAlwaysAllowedRole(role)) return true;
   if (!role) return false;
 
-  const tenant = await Tenant.findById(tenantId).select('settings.rolePermissionOverrides').lean();
-  return hasPermission(role, key, tenant?.settings?.rolePermissionOverrides);
+  const record = await prisma.tenantRolePermissionOverride.findUnique({
+    where: { tenantId },
+    select: { overrides: true },
+  });
+  return hasPermission(role, key, record?.overrides as RolePermissionOverrides | undefined);
 }

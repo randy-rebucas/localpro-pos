@@ -1,70 +1,96 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
-import Product from '@/models/Product';
-import Transaction from '@/models/Transaction';
-import Category from '@/models/Category';
-import StockMovement from '@/models/StockMovement';
-import Expense from '@/models/Expense';
-import Discount from '@/models/Discount';
-import Branch from '@/models/Branch';
-import CashDrawerSession from '@/models/CashDrawerSession';
-import ProductBundle from '@/models/ProductBundle';
-import Attendance from '@/models/Attendance';
-import Booking from '@/models/Booking';
-import SavedCart from '@/models/SavedCart';
-import AuditLog from '@/models/AuditLog';
-import Customer from '@/models/Customer';
-import Address from '@/models/Address';
-import Invoice from '@/models/Invoice';
-import Payment from '@/models/Payment';
-import LoyaltyConfig from '@/models/LoyaltyConfig';
-import LoyaltyTransaction from '@/models/LoyaltyTransaction';
-import TaxRule from '@/models/TaxRule';
-import CustomerOTP from '@/models/CustomerOTP';
-import mongoose from 'mongoose';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
-import { runWithOptionalMongoTransaction, sessionOpts } from '@/lib/mongo-session';
 
-// Map collection names to their models
-const COLLECTION_MODELS: Record<string, any> = { // eslint-disable-line @typescript-eslint/no-explicit-any
+// Map collection names (as used by the tenant-settings backup/reset UI) to
+// their Prisma delegate. Kept as `any` because each delegate has a different
+// generated type and we only ever call the shared `findMany`/`deleteMany`/
+// `createMany` shape on them here.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const COLLECTION_MODELS: Record<string, any> = {
   // Products & Inventory
-  products: Product,
-  productBundles: ProductBundle,
-  categories: Category,
-  stockMovements: StockMovement,
+  products: prisma.product,
+  productBundles: prisma.productBundle,
+  categories: prisma.category,
+  stockMovements: prisma.stockMovement,
   // Sales & Transactions
-  transactions: Transaction,
-  payments: Payment,
-  invoices: Invoice,
+  transactions: prisma.transaction,
+  payments: prisma.payment,
+  invoices: prisma.invoice,
   // Customer Management
-  customers: Customer,
-  addresses: Address,
-  customerOTPs: CustomerOTP,
+  customers: prisma.customer,
+  addresses: prisma.address,
+  customerOTPs: prisma.customerOTP,
   // Discounts & Promotions
-  discounts: Discount,
-  savedCarts: SavedCart,
+  discounts: prisma.discount,
+  savedCarts: prisma.savedCart,
   // Loyalty Program
-  loyaltyConfigs: LoyaltyConfig,
-  loyaltyTransactions: LoyaltyTransaction,
+  loyaltyConfigs: prisma.loyaltyConfig,
+  loyaltyTransactions: prisma.loyaltyTransaction,
   // Tax & Compliance
-  taxRules: TaxRule,
+  taxRules: prisma.taxRule,
   // Organizational
-  branches: Branch,
-  expenses: Expense,
+  branches: prisma.branch,
+  expenses: prisma.expense,
   // Cash Management
-  cashDrawerSessions: CashDrawerSession,
+  cashDrawerSessions: prisma.cashDrawerSession,
   // Staff & Operations
-  attendance: Attendance,
+  attendance: prisma.attendance,
   // Bookings & Services
-  bookings: Booking,
+  bookings: prisma.booking,
   // Audit & Compliance
-  auditLogs: AuditLog,
+  auditLogs: prisma.auditLog,
 };
+
+// FK-safe delete order: children before parents (see prisma/schema.prisma
+// relations). A restrict-mode FK (the Prisma default when `onDelete` isn't
+// specified) blocks deleting the parent row while a child still references
+// it, so rows with an FK to another listed collection must be cleared first.
+// - payments/invoices/loyaltyTransactions/stockMovements reference
+//   transactions (restrict) -> before transactions
+// - savedCarts (via saved_cart_items) and productBundles (via
+//   product_bundle_items) reference products (restrict) -> before products
+// - invoices/loyaltyTransactions reference customers (restrict) -> before
+//   customers
+// - products reference categories (restrict) -> before categories
+const RESET_ORDER = [
+  'auditLogs',
+  'payments',
+  'invoices',
+  'loyaltyTransactions',
+  'stockMovements',
+  'transactions',
+  'savedCarts',
+  'productBundles',
+  'products',
+  'categories',
+  'taxRules',
+  'discounts',
+  'customerOTPs',
+  'addresses',
+  'customers',
+  'cashDrawerSessions',
+  'expenses',
+  'attendance',
+  'bookings',
+  'branches',
+  'loyaltyConfigs',
+];
+
+function orderCollections(collections: string[]): string[] {
+  const set = new Set(collections);
+  const ordered = RESET_ORDER.filter((c) => set.has(c));
+  // Any collection not in RESET_ORDER (shouldn't happen given validation
+  // against COLLECTION_MODELS) is appended last.
+  for (const c of collections) {
+    if (!ordered.includes(c)) ordered.push(c);
+  }
+  return ordered;
+}
 
 // Backup endpoint - GET
 export async function GET(
@@ -72,12 +98,11 @@ export async function GET(
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const { slug } = await params;
     const t = await getValidationTranslatorFromRequest(request);
-    
-    const tenant = await Tenant.findOne({ slug, isActive: true });
+
+    const tenant = await prisma.tenant.findFirst({ where: { slug, isActive: true } });
     if (!tenant) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
@@ -86,14 +111,14 @@ export async function GET(
     }
 
     // Verify user owns this tenant (unless super_admin)
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json(
         { success: false, error: t('validation.forbidden', 'You do not have access to this tenant') },
         { status: 403 }
       );
     }
 
-    if (!(await hasTenantPermission(user.role, tenant._id.toString(), 'reset_collections.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenant.id, 'reset_collections.manage'))) {
       return NextResponse.json(
         { success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') },
         { status: 403 }
@@ -115,19 +140,19 @@ export async function GET(
       );
     }
 
-    const backup: Record<string, any[]> = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const backup: Record<string, unknown[]> = {};
     const counts: Record<string, number> = {};
 
     // Export data from each collection
     for (const collectionName of collections) {
-      const Model = COLLECTION_MODELS[collectionName];
-      const documents = await Model.find({ tenantId: tenant._id }).lean();
+      const model = COLLECTION_MODELS[collectionName];
+      const documents = await model.findMany({ where: { tenantId: tenant.id } });
       backup[collectionName] = documents;
       counts[collectionName] = documents.length;
     }
 
     const backupData = {
-      version: '1.0',
+      version: '2.0', // Postgres/Prisma-shaped backup (v1 Mongo backups are not restorable here)
       tenantSlug: slug,
       tenantName: tenant.name,
       createdAt: new Date().toISOString(),
@@ -137,7 +162,7 @@ export async function GET(
 
     // Create audit log
     await createAuditLog(request, {
-      tenantId: tenant._id,
+      tenantId: tenant.id,
       userId: user.userId,
       action: AuditActions.VIEW,
       entityType: 'collections',
@@ -177,11 +202,10 @@ export async function POST(
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const { slug } = await params;
-    
-    const tenant = await Tenant.findOne({ slug, isActive: true });
+
+    const tenant = await prisma.tenant.findFirst({ where: { slug, isActive: true } });
     const t = await getValidationTranslatorFromRequest(request);
     if (!tenant) {
       return NextResponse.json(
@@ -191,14 +215,14 @@ export async function POST(
     }
 
     // Verify user owns this tenant (unless super_admin)
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json(
         { success: false, error: t('validation.forbidden', 'You do not have access to this tenant') },
         { status: 403 }
       );
     }
 
-    if (!(await hasTenantPermission(user.role, tenant._id.toString(), 'reset_collections.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenant.id, 'reset_collections.manage'))) {
       return NextResponse.json(
         { success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') },
         { status: 403 }
@@ -227,21 +251,23 @@ export async function POST(
     }
 
     // Atomic: either every selected collection is cleared, or none are — a
-    // failure partway through (e.g. one bad collection) must not leave the
+    // failure partway through (e.g. an FK-order mistake) must not leave the
     // tenant with some collections wiped and others untouched.
-    const results = await runWithOptionalMongoTransaction(async (session) => {
+    const orderedCollections = orderCollections(collections);
+    const results = await prisma.$transaction(async (tx) => {
       const r: Record<string, { deleted: number }> = {};
-      for (const collectionName of collections) {
-        const Model = COLLECTION_MODELS[collectionName];
-        const result = await Model.deleteMany({ tenantId: tenant._id }, sessionOpts(session));
-        r[collectionName] = { deleted: result.deletedCount || 0 };
+      for (const collectionName of orderedCollections) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const model = (tx as any)[modelKeyFor(collectionName)];
+        const result = await model.deleteMany({ where: { tenantId: tenant.id } });
+        r[collectionName] = { deleted: result.count || 0 };
       }
       return r;
     });
 
     // Create audit log
     await createAuditLog(request, {
-      tenantId: tenant._id,
+      tenantId: tenant.id,
       userId: user.userId,
       action: AuditActions.DELETE,
       entityType: 'collections',
@@ -281,11 +307,10 @@ export async function PUT(
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const { slug } = await params;
-    
-    const tenant = await Tenant.findOne({ slug, isActive: true });
+
+    const tenant = await prisma.tenant.findFirst({ where: { slug, isActive: true } });
     const t = await getValidationTranslatorFromRequest(request);
     if (!tenant) {
       return NextResponse.json(
@@ -295,14 +320,14 @@ export async function PUT(
     }
 
     // Verify user owns this tenant (unless super_admin)
-    if (user.role !== 'super_admin' && user.tenantId !== tenant._id.toString()) {
+    if (user.role !== 'super_admin' && user.tenantId !== tenant.id) {
       return NextResponse.json(
         { success: false, error: t('validation.forbidden', 'You do not have access to this tenant') },
         { status: 403 }
       );
     }
 
-    if (!(await hasTenantPermission(user.role, tenant._id.toString(), 'reset_collections.manage'))) {
+    if (!(await hasTenantPermission(user.role, tenant.id, 'reset_collections.manage'))) {
       return NextResponse.json(
         { success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') },
         { status: 403 }
@@ -319,60 +344,58 @@ export async function PUT(
       );
     }
 
-    // Atomic: a partial failure (bad document, duplicate key, etc.) must not
-    // leave collections cleared-but-not-restored, or one collection restored
-    // while a later one silently fails. `ordered: true` inside the session so
-    // a single bad document aborts that collection's insert instead of
-    // leaving an inconsistent partial set (transactions require ordered writes).
-    const results = await runWithOptionalMongoTransaction(async (session) => {
+    if (backupData.version && backupData.version !== '2.0') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: t(
+            'validation.unsupportedBackupVersion',
+            'This backup was created before the PostgreSQL migration and cannot be restored here. Use the archived Mongo backup/restore tooling instead.'
+          ),
+        },
+        { status: 400 }
+      );
+    }
+
+    // Atomic: a partial failure (bad document, unique-key clash, etc.) must
+    // not leave collections cleared-but-not-restored, or one collection
+    // restored while a later one silently fails.
+    const collectionNames = Object.keys(backupData.collections).filter((c) => COLLECTION_MODELS[c]);
+    const orderedForClear = orderCollections(collectionNames);
+    const orderedForRestore = [...orderedForClear].reverse(); // parents-first insert order
+
+    const results = await prisma.$transaction(async (tx) => {
       const r: Record<string, { restored: number; cleared: number }> = {};
 
-      for (const [collectionName, documents] of Object.entries(backupData.collections)) {
-        if (!COLLECTION_MODELS[collectionName]) {
-          continue; // Skip invalid collections
+      if (clearExisting) {
+        for (const collectionName of orderedForClear) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const model = (tx as any)[modelKeyFor(collectionName)];
+          const deleteResult = await model.deleteMany({ where: { tenantId: tenant.id } });
+          r[collectionName] = { restored: 0, cleared: deleteResult.count || 0 };
+        }
+      }
+
+      for (const collectionName of orderedForRestore) {
+        const documents = backupData.collections[collectionName];
+        if (!Array.isArray(documents) || documents.length === 0) {
+          r[collectionName] = r[collectionName] || { restored: 0, cleared: 0 };
+          continue;
         }
 
-        const Model = COLLECTION_MODELS[collectionName];
-        let cleared = 0;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const model = (tx as any)[modelKeyFor(collectionName)];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const documentsToInsert = documents.map((doc: any) => ({
+          ...doc,
+          tenantId: tenant.id,
+        }));
 
-        // Clear existing data if requested
-        if (clearExisting) {
-          const deleteResult = await Model.deleteMany({ tenantId: tenant._id }, sessionOpts(session));
-          cleared = deleteResult.deletedCount || 0;
-        }
-
-        // Restore documents
-        if (Array.isArray(documents) && documents.length > 0) {
-          // Replace tenantId with current tenant's ID and convert _id strings to ObjectIds
-          const documentsToInsert = documents.map((doc: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-            const newDoc = { ...doc };
-            // Remove _id to let MongoDB create new ones (or keep if you want to preserve IDs)
-            delete newDoc._id;
-            // Ensure tenantId is set correctly
-            newDoc.tenantId = tenant._id;
-            // Convert any ObjectId strings to ObjectIds
-            Object.keys(newDoc).forEach(key => {
-              if (typeof newDoc[key] === 'string' && mongoose.Types.ObjectId.isValid(newDoc[key]) && key.endsWith('Id')) {
-                newDoc[key] = new mongoose.Types.ObjectId(newDoc[key]);
-              }
-            });
-            // Handle nested ObjectIds in arrays (like items.product in transactions)
-            if (newDoc.items && Array.isArray(newDoc.items)) {
-              newDoc.items = newDoc.items.map((item: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-                if (item.product && typeof item.product === 'string' && mongoose.Types.ObjectId.isValid(item.product)) {
-                  item.product = new mongoose.Types.ObjectId(item.product);
-                }
-                return item;
-              });
-            }
-            return newDoc;
-          });
-
-          await Model.insertMany(documentsToInsert, { ordered: true, ...sessionOpts(session) });
-          r[collectionName] = { restored: documentsToInsert.length, cleared };
-        } else {
-          r[collectionName] = { restored: 0, cleared };
-        }
+        await model.createMany({ data: documentsToInsert, skipDuplicates: true });
+        r[collectionName] = {
+          restored: documentsToInsert.length,
+          cleared: r[collectionName]?.cleared ?? 0,
+        };
       }
 
       return r;
@@ -380,13 +403,13 @@ export async function PUT(
 
     // Create audit log
     await createAuditLog(request, {
-      tenantId: tenant._id,
+      tenantId: tenant.id,
       userId: user.userId,
       action: AuditActions.UPDATE,
       entityType: 'collections',
       entityId: 'restore',
       changes: {
-        collections: Object.keys(backupData.collections),
+        collections: collectionNames,
         results: results,
         clearExisting,
       },
@@ -395,7 +418,7 @@ export async function PUT(
     return NextResponse.json({
       success: true,
       data: {
-        message: `Successfully restored ${Object.keys(backupData.collections).length} collection(s)`,
+        message: `Successfully restored ${collectionNames.length} collection(s)`,
         results,
       },
     });
@@ -415,3 +438,33 @@ export async function PUT(
   }
 }
 
+// Prisma's transaction client (`tx`) is keyed by camelCase model name, not by
+// the human-facing collection name used in the UI/backup JSON — map between
+// them explicitly rather than relying on name equality.
+const MODEL_KEY_MAP: Record<string, string> = {
+  products: 'product',
+  productBundles: 'productBundle',
+  categories: 'category',
+  stockMovements: 'stockMovement',
+  transactions: 'transaction',
+  payments: 'payment',
+  invoices: 'invoice',
+  customers: 'customer',
+  addresses: 'address',
+  customerOTPs: 'customerOTP',
+  discounts: 'discount',
+  savedCarts: 'savedCart',
+  loyaltyConfigs: 'loyaltyConfig',
+  loyaltyTransactions: 'loyaltyTransaction',
+  taxRules: 'taxRule',
+  branches: 'branch',
+  expenses: 'expense',
+  cashDrawerSessions: 'cashDrawerSession',
+  attendance: 'attendance',
+  bookings: 'booking',
+  auditLogs: 'auditLog',
+};
+
+function modelKeyFor(collectionName: string): string {
+  return MODEL_KEY_MAP[collectionName] || collectionName;
+}

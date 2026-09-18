@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
-import Transaction from '@/models/Transaction';
+import prisma from '@/lib/db';
 import { TENANT_IS_ACTIVE_FILTER } from '@/lib/tenant-active-query';
 
 /**
@@ -10,10 +8,9 @@ import { TENANT_IS_ACTIVE_FILTER } from '@/lib/tenant-active-query';
  */
 export async function GET() {
   try {
-    await connectDB();
     const [activeTenants, completedTransactions] = await Promise.all([
-      Tenant.countDocuments(TENANT_IS_ACTIVE_FILTER),
-      Transaction.countDocuments({ status: 'completed', isActive: true }),
+      prisma.tenant.count({ where: TENANT_IS_ACTIVE_FILTER }),
+      prisma.transaction.count({ where: { status: 'completed', isActive: true } }),
     ]);
 
     return NextResponse.json(

@@ -1,17 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import mongoose from 'mongoose';
-import connectDB from '@/lib/mongodb';
-import Subscription from '@/models/Subscription';
-import Tenant from '@/models/Tenant';
-import SubscriptionPlan from '@/models/SubscriptionPlan';
-import BillingEvent from '@/models/BillingEvent';
-import SuperAdminAction from '@/models/SuperAdminAction';
+import { randomUUID } from 'crypto';
+import { Prisma, Subscription } from '@prisma/client';
+import prisma from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
 
+type TxClient = Prisma.TransactionClient;
+
 async function resolveTenant(slug: string) {
-  return Tenant.findOne({ slug }).select('_id slug name').lean() as Promise<{ _id: unknown; slug: string; name: string } | null>;
+  return prisma.tenant.findUnique({ where: { slug }, select: { id: true, slug: true, name: true } });
 }
 
 export async function GET(
@@ -19,7 +17,6 @@ export async function GET(
   { params }: { params: Promise<{ tenantSlug: string }> }
 ) {
   try {
-    await connectDB();
     await requireRole(request, ['super_admin']);
 
     const { tenantSlug } = await params;
@@ -28,9 +25,10 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    const subscription = await Subscription.findOne({ tenantId: tenant._id })
-      .populate('planId', 'name tier price features')
-      .lean();
+    const subscription = await prisma.subscription.findUnique({
+      where: { tenantId: tenant.id },
+      include: { plan: { select: { name: true, tier: true, priceMonthly: true, priceSetupFee: true, priceCurrency: true } } },
+    });
 
     if (!subscription) {
       return NextResponse.json({ success: false, error: 'No subscription found for this tenant' }, { status: 404 });
@@ -50,12 +48,12 @@ export async function GET(
 
 // A validation failure here (missing field, plan not found, invalid date, positive-amount
 // check) surfaces as { error } and must be resolved *before* the transaction opens below —
-// nothing here reads/writes with a session.
-async function validateAction(action: string, body: Record<string, unknown>, subscription: InstanceType<typeof Subscription>): Promise<{ error: string; status: number } | null> {
+// nothing here reads/writes with a transaction.
+async function validateAction(action: string, body: Record<string, unknown>, subscription: Subscription): Promise<{ error: string; status: number } | null> {
   switch (action) {
     case 'assign-plan': {
       if (!body.planId) return { error: 'planId is required', status: 400 };
-      const plan = await SubscriptionPlan.findById(body.planId).lean();
+      const plan = await prisma.subscriptionPlan.findUnique({ where: { id: body.planId as string } });
       if (!plan) return { error: 'Plan not found', status: 404 };
       if (body.nextBillingDate && isNaN(new Date(body.nextBillingDate as string).getTime())) {
         return { error: 'Invalid nextBillingDate', status: 400 };
@@ -68,8 +66,9 @@ async function validateAction(action: string, body: Record<string, unknown>, sub
       return null;
     }
     case 'activate': {
-      if ((subscription.outstandingBalance || 0) > 0) {
-        return { error: `Outstanding balance of ${subscription.outstandingBalance} must be settled (via record-payment) before reactivating`, status: 400 };
+      const outstandingBalance = Number(subscription.outstandingBalance || 0);
+      if (outstandingBalance > 0) {
+        return { error: `Outstanding balance of ${outstandingBalance} must be settled (via record-payment) before reactivating`, status: 400 };
       }
       // Reactivating a cancelled subscription is a deliberate win-back, not a
       // routine unpause/unsuspend — require the admin to record why.
@@ -95,21 +94,21 @@ async function validateAction(action: string, body: Record<string, unknown>, sub
 interface AuditPlan { changes: Record<string, unknown> }
 
 // Applies the mutation for `action` against `subscription` (and, for a few actions, the
-// tenant's isActive flag + a BillingEvent) inside the caller's transaction session. Returns
+// tenant's isActive flag + a BillingEvent) inside the caller's transaction. Returns
 // the audit-log changes payload for the caller to log once the transaction has committed.
 async function applyAction(
   action: string,
   body: Record<string, unknown>,
-  subscription: InstanceType<typeof Subscription>,
+  subscription: Subscription,
   tenantId: string,
   adminUserId: string,
   previousStatus: string,
-  session: mongoose.ClientSession
+  tx: TxClient
 ): Promise<AuditPlan> {
   switch (action) {
     case 'assign-plan': {
       const planId = body.planId as string;
-      const previousPlanId = String(subscription.planId);
+      const previousPlanId = subscription.planId;
       const now = new Date();
       let nextBilling: Date;
       if (body.nextBillingDate) {
@@ -119,16 +118,20 @@ async function applyAction(
         if (subscription.billingCycle === 'yearly') nextBilling.setFullYear(nextBilling.getFullYear() + 1);
         else nextBilling.setMonth(nextBilling.getMonth() + 1);
       }
-      subscription.planId = new mongoose.Types.ObjectId(planId);
-      subscription.status = 'active';
-      subscription.isTrial = false;
-      subscription.startDate = now;
-      subscription.nextBillingDate = nextBilling;
-      subscription.trialEndDate = undefined;
-      subscription.endDate = undefined;
-      subscription.cancelledAt = undefined;
-      subscription.suspendedAt = undefined;
-      await subscription.save({ session });
+      await tx.subscription.update({
+        where: { id: subscription.id },
+        data: {
+          planId,
+          status: 'active',
+          isTrial: false,
+          startDate: now,
+          nextBillingDate: nextBilling,
+          trialEndDate: null,
+          endDate: null,
+          cancelledAt: null,
+          suspendedAt: null,
+        },
+      });
       return {
         changes: {
           planId: { from: previousPlanId, to: planId },
@@ -143,27 +146,39 @@ async function applyAction(
       const base = subscription.trialEndDate && subscription.trialEndDate > new Date()
         ? subscription.trialEndDate
         : new Date();
-      subscription.trialEndDate = new Date(base.getTime() + days * 86_400_000);
-      subscription.nextBillingDate = subscription.trialEndDate;
-      if (subscription.status !== 'trial') subscription.status = 'trial';
-      await subscription.save({ session });
-      return { changes: { trialEndDate: subscription.trialEndDate, days } };
+      const trialEndDate = new Date(base.getTime() + days * 86_400_000);
+      await tx.subscription.update({
+        where: { id: subscription.id },
+        data: {
+          trialEndDate,
+          nextBillingDate: trialEndDate,
+          status: subscription.status !== 'trial' ? 'trial' : undefined,
+        },
+      });
+      return { changes: { trialEndDate, days } };
     }
     case 'cancel': {
       const cancelReason = body.reason as string | undefined;
-      subscription.status = 'cancelled';
-      subscription.cancelledAt = new Date();
-      if (cancelReason) subscription.cancellationReason = cancelReason;
-      await subscription.save({ session });
-      await BillingEvent.create([{
-        tenantId,
-        subscriptionId: subscription._id,
-        type: 'subscription_cancelled',
-        amount: 0,
-        currency: 'PHP',
-        description: cancelReason || 'Cancelled by super-admin',
-        recordedBy: adminUserId,
-      }], { session });
+      await tx.subscription.update({
+        where: { id: subscription.id },
+        data: {
+          status: 'cancelled',
+          cancelledAt: new Date(),
+          cancellationReason: cancelReason || undefined,
+        },
+      });
+      await tx.billingEvent.create({
+        data: {
+          id: randomUUID(),
+          tenantId,
+          subscriptionId: subscription.id,
+          type: 'subscription_cancelled',
+          amount: 0,
+          currency: 'PHP',
+          description: cancelReason || 'Cancelled by super-admin',
+          recordedById: adminUserId,
+        },
+      });
       return { changes: { status: { from: previousStatus, to: 'cancelled' }, reason: cancelReason } };
     }
     case 'activate': {
@@ -171,172 +186,220 @@ async function applyAction(
       const wasDeactivated = !!subscription.deactivatedAt;
       const wasCancelled = previousStatus === 'cancelled';
       const reactivationReason = (body.reactivationReason as string | undefined)?.trim();
-      subscription.status = 'active';
-      subscription.isTrial = false;
-      if (wasTrial && !subscription.trialConvertedAt) subscription.trialConvertedAt = new Date();
       const nextBilling = new Date();
       if (subscription.billingCycle === 'yearly') nextBilling.setFullYear(nextBilling.getFullYear() + 1);
       else nextBilling.setMonth(nextBilling.getMonth() + 1);
-      subscription.nextBillingDate = nextBilling;
-      subscription.gracePeriodEndDate = undefined;
-      subscription.paymentOverdue = false;
-      subscription.deactivatedAt = undefined;
-      subscription.lateFeeAppliedAt = undefined;
-      subscription.reactivationFeeAppliedAt = undefined;
-      await subscription.save({ session });
+      await tx.subscription.update({
+        where: { id: subscription.id },
+        data: {
+          status: 'active',
+          isTrial: false,
+          trialConvertedAt: (wasTrial && !subscription.trialConvertedAt) ? new Date() : undefined,
+          nextBillingDate: nextBilling,
+          gracePeriodEndDate: null,
+          paymentOverdue: false,
+          deactivatedAt: null,
+          lateFeeAppliedAt: null,
+          reactivationFeeAppliedAt: null,
+        },
+      });
       if (wasDeactivated) {
-        await Tenant.findByIdAndUpdate(tenantId, { isActive: true }, { session });
-        await BillingEvent.create([{
-          tenantId,
-          subscriptionId: subscription._id,
-          type: 'account_reactivated',
-          amount: 0,
-          currency: 'PHP',
-          description: 'Account reactivated by super-admin after outstanding balance settled',
-          recordedBy: adminUserId,
-        }], { session });
+        await tx.tenant.update({ where: { id: tenantId }, data: { isActive: true } });
+        await tx.billingEvent.create({
+          data: {
+            id: randomUUID(),
+            tenantId,
+            subscriptionId: subscription.id,
+            type: 'account_reactivated',
+            amount: 0,
+            currency: 'PHP',
+            description: 'Account reactivated by super-admin after outstanding balance settled',
+            recordedById: adminUserId,
+          },
+        });
       }
       if (wasTrial) {
-        await BillingEvent.create([{
-          tenantId,
-          subscriptionId: subscription._id,
-          type: 'trial_converted',
-          amount: 0,
-          currency: 'PHP',
-          description: 'Trial converted to active subscription by super-admin',
-          recordedBy: adminUserId,
-        }], { session });
+        await tx.billingEvent.create({
+          data: {
+            id: randomUUID(),
+            tenantId,
+            subscriptionId: subscription.id,
+            type: 'trial_converted',
+            amount: 0,
+            currency: 'PHP',
+            description: 'Trial converted to active subscription by super-admin',
+            recordedById: adminUserId,
+          },
+        });
       }
       if (wasCancelled) {
-        await BillingEvent.create([{
-          tenantId,
-          subscriptionId: subscription._id,
-          type: 'account_reactivated',
-          amount: 0,
-          currency: 'PHP',
-          description: `Reactivated from cancelled by super-admin: ${reactivationReason}`,
-          recordedBy: adminUserId,
-        }], { session });
+        await tx.billingEvent.create({
+          data: {
+            id: randomUUID(),
+            tenantId,
+            subscriptionId: subscription.id,
+            type: 'account_reactivated',
+            amount: 0,
+            currency: 'PHP',
+            description: `Reactivated from cancelled by super-admin: ${reactivationReason}`,
+            recordedById: adminUserId,
+          },
+        });
       }
       return { changes: { status: { from: previousStatus, to: 'active' }, reactivationReason: wasCancelled ? reactivationReason : undefined } };
     }
     case 'suspend': {
       const graceDays = body.graceDays as number | undefined;
-      subscription.status = 'suspended';
-      subscription.suspendedAt = new Date();
+      let gracePeriodEndDate: Date | undefined;
       if (graceDays && Number(graceDays) > 0) {
-        const graceEnd = new Date();
-        graceEnd.setDate(graceEnd.getDate() + Number(graceDays));
-        subscription.gracePeriodEndDate = graceEnd;
+        gracePeriodEndDate = new Date();
+        gracePeriodEndDate.setDate(gracePeriodEndDate.getDate() + Number(graceDays));
       }
-      await subscription.save({ session });
-      await BillingEvent.create([{
-        tenantId,
-        subscriptionId: subscription._id,
-        type: 'subscription_suspended',
-        amount: 0,
-        currency: 'PHP',
-        description: `Suspended by super-admin${graceDays ? ` (grace period: ${graceDays} days)` : ''}`,
-        recordedBy: adminUserId,
-      }], { session });
+      await tx.subscription.update({
+        where: { id: subscription.id },
+        data: {
+          status: 'suspended',
+          suspendedAt: new Date(),
+          gracePeriodEndDate,
+        },
+      });
+      await tx.billingEvent.create({
+        data: {
+          id: randomUUID(),
+          tenantId,
+          subscriptionId: subscription.id,
+          type: 'subscription_suspended',
+          amount: 0,
+          currency: 'PHP',
+          description: `Suspended by super-admin${graceDays ? ` (grace period: ${graceDays} days)` : ''}`,
+          recordedById: adminUserId,
+        },
+      });
       return { changes: { status: { from: previousStatus, to: 'suspended' } } };
     }
     case 'pause': {
       const pauseReason = body.pauseReason as string | undefined;
       const pauseDays = body.pauseDays as number | undefined;
-      subscription.status = 'paused';
-      subscription.pausedAt = new Date();
-      if (pauseReason) subscription.pauseReason = pauseReason;
+      let pauseEndsAt: Date | undefined;
       if (pauseDays && Number(pauseDays) > 0) {
-        const pauseEnd = new Date();
-        pauseEnd.setDate(pauseEnd.getDate() + Number(pauseDays));
-        subscription.pauseEndsAt = pauseEnd;
+        pauseEndsAt = new Date();
+        pauseEndsAt.setDate(pauseEndsAt.getDate() + Number(pauseDays));
       }
-      await subscription.save({ session });
-      await BillingEvent.create([{
-        tenantId,
-        subscriptionId: subscription._id,
-        type: 'subscription_paused',
-        amount: 0,
-        currency: 'PHP',
-        description: pauseReason || 'Paused by super-admin',
-        recordedBy: adminUserId,
-      }], { session });
+      await tx.subscription.update({
+        where: { id: subscription.id },
+        data: {
+          status: 'paused',
+          pausedAt: new Date(),
+          pauseReason: pauseReason || undefined,
+          pauseEndsAt,
+        },
+      });
+      await tx.billingEvent.create({
+        data: {
+          id: randomUUID(),
+          tenantId,
+          subscriptionId: subscription.id,
+          type: 'subscription_paused',
+          amount: 0,
+          currency: 'PHP',
+          description: pauseReason || 'Paused by super-admin',
+          recordedById: adminUserId,
+        },
+      });
       return { changes: { status: { from: previousStatus, to: 'paused' }, pauseReason } };
     }
     case 'resume': {
-      subscription.status = 'active';
-      subscription.pausedAt = undefined;
-      subscription.pauseReason = undefined;
-      subscription.pauseEndsAt = undefined;
-      await subscription.save({ session });
-      await BillingEvent.create([{
-        tenantId,
-        subscriptionId: subscription._id,
-        type: 'subscription_resumed',
-        amount: 0,
-        currency: 'PHP',
-        description: 'Resumed by super-admin',
-        recordedBy: adminUserId,
-      }], { session });
+      await tx.subscription.update({
+        where: { id: subscription.id },
+        data: {
+          status: 'active',
+          pausedAt: null,
+          pauseReason: null,
+          pauseEndsAt: null,
+        },
+      });
+      await tx.billingEvent.create({
+        data: {
+          id: randomUUID(),
+          tenantId,
+          subscriptionId: subscription.id,
+          type: 'subscription_resumed',
+          amount: 0,
+          currency: 'PHP',
+          description: 'Resumed by super-admin',
+          recordedById: adminUserId,
+        },
+      });
       return { changes: { status: { from: previousStatus, to: 'active' } } };
     }
     case 'record-payment': {
       const payAmount = Number(body.amount);
       const payNotes = body.notes as string | undefined;
       const payTxId = body.transactionId as string | undefined;
-      await BillingEvent.create([{
-        tenantId,
-        subscriptionId: subscription._id,
-        type: 'payment_received',
-        amount: payAmount,
-        currency: 'PHP',
-        description: payNotes || 'Manual payment recorded by super-admin',
-        notes: payNotes,
-        transactionId: payTxId,
-        recordedBy: adminUserId,
-      }], { session });
-      subscription.billingHistory.push({
-        date: new Date(),
-        amount: payAmount,
-        currency: 'PHP',
-        status: 'paid',
-        transactionId: payTxId,
+      await tx.billingEvent.create({
+        data: {
+          id: randomUUID(),
+          tenantId,
+          subscriptionId: subscription.id,
+          type: 'payment_received',
+          amount: payAmount,
+          currency: 'PHP',
+          description: payNotes || 'Manual payment recorded by super-admin',
+          notes: payNotes,
+          transactionId: payTxId,
+          recordedById: adminUserId,
+        },
       });
-      subscription.outstandingBalance = Math.max(0, (subscription.outstandingBalance || 0) - payAmount);
+      await tx.subscriptionBillingHistory.create({
+        data: {
+          id: randomUUID(),
+          subscriptionId: subscription.id,
+          date: new Date(),
+          amount: payAmount,
+          currency: 'PHP',
+          status: 'paid',
+          transactionId: payTxId,
+        },
+      });
 
+      const outstandingBalance = Math.max(0, Number(subscription.outstandingBalance || 0) - payAmount);
       const wasDeactivated = !!subscription.deactivatedAt || subscription.status === 'suspended';
-      const fullyPaid = subscription.outstandingBalance <= 0;
+      const fullyPaid = outstandingBalance <= 0;
       const wasOverdue = subscription.paymentOverdue;
+
+      const updateData: Prisma.SubscriptionUpdateInput = { outstandingBalance };
 
       if (fullyPaid && (wasOverdue || wasDeactivated)) {
         const nextBilling = new Date();
         if (subscription.billingCycle === 'yearly') nextBilling.setFullYear(nextBilling.getFullYear() + 1);
         else nextBilling.setMonth(nextBilling.getMonth() + 1);
-        subscription.nextBillingDate = nextBilling;
-        subscription.paymentOverdue = false;
-        subscription.gracePeriodEndDate = undefined;
-        subscription.deactivatedAt = undefined;
-        subscription.lateFeeAppliedAt = undefined;
-        subscription.reactivationFeeAppliedAt = undefined;
-        if (wasDeactivated) subscription.status = 'active';
+        updateData.nextBillingDate = nextBilling;
+        updateData.paymentOverdue = false;
+        updateData.gracePeriodEndDate = null;
+        updateData.deactivatedAt = null;
+        updateData.lateFeeAppliedAt = null;
+        updateData.reactivationFeeAppliedAt = null;
+        if (wasDeactivated) updateData.status = 'active';
       }
 
-      await subscription.save({ session });
+      await tx.subscription.update({ where: { id: subscription.id }, data: updateData });
 
       if (fullyPaid && wasDeactivated) {
-        await Tenant.findByIdAndUpdate(tenantId, { isActive: true }, { session });
-        await BillingEvent.create([{
-          tenantId,
-          subscriptionId: subscription._id,
-          type: 'account_reactivated',
-          amount: 0,
-          currency: 'PHP',
-          description: 'Account reactivated automatically after payment settled outstanding balance',
-          recordedBy: adminUserId,
-        }], { session });
+        await tx.tenant.update({ where: { id: tenantId }, data: { isActive: true } });
+        await tx.billingEvent.create({
+          data: {
+            id: randomUUID(),
+            tenantId,
+            subscriptionId: subscription.id,
+            type: 'account_reactivated',
+            amount: 0,
+            currency: 'PHP',
+            description: 'Account reactivated automatically after payment settled outstanding balance',
+            recordedById: adminUserId,
+          },
+        });
       }
-      return { changes: { amount: payAmount, transactionId: payTxId, outstandingBalance: subscription.outstandingBalance, fullyPaid } };
+      return { changes: { amount: payAmount, transactionId: payTxId, outstandingBalance, fullyPaid } };
     }
     default:
       // Unreachable — validateAction already rejected unknown actions.
@@ -349,7 +412,6 @@ export async function PUT(
   { params }: { params: Promise<{ tenantSlug: string }> }
 ) {
   try {
-    await connectDB();
     const adminUser = await requireRole(request, ['super_admin']);
 
     const { tenantSlug } = await params;
@@ -361,12 +423,12 @@ export async function PUT(
     const body = await request.json();
     const { action } = body;
 
-    const subscription = await Subscription.findOne({ tenantId: tenant._id });
+    const subscription = await prisma.subscription.findUnique({ where: { tenantId: tenant.id } });
     if (!subscription) {
       return NextResponse.json({ success: false, error: 'No subscription found for this tenant' }, { status: 404 });
     }
 
-    const tenantId = String((tenant as { _id: unknown })._id);
+    const tenantId = tenant.id;
     const previousStatus = subscription.status;
 
     const validationError = await validateAction(action, body, subscription);
@@ -378,14 +440,19 @@ export async function PUT(
     // transactionId must not double-credit the account — payment recording
     // is the highest-risk action here since it moves money on the ledger.
     if (action === 'record-payment' && body.transactionId) {
-      const alreadyRecorded = await BillingEvent.findOne({
-        tenantId,
-        subscriptionId: subscription._id,
-        type: 'payment_received',
-        transactionId: body.transactionId,
-      }).lean();
+      const alreadyRecorded = await prisma.billingEvent.findFirst({
+        where: {
+          tenantId,
+          subscriptionId: subscription.id,
+          type: 'payment_received',
+          transactionId: body.transactionId,
+        },
+      });
       if (alreadyRecorded) {
-        const current = await Subscription.findById(subscription._id).populate('planId', 'name tier price').lean();
+        const current = await prisma.subscription.findUnique({
+          where: { id: subscription.id },
+          include: { plan: { select: { name: true, tier: true, priceMonthly: true } } },
+        });
         return NextResponse.json({ success: true, data: current });
       }
     }
@@ -394,24 +461,28 @@ export async function PUT(
     // event (and sometimes the tenant's isActive flag) — these must land
     // together or the ledger/tenant state can drift from the subscription
     // (e.g. status flipped to cancelled with no matching billing event).
-    const session = await mongoose.startSession();
     let auditPlan: AuditPlan;
     try {
-      session.startTransaction();
-      auditPlan = await applyAction(action, body, subscription, tenantId, adminUser.userId, previousStatus, session);
-      await session.commitTransaction();
+      auditPlan = await prisma.$transaction(async (tx) => {
+        return applyAction(action, body, subscription, tenantId, adminUser.userId, previousStatus, tx);
+      });
     } catch (e) {
-      await session.abortTransaction();
       // A concurrent request recorded this exact payment between our
       // pre-check above and this transaction's insert — the unique index
       // on {tenantId, transactionId} caught it. Treat as already-applied.
-      if (action === 'record-payment' && body.transactionId && e instanceof Error && (e as { code?: number }).code === 11000) {
-        const current = await Subscription.findById(subscription._id).populate('planId', 'name tier price').lean();
+      if (
+        action === 'record-payment' &&
+        body.transactionId &&
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === 'P2002'
+      ) {
+        const current = await prisma.subscription.findUnique({
+          where: { id: subscription.id },
+          include: { plan: { select: { name: true, tier: true, priceMonthly: true } } },
+        });
         return NextResponse.json({ success: true, data: current });
       }
       throw e;
-    } finally {
-      session.endSession();
     }
 
     await createAuditLog(request, {
@@ -419,24 +490,28 @@ export async function PUT(
       userId: adminUser.userId,
       action: `subscription.${action.replace(/-/g, '_')}`,
       entityType: 'Subscription',
-      entityId: String(subscription._id),
+      entityId: subscription.id,
       changes: auditPlan.changes,
     });
 
     const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '';
-    await SuperAdminAction.create({
-      adminUserId: adminUser.userId,
-      action: `subscription.${action}`,
-      targetType: 'Subscription',
-      targetId: String(subscription._id),
-      description: `Action "${action}" on subscription for tenant ${tenantSlug}`,
-      ipAddress: ip,
-      userAgent: request.headers.get('user-agent') || '',
+    await prisma.superAdminAction.create({
+      data: {
+        id: randomUUID(),
+        adminUserId: adminUser.userId,
+        action: `subscription.${action}`,
+        targetType: 'Subscription',
+        targetId: subscription.id,
+        description: `Action "${action}" on subscription for tenant ${tenantSlug}`,
+        ipAddress: ip,
+        userAgent: request.headers.get('user-agent') || '',
+      },
     });
 
-    const updated = await Subscription.findById(subscription._id)
-      .populate('planId', 'name tier price')
-      .lean();
+    const updated = await prisma.subscription.findUnique({
+      where: { id: subscription.id },
+      include: { plan: { select: { name: true, tier: true, priceMonthly: true } } },
+    });
 
     return NextResponse.json({ success: true, data: updated });
   } catch (error: unknown) {

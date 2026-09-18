@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Invoice from '@/models/Invoice';
+import prisma from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -10,7 +9,6 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const { tenantId, user } = await requireTenantAccess(request);
     const { id } = await params;
 
@@ -18,13 +16,14 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
-    const invoice = await Invoice.findOne({
-      _id: id,
-      tenantId,
-    })
-      .populate('transactionId', 'receiptNumber total items')
-      .populate('customerId', 'name email phone address')
-      .lean();
+    const invoice = await prisma.invoice.findFirst({
+      where: { id, tenantId },
+      include: {
+        transaction: { select: { receiptNumber: true, total: true, items: true } },
+        customer: { select: { firstName: true, lastName: true, email: true, phone: true, addresses: true } },
+        items: true,
+      },
+    });
 
     if (!invoice) {
       return NextResponse.json(
@@ -44,7 +43,6 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const tenantAccess = await requireTenantAccess(request);
     const { tenantId, user } = tenantAccess;
     if (!(await hasTenantPermission(user.role, tenantId, 'invoices.update_status'))) {
@@ -55,42 +53,45 @@ export async function PATCH(
     const body = await request.json();
     const { status, notes, paidAmount } = body;
 
-    const invoice = await Invoice.findOne({
-      _id: id,
-      tenantId,
+    const existingInvoice = await prisma.invoice.findFirst({
+      where: { id, tenantId },
     });
 
-    if (!invoice) {
+    if (!existingInvoice) {
       return NextResponse.json(
         { success: false, error: 'Invoice not found' },
         { status: 404 }
       );
     }
 
-    const previousStatus = invoice.status;
+    const previousStatus = existingInvoice.status;
     const changes: any = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const data: any = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
 
     // Update status if provided
     if (status && ['draft', 'sent', 'paid', 'overdue', 'cancelled'].includes(status)) {
-      invoice.status = status;
+      data.status = status;
       changes.status = status;
 
       // If marking as paid, update paid fields
       if (status === 'paid') {
-        invoice.paidAt = new Date();
-        invoice.paidAmount = paidAmount || invoice.total;
-        changes.paidAt = invoice.paidAt;
-        changes.paidAmount = invoice.paidAmount;
+        data.paidAt = new Date();
+        data.paidAmount = paidAmount || existingInvoice.total;
+        changes.paidAt = data.paidAt;
+        changes.paidAmount = data.paidAmount;
       }
     }
 
     // Update notes if provided
     if (notes !== undefined) {
-      invoice.notes = notes;
+      data.notes = notes;
       changes.notes = notes;
     }
 
-    await invoice.save();
+    const invoice = await prisma.invoice.update({
+      where: { id, tenantId },
+      data,
+    });
 
     // Determine audit action
     let auditAction: typeof AuditActions.INVOICE_UPDATE | typeof AuditActions.INVOICE_SEND | typeof AuditActions.INVOICE_MARK_PAID = AuditActions.INVOICE_UPDATE;
@@ -106,7 +107,7 @@ export async function PATCH(
       userId: user.userId,
       action: auditAction,
       entityType: 'invoice',
-      entityId: invoice._id.toString(),
+      entityId: invoice.id,
       changes,
     });
 

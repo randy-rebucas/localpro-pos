@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import mongoose from 'mongoose';
-import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
+import prisma from '@/lib/db';
+import { Prisma } from '@prisma/client';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -24,7 +23,7 @@ function generateSkuCandidate(): string {
 async function generateUniqueSku(tenantId: string): Promise<string> {
   for (let attempt = 0; attempt < 10; attempt++) {
     const candidate = generateSkuCandidate();
-    const exists = await Product.exists({ tenantId, sku: candidate });
+    const exists = await prisma.product.findFirst({ where: { tenantId, sku: candidate }, select: { id: true } });
     if (!exists) return candidate;
   }
   // Fallback: timestamp-based to guarantee uniqueness
@@ -36,8 +35,6 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
-
     const authResult = await requireTenantAccess(request);
     if (authResult instanceof NextResponse) return authResult;
     const { tenantId } = authResult;
@@ -56,9 +53,6 @@ export async function PATCH(
     }
 
     const { id } = await params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return NextResponse.json({ success: false, error: 'Invalid product ID' }, { status: 400 });
-    }
 
     const body = await request.json();
     const {
@@ -83,10 +77,8 @@ export async function PATCH(
       sessionId?: string;
     };
 
-    const product = await Product.findOne({
-      _id: id,
-      tenantId,
-      isActive: { $ne: false },
+    const product = await prisma.product.findFirst({
+      where: { id, tenantId, isActive: { not: false } },
     });
 
     if (!product) {
@@ -101,10 +93,9 @@ export async function PATCH(
       skuGenerated = true;
     } else {
       // Ensure provided SKU is unique within tenant (excluding this product)
-      const conflict = await Product.exists({
-        tenantId,
-        sku: resolvedSku,
-        _id: { $ne: id },
+      const conflict = await prisma.product.findFirst({
+        where: { tenantId, sku: resolvedSku, id: { not: id } },
+        select: { id: true },
       });
       if (conflict) {
         return NextResponse.json(
@@ -114,21 +105,18 @@ export async function PATCH(
       }
     }
 
-    const updates: Record<string, unknown> = { sku: resolvedSku };
+    const updates: Prisma.ProductUncheckedUpdateInput = { sku: resolvedSku };
     if (barcode !== undefined) updates.barcode = barcode.trim();
     if (name !== undefined && name.trim()) updates.name = name.trim();
     if (price !== undefined && price >= 0) updates.price = price;
-    if (categoryId && mongoose.Types.ObjectId.isValid(categoryId)) {
-      updates.categoryId = new mongoose.Types.ObjectId(categoryId);
-    }
+    if (categoryId) updates.categoryId = categoryId;
     if (imageUrl !== undefined) updates.image = imageUrl;
     if (notes !== undefined) updates.description = notes;
 
-    await Product.findOneAndUpdate(
-      { _id: id, tenantId },
-      { $set: updates },
-      { new: true }
-    );
+    await prisma.product.update({
+      where: { id },
+      data: updates,
+    });
 
     // Route stock changes through updateStock() so a StockMovement record is created
     // and the allowOutOfStockSales guard is applied consistently.
@@ -143,7 +131,7 @@ export async function PATCH(
       }
     }
 
-    const updatedProduct = await Product.findOne({ _id: id, tenantId }).lean();
+    const updatedProduct = await prisma.product.findFirst({ where: { id, tenantId } });
 
     await createAuditLog(request, {
       tenantId,
@@ -157,7 +145,12 @@ export async function PATCH(
 
     return NextResponse.json({
       success: true,
-      data: { product: updatedProduct, skuGenerated },
+      data: {
+        product: updatedProduct
+          ? { ...updatedProduct, _id: updatedProduct.id, price: Number(updatedProduct.price) }
+          : null,
+        skuGenerated,
+      },
     });
   } catch (error) {
     return handleApiError(error, 'Failed to update product');

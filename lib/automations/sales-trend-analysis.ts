@@ -3,10 +3,7 @@
  * Analyze sales trends and send insights
  */
 
-import connectDB from '@/lib/mongodb';
-import Transaction from '@/models/Transaction';
-import Tenant from '@/models/Tenant';
-import mongoose from 'mongoose';
+import prisma from '@/lib/db';
 import { sendEmail } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { AutomationResult } from './types';
@@ -23,8 +20,6 @@ export interface SalesTrendAnalysisOptions {
 export async function analyzeSalesTrends(
   options: SalesTrendAnalysisOptions = {}
 ): Promise<AutomationResult> {
-  await connectDB();
-
   const results: AutomationResult = {
     success: true,
     message: '',
@@ -40,10 +35,10 @@ export async function analyzeSalesTrends(
     // Get tenants to process
     let tenants;
     if (options.tenantId) {
-      const tenant = await Tenant.findById(options.tenantId).lean();
+      const tenant = await prisma.tenant.findUnique({ where: { id: options.tenantId } });
       tenants = tenant ? [tenant] : [];
     } else {
-      tenants = await Tenant.find({ status: 'active' }).lean();
+      tenants = await prisma.tenant.findMany({ where: { isActive: true } });
     }
 
     if (tenants.length === 0) {
@@ -56,7 +51,7 @@ export async function analyzeSalesTrends(
 
     for (const tenant of tenants) {
       try {
-        const tenantId = tenant._id.toString();
+        const tenantId = tenant.id;
         const tenantSettings = await getTenantSettingsById(tenantId);
 
         // Skip if notifications disabled
@@ -79,7 +74,7 @@ export async function analyzeSalesTrends(
             previousPeriodStart.setDate(previousPeriodStart.getDate() - 1);
             previousPeriodEnd = new Date(currentPeriodStart);
             break;
-          case 'weekly':
+          case 'weekly': {
             const dayOfWeek = now.getDay();
             currentPeriodStart = new Date(now);
             currentPeriodStart.setDate(currentPeriodStart.getDate() - dayOfWeek);
@@ -88,6 +83,7 @@ export async function analyzeSalesTrends(
             previousPeriodStart.setDate(previousPeriodStart.getDate() - 7);
             previousPeriodEnd = new Date(currentPeriodStart);
             break;
+          }
           case 'monthly':
             currentPeriodStart = new Date(now.getFullYear(), now.getMonth(), 1);
             previousPeriodStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -96,54 +92,40 @@ export async function analyzeSalesTrends(
         }
 
         // Get current period sales
-        const currentSales = await Transaction.aggregate([
-          {
-            $match: {
-              tenantId: new mongoose.Types.ObjectId(tenantId),
-              createdAt: { $gte: currentPeriodStart, $lte: currentPeriodEnd },
-              status: 'completed',
-            },
+        const currentAgg = await prisma.transaction.aggregate({
+          where: {
+            tenantId,
+            createdAt: { gte: currentPeriodStart, lte: currentPeriodEnd },
+            status: 'completed',
           },
-          {
-            $group: {
-              _id: null,
-              totalSales: { $sum: '$total' },
-              transactionCount: { $sum: 1 },
-              avgTransaction: { $avg: '$total' },
-            },
-          },
-        ]);
+          _sum: { total: true },
+          _count: { _all: true },
+          _avg: { total: true },
+        });
 
-        const currentData = currentSales[0] || {
-          totalSales: 0,
-          transactionCount: 0,
-          avgTransaction: 0,
+        const currentData = {
+          totalSales: Number(currentAgg._sum.total ?? 0),
+          transactionCount: currentAgg._count._all,
+          avgTransaction: Number(currentAgg._avg.total ?? 0),
         };
 
-        let previousData = null;
+        let previousData: { totalSales: number; transactionCount: number; avgTransaction: number } | null = null;
         if (comparePeriods) {
-          const previousSales = await Transaction.aggregate([
-            {
-              $match: {
-                tenantId: new mongoose.Types.ObjectId(tenantId),
-                createdAt: { $gte: previousPeriodStart, $lte: previousPeriodEnd },
-                status: 'completed',
-              },
+          const previousAgg = await prisma.transaction.aggregate({
+            where: {
+              tenantId,
+              createdAt: { gte: previousPeriodStart, lte: previousPeriodEnd },
+              status: 'completed',
             },
-            {
-              $group: {
-                _id: null,
-                totalSales: { $sum: '$total' },
-                transactionCount: { $sum: 1 },
-                avgTransaction: { $avg: '$total' },
-              },
-            },
-          ]);
+            _sum: { total: true },
+            _count: { _all: true },
+            _avg: { total: true },
+          });
 
-          previousData = previousSales[0] || {
-            totalSales: 0,
-            transactionCount: 0,
-            avgTransaction: 0,
+          previousData = {
+            totalSales: Number(previousAgg._sum.total ?? 0),
+            transactionCount: previousAgg._count._all,
+            avgTransaction: Number(previousAgg._avg.total ?? 0),
           };
         }
 
@@ -151,7 +133,7 @@ export async function analyzeSalesTrends(
         let trendAnalysis = '';
         let salesChange = 0;
         let salesChangePercent = '0';
-        
+
         if (previousData) {
           salesChange = currentData.totalSales - previousData.totalSales;
           salesChangePercent = previousData.totalSales > 0

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import ProductBundle from '@/models/ProductBundle';
-import '@/models/Category'; // register schema for populate
+import { randomUUID } from 'crypto';
+import prisma from '@/lib/db';
+import { Prisma } from '@prisma/client';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -14,7 +14,6 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
@@ -24,10 +23,17 @@ export async function GET(
       return NextResponse.json({ success: false, error: t('validation.tenantNotFound', 'Tenant not found') }, { status: 404 });
     }
 
-    const bundle = await ProductBundle.findOne({ _id: id, tenantId })
-      .populate('items.productId', 'name price stock')
-      .populate('categoryId', 'name')
-      .lean();
+    const bundle = await prisma.productBundle.findFirst({
+      where: { id, tenantId },
+      include: {
+        items: {
+          include: {
+            product: { select: { id: true, name: true, price: true, stock: true } },
+          },
+        },
+        category: { select: { id: true, name: true } },
+      },
+    });
 
     if (!bundle) {
       return NextResponse.json({ success: false, error: t('validation.bundleNotFound', 'Bundle not found') }, { status: 404 });
@@ -45,7 +51,6 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
@@ -58,38 +63,73 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
-    const bundle = await ProductBundle.findOne({ _id: id, tenantId });
-    if (!bundle) {
+    const existing = await prisma.productBundle.findFirst({
+      where: { id, tenantId },
+      include: { items: true },
+    });
+    if (!existing) {
       return NextResponse.json({ success: false, error: 'Bundle not found' }, { status: 404 });
     }
 
     const body = await request.json();
-    const oldData = bundle.toObject();
+    const oldData = existing;
 
-    if (body.name) bundle.name = body.name;
-    if (body.description !== undefined) bundle.description = body.description;
-    if (body.price !== undefined) bundle.price = body.price;
-    if (body.items) bundle.items = body.items;
-    if (body.sku !== undefined) bundle.sku = body.sku;
-    if (body.categoryId !== undefined) bundle.categoryId = body.categoryId;
-    if (body.image !== undefined) bundle.image = body.image;
-    if (body.trackInventory !== undefined) bundle.trackInventory = body.trackInventory;
-    if (body.isActive !== undefined) bundle.isActive = body.isActive;
+    const updateData: Prisma.ProductBundleUpdateInput = {};
+    if (body.name) updateData.name = body.name;
+    if (body.description !== undefined) updateData.description = body.description;
+    if (body.price !== undefined) updateData.price = body.price;
+    if (body.sku !== undefined) updateData.sku = body.sku;
+    if (body.categoryId !== undefined) {
+      updateData.category = body.categoryId
+        ? { connect: { id: body.categoryId } }
+        : { disconnect: true };
+    }
+    if (body.image !== undefined) updateData.image = body.image;
+    if (body.trackInventory !== undefined) updateData.trackInventory = body.trackInventory;
+    if (body.isActive !== undefined) updateData.isActive = body.isActive;
 
-    await bundle.save();
+    const bundle = await prisma.$transaction(async (tx) => {
+      if (body.items) {
+        await tx.productBundleItem.deleteMany({ where: { bundleId: id } });
+        updateData.items = {
+          create: body.items.map((item: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+            id: randomUUID(),
+            productId: item.productId,
+            productName: item.productName,
+            quantity: item.quantity,
+            variationSize: item.variation?.size,
+            variationColor: item.variation?.color,
+            variationType: item.variation?.type,
+          })),
+        };
+      }
+
+      return tx.productBundle.update({
+        where: { id },
+        data: updateData,
+        include: {
+          items: {
+            include: {
+              product: { select: { id: true, name: true, price: true, stock: true } },
+            },
+          },
+          category: { select: { id: true, name: true } },
+        },
+      });
+    });
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.UPDATE,
       entityType: 'bundle',
-      entityId: bundle._id.toString(),
-      changes: { before: oldData, after: bundle.toObject() },
+      entityId: bundle.id,
+      changes: { before: oldData, after: bundle },
     });
 
     return NextResponse.json({ success: true, data: bundle });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     const t = await getValidationTranslatorFromRequest(request);
-    if (error.code === 11000) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       return NextResponse.json(
         { success: false, error: t('validation.bundleSkuExists', 'Bundle with this SKU already exists') },
         { status: 400 }
@@ -105,7 +145,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const { id } = await params;
@@ -119,21 +158,20 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: t('validation.forbidden', 'Forbidden: Insufficient permissions') }, { status: 403 });
     }
 
-    const bundle = await ProductBundle.findOne({ _id: id, tenantId });
+    const bundle = await prisma.productBundle.findFirst({ where: { id, tenantId } });
     if (!bundle) {
       return NextResponse.json({ success: false, error: t('validation.bundleNotFound', 'Bundle not found') }, { status: 404 });
     }
 
     // Soft delete - set isActive to false
-    bundle.isActive = false;
-    await bundle.save();
+    const updated = await prisma.productBundle.update({ where: { id }, data: { isActive: false } });
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.DELETE,
       entityType: 'bundle',
-      entityId: bundle._id.toString(),
-      changes: { name: bundle.name },
+      entityId: updated.id,
+      changes: { name: updated.name },
     });
 
     return NextResponse.json({ success: true, message: t('validation.bundleDeactivated', 'Bundle deactivated') });
@@ -142,4 +180,3 @@ export async function DELETE(
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
-

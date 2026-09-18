@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -15,7 +14,6 @@ import { logger } from '@/lib/logger';
  */
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
     const t = await getValidationTranslatorFromRequest(request);
@@ -33,7 +31,10 @@ export async function GET(request: NextRequest) {
 
     const [aggregate, tenant] = await Promise.all([
       getDailySalesAggregate(tenantId, businessDate),
-      Tenant.findById(tenantId).select('grandTotalSales grandTotalTransactionCount').lean(),
+      prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { grandTotalSales: true, grandTotalTransactionCount: true },
+      }),
     ]);
 
     await createAuditLog(request, {
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest) {
       success: true,
       data: {
         ...aggregate,
-        currentGrandTotal: tenant?.grandTotalSales ?? 0,
+        currentGrandTotal: Number(tenant?.grandTotalSales ?? 0),
         currentGrandTotalTransactionCount: tenant?.grandTotalTransactionCount ?? 0,
       },
     });

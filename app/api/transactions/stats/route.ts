@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Transaction from '@/models/Transaction';
-import Expense from '@/models/Expense';
+import prisma from '@/lib/db';
 import { requireTenantAccess, TenantAccessViolationError, handleTenantAccessViolation } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
-import mongoose from 'mongoose';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     // Require authentication — financial data must not be public
     let tenantId: string;
     let role: string;
@@ -34,9 +30,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Convert tenantId string to ObjectId for proper querying
-    const tenantObjectId = new mongoose.Types.ObjectId(tenantId);
-    
     const searchParams = request.nextUrl.searchParams;
     const period = searchParams.get('period') || 'today'; // today, week, month, all
 
@@ -60,136 +53,84 @@ export async function GET(request: NextRequest) {
         startDate = new Date(0);
     }
 
-    const matchQuery: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
-      tenantId: tenantObjectId,
-      status: 'completed',
-      createdAt: { $gte: startDate, $lte: endDate },
+    const where = {
+      tenantId,
+      status: 'completed' as const,
+      createdAt: { gte: startDate, lte: endDate },
     };
 
-    // Time-series data for chart
-    let timeSeriesGroup: any; // eslint-disable-line @typescript-eslint/no-explicit-any
-    let dateFormat: string;
+    // Overall stats + per-payment-method breakdown + raw rows for the
+    // time-series bucketing (bucketing itself is done in JS below — Prisma
+    // has no native date_trunc grouping, and the volumes here don't warrant
+    // a raw SQL query).
+    const [aggStats, paymentMethodGroups, rows, expenseAgg] = await Promise.all([
+      prisma.transaction.aggregate({
+        where,
+        _sum: { total: true },
+        _count: { _all: true },
+        _avg: { total: true },
+      }),
+      prisma.transaction.groupBy({
+        by: ['paymentMethod'],
+        where,
+        _sum: { total: true },
+        _count: { _all: true },
+      }),
+      prisma.transaction.findMany({
+        where,
+        select: { createdAt: true, total: true },
+      }),
+      prisma.expense.aggregate({
+        where: { tenantId, date: { gte: startDate, lte: endDate } },
+        _sum: { amount: true },
+        _count: { _all: true },
+      }),
+    ]);
 
-    if (period === 'today') {
-      // Group by hour for today
-      timeSeriesGroup = {
-        $hour: '$createdAt'
-      };
-      dateFormat = 'hour';
-    } else if (period === 'week' || period === 'month') {
-      // Group by day for week/month
-      timeSeriesGroup = {
-        year: { $year: '$createdAt' },
-        month: { $month: '$createdAt' },
-        day: { $dayOfMonth: '$createdAt' }
-      };
-      dateFormat = 'day';
-    } else {
-      // Group by day for all time
-      timeSeriesGroup = {
-        year: { $year: '$createdAt' },
-        month: { $month: '$createdAt' },
-        day: { $dayOfMonth: '$createdAt' }
-      };
-      dateFormat = 'day';
+    const paymentMethodStats = paymentMethodGroups.map((g) => ({
+      _id: g.paymentMethod,
+      total: Number(g._sum.total ?? 0),
+      count: g._count._all,
+    }));
+
+    // Bucket the raw rows the same way the old $group by hour/day did.
+    const bucketMap = new Map<string, { sales: number; transactions: number }>();
+    const isHourBucket = period === 'today';
+    for (const row of rows) {
+      const d = row.createdAt;
+      const key = isHourBucket
+        ? String(d.getHours())
+        : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const bucket = bucketMap.get(key) || { sales: 0, transactions: 0 };
+      bucket.sales += Number(row.total);
+      bucket.transactions += 1;
+      bucketMap.set(key, bucket);
     }
-
-    // Single aggregation: one $match scan, three facets computed in one round-trip
-    // instead of three separate Transaction.aggregate() calls.
-    const [facetResult] = await Transaction.aggregate([
-      { $match: matchQuery },
-      {
-        $facet: {
-          stats: [
-            {
-              $group: {
-                _id: null,
-                totalSales: { $sum: '$total' },
-                totalTransactions: { $sum: 1 },
-                averageTransaction: { $avg: '$total' },
-              },
-            },
-          ],
-          paymentMethodStats: [
-            {
-              $group: {
-                _id: '$paymentMethod',
-                total: { $sum: '$total' },
-                count: { $sum: 1 },
-              },
-            },
-          ],
-          timeSeriesData: [
-            {
-              $group: {
-                _id: timeSeriesGroup,
-                sales: { $sum: '$total' },
-                transactions: { $sum: 1 },
-              },
-            },
-            { $sort: { _id: 1 } },
-          ],
-        },
-      },
-    ]);
-
-    const stats = facetResult.stats;
-    const paymentMethodStats = facetResult.paymentMethodStats;
-    const timeSeriesData = facetResult.timeSeriesData;
-
-    // Format time-series data for chart
-    const chartData = timeSeriesData.map((item: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-      let label: string;
-      if (dateFormat === 'hour') {
-        const hour = item._id;
-        label = `${String(hour).padStart(2, '0')}:00`;
-      } else {
-        const { year, month, day } = item._id;
-        label = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      }
-      const salesValue = typeof item.sales === 'number' ? item.sales : parseFloat(String(item.sales)) || 0;
-      const transactionsValue = typeof item.transactions === 'number' ? item.transactions : parseInt(String(item.transactions)) || 0;
-      return {
-        date: label,
-        sales: salesValue,
-        transactions: transactionsValue,
-      };
-    });
-
-    // Get expense statistics for the same period
-    const expenseQuery: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
-      tenantId: tenantObjectId,
-      date: { $gte: startDate, $lte: endDate },
-    };
-    
-    const expenseStats = await Expense.aggregate([
-      { $match: expenseQuery },
-      {
-        $group: {
-          _id: null,
-          totalExpenses: { $sum: '$amount' },
-          expenseCount: { $sum: 1 },
-        },
-      },
-    ]);
+    const chartData = Array.from(bucketMap.entries())
+      .sort(([a], [b]) => (isHourBucket ? Number(a) - Number(b) : a.localeCompare(b)))
+      .map(([key, v]) => ({
+        date: isHourBucket ? `${key.padStart(2, '0')}:00` : key,
+        sales: v.sales,
+        transactions: v.transactions,
+      }));
 
     const result = {
-      totalSales: stats[0]?.totalSales || 0,
-      totalTransactions: stats[0]?.totalTransactions || 0,
-      averageTransaction: stats[0]?.averageTransaction || 0,
-      totalExpenses: expenseStats[0]?.totalExpenses || 0,
-      expenseCount: expenseStats[0]?.expenseCount || 0,
+      totalSales: Number(aggStats._sum.total ?? 0),
+      totalTransactions: aggStats._count._all,
+      averageTransaction: Number(aggStats._avg.total ?? 0),
+      totalExpenses: Number(expenseAgg._sum.amount ?? 0),
+      expenseCount: expenseAgg._count._all,
       paymentMethods: paymentMethodStats,
       chartData,
     };
 
     return NextResponse.json({ success: true, data: result });
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  } catch (error: unknown) {
     // Handle tenant access violations with redirect
     if (error instanceof TenantAccessViolationError) {
       return handleTenantAccessViolation(error, request);
     }
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Internal server error';
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
-

@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Coupon from '@/models/Coupon';
-import SuperAdminAction from '@/models/SuperAdminAction';
+import { randomUUID } from 'crypto';
+import prisma from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { handleApiError } from '@/lib/error-handler';
 
 // GET /api/super-admin/coupons
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     await requireRole(request, ['super_admin']);
 
     const { searchParams } = new URL(request.url);
@@ -16,13 +14,19 @@ export async function GET(request: NextRequest) {
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20')));
 
-    const query: Record<string, unknown> = {};
-    if (active === 'true') query.isActive = true;
-    if (active === 'false') query.isActive = false;
+    const where: Record<string, unknown> = {};
+    if (active === 'true') where.isActive = true;
+    if (active === 'false') where.isActive = false;
 
     const [coupons, total] = await Promise.all([
-      Coupon.find(query).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
-      Coupon.countDocuments(query),
+      prisma.coupon.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+        include: { plans: true },
+      }),
+      prisma.coupon.count({ where }),
     ]);
 
     return NextResponse.json({
@@ -41,7 +45,6 @@ export async function GET(request: NextRequest) {
 // POST /api/super-admin/coupons
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const adminUser = await requireRole(request, ['super_admin']);
 
     const body = await request.json();
@@ -51,29 +54,39 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'code, discountType, and discountValue are required' }, { status: 400 });
     }
 
-    const coupon = await Coupon.create({
-      code: String(code).toUpperCase(),
-      description,
-      discountType,
-      discountValue: Number(discountValue),
-      appliesTo: appliesTo || 'all_plans',
-      planIds: planIds || [],
-      maxUses: maxUses ? Number(maxUses) : undefined,
-      validFrom: validFrom ? new Date(validFrom) : new Date(),
-      validUntil: validUntil ? new Date(validUntil) : undefined,
-      isActive: true,
-      createdBy: adminUser.userId,
+    const couponId = randomUUID();
+    const coupon = await prisma.coupon.create({
+      data: {
+        id: couponId,
+        code: String(code).toUpperCase(),
+        description,
+        discountType,
+        discountValue: Number(discountValue),
+        appliesTo: appliesTo || 'all_plans',
+        maxUses: maxUses ? Number(maxUses) : undefined,
+        validFrom: validFrom ? new Date(validFrom) : new Date(),
+        validUntil: validUntil ? new Date(validUntil) : undefined,
+        isActive: true,
+        createdById: adminUser.userId,
+        plans: planIds && planIds.length > 0
+          ? { create: (planIds as string[]).map((planId) => ({ planId })) }
+          : undefined,
+      },
+      include: { plans: true },
     });
 
     const ip = request.headers.get('x-forwarded-for') || '';
-    await SuperAdminAction.create({
-      adminUserId: adminUser.userId,
-      action: 'coupon.create',
-      targetType: 'Coupon',
-      targetId: String(coupon._id),
-      description: `Created coupon ${code}`,
-      ipAddress: ip,
-      userAgent: request.headers.get('user-agent') || '',
+    await prisma.superAdminAction.create({
+      data: {
+        id: randomUUID(),
+        adminUserId: adminUser.userId,
+        action: 'coupon.create',
+        targetType: 'Coupon',
+        targetId: coupon.id,
+        description: `Created coupon ${code}`,
+        ipAddress: ip,
+        userAgent: request.headers.get('user-agent') || '',
+      },
     });
 
     return NextResponse.json({ success: true, data: coupon }, { status: 201 });

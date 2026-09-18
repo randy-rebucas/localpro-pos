@@ -9,8 +9,15 @@ import { generateToken, verifyToken, getCurrentUser, hasRole } from '@/lib/auth'
 // Mocks
 // ---------------------------------------------------------------------------
 
-vi.mock('@/lib/mongodb', () => ({
-  default: vi.fn().mockResolvedValue(undefined),
+vi.mock('@/lib/db', () => ({
+  default: {
+    user: {
+      findUnique: vi.fn(),
+    },
+    tenant: {
+      findUnique: vi.fn(),
+    },
+  },
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -25,13 +32,6 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/lib/token-blacklist', () => ({
   isTokenRevoked: vi.fn().mockResolvedValue(false),
   isTokenIssuedBeforeRevocation: vi.fn().mockResolvedValue(false),
-}));
-
-// Mock the User model
-vi.mock('@/models/User', () => ({
-  default: {
-    findById: vi.fn(),
-  },
 }));
 
 // ---------------------------------------------------------------------------
@@ -96,12 +96,9 @@ describe('getCurrentUser — valid token', () => {
     vi.mocked(isTokenRevoked).mockResolvedValue(false);
     vi.mocked(isTokenIssuedBeforeRevocation).mockResolvedValue(false);
 
-    const User = (await import('@/models/User')).default;
-    vi.mocked(User.findById).mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        lean: vi.fn().mockResolvedValue({ isActive: true, tenantId: 'tenant-abc' }),
-      }),
-    } as unknown as ReturnType<typeof User.findById>);
+    const prisma = (await import('@/lib/db')).default;
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ isActive: true, tenantId: 'tenant-abc' } as never);
+    vi.mocked(prisma.tenant.findUnique).mockResolvedValue({ isActive: true } as never);
   });
 
   afterEach(() => {
@@ -170,12 +167,8 @@ describe('getCurrentUser — deactivated user', () => {
     vi.mocked(isTokenRevoked).mockResolvedValue(false);
     vi.mocked(isTokenIssuedBeforeRevocation).mockResolvedValue(false);
 
-    const User = (await import('@/models/User')).default;
-    vi.mocked(User.findById).mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        lean: vi.fn().mockResolvedValue({ isActive: false, tenantId: 'tenant-abc' }),
-      }),
-    } as unknown as ReturnType<typeof User.findById>);
+    const prisma = (await import('@/lib/db')).default;
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ isActive: false, tenantId: 'tenant-abc' } as never);
 
     const token = generateToken({ userId: 'u', tenantId: 'tenant-abc', email: 'e@e.com', role: 'manager' });
     const { NextRequest } = await import('next/server');
@@ -191,12 +184,8 @@ describe('getCurrentUser — deactivated user', () => {
     vi.mocked(isTokenRevoked).mockResolvedValue(false);
     vi.mocked(isTokenIssuedBeforeRevocation).mockResolvedValue(false);
 
-    const User = (await import('@/models/User')).default;
-    vi.mocked(User.findById).mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        lean: vi.fn().mockResolvedValue(null),
-      }),
-    } as unknown as ReturnType<typeof User.findById>);
+    const prisma = (await import('@/lib/db')).default;
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(null);
 
     const token = generateToken({ userId: 'u', tenantId: 't', email: 'e@e.com', role: 'admin' });
     const { NextRequest } = await import('next/server');

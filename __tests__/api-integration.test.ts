@@ -11,8 +11,13 @@ import { generateToken } from '@/lib/auth';
 // Mocks
 // ---------------------------------------------------------------------------
 
-vi.mock('@/lib/mongodb', () => ({
-  default: vi.fn().mockResolvedValue(undefined),
+vi.mock('@/lib/db', () => ({
+  default: {
+    user: {
+      findUnique: vi.fn(),
+      findFirst: vi.fn(),
+    },
+  },
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -26,12 +31,6 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/lib/token-blacklist', () => ({
   isTokenRevoked: vi.fn().mockResolvedValue(false),
   isTokenIssuedBeforeRevocation: vi.fn().mockResolvedValue(false),
-}));
-
-vi.mock('@/models/User', () => ({
-  default: {
-    findById: vi.fn(),
-  },
 }));
 
 vi.mock('@/lib/rate-limit', () => ({

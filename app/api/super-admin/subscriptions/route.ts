@@ -1,14 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Subscription from '@/models/Subscription';
-import '@/models/SubscriptionPlan';
-import Tenant from '@/models/Tenant';
+import prisma from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { handleApiError } from '@/lib/error-handler';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     await requireRole(request, ['super_admin']);
 
     const { searchParams } = new URL(request.url);
@@ -18,29 +14,31 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '50')));
 
     // Build query
-    const query: Record<string, unknown> = {};
-    if (status) query.status = status;
+    const where: Record<string, unknown> = {};
+    if (status) where.status = status;
 
     // If filtering by tenantSlug, resolve tenantId first
     if (tenantSlug) {
-      const tenant = await Tenant.findOne({ slug: tenantSlug }).select('_id').lean();
+      const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug }, select: { id: true } });
       if (tenant) {
-        query.tenantId = (tenant as { _id: unknown })._id;
+        where.tenantId = tenant.id;
       } else {
         return NextResponse.json({ success: true, data: [], pagination: { page, limit, total: 0, pages: 0 } });
       }
     }
 
     const [subscriptions, total] = await Promise.all([
-      Subscription.find(query)
-        .populate('tenantId', 'slug name')
-        .populate('planId', 'name tier')
-        .select('-billingHistory')
-        .sort({ createdAt: -1 })
-        .skip((page - 1) * limit)
-        .limit(limit)
-        .lean(),
-      Subscription.countDocuments(query),
+      prisma.subscription.findMany({
+        where,
+        include: {
+          tenant: { select: { slug: true, name: true } },
+          plan: { select: { name: true, tier: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.subscription.count({ where }),
     ]);
 
     return NextResponse.json({

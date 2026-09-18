@@ -1,17 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import mongoose from 'mongoose';
-import connectDB from '@/lib/mongodb';
-import Subscription from '@/models/Subscription';
-import SubscriptionPlan from '@/models/SubscriptionPlan';
-import Tenant from '@/models/Tenant';
+import { randomUUID } from 'crypto';
+import prisma from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
-
     // Cross-tenant subscription list — super_admin only
     await requireRole(request, ['super_admin']);
 
@@ -19,17 +14,19 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
 
-    const query: Record<string, unknown> = { isActive: { $ne: false } };
-
+    const where: Record<string, unknown> = {};
     if (status) {
-      query.status = status;
+      where.status = status;
     }
 
-    const subscriptions = await Subscription.find(query)
-      .populate('tenantId', 'slug name')
-      .populate('planId', 'name tier price features birCompliance isCustom')
-      .sort({ createdAt: -1 })
-      .lean();
+    const subscriptions = await prisma.subscription.findMany({
+      where,
+      include: {
+        tenant: { select: { id: true, slug: true, name: true } },
+        plan: true,
+      },
+      orderBy: { startDate: 'desc' },
+    });
 
     return NextResponse.json({ success: true, data: subscriptions });
   } catch (error: unknown) {
@@ -46,7 +43,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const t = await getValidationTranslatorFromRequest(request);
 
     // Creating a subscription for an arbitrary tenantId — super_admin only
@@ -63,7 +59,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify tenant exists
-    const tenant = await Tenant.findById(tenantId);
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
     if (!tenant) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantNotFound', 'Tenant not found') },
@@ -71,13 +67,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if tenant already has an active subscription
-    const existingSubscription = await Subscription.findOne({
-      tenantId,
-      status: { $in: ['active', 'trial'] }
+    // Check if tenant already has an active subscription (Subscription.tenantId is unique)
+    const existingSubscription = await prisma.subscription.findUnique({
+      where: { tenantId },
     });
 
-    if (existingSubscription) {
+    if (existingSubscription && ['active', 'trial'].includes(existingSubscription.status)) {
       return NextResponse.json(
         { success: false, error: t('validation.tenantAlreadyHasActiveSubscription', 'Tenant already has an active subscription') },
         { status: 400 }
@@ -85,7 +80,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify plan exists and is active
-    const plan = await SubscriptionPlan.findById(planId);
+    const plan = await prisma.subscriptionPlan.findUnique({ where: { id: planId } });
     if (!plan || !plan.isActive) {
       return NextResponse.json(
         { success: false, error: t('validation.subscriptionPlanNotFoundOrInactive', 'Subscription plan not found or inactive') },
@@ -94,80 +89,69 @@ export async function POST(request: NextRequest) {
     }
 
     const now = new Date();
-    const subscriptionData: Record<string, unknown> = {
-      tenantId,
-      planId,
-      status: isTrial ? 'trial' : 'active',
-      billingCycle,
-      startDate: now,
-      isTrial,
-      autoRenew: true,
-      usage: {
-        currentUsers: 1, // Admin user
-        currentBranches: 1,
-        currentProducts: 0,
-        currentTransactions: 0,
-        lastResetDate: now,
-      },
-    };
 
-    // Set trial period (30 days) if applicable
+    let trialEndDate: Date | undefined;
+    let nextBillingDate: Date;
+
     if (isTrial) {
-      const trialEndDate = new Date(now);
+      trialEndDate = new Date(now);
       trialEndDate.setDate(trialEndDate.getDate() + 30);
-      subscriptionData.trialEndDate = trialEndDate;
-      subscriptionData.nextBillingDate = trialEndDate;
+      nextBillingDate = trialEndDate;
     } else {
-      // Set next billing date for paid subscription
-      const nextBilling = new Date(now);
+      nextBillingDate = new Date(now);
       if (billingCycle === 'yearly') {
-        nextBilling.setFullYear(nextBilling.getFullYear() + 1);
+        nextBillingDate.setFullYear(nextBillingDate.getFullYear() + 1);
       } else {
-        nextBilling.setMonth(nextBilling.getMonth() + 1);
+        nextBillingDate.setMonth(nextBillingDate.getMonth() + 1);
       }
-      subscriptionData.nextBillingDate = nextBilling;
     }
 
-    // Subscription create + tenant backref must land together, otherwise a
-    // failure between the two leaves an orphaned subscription with no
-    // tenant.subscriptionId pointing to it.
-    const session = await mongoose.startSession();
-    let subscription;
-    try {
-      session.startTransaction();
-      [subscription] = await Subscription.create([subscriptionData], { session });
-      await Tenant.findByIdAndUpdate(tenantId, { subscriptionId: subscription._id }, { session });
-      await session.commitTransaction();
-    } catch (e) {
-      await session.abortTransaction();
-      throw e;
-    } finally {
-      session.endSession();
-    }
+    // Subscription create is scoped to a single tenant row via the unique
+    // tenantId constraint, so there is no separate tenant backref write needed
+    // (Tenant.subscription is the inverse side of Subscription.tenantId).
+    const subscription = await prisma.subscription.create({
+      data: {
+        id: randomUUID(),
+        tenantId,
+        planId,
+        status: isTrial ? 'trial' : 'active',
+        billingCycle,
+        startDate: now,
+        isTrial,
+        autoRenew: true,
+        trialEndDate,
+        nextBillingDate,
+        usageCurrentUsers: 1,
+        usageCurrentBranches: 1,
+        usageCurrentProducts: 0,
+        usageCurrentTransactions: 0,
+        usageLastResetDate: now,
+      },
+      include: {
+        tenant: { select: { id: true, slug: true, name: true } },
+        plan: true,
+      },
+    });
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.CREATE,
       entityType: 'subscription',
-      entityId: subscription._id.toString(),
+      entityId: subscription.id,
       changes: {
-        planId: planId,
+        planId,
         status: subscription.status,
         billingCycle,
-        isTrial
+        isTrial,
       },
     });
 
-    const populatedSubscription = await Subscription.findById(subscription._id)
-      .populate('tenantId', 'slug name')
-      .populate('planId', 'name tier price features birCompliance isCustom');
-
     return NextResponse.json({
       success: true,
-      data: populatedSubscription
+      data: subscription,
     }, { status: 201 });
   } catch (error: unknown) {
-    if ((error as Record<string, unknown>).code === 11000) {
+    if ((error as { code?: string }).code === 'P2002') {
       const t = await getValidationTranslatorFromRequest(request);
       return NextResponse.json(
         { success: false, error: t('validation.tenantAlreadyHasSubscription', 'Tenant already has a subscription') },

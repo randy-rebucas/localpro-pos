@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
-import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import { randomUUID } from 'crypto';
+import bcrypt from 'bcryptjs';
+import prisma from '@/lib/db';
+import { requireTenantAccess } from '@/lib/api-tenant'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { getRoleRank } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -13,7 +14,6 @@ import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     // SECURITY: Validate tenant access for authenticated requests
     let tenantId: string;
     try {
@@ -34,14 +34,18 @@ export async function GET(request: NextRequest) {
     }
 
     const isActiveParam = request.nextUrl.searchParams.get('isActive');
-    const query: Record<string, unknown> = { tenantId };
-    if (isActiveParam === 'true') query.isActive = { $ne: false };
-    else if (isActiveParam === 'false') query.isActive = false;
+    const where: Record<string, unknown> = { tenantId };
+    if (isActiveParam === 'true') where.isActive = true;
+    else if (isActiveParam === 'false') where.isActive = false;
 
-    const users = await User.find(query)
-      .select('-password')
-      .sort({ createdAt: -1 })
-      .lean();
+    const users = await prisma.user.findMany({
+      where,
+      select: {
+        id: true, email: true, name: true, role: true, tenantId: true, branchId: true,
+        isActive: true, lastLogin: true, qrToken: true, createdAt: true, updatedAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
 
     return NextResponse.json({ success: true, data: users });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -58,7 +62,6 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   let t: (key: string, fallback: string) => string;
   try {
-    await connectDB();
     // SECURITY: Validate tenant access for authenticated requests
     let tenantId: string;
     let actingUser: { userId: string; role: string };
@@ -140,7 +143,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check subscription limits
-    const currentUserCount = await User.countDocuments({ tenantId, isActive: true });
+    const currentUserCount = await prisma.user.count({ where: { tenantId, isActive: true } });
     try {
       await checkSubscriptionLimit(tenantId.toString(), 'maxUsers', currentUserCount);
     } catch (limitError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -150,19 +153,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const user = await User.create({
-      email: email.toLowerCase(),
-      password,
-      name,
-      role: role || 'cashier',
-      tenantId,
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = await prisma.user.create({
+      data: {
+        id: randomUUID(),
+        email: email.toLowerCase(),
+        password: hashedPassword,
+        name,
+        role: role || 'cashier',
+        tenantId,
+      },
     });
 
     await createAuditLog(request, {
       tenantId,
       action: AuditActions.CREATE,
       entityType: 'user',
-      entityId: user._id.toString(),
+      entityId: user.id,
       changes: { email, name, role: user.role },
     });
 
@@ -176,12 +183,11 @@ export async function POST(request: NextRequest) {
       // Don't fail the request if usage update fails
     }
 
-    const userResponse = user.toObject();
-    const { password: _, ...userWithoutPassword } = userResponse;
+    const { password: _password, ...userWithoutPassword } = user;
 
     return NextResponse.json({ success: true, data: userWithoutPassword }, { status: 201 });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (error.code === 11000) {
+    if (error.code === 'P2002') {
       return NextResponse.json(
         { success: false, error: 'User with this email already exists' },
         { status: 400 }
@@ -196,4 +202,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: error.message }, { status: 400 });
   }
 }
-

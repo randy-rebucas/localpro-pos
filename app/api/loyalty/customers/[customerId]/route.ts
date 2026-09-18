@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Customer from '@/models/Customer';
-import LoyaltyTransaction from '@/models/LoyaltyTransaction';
+import prisma from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -13,8 +11,6 @@ export async function GET(
   { params }: { params: Promise<{ customerId: string }> }
 ) {
   try {
-    await connectDB();
-
     const user = await getCurrentUser(request);
     if (!user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
@@ -40,7 +36,7 @@ export async function GET(
 
     const { customerId } = await params;
 
-    const customer = await Customer.findOne({ _id: customerId, tenantId }).lean();
+    const customer = await prisma.customer.findFirst({ where: { id: customerId, tenantId } });
     if (!customer) {
       return NextResponse.json({ success: false, error: 'Customer not found' }, { status: 404 });
     }
@@ -52,12 +48,13 @@ export async function GET(
     const skip = (page - 1) * limit;
 
     const [history, total] = await Promise.all([
-      LoyaltyTransaction.find({ tenantId, customerId })
-        .sort({ createdAt: -1 })
-        .limit(limit)
-        .skip(skip)
-        .lean(),
-      LoyaltyTransaction.countDocuments({ tenantId, customerId }),
+      prisma.loyaltyTransaction.findMany({
+        where: { tenantId, customerId },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip,
+      }),
+      prisma.loyaltyTransaction.count({ where: { tenantId, customerId } }),
     ]);
 
     return NextResponse.json({
@@ -65,8 +62,13 @@ export async function GET(
       data: {
         customerId,
         customerName: `${customer.firstName} ${customer.lastName}`,
-        loyaltyPointsBalance: customer.loyaltyPointsBalance ?? 0,
-        history,
+        loyaltyPointsBalance: Number(customer.loyaltyPointsBalance ?? 0),
+        history: history.map((h) => ({
+          ...h,
+          points: Number(h.points),
+          balanceBefore: Number(h.balanceBefore),
+          balanceAfter: Number(h.balanceAfter),
+        })),
         pagination: {
           total,
           page,

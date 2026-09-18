@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import SubscriptionPlan from '@/models/SubscriptionPlan';
+import prisma from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { getTenantSlugFromRequest } from '@/lib/api-tenant';
@@ -11,8 +10,6 @@ import { logger } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
-
     // Require authentication
     const user = await requireAuth(request);
     const tenantId = await getTenantIdFromRequest(request);
@@ -43,7 +40,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get the subscription plan
-    const plan = await SubscriptionPlan.findOne({ _id: planId, isActive: true });
+    const plan = await prisma.subscriptionPlan.findFirst({ where: { id: planId, isActive: true } });
     if (!plan) {
       return NextResponse.json(
         { success: false, error: 'Subscription plan not found' },
@@ -52,9 +49,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Calculate amount based on billing cycle
+    const monthlyPrice = Number(plan.priceMonthly);
     let amount = billingCycle === 'yearly'
-      ? plan.price.monthly * 12 * 0.9 // 10% discount for yearly
-      : plan.price.monthly;
+      ? monthlyPrice * 12 * 0.9 // 10% discount for yearly
+      : monthlyPrice;
 
     if (couponCode) {
       try {
@@ -69,7 +67,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create PayPal payment order
-    const paypalOrder = await createSubscriptionPayment(planId, amount, plan.price.currency, tenantSlug, 'en', billingCycle);
+    const paypalOrder = await createSubscriptionPayment(planId, amount, plan.priceCurrency, tenantSlug, 'en', billingCycle);
 
     return NextResponse.json({
       success: true,
@@ -78,7 +76,7 @@ export async function POST(request: NextRequest) {
         paypalOrder,
         planId,
         amount,
-        currency: plan.price.currency,
+        currency: plan.priceCurrency,
         billingCycle,
         couponCode: couponCode || undefined,
       },

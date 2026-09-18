@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Subscription from '@/models/Subscription';
-import '@/models/SubscriptionPlan';
+import prisma from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -10,7 +8,6 @@ import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const { tenantId, user } = await requireTenantAccess(request);
 
     if (!(await hasTenantPermission(user.role, tenantId, 'subscriptions.manage'))) {
@@ -24,20 +21,21 @@ export async function GET(request: NextRequest) {
     }
 
     // Get the current subscription for this tenant
-    const subscription = await Subscription.findOne({ tenantId })
-      .populate('planId', 'name tier price features birCompliance isCustom')
-      .lean();
+    const subscription = await prisma.subscription.findUnique({
+      where: { tenantId },
+      include: { plan: true },
+    });
 
     return NextResponse.json({
       success: true,
       data: subscription,
     });
 
-  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  } catch (error: unknown) {
     logger.error('Error fetching current subscription:', error);
     const t = await getValidationTranslatorFromRequest(request);
     return NextResponse.json(
-      { success: false, error: error.message || t('validation.failedToFetchSubscription', 'Failed to fetch subscription') },
+      { success: false, error: (error as Error).message || t('validation.failedToFetchSubscription', 'Failed to fetch subscription') },
       { status: 500 }
     );
   }

@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import mongoose from 'mongoose';
-import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
-import Category from '@/models/Category';
+import prisma from '@/lib/db';
+import { Prisma } from '@prisma/client';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -19,8 +17,6 @@ type BulkAction = 'update';
 
 export async function PUT(request: NextRequest) {
   try {
-    await connectDB();
-
     let tenantId: string;
     let userId: string;
     let userRole: string;
@@ -74,7 +70,7 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const validIds = productIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
+    const validIds = productIds.filter((id) => typeof id === 'string' && id.length > 0);
     if (validIds.length === 0) {
       return NextResponse.json({ success: false, error: 'No valid product IDs provided' }, { status: 400 });
     }
@@ -86,9 +82,7 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const tenantObjectId = new mongoose.Types.ObjectId(tenantId);
-    const objectIds = validIds.map((id) => new mongoose.Types.ObjectId(id));
-    const filter = { _id: { $in: objectIds }, tenantId: tenantObjectId };
+    const where: Prisma.ProductWhereInput = { id: { in: validIds }, tenantId };
 
     if (!updates || typeof updates !== 'object') {
       return NextResponse.json(
@@ -116,65 +110,58 @@ export async function PUT(request: NextRequest) {
     let modifiedCount = 0;
 
     if (updates.categoryId) {
-      const category = await Category.findOne({
-        _id: updates.categoryId,
-        tenantId,
-        isActive: { $ne: false },
-      }).lean();
+      const category = await prisma.category.findFirst({
+        where: { id: updates.categoryId, tenantId, isActive: { not: false } },
+      });
 
       if (!category) {
         return NextResponse.json({ success: false, error: 'Category not found' }, { status: 404 });
       }
 
-      const result = await Product.updateMany(filter, {
-        $set: { categoryId: updates.categoryId, category: category.name },
+      const result = await prisma.product.updateMany({
+        where,
+        data: { categoryId: updates.categoryId, category: category.name },
       });
-      modifiedCount = Math.max(modifiedCount, result.modifiedCount);
+      modifiedCount = Math.max(modifiedCount, result.count);
     }
 
     if (updates.trackInventory !== undefined) {
-      const result = await Product.updateMany(filter, {
-        $set: { trackInventory: updates.trackInventory },
+      const result = await prisma.product.updateMany({
+        where,
+        data: { trackInventory: updates.trackInventory },
       });
-      modifiedCount = Math.max(modifiedCount, result.modifiedCount);
+      modifiedCount = Math.max(modifiedCount, result.count);
     }
 
     if (updates.lowStockThreshold !== undefined) {
-      const result = await Product.updateMany(filter, {
-        $set: { lowStockThreshold: updates.lowStockThreshold },
+      const result = await prisma.product.updateMany({
+        where,
+        data: { lowStockThreshold: updates.lowStockThreshold },
       });
-      modifiedCount = Math.max(modifiedCount, result.modifiedCount);
+      modifiedCount = Math.max(modifiedCount, result.count);
     }
 
     if (updates.price) {
       const { mode, value } = updates.price;
       if (mode === 'set') {
-        const result = await Product.updateMany(filter, { $set: { price: value } });
-        modifiedCount = Math.max(modifiedCount, result.modifiedCount);
+        const result = await prisma.product.updateMany({ where, data: { price: value } });
+        modifiedCount = Math.max(modifiedCount, result.count);
       } else {
         const multiplier = mode === 'percent' ? 1 + value / 100 : 1;
         const addAmount = mode === 'add' ? value : 0;
-        const bulkOps = objectIds.map((id) => ({
-          updateOne: {
-            filter: { _id: id, tenantId: tenantObjectId },
-            update: [
-              {
-                $set: {
-                  price: {
-                    $max: [
-                      0,
-                      mode === 'percent'
-                        ? { $multiply: ['$price', multiplier] }
-                        : { $add: ['$price', addAmount] },
-                    ],
-                  },
-                },
-              },
-            ],
-          },
-        }));
-        const result = await Product.bulkWrite(bulkOps as Parameters<typeof Product.bulkWrite>[0]);
-        modifiedCount = Math.max(modifiedCount, result.modifiedCount);
+        // Postgres has no per-row $multiply/$add update expression like Mongo's
+        // aggregation-pipeline update — apply each product's new price via raw SQL
+        // so the max(0, ...) floor and per-row current price are still honored atomically.
+        const result = mode === 'percent'
+          ? await prisma.$executeRaw`
+              UPDATE products SET price = GREATEST(0, price * ${multiplier})
+              WHERE id = ANY(${validIds}) AND "tenantId" = ${tenantId}
+            `
+          : await prisma.$executeRaw`
+              UPDATE products SET price = GREATEST(0, price + ${addAmount})
+              WHERE id = ANY(${validIds}) AND "tenantId" = ${tenantId}
+            `;
+        modifiedCount = Math.max(modifiedCount, result);
       }
     }
 
@@ -182,7 +169,10 @@ export async function PUT(request: NextRequest) {
       const { mode, value } = updates.stock;
       // Applied one product at a time through updateStock() so each change gets a
       // StockMovement record and the allowOutOfStockSales guard is honored consistently.
-      const productsForStock = await Product.find(filter).select('stock trackInventory').lean();
+      const productsForStock = await prisma.product.findMany({
+        where,
+        select: { id: true, stock: true, trackInventory: true },
+      });
       let stockModified = 0;
       for (const p of productsForStock) {
         if (p.trackInventory === false) continue;
@@ -190,13 +180,13 @@ export async function PUT(request: NextRequest) {
         const delta = mode === 'set' ? value - currentStock : value;
         if (delta === 0) continue;
         try {
-          await updateStock(p._id.toString(), tenantId, delta, 'adjustment', {
+          await updateStock(p.id, tenantId, delta, 'adjustment', {
             userId,
             reason: 'Bulk stock update',
           });
           stockModified += 1;
         } catch (err) {
-          logger.error(`Bulk stock update failed for product ${p._id}:`, err);
+          logger.error(`Bulk stock update failed for product ${p.id}:`, err);
         }
       }
       modifiedCount = Math.max(modifiedCount, stockModified);
