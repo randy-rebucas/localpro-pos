@@ -4,6 +4,14 @@
  * its stock movement history was left behind), causing inventory reports
  * to show entries for products that don't exist anymore.
  *
+ * Note: under Postgres/Prisma, StockMovement.productId is a required
+ * foreign key to Product (see prisma/schema.prisma), so this situation
+ * should no longer be reachable through normal application code — Postgres
+ * enforces referential integrity, unlike Mongo's Mongoose refs. This script
+ * is kept as a defensive check in case rows were ever written around the
+ * FK (e.g. a raw SQL import, or a pre-migration Mongo carryover), using a
+ * LEFT JOIN rather than assuming orphans are even possible.
+ *
  * Usage:
  *   npx tsx scripts/fix-orphaned-stock-movements.ts           # dry run, reports only
  *   npx tsx scripts/fix-orphaned-stock-movements.ts --apply   # actually deletes
@@ -15,62 +23,52 @@ import { resolve } from 'path';
 dotenv.config({ path: resolve(process.cwd(), '.env.local') });
 dotenv.config({ path: resolve(process.cwd(), '.env') });
 
+import prisma from '../lib/db';
+
+interface OrphanRow {
+  productId: string;
+  count: bigint;
+  tenant_ids: string[];
+}
+
 async function main() {
-  // Loaded dynamically after dotenv.config() above: tsx runs .ts files as ESM,
-  // which hoists static imports above this file's top-level statements — a static
-  // import of lib/mongodb here would read process.env.MONGODB_URI before dotenv
-  // populates it and silently fall back to localhost.
-  const { default: connectDB } = await import('../lib/mongodb');
-  const { default: StockMovement } = await import('../models/StockMovement');
-  const { default: Product } = await import('../models/Product');
-  const mongoose = (await import('mongoose')).default;
-
   const apply = process.argv.includes('--apply');
-  await connectDB();
 
-  const orphans = await StockMovement.aggregate([
-    {
-      $lookup: {
-        from: Product.collection.name,
-        localField: 'productId',
-        foreignField: '_id',
-        as: 'product',
-      },
-    },
-    { $match: { product: { $size: 0 } } },
-    {
-      $group: {
-        _id: '$productId',
-        count: { $sum: 1 },
-        tenantIds: { $addToSet: '$tenantId' },
-      },
-    },
-  ]);
+  const orphans = await prisma.$queryRaw<OrphanRow[]>`
+    SELECT sm."productId" AS "productId",
+           COUNT(*) AS count,
+           ARRAY_AGG(DISTINCT sm."tenantId") AS tenant_ids
+    FROM stock_movements sm
+    LEFT JOIN products p ON p.id = sm."productId"
+    WHERE p.id IS NULL
+    GROUP BY sm."productId"
+  `;
 
   if (orphans.length === 0) {
     console.log('No orphaned stock movements found. Inventory is consistent with existing products.');
-    await mongoose.disconnect();
     return;
   }
 
-  const totalMovements = orphans.reduce((sum, o) => sum + o.count, 0);
+  const totalMovements = orphans.reduce((sum, o) => sum + Number(o.count), 0);
   console.log(`Found ${orphans.length} deleted product(s) with ${totalMovements} orphaned stock movement record(s):`);
   for (const o of orphans) {
-    console.log(`  productId=${o._id} tenantIds=${o.tenantIds.join(', ')} movements=${o.count}`);
+    console.log(`  productId=${o.productId} tenantIds=${o.tenant_ids.join(', ')} movements=${o.count}`);
   }
 
   if (apply) {
-    const orphanProductIds = orphans.map((o) => o._id);
-    const result = await StockMovement.deleteMany({ productId: { $in: orphanProductIds } });
-    console.log(`\nDeleted ${result.deletedCount} orphaned stock movement record(s).`);
+    const orphanProductIds = orphans.map((o) => o.productId);
+    const result = await prisma.stockMovement.deleteMany({ where: { productId: { in: orphanProductIds } } });
+    console.log(`\nDeleted ${result.count} orphaned stock movement record(s).`);
   } else {
     console.log('\nDry run only — re-run with --apply to delete these orphaned records.');
   }
-
-  await mongoose.disconnect();
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+main()
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

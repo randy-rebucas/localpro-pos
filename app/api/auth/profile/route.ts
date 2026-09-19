@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import prisma from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
-import { validateEmail, validatePassword } from '@/lib/validation';
+import { validatePassword } from '@/lib/validation';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { revokeAllUserTokens } from '@/lib/token-blacklist';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
@@ -98,19 +98,17 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
     }
 
+    // Users cannot change their own email from self-service profile settings —
+    // it's their login/recovery identifier; changes must go through an admin.
+    if (email !== undefined && email !== oldUser.email) {
+      return NextResponse.json(
+        { success: false, error: t('validation.emailCannotBeChanged', 'Your email address cannot be changed here. Contact an administrator.') },
+        { status: 400 }
+      );
+    }
+
     // Build update object
     const updateData: Record<string, unknown> = {};
-    const emailChanging = email !== undefined && email !== oldUser.email;
-
-    if (emailChanging) {
-      if (!validateEmail(email)) {
-        return NextResponse.json(
-          { success: false, error: t('validation.invalidEmailFormat', 'Invalid email format') },
-          { status: 400 }
-        );
-      }
-      updateData.email = email.toLowerCase();
-    }
 
     if (name !== undefined && name !== oldUser.name) {
       if (!name.trim()) {
@@ -122,13 +120,12 @@ export async function PUT(request: NextRequest) {
       updateData.name = name.trim();
     }
 
-    // Email is a recovery/login credential — changing it requires re-verifying
-    // the current password, same as a password change, so a hijacked session
-    // can't silently take over the account by pointing it at an attacker email.
-    if (emailChanging || (password !== undefined && password)) {
+    // Changing the password requires re-verifying the current password, so a
+    // hijacked session can't silently take over the account.
+    if (password !== undefined && password) {
       if (!currentPassword) {
         return NextResponse.json(
-          { success: false, error: t('validation.currentPasswordRequired', 'Current password is required to change your password or email') },
+          { success: false, error: t('validation.currentPasswordRequired', 'Current password is required to change your password') },
           { status: 400 }
         );
       }

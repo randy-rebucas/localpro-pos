@@ -1,5 +1,5 @@
 import prisma from '@/lib/db';
-import type { ITenantSettings } from '@/models/Tenant';
+import type { ITenantSettings } from '@/types/tenant';
 
 /**
  * BIR (Bureau of Internal Revenue) Philippines discount rates

@@ -481,7 +481,7 @@ export default function TransactionsPage() {
               if (item.type === 'transaction') {
                 const transaction = item.data as Transaction;
                 return (
-                  <div key={transaction._id} className="group relative bg-white border border-gray-300 p-4 sm:p-5 hover:border-teal-300 transition-all duration-200 flex flex-col">
+                  <div key={`transaction-${transaction._id}`} className="group relative bg-white border border-gray-300 p-4 sm:p-5 hover:border-teal-300 transition-all duration-200 flex flex-col">
                     <div className="flex-1 mb-4">
                       <div className="flex items-start justify-between mb-2">
                         <div className="flex-1">
@@ -547,7 +547,7 @@ export default function TransactionsPage() {
               } else {
                 const expense = item.data as Expense;
                 return (
-                  <div key={expense._id} className="group relative bg-white border-l-4 border-red-500 border border-gray-300 p-4 sm:p-5 hover:border-red-400 transition-all duration-200 flex flex-col">
+                  <div key={`expense-${expense._id}`} className="group relative bg-white border-l-4 border-red-500 border border-gray-300 p-4 sm:p-5 hover:border-red-400 transition-all duration-200 flex flex-col">
                     <div className="flex-1 mb-4">
                       <div className="flex items-start justify-between mb-2">
                         <div className="flex-1">
@@ -588,7 +588,7 @@ export default function TransactionsPage() {
               if (item.type === 'transaction') {
                 const transaction = item.data as Transaction;
                 return (
-                  <div key={transaction._id} className="group relative px-4 sm:px-5 py-2.5 sm:py-3 hover:bg-gray-50 transition-colors">
+                  <div key={`transaction-${transaction._id}`} className="group relative px-4 sm:px-5 py-2.5 sm:py-3 hover:bg-gray-50 transition-colors">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm">
@@ -640,7 +640,7 @@ export default function TransactionsPage() {
               } else {
                 const expense = item.data as Expense;
                 return (
-                  <div key={expense._id} className="group relative px-4 sm:px-5 py-2.5 sm:py-3 hover:bg-gray-50 transition-colors border-l-4 border-red-500">
+                  <div key={`expense-${expense._id}`} className="group relative px-4 sm:px-5 py-2.5 sm:py-3 hover:bg-gray-50 transition-colors border-l-4 border-red-500">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm mb-1">

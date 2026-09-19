@@ -1,4 +1,5 @@
 import prisma from '@/lib/db';
+import { getTenantDayBoundaries, DEFAULT_TENANT_TIMEZONE } from '@/lib/timezone';
 
 export interface DailySalesAggregate {
   startDate: Date;
@@ -13,11 +14,15 @@ export interface DailySalesAggregate {
   voidCount: number;
 }
 
-/** Normalizes a date to local midnight (start of business day). */
-export function startOfBusinessDay(date: Date): Date {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
+/**
+ * Normalizes a date to the start of its business day *in the tenant's
+ * timezone* (not the server's — Vercel runs UTC, so a naive server-local
+ * midnight would bucket sales into the wrong calendar day for any
+ * non-UTC tenant). Mirrors what the other report routes do via
+ * `getTenantDayBoundaries`.
+ */
+export function startOfBusinessDay(date: Date, tz: string = DEFAULT_TENANT_TIMEZONE): Date {
+  return getTenantDayBoundaries(date, tz).start;
 }
 
 /**
@@ -27,11 +32,11 @@ export function startOfBusinessDay(date: Date): Date {
  */
 export async function getDailySalesAggregate(
   tenantId: string,
-  businessDate: Date
+  businessDate: Date,
+  tz: string = DEFAULT_TENANT_TIMEZONE
 ): Promise<DailySalesAggregate> {
-  const startDate = startOfBusinessDay(businessDate);
-  const endDate = new Date(startDate);
-  endDate.setDate(endDate.getDate() + 1);
+  const { start: startDate, end: inclusiveEnd } = getTenantDayBoundaries(businessDate, tz);
+  const endDate = new Date(inclusiveEnd.getTime() + 1);
 
   const [completed, voided] = await Promise.all([
     prisma.transaction.findMany({

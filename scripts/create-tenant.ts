@@ -1,21 +1,21 @@
 /**
  * Script to create a new tenant
- * 
+ *
  * Usage:
  *   npx tsx scripts/create-tenant.ts <slug> <name> [options]
  *   npx tsx scripts/create-tenant.ts --interactive
  *   npx tsx scripts/create-tenant.ts  (runs in interactive mode automatically)
- * 
+ *
  * Options:
  *   --domain <domain>        Custom domain (optional)
  *   --subdomain <subdomain>  Subdomain (optional)
- *   --currency <code>        Currency code (default: USD)
+ *   --currency <code>        Currency code (default: PHP)
  *   --language <lang>        Language: en or es (default: en)
  *   --email <email>          Contact email (optional)
  *   --phone <phone>          Contact phone (optional)
  *   --company <name>         Company name (optional)
  *   --interactive            Interactive mode (prompts for all fields)
- * 
+ *
  * Examples:
  *   npx tsx scripts/create-tenant.ts my-store "My Store"
  *   npx tsx scripts/create-tenant.ts coffee-shop "Coffee Shop" --currency EUR --language es
@@ -31,13 +31,11 @@ dotenv.config({ path: resolve(process.cwd(), '.env.local') });
 // Also try .env as fallback
 dotenv.config({ path: resolve(process.cwd(), '.env') });
 
-import mongoose from 'mongoose';
-import Tenant from '../models/Tenant';
-import User from '../models/User';
+import { randomUUID } from 'crypto';
+import bcrypt from 'bcryptjs';
+import prisma from '../lib/db';
 import { getDefaultTenantSettings } from '../lib/currency';
 import * as readline from 'readline';
-
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/pos-system';
 
 interface TenantInput {
   slug: string;
@@ -105,8 +103,8 @@ async function interactiveMode(): Promise<TenantInput> {
   const subdomain = await question(rl, 'Subdomain (optional, press Enter to skip): ');
   if (subdomain.trim()) input.subdomain = subdomain.trim().toLowerCase();
 
-  const currency = await question(rl, 'Currency code (default: USD): ');
-  input.currency = currency.trim() || 'USD';
+  const currency = await question(rl, 'Currency code (default: PHP): ');
+  input.currency = currency.trim() || 'PHP';
 
   const language = await question(rl, 'Language (en/es, default: en): ');
   input.language = (language.trim().toLowerCase() === 'es' ? 'es' : 'en') as 'en' | 'es';
@@ -127,7 +125,7 @@ async function interactiveMode(): Promise<TenantInput> {
 // Parse command line arguments
 function parseArgs(): { input: TenantInput | null; interactive: boolean } {
   const args = process.argv.slice(2);
-  
+
   if (args.includes('--interactive') || args.includes('-i')) {
     return { input: null, interactive: true };
   }
@@ -191,16 +189,15 @@ function parseArgs(): { input: TenantInput | null; interactive: boolean } {
 // Create tenant
 async function createTenant(input: TenantInput) {
   try {
-    await mongoose.connect(MONGODB_URI);
-    console.log('✓ Connected to MongoDB\n');
-
     // Check if tenant already exists
-    const existing = await Tenant.findOne({ 
-      $or: [
-        { slug: input.slug },
-        ...(input.domain ? [{ domain: input.domain }] : []),
-        ...(input.subdomain ? [{ subdomain: input.subdomain }] : []),
-      ]
+    const existing = await prisma.tenant.findFirst({
+      where: {
+        OR: [
+          { slug: input.slug },
+          ...(input.domain ? [{ domain: input.domain }] : []),
+          ...(input.subdomain ? [{ subdomain: input.subdomain }] : []),
+        ],
+      },
     });
 
     if (existing) {
@@ -208,20 +205,18 @@ async function createTenant(input: TenantInput) {
       if (existing.slug === input.slug) console.log(`   - Slug: ${existing.slug}`);
       if (existing.domain === input.domain) console.log(`   - Domain: ${existing.domain}`);
       if (existing.subdomain === input.subdomain) console.log(`   - Subdomain: ${existing.subdomain}`);
-      await mongoose.disconnect();
       process.exit(1);
     }
 
     // Validate slug
     if (!validateSlug(input.slug)) {
       console.log('❌ Invalid slug format. Slug can only contain lowercase letters, numbers, and hyphens');
-      await mongoose.disconnect();
       process.exit(1);
     }
 
     // Get default settings and customize
     const defaultSettings = getDefaultTenantSettings();
-    const settings = {
+    const settings: Record<string, unknown> = {
       ...defaultSettings,
       currency: input.currency || defaultSettings.currency,
       language: input.language || defaultSettings.language,
@@ -230,36 +225,45 @@ async function createTenant(input: TenantInput) {
       ...(input.companyName && { companyName: input.companyName }),
     };
 
-    // Create tenant
-    const tenantData: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
-      slug: input.slug,
-      name: input.name,
-      settings,
-      isActive: true,
-    };
+    // Create tenant + admin user together
+    const adminEmail = `admin@${input.slug}.local`;
+    const adminPassword = `Admin${input.slug}123!`;
+    const hashedPassword = await bcrypt.hash(adminPassword, 10);
 
-    if (input.domain) tenantData.domain = input.domain;
-    if (input.subdomain) tenantData.subdomain = input.subdomain;
-
-    const tenant = await Tenant.create(tenantData);
-
-    // Automatically create admin user for the tenant
-    const adminEmail = `admin@${tenant.slug}.local`;
-    const adminPassword = `Admin${tenant.slug}123!`;
-    let adminUser = null;
-    
-    try {
-      adminUser = await User.create({
-        email: adminEmail,
-        password: adminPassword,
-        name: 'Administrator',
-        role: 'admin',
-        tenantId: tenant._id,
-        isActive: true,
+    let adminUserCreated = false;
+    const tenant = await prisma.$transaction(async (tx) => {
+      const newTenant = await tx.tenant.create({
+        data: {
+          id: randomUUID(),
+          slug: input.slug,
+          name: input.name,
+          isActive: true,
+          ...(input.domain && { domain: input.domain }),
+          ...(input.subdomain && { subdomain: input.subdomain }),
+          settings: { create: settings },
+        },
+        include: { settings: true },
       });
-    } catch (userError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.log('\n⚠️  Warning: Failed to create admin user:', userError.message);
-    }
+
+      try {
+        await tx.user.create({
+          data: {
+            id: randomUUID(),
+            email: adminEmail,
+            password: hashedPassword,
+            name: 'Administrator',
+            role: 'admin',
+            tenantId: newTenant.id,
+            isActive: true,
+          },
+        });
+        adminUserCreated = true;
+      } catch (userError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+        console.log('\n⚠️  Warning: Failed to create admin user:', userError.message);
+      }
+
+      return newTenant;
+    });
 
     console.log('\n✅ Tenant created successfully!\n');
     console.log('Tenant Details:');
@@ -268,15 +272,15 @@ async function createTenant(input: TenantInput) {
     console.log(`  Name:        ${tenant.name}`);
     if (tenant.domain) console.log(`  Domain:      ${tenant.domain}`);
     if (tenant.subdomain) console.log(`  Subdomain:   ${tenant.subdomain}`);
-    console.log(`  Currency:    ${tenant.settings.currency}`);
-    console.log(`  Language:    ${tenant.settings.language}`);
-    if (tenant.settings.email) console.log(`  Email:       ${tenant.settings.email}`);
-    if (tenant.settings.phone) console.log(`  Phone:       ${tenant.settings.phone}`);
+    console.log(`  Currency:    ${settings.currency}`);
+    console.log(`  Language:    ${settings.language}`);
+    if (settings.email) console.log(`  Email:       ${settings.email}`);
+    if (settings.phone) console.log(`  Phone:       ${settings.phone}`);
     console.log(`  Active:      ${tenant.isActive ? 'Yes' : 'No'}`);
     console.log(`  Created:     ${tenant.createdAt}`);
     console.log('─────────────────────────────────────────────────\n');
-    
-    if (adminUser) {
+
+    if (adminUserCreated) {
       console.log('✅ Admin User Created:');
       console.log('─────────────────────────────────────────────────');
       console.log(`  Email:       ${adminEmail}`);
@@ -285,26 +289,23 @@ async function createTenant(input: TenantInput) {
       console.log('─────────────────────────────────────────────────\n');
       console.log('⚠️  IMPORTANT: Please change the admin password after first login!\n');
     }
-    
+
     console.log('Next steps:');
-    console.log(`  1. Access your tenant at: http://localhost:3000/${tenant.slug}/${tenant.settings.language}`);
-    if (adminUser) {
+    console.log(`  1. Access your tenant at: http://localhost:3000/${tenant.slug}/${settings.language}`);
+    if (adminUserCreated) {
       console.log(`  2. Login with admin credentials above`);
     } else {
       console.log(`  2. Create an admin user: npx tsx scripts/create-admin-user.ts ${tenant.slug} <email> <password> "<name>"`);
     }
-    console.log(`  3. Configure settings at: http://localhost:3000/${tenant.slug}/${tenant.settings.language}/settings\n`);
-
-    await mongoose.disconnect();
+    console.log(`  3. Configure settings at: http://localhost:3000/${tenant.slug}/${settings.language}/settings\n`);
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('\n❌ Error creating tenant:', error.message);
-    
-    if (error.code === 11000) {
-      const field = Object.keys(error.keyPattern)[0];
-      console.error(`   Duplicate ${field}: ${error.keyValue[field]}`);
+
+    if (error.code === 'P2002') {
+      const field = error.meta?.target?.[0] || 'field';
+      console.error(`   Duplicate ${field}`);
     }
-    
-    await mongoose.disconnect();
+
     process.exit(1);
   }
 }
@@ -322,5 +323,11 @@ async function main() {
   }
 }
 
-main();
-
+main()
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

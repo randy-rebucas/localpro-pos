@@ -1,8 +1,9 @@
 /**
  * One-time fix: find and resolve duplicate open attendance sessions
- * (same userId+tenantId with clockOut: null) before the new unique
- * partial index on Attendance ({ userId, tenantId, clockOut: null })
- * is built, since duplicates would otherwise fail the index build.
+ * (same userId+tenantId with clockOut: null) before the partial unique
+ * index on Attendance (tenantId, userId WHERE clockOut IS NULL — see
+ * prisma/schema.prisma's Attendance model comment) is built, since
+ * duplicates would otherwise fail the index build.
  *
  * For each duplicate group, keeps the earliest open session and closes
  * the rest at their own clockIn time (zero-duration), tagging notes so
@@ -19,54 +20,51 @@ import { resolve } from 'path';
 dotenv.config({ path: resolve(process.cwd(), '.env.local') });
 dotenv.config({ path: resolve(process.cwd(), '.env') });
 
-import connectDB from '../lib/mongodb';
-import Attendance from '../models/Attendance';
-import mongoose from 'mongoose';
+import prisma from '../lib/db';
 
 async function main() {
   const apply = process.argv.includes('--apply');
-  await connectDB();
 
-  const duplicates = await Attendance.aggregate([
-    { $match: { clockOut: null } },
-    {
-      $group: {
-        _id: { userId: '$userId', tenantId: '$tenantId' },
-        count: { $sum: 1 },
-        docs: { $push: { _id: '$_id', clockIn: '$clockIn' } },
-      },
-    },
-    { $match: { count: { $gt: 1 } } },
-  ]);
+  const openSessions = await prisma.attendance.findMany({
+    where: { clockOut: null },
+    select: { id: true, userId: true, tenantId: true, clockIn: true },
+    orderBy: { clockIn: 'asc' },
+  });
+
+  const groups = new Map<string, typeof openSessions>();
+  for (const session of openSessions) {
+    const key = `${session.userId}::${session.tenantId}`;
+    const arr = groups.get(key) ?? [];
+    arr.push(session);
+    groups.set(key, arr);
+  }
+
+  const duplicates = [...groups.entries()].filter(([, docs]) => docs.length > 1);
 
   if (duplicates.length === 0) {
     console.log('No duplicate open attendance sessions found. Safe to deploy the unique index.');
-    await mongoose.disconnect();
     return;
   }
 
   console.log(`Found ${duplicates.length} user(s) with duplicate open sessions.`);
 
-  for (const group of duplicates) {
-    const docs = [...group.docs].sort(
-      (a, b) => new Date(a.clockIn).getTime() - new Date(b.clockIn).getTime()
-    );
-    const [keep, ...extras] = docs;
+  for (const [key, docs] of duplicates) {
+    const [userId, tenantId] = key.split('::');
+    const sorted = [...docs].sort((a, b) => a.clockIn.getTime() - b.clockIn.getTime());
+    const [keep, ...extras] = sorted;
     console.log(
-      `userId=${group._id.userId} tenantId=${group._id.tenantId}: keeping ${keep._id} (clockIn ${keep.clockIn}), closing ${extras.length} extra session(s): ${extras.map((d) => d._id).join(', ')}`
+      `userId=${userId} tenantId=${tenantId}: keeping ${keep.id} (clockIn ${keep.clockIn.toISOString()}), closing ${extras.length} extra session(s): ${extras.map((d) => d.id).join(', ')}`
     );
 
     if (apply) {
       for (const extra of extras) {
-        await Attendance.updateOne(
-          { _id: extra._id },
-          {
-            $set: {
-              clockOut: extra.clockIn,
-              notes: '[auto-closed: duplicate open session]',
-            },
-          }
-        );
+        await prisma.attendance.update({
+          where: { id: extra.id },
+          data: {
+            clockOut: extra.clockIn,
+            notes: '[auto-closed: duplicate open session]',
+          },
+        });
       }
     }
   }
@@ -76,11 +74,13 @@ async function main() {
   } else {
     console.log('\nDuplicate sessions closed.');
   }
-
-  await mongoose.disconnect();
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+main()
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

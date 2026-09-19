@@ -19,18 +19,8 @@ export interface StockUpdateOptions {
 /** Prisma client or an in-flight `prisma.$transaction` callback client. */
 type PrismaClientOrTx = typeof prisma | Prisma.TransactionClient;
 
-/**
- * Typed as `unknown` (not `PrismaClientOrTx`) because a handful of callers
- * (e.g. app/api/prescriptions/[id]/dispense/route.ts,
- * lib/ecommerce/import-channel-order.ts) are still on the pre-Prisma
- * Mongoose migration and pass a `mongoose.ClientSession` here — out of scope
- * for this change. Once those callers move to Prisma this can tighten back
- * to `PrismaClientOrTx | undefined`.
- */
-type SessionArg = unknown;
-
-function resolveClient(tx: SessionArg): PrismaClientOrTx {
-  return (tx as PrismaClientOrTx | undefined) ?? prisma;
+function resolveClient(tx: PrismaClientOrTx | undefined): PrismaClientOrTx {
+  return tx ?? prisma;
 }
 
 function matchesVariation(
@@ -110,7 +100,7 @@ export async function updateStock(
   quantity: number,
   type: 'sale' | 'purchase' | 'adjustment' | 'return' | 'damage' | 'transfer',
   options: StockUpdateOptions = {},
-  tx?: SessionArg
+  tx?: PrismaClientOrTx
 ): Promise<void> {
   const client = resolveClient(tx);
 
@@ -239,7 +229,7 @@ export async function updateBundleStock(
   quantity: number,
   type: 'sale' | 'purchase' | 'adjustment' | 'return' | 'damage' | 'transfer',
   options: StockUpdateOptions = {},
-  tx?: SessionArg
+  tx?: PrismaClientOrTx
 ): Promise<void> {
   const client = resolveClient(tx);
 
@@ -393,6 +383,7 @@ export async function getLowStockProducts(
     if (isLowStock) {
       lowStockProducts.push({
         ...product,
+        _id: product.id,
         currentStock,
         threshold: threshold || product.lowStockThreshold || 10,
       });

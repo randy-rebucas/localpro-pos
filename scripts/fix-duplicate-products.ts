@@ -24,6 +24,9 @@ import { resolve } from 'path';
 dotenv.config({ path: resolve(process.cwd(), '.env.local') });
 dotenv.config({ path: resolve(process.cwd(), '.env') });
 
+import prisma from '../lib/db';
+import { updateStock } from '../lib/stock';
+
 async function main() {
   const apply = process.argv.includes('--apply');
   const tenantFlagIndex = process.argv.indexOf('--tenant');
@@ -34,27 +37,17 @@ async function main() {
     process.exit(1);
   }
 
-  const { default: connectDB } = await import('../lib/mongodb');
-  const { default: Tenant } = await import('../models/Tenant');
-  const { default: Product } = await import('../models/Product');
-  const { default: StockMovement } = await import('../models/StockMovement');
-  const { default: Transaction } = await import('../models/Transaction');
-  const { default: SavedCart } = await import('../models/SavedCart');
-  const { updateStock } = await import('../lib/stock');
-  const mongoose = (await import('mongoose')).default;
-
-  await connectDB();
-
-  const tenant = await Tenant.findOne({ slug: tenantSlug }).lean();
+  const tenant = await prisma.tenant.findFirst({ where: { slug: tenantSlug } });
   if (!tenant) {
     console.error(`Tenant not found: ${tenantSlug}`);
     process.exit(1);
   }
-  const tenantId = tenant._id;
+  const tenantId = tenant.id;
 
-  const products = await Product.find({ tenantId, hasVariations: { $ne: true } })
-    .select('name sku stock isActive')
-    .lean();
+  const products = await prisma.product.findMany({
+    where: { tenantId, hasVariations: { not: true } },
+    select: { id: true, name: true, sku: true, stock: true, isActive: true },
+  });
 
   const groups = new Map<string, typeof products>();
   for (const p of products) {
@@ -73,7 +66,6 @@ async function main() {
 
   if (duplicateGroups.length === 0) {
     console.log(`No duplicate-named products found for tenant "${tenantSlug}".`);
-    await mongoose.disconnect();
     return;
   }
 
@@ -83,9 +75,9 @@ async function main() {
     const withHistory = await Promise.all(
       docs.map(async (p) => {
         const [movements, txns, carts] = await Promise.all([
-          StockMovement.countDocuments({ productId: p._id }),
-          Transaction.countDocuments({ 'items.product': p._id }),
-          SavedCart.countDocuments({ 'items.productId': p._id }),
+          prisma.stockMovement.count({ where: { productId: p.id } }),
+          prisma.transactionItem.count({ where: { productId: p.id } }),
+          prisma.savedCartItem.count({ where: { productId: p.id } }),
         ]);
         return { ...p, historyCount: movements + txns + carts };
       })
@@ -99,39 +91,39 @@ async function main() {
       return (b.stock || 0) - (a.stock || 0);
     })[0];
 
-    const losers = withHistory.filter((p) => p._id.toString() !== survivor._id.toString());
+    const losers = withHistory.filter((p) => p.id !== survivor.id);
 
-    console.log(`"${name}": keeping ${survivor.sku || survivor._id} (stock=${survivor.stock}, active=${survivor.isActive !== false}, history=${survivor.historyCount})`);
+    console.log(`"${name}": keeping ${survivor.sku || survivor.id} (stock=${survivor.stock}, active=${survivor.isActive !== false}, history=${survivor.historyCount})`);
 
     for (const loser of losers) {
       const action = loser.historyCount > 0 ? 'deactivate' : 'delete';
       console.log(
-        `  -> ${action} ${loser.sku || loser._id} (stock=${loser.stock}, active=${loser.isActive !== false}, history=${loser.historyCount})`
+        `  -> ${action} ${loser.sku || loser.id} (stock=${loser.stock}, active=${loser.isActive !== false}, history=${loser.historyCount})`
       );
 
       if (!apply) continue;
 
       if (loser.stock && loser.stock > 0) {
         await updateStock(
-          survivor._id.toString(),
-          tenantId.toString(),
+          survivor.id,
+          tenantId,
           loser.stock,
           'adjustment',
-          { reason: `Merged duplicate product ${loser.sku || loser._id}` }
+          { reason: `Merged duplicate product ${loser.sku || loser.id}` }
         );
         await updateStock(
-          loser._id.toString(),
-          tenantId.toString(),
+          loser.id,
+          tenantId,
           -loser.stock,
           'adjustment',
-          { reason: `Stock merged into ${survivor.sku || survivor._id}` }
+          { reason: `Stock merged into ${survivor.sku || survivor.id}` }
         );
       }
 
       if (action === 'deactivate') {
-        await Product.updateOne({ _id: loser._id }, { $set: { isActive: false } });
+        await prisma.product.update({ where: { id: loser.id }, data: { isActive: false } });
       } else {
-        await Product.deleteOne({ _id: loser._id });
+        await prisma.product.delete({ where: { id: loser.id } });
       }
     }
     console.log('');
@@ -142,11 +134,13 @@ async function main() {
   } else {
     console.log('Duplicate products merged.');
   }
-
-  await mongoose.disconnect();
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+main()
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

@@ -6,6 +6,7 @@ import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getDailySalesAggregate, startOfBusinessDay } from '@/lib/bir-readings';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { DEFAULT_TENANT_TIMEZONE } from '@/lib/timezone';
 import { logger } from '@/lib/logger';
 
 /**
@@ -29,8 +30,14 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const businessDate = searchParams.get('date') ? new Date(searchParams.get('date')!) : new Date();
 
+    const tenantSettings = await prisma.tenantSettings.findUnique({
+      where: { tenantId },
+      select: { timezone: true },
+    });
+    const tenantTz = tenantSettings?.timezone || DEFAULT_TENANT_TIMEZONE;
+
     const [aggregate, tenant] = await Promise.all([
-      getDailySalesAggregate(tenantId, businessDate),
+      getDailySalesAggregate(tenantId, businessDate, tenantTz),
       prisma.tenant.findUnique({
         where: { id: tenantId },
         select: { grandTotalSales: true, grandTotalTransactionCount: true },
@@ -42,7 +49,7 @@ export async function GET(request: NextRequest) {
       userId: user.userId,
       action: AuditActions.X_READING_VIEW,
       entityType: 'x_reading',
-      metadata: { businessDate: startOfBusinessDay(businessDate).toISOString() },
+      metadata: { businessDate: startOfBusinessDay(businessDate, tenantTz).toISOString() },
     });
 
     return NextResponse.json({

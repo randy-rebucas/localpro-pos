@@ -9,6 +9,7 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getDailySalesAggregate, startOfBusinessDay } from '@/lib/bir-readings';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { DEFAULT_TENANT_TIMEZONE } from '@/lib/timezone';
 import { logger } from '@/lib/logger';
 
 /** List historical Z-Readings for the tenant. */
@@ -71,8 +72,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: t('validation.tooManyRequests', 'Too many requests') }, { status: 429 });
     }
 
+    const tenantSettings = await prisma.tenantSettings.findUnique({
+      where: { tenantId },
+      select: { timezone: true },
+    });
+    const tenantTz = tenantSettings?.timezone || DEFAULT_TENANT_TIMEZONE;
+
     const body = await request.json().catch(() => ({}));
-    const businessDate = startOfBusinessDay(body.date ? new Date(body.date) : new Date());
+    const businessDate = startOfBusinessDay(body.date ? new Date(body.date) : new Date(), tenantTz);
 
     const existing = await prisma.zReading.findFirst({
       where: { tenantId, branchId: null, businessDate },
@@ -91,7 +98,7 @@ export async function POST(request: NextRequest) {
     }
 
     const [aggregate, tenant] = await Promise.all([
-      getDailySalesAggregate(tenantId, businessDate),
+      getDailySalesAggregate(tenantId, businessDate, tenantTz),
       prisma.tenant.findUnique({ where: { id: tenantId }, select: { grandTotalSales: true } }),
     ]);
 

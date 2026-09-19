@@ -6,7 +6,39 @@
 
 import { getBusinessTypeConfig, BusinessType, getAllowedProductTypes } from './business-types'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { ITenantSettings } from '@/types/tenant';
-import { IProduct } from '@/models/Product';
+
+/**
+ * Structural shape covering the product fields these helpers read/write.
+ * Deliberately loose (not the Prisma `Product` type) since callers pass
+ * partial/merged product-like objects assembled from multiple related tables
+ * (variations, branch stock, restaurant/laundry/service details, etc).
+ */
+interface IProduct {
+  _id?: string;
+  id?: string;
+  name: string;
+  description?: string;
+  price: number;
+  productType: 'regular' | 'bundle' | 'service';
+  image?: string;
+  categoryId?: string;
+  sku?: string;
+  stock?: number;
+  trackInventory?: boolean;
+  allowOutOfStockSales?: boolean;
+  variations?: unknown[];
+  branchStock?: unknown[];
+  modifiers?: { name: string; options: unknown[] }[];
+  allergens?: string[];
+  nutritionInfo?: { calories?: number };
+  serviceType?: string;
+  weightBased?: boolean;
+  pickupDelivery?: boolean;
+  estimatedDuration?: number;
+  serviceDuration?: number;
+  staffRequired?: number;
+  equipmentRequired?: unknown[];
+}
 
 /**
  * Get business type from tenant settings
