@@ -454,7 +454,7 @@
     "trustedBy": "Con la confianza de empresas de todos los sectores",
     "spActiveStores": "Tiendas activas",
     "spActiveStoresDesc": "Tiendas activas en tu base de datos conectada (no desactivadas explícitamente)",
-    "spActiveStoresDescZero": "Aún no hay tenants — usa Registrarse para crear tu primera tienda (este contador usa la misma MongoDB que Ver tiendas).",
+    "spActiveStoresDescZero": "Aún no hay tenants — usa Registrarse para crear tu primera tienda (este contador usa la misma base de datos que Ver tiendas).",
     "spTransactions": "Transacciones",
     "spTransactionsDesc": "ventas completadas registradas en la app (todos los tenants)",
     "spUptimeSla": "SLA de disponibilidad",

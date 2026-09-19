@@ -3,12 +3,7 @@
  */
 
 export const config = {
-  // Database (MongoDB — being migrated off, see prisma/schema.prisma)
-  mongodb: {
-    uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/pos-system',
-  },
-
-  // Database (PostgreSQL — migration target)
+  // Database (PostgreSQL)
   postgres: {
     url: process.env.DATABASE_URL || 'postgresql://pos:pos@localhost:5432/pos_system',
   },
@@ -62,7 +57,7 @@ export function validateConfig(): void {
     return;
   }
 
-  const required = ['MONGODB_URI'];
+  const required = ['DATABASE_URL'];
   if (process.env.NODE_ENV === 'production') {
     required.push('JWT_SECRET', 'ALLOWED_ORIGINS');
   }

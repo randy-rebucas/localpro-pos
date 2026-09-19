@@ -35,7 +35,8 @@ export function positiveFloat(
 }
 
 /**
- * Validate a MongoDB ObjectId string (24 hex chars).
+ * Validate a record id string (24 hex chars — the id shape retained from
+ * the pre-migration Mongoose schema; see prisma/schema.prisma header comment).
  * Returns the string if valid, undefined otherwise.
  */
 export function validObjectId(value: unknown): string | undefined {

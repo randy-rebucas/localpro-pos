@@ -454,7 +454,7 @@
     "trustedBy": "Trusted by businesses across industries",
     "spActiveStores": "Active stores",
     "spActiveStoresDesc": "Active stores in your connected database (not explicitly disabled)",
-    "spActiveStoresDescZero": "No tenants yet — use Sign up to create your first store (this count reads the same MongoDB as Browse Stores).",
+    "spActiveStoresDescZero": "No tenants yet — use Sign up to create your first store (this count reads the same database as Browse Stores).",
     "spTransactions": "Transactions",
     "spTransactionsDesc": "completed sales recorded in-app (all tenants)",
     "spUptimeSla": "Uptime SLA",

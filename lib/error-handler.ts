@@ -26,35 +26,6 @@ export function handleApiError(error: any, defaultMessage: string = 'An error oc
     );
   }
 
-  // Mongoose validation errors
-  if (error.name === 'ValidationError') {
-    const errors = Object.values(error.errors).map((err: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
-      field: err.path,
-      message: err.message,
-    }));
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Validation failed',
-        errors,
-      },
-      { status: 400 }
-    );
-  }
-
-  // Duplicate key errors (Mongo)
-  if (error.code === 11000) {
-    const field = Object.keys(error.keyPattern || {})[0] || 'field';
-    return NextResponse.json(
-      {
-        success: false,
-        error: `${field} already exists`,
-        code: 'DUPLICATE_KEY',
-      },
-      { status: 400 }
-    );
-  }
-
   // Duplicate key / FK constraint errors (Prisma/Postgres)
   if (error.code === 'P2002') {
     const field = Array.isArray(error.meta?.target) ? error.meta.target[0] : error.meta?.target || 'field';
