@@ -68,6 +68,7 @@ export interface ITransaction extends Document {
   externalOrderId?: string;
   /** `${provider}:${externalOrderId}` for idempotent unique index */
   channelSyncKey?: string;
+  idempotencyKey?: string;
   channelImportedAt?: Date;
   shopifyFulfilledAt?: Date;
   shopifyFulfillmentId?: string;
@@ -291,6 +292,10 @@ const TransactionSchema: Schema = new Schema(
       trim: true,
     },
     channelSyncKey: {
+      type: String,
+      trim: true,
+    },
+    idempotencyKey: {
       type: String,
       trim: true,
     },

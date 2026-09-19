@@ -7,6 +7,7 @@ export interface ICustomerBalancePayment extends Document {
   method: 'cash' | 'card' | 'digital' | 'check' | 'other';
   notes?: string;
   recordedBy?: mongoose.Types.ObjectId;
+  idempotencyKey?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -43,6 +44,9 @@ const CustomerBalancePaymentSchema: Schema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'User',
       index: true,
+    },
+    idempotencyKey: {
+      type: String,
     },
   },
   { timestamps: true }
