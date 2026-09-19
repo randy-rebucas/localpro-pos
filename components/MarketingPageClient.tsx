@@ -2,6 +2,35 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
+import {
+  Store,
+  UtensilsCrossed,
+  Shirt,
+  Briefcase,
+  Wrench,
+  Timer,
+  TrendingUp,
+  ShieldCheck,
+  Rocket,
+  CreditCard,
+  Zap,
+  Bell,
+  ShoppingCart,
+  BarChart3,
+  LineChart,
+  Building2,
+  Bot,
+  ShoppingBag,
+  ArrowLeftRight,
+  Package,
+  Receipt,
+  Smartphone,
+  Camera,
+  Image as ImageIcon,
+  PlayCircle,
+  Menu,
+  X,
+} from 'lucide-react';
 import FeaturesGrid, { FEATURE_MODULE_COUNT } from '@/components/FeaturesGrid';
 import { getDictionaryClient } from '@/app/[lang]/dictionaries-client';
 import {
@@ -53,12 +82,12 @@ function DashboardMockup() {
         <div className="flex-1 p-4 overflow-hidden bg-gray-950">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <div className="text-white font-semibold text-sm">Good morning, Admin 👋</div>
+              <div className="text-white font-semibold text-sm">Good morning, Admin</div>
               <div className="text-gray-500 text-xs">Today — March 24, 2026</div>
             </div>
             <div className="flex items-center gap-2">
               <div className="bg-brand/20 text-brand-muted px-2 py-1 text-xs font-medium">Premium Plan</div>
-              <div className="w-7 h-7 bg-gradient-to-br from-brand to-brand-navy flex items-center justify-center text-white text-xs font-bold">A</div>
+              <div className="w-7 h-7 bg-brand flex items-center justify-center text-white text-xs font-bold">A</div>
             </div>
           </div>
 
@@ -119,19 +148,6 @@ function DashboardMockup() {
   );
 }
 
-const AVATAR_COLORS = ['from-brand to-brand-navy', 'from-violet-500 to-purple-600', 'from-emerald-500 to-teal-600'];
-function InitialAvatar({ name, index }: { name: string; index: number }) {
-  const initials = name.split(' ').slice(0, 2).map((w) => w[0]).join('');
-  return (
-    <div
-      className={`w-12 h-12 bg-gradient-to-br ${AVATAR_COLORS[index % AVATAR_COLORS.length]} flex items-center justify-center text-white font-bold text-sm flex-shrink-0`}
-      aria-hidden="true"
-    >
-      {initials}
-    </div>
-  );
-}
-
 /* ── Main client component ───────────────────────────────────────── */
 type PlatformStats = { activeTenants: number; completedTransactions: number };
 
@@ -139,6 +155,7 @@ export default function MarketingPageClient() {
   const [preferredLang, setPreferredLang] = useState<'en' | 'es'>('en');
   const [dict, setDict] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [platformStats, setPlatformStats] = useState<PlatformStats | 'loading' | 'failed'>('loading');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem('preferred_lang');
@@ -187,25 +204,27 @@ export default function MarketingPageClient() {
 
   const d = dict?.home;
 
-  const businessTypes = [
-    { emoji: '🏪', name: 'Retail', desc: d?.retailDesc || 'Product & inventory focused', gradient: 'from-brand/70 to-brand-navy/90', img: '/images/business/retail.jpg', alt: 'Retail store' },
-    { emoji: '🍕', name: 'Restaurant', desc: d?.restaurantDesc || 'Menu & table management', gradient: 'from-orange-600/70 to-red-800/90', img: '/images/business/restaurant.jpg', alt: 'Restaurant' },
-    { emoji: '👔', name: 'Laundry', desc: d?.laundryDesc || 'Weight-based pricing', gradient: 'from-cyan-600/70 to-brand-navy-deep/90', img: '/images/business/laundry.jpg', alt: 'Laundry shop' },
-    { emoji: '💼', name: 'Service', desc: d?.serviceDesc || 'Time-based bookings', gradient: 'from-indigo-600/70 to-purple-900/90', img: '/images/business/service.jpg', alt: 'Service business' },
-    { emoji: '🔧', name: 'General', desc: d?.generalDesc || 'Fully flexible setup', gradient: 'from-slate-600/70 to-slate-900/90', img: '/images/business/general.jpg', alt: 'General business' },
+  const navLinks = [
+    { href: '#features', label: d?.navFeatures || 'Features', isLink: false },
+    { href: '#solutions', label: d?.navSolutions || 'Solutions', isLink: false },
+    { href: '#ecommerce', label: d?.navEcommerce || 'Ecommerce', isLink: false },
+    { href: '/stores', label: d?.navBrowseStores || 'Browse Stores', isLink: true },
   ];
 
-  const testimonials = [
-    { quote: d?.testimonial1Quote || '1pos transformed how we run our retail chain. The real-time inventory and multi-branch reporting paid for itself within the first month.', name: d?.testimonial1Name || 'Maria Santos', role: d?.testimonial1Role || 'Owner, Santos Retail Group' },
-    { quote: d?.testimonial2Quote || 'The automated workflows alone save my team 3+ hours every day — reminders, stock alerts, and scheduled reports just run themselves.', name: d?.testimonial2Name || 'James Reyes', role: d?.testimonial2Role || 'Operations Manager, FastBite Restaurants' },
-    { quote: d?.testimonial3Quote || 'We replaced three separate tools with 1pos. Bookings, customer CRM, and POS all in one platform is an absolute game changer.', name: d?.testimonial3Name || 'Ana Cruz', role: d?.testimonial3Role || 'Director, Cruz Service Centers' },
+  const businessTypes = [
+    { icon: Store, name: 'Retail', desc: d?.retailDesc || 'Product & inventory focused', overlay: 'bg-brand-navy/80', img: '/images/business/retail.jpg', alt: 'Retail store' },
+    { icon: UtensilsCrossed, name: 'Restaurant', desc: d?.restaurantDesc || 'Menu & table management', overlay: 'bg-win8-warning/85', img: '/images/business/restaurant.jpg', alt: 'Restaurant' },
+    { icon: Shirt, name: 'Laundry', desc: d?.laundryDesc || 'Weight-based pricing', overlay: 'bg-win8-info/80', img: '/images/business/laundry.jpg', alt: 'Laundry shop' },
+    { icon: Briefcase, name: 'Service', desc: d?.serviceDesc || 'Time-based bookings', overlay: 'bg-win8-accent/80', img: '/images/business/service.jpg', alt: 'Service business' },
+    { icon: Wrench, name: 'General', desc: d?.generalDesc || 'Fully flexible setup', overlay: 'bg-gray-800/80', img: '/images/business/general.jpg', alt: 'General business' },
   ];
+
 
   const benefits = [
-    { title: d?.saveTimeTitle || 'Save Time', desc: d?.saveTimeDesc || 'Seven core automations cut repetitive tasks (booking reminders, low stock, receipts, reports, and more)', icon: '⏱️' },
-    { title: d?.increaseRevenueTitle || 'Increase Revenue', desc: d?.increaseRevenueDesc || 'Advanced analytics help identify growth opportunities', icon: '📈' },
-    { title: d?.reduceErrorsTitle || 'Reduce Errors', desc: d?.reduceErrorsDesc || 'Real-time validation prevents costly mistakes', icon: '🛡️' },
-    { title: d?.scaleEasilyTitle || 'Scale Easily', desc: d?.scaleEasilyDesc || 'Multi-tenant architecture grows with your business', icon: '🚀' },
+    { title: d?.saveTimeTitle || 'Save Time', desc: d?.saveTimeDesc || 'Seven core automations cut repetitive tasks (booking reminders, low stock, receipts, reports, and more)', icon: Timer },
+    { title: d?.increaseRevenueTitle || 'Increase Revenue', desc: d?.increaseRevenueDesc || 'Advanced analytics help identify growth opportunities', icon: TrendingUp },
+    { title: d?.reduceErrorsTitle || 'Reduce Errors', desc: d?.reduceErrorsDesc || 'Real-time validation prevents costly mistakes', icon: ShieldCheck },
+    { title: d?.scaleEasilyTitle || 'Scale Easily', desc: d?.scaleEasilyDesc || 'Multi-tenant architecture grows with your business', icon: Rocket },
   ];
 
   return (
@@ -216,7 +235,7 @@ export default function MarketingPageClient() {
 
         {/* ── Sticky nav ─────────────────────────────────────── */}
         <nav
-          className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-100"
+          className="sticky top-0 z-50 bg-white border-b border-gray-300"
           aria-label="Main navigation"
         >
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -236,19 +255,13 @@ export default function MarketingPageClient() {
 
             {/* Centre links */}
             <div className="hidden md:flex items-center gap-1">
-              {[
-                { href: '#features', label: d?.navFeatures || 'Features', isLink: false },
-                { href: '#solutions', label: d?.navSolutions || 'Solutions', isLink: false },
-                { href: '#ecommerce', label: d?.navEcommerce || 'Ecommerce', isLink: false },
-                { href: '#testimonials', label: d?.navCustomers || 'Customers', isLink: false },
-                { href: '/stores', label: d?.navBrowseStores || 'Browse Stores', isLink: true },
-              ].map((item) =>
+              {navLinks.map((item) =>
                 item.isLink ? (
-                  <Link key={item.label} href={item.href} className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-600 hover:text-brand-navy hover:bg-brand-soft transition-all">
+                  <Link key={item.label} href={item.href} className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-600 hover:text-white hover:bg-brand-navy transition-colors">
                     {item.label}
                   </Link>
                 ) : (
-                  <a key={item.label} href={item.href} className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-600 hover:text-brand-navy hover:bg-brand-soft transition-all">
+                  <a key={item.label} href={item.href} className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-600 hover:text-white hover:bg-brand-navy transition-colors">
                     {item.label}
                   </a>
                 )
@@ -259,47 +272,91 @@ export default function MarketingPageClient() {
             <div className="flex items-center gap-2 flex-shrink-0">
               <Link
                 href="/stores"
-                className="hidden sm:inline-flex sm:items-center px-3 py-2 text-sm font-medium text-gray-600 hover:text-brand-navy hover:bg-brand-soft transition-all"
+                className="hidden sm:inline-flex sm:items-center px-3 py-2 text-sm font-medium text-gray-600 hover:text-white hover:bg-brand-navy transition-colors"
               >
                 {d?.signIn || 'Sign in'}
               </Link>
               <Link
                 href="/signup"
-                className="flex items-center gap-1.5 bg-brand text-white px-4 py-2 text-sm font-semibold hover:bg-brand-hover shadow-sm transition-colors"
+                className="flex items-center gap-1.5 bg-brand text-white px-4 py-2 text-sm font-semibold hover:brightness-110 transition-[filter]"
               >
                 {d?.getStartedFree || 'Get Started Free'}
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
               </Link>
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen((open) => !open)}
+                className="md:hidden inline-flex items-center justify-center w-9 h-9 border border-gray-300 text-gray-700 hover:bg-gray-100 transition-colors"
+                aria-expanded={mobileMenuOpen}
+                aria-controls="mobile-nav-panel"
+                aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+              >
+                {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              </button>
             </div>
 
           </div>
+
+          {/* Mobile menu panel */}
+          {mobileMenuOpen && (
+            <div id="mobile-nav-panel" className="md:hidden border-t border-gray-300 bg-white">
+              <div className="px-4 py-2 flex flex-col">
+                {navLinks.map((item) =>
+                  item.isLink ? (
+                    <Link
+                      key={item.label}
+                      href={item.href}
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="px-2 py-3 text-sm font-medium text-gray-700 border-b border-gray-100 last:border-b-0 hover:bg-gray-100 transition-colors"
+                    >
+                      {item.label}
+                    </Link>
+                  ) : (
+                    <a
+                      key={item.label}
+                      href={item.href}
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="px-2 py-3 text-sm font-medium text-gray-700 border-b border-gray-100 last:border-b-0 hover:bg-gray-100 transition-colors"
+                    >
+                      {item.label}
+                    </a>
+                  )
+                )}
+                <Link
+                  href="/stores"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="px-2 py-3 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                >
+                  {d?.signIn || 'Sign in'}
+                </Link>
+              </div>
+            </div>
+          )}
         </nav>
 
         {/* ── Hero ───────────────────────────────────────────── */}
-        <div className="relative bg-gradient-to-br from-brand via-brand-navy to-brand-navy-deep text-white pt-20 md:pt-28 pb-0 px-4 overflow-hidden">
+        <div className="relative bg-brand-navy text-white pt-20 md:pt-28 pb-0 px-4 overflow-hidden">
 
-          {/* Background: dot grid + soft orbs */}
+          {/* Background: flat dot grid texture */}
           <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
             <div
               className="absolute inset-0 opacity-[0.06]"
               style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '28px 28px' }}
             />
-            <div className="absolute -top-16 -left-16 w-96 h-96 bg-brand-muted/30 blur-3xl" />
-            <div className="absolute top-1/3 -right-24 w-80 h-80 bg-brand-navy/40 blur-3xl" />
           </div>
 
           <div className="relative max-w-7xl mx-auto text-center z-10">
 
             {/* Status badge */}
-            <div className="inline-flex items-center gap-2 bg-white/15 backdrop-blur-md border border-white/25 px-4 py-2 mb-8 text-sm font-medium">
-              <span className="w-2 h-2 bg-green-400 animate-pulse flex-shrink-0" aria-hidden="true" />
+            <div className="inline-flex items-center gap-2 bg-white/15 border border-white/25 px-4 py-2 mb-8 text-sm font-medium">
+              <span className="w-2 h-2 bg-win8-success flex-shrink-0" aria-hidden="true" />
               {d?.heroBadge || 'BIR-Ready Enterprise POS System'}
             </div>
 
             {/* H1 */}
-            <h1 className="text-7xl md:text-8xl lg:text-9xl font-black mb-5 tracking-tight bg-gradient-to-b from-white via-brand-soft to-brand-muted bg-clip-text text-transparent">
+            <h1 className="text-7xl md:text-8xl lg:text-9xl font-black mb-5 tracking-tight text-white">
               1pos
             </h1>
 
@@ -343,7 +400,7 @@ export default function MarketingPageClient() {
             <div className="flex flex-col sm:flex-row gap-3 justify-center items-center mb-4">
               <Link
                 href="/signup"
-                className="group flex items-center gap-2 bg-white text-brand-navy px-8 py-4 font-bold text-base shadow-lg hover:bg-brand-soft hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200"
+                className="group flex items-center gap-2 bg-white text-brand-navy px-8 py-4 font-bold text-base hover:brightness-95 transition-[filter] duration-200"
               >
                 {d?.startFreeTrial || 'Start Free Trial'}
                 <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
@@ -352,19 +409,29 @@ export default function MarketingPageClient() {
               </Link>
               <Link
                 href="/stores"
-                className="flex items-center gap-2 bg-white/10 backdrop-blur-sm text-white px-8 py-4 font-semibold text-base border border-white/30 hover:bg-white/20 hover:border-white/50 transition-all duration-200"
+                className="flex items-center gap-2 bg-white/10 text-white px-8 py-4 font-semibold text-base border border-white/30 hover:bg-white/20 transition-colors duration-200"
               >
                 {d?.browseLiveStores || 'Browse Live Stores'}
               </Link>
             </div>
-            <p className="text-white/65 text-xs mb-14">
-              {d?.noCC || 'No credit card required · 14-day free trial · Cancel anytime'}
-            </p>
+            <div className="mb-14">
+              <p className="text-white/65 text-xs">
+                {d?.noCC || 'No credit card required · 14-day free trial · Cancel anytime'}
+              </p>
+              {platformStats !== 'loading' && platformStats !== 'failed' && platformStats.activeTenants > 0 && (
+                <p className="text-white/75 text-xs mt-1">
+                  {(d?.heroLiveTrust || 'Live now: {count} active stores running on 1pos').replace(
+                    '{count}',
+                    formatActiveTenants(platformStats.activeTenants)
+                  )}
+                </p>
+              )}
+            </div>
 
             {/* Dashboard mockup */}
             <div className="relative w-full">
               {/* Browser chrome */}
-              <div className="bg-gray-900/95 px-4 py-3 flex items-center gap-3 border-x border-t border-white/10" aria-hidden="true">
+              <div className="bg-gray-900 px-4 py-3 flex items-center gap-3 border-x border-t border-white/10" aria-hidden="true">
                 <div className="flex gap-1.5 flex-shrink-0">
                   <div className="w-3 h-3 bg-red-500/80" />
                   <div className="w-3 h-3 bg-yellow-500/80" />
@@ -378,8 +445,6 @@ export default function MarketingPageClient() {
                 </div>
               </div>
               <DashboardMockup />
-              {/* Fade into next section (white bg) */}
-              <div className="absolute bottom-0 left-0 right-0 h-28 bg-gradient-to-t from-white to-transparent pointer-events-none" aria-hidden="true" />
             </div>
 
           </div>
@@ -390,15 +455,13 @@ export default function MarketingPageClient() {
       <main id="main-content">
 
         {/* Social proof strip */}
-        <section aria-label="Platform statistics" className="relative bg-white border-y border-gray-100 py-14 px-4 overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-r from-brand-soft/80 via-white to-brand-soft/50 pointer-events-none" aria-hidden="true" />
-
+        <section aria-label="Platform statistics" className="relative bg-white border-y border-gray-300 py-14 px-4 overflow-hidden">
           <div className="relative max-w-7xl mx-auto">
             <p className="text-center text-xs font-bold uppercase tracking-widest text-gray-400 mb-10">
               {d?.trustedBy || 'Trusted by businesses across industries'}
             </p>
 
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-gray-100 overflow-hidden shadow-sm">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-gray-300 border border-gray-300 overflow-hidden">
               {[
                 {
                   value:
@@ -408,7 +471,7 @@ export default function MarketingPageClient() {
                         ? '—'
                         : formatActiveTenants(platformStats.activeTenants),
                   label: d?.spActiveStores || 'Active stores',
-                  icon: '🏪',
+                  icon: Store,
                   desc:
                     platformStats !== 'loading' && platformStats !== 'failed' && platformStats.activeTenants === 0
                       ? d?.spActiveStoresDescZero ||
@@ -423,21 +486,19 @@ export default function MarketingPageClient() {
                         ? '—'
                         : formatCompletedTransactions(platformStats.completedTransactions),
                   label: d?.spTransactions || 'Transactions',
-                  icon: '💳',
+                  icon: CreditCard,
                   desc: d?.spTransactionsDesc || 'completed sales recorded in-app (all tenants)',
                 },
                 {
                   value: UPTIME_SLA_TARGET_PERCENT,
                   label: d?.spUptimeSla || 'Uptime SLA',
-                  icon: '⚡',
+                  icon: Zap,
                   desc: d?.spUptimeSlaDesc || 'target monthly availability (managed production)',
                 },
-                { value: '24/7', label: d?.spSupport || 'Support', icon: '🛎️', desc: d?.spSupportDesc || 'whenever you need us' },
+                { value: '24/7', label: d?.spSupport || 'Support', icon: Bell, desc: d?.spSupportDesc || 'whenever you need us' },
               ].map((item) => (
-                <div key={item.label} className="bg-white px-8 py-8 flex flex-col items-center text-center group hover:bg-brand-soft/50 transition-colors duration-200">
-                  <span className="text-3xl mb-3 group-hover:scale-110 transition-transform duration-200 block" aria-hidden="true">
-                    {item.icon}
-                  </span>
+                <div key={item.label} className="bg-white px-8 py-8 flex flex-col items-center text-center hover:bg-gray-100 transition-colors duration-200">
+                  <item.icon className="w-8 h-8 text-brand mb-3" aria-hidden="true" />
                   <div className="text-4xl font-extrabold text-gray-900 tracking-tight leading-none mb-1">
                     {item.value}
                   </div>
@@ -459,7 +520,7 @@ export default function MarketingPageClient() {
 
           <div className="relative max-w-7xl mx-auto">
             <div className="text-center mb-14">
-              <div className="inline-block bg-brand-soft text-brand-navy px-4 py-2 text-sm font-semibold mb-4 tracking-wide">
+              <div className="inline-block bg-brand text-white px-4 py-2 text-sm font-semibold mb-4 tracking-wide">
                 {d?.featuresBadge || 'POWERFUL FEATURES'}
               </div>
               <h2 id="features-heading" className="text-5xl md:text-6xl font-bold mb-5 text-gray-900 tracking-tight">
@@ -474,33 +535,30 @@ export default function MarketingPageClient() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-12">
               {[
                 {
-                  icon: '🛒',
+                  icon: ShoppingCart,
                   label: d?.posLabel || 'Point of Sale',
                   headline: d?.posHeadline || 'Sell faster, smarter',
                   body: d?.posBody || 'Full POS with cart, barcode scanning, multiple payment methods, and BIR-compliant official receipt printing.',
                   accent: 'bg-brand',
-                  ring: 'ring-brand-soft',
                 },
                 {
-                  icon: '📊',
+                  icon: BarChart3,
                   label: d?.inventoryLabel || 'Inventory',
                   headline: d?.inventoryHeadline || 'Always in stock, never guessing',
                   body: d?.inventoryBody || 'Real-time stock tracking across branches, automatic deductions on sale, low-stock alerts, and transfer management.',
-                  accent: 'bg-emerald-600',
-                  ring: 'ring-emerald-100',
+                  accent: 'bg-win8-success',
                 },
                 {
-                  icon: '📈',
+                  icon: LineChart,
                   label: d?.reportsLabel || 'Reports & Analytics',
                   headline: d?.reportsHeadline || 'Know your numbers',
                   body: d?.reportsBody || 'Daily, weekly, and monthly sales reports, P&L statements, VAT summaries, and exportable data in CSV, Excel, or PDF.',
-                  accent: 'bg-violet-600',
-                  ring: 'ring-violet-100',
+                  accent: 'bg-win8-accent',
                 },
               ].map((card) => (
-                <div key={card.label} className={`bg-white p-7 shadow-sm ring-1 ${card.ring} hover:shadow-md transition-shadow duration-200`}>
-                  <div className={`inline-flex w-11 h-11 ${card.accent} items-center justify-center text-2xl mb-4`} aria-hidden="true">
-                    {card.icon}
+                <div key={card.label} className="bg-white p-7 border border-gray-300 hover:bg-gray-50 transition-colors duration-200">
+                  <div className={`inline-flex w-11 h-11 ${card.accent} items-center justify-center mb-4`} aria-hidden="true">
+                    <card.icon className="w-6 h-6 text-white" />
                   </div>
                   <div className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">{card.label}</div>
                   <h3 className="text-lg font-bold text-gray-900 mb-2">{card.headline}</h3>
@@ -515,10 +573,10 @@ export default function MarketingPageClient() {
         </section>
 
         {/* Key highlights */}
-        <section aria-labelledby="highlights-heading" className="py-24 px-4 bg-gradient-to-b from-gray-50 to-white">
+        <section aria-labelledby="highlights-heading" className="py-24 px-4 bg-gray-50">
           <div className="max-w-7xl mx-auto">
             <div className="text-center mb-16">
-              <div className="inline-block bg-brand-soft text-brand-navy px-4 py-2 text-sm font-semibold mb-4">
+              <div className="inline-block bg-brand text-white px-4 py-2 text-sm font-semibold mb-4">
                 {d?.highlightsBadge || 'WHY CHOOSE US'}
               </div>
               <h2 id="highlights-heading" className="text-5xl md:text-6xl font-bold mb-5 text-gray-900">
@@ -528,16 +586,18 @@ export default function MarketingPageClient() {
                 {d?.highlightsDesc || 'Enterprise-grade features that scale with your business'}
               </p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-px bg-gray-300 border border-gray-300">
               {[
-                { emoji: '🏢', title: d?.multiTenantTitle || 'Multi-Tenant', desc: d?.multiTenantDesc || 'Complete data isolation with tenant-specific branding, settings, and configurations. Perfect for SaaS deployments and enterprise solutions.', bg: 'from-brand-soft to-teal-100', border: 'border-teal-200 hover:border-brand' },
-                { emoji: '⚡', title: d?.realTimeSyncTitle || 'Real-Time Sync', desc: d?.realTimeSyncDesc || 'Real-time inventory updates, stock validation, and Server-Sent Events for instant synchronization across all devices and locations.', bg: 'from-emerald-50 to-emerald-100', border: 'border-emerald-200 hover:border-emerald-400' },
-                { emoji: '🤖', title: d?.automatedTitle || 'Automated', desc: d?.automatedDesc || 'Seven core workflows today — booking reminders, low stock alerts, receipt email, scheduled reports, auto clock-out, cash drawer close, and customer welcome messages.', bg: 'from-purple-50 to-purple-100', border: 'border-purple-200 hover:border-purple-400' },
+                { icon: Building2, title: d?.multiTenantTitle || 'Multi-Tenant', desc: d?.multiTenantDesc || 'Complete data isolation with tenant-specific branding, settings, and configurations. Perfect for SaaS deployments and enterprise solutions.', tile: 'bg-brand' },
+                { icon: Zap, title: d?.realTimeSyncTitle || 'Real-Time Sync', desc: d?.realTimeSyncDesc || 'Real-time inventory updates, stock validation, and Server-Sent Events for instant synchronization across all devices and locations.', tile: 'bg-win8-success' },
+                { icon: Bot, title: d?.automatedTitle || 'Automated', desc: d?.automatedDesc || 'Seven core workflows today — booking reminders, low stock alerts, receipt email, scheduled reports, auto clock-out, cash drawer close, and customer welcome messages.', tile: 'bg-win8-accent' },
               ].map((item) => (
-                <div key={item.title} className={`group relative text-center p-10 bg-gradient-to-br ${item.bg} border-2 ${item.border} transition-all duration-300 hover:shadow-2xl hover:-translate-y-2`}>
-                  <div className="text-6xl mb-6 transform group-hover:scale-110 group-hover:rotate-6 transition-transform duration-300" aria-hidden="true">{item.emoji}</div>
-                  <h3 className="text-2xl font-bold mb-3 text-gray-900">{item.title}</h3>
-                  <p className="text-gray-600 leading-relaxed">{item.desc}</p>
+                <div key={item.title} className={`text-center p-10 ${item.tile} text-white hover:brightness-110 transition-[filter] duration-200`}>
+                  <div className="w-16 h-16 mx-auto mb-6 flex items-center justify-center bg-white/15" aria-hidden="true">
+                    <item.icon className="w-8 h-8 text-white" />
+                  </div>
+                  <h3 className="text-2xl font-bold mb-3 text-white">{item.title}</h3>
+                  <p className="text-white/85 leading-relaxed">{item.desc}</p>
                 </div>
               ))}
             </div>
@@ -548,7 +608,7 @@ export default function MarketingPageClient() {
         <section id="solutions" aria-labelledby="solutions-heading" className="py-24 px-4 bg-white">
           <div className="max-w-7xl mx-auto">
             <div className="text-center mb-16">
-              <div className="inline-block bg-purple-100 text-purple-700 px-4 py-2 text-sm font-semibold mb-4">
+              <div className="inline-block bg-win8-accent text-white px-4 py-2 text-sm font-semibold mb-4">
                 {d?.solutionsBadge || 'VERSATILE SOLUTION'}
               </div>
               <h2 id="solutions-heading" className="text-5xl md:text-6xl font-bold mb-5 text-gray-900">
@@ -560,14 +620,14 @@ export default function MarketingPageClient() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
               {businessTypes.map((type) => (
-                <div key={type.name} className="group relative overflow-hidden shadow-md hover:shadow-2xl transition-all duration-300 hover:-translate-y-2" style={{ minHeight: '280px' }}>
+                <div key={type.name} className="group relative overflow-hidden border border-gray-300 hover:brightness-110 transition-[filter] duration-200" style={{ minHeight: '280px' }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={type.img} alt={type.alt} className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
-                  <div className={`absolute inset-0 bg-gradient-to-t ${type.gradient}`} aria-hidden="true" />
+                  <img src={type.img} alt={type.alt} className="absolute inset-0 w-full h-full object-cover" />
+                  <div className={`absolute inset-0 ${type.overlay}`} aria-hidden="true" />
                   <div className="relative z-10 flex flex-col justify-end h-full p-6" style={{ minHeight: '280px' }}>
-                    <span className="text-4xl mb-3 transform group-hover:scale-110 transition-transform duration-300 block" aria-hidden="true">{type.emoji}</span>
+                    <type.icon className="w-9 h-9 text-white mb-3" aria-hidden="true" />
                     <h3 className="text-xl font-bold text-white mb-1">{type.name}</h3>
-                    <p className="text-white/75 text-sm leading-snug">{type.desc}</p>
+                    <p className="text-white/85 text-sm leading-snug">{type.desc}</p>
                   </div>
                 </div>
               ))}
@@ -579,7 +639,7 @@ export default function MarketingPageClient() {
         <section
           id="ecommerce"
           aria-labelledby="ecommerce-heading"
-          className="py-24 px-4 bg-gradient-to-b from-brand-soft/90 via-white to-slate-50 relative overflow-hidden"
+          className="py-24 px-4 bg-white relative overflow-hidden"
         >
           <div
             className="absolute inset-0 opacity-[0.04] pointer-events-none"
@@ -588,7 +648,7 @@ export default function MarketingPageClient() {
           />
           <div className="relative max-w-7xl mx-auto">
             <div className="text-center mb-14">
-              <div className="inline-block bg-brand-soft text-brand-navy px-4 py-2 text-sm font-semibold mb-4 tracking-wide">
+              <div className="inline-block bg-brand-navy text-white px-4 py-2 text-sm font-semibold mb-4 tracking-wide">
                 {d?.ecommerceBadge || 'OMNI-CHANNEL'}
               </div>
               <h2 id="ecommerce-heading" className="text-5xl md:text-6xl font-bold mb-5 text-gray-900 tracking-tight">
@@ -601,11 +661,9 @@ export default function MarketingPageClient() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-12">
-              <div className="border-2 border-emerald-200/80 bg-white p-8 shadow-sm ring-1 ring-emerald-100/80 hover:shadow-md transition-shadow duration-200">
+              <div className="border border-gray-300 bg-white p-8 hover:bg-gray-50 transition-colors duration-200">
                 <div className="flex items-center gap-3 mb-4">
-                  <span className="text-3xl" aria-hidden="true">
-                    🛍️
-                  </span>
+                  <ShoppingBag className="w-7 h-7 text-gray-900" aria-hidden="true" />
                   <h3 className="text-xl font-bold text-gray-900">{d?.ecommerceShopifyTitle || 'Shopify'}</h3>
                 </div>
                 <p className="text-gray-600 leading-relaxed text-sm md:text-base">
@@ -613,11 +671,9 @@ export default function MarketingPageClient() {
                     'Secure OAuth, expiring offline tokens, catalog sync, inventory levels at your default location, paid order import, and webhooks — so your storefront and counter stay aligned.'}
                 </p>
               </div>
-              <div className="border-2 border-violet-200/80 bg-white p-8 shadow-sm ring-1 ring-violet-100/80 hover:shadow-md transition-shadow duration-200">
+              <div className="border border-gray-300 bg-white p-8 hover:bg-gray-50 transition-colors duration-200">
                 <div className="flex items-center gap-3 mb-4">
-                  <span className="text-3xl" aria-hidden="true">
-                    🛒
-                  </span>
+                  <ShoppingCart className="w-7 h-7 text-gray-900" aria-hidden="true" />
                   <h3 className="text-xl font-bold text-gray-900">{d?.ecommerceWooTitle || 'WooCommerce'}</h3>
                 </div>
                 <p className="text-gray-600 leading-relaxed text-sm md:text-base">
@@ -630,21 +686,21 @@ export default function MarketingPageClient() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               {[
                 {
-                  icon: '↔️',
+                  icon: ArrowLeftRight,
                   title: d?.ecommerceCard1Title || 'Two-way inventory',
                   body:
                     d?.ecommerceCard1Body ||
                     'When you sell in-store or online, stock updates flow to the other channel so you avoid overselling.',
                 },
                 {
-                  icon: '📦',
+                  icon: Package,
                   title: d?.ecommerceCard2Title || 'Catalog sync',
                   body:
                     d?.ecommerceCard2Body ||
                     'Link channel variants to POS products by SKU, pull product data, and keep listings aligned with one click.',
                 },
                 {
-                  icon: '🧾',
+                  icon: Receipt,
                   title: d?.ecommerceCard3Title || 'Order import',
                   body:
                     d?.ecommerceCard3Body ||
@@ -653,11 +709,9 @@ export default function MarketingPageClient() {
               ].map((card) => (
                 <div
                   key={card.title}
-                  className="bg-gray-900 text-white px-6 py-7 border border-gray-800 shadow-lg hover:border-brand/50 transition-colors duration-200"
+                  className="bg-gray-900 text-white px-6 py-7 border border-gray-800 hover:border-brand transition-colors duration-200"
                 >
-                  <div className="text-2xl mb-3" aria-hidden="true">
-                    {card.icon}
-                  </div>
+                  <card.icon className="w-6 h-6 mb-3 text-brand-muted" aria-hidden="true" />
                   <h4 className="text-base font-bold mb-2 text-white">{card.title}</h4>
                   <p className="text-sm text-gray-300 leading-relaxed">{card.body}</p>
                 </div>
@@ -667,11 +721,11 @@ export default function MarketingPageClient() {
         </section>
 
         {/* Benefits */}
-        <section aria-labelledby="benefits-heading" className="py-24 px-4 bg-gradient-to-b from-gray-50 to-white">
+        <section aria-labelledby="benefits-heading" className="py-24 px-4 bg-gray-50">
           <div className="max-w-7xl mx-auto">
             <div className="grid md:grid-cols-2 gap-16 items-center">
               <div>
-                <div className="inline-block bg-green-100 text-green-700 px-4 py-2 text-sm font-semibold mb-4">
+                <div className="inline-block bg-win8-success text-white px-4 py-2 text-sm font-semibold mb-4">
                   {d?.benefitsBadge || 'KEY BENEFITS'}
                 </div>
                 <h2 id="benefits-heading" className="text-4xl md:text-5xl font-bold mb-8 text-gray-900 leading-tight">
@@ -680,7 +734,7 @@ export default function MarketingPageClient() {
                 <ul className="space-y-6" aria-label="Key business benefits">
                   {benefits.map((b) => (
                     <li key={b.title} className="flex gap-4 items-start">
-                      <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-brand to-brand-navy flex items-center justify-center text-xl shadow-md" aria-hidden="true">{b.icon}</div>
+                      <div className="flex-shrink-0 w-12 h-12 bg-brand flex items-center justify-center" aria-hidden="true"><b.icon className="w-6 h-6 text-white" /></div>
                       <div>
                         <h3 className="text-lg font-bold mb-1 text-gray-900">{b.title}</h3>
                         <p className="text-gray-500">{b.desc}</p>
@@ -692,8 +746,8 @@ export default function MarketingPageClient() {
 
               {/* Receipt mockup */}
               <div className="relative" aria-hidden="true">
-                <div className="bg-gradient-to-br from-gray-900 to-gray-800 p-6 shadow-2xl">
-                  <div className="bg-white p-5 font-mono text-xs text-gray-700 shadow-lg mb-4">
+                <div className="bg-gray-900 p-6">
+                  <div className="bg-white p-5 font-mono text-xs text-gray-700 mb-4">
                     <div className="text-center mb-3">
                       <div className="font-bold text-base text-gray-900">SANTOS RETAIL</div>
                       <div className="text-gray-500">123 Main St, Makati City</div>
@@ -725,7 +779,7 @@ export default function MarketingPageClient() {
                     ))}
                   </div>
                 </div>
-                <div className="absolute -top-4 -right-4 bg-white shadow-xl px-4 py-3 border border-gray-100">
+                <div className="absolute -top-4 -right-4 bg-white px-4 py-3 border border-gray-300">
                   <div className="text-xs text-gray-500 mb-0.5">BIR-compliant</div>
                   <div className="text-sm font-bold text-gray-900">Official Receipt ✓</div>
                 </div>
@@ -734,51 +788,11 @@ export default function MarketingPageClient() {
           </div>
         </section>
 
-        {/* Testimonials */}
-        <section id="testimonials" aria-labelledby="testimonials-heading" className="py-24 px-4 bg-white">
-          <div className="max-w-7xl mx-auto">
-            <div className="text-center mb-16">
-              <div className="inline-block bg-yellow-100 text-yellow-700 px-4 py-2 text-sm font-semibold mb-4">
-                {d?.testimonialsBadge || 'CUSTOMER STORIES'}
-              </div>
-              <h2 id="testimonials-heading" className="text-5xl font-bold mb-5 text-gray-900">
-                {d?.testimonialsHeading || 'Loved by Business Owners'}
-              </h2>
-              <p className="text-xl text-gray-500 max-w-xl mx-auto">
-                {d?.testimonialsDesc || 'See what our customers say about running their business with 1pos'}
-              </p>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {testimonials.map((t, i) => (
-                <figure key={i} className="bg-gray-50 p-8 border border-gray-100 hover:shadow-xl transition-shadow duration-300 flex flex-col">
-                  <div className="flex gap-1 mb-5" aria-label="5 out of 5 stars">
-                    {[...Array(5)].map((_, s) => (
-                      <svg key={s} className="w-5 h-5 text-yellow-400 fill-current" viewBox="0 0 20 20" aria-hidden="true">
-                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                      </svg>
-                    ))}
-                  </div>
-                  <blockquote className="text-gray-700 leading-relaxed flex-1 mb-6 text-[15px]">
-                    <p>&ldquo;{t.quote}&rdquo;</p>
-                  </blockquote>
-                  <figcaption className="flex items-center gap-3">
-                    <InitialAvatar name={t.name} index={i} />
-                    <div>
-                      <cite className="not-italic font-semibold text-gray-900 text-sm block">{t.name}</cite>
-                      <span className="text-xs text-gray-500">{t.role}</span>
-                    </div>
-                  </figcaption>
-                </figure>
-              ))}
-            </div>
-          </div>
-        </section>
-
         {/* CTA */}
         <section aria-labelledby="mobile-app-heading" className="py-24 px-4 bg-gray-900 relative overflow-hidden">
           <div className="relative max-w-5xl mx-auto text-center">
-            <div className="inline-block bg-white/10 text-white px-4 py-2 text-sm font-semibold mb-6 tracking-wide">
-              📱 {d?.mobileAppBadge || 'COMPANION APP'}
+            <div className="inline-flex items-center gap-2 bg-white/10 text-white px-4 py-2 text-sm font-semibold mb-6 tracking-wide">
+              <Smartphone className="w-4 h-4" aria-hidden="true" /> {d?.mobileAppBadge || 'COMPANION APP'}
             </div>
             <h2 id="mobile-app-heading" className="text-4xl md:text-5xl font-bold mb-5 text-white tracking-tight">
               {d?.mobileAppHeading || 'Get the 1POS companion app'}
@@ -789,14 +803,14 @@ export default function MarketingPageClient() {
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 max-w-xl mx-auto mb-10 text-left">
               <div className="bg-white/5 border border-white/10 px-5 py-4">
-                <div className="text-2xl mb-2" aria-hidden="true">📷</div>
+                <Camera className="w-6 h-6 mb-2 text-white" aria-hidden="true" />
                 <h3 className="text-white font-semibold text-sm mb-1">{d?.mobileAppScanTitle || 'Scan barcodes & QR codes'}</h3>
                 <p className="text-gray-400 text-sm leading-relaxed">
                   {d?.mobileAppScanBody || 'Look up or add products instantly by scanning with your phone camera.'}
                 </p>
               </div>
               <div className="bg-white/5 border border-white/10 px-5 py-4">
-                <div className="text-2xl mb-2" aria-hidden="true">🖼️</div>
+                <ImageIcon className="w-6 h-6 mb-2 text-white" aria-hidden="true" />
                 <h3 className="text-white font-semibold text-sm mb-1">{d?.mobileAppPhotoTitle || 'Add product photos'}</h3>
                 <p className="text-gray-400 text-sm leading-relaxed">
                   {d?.mobileAppPhotoBody || 'Snap and upload product images directly from your phone to your catalog.'}
@@ -807,22 +821,18 @@ export default function MarketingPageClient() {
               href="https://play.google.com/store/apps/details?id=com.app.onepos"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-3 bg-white text-gray-900 px-8 py-4 font-bold hover:bg-gray-100 transition-all duration-300 hover:scale-105"
+              className="inline-flex items-center gap-3 bg-white text-gray-900 px-8 py-4 font-bold hover:bg-gray-100 transition-colors duration-200"
             >
-              <span className="text-2xl" aria-hidden="true">▶️</span>
+              <PlayCircle className="w-6 h-6" aria-hidden="true" />
               {d?.mobileAppGetItOn || 'Get it on Google Play'}
             </a>
           </div>
         </section>
 
-        <section aria-labelledby="cta-heading" className="relative py-24 px-4 bg-gradient-to-br from-brand via-brand-navy to-brand-navy-deep text-white overflow-hidden">
-          <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
-            <div className="absolute top-0 left-0 w-96 h-96 bg-brand-muted/25 blur-3xl animate-pulse" />
-            <div className="absolute bottom-0 right-0 w-96 h-96 bg-brand-navy/50 blur-3xl animate-pulse" />
-          </div>
+        <section aria-labelledby="cta-heading" className="relative py-24 px-4 bg-brand-navy text-white overflow-hidden">
           <div className="relative max-w-7xl mx-auto text-center z-10">
-            <div className="inline-block bg-white/20 backdrop-blur-md border border-white/30 px-4 py-2 text-sm font-semibold mb-6">
-              🚀 {d?.ctaBadge || 'START YOUR JOURNEY TODAY'}
+            <div className="inline-flex items-center gap-2 bg-white/20 border border-white/30 px-4 py-2 text-sm font-semibold mb-6">
+              <Rocket className="w-4 h-4" aria-hidden="true" /> {d?.ctaBadge || 'START YOUR JOURNEY TODAY'}
             </div>
             <h2 id="cta-heading" className="text-5xl md:text-6xl font-bold mb-6">
               {d?.ctaHeading || 'Ready to Transform Your Business?'}
@@ -831,10 +841,10 @@ export default function MarketingPageClient() {
               {d?.ctaDesc || 'Join businesses using 1pos to streamline operations, tighten inventory control, and scale with multi-branch-ready tooling.'}
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-              <Link href="/signup" className="bg-white text-brand px-10 py-4 font-bold text-lg hover:bg-brand-soft transition-all duration-300 hover:scale-105 hover:shadow-2xl">
+              <Link href="/signup" className="bg-white text-brand px-10 py-4 font-bold text-lg hover:brightness-95 transition-[filter] duration-200">
                 {d?.ctaStartTrial || 'Start Your Free 14-Day Trial →'}
               </Link>
-              <Link href="/stores" className="bg-white/15 backdrop-blur-md text-white px-10 py-4 font-bold text-lg border-2 border-white/50 hover:border-white hover:bg-white/25 transition-all duration-300 hover:scale-105">
+              <Link href="/stores" className="bg-white/15 text-white px-10 py-4 font-bold text-lg border-2 border-white/50 hover:bg-white/25 transition-colors duration-200">
                 {d?.ctaBrowseLiveStores || 'Browse Live Stores'}
               </Link>
             </div>
@@ -849,8 +859,8 @@ export default function MarketingPageClient() {
       {/* ── Footer ──────────────────────────────────────────────── */}
       <footer className="bg-gray-950 text-gray-400 py-16 px-4" aria-label="Site footer">
         <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-10 mb-12">
-            <div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-10 mb-12">
+            <div className="md:col-span-1">
               <Link href="/" className="inline-block mb-3">
                 <img
                   src="/brand/1pos-logo.png"
@@ -861,7 +871,7 @@ export default function MarketingPageClient() {
                   decoding="async"
                 />
               </Link>
-              <p className="text-gray-500 text-sm leading-relaxed">
+              <p className="text-gray-500 text-sm leading-relaxed max-w-sm">
                 {d?.footerDesc || `BIR-ready enterprise POS with ${FEATURE_MODULE_COUNT} capability modules for modern Philippine businesses.`}
               </p>
             </div>
@@ -871,25 +881,14 @@ export default function MarketingPageClient() {
                 <li><a href="#features" className="hover:text-white transition-colors">{d?.footerFeatures || 'Features'}</a></li>
                 <li><a href="#solutions" className="hover:text-white transition-colors">{d?.footerSolutions || 'Solutions'}</a></li>
                 <li><a href="#ecommerce" className="hover:text-white transition-colors">{d?.footerEcommerce || 'Ecommerce integrations'}</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">{d?.footerPricing || 'Pricing'}</a></li>
                 <li><Link href="/stores" className="hover:text-white transition-colors">{d?.footerBrowseStores || 'Browse Stores'}</Link></li>
               </ul>
             </nav>
-            <nav aria-label="Company links">
-              <h3 className="text-white font-semibold mb-4 text-sm uppercase tracking-wider">{d?.footerCompany || 'Company'}</h3>
+            <nav aria-label="Legal links">
+              <h3 className="text-white font-semibold mb-4 text-sm uppercase tracking-wider">{d?.footerCompany || 'Legal'}</h3>
               <ul className="space-y-2.5 text-sm">
-                <li><a href="#" className="hover:text-white transition-colors">{d?.footerAbout || 'About'}</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">{d?.footerBlog || 'Blog'}</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">{d?.footerContact || 'Contact'}</a></li>
                 <li><Link href="/privacy" className="hover:text-white transition-colors">{d?.footerPrivacy || 'Privacy Policy'}</Link></li>
-              </ul>
-            </nav>
-            <nav aria-label="Resources links">
-              <h3 className="text-white font-semibold mb-4 text-sm uppercase tracking-wider">{d?.footerResources || 'Resources'}</h3>
-              <ul className="space-y-2.5 text-sm">
-                <li><a href="#" className="hover:text-white transition-colors">{d?.footerDocumentation || 'Documentation'}</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">{d?.footerSupport || 'Support'}</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">{d?.footerApiReference || 'API Reference'}</a></li>
+                <li><Link href="/signup" className="hover:text-white transition-colors">{d?.footerGetStarted || 'Get Started'}</Link></li>
               </ul>
             </nav>
           </div>

@@ -1,38 +1,64 @@
 'use client';
 
 import { useState } from 'react';
+import {
+  ShoppingCart,
+  Gift,
+  Landmark,
+  Wallet,
+  Globe,
+  Package,
+  BarChart3,
+  Store,
+  Layers,
+  Receipt,
+  Printer,
+  User,
+  Calendar,
+  Users,
+  Clock,
+  LineChart,
+  Bot,
+  Building2,
+  Target,
+  ShieldCheck,
+  Settings,
+  Smartphone,
+  Languages,
+  type LucideIcon,
+} from 'lucide-react';
 
 type Category = 'all' | 'pos' | 'inventory' | 'customers' | 'analytics' | 'platform';
 
-const features = [
+const features: { id: string; category: Category; title: string; icon: LucideIcon; description: string; details: string[] }[] = [
   // ── Point of Sale ──────────────────────────────────────────────────
-  { id: 'core-pos', category: 'pos' as Category, title: 'Core POS', icon: '🛒', description: 'Complete point of sale interface with shopping cart, payments, and receipts', details: ['Shopping cart with real-time calculations', 'Product search & filtering by name, SKU, or barcode', 'Real-time stock validation', 'Multiple payment methods (Cash, Card, Digital Wallet)', 'Customizable receipt generation (PDF, Print, Email)', 'Transaction management with full history', 'Refund processing with stock restoration'] },
-  { id: 'discounts', category: 'pos' as Category, title: 'Discounts & Promos', icon: '🎁', description: 'Flexible discount codes with usage limits and validity periods', details: ['Percentage and fixed amount discounts', 'Product, category, or store-wide discounts', 'Minimum purchase requirements', 'Usage limits per code and per customer', 'Validity periods with start/end dates', 'Real-time discount validation'] },
-  { id: 'tax', category: 'pos' as Category, title: 'Tax & BIR Compliance', icon: '💰', description: 'BIR-ready tax configuration with VAT computation and official receipt generation', details: ['Flat rate and percentage-based taxes', 'BIR-compliant official receipts (OR)', 'Custom tax labels (VAT, GST, Sales Tax)', 'Multiple tax rules with priority ordering', 'Automatic VAT calculation', 'CAS reporting for BIR audit'] },
-  { id: 'cash-drawer', category: 'pos' as Category, title: 'Cash Drawer', icon: '💵', description: 'Cash drawer sessions with opening/closing amounts and reconciliation', details: ['Opening cash drawer with starting amount', 'Closing cash drawer with count', 'Shortage/overage detection', 'Cash sales and expenses tracking', 'Session history and reports', 'Auto-close at end of day'] },
-  { id: 'currency', category: 'pos' as Category, title: 'Multi-Currency', icon: '🌍', description: 'Support for multiple currencies with automatic exchange rates', details: ['Base currency per tenant', 'Display currencies', 'Automatic exchange rate fetching', 'Multiple exchange rate providers', 'Real-time currency conversion', 'Multi-currency reporting'] },
+  { id: 'core-pos', category: 'pos', title: 'Core POS', icon: ShoppingCart, description: 'Complete point of sale interface with shopping cart, payments, and receipts', details: ['Shopping cart with real-time calculations', 'Product search & filtering by name, SKU, or barcode', 'Real-time stock validation', 'Multiple payment methods (Cash, Card, Digital Wallet)', 'Customizable receipt generation (PDF, Print, Email)', 'Transaction management with full history', 'Refund processing with stock restoration'] },
+  { id: 'discounts', category: 'pos', title: 'Discounts & Promos', icon: Gift, description: 'Flexible discount codes with usage limits and validity periods', details: ['Percentage and fixed amount discounts', 'Product, category, or store-wide discounts', 'Minimum purchase requirements', 'Usage limits per code and per customer', 'Validity periods with start/end dates', 'Real-time discount validation'] },
+  { id: 'tax', category: 'pos', title: 'Tax & BIR Compliance', icon: Landmark, description: 'BIR-ready tax configuration with VAT computation and official receipt generation', details: ['Flat rate and percentage-based taxes', 'BIR-compliant official receipts (OR)', 'Custom tax labels (VAT, GST, Sales Tax)', 'Multiple tax rules with priority ordering', 'Automatic VAT calculation', 'CAS reporting for BIR audit'] },
+  { id: 'cash-drawer', category: 'pos', title: 'Cash Drawer', icon: Wallet, description: 'Cash drawer sessions with opening/closing amounts and reconciliation', details: ['Opening cash drawer with starting amount', 'Closing cash drawer with count', 'Shortage/overage detection', 'Cash sales and expenses tracking', 'Session history and reports', 'Auto-close at end of day'] },
+  { id: 'currency', category: 'pos', title: 'Multi-Currency', icon: Globe, description: 'Support for multiple currencies with automatic exchange rates', details: ['Base currency per tenant', 'Display currencies', 'Automatic exchange rate fetching', 'Multiple exchange rate providers', 'Real-time currency conversion', 'Multi-currency reporting'] },
   // ── Inventory ──────────────────────────────────────────────────────
-  { id: 'product-management', category: 'inventory' as Category, title: 'Product Management', icon: '📦', description: 'Comprehensive product management with variations, bundles, and barcode support', details: ['Full CRUD operations for products', 'Product categories and organization', 'SKU tracking and management', 'Product variations (size, color, type)', 'Product bundles with automatic stock deduction', 'Barcode & QR code scanning and generation', 'Product images and descriptions'] },
-  { id: 'inventory', category: 'inventory' as Category, title: 'Inventory Tracking', icon: '📊', description: 'Real-time inventory tracking with multi-branch support and low stock alerts', details: ['Real-time stock updates via Server-Sent Events', 'Complete stock movement history', 'Multi-branch inventory with transfers', 'Low stock alerts and notifications', 'Stock movement types: Sale, Purchase, Adjustment, Return, Damage, Transfer', 'Automated stock deduction on sales'] },
-  { id: 'branches', category: 'inventory' as Category, title: 'Branch Management', icon: '🏪', description: 'Multi-branch support with branch-specific inventory and reporting', details: ['Create and manage multiple branches', 'Branch-specific stock levels', 'Stock transfers between branches', 'Branch-specific reports', 'Cross-branch comparisons', 'Consolidated reporting'] },
-  { id: 'bundles', category: 'inventory' as Category, title: 'Product Bundles', icon: '🗂️', description: 'Product bundles with automatic stock management and analytics', details: ['Create and manage product bundles', 'Bundle-specific pricing', 'Automatic stock deduction for all bundle items', 'Bundle performance tracking', 'Component product analysis', 'Bulk bundle operations'] },
-  { id: 'expenses', category: 'inventory' as Category, title: 'Expense Management', icon: '💸', description: 'Track expenses with categories, receipts, and integration with P&L reports', details: ['Expense categories and organization', 'Receipt attachments', 'Payment method tracking', 'Date-based filtering', 'Integration with profit/loss reports', 'Category-wise expense breakdown'] },
-  { id: 'hardware', category: 'inventory' as Category, title: 'Hardware Integration', icon: '🖨️', description: 'Support for barcode scanners, QR code scanners, and receipt printers', details: ['USB and wireless barcode scanners', 'Camera-based QR code scanning', 'ESC/POS compatible receipt printers', 'Per-tenant hardware configuration', 'Hardware status monitoring', 'Connection error handling'] },
+  { id: 'product-management', category: 'inventory', title: 'Product Management', icon: Package, description: 'Comprehensive product management with variations, bundles, and barcode support', details: ['Full CRUD operations for products', 'Product categories and organization', 'SKU tracking and management', 'Product variations (size, color, type)', 'Product bundles with automatic stock deduction', 'Barcode & QR code scanning and generation', 'Product images and descriptions'] },
+  { id: 'inventory', category: 'inventory', title: 'Inventory Tracking', icon: BarChart3, description: 'Real-time inventory tracking with multi-branch support and low stock alerts', details: ['Real-time stock updates via Server-Sent Events', 'Complete stock movement history', 'Multi-branch inventory with transfers', 'Low stock alerts and notifications', 'Stock movement types: Sale, Purchase, Adjustment, Return, Damage, Transfer', 'Automated stock deduction on sales'] },
+  { id: 'branches', category: 'inventory', title: 'Branch Management', icon: Store, description: 'Multi-branch support with branch-specific inventory and reporting', details: ['Create and manage multiple branches', 'Branch-specific stock levels', 'Stock transfers between branches', 'Branch-specific reports', 'Cross-branch comparisons', 'Consolidated reporting'] },
+  { id: 'bundles', category: 'inventory', title: 'Product Bundles', icon: Layers, description: 'Product bundles with automatic stock management and analytics', details: ['Create and manage product bundles', 'Bundle-specific pricing', 'Automatic stock deduction for all bundle items', 'Bundle performance tracking', 'Component product analysis', 'Bulk bundle operations'] },
+  { id: 'expenses', category: 'inventory', title: 'Expense Management', icon: Receipt, description: 'Track expenses with categories, receipts, and integration with P&L reports', details: ['Expense categories and organization', 'Receipt attachments', 'Payment method tracking', 'Date-based filtering', 'Integration with profit/loss reports', 'Category-wise expense breakdown'] },
+  { id: 'hardware', category: 'inventory', title: 'Hardware Integration', icon: Printer, description: 'Support for barcode scanners, QR code scanners, and receipt printers', details: ['USB and wireless barcode scanners', 'Camera-based QR code scanning', 'ESC/POS compatible receipt printers', 'Per-tenant hardware configuration', 'Hardware status monitoring', 'Connection error handling'] },
   // ── Customers ──────────────────────────────────────────────────────
-  { id: 'customers', category: 'customers' as Category, title: 'Customer Management', icon: '👤', description: 'Comprehensive customer profiles with analytics and lifetime value tracking', details: ['Customer information and contact details', 'Multiple addresses per customer', 'Customer tags and categorization', 'Purchase history and analytics', 'Customer lifetime value calculation', 'Customer notes and preferences'] },
-  { id: 'booking', category: 'customers' as Category, title: 'Booking & Scheduling', icon: '📅', description: 'Calendar-based booking system with reminders and status management', details: ['Calendar views (Month, Week, Day)', 'Create, edit, cancel, and delete bookings', 'Customer and service information', 'Staff assignment', 'Booking status management', 'Automated reminders (24h before)', 'Conflict detection'] },
-  { id: 'user-management', category: 'customers' as Category, title: 'User Management', icon: '👥', description: 'Flexible authentication with role-based access control', details: ['Email/Password authentication', 'PIN-based login (4-6 digits)', 'QR code-based login', 'Role-based access control (Owner, Admin, Manager, Cashier, Viewer)', 'User profiles with activity tracking', 'Session management with JWT tokens'] },
-  { id: 'attendance', category: 'customers' as Category, title: 'Attendance', icon: '⏰', description: 'Time tracking with clock in/out, breaks, and location tracking', details: ['Clock in/out functionality', 'Break tracking (start/end)', 'Automatic hours calculation', 'Attendance history and records', 'GPS location capture (optional)', 'Auto clock-out for forgotten sessions'] },
+  { id: 'customers', category: 'customers', title: 'Customer Management', icon: User, description: 'Comprehensive customer profiles with analytics and lifetime value tracking', details: ['Customer information and contact details', 'Multiple addresses per customer', 'Customer tags and categorization', 'Purchase history and analytics', 'Customer lifetime value calculation', 'Customer notes and preferences'] },
+  { id: 'booking', category: 'customers', title: 'Booking & Scheduling', icon: Calendar, description: 'Calendar-based booking system with reminders and status management', details: ['Calendar views (Month, Week, Day)', 'Create, edit, cancel, and delete bookings', 'Customer and service information', 'Staff assignment', 'Booking status management', 'Automated reminders (24h before)', 'Conflict detection'] },
+  { id: 'user-management', category: 'customers', title: 'User Management', icon: Users, description: 'Flexible authentication with role-based access control', details: ['Email/Password authentication', 'PIN-based login (4-6 digits)', 'QR code-based login', 'Role-based access control (Owner, Admin, Manager, Cashier, Viewer)', 'User profiles with activity tracking', 'Session management with JWT tokens'] },
+  { id: 'attendance', category: 'customers', title: 'Attendance', icon: Clock, description: 'Time tracking with clock in/out, breaks, and location tracking', details: ['Clock in/out functionality', 'Break tracking (start/end)', 'Automatic hours calculation', 'Attendance history and records', 'GPS location capture (optional)', 'Auto clock-out for forgotten sessions'] },
   // ── Analytics ──────────────────────────────────────────────────────
-  { id: 'reports', category: 'analytics' as Category, title: 'Reports & Analytics', icon: '📈', description: 'Comprehensive reporting with sales, product, financial, and attendance analytics', details: ['Sales reports (Daily, Weekly, Monthly, Custom)', 'Product performance and analytics', 'Financial reports (Profit & Loss)', 'VAT/Tax reports', 'Cash drawer session reports', 'Bundle performance reports', 'Export capabilities (CSV, Excel, PDF)'] },
-  { id: 'automations', category: 'analytics' as Category, title: 'Automations', icon: '🤖', description: 'Seven core automated workflows today — expandable per tenant', details: ['Automated booking reminders', 'Low stock alerts', 'Transaction receipt auto-email', 'Scheduled reports', 'Auto clock-out for attendance', 'Cash drawer auto-close', 'Customer welcome emails'] },
+  { id: 'reports', category: 'analytics', title: 'Reports & Analytics', icon: LineChart, description: 'Comprehensive reporting with sales, product, financial, and attendance analytics', details: ['Sales reports (Daily, Weekly, Monthly, Custom)', 'Product performance and analytics', 'Financial reports (Profit & Loss)', 'VAT/Tax reports', 'Cash drawer session reports', 'Bundle performance reports', 'Export capabilities (CSV, Excel, PDF)'] },
+  { id: 'automations', category: 'analytics', title: 'Automations', icon: Bot, description: 'Seven core automated workflows today — expandable per tenant', details: ['Automated booking reminders', 'Low stock alerts', 'Transaction receipt auto-email', 'Scheduled reports', 'Auto clock-out for attendance', 'Cash drawer auto-close', 'Customer welcome emails'] },
   // ── Platform ───────────────────────────────────────────────────────
-  { id: 'multi-tenant', category: 'platform' as Category, title: 'Multi-Tenant', icon: '🏢', description: 'Complete data isolation with tenant-specific branding and configuration', details: ['Complete data isolation per tenant', 'Path-based and subdomain routing', 'Tenant-specific branding (logo, colors, favicon)', 'Custom currency and localization per tenant', 'Business type configuration', 'Tenant-specific settings and features'] },
-  { id: 'business-types', category: 'platform' as Category, title: 'Business Types', icon: '🎯', description: 'Industry-specific configurations for Retail, Restaurant, Laundry, Service, and more', details: ['Retail: Product-focused with inventory management', 'Restaurant: Menu items with modifiers and allergens', 'Laundry: Service-based with weight-based pricing', 'Service: Time-based services with staff assignment', 'General: Flexible configuration for any business', 'Automatic feature configuration based on type'] },
-  { id: 'security', category: 'platform' as Category, title: 'Security & Audit', icon: '🔒', description: 'Enterprise-grade security with complete audit logging', details: ['JWT token-based authentication', 'Secure password hashing (bcrypt)', 'Role-based access control', 'Tenant data isolation', 'Complete audit trail', 'Before/after value tracking', 'IP address and user agent logging'] },
-  { id: 'settings', category: 'platform' as Category, title: 'Settings', icon: '⚙️', description: 'Comprehensive settings for branding, receipts, taxes, and feature flags', details: ['Company information and branding', 'Currency and localization settings', 'Receipt template customization', 'Tax configuration', 'Feature flags (enable/disable features)', 'Business hours and holidays management', 'Notification templates'] },
-  { id: 'offline', category: 'platform' as Category, title: 'Offline Support', icon: '📱', description: 'Work offline with automatic sync when connection is restored', details: ['Automatic offline mode detection', 'Local storage for offline transactions', 'Offline product browsing', 'Offline cart management', 'Automatic sync when online', 'Conflict resolution'] },
-  { id: 'i18n', category: 'platform' as Category, title: 'Internationalization', icon: '🌐', description: 'Multi-language support with localized formatting', details: ['English and Spanish support', 'Extensible for additional languages', 'Localized date/time formatting', 'Localized number formatting', 'Localized currency formatting', 'Timezone support'] },
+  { id: 'multi-tenant', category: 'platform', title: 'Multi-Tenant', icon: Building2, description: 'Complete data isolation with tenant-specific branding and configuration', details: ['Complete data isolation per tenant', 'Path-based and subdomain routing', 'Tenant-specific branding (logo, colors, favicon)', 'Custom currency and localization per tenant', 'Business type configuration', 'Tenant-specific settings and features'] },
+  { id: 'business-types', category: 'platform', title: 'Business Types', icon: Target, description: 'Industry-specific configurations for Retail, Restaurant, Laundry, Service, and more', details: ['Retail: Product-focused with inventory management', 'Restaurant: Menu items with modifiers and allergens', 'Laundry: Service-based with weight-based pricing', 'Service: Time-based services with staff assignment', 'General: Flexible configuration for any business', 'Automatic feature configuration based on type'] },
+  { id: 'security', category: 'platform', title: 'Security & Audit', icon: ShieldCheck, description: 'Enterprise-grade security with complete audit logging', details: ['JWT token-based authentication', 'Secure password hashing (bcrypt)', 'Role-based access control', 'Tenant data isolation', 'Complete audit trail', 'Before/after value tracking', 'IP address and user agent logging'] },
+  { id: 'settings', category: 'platform', title: 'Settings', icon: Settings, description: 'Comprehensive settings for branding, receipts, taxes, and feature flags', details: ['Company information and branding', 'Currency and localization settings', 'Receipt template customization', 'Tax configuration', 'Feature flags (enable/disable features)', 'Business hours and holidays management', 'Notification templates'] },
+  { id: 'offline', category: 'platform', title: 'Offline Support', icon: Smartphone, description: 'Work offline with automatic sync when connection is restored', details: ['Automatic offline mode detection', 'Local storage for offline transactions', 'Offline product browsing', 'Offline cart management', 'Automatic sync when online', 'Conflict resolution'] },
+  { id: 'i18n', category: 'platform', title: 'Internationalization', icon: Languages, description: 'Multi-language support with localized formatting', details: ['English and Spanish support', 'Extensible for additional languages', 'Localized date/time formatting', 'Localized number formatting', 'Localized currency formatting', 'Timezone support'] },
 ];
 
 /** Shipped capability cards — keep marketing hero stats in sync with this list. */
@@ -48,12 +74,12 @@ const TABS: { key: Category; label: string; count: number }[] = [
 ];
 
 const CATEGORY_ACCENT: Record<Category, string> = {
-  all: '#35979c',
-  pos: '#35979c',
-  inventory: '#10b981',
-  customers: '#8b5cf6',
-  analytics: '#f97316',
-  platform: '#6b7280',
+  all: 'bg-brand',
+  pos: 'bg-brand',
+  inventory: 'bg-win8-success',
+  customers: 'bg-win8-accent',
+  analytics: 'bg-win8-warning',
+  platform: 'bg-gray-600',
 };
 
 export default function FeaturesGrid() {
@@ -74,10 +100,10 @@ export default function FeaturesGrid() {
               role="tab"
               aria-selected={isActive}
               onClick={() => { setActiveTab(tab.key); setActiveSection(null); }}
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-all duration-200 ${
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors duration-200 ${
                 isActive
-                  ? 'bg-gray-900 text-white shadow-sm'
-                  : 'bg-white text-gray-600 border border-gray-200 hover:border-gray-300 hover:text-gray-900'
+                  ? 'bg-brand-navy text-white'
+                  : 'bg-white text-gray-600 border border-gray-300 hover:border-gray-400 hover:text-gray-900'
               }`}
             >
               {tab.label}
@@ -97,10 +123,10 @@ export default function FeaturesGrid() {
           return (
             <article
               key={feature.id}
-              className={`group relative bg-white border transition-all duration-200 cursor-pointer overflow-hidden ${
+              className={`group relative bg-white border transition-colors duration-200 cursor-pointer overflow-hidden ${
                 isOpen
-                  ? 'border-gray-300 shadow-md'
-                  : 'border-gray-200 hover:border-gray-300 hover:shadow-md hover:-translate-y-0.5'
+                  ? 'border-gray-400 bg-gray-50'
+                  : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
               }`}
               onClick={() => setActiveSection(isOpen ? null : feature.id)}
             >
@@ -109,9 +135,9 @@ export default function FeaturesGrid() {
 
               <div className="p-6">
                 <div className="flex items-start gap-3 mb-3">
-                  <span className="text-3xl flex-shrink-0 mt-0.5 group-hover:scale-110 transition-transform duration-200" role="img" aria-label={feature.title}>
-                    {feature.icon}
-                  </span>
+                  <div className={`w-10 h-10 flex-shrink-0 ${accent} flex items-center justify-center`} aria-hidden="true">
+                    <feature.icon className="w-5 h-5 text-white" />
+                  </div>
                   <div className="min-w-0">
                     <h3 className="font-bold text-gray-900 mb-1 leading-tight">{feature.title}</h3>
                     <p className="text-sm text-gray-500 leading-relaxed">{feature.description}</p>
@@ -119,7 +145,7 @@ export default function FeaturesGrid() {
                 </div>
 
                 {isOpen && (
-                  <ul className="mt-4 pt-4 border-t border-gray-100 space-y-2" aria-label={`${feature.title} details`}>
+                  <ul className="mt-4 pt-4 border-t border-gray-300 space-y-2" aria-label={`${feature.title} details`}>
                     {feature.details.map((detail) => (
                       <li key={detail} className="flex items-start gap-2 text-sm text-gray-600">
                         <span className={`flex-shrink-0 w-4 h-4 ${accent} text-white flex items-center justify-center text-xs font-bold mt-0.5`} aria-hidden="true">✓</span>

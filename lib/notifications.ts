@@ -37,8 +37,13 @@ export async function sendEmail(options: NotificationOptions): Promise<boolean> 
     const emailProvider = process.env.EMAIL_PROVIDER || 'console';
     const fromEmail = process.env.FROM_EMAIL || process.env.EMAIL_FROM || 'noreply@localhost';
 
-    // If no provider is configured, log to console (development mode)
-    if (emailProvider === 'console' || !process.env.EMAIL_API_KEY) {
+    // If no provider is configured, log to console (development mode).
+    // SMTP doesn't use an API key (it authenticates via SMTP_USER/SMTP_PASSWORD),
+    // so only fall back to console for resend/sendgrid when they're missing
+    // both the generic and provider-specific key env vars.
+    const missingResendKey = emailProvider === 'resend' && !process.env.EMAIL_API_KEY && !process.env.RESEND_API_KEY;
+    const missingSendgridKey = emailProvider === 'sendgrid' && !process.env.EMAIL_API_KEY && !process.env.SENDGRID_API_KEY;
+    if (emailProvider === 'console' || missingResendKey || missingSendgridKey) {
       logger.info('📧 Email notification (console mode):', {
         to: options.to,
         from: fromEmail,
@@ -97,15 +102,21 @@ export async function sendEmail(options: NotificationOptions): Promise<boolean> 
 
     // SMTP provider (using nodemailer)
     if (emailProvider === 'smtp') {
+      const smtpUser = process.env.SMTP_USER || process.env.EMAIL_API_KEY;
+      const smtpPass = process.env.SMTP_PASSWORD || process.env.EMAIL_PASSWORD;
+      if (!process.env.SMTP_HOST || !smtpUser || !smtpPass) {
+        throw new Error('SMTP_HOST, SMTP_USER, and SMTP_PASSWORD are required when EMAIL_PROVIDER=smtp');
+      }
+
       const nodemailer = await import('nodemailer');
-      
+
       const transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST || 'smtp.gmail.com',
+        host: process.env.SMTP_HOST,
         port: parseInt(process.env.SMTP_PORT || '587', 10),
         secure: process.env.SMTP_SECURE === 'true',
         auth: {
-          user: process.env.SMTP_USER || process.env.EMAIL_API_KEY,
-          pass: process.env.SMTP_PASSWORD || process.env.EMAIL_PASSWORD,
+          user: smtpUser,
+          pass: smtpPass,
         },
       });
 

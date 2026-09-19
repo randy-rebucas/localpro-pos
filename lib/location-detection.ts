@@ -134,8 +134,9 @@ export async function detectLocation(): Promise<DetectedLocation> {
   // Determine language
   const language: 'en' | 'es' = languageCode === 'es' ? 'es' : 'en';
   
-  // Get currency from country code
-  const currency = countryCurrencyMap[countryCode] || 'USD';
+  // Get currency from country code — default to PHP (primary market) when
+  // the browser locale doesn't resolve to a known country.
+  const currency = countryCurrencyMap[countryCode] || 'PHP';
   
   // Get currency symbol (will be auto-detected by currency utility)
   const currencyPosition = currencyPositionMap[countryCode] || 'before';
@@ -193,8 +194,9 @@ export async function detectLocation(): Promise<DetectedLocation> {
     }
   }
   
-  // Get phone format from country code
-  const phoneFormat = countryCode ? phoneFormatMap[countryCode] : undefined;
+  // Get phone format from country code — default to PH (+63) when the
+  // browser locale doesn't resolve to a known country.
+  const phoneFormat = phoneFormatMap[countryCode] || phoneFormatMap.PH;
 
   return {
     timezone,

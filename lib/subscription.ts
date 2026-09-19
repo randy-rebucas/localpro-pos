@@ -1,6 +1,6 @@
 import prisma from '@/lib/db';
 import { logger } from '@/lib/logger';
-import type { Subscription, SubscriptionPlan } from '@prisma/client';
+import type { Subscription, SubscriptionPlan, Prisma } from '@prisma/client';
 
 export interface SubscriptionLimits {
   maxUsers: number;
@@ -465,12 +465,21 @@ export class SubscriptionService {
   /**
    * Ensure a tenant has a trial subscription (idempotent).
    * Returns the existing subscription if one is already active/trial.
+   *
+   * Accepts an optional `Prisma.TransactionClient` so callers that must
+   * guarantee "tenant created ⇒ trial applied" atomically (e.g. self-serve
+   * signup) can run this inside the same `$transaction` as tenant/user
+   * creation — a failure here then rolls back the whole signup instead of
+   * silently leaving a tenant with no subscription.
    */
-  static async ensureTrialSubscription(tenantId: string): Promise<{
+  static async ensureTrialSubscription(
+    tenantId: string,
+    client: Prisma.TransactionClient | typeof prisma = prisma
+  ): Promise<{
     subscription: Subscription;
     created: boolean;
   }> {
-    const existing = await prisma.subscription.findFirst({
+    const existing = await client.subscription.findFirst({
       where: {
         tenantId,
         status: { in: ['active', 'trial'] },
@@ -481,7 +490,7 @@ export class SubscriptionService {
       return { subscription: existing, created: false };
     }
 
-    const starterPlan = await prisma.subscriptionPlan.findFirst({
+    const starterPlan = await client.subscriptionPlan.findFirst({
       where: { tier: 'starter', isActive: true },
     });
     if (!starterPlan) {
@@ -493,7 +502,7 @@ export class SubscriptionService {
     trialEndDate.setDate(trialEndDate.getDate() + 14);
 
     try {
-      const subscription = await prisma.subscription.create({
+      const subscription = await client.subscription.create({
         data: {
           id: crypto.randomUUID(),
           tenantId,
@@ -513,12 +522,27 @@ export class SubscriptionService {
         },
       });
 
+      await client.billingEvent.create({
+        data: {
+          id: crypto.randomUUID(),
+          tenantId,
+          subscriptionId: subscription.id,
+          type: 'trial_started',
+          amount: 0,
+          currency: 'PHP',
+          description: `Trial started for 14 days on ${starterPlan.name} plan`,
+        },
+      });
+
       return { subscription, created: true };
     } catch (error: unknown) {
       // Unique constraint violation (tenantId is @unique on Subscription) — a
-      // concurrent request already created one for this same tenant.
+      // concurrent request already created one for this same tenant. Only
+      // relevant outside a transaction (e.g. two racing background jobs on
+      // an existing tenant) — inside `$transaction`, a P2002 here aborts the
+      // whole transaction and this recovery path never runs.
       if ((error as { code?: string }).code === 'P2002') {
-        const raced = await prisma.subscription.findUnique({ where: { tenantId } });
+        const raced = await client.subscription.findUnique({ where: { tenantId } });
         if (raced) {
           return { subscription: raced, created: false };
         }

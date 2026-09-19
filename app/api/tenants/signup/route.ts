@@ -8,6 +8,8 @@ import { getValidationTranslator } from '@/lib/validation-translations';
 import { applyBusinessTypeDefaults } from '@/lib/business-types';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { SubscriptionService } from '@/lib/subscription';
+import { getPublicAppUrl } from '@/lib/ecommerce/public-url';
+import { sendEmail } from '@/lib/notifications';
 import { logger } from '@/lib/logger';
 
 /**
@@ -129,6 +131,10 @@ export async function POST(request: NextRequest) {
 
     const hashedPassword = await bcrypt.hash(adminPassword, 10);
 
+    // Tenant + admin user + trial subscription must all land together or not
+    // at all — a signup that creates a tenant without a trial silently breaks
+    // the "14-day free trial" promise on the marketing page, and there would
+    // be no later trigger to retroactively create one for a self-serve tenant.
     const { tenant, adminUser } = await prisma.$transaction(async (tx) => {
       const newTenant = await tx.tenant.create({
         data: {
@@ -136,6 +142,7 @@ export async function POST(request: NextRequest) {
           slug: slug.toLowerCase(),
           name,
           isActive: true,
+          onboardingStatus: 'in_progress',
           settings: { create: settings as Record<string, unknown> },
         },
       });
@@ -152,13 +159,31 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      await SubscriptionService.ensureTrialSubscription(newTenant.id, tx);
+
       return { tenant: newTenant, adminUser: newAdminUser };
     });
 
-    try {
-      await SubscriptionService.ensureTrialSubscription(tenant.id);
-    } catch (subscriptionError) {
-      logger.error('Failed to create trial subscription during signup:', subscriptionError);
+    // Best-effort: the account and trial are already committed above, so a
+    // delivery failure here shouldn't fail the signup response — but it is
+    // awaited (rather than fire-and-forget) because serverless functions can
+    // be frozen the instant the response is returned, silently dropping any
+    // still-pending work. sendEmail() catches its own errors and resolves to
+    // false rather than rejecting, so the result is checked, not caught.
+    const storeUrl = `${getPublicAppUrl(request)}/${tenant.slug}/${lang}/login`;
+    const emailSent = await sendEmail({
+      to: adminUser.email,
+      type: 'email',
+      subject: `Your 1pos store "${tenant.name}" is ready`,
+      message:
+        `Welcome to 1pos!\n\n` +
+        `Your store "${tenant.name}" has been created with a 14-day free trial — no credit card required.\n\n` +
+        `Store link: ${storeUrl}\n` +
+        `Login email: ${adminUser.email}\n\n` +
+        `Sign in with the email and password you just created to get started.`,
+    });
+    if (!emailSent) {
+      logger.error('Signup welcome email did not send', { tenantSlug: tenant.slug, to: adminUser.email });
     }
 
     return NextResponse.json({

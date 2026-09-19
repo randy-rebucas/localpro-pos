@@ -22,7 +22,7 @@ export default function SignupPage() {
     adminPassword: '',
     adminName: '',
     // Optional
-    currency: 'USD',
+    currency: 'PHP',
     language: 'en',
     phone: '',
     email: '',
@@ -33,7 +33,7 @@ export default function SignupPage() {
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
   const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
-  const [phonePlaceholder, setPhonePlaceholder] = useState('+1 (555) 123-4567');
+  const [phonePlaceholder, setPhonePlaceholder] = useState('+63 912 345 6789');
   const [detectingLocation, setDetectingLocation] = useState(true);
 
   // Load dictionary
@@ -147,10 +147,10 @@ export default function SignupPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-brand-soft via-white to-slate-100 flex items-center justify-center px-4 py-12">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-12">
         <div className="max-w-md w-full bg-white border border-gray-300 p-8 text-center">
           <div className="mb-6">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-green-500 border border-green-600 mb-4">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-win8-success mb-4">
               <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
@@ -165,7 +165,7 @@ export default function SignupPage() {
           </p>
           <Link
             href={`/${formData.slug}/${formData.language}/login`}
-            className="inline-block w-full bg-brand text-white px-4 py-3 hover:bg-brand-hover font-medium transition-colors border border-brand-hover"
+            className="inline-block w-full bg-brand text-white px-4 py-3 hover:brightness-110 font-medium transition-[filter]"
           >
             {dict?.signup?.goToLogin || 'Go to Login'}
           </Link>
@@ -175,10 +175,10 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-soft via-white to-slate-100 flex items-center justify-center px-4 py-12">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-12">
       <div className="max-w-2xl w-full bg-white border border-gray-300 p-6 sm:p-8">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-brand border border-brand-hover mb-4">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-brand mb-4">
             <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
             </svg>
@@ -188,7 +188,7 @@ export default function SignupPage() {
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border-2 border-red-300 text-red-700 text-sm flex items-start gap-2">
+          <div className="mb-6 p-4 bg-win8-danger text-white text-sm flex items-start gap-2">
             <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
@@ -198,7 +198,7 @@ export default function SignupPage() {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Store Information */}
-          <div className="border-b border-gray-200 pb-6">
+          <div className="border-b border-gray-300 pb-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">{dict?.signup?.storeInformation || 'Store Information'}</h2>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -212,7 +212,7 @@ export default function SignupPage() {
                   required
                   value={formData.slug}
                   onChange={(e) => setFormData({ ...formData, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })}
-                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white transition-all"
+                  className="w-full px-4 py-3 border border-gray-300 focus:outline-none focus:border-brand bg-white transition-colors"
                   placeholder={dict?.signup?.storeIdentifierPlaceholder || 'my-store'}
                   pattern="[a-z0-9-]+"
                 />
@@ -229,7 +229,7 @@ export default function SignupPage() {
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white transition-all"
+                  className="w-full px-4 py-3 border border-gray-300 focus:outline-none focus:border-brand bg-white transition-colors"
                   placeholder={dict?.signup?.storeNamePlaceholder || 'My Store'}
                 />
               </div>
@@ -244,7 +244,7 @@ export default function SignupPage() {
                 id="companyName"
                 value={formData.companyName}
                 onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-                className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white transition-all"
+                className="w-full px-4 py-3 border border-gray-300 focus:outline-none focus:border-brand bg-white transition-colors"
                 placeholder={dict?.signup?.companyNamePlaceholder || 'My Company Inc.'}
               />
             </div>
@@ -254,8 +254,10 @@ export default function SignupPage() {
                 {dict?.signup?.businessType || 'Business Type'} <span className="text-red-500">*</span>
               </label>
               {loadingBusinessTypes ? (
-                <div className="w-full px-4 py-3 border-2 border-gray-300 bg-gray-50 flex items-center gap-2">
-                  <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent animate-spin"></div>
+                <div className="w-full px-4 py-3 border border-gray-300 bg-gray-50 flex items-center gap-2">
+                  <div className="win8-spinner-sm text-brand" role="status" aria-label="Loading">
+                    <span /><span /><span /><span /><span />
+                  </div>
                   <span className="text-sm text-gray-600">Loading business types...</span>
                 </div>
               ) : (
@@ -264,7 +266,7 @@ export default function SignupPage() {
                   required
                   value={formData.businessType}
                   onChange={(e) => setFormData({ ...formData, businessType: e.target.value as any })} // eslint-disable-line @typescript-eslint/no-explicit-any
-                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white transition-all"
+                  className="w-full px-4 py-3 border border-gray-300 focus:outline-none focus:border-brand bg-white transition-colors"
                 >
                   {businessTypes.map((type) => (
                     <option key={type.type} value={type.type}>
@@ -282,7 +284,7 @@ export default function SignupPage() {
           </div>
 
           {/* Admin Account */}
-          <div className="border-b border-gray-200 pb-6">
+          <div className="border-b border-gray-300 pb-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">{dict?.signup?.adminAccount || 'Admin Account'}</h2>
             
             <div className="space-y-4">
@@ -296,7 +298,7 @@ export default function SignupPage() {
                   required
                   value={formData.adminName}
                   onChange={(e) => setFormData({ ...formData, adminName: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white transition-all"
+                  className="w-full px-4 py-3 border border-gray-300 focus:outline-none focus:border-brand bg-white transition-colors"
                   placeholder={dict?.signup?.namePlaceholder || 'John Doe'}
                 />
               </div>
@@ -311,7 +313,7 @@ export default function SignupPage() {
                   required
                   value={formData.adminEmail}
                   onChange={(e) => setFormData({ ...formData, adminEmail: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white transition-all"
+                  className="w-full px-4 py-3 border border-gray-300 focus:outline-none focus:border-brand bg-white transition-colors"
                   placeholder={dict?.signup?.adminEmailPlaceholder || 'admin@example.com'}
                 />
               </div>
@@ -332,7 +334,7 @@ export default function SignupPage() {
                       setPasswordErrors([]);
                     }
                   }}
-                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white transition-all"
+                  className="w-full px-4 py-3 border border-gray-300 focus:outline-none focus:border-brand bg-white transition-colors"
                   placeholder={dict?.signup?.createStrongPassword || 'Create a strong password'}
                 />
                 {passwordErrors.length > 0 && (
@@ -359,16 +361,16 @@ export default function SignupPage() {
                   id="currency"
                   value={formData.currency}
                   onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white transition-all"
+                  className="w-full px-4 py-3 border border-gray-300 focus:outline-none focus:border-brand bg-white transition-colors"
                   disabled={detectingLocation}
                 >
+                  <option value="PHP">PHP - Philippine Peso</option>
                   <option value="USD">USD - US Dollar</option>
                   <option value="EUR">EUR - Euro</option>
                   <option value="GBP">GBP - British Pound</option>
                   <option value="CAD">CAD - Canadian Dollar</option>
                   <option value="AUD">AUD - Australian Dollar</option>
                   <option value="MXN">MXN - Mexican Peso</option>
-                  <option value="PHP">PHP - Philippine Peso</option>
                   <option value="JPY">JPY - Japanese Yen</option>
                   <option value="CNY">CNY - Chinese Yuan</option>
                   <option value="INR">INR - Indian Rupee</option>
@@ -393,7 +395,7 @@ export default function SignupPage() {
                   id="language"
                   value={formData.language}
                   onChange={(e) => setFormData({ ...formData, language: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white transition-all"
+                  className="w-full px-4 py-3 border border-gray-300 focus:outline-none focus:border-brand bg-white transition-colors"
                 >
                   <option value="en">English</option>
                   <option value="es">Español</option>
@@ -411,7 +413,7 @@ export default function SignupPage() {
                   id="phone"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white transition-all"
+                  className="w-full px-4 py-3 border border-gray-300 focus:outline-none focus:border-brand bg-white transition-colors"
                   placeholder={phonePlaceholder}
                 />
               </div>
@@ -425,7 +427,7 @@ export default function SignupPage() {
                   id="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white transition-all"
+                  className="w-full px-4 py-3 border border-gray-300 focus:outline-none focus:border-brand bg-white transition-colors"
                   placeholder={dict?.signup?.contactEmailPlaceholder || 'contact@example.com'}
                 />
               </div>
@@ -435,11 +437,13 @@ export default function SignupPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-brand text-white px-4 py-4 hover:bg-brand-hover font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-lg border border-brand-hover flex items-center justify-center gap-2"
+            className="w-full bg-brand text-white px-4 py-4 hover:brightness-110 font-medium transition-[filter] disabled:opacity-50 disabled:cursor-not-allowed text-lg flex items-center justify-center gap-2"
           >
             {loading ? (
               <>
-                <div className="w-5 h-5 border-2 border-white border-t-transparent animate-spin"></div>
+                <div className="win8-spinner-sm text-white" role="status" aria-label="Loading">
+                  <span /><span /><span /><span /><span />
+                </div>
                 <span>{dict?.signup?.creatingStore || 'Creating Store...'}</span>
               </>
             ) : (

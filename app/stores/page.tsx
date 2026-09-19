@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
+import { Store, UtensilsCrossed, Shirt, Briefcase, Wrench, Search, X, MapPin, Coins, ArrowRight } from 'lucide-react';
 import { normalizeImageUrl } from '@/lib/image-utils';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { getDictionaryClient } from '@/app/[lang]/dictionaries-client';
@@ -26,15 +27,15 @@ interface Tenant {
   };
 }
 
-const BUSINESS_TYPE_META: Record<string, { icon: string; label: string; gradient: string }> = {
-  Retail: { icon: '🏪', label: 'Retail', gradient: 'from-brand to-brand-navy' },
-  Restaurant: { icon: '🍕', label: 'Restaurant', gradient: 'from-orange-500 to-red-500' },
-  Laundry: { icon: '👔', label: 'Laundry', gradient: 'from-cyan-500 to-brand-navy' },
-  Service: { icon: '💼', label: 'Service', gradient: 'from-purple-500 to-violet-600' },
-  General: { icon: '🔧', label: 'General', gradient: 'from-gray-500 to-slate-600' },
+const BUSINESS_TYPE_META: Record<string, { icon: typeof Store; label: string; tile: string }> = {
+  Retail: { icon: Store, label: 'Retail', tile: 'bg-brand' },
+  Restaurant: { icon: UtensilsCrossed, label: 'Restaurant', tile: 'bg-win8-warning' },
+  Laundry: { icon: Shirt, label: 'Laundry', tile: 'bg-win8-info' },
+  Service: { icon: Briefcase, label: 'Service', tile: 'bg-win8-accent' },
+  General: { icon: Wrench, label: 'General', tile: 'bg-gray-600' },
 };
 
-const DEFAULT_META = { icon: '🏬', label: 'Store', gradient: 'from-brand to-brand-navy' };
+const DEFAULT_META = { icon: Store, label: 'Store', tile: 'bg-brand' };
 
 function StoreCard({ tenant, preferredLang, dict }: { tenant: Tenant; preferredLang: string; dict: any }) { // eslint-disable-line @typescript-eslint/no-explicit-any
   const displayName = tenant.settings?.companyName || tenant.name;
@@ -57,33 +58,30 @@ function StoreCard({ tenant, preferredLang, dict }: { tenant: Tenant; preferredL
   return (
     <Link
       href={`/${tenant.slug}/${preferredLang}`}
-      className="group relative flex flex-col bg-white border border-gray-200 overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200 hover:border-brand"
+      className="group relative flex flex-col bg-white border border-gray-300 overflow-hidden hover:border-brand transition-colors duration-200"
     >
       {/* Top accent bar */}
       <div
-        className={`h-1 w-full bg-gradient-to-r ${meta.gradient}`}
+        className={`h-1 w-full ${meta.tile}`}
         style={primaryColor ? { background: primaryColor } : {}}
       />
 
       {/* Card Header */}
       <div
-        className={`relative flex items-center justify-between px-5 py-5 bg-gradient-to-br ${meta.gradient} text-white overflow-hidden`}
-        style={primaryColor ? { background: `linear-gradient(135deg, ${primaryColor}ee, ${primaryColor}99)` } : {}}
+        className={`relative flex items-center justify-between px-5 py-5 ${meta.tile} text-white`}
+        style={primaryColor ? { background: primaryColor } : {}}
       >
-        <div className="absolute -top-6 -right-6 w-24 h-24 bg-white/10" style={{ transform: 'rotate(15deg)' }} />
-        <div className="absolute -bottom-4 -left-4 w-16 h-16 bg-black/10" style={{ transform: 'rotate(15deg)' }} />
-
-        <div className="flex items-center gap-3 relative z-10">
+        <div className="flex items-center gap-3">
           {logo ? (
             <Image
               src={normalizeImageUrl(logo)}
               alt={displayName}
               width={48}
               height={48}
-              className="object-contain bg-white/20 backdrop-blur-sm p-1 shadow"
+              className="object-contain bg-white/20 p-1"
             />
           ) : (
-            <div className="w-12 h-12 bg-white/25 backdrop-blur-sm flex items-center justify-center text-lg font-extrabold text-white shadow">
+            <div className="w-12 h-12 bg-white/20 flex items-center justify-center text-lg font-extrabold text-white">
               {initials}
             </div>
           )}
@@ -95,8 +93,8 @@ function StoreCard({ tenant, preferredLang, dict }: { tenant: Tenant; preferredL
           </div>
         </div>
 
-        <span className="relative z-10 flex items-center gap-1 bg-black/20 text-white text-xs font-semibold px-2 py-1 border border-white/20 flex-shrink-0">
-          <span>{meta.icon}</span>
+        <span className="flex items-center gap-1 bg-black/20 text-white text-xs font-semibold px-2 py-1 border border-white/20 flex-shrink-0">
+          <meta.icon className="w-3.5 h-3.5" aria-hidden="true" />
           <span className="hidden sm:inline">{meta.label}</span>
         </span>
       </div>
@@ -106,29 +104,22 @@ function StoreCard({ tenant, preferredLang, dict }: { tenant: Tenant; preferredL
         <div className="space-y-2">
           {location && (
             <div className="flex items-center gap-2 text-sm text-gray-600">
-              <svg className="w-4 h-4 flex-shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
+              <MapPin className="w-4 h-4 flex-shrink-0 text-gray-400" aria-hidden="true" />
               <span className="truncate">{location}</span>
             </div>
           )}
           {currency && (
             <div className="flex items-center gap-2 text-sm text-gray-600">
-              <svg className="w-4 h-4 flex-shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+              <Coins className="w-4 h-4 flex-shrink-0 text-gray-400" aria-hidden="true" />
               <span>{currency}</span>
             </div>
           )}
         </div>
 
-        <div className="mt-auto pt-3 border-t border-gray-100">
+        <div className="mt-auto pt-3 border-t border-gray-300">
           <div className="flex items-center justify-between text-sm font-semibold text-brand group-hover:text-brand-hover">
             <span>{dict?.stores?.enterStore || 'Enter Store'}</span>
-            <svg className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
+            <ArrowRight className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" aria-hidden="true" />
           </div>
         </div>
       </div>
@@ -138,7 +129,7 @@ function StoreCard({ tenant, preferredLang, dict }: { tenant: Tenant; preferredL
 
 function SkeletonCard() {
   return (
-    <div className="flex flex-col bg-white border border-gray-200 overflow-hidden animate-pulse">
+    <div className="flex flex-col bg-white border border-gray-300 overflow-hidden animate-pulse">
       <div className="h-1 bg-gray-200" />
       <div className="h-24 bg-gray-200" />
       <div className="p-5 space-y-3">
@@ -229,7 +220,7 @@ export default function StoresPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
+      <header className="bg-white border-b border-gray-300 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
           <Link href="/" className="flex items-center gap-2 font-bold text-lg text-gray-900 hover:opacity-90 transition-opacity">
             <img
@@ -252,14 +243,10 @@ export default function StoresPage() {
       </header>
 
       {/* Hero */}
-      <section className="relative bg-gradient-to-br from-brand via-brand-navy to-brand-navy-deep text-white py-14 px-4 overflow-hidden">
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-10 left-10 w-64 h-64 bg-brand-muted/25 blur-3xl animate-pulse" style={{ animationDuration: '4s' }} />
-          <div className="absolute bottom-0 right-0 w-80 h-80 bg-brand-navy/45 blur-3xl animate-pulse" style={{ animationDelay: '2s', animationDuration: '5s' }} />
-        </div>
+      <section className="relative bg-brand-navy text-white py-14 px-4 overflow-hidden">
         <div className="relative max-w-7xl mx-auto text-center z-10">
-          <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-md border border-white/30 px-4 py-1.5 text-sm font-semibold mb-4">
-            🏪 {dict?.stores?.storeDirectory || 'Store Directory'}
+          <div className="inline-flex items-center gap-2 bg-white/20 border border-white/30 px-4 py-1.5 text-sm font-semibold mb-4">
+            <Store className="w-4 h-4" aria-hidden="true" /> {dict?.stores?.storeDirectory || 'Store Directory'}
           </div>
           <h1 className="text-4xl md:text-5xl font-bold mb-3">{dict?.stores?.selectYourStore || 'Select Your Store'}</h1>
           <p className="text-white/80 text-lg max-w-xl mx-auto">
@@ -283,9 +270,7 @@ export default function StoresPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-8 pb-4">
         <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
           <div className="relative flex-1">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" aria-hidden="true" />
             <input
               ref={searchRef}
               type="text"
@@ -297,28 +282,32 @@ export default function StoresPage() {
             {search && (
               <button
                 onClick={() => setSearch('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                 aria-label="Clear search"
               >
-                ×
+                <X className="w-4 h-4" />
               </button>
             )}
           </div>
           {availableTypes.length > 2 && (
             <div className="flex gap-1.5 flex-wrap">
-              {availableTypes.map((type) => (
-                <button
-                  key={type}
-                  onClick={() => setTypeFilter(type)}
-                  className={`px-3 py-2 text-xs font-semibold border transition-all ${
-                    typeFilter === type
-                      ? 'bg-brand border-brand text-white'
-                      : 'bg-white border-gray-300 text-gray-600 hover:border-brand hover:text-brand'
-                  }`}
-                >
-                  {type === 'All' ? (dict?.stores?.allTypes || 'All Types') : `${BUSINESS_TYPE_META[type]?.icon ?? ''} ${type}`}
-                </button>
-              ))}
+              {availableTypes.map((type) => {
+                const TypeIcon = type !== 'All' ? BUSINESS_TYPE_META[type]?.icon : null;
+                return (
+                  <button
+                    key={type}
+                    onClick={() => setTypeFilter(type)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold border transition-colors ${
+                      typeFilter === type
+                        ? 'bg-brand border-brand text-white'
+                        : 'bg-white border-gray-300 text-gray-600 hover:border-brand hover:text-brand'
+                    }`}
+                  >
+                    {TypeIcon && <TypeIcon className="w-3.5 h-3.5" aria-hidden="true" />}
+                    {type === 'All' ? (dict?.stores?.allTypes || 'All Types') : type}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
@@ -351,7 +340,7 @@ export default function StoresPage() {
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-24 text-center">
-            <div className="text-5xl mb-4">🔍</div>
+            <Search className="w-12 h-12 text-gray-300 mb-4" aria-hidden="true" />
             <h3 className="text-lg font-bold text-gray-900 mb-2">{dict?.stores?.noStoresFound || 'No stores found'}</h3>
             <p className="text-gray-500 text-sm mb-6 max-w-sm">
               {tenants.length === 0
@@ -377,7 +366,7 @@ export default function StoresPage() {
 
       {/* Footer CTA */}
       {!loading && tenants.length > 0 && (
-        <div className="border-t border-gray-200 bg-white py-10 px-4">
+        <div className="border-t border-gray-300 bg-white py-10 px-4">
           <div className="max-w-xl mx-auto text-center">
             <h3 className="text-base font-bold text-gray-900 mb-1">{dict?.stores?.dontSeeYourStore || "Don't see your store?"}</h3>
             <p className="text-gray-500 text-sm mb-5">{dict?.stores?.getStartedDesc || 'Get started and create your own store in minutes.'}</p>
