@@ -23,6 +23,14 @@
   --color-brand-soft: #e8f5f5;
   --color-brand-navy: #1e3a4c;
   --color-brand-navy-deep: #152a38;
+
+  /* Windows 8 / Metro status palette — verified ≥4.5:1 contrast against white text */
+  --color-win8-success: #0b7a44;
+  --color-win8-danger: #c0392b;
+  --color-win8-warning: #8a6206;
+  --color-win8-accent: #7a3fc9;
+  --color-win8-info: #1e70bf;
+  --color-win8-suspended: #b35900;
 }
 
 body {
@@ -148,6 +156,68 @@ input[type="checkbox"].checkbox-win8:disabled {
 
 .animate-spin {
   animation: spin 1s linear infinite;
+}
+
+/* Windows 8 / Metro-style loading indicator — five square dots orbiting
+   and throbbing in sequence, like the classic Win8 "ring" progress ring. */
+.win8-spinner {
+  position: relative;
+  width: 1.5em;
+  height: 1.5em;
+  display: inline-block;
+}
+
+.win8-spinner span {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0.25em;
+  height: 0.25em;
+  margin: -0.125em;
+  background: currentColor;
+  animation: win8-orbit 1.6s infinite cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.win8-spinner span:nth-child(1) { animation-delay: 0s; }
+.win8-spinner span:nth-child(2) { animation-delay: 0.16s; }
+.win8-spinner span:nth-child(3) { animation-delay: 0.32s; }
+.win8-spinner span:nth-child(4) { animation-delay: 0.48s; }
+.win8-spinner span:nth-child(5) { animation-delay: 0.64s; }
+
+@keyframes win8-orbit {
+  0% {
+    transform: rotate(0deg) translateX(0.65em) scale(0.4);
+    opacity: 0.35;
+  }
+  50% {
+    transform: rotate(180deg) translateX(0.65em) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(360deg) translateX(0.65em) scale(0.4);
+    opacity: 0.35;
+  }
+}
+
+.win8-spinner-sm {
+  width: 1em;
+  height: 1em;
+}
+
+.win8-spinner-sm span {
+  width: 0.18em;
+  height: 0.18em;
+  margin: -0.09em;
+}
+
+@keyframes win8-orbit-sm {
+  0% { transform: rotate(0deg) translateX(0.42em) scale(0.4); opacity: 0.35; }
+  50% { transform: rotate(180deg) translateX(0.42em) scale(1); opacity: 1; }
+  100% { transform: rotate(360deg) translateX(0.42em) scale(0.4); opacity: 0.35; }
+}
+
+.win8-spinner-sm span {
+  animation-name: win8-orbit-sm;
 }
 
 /* Fade in animation */

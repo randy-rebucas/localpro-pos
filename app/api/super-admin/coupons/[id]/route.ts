@@ -20,6 +20,17 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'Coupon not found' }, { status: 404 });
     }
 
+    if (body.discountValue !== undefined) {
+      const numericDiscount = Number(body.discountValue);
+      const effectiveType = body.discountType ?? existing.discountType;
+      if (!Number.isFinite(numericDiscount) || numericDiscount <= 0) {
+        return NextResponse.json({ success: false, error: 'discountValue must be a positive number' }, { status: 400 });
+      }
+      if (effectiveType === 'percentage' && numericDiscount > 100) {
+        return NextResponse.json({ success: false, error: 'Percentage discountValue cannot exceed 100' }, { status: 400 });
+      }
+    }
+
     const coupon = await prisma.coupon.update({
       where: { id },
       data: {

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireRole } from '@/lib/auth';
 import { logger } from '@/lib/logger';
+import { createAuditLog, AuditActions } from '@/lib/audit';
+import prisma from '@/lib/db';
 import path from 'path';
 
 const _importFs = () => import('fs/promises');
@@ -27,15 +29,15 @@ export async function GET(
     const fs = await _importFs();
     const filePath = path.join(process.cwd(), 'backups', safe);
 
-    let content: string;
+    let content: Buffer;
     try {
-      content = await fs.readFile(filePath, 'utf-8');
+      content = await fs.readFile(filePath);
     } catch {
       return NextResponse.json({ success: false, error: 'Backup not found' }, { status: 404 });
     }
 
     const contentType = safe.endsWith('.json') ? 'application/json' : 'application/octet-stream';
-    return new NextResponse(content, {
+    return new NextResponse(new Uint8Array(content), {
       status: 200,
       headers: {
         'Content-Type': contentType,
@@ -56,7 +58,7 @@ export async function DELETE(
   { params }: { params: Promise<{ filename: string }> }
 ) {
   try {
-    await requireRole(request, ['super_admin']);
+    const user = await requireRole(request, ['super_admin']);
 
     const { filename } = await params;
     const safe = safeFilename(filename);
@@ -71,6 +73,18 @@ export async function DELETE(
       await fs.unlink(filePath);
     } catch {
       return NextResponse.json({ success: false, error: 'Backup not found' }, { status: 404 });
+    }
+
+    const defaultTenant = await prisma.tenant.findUnique({ where: { slug: 'default' }, select: { id: true } });
+    if (defaultTenant) {
+      await createAuditLog(request, {
+        tenantId: defaultTenant.id,
+        userId: user.userId,
+        action: AuditActions.DELETE,
+        entityType: 'database_backup',
+        entityId: safe,
+        metadata: { deletedBy: user.userId, role: 'super_admin' },
+      });
     }
 
     return NextResponse.json({ success: true, message: `Deleted ${safe}` });

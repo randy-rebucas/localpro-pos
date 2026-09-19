@@ -37,9 +37,11 @@ export async function GET(
       prisma.billingEvent.count({ where: { tenantId: tenant.id } }),
     ]);
 
+    const data = events.map((ev) => ({ ...ev, amount: Number(ev.amount) }));
+
     return NextResponse.json({
       success: true,
-      data: events,
+      data,
       pagination: { page, limit, total, pages: Math.ceil(total / limit) },
     });
   } catch (error: unknown) {

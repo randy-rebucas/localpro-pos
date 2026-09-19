@@ -752,6 +752,7 @@ model User {
   recurringBookingTemplates  RecurringBookingTemplate[]  @relation("RecurringBookingStaff")
   couponsCreated             Coupon[]
   featureFlagOverridesGranted FeatureFlagOverride[]
+  systemSettingsUpdated      SystemSettings[]
 
   @@index([tenantId, role, isActive])
   @@index([tenantId, branchId, isActive])
@@ -1473,6 +1474,20 @@ model FeatureFlagOverride {
   @@unique([tenantId, feature])
   @@index([expiresAt])
   @@map("feature_flag_overrides")
+}
+
+// Single-row table for platform-wide settings (maintenance mode, etc).
+// Always accessed by the fixed id below rather than a query filter.
+model SystemSettings {
+  id                  String    @id @default("singleton")
+  maintenanceMode     Boolean   @default(false)
+  maintenanceMessage  String?
+  updatedById         String?
+  updatedAt           DateTime  @updatedAt
+
+  updatedBy User? @relation(fields: [updatedById], references: [id])
+
+  @@map("system_settings")
 }
 
 // ----------------------------------------------------------------------------

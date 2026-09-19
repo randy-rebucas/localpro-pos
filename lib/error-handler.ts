@@ -42,7 +42,7 @@ export function handleApiError(error: any, defaultMessage: string = 'An error oc
     );
   }
 
-  // Duplicate key errors
+  // Duplicate key errors (Mongo)
   if (error.code === 11000) {
     const field = Object.keys(error.keyPattern || {})[0] || 'field';
     return NextResponse.json(
@@ -52,6 +52,39 @@ export function handleApiError(error: any, defaultMessage: string = 'An error oc
         code: 'DUPLICATE_KEY',
       },
       { status: 400 }
+    );
+  }
+
+  // Duplicate key / FK constraint errors (Prisma/Postgres)
+  if (error.code === 'P2002') {
+    const field = Array.isArray(error.meta?.target) ? error.meta.target[0] : error.meta?.target || 'field';
+    return NextResponse.json(
+      {
+        success: false,
+        error: `${field} already exists`,
+        code: 'DUPLICATE_KEY',
+      },
+      { status: 409 }
+    );
+  }
+  if (error.code === 'P2025') {
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Record not found',
+        code: 'NOT_FOUND',
+      },
+      { status: 404 }
+    );
+  }
+  if (error.code === 'P2003') {
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'This action violates a related record reference',
+        code: 'FOREIGN_KEY_CONSTRAINT',
+      },
+      { status: 409 }
     );
   }
 

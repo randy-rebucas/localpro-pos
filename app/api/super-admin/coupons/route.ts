@@ -53,6 +53,13 @@ export async function POST(request: NextRequest) {
     if (!code || !discountType || discountValue === undefined) {
       return NextResponse.json({ success: false, error: 'code, discountType, and discountValue are required' }, { status: 400 });
     }
+    const numericDiscount = Number(discountValue);
+    if (!Number.isFinite(numericDiscount) || numericDiscount <= 0) {
+      return NextResponse.json({ success: false, error: 'discountValue must be a positive number' }, { status: 400 });
+    }
+    if (discountType === 'percentage' && numericDiscount > 100) {
+      return NextResponse.json({ success: false, error: 'Percentage discountValue cannot exceed 100' }, { status: 400 });
+    }
 
     const couponId = randomUUID();
     const coupon = await prisma.coupon.create({

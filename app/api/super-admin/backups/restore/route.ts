@@ -19,6 +19,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireRole } from '@/lib/auth';
 import { restoreDatabaseBackup } from '@/lib/automations/database-backups';
 import { logger } from '@/lib/logger';
+import { createAuditLog, AuditActions } from '@/lib/audit';
+import prisma from '@/lib/db';
 import path from 'path';
 import fs from 'fs/promises';
 import os from 'os';
@@ -30,10 +32,11 @@ function safeFilename(filename: string): string | null {
 
 export async function POST(request: NextRequest) {
   try {
-    await requireRole(request, ['super_admin']);
+    const user = await requireRole(request, ['super_admin']);
 
     const contentType = request.headers.get('content-type') ?? '';
     let filePath: string;
+    let sourceLabel: string;
     let tempFile = false;
     let clearExisting = false;
     let dryRun = false;
@@ -54,6 +57,7 @@ export async function POST(request: NextRequest) {
       const tmpPath = path.join(os.tmpdir(), `restore-${Date.now()}.dump`);
       await fs.writeFile(tmpPath, Buffer.from(arrayBuffer));
       filePath = tmpPath;
+      sourceLabel = `upload:${file.name}`;
       tempFile = true;
 
       clearExisting = form.get('clearExisting') === 'true';
@@ -72,6 +76,7 @@ export async function POST(request: NextRequest) {
       }
 
       filePath = path.join(process.cwd(), 'backups', safe);
+      sourceLabel = safe;
       clearExisting = ce === true;
       dryRun = dr === true;
     }
@@ -80,6 +85,21 @@ export async function POST(request: NextRequest) {
 
     if (tempFile) {
       await fs.unlink(filePath).catch(() => null);
+    }
+
+    if (!dryRun) {
+      const defaultTenant = await prisma.tenant.findUnique({ where: { slug: 'default' }, select: { id: true } });
+      if (defaultTenant) {
+        await createAuditLog(request, {
+          tenantId: defaultTenant.id,
+          userId: user.userId,
+          action: AuditActions.UPDATE,
+          entityType: 'database_backup_restore',
+          entityId: sourceLabel,
+          changes: { clearExisting, success: result.success },
+          metadata: { restoredBy: user.userId, role: 'super_admin' },
+        });
+      }
     }
 
     return NextResponse.json(result, { status: result.success ? 200 : 500 });

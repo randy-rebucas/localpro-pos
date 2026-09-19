@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-19T08:54:41Z",
+  "title": "Design System: 1POS Super-Admin (Win8/Metro)",
+  "extensions": {
+    "colorMeta": {
+      "brand-teal": { "role": "primary", "displayName": "Brand Teal", "canonical": "#35979c", "tonalRamp": ["#0f2f31", "#1d5457", "#2b787c", "#35979c", "#4aabae", "#6fbdc0", "#a2d5d6", "#d6ecec"] },
+      "brand-navy": { "role": "secondary", "displayName": "Brand Navy", "canonical": "#1e3a4c", "tonalRamp": ["#0a1319", "#111f28", "#152a38", "#1e3a4c", "#2c5470", "#3f74a0", "#6ba0c8", "#a8cbe3"] },
+      "win8-success": { "role": "status", "displayName": "Win8 Success (contrast-safe green)", "canonical": "#0b7a44", "tonalRamp": ["#03150b", "#062c19", "#094a29", "#0b7a44", "#0fa860", "#3fc282", "#82ddad", "#c8f2dc"] },
+      "win8-danger": { "role": "status", "displayName": "Win8 Danger", "canonical": "#c0392b", "tonalRamp": ["#280a07", "#4a130e", "#7d2117", "#c0392b", "#d55f52", "#e08a80", "#edb6af", "#f7dedb"] },
+      "win8-warning": { "role": "status", "displayName": "Win8 Warning (contrast-safe amber)", "canonical": "#8a6206", "tonalRamp": ["#1c1401", "#332403", "#5c4005", "#8a6206", "#b98209", "#d9a53d", "#ecc885", "#f8e6c2"] },
+      "win8-info": { "role": "status", "displayName": "Win8 Info", "canonical": "#1e70bf", "tonalRamp": ["#08192a", "#0f2e4b", "#164d7f", "#1e70bf", "#3f8fd9", "#75b1e6", "#aed2f1", "#dcecfa"] },
+      "win8-suspended": { "role": "status", "displayName": "Win8 Suspended (burnt orange)", "canonical": "#b35900", "tonalRamp": ["#241200", "#412000", "#733900", "#b35900", "#d97b26", "#e9a05f", "#f3c69c", "#faE3ce"] },
+      "win8-accent": { "role": "tertiary", "displayName": "Win8 Accent (Impersonate purple)", "canonical": "#7a3fc9", "tonalRamp": ["#170b28", "#2a144a", "#48237e", "#7a3fc9", "#9868d8", "#b895e5", "#d7c3f0", "#ede2f9"] },
+      "neutral-border": { "role": "neutral", "displayName": "Neutral Border", "canonical": "#d1d5db" },
+      "neutral-row-hover": { "role": "neutral", "displayName": "Neutral Row Hover", "canonical": "#f3f4f6" },
+      "neutral-text-primary": { "role": "neutral", "displayName": "Neutral Text Primary", "canonical": "#111827" },
+      "neutral-text-secondary": { "role": "neutral", "displayName": "Neutral Text Secondary", "canonical": "#374151" },
+      "neutral-text-muted": { "role": "neutral", "displayName": "Neutral Text Muted", "canonical": "#6b7280" }
+    },
+    "typographyMeta": {
+      "title": { "displayName": "Title", "purpose": "Page-level heading, paired with a muted count/subtitle." },
+      "drawer-heading": { "displayName": "Drawer Heading", "purpose": "Title bar inside a right-side drawer." },
+      "table-header": { "displayName": "Table Header", "purpose": "Sticky uppercase column headers, white on navy." },
+      "body": { "displayName": "Body", "purpose": "Primary cell values, form inputs, toolbar text." },
+      "caption": { "displayName": "Caption", "purpose": "Secondary cell values, muted captions, badge text." }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "drawer-slide", "value": "transform 250ms cubic-bezier(0, 0, 0.2, 1)", "purpose": "Right-to-left slide-in/out for Win8Drawer; mount stays alive through close so content doesn't vanish mid-transition." },
+      { "name": "scrim-fade", "value": "opacity 200ms ease", "purpose": "Drawer backdrop fade paired with drawer-slide." },
+      { "name": "action-brighten", "value": "filter 150ms ease", "purpose": "hover:brightness-110 on solid action-color buttons; the only hover feedback any button gets (no shadow, no scale)." },
+      { "name": "win8-orbit", "value": "transform/opacity 1.6s cubic-bezier(0.4,0,0.2,1) infinite, staggered 0.16s per dot", "purpose": "Five-dot orbiting loading indicator (win8-spinner)." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Main call-to-action, e.g. '+ New Tenant', drawer footer 'Confirm'/'Save'.",
+      "html": "<button class=\"ds-btn-primary\">+ New Tenant</button>",
+      "css": ".ds-btn-primary { background: #35979c; color: #fff; padding: 8px 16px; font-size: 0.875rem; font-weight: 600; border: none; border-radius: 0; } .ds-btn-primary:hover { background: #2d868a; } .ds-btn-primary:disabled { opacity: 0.5; }"
+    },
+    {
+      "name": "Secondary/Cancel Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Outline dismiss/cancel action inside a drawer footer.",
+      "html": "<button class=\"ds-btn-secondary\">Cancel</button>",
+      "css": ".ds-btn-secondary { background: #fff; color: #111827; padding: 8px 16px; font-size: 0.875rem; border: 1px solid #d1d5db; border-radius: 0; } .ds-btn-secondary:hover { background: #f3f4f6; }"
+    },
+    {
+      "name": "Action Icon Button",
+      "kind": "button",
+      "refersTo": "action-icon-button",
+      "description": "Icon-only row action with a solid status/action color fill, e.g. Impersonate (purple).",
+      "html": "<button class=\"ds-btn-icon\" title=\"Impersonate\" aria-label=\"Impersonate\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M17 8V6a4 4 0 0 0-8 0v2M5 8h14l-1 12H6L5 8Z\"/></svg></button>",
+      "css": ".ds-btn-icon { display: inline-flex; align-items: center; justify-content: center; padding: 10px; background: #7a3fc9; color: #fff; border: none; border-radius: 0; transition: filter 150ms ease; } .ds-btn-icon:hover { filter: brightness(1.1); } .ds-btn-icon:focus-visible { outline: 2px solid #35979c; outline-offset: 1px; } .ds-btn-icon:disabled { opacity: 0.5; }"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "refersTo": "badge-flat",
+      "description": "Flat solid-fill status/tier/onboarding tag — the only badge style in this system, no pastel variant exists.",
+      "html": "<span class=\"ds-badge\">Active</span>",
+      "css": ".ds-badge { display: inline-block; padding: 2px 8px; font-size: 0.75rem; font-weight: 600; color: #fff; background: #0b7a44; border-radius: 0; }"
+    },
+    {
+      "name": "Table",
+      "kind": "custom",
+      "refersTo": "table-header-row",
+      "description": "Sticky navy header, flat white body, flat gray row hover, bordered wrapper with internal scroll.",
+      "html": "<div class=\"ds-table-wrap\"><table class=\"ds-table\"><thead><tr><th>Name</th><th>Status</th></tr></thead><tbody><tr><td>Acme Cafe</td><td><span class=\"ds-badge\">Active</span></td></tr></tbody></table></div>",
+      "css": ".ds-table-wrap { border: 1px solid #d1d5db; background: #fff; max-height: 70vh; overflow-y: auto; } .ds-table { width: 100%; font-size: 0.875rem; border-collapse: collapse; } .ds-table thead { background: #1e3a4c; color: #fff; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; position: sticky; top: 0; } .ds-table th, .ds-table td { padding: 12px 16px; text-align: left; } .ds-table tbody tr { border-top: 1px solid #e5e7eb; } .ds-table tbody tr:hover { background: #f3f4f6; }"
+    },
+    {
+      "name": "Win8 Drawer",
+      "kind": "custom",
+      "refersTo": "drawer-header",
+      "description": "Signature component. Right-side sliding panel replacing centered modals for create/edit/detail workflows; navy header, scrollable body, bordered footer.",
+      "html": "<div class=\"ds-drawer-scrim\"><div class=\"ds-drawer-panel\"><div class=\"ds-drawer-header\"><h2>Edit Tenant</h2><button class=\"ds-drawer-close\" aria-label=\"Close\">&times;</button></div><div class=\"ds-drawer-body\"><p>Form content scrolls here.</p></div><div class=\"ds-drawer-footer\"><button class=\"ds-btn-secondary\">Cancel</button><button class=\"ds-btn-primary\">Save Changes</button></div></div></div>",
+      "css": ".ds-drawer-scrim { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; justify-content: flex-end; } .ds-drawer-panel { background: #fff; width: 100%; max-width: 32rem; height: 100%; display: flex; flex-direction: column; transform: translateX(0); transition: transform 250ms cubic-bezier(0,0,0.2,1); } .ds-drawer-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; background: #1e3a4c; color: #fff; flex-shrink: 0; } .ds-drawer-close { background: none; border: none; color: rgba(255,255,255,0.7); font-size: 1.25rem; cursor: pointer; } .ds-drawer-close:hover { color: #fff; } .ds-drawer-body { padding: 24px; overflow-y: auto; flex: 1; min-height: 0; } .ds-drawer-footer { display: flex; gap: 12px; justify-content: flex-end; padding: 16px 24px; border-top: 1px solid #d1d5db; flex-shrink: 0; }"
+    },
+    {
+      "name": "Win8 Spinner",
+      "kind": "custom",
+      "refersTo": "loading-indicator",
+      "description": "Five square dots orbiting and throbbing in sequence — the system's loading indicator, replacing a generic spinning ring.",
+      "html": "<div class=\"ds-win8-spinner\"><span></span><span></span><span></span><span></span><span></span></div>",
+      "css": ".ds-win8-spinner { position: relative; width: 1.5em; height: 1.5em; display: inline-block; color: #35979c; } .ds-win8-spinner span { position: absolute; top: 50%; left: 50%; width: 0.25em; height: 0.25em; margin: -0.125em; background: currentColor; animation: ds-win8-orbit 1.6s infinite cubic-bezier(0.4,0,0.2,1); } .ds-win8-spinner span:nth-child(1) { animation-delay: 0s; } .ds-win8-spinner span:nth-child(2) { animation-delay: 0.16s; } .ds-win8-spinner span:nth-child(3) { animation-delay: 0.32s; } .ds-win8-spinner span:nth-child(4) { animation-delay: 0.48s; } .ds-win8-spinner span:nth-child(5) { animation-delay: 0.64s; } @keyframes ds-win8-orbit { 0% { transform: rotate(0deg) translateX(0.65em) scale(0.4); opacity: 0.35; } 50% { transform: rotate(180deg) translateX(0.65em) scale(1); opacity: 1; } 100% { transform: rotate(360deg) translateX(0.65em) scale(0.4); opacity: 0.35; } }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Control Room Tile Board",
+    "overview": "The super-admin panel is an operator's control surface, not a storefront — every screen is built for a small number of trusted staff scanning dense tenant/billing data and firing off state-changing actions all day. The system borrows directly from Windows 8/Metro: flat saturated color fills stand in for icons and status, everything meets at a hard 90° corner, and there is no ambient depth (no shadows, no gradients, no blur) to distract from the data. Chrome is deliberately quiet — navy headers and borders — so the only color that draws the eye is a status fill or an action button, and it always means something specific.\n\nThis is a separate visual world from the tenant-facing app, which uses its own rounded, softer styling. Never bleed tenant-facing classes into app/super-admin/**, and never bleed this flat Metro language back into tenant-facing pages.",
+    "keyCharacteristics": [
+      "Flat solid-color fills for every status, tag, and action — never pastel background + colored border/text",
+      "Zero border-radius anywhere; zero box-shadow anywhere",
+      "Navy chrome for table headers and drawer headers; white content areas with 1px gray-300 borders",
+      "Right-side sliding drawers (not centered modals) for create/edit/detail workflows",
+      "A custom five-dot orbiting win8-spinner in place of a generic spinning-ring loader"
+    ],
+    "rules": [
+      { "name": "The No Pastel Rule", "body": "A status, tag, or tier is always a solid saturated fill with white text — never a bg-*-100 / text-*-800 / border-*-200 combination.", "section": "colors" },
+      { "name": "The 4.5:1 Floor Rule", "body": "Any color paired with white text must be verified at ≥4.5:1 contrast before it enters the palette.", "section": "colors" },
+      { "name": "The Uniform Caption Rule", "body": "Every secondary/tertiary piece of text in a table cell is text-xs text-gray-700 (or text-gray-500 if muted) — never the table's inherited text-sm.", "section": "typography" },
+      { "name": "The Flat-By-Default, Always Rule", "body": "This system never lifts on interaction. hover:brightness-110 (a filter) is the only hover feedback an action button gets — no shadow, no scale.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do use a solid, contrast-verified fill (≥4.5:1 against white text) for every status/tag/badge.",
+      "Do keep row actions right-aligned and, if icon-only, always visible (never hover-gated).",
+      "Do reuse components/admin/Win8Drawer.tsx for any new create/edit/detail panel in this area.",
+      "Do give every icon-only button both title and aria-label.",
+      "Do keep secondary table-cell text at text-xs text-gray-700 (or text-gray-500 when muted).",
+      "Do keep form labels and plain body copy dark (gray-600/700/900) — white text only on a solid, contrast-verified fill (badges, filled buttons, navy chrome)."
+    ],
+    "donts": [
+      "Don't use rounded-* or shadow-* anywhere in app/super-admin/**.",
+      "Don't use a pastel bg-*-100 / text-*-800 / border-*-200 badge combination.",
+      "Don't put white text on a <select> without also forcing bg-white text-gray-900 on its <option> children.",
+      "Don't use text-gray-400 for real copy — it fails contrast (2.54:1); use gray-500 or darker.",
+      "Don't bleed this Metro language into the tenant-facing app, or vice versa.",
+      "Don't add a page-level title/count block above the toolbar — the toolbar is always the first element on the page."
+    ]
+  }
+}

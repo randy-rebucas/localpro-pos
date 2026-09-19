@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { showToast } from '@/lib/toast';
 
 interface AuditLog {
-  _id: string;
+  id: string;
   tenantId: { slug: string; name: string } | null;
   userId: { name: string; email: string } | null;
   action: string;
@@ -107,38 +107,38 @@ export default function LogsPage() {
   return (
       <div className="space-y-4">
         {/* Filters */}
-        <div className="bg-white border border-gray-100 p-4 space-y-3">
+        <div className="bg-white border border-gray-300 p-4 space-y-3">
           <div className="flex flex-wrap gap-3">
             <input type="text" placeholder="Tenant slug" value={tenantSlug} onChange={e => setTenantSlug(e.target.value)}
-              className="px-3 py-2 border border-gray-200 text-sm w-36" />
+              className="px-3 py-2 border border-gray-300 text-sm bg-white w-36" />
             <input type="text" placeholder="Action (e.g. create)" value={action} onChange={e => setAction(e.target.value)}
-              className="px-3 py-2 border border-gray-200 text-sm w-44" />
+              className="px-3 py-2 border border-gray-300 text-sm bg-white w-44" />
             <input type="text" placeholder="Entity type" value={entityType} onChange={e => setEntityType(e.target.value)}
-              className="px-3 py-2 border border-gray-200 text-sm w-36" />
+              className="px-3 py-2 border border-gray-300 text-sm bg-white w-36" />
             <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
-              className="px-3 py-2 border border-gray-200 text-sm" />
+              className="px-3 py-2 border border-gray-300 text-sm bg-white" />
             <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
-              className="px-3 py-2 border border-gray-200 text-sm" />
+              className="px-3 py-2 border border-gray-300 text-sm bg-white" />
             <select value={limit} onChange={e => { setLimit(Number(e.target.value)); setPage(1); }}
-              className="px-3 py-2 border border-gray-200 text-sm bg-white">
+              className="px-3 py-2 border border-gray-300 text-sm bg-white">
               {PAGE_SIZES.map(s => <option key={s} value={s}>{s} / page</option>)}
             </select>
           </div>
           <div className="flex flex-wrap gap-2 items-center">
             {PRESETS.map(p => (
               <button key={p.label} onClick={() => { const { start, end } = applyPreset(p.days); setStartDate(start); setEndDate(end); setPage(1); }}
-                className="px-3 py-1 text-xs border text-gray-600 hover:bg-gray-50">
+                className="px-3 py-1 text-xs border border-gray-300 text-gray-600 hover:bg-gray-50 bg-white transition-colors">
                 {p.label}
               </button>
             ))}
-            <button onClick={clearFilters} className="px-3 py-1 text-xs border text-gray-400 hover:bg-gray-50">Clear</button>
+            <button onClick={clearFilters} className="px-3 py-1 text-xs border border-gray-300 text-gray-400 hover:bg-gray-50 bg-white transition-colors">Clear</button>
             <div className="ml-auto flex gap-2">
               <button onClick={() => { setPage(1); fetchLogs(); }}
-                className="px-4 py-1.5 bg-brand-teal text-white text-sm font-medium hover:bg-brand-teal/90">
+                className="px-4 py-1.5 bg-brand text-white text-sm font-medium hover:bg-brand-hover transition-colors">
                 Search
               </button>
               <button onClick={downloadCsv} disabled={csvLoading || loading}
-                className="px-4 py-1.5 border text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                className="px-4 py-1.5 border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 bg-white disabled:opacity-50 transition-colors">
                 {csvLoading ? 'Exporting…' : '↓ CSV'}
               </button>
             </div>
@@ -150,23 +150,28 @@ export default function LogsPage() {
 
         {/* Table */}
         {loading ? (
-          <div className="text-center py-12 text-gray-400">Loading…</div>
+          <div className="text-center py-12 bg-white border border-gray-300">
+            <div className="win8-spinner text-brand mx-auto">
+              <span /><span /><span /><span /><span />
+            </div>
+            <p className="mt-3 text-gray-500 text-sm">Loading audit logs…</p>
+          </div>
         ) : logs.length === 0 ? (
-          <div className="text-center py-12 text-gray-400">No audit logs found.</div>
+          <div className="text-center py-12 text-gray-500 bg-white border border-gray-300">No audit logs found.</div>
         ) : (
-          <div className="overflow-x-auto border border-gray-100 bg-white">
+          <div className="overflow-x-auto border border-gray-300 bg-white">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wide">
+              <thead className="bg-brand-navy text-white text-xs uppercase tracking-wide">
                 <tr>
                   {['Timestamp', 'Tenant', 'Action', 'Entity', 'User', 'IP', ''].map(h => (
                     <th key={h} className="px-4 py-3 text-left font-medium">{h}</th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-gray-200">
                 {logs.map(log => (
-                  <React.Fragment key={log._id}>
-                    <tr className="hover:bg-gray-50/50 transition-colors">
+                  <React.Fragment key={log.id}>
+                    <tr className="hover:bg-gray-100 transition-colors">
                       <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{fmt(log.createdAt)}</td>
                       <td className="px-4 py-3">
                         {log.tenantId ? (
@@ -177,7 +182,7 @@ export default function LogsPage() {
                         ) : <span className="text-xs text-gray-400">—</span>}
                       </td>
                       <td className="px-4 py-3">
-                        <span className="text-xs font-mono bg-gray-100 px-1.5 py-0.5 text-gray-700">{log.action}</span>
+                        <span className="text-xs font-mono bg-gray-500 text-white px-1.5 py-0.5">{log.action}</span>
                       </td>
                       <td className="px-4 py-3 text-xs text-gray-500">
                         <span className="font-medium">{log.entityType}</span>
@@ -194,22 +199,22 @@ export default function LogsPage() {
                       <td className="px-4 py-3 text-xs text-gray-400 font-mono">{log.ipAddress || '—'}</td>
                       <td className="px-4 py-3">
                         {log.changes && Object.keys(log.changes).length > 0 && (
-                          <button onClick={() => setExpandedId(expandedId === log._id ? null : log._id)}
-                            className="text-xs text-brand-teal hover:underline">
-                            {expandedId === log._id ? 'Hide' : 'Changes'}
+                          <button onClick={() => setExpandedId(expandedId === log.id ? null : log.id)}
+                            className="text-xs text-brand hover:underline">
+                            {expandedId === log.id ? 'Hide' : 'Changes'}
                           </button>
                         )}
                       </td>
                     </tr>
-                    {expandedId === log._id && (
+                    {expandedId === log.id && (
                       <tr>
-                        <td colSpan={7} className="px-4 py-3 bg-gray-50">
+                        <td colSpan={7} className="px-4 py-3 bg-gray-100">
                           <div className="text-xs font-semibold text-gray-500 mb-1">Changes</div>
-                          <div className="bg-white border border-gray-100 p-3 overflow-x-auto max-h-60">
+                          <div className="bg-white border border-gray-300 p-3 overflow-x-auto max-h-60">
                             <table className="text-xs w-full">
                               <tbody>
                                 {Object.entries(log.changes!).map(([key, val]) => (
-                                  <tr key={key} className="border-b border-gray-50 last:border-0">
+                                  <tr key={key} className="border-b border-gray-200 last:border-0">
                                     <td className="py-1 pr-4 font-mono font-medium text-gray-600 whitespace-nowrap align-top">{key}</td>
                                     <td className="py-1 text-gray-700 font-mono break-all">
                                       {typeof val === 'object' && val !== null
@@ -230,13 +235,13 @@ export default function LogsPage() {
             </table>
 
             {/* Pagination */}
-            <div className="border-t px-4 py-3 flex items-center justify-between text-sm text-gray-500">
+            <div className="border-t border-gray-200 px-4 py-3 flex items-center justify-between text-sm text-gray-500">
               <span>Page {pagination.page} of {pagination.pages}</span>
               <div className="flex gap-2">
                 <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}
-                  className="px-3 py-1 border disabled:opacity-40 hover:bg-gray-50">← Prev</button>
+                  className="px-3 py-1 border border-gray-300 bg-white disabled:opacity-40 hover:bg-gray-50 transition-colors">← Prev</button>
                 <button disabled={page >= pagination.pages} onClick={() => setPage(p => p + 1)}
-                  className="px-3 py-1 border disabled:opacity-40 hover:bg-gray-50">Next →</button>
+                  className="px-3 py-1 border border-gray-300 bg-white disabled:opacity-40 hover:bg-gray-50 transition-colors">Next →</button>
               </div>
             </div>
           </div>

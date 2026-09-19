@@ -116,21 +116,32 @@ export async function processSubscriptionBilling(
         if (!plan) continue;
 
         const tenantId = sub.tenantId;
-        const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } });
+        const tenant = await prisma.tenant.findUnique({
+          where: { id: tenantId },
+          select: { name: true, settings: { select: { email: true } } },
+        });
         const invoiceNumber = await generateInvoiceNumber(tenantId);
         const amount = Number(plan.priceMonthly);
+        // Platform subscription fee — flat 12% PH VAT, not the tenant's own
+        // (customer-facing) tax rules from lib/tax-calculation.ts.
+        const vatAmount = Math.round(amount * 0.12 * 100) / 100;
+        const totalWithVat = amount + vatAmount;
 
         const invoice = await prisma.invoice.create({
           data: {
             id: randomUUID(),
             tenantId,
             invoiceNumber,
+            // Billed to the tenant itself — these are the platform's own
+            // subscription invoices, not tied to a CRM customer record.
+            snapshotName: tenant?.name,
+            snapshotEmail: tenant?.settings?.email || undefined,
             items: {
               create: [{ id: randomUUID(), name: `${plan.name} subscription`, quantity: 1, price: amount, subtotal: amount }],
             },
             subtotal: amount,
-            taxAmount: 0,
-            total: amount,
+            taxAmount: vatAmount,
+            total: totalWithVat,
             dueDate: sub.nextBillingDate!,
             paymentTerms: 'Due on receipt',
             status: 'sent',
@@ -144,7 +155,7 @@ export async function processSubscriptionBilling(
             tenantId,
             subscriptionId: sub.id,
             type: 'invoice_generated',
-            amount,
+            amount: totalWithVat,
             currency: plan.priceCurrency || 'PHP',
             description: `Invoice ${invoiceNumber} generated for upcoming billing`,
             invoiceUrl: `/invoices/${invoice.id}`,

@@ -137,6 +137,33 @@ const DEFAULT_PLANS = [
   },
 ];
 
+const DEFAULT_COUPONS = [
+  {
+    code: 'WELCOME10',
+    description: '10% off for new tenants',
+    discountType: 'percentage' as const,
+    discountValue: 10,
+    appliesTo: 'all_plans' as const,
+    maxUses: 100,
+  },
+  {
+    code: 'LAUNCH50',
+    description: '₱500 off setup for launch promo',
+    discountType: 'fixed' as const,
+    discountValue: 500,
+    appliesTo: 'all_plans' as const,
+    maxUses: 50,
+  },
+  {
+    code: 'SUMMER20',
+    description: '20% off seasonal promo',
+    discountType: 'percentage' as const,
+    discountValue: 20,
+    appliesTo: 'all_plans' as const,
+    maxUses: undefined,
+  },
+];
+
 export async function POST(request: NextRequest) {
   try {
     const ip = getClientIp(request);
@@ -153,9 +180,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { target } = body;
 
-    if (!target || !['plans', 'all'].includes(target)) {
+    if (!target || !['plans', 'coupons', 'all'].includes(target)) {
       return NextResponse.json(
-        { success: false, error: "target must be 'plans' or 'all'" },
+        { success: false, error: "target must be 'plans', 'coupons', or 'all'" },
         { status: 400 }
       );
     }
@@ -171,6 +198,18 @@ export async function POST(request: NextRequest) {
           update: { ...rest },
         });
         seeded.push(`plan:${tier}`);
+      }
+    }
+
+    if (target === 'coupons' || target === 'all') {
+      for (const couponData of DEFAULT_COUPONS) {
+        const { code, ...rest } = couponData;
+        await prisma.coupon.upsert({
+          where: { code },
+          create: { id: randomUUID(), code, ...rest, createdById: user.userId },
+          update: { ...rest },
+        });
+        seeded.push(`coupon:${code}`);
       }
     }
 

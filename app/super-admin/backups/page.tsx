@@ -8,17 +8,10 @@ interface BackupFile {
   createdAt: string;
 }
 
-interface RestoreCollectionResult {
-  inserted: number;
-  cleared: number;
-  skipped?: boolean;
-}
-
 interface RestoreResult {
   success: boolean;
   message: string;
   dryRun: boolean;
-  collections: Record<string, RestoreCollectionResult>;
   errors: string[];
 }
 
@@ -129,8 +122,8 @@ export default function BackupsPage() {
     if (!restoreFilename) return;
     if (!restoreDry && !confirm(
       restoreClear
-        ? `This will DELETE all existing documents in each restored collection, then insert the backup data.\n\nBackup: ${restoreFilename}\n\nType OK to continue.`
-        : `This will insert documents from "${restoreFilename}" into the live database (existing documents are kept).\n\nProceed?`
+        ? `This will DELETE the entire live database, then restore it from the backup.\n\nBackup: ${restoreFilename}\n\nType OK to continue.`
+        : `This will restore "${restoreFilename}" into the live database (existing data is kept where possible).\n\nProceed?`
     )) return;
 
     setRestoring(true);
@@ -160,8 +153,8 @@ export default function BackupsPage() {
     if (!uploadFile) return;
     if (!uploadDry && !confirm(
       uploadClear
-        ? `This will DELETE all existing documents in each restored collection, then insert the uploaded backup data.\n\nFile: ${uploadFile.name}\n\nProceed?`
-        : `This will insert documents from "${uploadFile.name}" into the live database.\n\nProceed?`
+        ? `This will DELETE the entire live database, then restore it from the uploaded backup.\n\nFile: ${uploadFile.name}\n\nProceed?`
+        : `This will restore "${uploadFile.name}" into the live database.\n\nProceed?`
     )) return;
 
     setUploading(true);
@@ -211,14 +204,14 @@ export default function BackupsPage() {
               <button
                 onClick={() => triggerBackup(false)}
                 disabled={triggering}
-                className="px-4 py-2 bg-brand text-white text-sm font-semibold hover:bg-brand-hover disabled:opacity-50 transition-colors"
+                className="px-4 py-2 bg-brand text-white text-sm font-medium border border-brand-hover hover:bg-brand-hover disabled:opacity-50 transition-colors"
               >
                 {triggering ? 'Creating...' : 'Create Backup'}
               </button>
               <button
                 onClick={() => triggerBackup(true)}
                 disabled={triggering}
-                className="px-4 py-2 bg-gray-900 text-white text-sm font-semibold hover:bg-gray-700 disabled:opacity-50 transition-colors"
+                className="px-4 py-2 bg-gray-900 text-white text-sm font-medium border border-gray-900 hover:bg-gray-700 disabled:opacity-50 transition-colors"
               >
                 {triggering ? 'Creating...' : 'Create & Upload to Cloud'}
               </button>
@@ -275,20 +268,20 @@ export default function BackupsPage() {
                           <div className="flex gap-2 justify-end">
                             <button
                               onClick={() => { setRestoreFilename(backup.name); setRestoreResult(null); setRestoreError(''); }}
-                              className={`px-3 py-1 text-xs font-medium transition-colors ${restoreFilename === backup.name ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`}
+                              className={`px-3 py-1 text-xs font-medium border transition-colors ${restoreFilename === backup.name ? 'bg-blue-600 text-white border-blue-700' : 'bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200'}`}
                             >
                               Restore
                             </button>
                             <button
                               onClick={() => downloadBackup(backup.name)}
-                              className="px-3 py-1 text-xs bg-brand text-white hover:bg-brand-hover transition-colors font-medium"
+                              className="px-3 py-1 text-xs bg-brand text-white border border-brand-hover hover:bg-brand-hover transition-colors font-medium"
                             >
                               Download
                             </button>
                             <button
                               onClick={() => deleteBackup(backup.name)}
                               disabled={deletingFile === backup.name}
-                              className="px-3 py-1 text-xs bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition-colors font-medium"
+                              className="px-3 py-1 text-xs bg-red-600 text-white border border-red-700 hover:bg-red-700 disabled:opacity-50 transition-colors font-medium"
                             >
                               {deletingFile === backup.name ? 'Deleting...' : 'Delete'}
                             </button>
@@ -321,25 +314,25 @@ export default function BackupsPage() {
 
             <div className="flex gap-6">
               <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                <input type="checkbox" checked={restoreClear} onChange={e => setRestoreClear(e.target.checked)} className="h-4 w-4 text-red-600 border-gray-300 rounded" />
+                <input type="checkbox" checked={restoreClear} onChange={e => setRestoreClear(e.target.checked)} className="checkbox-win8" />
                 Clear existing data before restore
               </label>
               <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                <input type="checkbox" checked={restoreDry} onChange={e => setRestoreDry(e.target.checked)} className="h-4 w-4 text-gray-600 border-gray-300 rounded" />
+                <input type="checkbox" checked={restoreDry} onChange={e => setRestoreDry(e.target.checked)} className="checkbox-win8" />
                 Dry run (preview only, no writes)
               </label>
             </div>
 
             {restoreClear && !restoreDry && (
               <div className="p-3 bg-red-50 border border-red-300 text-red-800 text-sm">
-                All documents in each restored collection will be <strong>permanently deleted</strong> before inserting backup data.
+                The entire database will be <strong>permanently deleted</strong> and replaced with the backup's contents before restore.
               </div>
             )}
 
             <button
               onClick={restoreFromServer}
               disabled={!restoreFilename || restoring}
-              className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium border border-blue-700 hover:bg-blue-700 disabled:opacity-50 transition-colors"
             >
               {restoring ? 'Restoring...' : restoreDry ? 'Run Dry Run' : 'Restore'}
             </button>
@@ -355,14 +348,14 @@ export default function BackupsPage() {
         <section className="bg-white border border-gray-200">
           <div className="px-6 py-4 border-b border-gray-200">
             <h2 className="text-base font-bold text-gray-900">Restore from Uploaded File</h2>
-            <p className="text-sm text-gray-500">Upload a backup JSON file from your computer to restore into the database.</p>
+            <p className="text-sm text-gray-500">Upload a pg_dump (.dump) backup file from your computer to restore into the database.</p>
           </div>
           <div className="p-6 space-y-4">
             <div>
-              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Backup file (.json)</label>
+              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Backup file (.dump)</label>
               <input
                 type="file"
-                accept=".json"
+                accept=".dump"
                 onChange={e => { setUploadFile(e.target.files?.[0] ?? null); setUploadResult(null); setUploadError(''); }}
                 className="block w-full text-sm text-gray-700 border border-gray-300 px-3 py-2 focus:outline-none focus:border-blue-500"
               />
@@ -373,25 +366,25 @@ export default function BackupsPage() {
 
             <div className="flex gap-6">
               <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                <input type="checkbox" checked={uploadClear} onChange={e => setUploadClear(e.target.checked)} className="h-4 w-4 text-red-600 border-gray-300 rounded" />
+                <input type="checkbox" checked={uploadClear} onChange={e => setUploadClear(e.target.checked)} className="checkbox-win8" />
                 Clear existing data before restore
               </label>
               <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                <input type="checkbox" checked={uploadDry} onChange={e => setUploadDry(e.target.checked)} className="h-4 w-4 text-gray-600 border-gray-300 rounded" />
+                <input type="checkbox" checked={uploadDry} onChange={e => setUploadDry(e.target.checked)} className="checkbox-win8" />
                 Dry run (preview only, no writes)
               </label>
             </div>
 
             {uploadClear && !uploadDry && (
               <div className="p-3 bg-red-50 border border-red-300 text-red-800 text-sm">
-                All documents in each restored collection will be <strong>permanently deleted</strong> before inserting backup data.
+                The entire database will be <strong>permanently deleted</strong> and replaced with the backup's contents before restore.
               </div>
             )}
 
             <button
               onClick={restoreFromUpload}
               disabled={!uploadFile || uploading}
-              className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium border border-blue-700 hover:bg-blue-700 disabled:opacity-50 transition-colors"
             >
               {uploading ? 'Restoring...' : uploadDry ? 'Run Dry Run' : 'Restore'}
             </button>
@@ -415,7 +408,7 @@ export default function BackupsPage() {
               <span className="text-gray-500">Retention</span>
               <span className="font-medium">Last 7 backups</span>
               <span className="text-gray-500">Format</span>
-              <span className="font-medium">JSON (all collections)</span>
+              <span className="font-medium">PostgreSQL custom dump (pg_dump -Fc)</span>
               <span className="text-gray-500">Cloud upload</span>
               <span className="font-medium">Disabled (set S3 env vars)</span>
             </div>
@@ -426,49 +419,13 @@ export default function BackupsPage() {
 }
 
 function RestoreResultPanel({ result }: { result: RestoreResult }) {
-  const entries = Object.entries(result.collections);
-  const totalInserted = entries.reduce((s, [, c]) => s + c.inserted, 0);
-  const totalCleared = entries.reduce((s, [, c]) => s + c.cleared, 0);
-
+  // pg_restore operates on the whole dump — there's no per-table breakdown
+  // like the old Mongo per-collection JSON restore returned.
   return (
     <div className={`p-4 border text-sm ${result.dryRun ? 'bg-gray-50 border-gray-300' : result.success ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-300'}`}>
-      <p className={`font-semibold mb-3 ${result.dryRun ? 'text-gray-800' : result.success ? 'text-green-800' : 'text-red-800'}`}>
+      <p className={`font-semibold ${result.dryRun ? 'text-gray-800' : result.success ? 'text-green-800' : 'text-red-800'}`}>
         {result.dryRun && '[DRY RUN] '}{result.message}
       </p>
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-xs">
-          <thead>
-            <tr className="text-gray-500">
-              <th className="text-left pr-8 pb-1">Collection</th>
-              <th className="text-right pr-8 pb-1">{result.dryRun ? 'Would insert' : 'Inserted'}</th>
-              {totalCleared > 0 && <th className="text-right pr-8 pb-1">Cleared</th>}
-              <th className="text-left pb-1">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {entries.map(([name, col]) => (
-              <tr key={name} className="border-t border-gray-200">
-                <td className="font-mono pr-8 py-1 text-gray-700">{name}</td>
-                <td className="text-right pr-8 py-1 text-gray-700">{col.inserted.toLocaleString()}</td>
-                {totalCleared > 0 && <td className="text-right pr-8 py-1 text-gray-500">{col.cleared.toLocaleString()}</td>}
-                <td className="py-1">
-                  {col.skipped
-                    ? <span className="text-gray-400">skipped</span>
-                    : <span className="text-green-600">ok</span>}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr className="border-t-2 border-gray-300 font-semibold">
-              <td className="pr-8 py-1 text-gray-700">Total</td>
-              <td className="text-right pr-8 py-1 text-gray-700">{totalInserted.toLocaleString()}</td>
-              {totalCleared > 0 && <td className="text-right pr-8 py-1 text-gray-600">{totalCleared.toLocaleString()}</td>}
-              <td />
-            </tr>
-          </tfoot>
-        </table>
-      </div>
       {result.errors.length > 0 && (
         <div className="mt-3">
           <p className="font-medium text-red-700 mb-1">Warnings ({result.errors.length})</p>

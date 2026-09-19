@@ -5,6 +5,8 @@ import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { generateInvoiceNumber } from '@/lib/receipt';
+import { calculateTax } from '@/lib/tax-calculation';
+import { getTenantSettingsById } from '@/lib/tenant';
 
 export async function GET(request: NextRequest) {
   try {
@@ -87,14 +89,12 @@ export async function POST(request: NextRequest) {
       transactionId,
       customerId,
       items,
-      subtotal, 
-      discountAmount, 
-      taxAmount, 
-      total, 
-      dueDate, 
-      paymentTerms, 
+      subtotal,
+      discountAmount,
+      dueDate,
+      paymentTerms,
       notes,
-      customerInfo 
+      customerInfo
     } = body;
 
     // Validate required fields
@@ -105,12 +105,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!subtotal || !taxAmount || !total || !dueDate) {
+    if (!subtotal || !dueDate) {
       return NextResponse.json(
-        { success: false, error: 'Subtotal, tax amount, total, and due date are required' },
+        { success: false, error: 'Subtotal and due date are required' },
         { status: 400 }
       );
     }
+
+    // VAT/tax is computed server-side from the tenant's tax rules/settings —
+    // never trust a client-supplied taxAmount, so an invoice can't be created
+    // VAT-free just because the caller omitted or miscalculated it.
+    const subtotalAfterDiscount = Math.max(0, subtotal - (discountAmount || 0));
+    const tenantSettings = await getTenantSettingsById(tenantId);
+    const taxItems = items.map((item: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+      taxExempt: item.taxExempt || false,
+      zeroRated: item.zeroRated || false,
+      subtotal: item.subtotal,
+    }));
+    const taxResult = await calculateTax(tenantId, subtotalAfterDiscount, taxItems, tenantSettings ?? undefined);
+    const taxAmount = taxResult.taxAmount;
+    const total = Math.max(0, subtotalAfterDiscount + taxAmount);
 
     // If transactionId provided, verify it exists and belongs to tenant
     if (transactionId) {

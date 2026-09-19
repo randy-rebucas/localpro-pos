@@ -33,6 +33,14 @@ export interface DatabaseBackupOptions {
   uploadToCloud?: boolean; // Upload to cloud storage (S3-compatible)
 }
 
+function describeExecError(error: unknown, binary: string): string {
+  const err = error as NodeJS.ErrnoException;
+  if (err?.code === 'ENOENT') {
+    return `${binary} is not installed on this server (or not on PATH). Install the PostgreSQL client tools (postgresql-client) on the host running this app.`;
+  }
+  return err instanceof Error ? err.message : String(err);
+}
+
 /**
  * Create database backup
  */
@@ -84,7 +92,11 @@ export async function createDatabaseBackup(
     // mongodump -> pg_dump: full logical backup in custom (compressed, restorable) format.
     //   mongodump --uri="<mongo uri>" --archive=<file> --gzip
     //   pg_dump "<postgres connection string>" -Fc -f <file>
-    await execFileAsync('pg_dump', [connectionString, '-Fc', '-f', backupFilePath]);
+    try {
+      await execFileAsync('pg_dump', [connectionString, '-Fc', '-f', backupFilePath]);
+    } catch (execError) {
+      throw new Error(describeExecError(execError, 'pg_dump'));
+    }
 
     // Rotate old backups (keep last 7)
     try {
@@ -167,9 +179,13 @@ export async function restoreDatabaseBackup(
     const connectionString = getPostgresConnectionString();
 
     if (options.dryRun) {
-      const { stdout } = await execFileAsync('pg_restore', ['--list', options.backupFilePath]);
-      const entryCount = stdout.split('\n').filter((l) => l.trim().length > 0).length;
-      result.message = `[DRY RUN] Backup contains ${entryCount} entries; no changes made`;
+      try {
+        const { stdout } = await execFileAsync('pg_restore', ['--list', options.backupFilePath]);
+        const entryCount = stdout.split('\n').filter((l) => l.trim().length > 0).length;
+        result.message = `[DRY RUN] Backup contains ${entryCount} entries; no changes made`;
+      } catch (execError) {
+        throw new Error(describeExecError(execError, 'pg_restore'));
+      }
       return result;
     }
 
@@ -183,7 +199,11 @@ export async function restoreDatabaseBackup(
       args.push('--clean', '--if-exists');
     }
 
-    await execFileAsync('pg_restore', args);
+    try {
+      await execFileAsync('pg_restore', args);
+    } catch (execError) {
+      throw new Error(describeExecError(execError, 'pg_restore'));
+    }
     result.message = 'Database restored successfully';
     return result;
   } catch (err: unknown) {
@@ -232,6 +252,6 @@ async function uploadBackupToS3(
     Bucket: bucket,
     Key: key,
     Body: fileContent,
-    ContentType: 'application/json',
+    ContentType: 'application/octet-stream', // pg_dump custom format (-Fc) is binary, not JSON
   }));
 }

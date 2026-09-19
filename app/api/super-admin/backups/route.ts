@@ -18,7 +18,9 @@ export async function GET(request: NextRequest) {
       const entries = await fs.readdir(backupDir);
       const stats = await Promise.all(
         entries
-          .filter(f => f.endsWith('.json') || f.endsWith('.bson'))
+          // .dump = current pg_dump backups; .json/.bson kept so pre-migration
+          // Mongo backups still on disk remain visible/downloadable/deletable.
+          .filter(f => f.endsWith('.dump') || f.endsWith('.json') || f.endsWith('.bson'))
           .map(async name => {
             const stat = await fs.stat(path.join(backupDir, name));
             return { name, size: stat.size, createdAt: stat.mtime.toISOString() };

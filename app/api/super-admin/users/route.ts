@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Prisma } from '@prisma/client';
+import { Prisma, UserRole } from '@prisma/client';
 import prisma from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { handleApiError } from '@/lib/error-handler';
@@ -18,7 +18,12 @@ export async function GET(request: NextRequest) {
     // Build query — always exclude super_admin accounts
     const where: Prisma.UserWhereInput = { role: { not: 'super_admin' } };
 
-    if (role) where.role = role as Prisma.UserWhereInput['role'];
+    if (role) {
+      if (!Object.values(UserRole).includes(role as UserRole)) {
+        return NextResponse.json({ success: false, error: 'Invalid role filter' }, { status: 400 });
+      }
+      where.role = role as UserRole;
+    }
 
     if (search) {
       where.OR = [

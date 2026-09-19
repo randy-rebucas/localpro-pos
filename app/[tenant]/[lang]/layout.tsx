@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "../../globals.css";
 import LangSetter from "@/components/LangSetter";
 import { getTenantBySlug } from "@/lib/tenant";
+import { getSystemSettings } from "@/lib/system-settings";
 import ProtectedLayout from "./layout-protected";
 import { headers } from "next/headers"; // eslint-disable-line @typescript-eslint/no-unused-vars
 
@@ -58,6 +59,21 @@ export default async function RootLayout({
     redirect(`/${tenantSlug}/en`);
   }
   
+  // Platform-wide maintenance mode blocks all tenant-facing traffic
+  const systemSettings = await getSystemSettings();
+  if (systemSettings.maintenanceMode) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+        <div className="max-w-md text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Under Maintenance</h1>
+          <p className="text-sm text-gray-500">
+            {systemSettings.maintenanceMessage || "We're performing scheduled maintenance. Please check back shortly."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   // Get tenant info for settings
   const tenant = await getTenantBySlug(tenantSlug);
   const tenantLang = tenant?.settings.language || lang;

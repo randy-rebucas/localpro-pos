@@ -56,7 +56,9 @@ export default function SuperAdminLoginPage() {
   if (checking) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin h-8 w-8 border-2 border-brand border-t-transparent rounded-full" />
+        <div className="win8-spinner text-brand">
+          <span /><span /><span /><span /><span />
+        </div>
       </div>
     );
   }
@@ -108,7 +110,7 @@ export default function SuperAdminLoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 bg-brand text-white font-semibold hover:bg-brand-hover disabled:opacity-50 transition-colors text-sm"
+              className="w-full py-2.5 bg-brand text-white font-medium border border-brand-hover hover:bg-brand-hover disabled:opacity-50 transition-colors text-sm"
             >
               {loading ? 'Signing in...' : 'Sign In'}
             </button>

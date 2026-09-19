@@ -40,7 +40,13 @@ import {
 } from './automations';
 import { logger } from '@/lib/logger';
 
-let cronJobs: cron.ScheduledTask[] = [];
+interface NamedCronJob {
+  name: string;
+  schedule: string;
+  task: cron.ScheduledTask;
+}
+
+let cronJobs: NamedCronJob[] = [];
 
 /**
  * Initialize cron jobs
@@ -510,48 +516,48 @@ export function initializeCronJobs() {
     timezone: 'UTC',
   });
 
-  // Store jobs
+  // Store jobs (name, cron schedule, task)
   cronJobs = [
-    bookingRemindersJob,
-    bookingConfirmJob,
-    noShowJob,
-    lowStockJob,
-    purchaseOrderJob,
-    dailyReportJob,
-    weeklyReportJob,
-    monthlyReportJob,
-    pendingReceiptsJob,
-    discountManagementJob,
-    subscriptionExpiryJob,
-    subscriptionBillingJob,
-    attendanceViolationsJob,
-    breakDetectionJob,
-    autoClockOutJob,
-    cashDrawerCloseJob,
-    cashCountReminderJob,
-    abandonedCartJob,
-    productPerformanceJob,
-    clvJob,
-    sessionExpirationJob,
-    stockTransferJob,
-    predictiveStockJob,
-    dynamicPricingJob,
-    dataArchiveJob,
-    backupJob,
-    auditCleanupJob,
-    multiBranchSyncJob,
-    suspiciousActivityJob,
-    salesTrendDailyJob,
-    salesTrendWeeklyJob,
-    salesTrendMonthlyJob,
-    salesSummaryDailyJob,
-    salesSummaryMonthlyJob,
+    { name: 'Booking Reminders', schedule: '0 * * * *', task: bookingRemindersJob },
+    { name: 'Booking Confirmations', schedule: '*/15 * * * *', task: bookingConfirmJob },
+    { name: 'No-Show Detection', schedule: '*/30 * * * *', task: noShowJob },
+    { name: 'Low Stock Alerts', schedule: '0 * * * *', task: lowStockJob },
+    { name: 'Purchase Order Generation', schedule: '0 9 * * *', task: purchaseOrderJob },
+    { name: 'Daily Sales Report', schedule: '0 22 * * *', task: dailyReportJob },
+    { name: 'Weekly Sales Report', schedule: '0 9 * * 1', task: weeklyReportJob },
+    { name: 'Monthly Sales Report', schedule: '0 10 1 * *', task: monthlyReportJob },
+    { name: 'Pending Receipts', schedule: '0 */6 * * *', task: pendingReceiptsJob },
+    { name: 'Discount Management', schedule: '0 */6 * * *', task: discountManagementJob },
+    { name: 'Subscription Expiry', schedule: '0 1 * * *', task: subscriptionExpiryJob },
+    { name: 'Subscription Billing', schedule: '0 2 * * *', task: subscriptionBillingJob },
+    { name: 'Attendance Violations', schedule: '0 9 * * *', task: attendanceViolationsJob },
+    { name: 'Break Detection', schedule: '*/30 * * * *', task: breakDetectionJob },
+    { name: 'Auto Clock-Out', schedule: '0 */2 * * *', task: autoClockOutJob },
+    { name: 'Cash Drawer Auto-Close', schedule: '0 22 * * *', task: cashDrawerCloseJob },
+    { name: 'Cash Count Reminders', schedule: '0 17 * * *', task: cashCountReminderJob },
+    { name: 'Abandoned Cart Reminders', schedule: '0 */12 * * *', task: abandonedCartJob },
+    { name: 'Product Performance', schedule: '0 10 * * 1', task: productPerformanceJob },
+    { name: 'Customer Lifetime Value', schedule: '0 2 * * 0', task: clvJob },
+    { name: 'Session Expiration', schedule: '0 */6 * * *', task: sessionExpirationJob },
+    { name: 'Stock Transfer', schedule: '0 8 * * *', task: stockTransferJob },
+    { name: 'Predictive Stock', schedule: '0 9 * * 1', task: predictiveStockJob },
+    { name: 'Dynamic Pricing', schedule: '*/30 * * * *', task: dynamicPricingJob },
+    { name: 'Data Archiving', schedule: '0 3 * * 0', task: dataArchiveJob },
+    { name: 'Database Backup', schedule: '0 2 * * *', task: backupJob },
+    { name: 'Audit Log Cleanup', schedule: '0 4 * * 0', task: auditCleanupJob },
+    { name: 'Multi-Branch Sync', schedule: '0 */4 * * *', task: multiBranchSyncJob },
+    { name: 'Suspicious Activity Detection', schedule: '*/15 * * * *', task: suspiciousActivityJob },
+    { name: 'Sales Trend Analysis (Daily)', schedule: '0 9 * * *', task: salesTrendDailyJob },
+    { name: 'Sales Trend Analysis (Weekly)', schedule: '0 10 * * 1', task: salesTrendWeeklyJob },
+    { name: 'Sales Trend Analysis (Monthly)', schedule: '0 11 1 * *', task: salesTrendMonthlyJob },
+    { name: 'BIR Sales Summary Export (Daily)', schedule: '0 23 * * *', task: salesSummaryDailyJob },
+    { name: 'BIR Sales Summary Export (Monthly)', schedule: '0 1 1 * *', task: salesSummaryMonthlyJob },
   ];
 
   // Start all jobs if enabled
   const cronEnabled = process.env.ENABLE_CRON_JOBS === 'true';
   if (cronEnabled) {
-    cronJobs.forEach(job => job.start());
+    cronJobs.forEach(({ task }) => task.start());
     logger.info(`✅ Started ${cronJobs.length} cron jobs`);
   } else {
     logger.info('⚠️  Cron jobs disabled (set ENABLE_CRON_JOBS=true to enable)');
@@ -562,7 +568,7 @@ export function initializeCronJobs() {
  * Stop all cron jobs
  */
 export function stopCronJobs() {
-  cronJobs.forEach(job => job.stop());
+  cronJobs.forEach(({ task }) => task.stop());
   cronJobs = [];
   logger.info('🛑 Stopped all cron jobs');
 }
@@ -574,9 +580,10 @@ export function getCronJobStatus() {
   return {
     enabled: process.env.ENABLE_CRON_JOBS === 'true',
     activeJobs: cronJobs.length,
-    jobs: cronJobs.map((job, index) => ({
-      index,
-      running: job.getStatus() === 'scheduled',
+    jobs: cronJobs.map(({ name, schedule, task }) => ({
+      name,
+      schedule,
+      running: task.getStatus() === 'scheduled',
     })),
   };
 }

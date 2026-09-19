@@ -17,18 +17,18 @@ interface AnalyticsData {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  active: 'bg-green-500',
-  trial: 'bg-yellow-500',
-  cancelled: 'bg-red-500',
-  suspended: 'bg-orange-500',
-  inactive: 'bg-gray-400',
+  active: 'bg-win8-success',
+  trial: 'bg-win8-warning',
+  cancelled: 'bg-win8-danger',
+  suspended: 'bg-win8-suspended',
+  inactive: 'bg-gray-500',
 };
 
 const TIER_COLORS: Record<string, string> = {
-  starter: 'bg-gray-400',
-  pro: 'bg-brand-soft0',
-  business: 'bg-purple-500',
-  enterprise: 'bg-indigo-600',
+  starter: 'bg-gray-500',
+  pro: 'bg-brand',
+  business: 'bg-win8-accent',
+  enterprise: 'bg-brand-navy',
 };
 
 function formatCurrency(v: number) {
@@ -52,7 +52,7 @@ function changeBadge(pct: number | null) {
   if (pct === null) return null;
   const up = pct >= 0;
   return (
-    <span className={`text-xs font-medium px-1.5 py-0.5 ${up ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+    <span className={`text-xs font-semibold px-1.5 py-0.5 text-white ${up ? 'bg-win8-success' : 'bg-win8-danger'}`}>
       {up ? '▲' : '▼'} {Math.abs(pct).toFixed(1)}%
     </span>
   );
@@ -123,38 +123,38 @@ export default function AnalyticsPage() {
   return (
       <div className="space-y-5">
         {/* Date range + actions */}
-        <div className="bg-white border border-gray-200 p-4 flex flex-wrap items-center gap-3">
+        <div className="bg-white border border-gray-300 p-4 flex flex-wrap items-center gap-3">
           <label className="text-xs font-medium text-gray-500">Date range:</label>
           <input type="date" value={rangeStart} onChange={e => setRangeStart(e.target.value)}
-            className="border px-3 py-1.5 text-sm" />
+            className="border border-gray-300 px-3 py-1.5 text-sm bg-white" />
           <span className="text-gray-400 text-sm">to</span>
           <input type="date" value={rangeEnd} onChange={e => setRangeEnd(e.target.value)}
-            className="border px-3 py-1.5 text-sm" />
+            className="border border-gray-300 px-3 py-1.5 text-sm bg-white" />
           {[
             { label: '7d', days: 7 }, { label: '30d', days: 30 }, { label: '90d', days: 90 },
           ].map(p => (
             <button key={p.label} onClick={() => { const d = new Date(); d.setDate(d.getDate() - p.days); setRangeStart(d.toISOString().slice(0, 10)); setRangeEnd(new Date().toISOString().slice(0, 10)); }}
-              className="px-2.5 py-1 text-xs border text-gray-600 hover:bg-gray-50">
+              className="px-2.5 py-1 text-xs border border-gray-300 text-gray-600 hover:bg-gray-50 bg-white transition-colors">
               {p.label}
             </button>
           ))}
           <div className="ml-auto flex gap-2">
-            <button onClick={fetchAnalytics} className="px-3 py-1.5 text-sm border text-gray-600 hover:bg-gray-50">Refresh</button>
+            <button onClick={fetchAnalytics} className="px-3 py-1.5 text-sm border border-gray-300 text-gray-600 hover:bg-gray-50 bg-white transition-colors">Refresh</button>
             <button onClick={downloadCsv} disabled={csvLoading || loading}
-              className="px-3 py-1.5 text-sm border text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+              className="px-3 py-1.5 text-sm border border-gray-300 text-gray-600 hover:bg-gray-50 bg-white disabled:opacity-50 transition-colors">
               {csvLoading ? 'Exporting…' : '↓ CSV'}
             </button>
           </div>
         </div>
 
         {error && (
-          <div className="p-3 bg-red-50 border border-red-300 text-red-800 text-sm">{error}</div>
+          <div className="p-3 bg-white border border-win8-danger text-win8-danger text-sm">{error}</div>
         )}
 
         {loading ? (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="bg-white border border-gray-200 p-5 animate-pulse">
+              <div key={i} className="bg-white border border-gray-300 p-5 animate-pulse">
                 <div className="h-4 bg-gray-200 w-28 mb-3" />
                 <div className="h-8 bg-gray-200 w-20" />
               </div>
@@ -170,7 +170,7 @@ export default function AnalyticsPage() {
                 { label: 'Transactions (Period)', value: data.transactions.inRange.toLocaleString(), sub: `${data.transactions.total.toLocaleString()} all time`, change: data.transactions.rangeChangePct },
                 { label: 'Active Subscribers', value: totalSubscribers.toLocaleString(), sub: 'active + trial plans', change: null },
               ].map(card => (
-                <div key={card.label} className="bg-white border border-gray-200 p-5">
+                <div key={card.label} className="bg-white border border-gray-300 p-5">
                   <p className="text-xs text-gray-500 leading-tight">{card.label}</p>
                   <div className="flex items-end gap-2 mt-1">
                     <p className="text-2xl font-bold text-gray-900">{card.value}</p>
@@ -183,7 +183,7 @@ export default function AnalyticsPage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
               {/* Plan distribution */}
-              <div className="bg-white border border-gray-200 p-5">
+              <div className="bg-white border border-gray-300 p-5">
                 <h2 className="text-sm font-bold text-gray-900 mb-4">Plan Distribution</h2>
                 {data.planBreakdown.length === 0 ? (
                   <p className="text-sm text-gray-400 italic">No active subscribers</p>
@@ -195,7 +195,7 @@ export default function AnalyticsPage() {
                         label={p.name}
                         value={p.count}
                         max={maxPlanCount}
-                        color={TIER_COLORS[p.tier] || 'bg-brand-soft0'}
+                        color={TIER_COLORS[p.tier] || 'bg-brand'}
                       />
                     ))}
                   </div>
@@ -203,7 +203,7 @@ export default function AnalyticsPage() {
               </div>
 
               {/* Subscription status */}
-              <div className="bg-white border border-gray-200 p-5">
+              <div className="bg-white border border-gray-300 p-5">
                 <h2 className="text-sm font-bold text-gray-900 mb-4">Subscription Status</h2>
                 {data.statusBreakdown.length === 0 ? (
                   <p className="text-sm text-gray-400 italic">No subscriptions</p>
@@ -225,7 +225,7 @@ export default function AnalyticsPage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Tenant growth */}
-              <div className="bg-white border border-gray-200 p-5">
+              <div className="bg-white border border-gray-300 p-5">
                 <h2 className="text-sm font-bold text-gray-900 mb-4">New Tenants (Last 12 Months)</h2>
                 {data.tenantGrowth.length === 0 ? (
                   <p className="text-sm text-gray-400 italic">No tenant registrations in this period</p>
@@ -237,7 +237,7 @@ export default function AnalyticsPage() {
                         label={g.month}
                         value={g.count}
                         max={maxGrowth}
-                        color="bg-brand-soft0"
+                        color="bg-brand"
                       />
                     ))}
                   </div>
@@ -245,7 +245,7 @@ export default function AnalyticsPage() {
               </div>
 
               {/* Top tenants */}
-              <div className="bg-white border border-gray-200 p-5">
+              <div className="bg-white border border-gray-300 p-5">
                 <h2 className="text-sm font-bold text-gray-900 mb-4">Top 10 Tenants by Transactions</h2>
                 {data.topTenants.length === 0 ? (
                   <p className="text-sm text-gray-400 italic">No transaction data</p>
@@ -259,7 +259,7 @@ export default function AnalyticsPage() {
                           <th className="pb-2 text-right text-xs font-medium text-gray-500">Revenue</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-100">
+                      <tbody className="divide-y divide-gray-200">
                         {data.topTenants.map((t, i) => (
                           <tr key={t.slug || i}>
                             <td className="py-2">
