@@ -1,16 +1,11 @@
 import { NextRequest } from 'next/server';
 import { randomUUID } from 'crypto';
-import type { Types as MongooseTypes } from 'mongoose';
 import prisma from '@/lib/db';
 import { getCurrentUser, verifyToken } from './auth';
 import { logger } from '@/lib/logger';
 
-// Callers across app/api/** are migrated to Prisma incrementally; until every
-// route is rewritten, some still pass a Mongoose ObjectId here (from models
-// not yet ported). Accept both shapes and normalize to a plain string below
-// so this stays a drop-in replacement during the transition.
 export interface AuditLogData {
-  tenantId: string | MongooseTypes.ObjectId;
+  tenantId: string;
   userId?: string;
   action: string;
   entityType: string;
@@ -30,7 +25,7 @@ export interface AuditLogData {
 export async function createAuditLog(
   request: NextRequest,
   data: Omit<AuditLogData, 'userId'> & {
-    tenantId?: string | MongooseTypes.ObjectId;
+    tenantId?: string;
     userId?: string;
   }
 ): Promise<void> {
@@ -59,9 +54,7 @@ export async function createAuditLog(
     let tenantId: string;
 
     if (data.tenantId) {
-      // Use provided tenantId — normalize a Mongoose ObjectId (from
-      // not-yet-migrated callers) down to a plain string id.
-      tenantId = data.tenantId.toString();
+      tenantId = data.tenantId;
     } else if (user) {
       // Get from authenticated user
       tenantId = user.tenantId;

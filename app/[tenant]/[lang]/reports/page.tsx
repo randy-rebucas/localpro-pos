@@ -33,6 +33,18 @@ import type { TranslationDict } from '@/types/dictionary';
 
 const DEFAULT_COLORS = ['#35979c', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
+// `Date#toISOString()` yields the UTC calendar date, which can be a day off
+// from the browser's local date (e.g. Manila is UTC+8, so between local
+// midnight and 8am, toISOString() still reports "yesterday"). The reports
+// API resolves date-only params in the tenant's timezone, so the default
+// range must be built from local date components, not UTC ones.
+function toLocalDateInputValue(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export default function ReportsPage() {
   const params = useParams();
   const tenant = params.tenant as string;
@@ -84,8 +96,8 @@ export default function ReportsPage() {
     const end = new Date();
     const start = new Date();
     start.setDate(start.getDate() - 30);
-    setEndDate(end.toISOString().split('T')[0]);
-    setStartDate(start.toISOString().split('T')[0]);
+    setEndDate(toLocalDateInputValue(end));
+    setStartDate(toLocalDateInputValue(start));
   }, [lang]);
 
   useEffect(() => {
@@ -103,8 +115,8 @@ export default function ReportsPage() {
     } else if (newPeriod === 'monthly') {
       start.setDate(start.getDate() - 29);
     }
-    setEndDate(end.toISOString().split('T')[0]);
-    setStartDate(start.toISOString().split('T')[0]);
+    setEndDate(toLocalDateInputValue(end));
+    setStartDate(toLocalDateInputValue(start));
   };
 
   const exportSalesJournal = async (format: 'csv' | 'excel' | 'pdf') => {

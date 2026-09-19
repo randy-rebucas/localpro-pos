@@ -1,19 +1,19 @@
 /**
- * Script to reset/clean database collections
- * Usage: 
+ * Script to reset/clean database tables (Postgres / Prisma)
+ * Usage:
  *   npx tsx scripts/reset-collections.ts [options]
- * 
+ *
  * Options:
- *   --all                    Clean all collections
- *   --tenant=<slug>          Clean collections for specific tenant
- *   --collection=<name>      Clean specific collection(s), comma-separated
- *   --keep-tenants           Keep tenant collection when using --all
- *   --keep-users             Keep user collection when using --all
+ *   --all                    Clean all tables
+ *   --tenant=<slug>          Clean tables for specific tenant
+ *   --collection=<name>      Clean specific table(s), comma-separated
+ *   --keep-tenants           Keep tenants table when using --all
+ *   --keep-users             Keep users table when using --all
  *   --create-default-store   Create default store/tenant after reset
  *   --create-admin           Create admin user for default store (requires --create-default-store)
  *   --create-demo-tenant     Create demo tenant with sample data
  *   --force                  Skip confirmation prompt
- * 
+ *
  * Examples:
  *   npx tsx scripts/reset-collections.ts --all
  *   npx tsx scripts/reset-collections.ts --all --create-default-store
@@ -22,6 +22,9 @@
  *   npx tsx scripts/reset-collections.ts --tenant=default
  *   npx tsx scripts/reset-collections.ts --collection=transactions,products
  *   npx tsx scripts/reset-collections.ts --all --keep-tenants --keep-users
+ *
+ * IMPORTANT: this script is destructive. Never run it against a database you
+ * care about without a fresh backup.
  */
 
 import dotenv from 'dotenv';
@@ -33,45 +36,30 @@ dotenv.config({ path: resolve(process.cwd(), '.env.local') });
 // Also try .env as fallback
 dotenv.config({ path: resolve(process.cwd(), '.env') });
 
-import mongoose from 'mongoose';
-
-// Import all models
-import Attendance from '../models/Attendance';
-import AuditLog from '../models/AuditLog';
-import Booking from '../models/Booking';
-import Branch from '../models/Branch';
-import CashDrawerSession from '../models/CashDrawerSession';
-import Category from '../models/Category';
-import Discount from '../models/Discount';
-import Expense from '../models/Expense';
-import Product from '../models/Product';
-import ProductBundle from '../models/ProductBundle';
-import SavedCart from '../models/SavedCart';
-import StockMovement from '../models/StockMovement';
-import Tenant from '../models/Tenant';
-import Transaction from '../models/Transaction';
-import User from '../models/User';
+import { randomUUID } from 'crypto';
+import bcrypt from 'bcryptjs';
+import prisma from '../lib/db';
 import { getDefaultTenantSettings } from '../lib/currency';
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/pos-system';
-
-// Collection mapping (Mongoose automatically pluralizes and lowercases model names)
+// Table mapping: collection name (Mongo-era) -> Prisma delegate, all tenant-scoped
+// except `tenants` and `users` (users are scoped indirectly via tenantId, kept
+// nullable-tolerant here since super-admin users have no tenantId).
 const COLLECTIONS = {
-  attendances: Attendance,
-  auditlogs: AuditLog,
-  bookings: Booking,
-  branches: Branch,
-  cashdrawersessions: CashDrawerSession,
-  categories: Category,
-  discounts: Discount,
-  expenses: Expense,
-  products: Product,
-  productbundles: ProductBundle,
-  savedcarts: SavedCart,
-  stockmovements: StockMovement,
-  tenants: Tenant,
-  transactions: Transaction,
-  users: User,
+  attendances: prisma.attendance,
+  auditlogs: prisma.auditLog,
+  bookings: prisma.booking,
+  branches: prisma.branch,
+  cashdrawersessions: prisma.cashDrawerSession,
+  categories: prisma.category,
+  discounts: prisma.discount,
+  expenses: prisma.expense,
+  products: prisma.product,
+  productbundles: prisma.productBundle,
+  savedcarts: prisma.savedCart,
+  stockmovements: prisma.stockMovement,
+  tenants: prisma.tenant,
+  transactions: prisma.transaction,
+  users: prisma.user,
 } as const;
 
 type CollectionName = keyof typeof COLLECTIONS;
@@ -91,35 +79,38 @@ function askQuestion(query: string): Promise<string> {
   });
 }
 
-// Get collection counts
-async function getCollectionCounts(tenantId?: mongoose.Types.ObjectId) {
+// Get table counts
+async function getCollectionCounts(tenantId?: string) {
   const counts: Record<string, number> = {};
-  
-  for (const [name, model] of Object.entries(COLLECTIONS)) {
+
+  for (const [name] of Object.entries(COLLECTIONS)) {
     try {
-      const mongooseModel = model as mongoose.Model<any>; // eslint-disable-line @typescript-eslint/no-explicit-any
-      if (tenantId && 'tenantId' in model.schema.paths) {
-        counts[name] = await mongooseModel.countDocuments({ tenantId });
+      const collectionName = name as CollectionName;
+      const delegate = COLLECTIONS[collectionName] as { count: (args?: unknown) => Promise<number> };
+      if (tenantId && collectionName === 'tenants') {
+        counts[name] = await delegate.count({ where: { id: tenantId } });
+      } else if (tenantId) {
+        counts[name] = await delegate.count({ where: { tenantId } });
       } else {
-        counts[name] = await mongooseModel.countDocuments();
+        counts[name] = await delegate.count();
       }
-    } catch (error) {
+    } catch {
       counts[name] = 0;
     }
   }
-  
+
   return counts;
 }
 
-// Clean collections
+// Clean tables
 async function cleanCollections(
   collections: CollectionName[],
-  tenantId?: mongoose.Types.ObjectId,
+  tenantId?: string,
   keepTenants = false,
   keepUsers = false
 ) {
   const results: Record<string, { deleted: number; error?: string }> = {};
-  
+
   for (const collectionName of collections) {
     // Skip if keeping tenants or users
     if (collectionName === 'tenants' && keepTenants) {
@@ -130,26 +121,27 @@ async function cleanCollections(
       results[collectionName] = { deleted: 0 };
       continue;
     }
-    
-    const model = COLLECTIONS[collectionName];
-    const mongooseModel = model as mongoose.Model<any>; // eslint-disable-line @typescript-eslint/no-explicit-any
-    
+
+    const delegate = COLLECTIONS[collectionName] as { deleteMany: (args?: unknown) => Promise<{ count: number }> };
+
     try {
       let deleteResult;
-      if (tenantId && 'tenantId' in model.schema.paths) {
-        deleteResult = await mongooseModel.deleteMany({ tenantId });
+      if (tenantId && collectionName === 'tenants') {
+        deleteResult = await delegate.deleteMany({ where: { id: tenantId } });
+      } else if (tenantId) {
+        deleteResult = await delegate.deleteMany({ where: { tenantId } });
       } else {
-        deleteResult = await mongooseModel.deleteMany({});
+        deleteResult = await delegate.deleteMany({});
       }
-      results[collectionName] = { deleted: deleteResult.deletedCount || 0 };
+      results[collectionName] = { deleted: deleteResult.count || 0 };
     } catch (error: unknown) {
-      results[collectionName] = { 
-        deleted: 0, 
-        error: typeof error === 'object' && error !== null && 'message' in error ? (error as { message: string }).message : String(error)
+      results[collectionName] = {
+        deleted: 0,
+        error: typeof error === 'object' && error !== null && 'message' in error ? (error as { message: string }).message : String(error),
       };
     }
   }
-  
+
   return results;
 }
 
@@ -158,33 +150,36 @@ async function createDefaultStore(createAdmin = false) {
   try {
     console.log('');
     console.log('Creating default store...');
-    
+
     // Check if default tenant already exists
-    const existing = await Tenant.findOne({ slug: 'default' });
+    const existing = await prisma.tenant.findFirst({ where: { slug: 'default' } });
     if (existing) {
       console.log('⚠️  Default tenant already exists');
       if (createAdmin) {
         // Check if admin user exists
-        const adminExists = await User.findOne({ 
-          email: 'admin@default.local',
-          tenantId: existing._id 
+        const adminExists = await prisma.user.findFirst({
+          where: { email: 'admin@default.local', tenantId: existing.id },
         });
         if (!adminExists) {
           console.log('Creating admin user for default store...');
-          const adminUser = await User.create({
-            email: 'admin@default.local',
-            password: 'Admindefault123!',
-            name: 'Administrator',
-            role: 'admin',
-            tenantId: existing._id,
-            isActive: true,
+          const hashedPassword = await bcrypt.hash('Admindefault123!', 10);
+          const adminUser = await prisma.user.create({
+            data: {
+              id: randomUUID(),
+              email: 'admin@default.local',
+              password: hashedPassword,
+              name: 'Administrator',
+              role: 'admin',
+              tenantId: existing.id,
+              isActive: true,
+            },
           });
           console.log('✓ Admin user created for default store');
           console.log(`  Email:    ${adminUser.email}`);
           console.log(`  Password: Admindefault123!`);
           console.log(`  Role:     admin`);
           console.log(`  Tenant:   ${existing.name} (${existing.slug})`);
-          console.log(`  Tenant ID: ${existing._id}`);
+          console.log(`  Tenant ID: ${existing.id}`);
           console.log('');
           console.log('⚠️  IMPORTANT: Please change the admin password after first login!');
         } else {
@@ -197,9 +192,9 @@ async function createDefaultStore(createAdmin = false) {
 
     // Get default settings and customize (following tenant signup route pattern)
     const defaultSettings = getDefaultTenantSettings();
-    const settings = {
+    const settings: Record<string, unknown> = {
       ...defaultSettings,
-      currency: defaultSettings.currency || 'USD',
+      currency: defaultSettings.currency || 'PHP',
       language: (defaultSettings.language || 'en') as 'en' | 'es',
       companyName: 'Default Store',
       email: 'admin@default.local',
@@ -207,19 +202,20 @@ async function createDefaultStore(createAdmin = false) {
     };
 
     // Create tenant first (following tenant signup route hierarchy)
-    const tenantData: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
-      slug: 'default',
-      name: 'Default Store',
-      settings,
-      isActive: true,
-    };
-
-    const tenant = await Tenant.create(tenantData);
+    const tenant = await prisma.tenant.create({
+      data: {
+        id: randomUUID(),
+        slug: 'default',
+        name: 'Default Store',
+        isActive: true,
+        settings: { create: settings },
+      },
+    });
 
     console.log('✓ Default store created');
     console.log(`  Name: ${tenant.name}`);
     console.log(`  Slug: ${tenant.slug}`);
-    console.log(`  Tenant ID: ${tenant._id}`);
+    console.log(`  Tenant ID: ${tenant.id}`);
 
     // Create admin user for the tenant (after tenant is created)
     if (createAdmin) {
@@ -227,25 +223,29 @@ async function createDefaultStore(createAdmin = false) {
         const adminEmail = 'admin@default.local';
         const adminPassword = 'Admindefault123!';
         const adminName = 'Administrator';
-        
+
         console.log('');
         console.log('Creating admin user for default store...');
-        const adminUser = await User.create({
-          email: adminEmail.toLowerCase(),
-          password: adminPassword,
-          name: adminName,
-          role: 'admin',
-          tenantId: tenant._id,
-          isActive: true,
+        const hashedPassword = await bcrypt.hash(adminPassword, 10);
+        const adminUser = await prisma.user.create({
+          data: {
+            id: randomUUID(),
+            email: adminEmail.toLowerCase(),
+            password: hashedPassword,
+            name: adminName,
+            role: 'admin',
+            tenantId: tenant.id,
+            isActive: true,
+          },
         });
-        
+
         console.log('');
         console.log('✓ Admin user created for default store');
         console.log(`  Email:    ${adminUser.email}`);
         console.log(`  Password: Admindefault123!`);
         console.log(`  Role:     admin`);
         console.log(`  Tenant:   ${tenant.name} (${tenant.slug})`);
-        console.log(`  Tenant ID: ${tenant._id}`);
+        console.log(`  Tenant ID: ${tenant.id}`);
         console.log('');
         console.log('⚠️  IMPORTANT: Please change the admin password after first login!');
       } catch (userError: unknown) {
@@ -267,9 +267,9 @@ async function createDemoTenant() {
   try {
     console.log('');
     console.log('Creating demo tenant...');
-    
+
     // Check if demo tenant already exists
-    const existing = await Tenant.findOne({ slug: 'demo' });
+    const existing = await prisma.tenant.findFirst({ where: { slug: 'demo' } });
     if (existing) {
       console.log('⚠️  Demo tenant already exists');
       console.log(`  Name: ${existing.name}`);
@@ -279,43 +279,50 @@ async function createDemoTenant() {
 
     // Create demo tenant with settings
     const defaultSettings = getDefaultTenantSettings();
-    const demoTenant = await Tenant.create({
-      slug: 'demo',
-      name: 'Demo Store',
-      settings: {
-        ...defaultSettings,
-        companyName: 'Demo Store',
-        email: 'demo@store.local',
-        phone: '+1-555-0123',
-        address: {
-          street: '123 Demo Street',
-          city: 'Demo City',
-          state: 'DC',
-          zipCode: '12345',
-          country: 'USA',
+    const demoTenant = await prisma.tenant.create({
+      data: {
+        id: randomUUID(),
+        slug: 'demo',
+        name: 'Demo Store',
+        isActive: true,
+        settings: {
+          create: {
+            ...defaultSettings,
+            companyName: 'Demo Store',
+            email: 'demo@store.local',
+            phone: '+1-555-0123',
+            addressStreet: '123 Demo Street',
+            addressCity: 'Demo City',
+            addressState: 'DC',
+            addressZipCode: '12345',
+            addressCountry: 'USA',
+          },
         },
       },
-      isActive: true,
     });
 
     console.log('✓ Demo tenant created');
     console.log(`  Name: ${demoTenant.name}`);
     console.log(`  Slug: ${demoTenant.slug}`);
-    console.log(`  Tenant ID: ${demoTenant._id}`);
+    console.log(`  Tenant ID: ${demoTenant.id}`);
 
     // Create demo admin user
     try {
       console.log('');
       console.log('Creating demo admin user...');
-      const demoAdmin = await User.create({
-        email: 'admin@demo.local',
-        password: 'Admindemo123!',
-        name: 'Demo Administrator',
-        role: 'admin',
-        tenantId: demoTenant._id,
-        isActive: true,
+      const hashedPassword = await bcrypt.hash('Admindemo123!', 10);
+      const demoAdmin = await prisma.user.create({
+        data: {
+          id: randomUUID(),
+          email: 'admin@demo.local',
+          password: hashedPassword,
+          name: 'Demo Administrator',
+          role: 'admin',
+          tenantId: demoTenant.id,
+          isActive: true,
+        },
       });
-      
+
       console.log('✓ Demo admin user created');
       console.log(`  Email:    ${demoAdmin.email}`);
       console.log(`  Password: Admindemo123!`);
@@ -329,6 +336,7 @@ async function createDemoTenant() {
     }
 
     // Create demo categories
+    const createdCategories: { id: string; name: string }[] = [];
     try {
       console.log('');
       console.log('Creating demo categories...');
@@ -339,13 +347,15 @@ async function createDemoTenant() {
         { name: 'Books', description: 'Books and publications' },
       ];
 
-      const createdCategories = [];
       for (const cat of categories) {
-        const category = await Category.create({
-          name: cat.name,
-          description: cat.description,
-          tenantId: demoTenant._id,
-          isActive: true,
+        const category = await prisma.category.create({
+          data: {
+            id: randomUUID(),
+            name: cat.name,
+            description: cat.description,
+            tenantId: demoTenant.id,
+            isActive: true,
+          },
         });
         createdCategories.push(category);
       }
@@ -370,27 +380,30 @@ async function createDemoTenant() {
       ];
 
       // Get category IDs
-      const categories = await Category.find({ tenantId: demoTenant._id });
-      const categoryMap = new Map(categories.map(cat => [cat.name, cat._id]));
+      const categories = await prisma.category.findMany({ where: { tenantId: demoTenant.id } });
+      const categoryMap = new Map(categories.map((cat) => [cat.name, cat.id]));
 
-      const createdProducts = [];
+      let createdCount = 0;
       for (const prod of products) {
         const categoryId = categoryMap.get(prod.category);
-        const product = await Product.create({
-          name: prod.name,
-          price: prod.price,
-          stock: prod.stock,
-          sku: prod.sku,
-          category: prod.category,
-          categoryId: categoryId,
-          tenantId: demoTenant._id,
-          productType: 'regular',
-          hasVariations: false,
-          trackInventory: true,
+        await prisma.product.create({
+          data: {
+            id: randomUUID(),
+            name: prod.name,
+            price: prod.price,
+            stock: prod.stock,
+            sku: prod.sku,
+            category: prod.category,
+            categoryId: categoryId,
+            tenantId: demoTenant.id,
+            productType: 'regular',
+            hasVariations: false,
+            trackInventory: true,
+          },
         });
-        createdProducts.push(product);
+        createdCount++;
       }
-      console.log(`✓ Created ${createdProducts.length} demo products`);
+      console.log(`✓ Created ${createdCount} demo products`);
     } catch (prodError: unknown) {
       console.log('⚠️  Warning: Failed to create demo products:', typeof prodError === 'object' && prodError !== null && 'message' in prodError ? (prodError as { message: string }).message : String(prodError));
     }
@@ -419,42 +432,35 @@ async function resetCollections() {
     const shouldCreateDefaultStore = args.includes('--create-default-store');
     const createAdmin = args.includes('--create-admin');
     const shouldCreateDemoTenant = args.includes('--create-demo-tenant');
-    
+
     const tenantSlug = args.find(arg => arg.startsWith('--tenant='))?.split('=')[1];
     const collectionArg = args.find(arg => arg.startsWith('--collection='))?.split('=')[1];
-    
-    // Connect to MongoDB
-    await mongoose.connect(MONGODB_URI);
-    console.log('✓ Connected to MongoDB');
-    console.log('');
-    
-    let tenantId: mongoose.Types.ObjectId | undefined;
+
+    let tenantId: string | undefined;
     let collectionsToClean: CollectionName[] = [];
-    
+
     // Handle tenant-specific cleaning
     if (tenantSlug) {
-      const tenant = await Tenant.findOne({ slug: tenantSlug });
+      const tenant = await prisma.tenant.findFirst({ where: { slug: tenantSlug } });
       if (!tenant) {
         console.error(`✗ Tenant "${tenantSlug}" not found`);
-        await mongoose.disconnect();
         process.exit(1);
       }
-      tenantId = tenant._id;
+      tenantId = tenant.id;
       console.log(`Target tenant: ${tenant.name} (${tenant.slug})`);
       console.log('');
     }
-    
-    // Determine which collections to clean
+
+    // Determine which tables to clean
     if (cleanAll) {
       collectionsToClean = Object.keys(COLLECTIONS) as CollectionName[];
     } else if (collectionArg) {
       const requested = collectionArg.split(',').map(c => c.trim().toLowerCase());
       collectionsToClean = requested.filter(c => c in COLLECTIONS) as CollectionName[];
-      
+
       if (collectionsToClean.length === 0) {
-        console.error('✗ No valid collections specified');
-        console.log('Available collections:', Object.keys(COLLECTIONS).join(', '));
-        await mongoose.disconnect();
+        console.error('✗ No valid tables specified');
+        console.log('Available tables:', Object.keys(COLLECTIONS).join(', '));
         process.exit(1);
       }
     } else {
@@ -467,15 +473,14 @@ async function resetCollections() {
       console.log('  npx tsx scripts/reset-collections.ts --all --create-default-store --create-demo-tenant');
       console.log('  npx tsx scripts/reset-collections.ts --tenant=default');
       console.log('  npx tsx scripts/reset-collections.ts --collection=transactions,products');
-      await mongoose.disconnect();
       process.exit(1);
     }
-    
+
     // Get current counts
-    console.log('Current collection counts:');
+    console.log('Current table row counts:');
     const counts = await getCollectionCounts(tenantId);
     let totalCount = 0;
-    
+
     for (const collectionName of collectionsToClean) {
       const count = counts[collectionName] || 0;
       if (collectionName === 'tenants' && keepTenants) {
@@ -488,42 +493,40 @@ async function resetCollections() {
       }
     }
     console.log('');
-    
+
     if (totalCount === 0) {
-      console.log('✓ No documents to delete');
-      await mongoose.disconnect();
+      console.log('✓ No rows to delete');
       return;
     }
-    
+
     // Confirmation prompt
     if (!force) {
-      const action = tenantSlug 
-        ? `clean ${totalCount} document(s) for tenant "${tenantSlug}"`
-        : `clean ${totalCount} document(s) from ${collectionsToClean.length} collection(s)`;
-      
+      const action = tenantSlug
+        ? `clean ${totalCount} row(s) for tenant "${tenantSlug}"`
+        : `clean ${totalCount} row(s) from ${collectionsToClean.length} table(s)`;
+
       console.log(`⚠️  WARNING: This will ${action}`);
       console.log('This action cannot be undone!');
       console.log('');
-      
+
       const answer = await askQuestion('Are you sure you want to continue? (yes/no): ');
       if (answer.toLowerCase() !== 'yes' && answer.toLowerCase() !== 'y') {
         console.log('Operation cancelled');
-        await mongoose.disconnect();
         return;
       }
       console.log('');
     }
-    
-    // Clean collections
-    console.log('Cleaning collections...');
+
+    // Clean tables
+    console.log('Cleaning tables...');
     const results = await cleanCollections(collectionsToClean, tenantId, keepTenants, keepUsers);
-    
+
     // Display results
     console.log('');
     console.log('Results:');
     let totalDeleted = 0;
     let hasErrors = false;
-    
+
     for (const [collectionName, result] of Object.entries(results)) {
       if (result.error) {
         console.log(`  ✗ ${collectionName.padEnd(20)} Error: ${result.error}`);
@@ -539,14 +542,14 @@ async function resetCollections() {
         console.log(`  - ${collectionName.padEnd(20)} 0 (already empty)`);
       }
     }
-    
+
     console.log('');
-    console.log(`✓ Total: ${totalDeleted} document(s) deleted`);
-    
+    console.log(`✓ Total: ${totalDeleted} row(s) deleted`);
+
     if (hasErrors) {
-      console.log('⚠️  Some collections had errors during deletion');
+      console.log('⚠️  Some tables had errors during deletion');
     }
-    
+
     // Create default store if requested
     if (shouldCreateDefaultStore) {
       try {
@@ -568,16 +571,17 @@ async function resetCollections() {
         console.log('⚠️  Warning: Failed to create demo tenant:', typeof error === 'object' && error !== null && 'message' in error ? (error as { message: string }).message : String(error));
       }
     }
-    
-    await mongoose.disconnect();
-    console.log('✓ Disconnected from MongoDB');
   } catch (error: unknown) {
-    console.error('✗ Error resetting collections:', typeof error === 'object' && error !== null && 'message' in error ? (error as { message: string }).message : String(error));
-    if (mongoose.connection.readyState === 1) {
-      await mongoose.disconnect();
-    }
+    console.error('✗ Error resetting tables:', typeof error === 'object' && error !== null && 'message' in error ? (error as { message: string }).message : String(error));
     process.exit(1);
   }
 }
 
-resetCollections();
+resetCollections()
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

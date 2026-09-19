@@ -2,7 +2,7 @@
 /**
  * 1POS — System Health Check
  *
- * Verifies environment, database connectivity, collection integrity,
+ * Verifies environment, database connectivity, table integrity,
  * tenant status, and subscription plan seeds.
  *
  * Usage:
@@ -21,22 +21,9 @@ import { resolve } from 'path';
 dotenv.config({ path: resolve(process.cwd(), '.env.local') });
 dotenv.config({ path: resolve(process.cwd(), '.env') });
 
-import mongoose from 'mongoose';
-
-// ── Models ─────────────────────────────────────────────────────────────────
-import Tenant from '../models/Tenant';
-import User from '../models/User';
-import Product from '../models/Product';
-import Category from '../models/Category';
-import Transaction from '../models/Transaction';
-import Subscription from '../models/Subscription';
-import SubscriptionPlan from '../models/SubscriptionPlan';
-import Branch from '../models/Branch';
-import Customer from '../models/Customer';
-import AuditLog from '../models/AuditLog';
+import prisma from '../lib/db';
 
 // ── Config ──────────────────────────────────────────────────────────────────
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/pos-system';
 const VERBOSE = process.argv.includes('--verbose');
 
 // ── Colours ─────────────────────────────────────────────────────────────────
@@ -77,7 +64,7 @@ async function safe<T>(
 function checkEnvironment(): CheckResult[] {
   title('1. Environment Variables');
 
-  const required = ['MONGODB_URI', 'JWT_SECRET'];
+  const required = ['DATABASE_URL', 'JWT_SECRET'];
   const recommended = ['CRON_SECRET', 'NEXT_PUBLIC_APP_URL'];
 
   const results: CheckResult[] = [];
@@ -124,47 +111,47 @@ function checkEnvironment(): CheckResult[] {
 async function checkDatabase(): Promise<CheckResult[]> {
   title('2. Database Connection');
 
-  const result = await safe('mongodb connect', () =>
-    mongoose.connect(MONGODB_URI, { serverSelectionTimeoutMS: 5000 })
-  );
+  const result = await safe('postgres connect', () => prisma.$queryRaw`SELECT current_database() as db`);
 
   if (result.ok) {
-    const dbName = mongoose.connection.db?.databaseName ?? '(unknown)';
-    pass(`Connected to MongoDB  →  ${c.grey}${MONGODB_URI.replace(/\/\/[^@]+@/, '//<credentials>@')}${c.reset}`);
+    const rows = result.value as { db: string }[];
+    const dbName = rows?.[0]?.db ?? '(unknown)';
+    const dbUrl = process.env.DATABASE_URL ?? '';
+    pass(`Connected to Postgres  →  ${c.grey}${dbUrl.replace(/\/\/[^@]+@/, '//<credentials>@')}${c.reset}`);
     pass(`Database name: ${dbName}`);
-    return [{ label: 'mongodb', ok: true }];
+    return [{ label: 'postgres', ok: true }];
   } else {
-    fail(`Cannot connect to MongoDB: ${result.error}`);
-    return [{ label: 'mongodb', ok: false, detail: result.error }];
+    fail(`Cannot connect to Postgres: ${result.error}`);
+    return [{ label: 'postgres', ok: false, detail: result.error }];
   }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  Section 3 — Collection Counts
+//  Section 3 — Table Counts
 // ═══════════════════════════════════════════════════════════════════════════
 async function checkCollections(): Promise<CheckResult[]> {
-  title('3. Collection Counts');
+  title('3. Table Counts');
 
-  const models: [string, mongoose.Model<any>][] = [ // eslint-disable-line @typescript-eslint/no-explicit-any
-    ['Tenants',           Tenant],
-    ['Users',             User],
-    ['Products',          Product],
-    ['Categories',        Category],
-    ['Transactions',      Transaction],
-    ['Branches',          Branch],
-    ['Customers',         Customer],
-    ['Subscriptions',     Subscription],
-    ['SubscriptionPlans', SubscriptionPlan],
-    ['AuditLogs',         AuditLog],
+  const counters: [string, () => Promise<number>][] = [
+    ['Tenants',           () => prisma.tenant.count()],
+    ['Users',             () => prisma.user.count()],
+    ['Products',          () => prisma.product.count()],
+    ['Categories',        () => prisma.category.count()],
+    ['Transactions',      () => prisma.transaction.count()],
+    ['Branches',          () => prisma.branch.count()],
+    ['Customers',         () => prisma.customer.count()],
+    ['Subscriptions',     () => prisma.subscription.count()],
+    ['SubscriptionPlans', () => prisma.subscriptionPlan.count()],
+    ['AuditLogs',         () => prisma.auditLog.count()],
   ];
 
   const results: CheckResult[] = [];
 
-  for (const [label, model] of models) {
-    const r = await safe(label, () => model.countDocuments());
+  for (const [label, countFn] of counters) {
+    const r = await safe(label, countFn);
     if (r.ok) {
       const count = r.value as number;
-      pass(`${label.padEnd(18)} ${String(count).padStart(6)} document${count !== 1 ? 's' : ''}`);
+      pass(`${label.padEnd(18)} ${String(count).padStart(6)} row${count !== 1 ? 's' : ''}`);
       results.push({ label, ok: true });
     } else {
       fail(`${label}: ${r.error}`);
@@ -184,7 +171,7 @@ async function checkTenants(): Promise<CheckResult[]> {
   const results: CheckResult[] = [];
 
   const tenantsResult = await safe('tenants query', () =>
-    Tenant.find({ isActive: true }).select('_id slug name settings').lean()
+    prisma.tenant.findMany({ where: { isActive: true }, select: { id: true, slug: true, name: true } })
   );
 
   if (!tenantsResult.ok || !tenantsResult.value) {
@@ -202,10 +189,12 @@ async function checkTenants(): Promise<CheckResult[]> {
   pass(`${tenants.length} active tenant${tenants.length !== 1 ? 's' : ''} found`);
 
   for (const tenant of tenants) {
-    const userCount = await User.countDocuments({ tenantId: tenant._id, isActive: true });
-    const adminCount = await User.countDocuments({ tenantId: tenant._id, role: { $in: ['admin', 'owner'] }, isActive: true });
-    const productCount = await Product.countDocuments({ tenantId: tenant._id });
-    const branchCount = await Branch.countDocuments({ tenantId: tenant._id });
+    const userCount = await prisma.user.count({ where: { tenantId: tenant.id, isActive: true } });
+    const adminCount = await prisma.user.count({
+      where: { tenantId: tenant.id, role: { in: ['admin', 'owner'] }, isActive: true },
+    });
+    const productCount = await prisma.product.count({ where: { tenantId: tenant.id } });
+    const branchCount = await prisma.branch.count({ where: { tenantId: tenant.id } });
 
     const slug = String(tenant.slug).padEnd(20);
     const name = String(tenant.name);
@@ -235,7 +224,10 @@ async function checkSubscriptionPlans(): Promise<CheckResult[]> {
   const expectedTiers = ['starter', 'pro', 'business', 'enterprise'];
 
   const plansResult = await safe('plans query', () =>
-    SubscriptionPlan.find({ isActive: true }).select('name tier price').lean()
+    prisma.subscriptionPlan.findMany({
+      where: { isActive: true },
+      select: { name: true, tier: true, priceMonthly: true, priceCurrency: true },
+    })
   );
 
   if (!plansResult.ok) {
@@ -244,7 +236,7 @@ async function checkSubscriptionPlans(): Promise<CheckResult[]> {
   }
 
   const plans = plansResult.value ?? [];
-  const tiers = plans.map((p: any) => p.tier); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const tiers = plans.map((p) => p.tier);
 
   if (plans.length === 0) {
     warn('No active subscription plans — run: npm run seed:subscription-plans');
@@ -252,12 +244,11 @@ async function checkSubscriptionPlans(): Promise<CheckResult[]> {
   }
 
   for (const expected of expectedTiers) {
-    if (tiers.includes(expected)) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const plan: any = plans.find((p: any) => p.tier === expected) ?? {};
-      const planName     = plan.name     ?? expected;
-      const planCurrency = plan.price?.currency ?? '?';
-      const planPrice    = ((plan.price?.monthly ?? 0) / 100).toFixed(2);
+    if (tiers.includes(expected as (typeof tiers)[number])) {
+      const plan = plans.find((p) => p.tier === expected);
+      const planName     = plan?.name     ?? expected;
+      const planCurrency = plan?.priceCurrency ?? '?';
+      const planPrice    = Number(plan?.priceMonthly ?? 0).toFixed(2);
       pass(`${expected.padEnd(12)} — ${planName} (${planCurrency} ${planPrice}/mo)`);
       results.push({ label: `plan:${expected}`, ok: true });
     } else {
@@ -275,9 +266,9 @@ async function checkSubscriptionPlans(): Promise<CheckResult[]> {
 async function checkSubscriptions(): Promise<CheckResult[]> {
   title('6. Tenant Subscriptions');
 
-  const activeSubs = await Subscription.countDocuments({ status: 'active' });
-  const trialSubs  = await Subscription.countDocuments({ status: 'trial' });
-  const expiredSubs = await Subscription.countDocuments({ status: { $in: ['cancelled', 'suspended'] } });
+  const activeSubs = await prisma.subscription.count({ where: { status: 'active' } });
+  const trialSubs  = await prisma.subscription.count({ where: { status: 'trial' } });
+  const expiredSubs = await prisma.subscription.count({ where: { status: { in: ['cancelled', 'suspended'] } } });
 
   if (activeSubs > 0 || trialSubs > 0) {
     pass(`Active: ${activeSubs}  |  Trial: ${trialSubs}  |  Cancelled/Suspended: ${expiredSubs}`);
@@ -337,14 +328,14 @@ async function main() {
 
   sep();
 
-  if (dbConnected) {
-    await mongoose.disconnect();
-  }
-
   process.exit(failed.length > 0 ? 1 : 0);
 }
 
-main().catch(err => {
-  console.error(`\n${c.red}Fatal error:${c.reset}`, err);
-  process.exit(1);
-});
+main()
+  .catch(err => {
+    console.error(`\n${c.red}Fatal error:${c.reset}`, err);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

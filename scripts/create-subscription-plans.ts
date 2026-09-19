@@ -1,6 +1,6 @@
-import mongoose from 'mongoose';
-import SubscriptionPlan from '../models/SubscriptionPlan';
+import { randomUUID } from 'crypto';
 import dotenv from 'dotenv';
+import prisma from '../lib/db';
 
 // Load environment variables
 dotenv.config({ path: '.env.local' });
@@ -13,7 +13,7 @@ const subscriptionPlans = [
   // ──────────────────────────────────────────────
   {
     name: 'Basic',
-    tier: 'starter',
+    tier: 'starter' as const,
     description: 'POS software + hardware setup & training. Perfect for micro businesses getting started.',
     price: {
       monthly: 1500,
@@ -56,7 +56,7 @@ const subscriptionPlans = [
   // ──────────────────────────────────────────────
   {
     name: 'Standard',
-    tier: 'pro',
+    tier: 'pro' as const,
     description: 'Everything in Basic + BIR Permit-to-Use assistance, receipt formatting, and BIR documentation.',
     price: {
       monthly: 2500,
@@ -99,7 +99,7 @@ const subscriptionPlans = [
   // ──────────────────────────────────────────────
   {
     name: 'Premium',
-    tier: 'business',
+    tier: 'business' as const,
     description: 'Full BIR compliance solution: CAS-ready reporting, complete audit trail, and monthly support.',
     price: {
       monthly: 5000,
@@ -141,7 +141,7 @@ const subscriptionPlans = [
   // ──────────────────────────────────────────────
   {
     name: 'Enterprise',
-    tier: 'enterprise',
+    tier: 'enterprise' as const,
     description: 'Custom solutions for chains and LGUs. Unlimited everything with dedicated account management.',
     price: {
       monthly: 0, // Custom pricing
@@ -181,34 +181,71 @@ const subscriptionPlans = [
 
 async function createSubscriptionPlans() {
   try {
-    const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/pos-system';
+    console.log('Connecting to database...');
 
-    if (!MONGODB_URI) {
-      throw new Error('Please define the MONGODB_URI environment variable');
+    // Upsert by tier (unique) so this stays idempotent/safe to run twice,
+    // instead of the old Mongo script's deleteMany + insertMany (which would
+    // also cascade-orphan any existing Subscription.planId references).
+    const createdPlans = [];
+    for (const plan of subscriptionPlans) {
+      const data = {
+        name: plan.name,
+        tier: plan.tier,
+        description: plan.description,
+        priceMonthly: plan.price.monthly,
+        priceSetupFee: plan.price.setupFee || 0,
+        priceCurrency: plan.price.currency || 'PHP',
+        maxUsers: plan.features.maxUsers,
+        maxBranches: plan.features.maxBranches,
+        maxProducts: plan.features.maxProducts,
+        maxTransactions: plan.features.maxTransactions,
+        enableInventory: plan.features.enableInventory,
+        enableCategories: plan.features.enableCategories,
+        enableDiscounts: plan.features.enableDiscounts,
+        enableLoyaltyProgram: plan.features.enableLoyaltyProgram,
+        enableCustomerManagement: plan.features.enableCustomerManagement,
+        enableBookingScheduling: plan.features.enableBookingScheduling,
+        enableReports: plan.features.enableReports,
+        enableMultiBranch: plan.features.enableMultiBranch,
+        enableHardwareIntegration: plan.features.enableHardwareIntegration,
+        prioritySupport: plan.features.prioritySupport,
+        customIntegrations: plan.features.customIntegrations,
+        dedicatedAccountManager: plan.features.dedicatedAccountManager,
+        birPtuAssistance: plan.birCompliance.ptuAssistance,
+        birReceiptFormatting: plan.birCompliance.receiptFormatting,
+        birDocumentation: plan.birCompliance.birDocumentation,
+        birCasReporting: plan.birCompliance.casReporting,
+        birAuditTrailSystem: plan.birCompliance.auditTrailSystem,
+        birMonthlySupport: plan.birCompliance.monthlySupport,
+        isActive: plan.isActive,
+        isCustom: plan.isCustom,
+      };
+
+      const created = await prisma.subscriptionPlan.upsert({
+        where: { tier: plan.tier },
+        create: { id: randomUUID(), ...data },
+        update: data,
+      });
+      createdPlans.push(created);
     }
 
-    console.log('Connecting to MongoDB...');
-    await mongoose.connect(MONGODB_URI);
-    console.log('Connected to database');
-
-    // Clear existing plans
-    await SubscriptionPlan.deleteMany({});
-    console.log('Cleared existing subscription plans');
-
-    // Create new plans
-    const createdPlans = await SubscriptionPlan.insertMany(subscriptionPlans);
-    console.log(`Created ${createdPlans.length} subscription plans:`);
-
-    createdPlans.forEach(plan => {
-      console.log(`- ${plan.name} (${plan.tier}): ₱${plan.price.monthly}/month + ₱${plan.price.setupFee} setup`);
+    console.log(`Upserted ${createdPlans.length} subscription plans:`);
+    createdPlans.forEach((plan) => {
+      console.log(`- ${plan.name} (${plan.tier}): ₱${plan.priceMonthly}/month + ₱${plan.priceSetupFee} setup`);
     });
 
     console.log('Subscription plans created successfully!');
-    process.exit(0);
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('Error creating subscription plans:', error.message);
     process.exit(1);
   }
 }
 
-createSubscriptionPlans();
+createSubscriptionPlans()
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

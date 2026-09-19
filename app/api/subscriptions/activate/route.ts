@@ -241,15 +241,8 @@ export async function POST(request: NextRequest) {
         // Reserve the coupon's use in the same transaction as the charge it
         // discounted — if the payment write rolls back, the use shouldn't be
         // consumed either.
-        // TODO(postgres-migration): lib/coupons.ts is still Mongoose-based
-        // (owned by the customers/crm/loyalty/coupons migration workstream)
-        // and incrementCouponUsage expects a mongoose.ClientSession, not a
-        // Prisma transaction client — it cannot participate in this Prisma
-        // $transaction. Left as a best-effort call outside strict atomicity
-        // until lib/coupons.ts is migrated to Prisma; revisit then to move
-        // this inside the transaction against the Prisma tx client.
         if (coupon) {
-          await incrementCouponUsage(coupon._id, undefined as unknown as Parameters<typeof incrementCouponUsage>[1]);
+          await incrementCouponUsage(coupon._id, tx);
         }
 
         return subscription;

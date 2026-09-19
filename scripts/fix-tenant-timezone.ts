@@ -18,10 +18,7 @@ import { resolve } from 'path';
 dotenv.config({ path: resolve(process.cwd(), '.env.local') });
 dotenv.config({ path: resolve(process.cwd(), '.env') });
 
-import mongoose from 'mongoose';
-import Tenant from '../models/Tenant';
-
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/pos-system';
+import prisma from '../lib/db';
 
 function arg(name: string, fallback?: string): string | undefined {
   const found = process.argv.find(a => a.startsWith(`--${name}=`));
@@ -46,39 +43,41 @@ async function main() {
     process.exit(1);
   }
 
-  await mongoose.connect(MONGODB_URI);
-
-  const tenant = await Tenant.findOne({ slug });
+  const tenant = await prisma.tenant.findFirst({ where: { slug }, include: { settings: true } });
   if (!tenant) {
     console.error(`Tenant "${slug}" not found.`);
     process.exit(1);
   }
 
-  const before = (tenant as any).settings?.timezone;
-  console.log(`Tenant: ${(tenant as any).name} (${slug})`);
+  const before = tenant.settings?.timezone;
+  console.log(`Tenant: ${tenant.name} (${slug})`);
   console.log(`Current settings.timezone: ${before ?? '(unset)'}`);
   console.log(`New settings.timezone:     ${timezone}`);
 
   if (before === timezone) {
     console.log('\nNo change needed — already set to the target timezone.');
-    await mongoose.disconnect();
     return;
   }
 
   if (dryRun) {
     console.log('\n--dry-run: no changes written.');
-    await mongoose.disconnect();
     return;
   }
 
-  (tenant as any).settings.timezone = timezone;
-  await tenant.save();
+  await prisma.tenantSettings.upsert({
+    where: { tenantId: tenant.id },
+    create: { tenantId: tenant.id, timezone },
+    update: { timezone },
+  });
 
   console.log('\nUpdated. Existing transaction createdAt values are untouched (they are correct UTC instants) — only the display timezone changed.');
-  await mongoose.disconnect();
 }
 
-main().catch(err => {
-  console.error(err);
-  process.exit(1);
-});
+main()
+  .catch(err => {
+    console.error(err);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

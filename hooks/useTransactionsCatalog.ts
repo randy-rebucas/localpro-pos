@@ -68,7 +68,9 @@ export function useTransactionsCatalog(tenant: string, page: number) {
       let expOk = false;
 
       if (txData.success) {
-        setTransactions(txData.data);
+        // API rows are Prisma records keyed by `id`; this hook's consumers
+        // still use the pre-Postgres-migration `_id` convention throughout.
+        setTransactions(txData.data.map((t: CatalogTransaction & { id?: string }) => ({ ...t, _id: t._id ?? t.id })));
         setTotalPages(txData.pagination?.pages ?? 1);
         txOk = true;
       } else {
@@ -77,7 +79,7 @@ export function useTransactionsCatalog(tenant: string, page: number) {
       }
 
       if (expData.success) {
-        setExpenses(expData.data);
+        setExpenses(expData.data.map((e: CatalogExpense & { id?: string }) => ({ ...e, _id: e._id ?? e.id })));
         expOk = true;
       } else {
         setExpenses([]);

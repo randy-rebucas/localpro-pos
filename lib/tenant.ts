@@ -9,7 +9,7 @@
  * subdomain / domain / id, and never widen a `where` clause.
  */
 import prisma from '@/lib/db';
-import { ITenantSettings } from '@/models/Tenant';
+import { ITenantSettings } from '@/types/tenant';
 import { logger } from '@/lib/logger';
 
 export interface TenantInfo {
