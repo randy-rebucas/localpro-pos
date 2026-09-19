@@ -119,15 +119,15 @@ Access Check:
 ## 2. Password Security
 
 ### 2.1 Storage
-**Source**: `models/User.ts`
+**Source**: `prisma/schema.prisma` (`User` model), `lib/auth.ts`
 
 | Control | Implementation |
 |---------|---------------|
 | Hashing Algorithm | bcryptjs |
 | Salt Rounds | 10 |
 | Storage | Hashed in database (never plaintext) |
-| Query Exclusion | `select: false` — never returned in queries by default |
-| Minimum Length | 8 characters (schema validation) |
+| Query Exclusion | Non-auth routes use Prisma `select` to whitelist fields (excluding `password`), or strip it from the result before returning to the client |
+| Minimum Length | 8 characters (application-level validation) |
 
 ### 2.2 Password Lifecycle
 
@@ -183,9 +183,9 @@ Set httpOnly cookie + audit log (successful login)
 
 | Control | Implementation |
 |---------|---------------|
-| Database | MongoDB Atlas (encrypted at rest) |
-| Connection | `mongodb+srv://` with TLS |
-| Sensitive Fields | Password: `select: false` in schema |
+| Database | PostgreSQL (encryption at rest depends on the hosting provider — confirm with your DB host) |
+| Connection | `DATABASE_URL` (postgresql://), TLS recommended/required per provider |
+| Sensitive Fields | Password: hashed with bcrypt; excluded from API responses via Prisma `select` or explicit stripping (see §2.1) |
 | Environment Secrets | `.env.local` (never committed to git) |
 
 ### 3.3 Security Headers
@@ -239,15 +239,14 @@ Production:
 | Password | Minimum length, strength requirements |
 | Numeric | Range checks, type coercion |
 | Strings | Trim, max length, allowed characters |
-| ObjectIds | MongoDB ObjectId format validation |
+| Record IDs | Format validation (24-hex-char id shape retained from the pre-migration schema) |
 | Dates | ISO format parsing and range checks |
 
 ### 4.2 Protection Against Common Attacks
 
 | Attack Vector | Mitigation |
 |--------------|-----------|
-| SQL Injection | N/A (MongoDB, no SQL) |
-| NoSQL Injection | Mongoose schema validation, typed queries |
+| SQL Injection | Prisma parameterized queries (no raw string-concatenated SQL) |
 | XSS | CSP headers, input sanitization |
 | CSRF | SameSite cookies, origin validation |
 | Clickjacking | X-Frame-Options: DENY |
@@ -263,9 +262,9 @@ Production:
 ```
 Every Database Query:
   ─────────────────────
-  Transaction.find({ tenantId: currentUser.tenantId, ... })
-  Product.find({ tenantId: currentUser.tenantId, ... })
-  AuditLog.find({ tenantId: currentUser.tenantId, ... })
+  prisma.transaction.findMany({ where: { tenantId: currentUser.tenantId, ... } })
+  prisma.product.findMany({ where: { tenantId: currentUser.tenantId, ... } })
+  prisma.auditLog.findMany({ where: { tenantId: currentUser.tenantId, ... } })
 
   → Users can NEVER access another tenant's data
   → tenantId is extracted from JWT (server-side)
@@ -288,33 +287,27 @@ Every Database Query:
 ## 6. Database Security
 
 ### 6.1 Connection Configuration
-**Source**: `lib/mongodb.ts`
+**Source**: `lib/db.ts`
 
 ```
-Connection Options:
-  bufferCommands:            false
-  serverSelectionTimeoutMS:  5000    → Fail fast on connection issues
-  connectTimeoutMS:          10000   → 10s connection timeout
-  socketTimeoutMS:           45000   → 45s query timeout
-  maxPoolSize:               10      → Limit concurrent connections
-  minPoolSize:               2       → Keep minimum pool ready
-
 Connection Management:
-  - Global singleton (prevents connection leaks)
-  - Cached promise pattern (reused across requests)
+  - Single PrismaClient instance, cached on globalThis in development
+    (prevents connection-pool exhaustion from hot-reload creating new clients)
+  - Pool sizing/timeouts configured via DATABASE_URL connection params
+    or the hosting provider's pooler (e.g. PgBouncer), not hardcoded here
   - Error logging via structured logger
 ```
 
 ### 6.2 Connection String Security
 
 ```
-Environment Variable: MONGODB_URI
-Format: mongodb+srv://<username>:<password>@<cluster>/<database>
+Environment Variable: DATABASE_URL
+Format: postgresql://<username>:<password>@<host>:<port>/<database>
 
 Security:
   - Stored in .env.local (never committed)
-  - TLS encryption for all connections
-  - IP whitelist on MongoDB Atlas (recommended)
+  - TLS encryption for all connections (required by most managed providers)
+  - IP allowlisting on the database host (recommended where supported)
   - Database user with least-privilege access
 ```
 
@@ -338,34 +331,34 @@ Backup Automation:
 
   Process:
     1. Authenticate cron request
-    2. Connect to database
-    3. Export collections (tenant-scoped or full)
-    4. Compress backup data
-    5. Upload to cloud storage (optional)
-    6. Log backup result
+    2. Run pg_dump against DATABASE_URL (custom-format dump, produces a
+       .dump file; a full-database export — pg_dump cannot filter rows
+       by tenant, so a per-tenant backup request still exports everything
+       and a warning is logged)
+    3. Write dump to local backup directory, rotate old backups (keep N)
+    4. Upload to cloud storage (optional, S3-compatible)
+    5. Log backup result
 
   Recovery:
-    - Restore from backup file
-    - MongoDB Atlas point-in-time recovery (if Atlas)
-    - Manual import via mongorestore
+    - Restore from a .dump file via pg_restore (see scripts/restore-database.ts)
+    - Or your database provider's own point-in-time recovery, if offered
 ```
 
-### 7.2 MongoDB Atlas Backups (Recommended)
+### 7.2 Managed PostgreSQL Provider Backups (Recommended)
 
-| Feature | Description |
-|---------|-------------|
-| Continuous Backup | Point-in-time recovery up to last 24 hours |
-| Daily Snapshots | Retained for 7 days (configurable) |
-| Weekly Snapshots | Retained for 4 weeks |
-| Monthly Snapshots | Retained for 12 months |
-| Cross-Region | Replicate backups to different region |
+Point-in-time recovery, automatic snapshots, and cross-region replication
+are provider features (e.g. RDS, Cloud SQL, Neon, Supabase), not something
+this application implements itself. Confirm what your specific hosting
+provider offers and record it here once the production database is
+provisioned — do not assume Atlas-style continuous backups are active by
+default.
 
 ### 7.3 Backup Schedule Recommendation
 
 | Backup Type | Frequency | Retention | Method |
 |------------|-----------|-----------|--------|
-| Automated DB Backup | Daily (2:00 AM) | 30 days | Cron + cloud storage |
-| MongoDB Atlas Snapshot | Continuous | Per Atlas plan | Automatic |
+| Automated DB Backup | Daily (2:00 AM) | 30 days | Cron (`pnpm db:backup`) + cloud storage |
+| Managed Provider Snapshot | Per provider plan | Per provider plan | Confirm with hosting provider |
 | Configuration Export | Weekly | 90 days | Settings + env backup |
 | Audit Log Archive | Monthly | 5 years (BIR) | Export to cold storage |
 
@@ -457,7 +450,7 @@ Log Entry:
 
 | Variable | Purpose | Generation |
 |---------|---------|-----------|
-| `MONGODB_URI` | Database connection | MongoDB Atlas dashboard |
+| `DATABASE_URL` | Database connection | Your PostgreSQL hosting provider's dashboard |
 | `JWT_SECRET` | Token signing | `crypto.randomBytes(32).toString('hex')` |
 | `CRON_SECRET` | Automation auth | `crypto.randomBytes(32).toString('hex')` |
 
@@ -497,13 +490,13 @@ Storage:
 |----------------|----------------------|--------|
 | Data confidentiality | JWT auth, RBAC, tenant isolation | Implemented |
 | Data integrity | Immutable transactions, audit trail | Implemented |
-| Data availability | Automated backups, MongoDB replication | Implemented |
+| Data availability | Automated backups (pg_dump/cron), plus provider replication where available | Implemented |
 | Access control | 5-tier role hierarchy, API-level enforcement | Implemented |
 | Audit trail | Complete action logging with user + timestamp + IP | Implemented |
 | Secure transmission | HTTPS (HSTS), TLS for database | Implemented |
 | Password protection | bcrypt hashing (10 rounds), not stored in plaintext | Implemented |
 | Session management | JWT with expiration, token revocation | Implemented |
-| Backup & recovery | Automated backups, point-in-time recovery | Implemented |
+| Backup & recovery | Automated pg_dump backups; point-in-time recovery depends on hosting provider (confirm) | Partially implemented |
 | Record retention | Persistent storage, no auto-deletion of financial data | Implemented |
 | Input validation | Server-side validation on all endpoints | Implemented |
 | Separation of duties | Role-based permissions (cashier vs manager vs admin) | Implemented |
@@ -517,21 +510,21 @@ Storage:
 | Scenario | RTO | RPO | Recovery Method |
 |----------|-----|-----|----------------|
 | Application crash | < 5 min | 0 | Auto-restart (platform) |
-| Database corruption | < 1 hour | < 24 hours | Atlas point-in-time restore |
-| Data center outage | < 4 hours | < 1 hour | Cross-region replica |
-| Accidental deletion | < 30 min | < 24 hours | Backup restore |
+| Database corruption | < 1 hour | < 24 hours | Restore from latest `pg_dump` backup, or provider point-in-time restore if available |
+| Data center outage | Depends on provider | Depends on provider | Provider failover/replica, if the plan includes one — confirm with hosting provider |
+| Accidental deletion | < 30 min | < 24 hours | `pg_restore` from most recent backup (`scripts/restore-database.ts`) |
 | Security breach | < 1 hour | 0 | Token revocation + password reset |
 
 ### Recovery Procedures
 
 1. **Application Failure**: Platform auto-restart (Vercel/Railway/AWS)
-2. **Database Issues**: MongoDB Atlas automatic failover to replica
-3. **Data Loss**: Restore from most recent backup
+2. **Database Issues**: Restore via `pg_restore` from the most recent `pg_dump` backup; escalate to provider support for provider-level failover
+3. **Data Loss**: Restore from most recent backup (`pnpm db:restore`)
 4. **Compromised Account**: Revoke all tokens → force password reset → review audit logs
-5. **Full System Compromise**: Rotate all secrets → restore from clean backup → audit review
+5. **Full System Compromise**: Rotate all secrets (including `DATABASE_URL` credentials) → restore from clean backup → audit review
 
 ---
 
-*Document Version: 1.0*
-*Generated: 2026-03-21*
+*Document Version: 1.1 — updated for the PostgreSQL/Prisma migration (previously described MongoDB/Mongoose)*
+*Generated: 2026-03-21, revised 2026-09-19*
 *System: 1POS*

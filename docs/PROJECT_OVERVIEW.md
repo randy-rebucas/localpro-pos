@@ -51,7 +51,7 @@ Tenant isolation is treated as a hard security boundary, not a convenience featu
 |---|---|
 | Framework | Next.js 16 (App Router), React 19, TypeScript |
 | Styling | Tailwind CSS 4 |
-| Data layer | MongoDB via Mongoose 8 |
+| Data layer | PostgreSQL via Prisma |
 | Auth | JWT (`jsonwebtoken`), `bcryptjs` |
 | Scheduling | node-cron |
 | Payments | PayPal Server SDK |

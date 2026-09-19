@@ -6,29 +6,31 @@ Create a new Next.js App Router API route following project conventions.
 
 ```typescript
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import { getCurrentUser } from '@/lib/auth';
+import prisma from '@/lib/db';
+import { requireTenantAccess } from '@/lib/api-tenant';
+import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { createAuditLog } from '@/lib/audit';
 
 export async function POST(request: NextRequest) {
-  // 1. Rate limit (auth/write routes)
-  const ip = request.headers.get('x-forwarded-for') || 'unknown';
-  const rl = checkRateLimit(`route-name:${ip}`, 20, 60_000);
-  if (!rl.allowed) return NextResponse.json({ success: false, error: 'Rate limit exceeded' }, { status: 429 });
-
-  // 2. Auth
-  const user = await getCurrentUser(request);
-  if (!user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-
-  // 3. DB + tenant-scoped query (ALWAYS filter by user.tenantId)
   try {
-    await connectDB();
-    // ... query with { tenantId: user.tenantId }
+    // 1. Rate limit (auth/write routes)
+    const ip = request.headers.get('x-forwarded-for') || 'unknown';
+    const rl = checkRateLimit(`route-name:${ip}`, 20, 60_000);
+    if (!rl.allowed) return NextResponse.json({ success: false, error: 'Rate limit exceeded' }, { status: 429 });
+
+    // 2. Auth + tenant resolution (ALWAYS use the returned tenantId, never a client-supplied one)
+    //    requireTenantAccess throws (caught below by handleApiError) on missing auth or
+    //    a cross-tenant access attempt — it never returns a NextResponse itself.
+    const { user, tenantId } = await requireTenantAccess(request);
+
+    // 3. Prisma query, scoped by tenantId
+    const result = await prisma.entityName.create({
+      data: { /* ...fields */, tenantId },
+    });
 
     // 4. Audit log for mutations
-    await createAuditLog(request, { action: 'CREATE', entityType: 'EntityName', tenantId: user.tenantId });
+    await createAuditLog(request, { action: AuditActions.CREATE, entityType: 'EntityName', tenantId, userId: user.userId });
 
     return NextResponse.json({ success: true, data: result });
   } catch (error) {

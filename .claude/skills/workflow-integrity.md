@@ -2,7 +2,7 @@
 
 Audit or implement any feature slice — API route(s), the page(s)/component(s) that call them, and any setting/toggle that controls them — so it can't leave a half-done state, a double-applied write, or a control (permission gate, feature flag, setting) that's declared but not actually wired to what it's supposed to govern. Covers two overlapping concerns:
 
-- **Multi-step workflow integrity** (transactions, checkout, refund, void, shift open/close, stock adjustment, payment capture, loyalty/balance adjustment) — any handler writing to **more than one collection or side effect**.
+- **Multi-step workflow integrity** (transactions, checkout, refund, void, shift open/close, stock adjustment, payment capture, loyalty/balance adjustment) — any handler writing to **more than one table or side effect**.
 - **Wiring integrity** — any UI gate, permission check, setting, or feature flag that exists in one layer (page, component, settings screen) must actually be enforced/consumed in every other layer it claims to affect (API route, cron job, other pages/components reading the same setting).
 
 Single-collection CRUD with no cross-layer control to verify only needs [[api_patterns]] (`add-api-route`).
@@ -25,9 +25,9 @@ Run every invocation as five explicit phases — don't collapse straight to edit
 ## Checks
 
 ### A. Multi-write workflow (when the route has 2+ side effects)
-1. **Atomicity** — all writes succeed or none do. Prefer a Mongo transaction (`startSession()` + `withTransaction()`, `{ session }` on every write). Prior art: only `prescriptions/[id]/dispense`, `loyalty/adjust`, `customers/[id]/balance-payments` use transactions (`rg "withTransaction|startSession" app/api`) — new multi-write financial/inventory routes should match that, not the untransacted majority. No transaction + no compensating rollback on a multi-write financial/inventory route = flag it, even if "unlikely to fail."
-2. **Idempotency** — can a retry/double-tap/back-button resubmit double-apply? Needs a dedupe key (client idempotency token or unique index) turning a repeat into a no-op/409. Payment capture/refund are highest risk.
-3. **Concurrency** — flag `findOne` → compute → `save()` on stock/balance/points (two concurrent sales can oversell). Prefer atomic `findOneAndUpdate` with `$inc` + a precondition filter (e.g. `{ stock: { $gte: qty } }`).
+1. **Atomicity** — all writes succeed or none do. Prefer a Prisma interactive transaction (`prisma.$transaction(async (tx) => { ... })`, passing `tx` — not the bare `prisma` client — to every helper called inside it, e.g. `updateStock(..., tx)`). Prior art is now widespread (`rg '\$transaction' app/api` — includes `transactions`, `transactions/[id]/refund`, `bookings`, `products/[id]`, `stock-movements`, `subscriptions/activate`, `loyalty/adjust`, `customers/[id]/balance-payments`, `prescriptions/[id]/dispense`, and more); new multi-write financial/inventory routes should match that pattern. No transaction + no compensating rollback on a multi-write financial/inventory route = flag it, even if "unlikely to fail." Also flag a helper called inside a `$transaction` callback that was passed the global `prisma` client instead of `tx` — it silently escapes the transaction.
+2. **Idempotency** — can a retry/double-tap/back-button resubmit double-apply? Needs a dedupe key (client idempotency token or a unique constraint in `prisma/schema.prisma`) turning a repeat into a no-op/409. Payment capture/refund are highest risk.
+3. **Concurrency** — flag `findFirst`/`findUnique` → compute → `update()` on stock/balance/points (two concurrent sales can oversell). Prefer an atomic `updateMany` with `data: { field: { increment: ... } }` and a precondition in `where` (e.g. `{ stock: { gte: qty } }`), checking the returned `count` to detect a lost race.
 4. **State machine** — status transitions (pending→completed→refunded, open→closed, pending→dispensed) must be validated server-side before mutating, not just set.
 
 ### B. Wiring integrity (every layer that touches the control, always check)

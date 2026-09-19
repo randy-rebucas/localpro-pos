@@ -134,7 +134,7 @@ The mobile app enables customers to:
 
 ### Backend
 - Next.js API Routes
-- MongoDB (Mongoose)
+- PostgreSQL (Prisma)
 - Twilio (SMS)
 - JWT (Authentication)
 

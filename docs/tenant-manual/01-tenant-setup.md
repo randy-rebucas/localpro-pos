@@ -3,7 +3,7 @@
 ## What Is a Tenant?
 
 A tenant is an isolated store instance on the 1POS platform. Each tenant has its own:
-- Database (logically isolated within MongoDB)
+- Database rows (logically isolated within PostgreSQL via `tenantId` scoping)
 - Users and roles
 - Products, inventory, and transactions
 - Settings, branding, and configuration

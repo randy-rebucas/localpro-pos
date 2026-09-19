@@ -1,6 +1,6 @@
 # 1POS - Enterprise Point of Sale System
 
-A comprehensive, enterprise-grade Point of Sale (POS) system built with Next.js 16, MongoDB, Mongoose, and Tailwind CSS. Features multi-tenant architecture, real-time inventory management, advanced reporting, and extensive customization options.
+A comprehensive, enterprise-grade Point of Sale (POS) system built with Next.js 16, PostgreSQL, Prisma, and Tailwind CSS. Features multi-tenant architecture, real-time inventory management, advanced reporting, and extensive customization options.
 
 ## 🤖 Automations
 
@@ -373,7 +373,7 @@ The system supports multiple business types with industry-specific configuration
 
 - **Framework**: Next.js 16 (App Router)
 - **Language**: TypeScript
-- **Database**: MongoDB with Mongoose ODM
+- **Database**: PostgreSQL with Prisma ORM
 - **Styling**: Tailwind CSS 4
 - **Charts**: Recharts
 - **Authentication**: JWT (jsonwebtoken)
@@ -384,7 +384,7 @@ The system supports multiple business types with industry-specific configuration
 ## 📋 Prerequisites
 
 - Node.js 20.9 or higher
-- MongoDB 6.0+ (local installation or MongoDB Atlas account)
+- PostgreSQL 14+ (local installation or a managed provider)
 - npm, yarn, or pnpm
 
 ## 🚀 Installation
@@ -407,9 +407,9 @@ The system supports multiple business types with industry-specific configuration
    Create a `.env.local` file in the root directory:
    ```env
    # Database
-   MONGODB_URI=mongodb://localhost:27017/localpro-pos
-   # or for MongoDB Atlas
-   MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/localpro-pos
+   DATABASE_URL=postgresql://localhost:5432/localpro-pos
+   # or for a managed provider
+   DATABASE_URL=postgresql://username:password@host:5432/localpro-pos
    
    # JWT Authentication (REQUIRED - Change in production!)
    JWT_SECRET=your-super-secret-random-string-min-32-characters
@@ -423,16 +423,19 @@ The system supports multiple business types with industry-specific configuration
    DEFAULT_TENANT_SLUG=default
    ```
 
-4. **Start MongoDB (if using local installation):**
+4. **Start PostgreSQL (if using local installation) and run migrations:**
    ```bash
    # macOS (using Homebrew)
-   brew services start mongodb-community
+   brew services start postgresql
    
    # Linux
-   sudo systemctl start mongod
+   sudo systemctl start postgresql
    
    # Windows
-   # Start MongoDB service from Services panel
+   # Start PostgreSQL service from Services panel
+
+   # Apply the Prisma schema
+   npx prisma migrate deploy
    ```
 
 5. **Create default tenant:**
@@ -601,15 +604,9 @@ localpro-pos/
 │   ├── hardware/                  # Hardware integration
 │   ├── stock.ts                   # Stock management
 │   └── ...                        # Other utilities
-├── models/                         # Mongoose models
-│   ├── Attendance.ts              # Attendance model
-│   ├── CashDrawerSession.ts       # Cash drawer model
-│   ├── Discount.ts                # Discount model
-│   ├── Expense.ts                 # Expense model
-│   ├── Product.ts                 # Product model
-│   ├── ProductBundle.ts           # Bundle model
-│   ├── Transaction.ts             # Transaction model
-│   └── ...                        # Other models
+├── prisma/                          # Prisma schema and migrations
+│   ├── schema.prisma               # Data models (Tenant, User, Product, Transaction, etc.)
+│   └── migrations/                 # SQL migration history
 └── scripts/                        # Setup scripts
     ├── create-admin-user.ts        # Admin user creation
     └── create-default-tenant.ts    # Default tenant creation
@@ -757,10 +754,11 @@ Language can be set per tenant and switched dynamically. All UI text is localize
 
 ## 🐛 Troubleshooting
 
-### MongoDB Connection Issues
-- Ensure MongoDB is running (check with `mongosh` or MongoDB Compass)
-- Verify the connection string in `.env.local`
-- Check firewall settings if using MongoDB Atlas
+### PostgreSQL Connection Issues
+- Ensure PostgreSQL is running (check with `psql` or a GUI client)
+- Verify `DATABASE_URL` in `.env.local`
+- Check firewall settings if using a managed/remote database
+- Run `npx prisma migrate deploy` if tables are missing
 
 ### Port Already in Use
 - Change the port: `npm run dev -- -p 3001`
@@ -784,7 +782,7 @@ This project is open source and available for use.
 For issues or questions:
 - Check the documentation files in the repository
 - Review the Next.js documentation
-- Review the MongoDB documentation
+- Review the Prisma documentation
 
 ## 🎯 Feature Summary
 
@@ -826,18 +824,15 @@ This POS system includes **100+ enterprise features** covering:
 
 ---
 
-**Built with ❤️ using Next.js, MongoDB, and modern web technologies.**
+**Built with ❤️ using Next.js, PostgreSQL, and modern web technologies.**
 
-npm run db:backup	Full DB backup to ./backups/, keeps last 7
+npm run db:backup	Full DB backup (via pg_dump) to ./backups/, keeps last 7
 npm run db:backup:cloud	Same + uploads to S3-compatible cloud storage
 npm run db:backup:list	Lists all backup files with size and timestamp
 
-
-# Backup a single tenant
-npm run db:backup -- --tenant=64abc123def456
 
 # Custom output dir + keep 14 backups
 npm run db:backup -- --out=/mnt/backups --keep=14
 
 # Delete a specific backup
-npm run db:backup -- --delete=backup-2026-01-01T02-00-00-000Z.json
+npm run db:backup -- --delete=backup-2026-01-01T02-00-00-000Z.dump
