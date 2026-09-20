@@ -277,25 +277,6 @@ export interface TranslationDict {
     missingPlanId?: string;
     [key: string]: string | undefined;
   };
-  documentation?: {
-    tableOfContents?: string;
-    overview?: string;
-    searchPages?: string;
-    userManualDesc?: string;
-    tenantManualDesc?: string;
-    birDocumentation?: string;
-    birDocs?: string;
-    birDesc?: string;
-    noSearchResults?: string;
-    chapter?: string;
-    chapters?: string;
-    chapterLabel?: string;
-    previous?: string;
-    next?: string;
-    failedToLoadDocs?: string;
-    failedToLoadPage?: string;
-    [key: string]: string | undefined;
-  };
   customerDisplay?: {
     noSessionFound?: string;
     noSessionMessage?: string;

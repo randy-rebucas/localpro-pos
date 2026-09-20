@@ -146,8 +146,6 @@
     "settings": "Configuración",
     "profile": "Perfil",
     "admin": "Administración",
-    "userManual": "Manual de Usuario",
-    "tenantManual": "Manual de Tenant",
     "switchStore": "Cambiar Tienda",
     "logout": "Cerrar Sesión"
   },
@@ -2332,24 +2330,6 @@
     "paymentCancelled": "Pago Cancelado",
     "paymentCancelledMessage": "Su pago fue cancelado. No se han realizado cambios en su suscripcion.",
     "backToSubscription": "Volver a Suscripcion"
-  },
-  "documentation": {
-    "tableOfContents": "Tabla de Contenidos",
-    "overview": "Resumen",
-    "searchPages": "Buscar paginas...",
-    "userManualDesc": "Guias paso a paso para las operaciones diarias de la tienda",
-    "tenantManualDesc": "Guias de configuracion y administracion",
-    "birDocumentation": "Documentacion BIR",
-    "birDocs": "Docs BIR",
-    "birDesc": "Guias de cumplimiento del Bureau of Internal Revenue, recibos, IVA y auditoria",
-    "noSearchResults": "Ninguna pagina coincide con \"{query}\"",
-    "chapter": "capitulo",
-    "chapters": "capitulos",
-    "chapterLabel": "Capitulo",
-    "previous": "Anterior",
-    "next": "Siguiente",
-    "failedToLoadDocs": "Error al cargar la documentacion",
-    "failedToLoadPage": "Error al cargar esta pagina"
   },
   "crm": {
     "title": "CRM",

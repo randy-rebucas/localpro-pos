@@ -146,8 +146,6 @@
     "settings": "Settings",
     "profile": "Profile",
     "admin": "Admin",
-    "userManual": "User Manual",
-    "tenantManual": "Tenant Manual",
     "switchStore": "Switch Store",
     "logout": "Logout"
   },
@@ -2327,24 +2325,6 @@
     "paymentCancelled": "Payment Cancelled",
     "paymentCancelledMessage": "Your payment was cancelled. No changes have been made to your subscription.",
     "backToSubscription": "Back to Subscription"
-  },
-  "documentation": {
-    "tableOfContents": "Table of Contents",
-    "overview": "Overview",
-    "searchPages": "Search pages...",
-    "userManualDesc": "Step-by-step guides for daily store operations",
-    "tenantManualDesc": "Setup, configuration, and administration guides",
-    "birDocumentation": "BIR Documentation",
-    "birDocs": "BIR Docs",
-    "birDesc": "Bureau of Internal Revenue compliance, receipts, VAT, and audit trail guides",
-    "noSearchResults": "No pages match \"{query}\"",
-    "chapter": "chapter",
-    "chapters": "chapters",
-    "chapterLabel": "Chapter",
-    "previous": "Previous",
-    "next": "Next",
-    "failedToLoadDocs": "Failed to load documentation",
-    "failedToLoadPage": "Failed to load this page"
   },
   "crm": {
     "title": "CRM",
