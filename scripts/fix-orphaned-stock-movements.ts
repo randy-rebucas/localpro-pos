@@ -17,6 +17,8 @@
  *   npx tsx scripts/fix-orphaned-stock-movements.ts --apply   # actually deletes
  */
 
+import '../lib/script-runtime';
+
 import dotenv from 'dotenv';
 import { resolve } from 'path';
 

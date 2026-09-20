@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
+import { setBypassContext } from '@/lib/tenant-context';
 
 /**
  * GET /api/stores/retail
@@ -22,6 +23,9 @@ export async function GET(request: NextRequest) {
     if (!rl.allowed) {
       return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     }
+
+    // Intentionally cross-tenant: public store directory, not scoped to one tenant.
+    setBypassContext();
 
     const searchParams = request.nextUrl.searchParams;
     const search = searchParams.get('search')?.trim() ?? '';

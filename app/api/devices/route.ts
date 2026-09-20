@@ -56,10 +56,18 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { label, serialNumber, terminalId, branchId, ptuNumber, ptuStatus } = body;
 
-    if (!label || !serialNumber || !terminalId) {
+    if (!label || !serialNumber || !terminalId || !branchId) {
       return NextResponse.json(
-        { success: false, error: t('validation.deviceFieldsRequired', 'Label, serial number, and terminal ID are required') },
+        { success: false, error: t('validation.deviceFieldsRequired', 'Label, serial number, terminal ID, and branch are required') },
         { status: 400 }
+      );
+    }
+
+    const branch = await prisma.branch.findFirst({ where: { id: branchId, tenantId } });
+    if (!branch) {
+      return NextResponse.json(
+        { success: false, error: t('validation.branchNotFound', 'Branch not found') },
+        { status: 404 }
       );
     }
 
@@ -69,7 +77,7 @@ export async function POST(request: NextRequest) {
         data: {
           id: randomUUID(),
           tenantId,
-          branchId: branchId || undefined,
+          branchId,
           label,
           serialNumber,
           terminalId,

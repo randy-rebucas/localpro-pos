@@ -5,6 +5,7 @@ import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
+import { setTenantContext } from '@/lib/tenant-context';
 
 export async function POST(request: NextRequest) {
   let t: (key: string, fallback: string) => string;
@@ -40,6 +41,7 @@ export async function POST(request: NextRequest) {
         { status: 404 }
       );
     }
+    setTenantContext(tenant.id);
 
     // Find user by QR token
     const user = await prisma.user.findFirst({

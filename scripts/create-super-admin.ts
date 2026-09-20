@@ -9,6 +9,8 @@
  * Login URL: http://localhost:3000/super-admin/login
  */
 
+import '../lib/script-runtime';
+
 import dotenv from 'dotenv';
 import { resolve } from 'path';
 

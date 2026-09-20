@@ -7,6 +7,7 @@ import bcrypt from 'bcryptjs';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
+import { setTenantContext } from '@/lib/tenant-context';
 
 export async function POST(request: NextRequest) {
   let t: (key: string, fallback: string) => string;
@@ -49,6 +50,7 @@ export async function POST(request: NextRequest) {
         { status: 404 }
       );
     }
+    setTenantContext(tenant.id);
 
     // Find user with password field in the requested tenant
     const user = await prisma.user.findFirst({ where: { email: email.toLowerCase(), tenantId: tenant.id } });

@@ -14,6 +14,8 @@
  *   npx tsx scripts/fix-duplicate-attendance-sessions.ts --apply   # actually fixes
  */
 
+import '../lib/script-runtime';
+
 import dotenv from 'dotenv';
 import { resolve } from 'path';
 

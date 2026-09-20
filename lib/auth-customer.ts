@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import jwt from 'jsonwebtoken';
 import prisma from './db';
 import { logger } from '@/lib/logger';
+import { setTenantContext } from '@/lib/tenant-context';
 
 export interface CustomerJWTPayload {
   customerId: string;
@@ -64,6 +65,10 @@ export async function getCurrentCustomer(request: NextRequest): Promise<{
     if (!payload) {
       return null;
     }
+
+    // Establish the RLS session context before any tenant-scoped query,
+    // including the `prisma.customer.findUnique` right below.
+    setTenantContext(payload.tenantId);
 
     // Verify customer still exists and is active
     const customer = await prisma.customer.findUnique({

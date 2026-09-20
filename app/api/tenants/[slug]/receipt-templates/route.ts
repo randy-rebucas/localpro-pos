@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { validateTemplate } from '@/lib/receipt-templates';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -117,7 +117,7 @@ export async function POST(
     // Transactional so the "clear other defaults" + "insert + set default" steps
     // can't be interleaved by a concurrent write on the same tenant (matches
     // the previous atomic multi-step Mongoose updateOne() sequence).
-    const created = await prisma.$transaction(async (tx) => {
+    const created = await dbTransaction(async (tx) => {
       if (isDefault) {
         await tx.tenantReceiptTemplate.updateMany({
           where: { tenantId: tenant.id },
@@ -210,7 +210,7 @@ export async function PUT(
     if (name) data.name = name;
     if (html) data.html = html;
 
-    const updated = await prisma.$transaction(async (tx) => {
+    const updated = await dbTransaction(async (tx) => {
       if (isDefault !== undefined) {
         if (isDefault) {
           await tx.tenantReceiptTemplate.updateMany({
@@ -302,7 +302,7 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: t('validation.templateNotFound', 'Template not found') }, { status: 404 });
     }
 
-    await prisma.$transaction(async (tx) => {
+    await dbTransaction(async (tx) => {
       await tx.tenantReceiptTemplate.deleteMany({ where: { id, tenantId: tenant.id } });
       if (tenant.settings?.receiptDefaultTemplateId === id) {
         await tx.tenantSettings.update({

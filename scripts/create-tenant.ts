@@ -23,6 +23,8 @@
  *   npm run tenant:create  (runs in interactive mode)
  */
 
+import '../lib/script-runtime';
+
 import dotenv from 'dotenv';
 import { resolve } from 'path';
 

@@ -2,6 +2,8 @@
  * Script to create an admin user for a tenant
  * Usage: npx tsx scripts/create-admin-user.ts <tenant-slug> <email> <password> <name>
  */
+import '../lib/script-runtime';
+
 import dotenv from 'dotenv';
 import { resolve } from 'path';
 

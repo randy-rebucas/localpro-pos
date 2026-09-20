@@ -818,7 +818,7 @@ model Branch {
 model Device {
   id           String    @id
   tenantId     String
-  branchId     String?
+  branchId     String
   label        String
   serialNumber String
   terminalId   String
@@ -830,7 +830,7 @@ model Device {
   updatedAt    DateTime  @updatedAt
 
   tenant     Tenant @relation(fields: [tenantId], references: [id])
-  branch     Branch? @relation(fields: [branchId], references: [id])
+  branch     Branch @relation(fields: [branchId], references: [id])
   registeredBy User  @relation("DeviceRegisteredBy", fields: [registeredById], references: [id])
 
   transactions Transaction[]

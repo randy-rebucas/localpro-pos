@@ -35,11 +35,27 @@ export async function PUT(
     const body = await request.json();
     const { label, serialNumber, terminalId, branchId, ptuNumber, ptuStatus, isActive } = body;
 
+    if (branchId !== undefined) {
+      if (!branchId) {
+        return NextResponse.json(
+          { success: false, error: t('validation.branchRequired', 'A branch is required') },
+          { status: 400 }
+        );
+      }
+      const branch = await prisma.branch.findFirst({ where: { id: branchId, tenantId } });
+      if (!branch) {
+        return NextResponse.json(
+          { success: false, error: t('validation.branchNotFound', 'Branch not found') },
+          { status: 404 }
+        );
+      }
+    }
+
     const updateData: Record<string, unknown> = {};
     if (label !== undefined) updateData.label = label;
     if (serialNumber !== undefined) updateData.serialNumber = serialNumber;
     if (terminalId !== undefined) updateData.terminalId = terminalId;
-    if (branchId !== undefined) updateData.branchId = branchId || null;
+    if (branchId !== undefined) updateData.branchId = branchId;
     if (ptuNumber !== undefined) updateData.ptuNumber = ptuNumber;
     if (ptuStatus !== undefined) updateData.ptuStatus = ptuStatus;
     if (isActive !== undefined) updateData.isActive = isActive;

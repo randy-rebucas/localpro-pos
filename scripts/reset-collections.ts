@@ -27,6 +27,8 @@
  * care about without a fresh backup.
  */
 
+import '../lib/script-runtime';
+
 import dotenv from 'dotenv';
 import { resolve } from 'path';
 import readline from 'readline';

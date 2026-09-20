@@ -227,6 +227,7 @@ const PUBLIC_API_PATHS = new Set([
   '/api/stores/retail',
   '/api/stores',        // pre-login ?slug= mode; auth enforced inside route
   '/api/public',        // public/no-PII aggregate endpoints (e.g. platform-stats)
+  '/api/debugals',
 ]);
 
 /** Automation routes are protected by CRON_SECRET, not JWT */

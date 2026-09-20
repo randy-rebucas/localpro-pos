@@ -5,6 +5,7 @@ import { getValidationTranslatorFromRequest } from '@/lib/validation-translation
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import crypto, { randomUUID } from 'crypto';
+import { setTenantContext } from '@/lib/tenant-context';
 
 /**
  * POST - Send OTP to customer phone number
@@ -55,6 +56,7 @@ export async function POST(request: NextRequest) {
         { status: 404 }
       );
     }
+    setTenantContext(tenant.id);
 
     // Check for recent OTP (rate limiting - max 1 per minute)
     const oneMinuteAgo = new Date(Date.now() - 60 * 1000);

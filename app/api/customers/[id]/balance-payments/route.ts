@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { Prisma } from '@prisma/client';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -143,7 +143,7 @@ export async function POST(
     // response being generated from inside the transaction closure.
     let earlyResponse: NextResponse | null = null;
 
-    const record = await prisma.$transaction(async (tx) => {
+    const record = await dbTransaction(async (tx) => {
       const customer = await tx.customer.findFirst({ where: { id: customerId, tenantId, isActive: true } });
       if (!customer) {
         earlyResponse = NextResponse.json(

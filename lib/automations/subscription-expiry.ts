@@ -7,7 +7,7 @@
  */
 
 import { randomUUID } from 'crypto';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { positiveInt } from '@/lib/automation-validation';
 import { logger } from '@/lib/logger';
 
@@ -56,7 +56,7 @@ export async function expireSubscriptions(options?: {
       // event, breaking the billing/audit trail with nothing flagging it for
       // reconciliation.
       try {
-        await prisma.$transaction(async (tx) => {
+        await dbTransaction(async (tx) => {
           const expiredTrials = await tx.subscription.updateMany({
             where: { id: { in: expiringTrials.map((s) => s.id) } },
             data: { status: 'inactive', isTrial: false },

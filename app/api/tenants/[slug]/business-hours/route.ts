@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { roleAtLeast } from '@/lib/permissions';
 import { logger } from '@/lib/logger';
@@ -93,7 +93,7 @@ export async function PUT(
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    await prisma.$transaction(async (tx) => {
+    await dbTransaction(async (tx) => {
       if (timezone !== undefined) {
         await tx.tenantSettings.upsert({
           where: { tenantId: tenant.id },

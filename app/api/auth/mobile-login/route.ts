@@ -7,6 +7,7 @@ import { validateEmail } from '@/lib/validation';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { handleApiError } from '@/lib/error-handler';
 import { logger } from '@/lib/logger';
+import { setTenantContext } from '@/lib/tenant-context';
 
 /**
  * Mobile-specific login — returns the JWT in the response body instead of
@@ -63,6 +64,7 @@ export async function POST(request: NextRequest) {
         { status: 404 }
       );
     }
+    setTenantContext(tenant.id);
 
     const user = await prisma.user.findFirst({
       where: { email: email.toLowerCase(), tenantId: tenant.id },

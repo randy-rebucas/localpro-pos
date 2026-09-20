@@ -3,6 +3,7 @@ import prisma from '@/lib/db';
 import { verifyWooCommerceWebhookSignature } from '@/lib/ecommerce/webhook-verify';
 import { getWooWebhookSecretPlain } from '@/lib/ecommerce/integration-credentials';
 import { handleWooCommerceWebhook } from '@/lib/ecommerce/process-channel-webhook';
+import { setBypassContext, setTenantContext } from '@/lib/tenant-context';
 
 export const runtime = 'nodejs';
 
@@ -18,10 +19,15 @@ export async function POST(
     return new NextResponse('Not Found', { status: 404 });
   }
 
+  // Webhook requests carry no auth token/tenantId — bypass RLS just to look
+  // up which tenant this integration belongs to, then scope everything
+  // after that to that tenant specifically.
+  setBypassContext();
   const integration = await prisma.tenantEcommerceIntegration.findUnique({ where: { id: integrationId } });
   if (!integration || integration.provider !== 'woocommerce' || !integration.isActive) {
     return new NextResponse('Not Found', { status: 404 });
   }
+  setTenantContext(integration.tenantId);
 
   const secret = getWooWebhookSecretPlain(integration);
   if (!secret || !verifyWooCommerceWebhookSignature(rawBody, sig, secret)) {

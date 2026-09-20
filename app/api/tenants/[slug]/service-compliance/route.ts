@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
@@ -79,7 +79,7 @@ export async function PUT(
       settingsData.serviceDohAccreditationExpiry = body.dohAccreditationExpiry ? new Date(body.dohAccreditationExpiry) : null;
     }
 
-    await prisma.$transaction(async (tx) => {
+    await dbTransaction(async (tx) => {
       if (Object.keys(settingsData).length > 0) {
         await tx.tenantSettings.upsert({
           where: { tenantId: tenant.id },

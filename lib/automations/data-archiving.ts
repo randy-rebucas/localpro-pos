@@ -3,7 +3,7 @@
  * Automatically archive old data to reduce database size
  */
 
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { AutomationResult } from './types';
 
 export interface DataArchivingOptions {
@@ -68,7 +68,7 @@ export async function archiveOldData(
             }
             const archiveTable = `${tableName}_archive`;
 
-            const archived = await prisma.$transaction(async (tx) => {
+            const archived = await dbTransaction(async (tx) => {
               // Ensure the archive table exists, shaped like the source table plus
               // bookkeeping columns (created once; a no-op on subsequent runs).
               await tx.$executeRawUnsafe(`

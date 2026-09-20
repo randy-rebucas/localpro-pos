@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -254,7 +254,7 @@ export async function POST(
     // failure partway through (e.g. an FK-order mistake) must not leave the
     // tenant with some collections wiped and others untouched.
     const orderedCollections = orderCollections(collections);
-    const results = await prisma.$transaction(async (tx) => {
+    const results = await dbTransaction(async (tx) => {
       const r: Record<string, { deleted: number }> = {};
       for (const collectionName of orderedCollections) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -364,7 +364,7 @@ export async function PUT(
     const orderedForClear = orderCollections(collectionNames);
     const orderedForRestore = [...orderedForClear].reverse(); // parents-first insert order
 
-    const results = await prisma.$transaction(async (tx) => {
+    const results = await dbTransaction(async (tx) => {
       const r: Record<string, { restored: number; cleared: number }> = {};
 
       if (clearExisting) {

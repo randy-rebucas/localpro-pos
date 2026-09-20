@@ -13,6 +13,7 @@ const mockDeviceFindMany = vi.fn();
 const mockDeviceFindFirst = vi.fn();
 const mockDeviceCreate = vi.fn();
 const mockDeviceUpdate = vi.fn();
+const mockBranchFindFirst = vi.fn();
 
 vi.mock('@/lib/db', () => ({
   default: {
@@ -21,6 +22,9 @@ vi.mock('@/lib/db', () => ({
       findFirst: (...args: unknown[]) => mockDeviceFindFirst(...args),
       create: (...args: unknown[]) => mockDeviceCreate(...args),
       update: (...args: unknown[]) => mockDeviceUpdate(...args),
+    },
+    branch: {
+      findFirst: (...args: unknown[]) => mockBranchFindFirst(...args),
     },
   },
 }));
@@ -83,6 +87,7 @@ function authAs(tenantId: string, role: string = 'owner', userId: string = 'user
 beforeEach(() => {
   vi.clearAllMocks();
   mockHasTenantPermission.mockResolvedValue(true);
+  mockBranchFindFirst.mockResolvedValue({ id: 'branch-1', tenantId: TENANT_A });
 });
 
 // ---------------------------------------------------------------------------
@@ -140,7 +145,7 @@ describe('POST /api/devices', () => {
     mockDeviceCreate.mockResolvedValue({ id: 'd1' });
 
     const res = await POST(createRequest('/api/devices', 'POST', {
-      label: 'Front Counter', serialNumber: 'SN1', terminalId: 'T-01',
+      label: 'Front Counter', serialNumber: 'SN1', terminalId: 'T-01', branchId: 'branch-1',
     }));
     const { status, body } = await parseResponse(res);
 
@@ -151,6 +156,20 @@ describe('POST /api/devices', () => {
     }));
   });
 
+  it('rejects when branchId does not belong to the tenant', async () => {
+    authAs(TENANT_A);
+    mockBranchFindFirst.mockResolvedValue(null);
+
+    const res = await POST(createRequest('/api/devices', 'POST', {
+      label: 'Front Counter', serialNumber: 'SN1', terminalId: 'T-01', branchId: 'other-tenant-branch',
+    }));
+    const { status, body } = await parseResponse(res);
+
+    expect(status).toBe(404);
+    expect(body.success).toBe(false);
+    expect(mockDeviceCreate).not.toHaveBeenCalled();
+  });
+
   it('returns 409 on duplicate terminalId/serialNumber', async () => {
     authAs(TENANT_A);
     const dupErr = new Error('duplicate') as Error & { code: string };
@@ -158,7 +177,7 @@ describe('POST /api/devices', () => {
     mockDeviceCreate.mockRejectedValue(dupErr);
 
     const res = await POST(createRequest('/api/devices', 'POST', {
-      label: 'Front Counter', serialNumber: 'SN1', terminalId: 'T-01',
+      label: 'Front Counter', serialNumber: 'SN1', terminalId: 'T-01', branchId: 'branch-1',
     }));
     const { status, body } = await parseResponse(res);
 
@@ -218,6 +237,21 @@ describe('PUT /api/devices/:id', () => {
       where: { id: 'd1' },
       data: { label: 'New Label' },
     });
+  });
+
+  it('rejects reassigning the device to a branch outside the tenant', async () => {
+    authAs(TENANT_A);
+    mockDeviceFindFirst.mockResolvedValue({ id: 'd1', label: 'Front Counter', terminalId: 'T-01' });
+    mockBranchFindFirst.mockResolvedValue(null);
+
+    const res = await PUT(createRequest('/api/devices/d1', 'PUT', { branchId: 'other-tenant-branch' }), {
+      params: Promise.resolve({ id: 'd1' }),
+    });
+    const { status, body } = await parseResponse(res);
+
+    expect(status).toBe(404);
+    expect(body.success).toBe(false);
+    expect(mockDeviceUpdate).not.toHaveBeenCalled();
   });
 });
 

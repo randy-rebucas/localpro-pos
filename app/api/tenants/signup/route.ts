@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import bcrypt from 'bcryptjs';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { getDefaultTenantSettings } from '@/lib/currency';
 import { validateEmail, validatePassword, validateTenant } from '@/lib/validation';
 import { getValidationTranslator } from '@/lib/validation-translations';
@@ -11,6 +11,7 @@ import { SubscriptionService } from '@/lib/subscription';
 import { getPublicAppUrl } from '@/lib/ecommerce/public-url';
 import { sendEmail } from '@/lib/notifications';
 import { logger } from '@/lib/logger';
+import { setBypassContext } from '@/lib/tenant-context';
 
 /**
  * Public endpoint for tenant signup
@@ -19,6 +20,9 @@ import { logger } from '@/lib/logger';
 export async function POST(request: NextRequest) {
   let t: (key: string, fallback: string) => string;
   try {
+    // No tenant exists yet — this endpoint creates one.
+    setBypassContext();
+
     // Rate limiting: 3 store sign-ups per hour per IP
     const ip = getClientIp(request);
     const rl = checkRateLimit(`signup:${ip}`, 3, 60 * 60 * 1000);
@@ -135,7 +139,7 @@ export async function POST(request: NextRequest) {
     // at all — a signup that creates a tenant without a trial silently breaks
     // the "14-day free trial" promise on the marketing page, and there would
     // be no later trigger to retroactively create one for a self-serve tenant.
-    const { tenant, adminUser } = await prisma.$transaction(async (tx) => {
+    const { tenant, adminUser } = await dbTransaction(async (tx) => {
       const newTenant = await tx.tenant.create({
         data: {
           id: randomUUID(),

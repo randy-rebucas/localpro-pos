@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { Prisma } from '@prisma/client';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -379,7 +379,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     const scalarData = scalarUpdateData(data as Record<string, unknown>);
 
-    const product = await prisma.$transaction(async (tx) => {
+    const product = await dbTransaction(async (tx) => {
       await tx.product.update({ where: { id }, data: scalarData });
       await applyChildTableUpdates(tx, id, data as Record<string, unknown>);
       return tx.product.findUniqueOrThrow({ where: { id }, include: PRODUCT_INCLUDE });
@@ -447,16 +447,23 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ success: false, error: 'No valid fields to update' }, { status: 400 });
     }
 
-    const oldProduct = await prisma.product.findFirst({ where: { id, tenantId } });
-    if (!oldProduct) {
+    const product = await dbTransaction(async (tx) => {
+      const oldProduct = await tx.product.findFirst({ where: { id, tenantId } });
+      if (!oldProduct) {
+        return null;
+      }
+      const updated = await tx.product.update({
+        where: { id },
+        data: updates as Prisma.ProductUncheckedUpdateInput,
+        include: PRODUCT_INCLUDE,
+      });
+      return { oldProduct, updated };
+    });
+
+    if (!product) {
       return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
     }
-
-    const product = await prisma.product.update({
-      where: { id },
-      data: updates as Prisma.ProductUncheckedUpdateInput,
-      include: PRODUCT_INCLUDE,
-    });
+    const { oldProduct, updated } = product;
 
     await createAuditLog(request, {
       tenantId,
@@ -471,7 +478,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       ),
     });
 
-    return NextResponse.json({ success: true, data: toProductJSON(product) });
+    return NextResponse.json({ success: true, data: toProductJSON(updated) });
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     return handleApiError(error);
   }

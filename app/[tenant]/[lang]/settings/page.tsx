@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -95,15 +95,21 @@ export default function SettingsPage() {
     }
   };
 
-  // Auto-detect location on first load if settings are default
+  // Auto-detect location on first load if settings are default. Guarded by a
+  // ref (not just the isDefault check) because autoDetectLocation can itself
+  // resolve to the same "default" values (e.g. visitor really is in
+  // Asia/Manila/USD), which would otherwise re-trigger this effect forever
+  // since setSettings creates a new object reference each time.
+  const hasAutoDetectedRef = useRef(false);
   useEffect(() => {
-    if (settings && status === 'ready' && !detecting) {
+    if (settings && status === 'ready' && !detecting && !hasAutoDetectedRef.current) {
       const isDefault =
         settings.timezone === 'Asia/Manila' &&
         settings.currency === 'USD' &&
         settings.dateFormat === 'MM/DD/YYYY';
 
       if (isDefault) {
+        hasAutoDetectedRef.current = true;
         autoDetectLocation();
       }
     }

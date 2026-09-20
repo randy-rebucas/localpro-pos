@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth, getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -125,7 +125,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     let accountBalanceAfter: number | undefined;
 
     try {
-      await prisma.$transaction(async (tx) => {
+      await dbTransaction(async (tx) => {
         // Atomic claim: fails if a concurrent refund already changed this
         // transaction's status (double-submit / retry / two staff refunding at once).
         const claim = await tx.transaction.updateMany({

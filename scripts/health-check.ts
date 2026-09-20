@@ -15,6 +15,8 @@
  *   1  One or more checks failed
  */
 
+import '../lib/script-runtime';
+
 import dotenv from 'dotenv';
 import { resolve } from 'path';
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
+import { setTenantContext } from '@/lib/tenant-context';
 
 /**
  * GET /api/services?tenantId={{tenantId}}
@@ -33,6 +34,7 @@ export async function GET(request: NextRequest) {
         { status: 404 }
       );
     }
+    setTenantContext(tenant.id);
 
     const categoryId = request.nextUrl.searchParams.get('categoryId');
     const search = request.nextUrl.searchParams.get('search');

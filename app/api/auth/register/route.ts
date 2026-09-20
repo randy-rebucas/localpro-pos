@@ -8,6 +8,7 @@ import { logger } from '@/lib/logger';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { generateToken } from '@/lib/auth';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import { setTenantContext } from '@/lib/tenant-context';
 
 /**
  * Public endpoint for client (end user) registration
@@ -65,6 +66,7 @@ export async function POST(request: NextRequest) {
         { status: 404 }
       );
     }
+    setTenantContext(tenant.id);
 
     // Check if user already exists
     const existingUser = await prisma.user.findFirst({

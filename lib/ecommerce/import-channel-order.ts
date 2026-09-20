@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { generateReceiptNumber } from '@/lib/receipt';
 import { updateStock } from '@/lib/stock';
 import type { NormalizedPaidOrder } from '@/lib/ecommerce/types';
@@ -99,7 +99,7 @@ export async function importPaidChannelOrder(
   let transactionId = '';
 
   try {
-    transactionId = await prisma.$transaction(async (tx) => {
+    transactionId = await dbTransaction(async (tx) => {
       const syncNote = `channelSyncKey:${key}`;
 
       for (const item of items) {

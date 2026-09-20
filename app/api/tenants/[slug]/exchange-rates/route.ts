@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { fetchExchangeRates } from '@/lib/multi-currency';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -87,7 +87,7 @@ export async function POST(
     }
 
     const writeRates = async (rates: Record<string, number>) => {
-      await prisma.$transaction(async (tx) => {
+      await dbTransaction(async (tx) => {
         for (const [currencyCode, rate] of Object.entries(rates)) {
           await tx.tenantExchangeRate.upsert({
             where: { tenantId_currencyCode: { tenantId: tenant.id, currencyCode } },

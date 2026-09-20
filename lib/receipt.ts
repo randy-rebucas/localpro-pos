@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 import { Prisma } from '@prisma/client';
-import prisma from '@/lib/db';
+import { dbTransaction } from '@/lib/db';
 
 /**
  * Get next sequence number atomically using an upsert + increment.
@@ -9,7 +9,7 @@ import prisma from '@/lib/db';
  * semantics — no read-then-write race between concurrent callers.
  */
 async function getNextSequence(tenantId: string, counterKey: string): Promise<number> {
-  const counter = await prisma.$transaction(async (tx) => {
+  const counter = await dbTransaction(async (tx) => {
     return tx.counter.upsert({
       where: { tenantId_key: { tenantId, key: counterKey } },
       update: { value: { increment: 1 } },

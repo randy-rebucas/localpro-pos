@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -212,7 +212,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       settingsUpdate = flattenSettingsForPrisma(updatedSettings);
     }
 
-    const tenant = await prisma.$transaction(async (tx) => {
+    const tenant = await dbTransaction(async (tx) => {
       const updated = await tx.tenant.update({
         where: { id: oldTenant.id },
         data: updateData,

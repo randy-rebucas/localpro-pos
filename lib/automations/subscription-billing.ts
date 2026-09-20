@@ -11,7 +11,7 @@
  */
 
 import { randomUUID } from 'crypto';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import type { SubscriptionPlan as PrismaSubscriptionPlan } from '@prisma/client';
 import { generateInvoiceNumber } from '@/lib/receipt';
 import { sendEmail } from '@/lib/notifications';
@@ -355,7 +355,7 @@ export async function processSubscriptionBilling(
         const lateFeeAmount = Number(plan.priceMonthly) * LATE_FEE_PERCENT;
         const newOutstandingBalance = Number(sub.outstandingBalance || 0) + lateFeeAmount;
 
-        await prisma.$transaction(async (tx) => {
+        await dbTransaction(async (tx) => {
           await tx.subscription.update({
             where: { id: sub.id },
             data: {

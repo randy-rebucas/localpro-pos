@@ -15,6 +15,8 @@
  * Exit codes:  0 = success,  1 = error
  */
 
+import '../lib/script-runtime';
+
 import dotenv from 'dotenv';
 import { resolve } from 'path';
 

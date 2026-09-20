@@ -54,6 +54,10 @@ Viewer (Level 1)  — Read-only access
 - Compound database indexes include `tenantId` for query isolation
 - No cross-tenant data access is possible through the API
 - Branch-level isolation further restricts data within a tenant
+- A second, database-level layer (PostgreSQL Row-Level Security) independently
+  enforces the same isolation, so a bug in application code alone cannot leak
+  data across tenants — see `docs/architecture/tenant-isolation-rls.md` for
+  implementation details
 
 ## Audit Logging
 

@@ -38,6 +38,7 @@ vi.mock('@/lib/db', () => {
       ...client,
       $transaction: vi.fn((cb: (tx: typeof client) => unknown) => cb(client)),
     },
+    dbTransaction: vi.fn((cb: (tx: typeof client) => unknown) => cb(client)),
   };
 });
 

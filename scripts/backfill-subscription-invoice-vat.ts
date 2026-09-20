@@ -16,6 +16,8 @@
  *   npx tsx scripts/backfill-subscription-invoice-vat.ts
  */
 
+import '../lib/script-runtime';
+
 import dotenv from 'dotenv';
 import { resolve } from 'path';
 dotenv.config({ path: resolve(process.cwd(), '.env.local') });

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth, getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -225,7 +225,7 @@ export async function POST(request: NextRequest) {
     // double-booking the same staff/slot.
     let booking;
     try {
-      booking = await prisma.$transaction(async (tx) => {
+      booking = await dbTransaction(async (tx) => {
         const conflictingBookings = await tx.booking.findMany({
           where: {
             tenantId,

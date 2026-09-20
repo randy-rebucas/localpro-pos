@@ -39,6 +39,7 @@ import {
   generateSalesSummaryExport,
 } from './automations';
 import { logger } from '@/lib/logger';
+import { setBypassContext } from '@/lib/tenant-context';
 
 interface NamedCronJob {
   name: string;
@@ -68,6 +69,7 @@ export function initializeCronJobs() {
   const bookingRemindersJob = cron.schedule('0 * * * *', async () => {
     logger.info('📅 Running booking reminders automation...');
     try {
+      setBypassContext();
       const result = await sendBookingReminders({ hoursBefore: 24 });
       logger.info('✅ Booking reminders:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -81,6 +83,7 @@ export function initializeCronJobs() {
   const lowStockJob = cron.schedule('0 * * * *', async () => {
     logger.info('📦 Running low stock alerts automation...');
     try {
+      setBypassContext();
       const result = await sendLowStockAlerts();
       logger.info('✅ Low stock alerts:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -94,6 +97,7 @@ export function initializeCronJobs() {
   const dailyReportJob = cron.schedule('0 22 * * *', async () => {
     logger.info('📊 Running daily sales report automation...');
     try {
+      setBypassContext();
       const result = await sendSalesReport({ period: 'daily' });
       logger.info('✅ Daily sales report:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -107,6 +111,7 @@ export function initializeCronJobs() {
   const weeklyReportJob = cron.schedule('0 9 * * 1', async () => {
     logger.info('📊 Running weekly sales report automation...');
     try {
+      setBypassContext();
       const result = await sendSalesReport({ period: 'weekly' });
       logger.info('✅ Weekly sales report:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -120,6 +125,7 @@ export function initializeCronJobs() {
   const monthlyReportJob = cron.schedule('0 10 1 * *', async () => {
     logger.info('📊 Running monthly sales report automation...');
     try {
+      setBypassContext();
       const result = await sendSalesReport({ period: 'monthly' });
       logger.info('✅ Monthly sales report:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -133,6 +139,7 @@ export function initializeCronJobs() {
   const pendingReceiptsJob = cron.schedule('0 */6 * * *', async () => {
     logger.info('📧 Running pending receipts automation...');
     try {
+      setBypassContext();
       const result = await sendPendingReceipts({ hoursAgo: 24 });
       logger.info('✅ Pending receipts:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -147,6 +154,7 @@ export function initializeCronJobs() {
     logger.info('💰 Running discount management automation...');
     try {
       const { manageDiscountStatus } = await import('./automations/discount-management');
+      setBypassContext();
       const result = await manageDiscountStatus();
       logger.info('✅ Discount management:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -161,6 +169,7 @@ export function initializeCronJobs() {
     logger.info('⏰ Running auto clock-out automation...');
     try {
       const { autoClockOutForgottenSessions } = await import('./automations/attendance-auto-clockout');
+      setBypassContext();
       const result = await autoClockOutForgottenSessions();
       logger.info('✅ Auto clock-out:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -175,6 +184,7 @@ export function initializeCronJobs() {
     logger.info('🧾 Running subscription billing automation...');
     try {
       const { processSubscriptionBilling } = await import('./automations/subscription-billing');
+      setBypassContext();
       const result = await processSubscriptionBilling();
       logger.info('✅ Subscription billing:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -189,6 +199,7 @@ export function initializeCronJobs() {
     logger.info('⏳ Running subscription expiry automation...');
     try {
       const { expireSubscriptions } = await import('./automations/subscription-expiry');
+      setBypassContext();
       const result = await expireSubscriptions();
       logger.info('✅ Subscription expiry:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -203,6 +214,7 @@ export function initializeCronJobs() {
     logger.info('💵 Running cash drawer auto-close automation...');
     try {
       const { autoCloseCashDrawers } = await import('./automations/cash-drawer-closure');
+      setBypassContext();
       const result = await autoCloseCashDrawers();
       logger.info('✅ Cash drawer auto-close:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -216,6 +228,7 @@ export function initializeCronJobs() {
   const bookingConfirmJob = cron.schedule('*/15 * * * *', async () => {
     logger.info('✅ Running booking confirmations automation...');
     try {
+      setBypassContext();
       const result = await autoConfirmBookings();
       logger.info('✅ Booking confirmations:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -229,6 +242,7 @@ export function initializeCronJobs() {
   const noShowJob = cron.schedule('*/30 * * * *', async () => {
     logger.info('🚫 Running no-show detection automation...');
     try {
+      setBypassContext();
       const result = await detectNoShows({ gracePeriodMinutes: 15 });
       logger.info('✅ No-show detection:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -242,6 +256,7 @@ export function initializeCronJobs() {
   const cashCountReminderJob = cron.schedule('0 17 * * *', async () => {
     logger.info('💵 Running cash count reminders automation...');
     try {
+      setBypassContext();
       const result = await sendCashCountReminders({ reminderMinutesBefore: 30 });
       logger.info('✅ Cash count reminders:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -255,6 +270,7 @@ export function initializeCronJobs() {
   const attendanceViolationsJob = cron.schedule('0 9 * * *', async () => {
     logger.info('⏰ Running attendance violations automation...');
     try {
+      setBypassContext();
       const result = await detectAttendanceViolations({ lateThresholdMinutes: 15 });
       logger.info('✅ Attendance violations:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -268,6 +284,7 @@ export function initializeCronJobs() {
   const breakDetectionJob = cron.schedule('*/30 * * * *', async () => {
     logger.info('☕ Running break detection automation...');
     try {
+      setBypassContext();
       const result = await detectBreaks({ inactivityMinutes: 30 });
       logger.info('✅ Break detection:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -281,6 +298,7 @@ export function initializeCronJobs() {
   const abandonedCartJob = cron.schedule('0 */12 * * *', async () => {
     logger.info('🛒 Running abandoned cart reminders automation...');
     try {
+      setBypassContext();
       const result = await sendAbandonedCartReminders({ hoursAgo: 24 });
       logger.info('✅ Abandoned cart reminders:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -294,6 +312,7 @@ export function initializeCronJobs() {
   const purchaseOrderJob = cron.schedule('0 9 * * *', async () => {
     logger.info('📋 Running purchase order generation automation...');
     try {
+      setBypassContext();
       const result = await generatePurchaseOrders();
       logger.info('✅ Purchase order generation:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -307,6 +326,7 @@ export function initializeCronJobs() {
   const backupJob = cron.schedule('0 2 * * *', async () => {
     logger.info('💾 Running database backup automation...');
     try {
+      setBypassContext();
       const result = await createDatabaseBackup();
       logger.info('✅ Database backup:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -320,6 +340,7 @@ export function initializeCronJobs() {
   const auditCleanupJob = cron.schedule('0 4 * * 0', async () => {
     logger.info('🧹 Running audit log cleanup automation...');
     try {
+      setBypassContext();
       const result = await cleanupAuditLogs({ retentionYears: 2 });
       logger.info('✅ Audit log cleanup:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -333,6 +354,7 @@ export function initializeCronJobs() {
   const productPerformanceJob = cron.schedule('0 10 * * 1', async () => {
     logger.info('📊 Running product performance automation...');
     try {
+      setBypassContext();
       const result = await analyzeProductPerformance({ daysToAnalyze: 30 });
       logger.info('✅ Product performance:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -346,6 +368,7 @@ export function initializeCronJobs() {
   const clvJob = cron.schedule('0 2 * * 0', async () => {
     logger.info('💰 Running customer lifetime value automation...');
     try {
+      setBypassContext();
       const result = await calculateCustomerLifetimeValue();
       logger.info('✅ Customer lifetime value:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -360,6 +383,7 @@ export function initializeCronJobs() {
     logger.info('🔒 Running session expiration automation...');
     try {
       const { expireInactiveSessions } = await import('./automations/session-expiration');
+      setBypassContext();
       const result = await expireInactiveSessions({ inactivityHours: 24 });
       logger.info('✅ Session expiration:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -373,6 +397,7 @@ export function initializeCronJobs() {
   const stockTransferJob = cron.schedule('0 8 * * *', async () => {
     logger.info('📦 Running stock transfer automation...');
     try {
+      setBypassContext();
       const result = await detectStockImbalances({ autoApprove: false });
       logger.info('✅ Stock transfer:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -386,6 +411,7 @@ export function initializeCronJobs() {
   const predictiveStockJob = cron.schedule('0 9 * * 1', async () => {
     logger.info('🔮 Running predictive stock automation...');
     try {
+      setBypassContext();
       const result = await predictStockNeeds({ analysisDays: 30, predictionDays: 7 });
       logger.info('✅ Predictive stock:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -399,6 +425,7 @@ export function initializeCronJobs() {
   const dynamicPricingJob = cron.schedule('*/30 * * * *', async () => {
     logger.info('💲 Running dynamic pricing automation...');
     try {
+      setBypassContext();
       const result = await applyDynamicPricing({
         enableTimeBased: true,
         enableDemandBased: true,
@@ -416,6 +443,7 @@ export function initializeCronJobs() {
   const dataArchiveJob = cron.schedule('0 3 * * 0', async () => {
     logger.info('📚 Running data archiving automation...');
     try {
+      setBypassContext();
       const result = await archiveOldData({ archiveYears: 2 });
       logger.info('✅ Data archiving:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -429,6 +457,7 @@ export function initializeCronJobs() {
   const multiBranchSyncJob = cron.schedule('0 */4 * * *', async () => {
     logger.info('🔄 Running multi-branch sync automation...');
     try {
+      setBypassContext();
       const result = await syncMultiBranchData();
       logger.info('✅ Multi-branch sync:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -442,6 +471,7 @@ export function initializeCronJobs() {
   const suspiciousActivityJob = cron.schedule('*/15 * * * *', async () => {
     logger.info('🚨 Running suspicious activity detection automation...');
     try {
+      setBypassContext();
       const result = await detectSuspiciousActivity();
       logger.info('✅ Suspicious activity detection:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -455,6 +485,7 @@ export function initializeCronJobs() {
   const salesTrendDailyJob = cron.schedule('0 9 * * *', async () => {
     logger.info('📈 Running daily sales trend analysis automation...');
     try {
+      setBypassContext();
       const result = await analyzeSalesTrends({ period: 'daily', comparePeriods: true });
       logger.info('✅ Daily sales trend analysis:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -468,6 +499,7 @@ export function initializeCronJobs() {
   const salesTrendWeeklyJob = cron.schedule('0 10 * * 1', async () => {
     logger.info('📈 Running weekly sales trend analysis automation...');
     try {
+      setBypassContext();
       const result = await analyzeSalesTrends({ period: 'weekly', comparePeriods: true });
       logger.info('✅ Weekly sales trend analysis:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -481,6 +513,7 @@ export function initializeCronJobs() {
   const salesTrendMonthlyJob = cron.schedule('0 11 1 * *', async () => {
     logger.info('📈 Running monthly sales trend analysis automation...');
     try {
+      setBypassContext();
       const result = await analyzeSalesTrends({ period: 'monthly', comparePeriods: true });
       logger.info('✅ Monthly sales trend analysis:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -494,6 +527,7 @@ export function initializeCronJobs() {
   const salesSummaryDailyJob = cron.schedule('0 23 * * *', async () => {
     logger.info('📤 Running daily BIR sales summary export...');
     try {
+      setBypassContext();
       const result = await generateSalesSummaryExport({ period: 'daily' });
       logger.info('✅ Daily sales summary export:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -507,6 +541,7 @@ export function initializeCronJobs() {
   const salesSummaryMonthlyJob = cron.schedule('0 1 1 * *', async () => {
     logger.info('📤 Running monthly BIR sales summary export...');
     try {
+      setBypassContext();
       const result = await generateSalesSummaryExport({ period: 'monthly' });
       logger.info('✅ Monthly sales summary export:' + result.message);
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { Prisma } from '@prisma/client';
 import { getTenantIdFromRequest, requireTenantAccess } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
@@ -120,7 +120,7 @@ export async function PATCH(
     if (body.priority !== undefined) updateData.priority = body.priority;
     if (body.isActive !== undefined) updateData.isActive = body.isActive;
 
-    const taxRule = await prisma.$transaction(async (tx) => {
+    const taxRule = await dbTransaction(async (tx) => {
       if (body.categoryIds !== undefined) {
         await tx.taxRuleCategory.deleteMany({ where: { taxRuleId: id } });
         updateData.categories = {

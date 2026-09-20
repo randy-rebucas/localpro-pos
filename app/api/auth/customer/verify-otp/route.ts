@@ -5,6 +5,7 @@ import { generateCustomerToken } from '@/lib/auth-customer';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { logger } from '@/lib/logger';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import { setTenantContext } from '@/lib/tenant-context';
 
 /**
  * POST - Verify OTP and login customer
@@ -48,6 +49,7 @@ export async function POST(request: NextRequest) {
         { status: 404 }
       );
     }
+    setTenantContext(tenant.id);
 
     // Find valid OTP
     const otpRecord = await prisma.customerOTP.findFirst({

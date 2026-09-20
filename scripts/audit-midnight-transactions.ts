@@ -15,6 +15,8 @@
  * This script performs NO writes.
  */
 
+import '../lib/script-runtime';
+
 import dotenv from 'dotenv';
 import { resolve } from 'path';
 

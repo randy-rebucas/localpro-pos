@@ -7,6 +7,8 @@
  * Make sure your .env file has Twilio credentials configured
  */
 
+import '../lib/script-runtime';
+
 import 'dotenv/config';
 import readline from 'readline';
 

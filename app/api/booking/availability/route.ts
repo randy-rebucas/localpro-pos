@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { getValidationTranslatorFromRequest } from '@/lib/validation-translations';
 import { getClosedHolidayForDate } from '@/lib/holidays';
+import { setTenantContext } from '@/lib/tenant-context';
 
 /**
  * GET /api/booking/availability?tenantId={{tenantId}}&serviceId={{serviceId}}&date={{date}}
@@ -39,6 +40,7 @@ export async function GET(request: NextRequest) {
         { status: 404 }
       );
     }
+    setTenantContext(tenant.id);
 
     // Fetch service to get default duration
     const service = await prisma.product.findFirst({

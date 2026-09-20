@@ -12,6 +12,8 @@
  *   npx tsx scripts/apply-business-type-defaults.ts  # Apply to all tenants
  */
 
+import '../lib/script-runtime';
+
 import prisma from '../lib/db';
 import { applyBusinessTypeDefaults } from '../lib/business-types';
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { Prisma } from '@prisma/client';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { requireAuth } from '@/lib/auth';
@@ -88,7 +88,7 @@ export async function PUT(
     if (body.trackInventory !== undefined) updateData.trackInventory = body.trackInventory;
     if (body.isActive !== undefined) updateData.isActive = body.isActive;
 
-    const bundle = await prisma.$transaction(async (tx) => {
+    const bundle = await dbTransaction(async (tx) => {
       if (body.items) {
         await tx.productBundleItem.deleteMany({ where: { bundleId: id } });
         updateData.items = {

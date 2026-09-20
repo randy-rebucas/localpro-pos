@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { Prisma, Subscription } from '@prisma/client';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
@@ -463,7 +463,7 @@ export async function PUT(
     // (e.g. status flipped to cancelled with no matching billing event).
     let auditPlan: AuditPlan;
     try {
-      auditPlan = await prisma.$transaction(async (tx) => {
+      auditPlan = await dbTransaction(async (tx) => {
         return applyAction(action, body, subscription, tenantId, adminUser.userId, previousStatus, tx);
       });
     } catch (e) {

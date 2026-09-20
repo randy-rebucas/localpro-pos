@@ -18,6 +18,8 @@
  *   npx tsx scripts/fix-duplicate-products.ts --tenant <slug> --apply      # applies
  */
 
+import '../lib/script-runtime';
+
 import dotenv from 'dotenv';
 import { resolve } from 'path';
 

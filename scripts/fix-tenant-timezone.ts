@@ -12,6 +12,8 @@
  *   npx tsx scripts/fix-tenant-timezone.ts --tenant=botika-ng-wise --timezone=Asia/Manila --dry-run
  */
 
+import '../lib/script-runtime';
+
 import dotenv from 'dotenv';
 import { resolve } from 'path';
 

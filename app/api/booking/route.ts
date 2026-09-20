@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { validateEmail } from '@/lib/validation'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { createAuditLog, AuditActions } from '@/lib/audit';
@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
     // the same guarantee explicitly here).
     let booking;
     try {
-      booking = await prisma.$transaction(async (tx) => {
+      booking = await dbTransaction(async (tx) => {
         const conflict = await tx.booking.findFirst({
           where: {
             tenantId: tenant.id,

@@ -9,6 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { setBypassContext } from '@/lib/tenant-context';
 
 export function verifyCronAuth(
   request: NextRequest,
@@ -24,7 +25,8 @@ export function verifyCronAuth(
         { status: 503 }
       );
     }
-    return null; // allow in development
+    setBypassContext(); // allow in development
+    return null;
   }
 
   const authHeader = request.headers.get('authorization');
@@ -38,5 +40,9 @@ export function verifyCronAuth(
     );
   }
 
+  // These routes run trusted automation logic that loops across tenants
+  // internally (see lib/automations/*), not a single tenant's request — RLS
+  // session context is never set for them, so they need an explicit bypass.
+  setBypassContext();
   return null; // authorized
 }

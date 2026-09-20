@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -159,7 +159,7 @@ export async function POST(request: NextRequest) {
     let wasTrial = false;
     let resultSubscription;
     try {
-      resultSubscription = await prisma.$transaction(async (tx) => {
+      resultSubscription = await dbTransaction(async (tx) => {
         const existingSubscription = await tx.subscription.findUnique({ where: { tenantId } });
         wasTrial = existingSubscription?.isTrial === true;
 

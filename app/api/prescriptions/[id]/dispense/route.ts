@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
 import { handleApiError } from '@/lib/error-handler';
@@ -111,7 +111,7 @@ export async function POST(
 
     // Atomic stock deduction using a Prisma transaction
     const now = new Date();
-    const updatedPrescription = await prisma.$transaction(async (tx) => {
+    const updatedPrescription = await dbTransaction(async (tx) => {
       for (const idx of itemIndexes) {
         const item = prescription.items[idx];
         if (item.productId) {

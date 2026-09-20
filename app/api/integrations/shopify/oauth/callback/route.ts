@@ -10,6 +10,7 @@ import { registerShopifyWebhooksForIntegration } from '@/lib/ecommerce/register-
 import { getPublicAppUrl } from '@/lib/ecommerce/public-url';
 import { requireEcommerceProviderConnectAllowed } from '@/lib/ecommerce/tenant-integration-policy';
 import { normalizeShopifyShopDomain } from '@/lib/ecommerce/shopify-shop-domain';
+import { setTenantContext } from '@/lib/tenant-context';
 
 // This is a Shopify OAuth redirect endpoint, not a normal authenticated API route: Shopify
 // itself calls back here with no session cookie. Tenant resolution therefore does NOT use
@@ -42,6 +43,7 @@ export async function GET(request: NextRequest) {
     if (!st) {
       return NextResponse.json({ error: 'Invalid or expired state' }, { status: 400 });
     }
+    setTenantContext(st.tenantId);
 
     const shopNorm = normalizeShopifyShopDomain(query.shop ?? '');
     const code = query.code;

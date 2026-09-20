@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import type { Prisma, PaymentMethodType, PaymentMethodSimple, PaymentStatus, DiscountCategory, OrderType } from '@prisma/client';
 import { requireTenantAccess } from '@/lib/api-tenant';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -844,7 +844,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      return prisma.$transaction(async (tx) => {
+      return dbTransaction(async (tx) => {
         const paymentRecords: Array<{ id: string; method: string; amount: Prisma.Decimal | number; status: string }> = [];
         let onAccountCreditChange: {
           customerId: string;

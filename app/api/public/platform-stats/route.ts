@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { TENANT_IS_ACTIVE_FILTER } from '@/lib/tenant-active-query';
+import { setBypassContext } from '@/lib/tenant-context';
 
 /**
  * Public aggregate counts for marketing / trust strip (no PII).
@@ -8,6 +9,8 @@ import { TENANT_IS_ACTIVE_FILTER } from '@/lib/tenant-active-query';
  */
 export async function GET() {
   try {
+    // Intentionally cross-tenant: aggregate platform-wide counts.
+    setBypassContext();
     const [activeTenants, completedTransactions] = await Promise.all([
       prisma.tenant.count({ where: TENANT_IS_ACTIVE_FILTER }),
       prisma.transaction.count({ where: { status: 'completed', isActive: true } }),

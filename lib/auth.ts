@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import prisma from '@/lib/db';
 import { isTokenRevoked, isTokenIssuedBeforeRevocation } from '@/lib/token-blacklist';
 import { logger } from '@/lib/logger';
+import { setBypassContext, setTenantContext } from '@/lib/tenant-context';
 
 export interface JWTPayload {
   userId: string;
@@ -66,13 +67,28 @@ export async function getCurrentUser(request: NextRequest): Promise<{
       return null;
     }
 
-    // Check if this specific token has been revoked (e.g. after logout)
-    if (await isTokenRevoked(token)) {
+    const payload = verifyToken(token);
+    if (!payload) {
       return null;
     }
 
-    const payload = verifyToken(token);
-    if (!payload) {
+    // Establish the RLS session context before this function's first
+    // `await` (crossed by `isTokenRevoked` right below) — not just before
+    // the first tenant-scoped query. `AsyncLocalStorage.enterWith()` called
+    // *after* a function has already awaited something internally does not
+    // reliably propagate to that function's own caller once it returns
+    // (calling it as the very first synchronous action is the only shape
+    // that reliably survives crossing back out of this function). super_admin
+    // has no tenantId and legitimately needs cross-tenant access, so it
+    // bypasses instead.
+    if (payload.role === 'super_admin') {
+      setBypassContext();
+    } else if (payload.tenantId) {
+      setTenantContext(payload.tenantId);
+    }
+
+    // Check if this specific token has been revoked (e.g. after logout)
+    if (await isTokenRevoked(token)) {
       return null;
     }
 

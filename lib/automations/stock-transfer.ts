@@ -4,7 +4,7 @@
  */
 
 import { randomUUID } from 'crypto';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { sendEmail } from '@/lib/notifications';
 import { getTenantSettingsById } from '@/lib/tenant';
 import { AutomationResult } from './types';
@@ -117,7 +117,7 @@ export async function detectStockImbalances(
 
               if (autoApprove) {
                 // Auto-transfer (update stock)
-                await prisma.$transaction(async (tx) => {
+                await dbTransaction(async (tx) => {
                   const fromStockBefore = highStock.stock;
                   const fromStockAfter = fromStockBefore - transferQuantity;
 

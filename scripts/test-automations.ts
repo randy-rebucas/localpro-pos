@@ -6,6 +6,8 @@
  * Usage: npx tsx scripts/test-automations.ts
  */
 
+import '../lib/script-runtime';
+
 import { config } from 'dotenv';
 import { resolve } from 'path';
 

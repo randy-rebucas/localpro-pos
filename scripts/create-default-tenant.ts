@@ -2,6 +2,8 @@
  * Script to create a default tenant
  * Run with: npx tsx scripts/create-default-tenant.ts
  */
+import '../lib/script-runtime';
+
 import dotenv from 'dotenv';
 import { resolve } from 'path';
 

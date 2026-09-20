@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { handleApiError } from '@/lib/error-handler';
@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
     const existingUser = ownerEmail ? await prisma.user.findUnique({ where: { email: ownerEmail.toLowerCase() } }) : null;
     const tempPassword = (ownerEmail && !existingUser) ? crypto.randomBytes(8).toString('hex') : null;
 
-    const { tenant, subscription, ownerUser } = await prisma.$transaction(async (tx) => {
+    const { tenant, subscription, ownerUser } = await dbTransaction(async (tx) => {
       const tenantId = randomUUID();
       const tenant = await tx.tenant.create({
         data: {

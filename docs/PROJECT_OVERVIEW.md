@@ -34,6 +34,8 @@ Super-admin accounts are a special case: they carry no `tenantId`, bypass the te
 
 Tenant isolation is treated as a hard security boundary, not a convenience feature. Every database query in tenant-scoped code is filtered by the tenant ID pulled from the verified JWT, and dedicated helpers (`requireTenantAccess`, `getTenantIdFromRequest`) throw explicit violation errors if a request ever attempts to reach across tenant boundaries. This was reinforced by a full API audit that found and closed a cross-tenant data leak in the subscriptions endpoints — isolation isn't assumed, it's actively verified.
 
+That application-level filtering is backed by a second, independent layer: PostgreSQL Row-Level Security, enforced on every tenant-scoped table regardless of whether a given query remembers to filter by tenant. See `docs/architecture/tenant-isolation-rls.md` for how it's wired.
+
 ## Core Capabilities
 
 - **Point of Sale**: transaction processing, barcode/QR scanning and generation, receipt handling

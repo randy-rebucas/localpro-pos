@@ -22,6 +22,8 @@
  *   npm run db:backup -- --out=/mnt/backups
  */
 
+import '../lib/script-runtime';
+
 import dotenv from 'dotenv';
 import { resolve } from 'path';
 import fs from 'fs/promises';

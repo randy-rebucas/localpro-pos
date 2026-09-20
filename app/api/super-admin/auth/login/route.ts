@@ -4,6 +4,7 @@ import { generateToken } from '@/lib/auth';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import bcrypt from 'bcryptjs';
+import { setBypassContext } from '@/lib/tenant-context';
 
 export async function POST(request: NextRequest) {
   try {
@@ -34,7 +35,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find super_admin user by email only (no tenant scope)
+    // Find super_admin user by email only (no tenant scope) — genuinely
+    // cross-tenant, so bypass RLS rather than scoping to a tenant.
+    setBypassContext();
     const user = await prisma.user.findFirst({
       where: { email: email.toLowerCase(), role: 'super_admin' },
     });

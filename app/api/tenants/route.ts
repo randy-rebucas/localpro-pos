@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto, { randomUUID } from 'crypto';
 import bcrypt from 'bcryptjs';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { createAuditLog, AuditActions } from '@/lib/audit';
 import { getDefaultTenantSettings } from '@/lib/currency';
@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
       ...(companyName && { companyName }),
     };
 
-    const { tenant, adminUser, adminPassword } = await prisma.$transaction(async (tx) => {
+    const { tenant, adminUser, adminPassword } = await dbTransaction(async (tx) => {
       const newTenant = await tx.tenant.create({
         data: {
           id: randomUUID(),

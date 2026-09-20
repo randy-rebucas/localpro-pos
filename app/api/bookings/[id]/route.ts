@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/db';
+import prisma, { dbTransaction } from '@/lib/db';
 import { getTenantIdFromRequest } from '@/lib/api-tenant';
 import { getCurrentUser } from '@/lib/auth';
 import { hasTenantPermission } from '@/lib/permissions-server';
@@ -215,7 +215,7 @@ export async function PUT(
 
     let updatedBooking;
     try {
-      await prisma.$transaction(async (tx) => {
+      await dbTransaction(async (tx) => {
         if (startTime || duration) {
           const conflictingBookings = await tx.booking.findMany({
             where: {

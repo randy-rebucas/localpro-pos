@@ -31,6 +31,8 @@
  *   1  One or more entity groups failed (see failure report at the end)
  */
 
+import '../lib/script-runtime';
+
 import dotenv from 'dotenv';
 import { resolve } from 'path';
 
@@ -792,7 +794,7 @@ async function migrateDevices() {
       data: batch.map(d => ({
         id: oidRequired(d._id, 'Device._id'),
         tenantId: oidRequired(d.tenantId, 'Device.tenantId'),
-        branchId: oid(d.branchId),
+        branchId: oidRequired(d.branchId, 'Device.branchId'),
         label: d.label,
         serialNumber: d.serialNumber,
         terminalId: d.terminalId,

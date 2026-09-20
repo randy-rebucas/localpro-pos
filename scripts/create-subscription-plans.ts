@@ -1,3 +1,5 @@
+import '../lib/script-runtime';
+
 import { randomUUID } from 'crypto';
 import dotenv from 'dotenv';
 import prisma from '../lib/db';
