@@ -520,6 +520,7 @@
     "subtitle": "Ver informes detallados y análisis para su negocio",
     "tabs": {
       "sales": "Ventas",
+      "trends": "Tendencias",
       "products": "Productos",
       "vat": "IVA",
       "profit-loss": "Ganancias y Pérdidas",
@@ -576,6 +577,9 @@
     "voidedTransactions": "Transacciones Anuladas/Reembolsadas",
     "xReadingDesc": "Un resumen repetible de ventas por turno/día. No reinicia ni bloquea ningún total — seguro de ejecutar en cualquier momento.",
     "zReadingDesc": "El informe oficial de ventas de fin de día. Generar uno bloquea los totales de hoy contra el acumulador de Gran Total — solo se puede generar uno por día hábil.",
+    "trendsDesc": "Totales diarios históricos de las tablas de reportes preagregadas. Refleja los datos hasta el final del día anterior.",
+    "noTrendData": "Aún no hay datos de tendencias — el trabajo nocturno de reportes los genera al día siguiente de las transacciones",
+    "netSales": "Ventas Netas",
     "generateZReading": "Generar Lectura Z de Hoy",
     "zReadingGenerated": "Lectura Z generada",
     "zReadingAlreadyGenerated": "La Lectura Z ya fue generada hoy — mostrando el registro existente",

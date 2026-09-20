@@ -520,6 +520,7 @@
     "subtitle": "View detailed reports and analytics for your business",
     "tabs": {
       "sales": "Sales",
+      "trends": "Trends",
       "products": "Products",
       "vat": "VAT",
       "profit-loss": "Profit & Loss",
@@ -576,6 +577,9 @@
     "voidedTransactions": "Voided/Refunded Transactions",
     "xReadingDesc": "A repeatable shift/day sales summary. Does not reset or lock any totals — safe to run any time.",
     "zReadingDesc": "The official end-of-day sales report. Generating one locks in today's totals against the Grand Total accumulator — only one can be generated per business day.",
+    "trendsDesc": "Historical daily totals from the pre-aggregated reporting tables. Reflects data through the end of the previous day.",
+    "noTrendData": "No trend data available yet — the nightly reporting job populates this the day after transactions occur",
+    "netSales": "Net Sales",
     "generateZReading": "Generate Z-Reading for Today",
     "zReadingGenerated": "Z-Reading generated",
     "zReadingAlreadyGenerated": "Z-Reading already generated for today — showing existing record",

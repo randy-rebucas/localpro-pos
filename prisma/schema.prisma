@@ -73,7 +73,7 @@ enum TransactionStatus {
 }
 
 enum OrderType {
-  dine_in @map("dine-in")
+  dine_in  @map("dine-in")
   takeout
   delivery
 }
@@ -105,7 +105,7 @@ enum BookingStatus {
   confirmed
   completed
   cancelled
-  no_show @map("no-show")
+  no_show   @map("no-show")
 }
 
 enum RecurrenceType {
@@ -316,19 +316,19 @@ enum CustomerBalancePaymentMethod {
 // ----------------------------------------------------------------------------
 
 model Tenant {
-  id                        String           @id
-  slug                      String           @unique
-  name                      String
-  domain                    String?          @unique
-  subdomain                 String?          @unique
-  isActive                  Boolean          @default(true)
-  onboardingStatus          OnboardingStatus @default(not_started)
-  notes                     String?
-  createdById               String?
-  grandTotalSales           Decimal          @default(0) @db.Decimal(18, 2)
-  grandTotalTransactionCount Int             @default(0)
-  createdAt                 DateTime         @default(now())
-  updatedAt                 DateTime         @updatedAt
+  id                         String           @id
+  slug                       String           @unique
+  name                       String
+  domain                     String?          @unique
+  subdomain                  String?          @unique
+  isActive                   Boolean          @default(true)
+  onboardingStatus           OnboardingStatus @default(not_started)
+  notes                      String?
+  createdById                String?
+  grandTotalSales            Decimal          @default(0) @db.Decimal(18, 2)
+  grandTotalTransactionCount Int              @default(0)
+  createdAt                  DateTime         @default(now())
+  updatedAt                  DateTime         @updatedAt
 
   createdBy User? @relation("TenantCreatedBy", fields: [createdById], references: [id])
 
@@ -379,6 +379,12 @@ model Tenant {
   transactions              Transaction[]
   counters                  Counter[]
 
+  dailySalesSummaries   DailySalesSummary[]
+  monthlySalesSummaries MonthlySalesSummary[]
+  productSalesSummaries ProductSalesSummary[]
+  branchSalesSummaries  BranchSalesSummary[]
+  cashierSalesSummaries CashierSalesSummary[]
+
   @@map("tenants")
 }
 
@@ -387,48 +393,48 @@ model TenantSettings {
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   // Currency & localization
-  currency               String  @default("USD")
-  currencySymbol         String?
-  currencyPosition       String  @default("before") // 'before' | 'after'
-  dateFormat             String  @default("MM/DD/YYYY")
-  timeFormat             String  @default("12h") // '12h' | '24h'
-  timezone               String  @default("Asia/Manila")
-  language               String  @default("en") // 'en' | 'es'
-  decimalSeparator       String  @default(".")
-  thousandsSeparator     String  @default(",")
-  decimalPlaces          Int     @default(2)
+  currency           String  @default("USD")
+  currencySymbol     String?
+  currencyPosition   String  @default("before") // 'before' | 'after'
+  dateFormat         String  @default("MM/DD/YYYY")
+  timeFormat         String  @default("12h") // '12h' | '24h'
+  timezone           String  @default("Asia/Manila")
+  language           String  @default("en") // 'en' | 'es'
+  decimalSeparator   String  @default(".")
+  thousandsSeparator String  @default(",")
+  decimalPlaces      Int     @default(2)
 
   // Branding
-  companyName    String?
-  logo           String?
-  favicon        String?
-  primaryColor   String? @default("#35979c")
-  secondaryColor String?
-  accentColor    String?
+  companyName     String?
+  logo            String?
+  favicon         String?
+  primaryColor    String? @default("#35979c")
+  secondaryColor  String?
+  accentColor     String?
   backgroundColor String?
-  textColor      String?
+  textColor       String?
 
   // Contact info
-  email       String?
-  phone       String?
+  email          String?
+  phone          String?
   addressStreet  String?
   addressCity    String?
   addressState   String?
   addressZipCode String?
   addressCountry String?
-  website     String?
+  website        String?
 
   // Receipt & invoice
-  receiptHeader       String?
-  receiptFooter       String?
-  receiptShowLogo     Boolean @default(true)
-  receiptShowAddress  Boolean @default(true)
-  receiptShowPhone    Boolean @default(false)
-  receiptShowEmail    Boolean @default(false)
+  receiptHeader            String?
+  receiptFooter            String?
+  receiptShowLogo          Boolean @default(true)
+  receiptShowAddress       Boolean @default(true)
+  receiptShowPhone         Boolean @default(false)
+  receiptShowEmail         Boolean @default(false)
   receiptDefaultTemplateId String?
-  taxEnabled          Boolean @default(false)
-  taxRate             Decimal @default(0) @db.Decimal(5, 2)
-  taxLabel            String  @default("Tax")
+  taxEnabled               Boolean @default(false)
+  taxRate                  Decimal @default(0) @db.Decimal(5, 2)
+  taxLabel                 String  @default("Tax")
 
   // Business
   businessType       String?
@@ -437,115 +443,115 @@ model TenantSettings {
 
   // BIR compliance
   birTin                     String?
-  birPtuNumber                String?
-  birPtuIssuedDate             DateTime?
-  birPtuExpiryDate              DateTime?
-  birMinNumber                 String?
-  birBusinessStyle              String?
-  birSystemProvider              String?
-  birTerminalSN                    String?
-  birAccreditationNo                 String?
-  birAccreditationDate                DateTime?
-  birAccreditationValidUntil           DateTime?
-  birEsalesPushUrl                       String?
+  birPtuNumber               String?
+  birPtuIssuedDate           DateTime?
+  birPtuExpiryDate           DateTime?
+  birMinNumber               String?
+  birBusinessStyle           String?
+  birSystemProvider          String?
+  birTerminalSN              String?
+  birAccreditationNo         String?
+  birAccreditationDate       DateTime?
+  birAccreditationValidUntil DateTime?
+  birEsalesPushUrl           String?
 
   // Business permits (single nested object, flattened)
   mayorsPermitNumber              String?
-  mayorsPermitExpiry               DateTime?
-  barangayClearanceNumber           String?
-  barangayClearanceExpiry            DateTime?
-  dtiSecRegistration                  String?
-  birCertificateOfRegistration         String?
-  fireSafetyInspectionCertificate       String?
-  fsicExpiry                             DateTime?
-  sanitaryPermitNumber                    String?
-  sanitaryPermitExpiry                     DateTime?
+  mayorsPermitExpiry              DateTime?
+  barangayClearanceNumber         String?
+  barangayClearanceExpiry         DateTime?
+  dtiSecRegistration              String?
+  birCertificateOfRegistration    String?
+  fireSafetyInspectionCertificate String?
+  fsicExpiry                      DateTime?
+  sanitaryPermitNumber            String?
+  sanitaryPermitExpiry            DateTime?
 
   // Restaurant compliance (RA 10611)
-  fdaFoodBusinessLicense       String?
-  fdaFblExpiry                  DateTime?
-  foodSafetyCertificateNumber    String?
-  foodSafetyCertificateExpiry     DateTime?
-  foodHandlersCertified             Boolean  @default(false)
-  numberOfCertifiedHandlers          Int?
-  healthCertificateExpiry             DateTime?
-  kitchenSanitationCompliant           Boolean  @default(false)
+  fdaFoodBusinessLicense      String?
+  fdaFblExpiry                DateTime?
+  foodSafetyCertificateNumber String?
+  foodSafetyCertificateExpiry DateTime?
+  foodHandlersCertified       Boolean   @default(false)
+  numberOfCertifiedHandlers   Int?
+  healthCertificateExpiry     DateTime?
+  kitchenSanitationCompliant  Boolean   @default(false)
 
   // Retail compliance (RA 7394)
-  dtiBusinessNameRegistration   String?
-  priceTaggingCompliant          Boolean @default(false)
-  weightsAndMeasuresCompliant     Boolean @default(false)
-  btiAccreditation                  String?
-  productLabelsCompliant             Boolean @default(false)
+  dtiBusinessNameRegistration String?
+  priceTaggingCompliant       Boolean @default(false)
+  weightsAndMeasuresCompliant Boolean @default(false)
+  btiAccreditation            String?
+  productLabelsCompliant      Boolean @default(false)
 
   // Laundry compliance (DENR/EMB)
   environmentalComplianceCertificate String?
-  eccExpiry                            DateTime?
-  wastewaterDischargePermit              String?
-  wastewaterPermitExpiry                   DateTime?
-  solidWasteManagementPlan                   Boolean @default(false)
+  eccExpiry                          DateTime?
+  wastewaterDischargePermit          String?
+  wastewaterPermitExpiry             DateTime?
+  solidWasteManagementPlan           Boolean   @default(false)
 
   // Service business compliance (DOH/LGU) — practitionerLicenses[] -> own table
   serviceDohAccreditation       String?
-  serviceDohAccreditationExpiry  DateTime?
+  serviceDohAccreditationExpiry DateTime?
 
   // Pharmacy compliance
-  pharmacistName              String?
-  pharmacistPRCNumber          String?
-  pharmacistPTRNumber           String?
-  fdaLTO                          String?
-  fdaLTOExpiryDate                  DateTime?
-  pharmacyDohAccreditation           String?
-  pdeaLicense                          String?
-  pdeaLicenseExpiry                      DateTime?
-  requirePrescriptionForRx                 Boolean  @default(true)
-  trackExpiryDates                           Boolean  @default(true)
-  expiryAlertDays                              Int      @default(90)
+  pharmacistName           String?
+  pharmacistPRCNumber      String?
+  pharmacistPTRNumber      String?
+  fdaLTO                   String?
+  fdaLTOExpiryDate         DateTime?
+  pharmacyDohAccreditation String?
+  pdeaLicense              String?
+  pdeaLicenseExpiry        DateTime?
+  requirePrescriptionForRx Boolean   @default(true)
+  trackExpiryDates         Boolean   @default(true)
+  expiryAlertDays          Int       @default(90)
 
   // Notifications
-  lowStockThreshold Int     @default(10)
-  lowStockAlert     Boolean @default(true)
-  emailNotifications Boolean @default(false)
-  smsNotifications   Boolean @default(false)
-  attendanceNotificationsEnabled            Boolean @default(true)
-  attendanceExpectedStartTime               String  @default("09:00")
-  attendanceMaxHoursWithoutClockOut         Int     @default(12)
+  lowStockThreshold                 Int     @default(10)
+  lowStockAlert                     Boolean @default(true)
+  emailNotifications                Boolean @default(false)
+  smsNotifications                  Boolean @default(false)
+  attendanceNotificationsEnabled    Boolean @default(true)
+  attendanceExpectedStartTime       String  @default("09:00")
+  attendanceMaxHoursWithoutClockOut Int     @default(12)
 
   // Feature flags
-  enableInventory            Boolean @default(true)
-  enableCategories           Boolean @default(true)
-  enableDiscounts            Boolean @default(false)
-  enableLoyaltyProgram       Boolean @default(false)
-  enableCustomerManagement   Boolean @default(false)
-  enableOnAccountSales       Boolean @default(false)
-  autoOpenDrawerOnShiftStart Boolean @default(false)
-  autoOpenDrawerOnShiftEnd   Boolean @default(false)
-  enableBookingScheduling    Boolean @default(false)
-  enableTableManagement      Boolean @default(false)
+  enableInventory             Boolean @default(true)
+  enableCategories            Boolean @default(true)
+  enableDiscounts             Boolean @default(false)
+  enableLoyaltyProgram        Boolean @default(false)
+  enableCustomerManagement    Boolean @default(false)
+  enableOnAccountSales        Boolean @default(false)
+  autoOpenDrawerOnShiftStart  Boolean @default(false)
+  autoOpenDrawerOnShiftEnd    Boolean @default(false)
+  enableBookingScheduling     Boolean @default(false)
+  enableTableManagement       Boolean @default(false)
   ecommerceShopifyEnabled     Boolean @default(false)
   ecommerceWooCommerceEnabled Boolean @default(false)
 
   // Hardware config (single nested object)
-  printerType        String?
-  printerProfile     String?
-  printerVendorId    Int?
-  printerProductId   Int?
-  printerIpAddress   String?
-  printerPortNumber  Int?
-  barcodeScannerType    String?
-  barcodeScannerEnabled Boolean?
-  qrReaderEnabled       Boolean?
-  qrReaderCameraId      String?
-  cashDrawerEnabled              Boolean?
-  cashDrawerConnectedToPrinter   Boolean?
-  touchscreenEnabled               Boolean?
+  printerType                  String?
+  printerProfile               String?
+  printerVendorId              Int?
+  printerProductId             Int?
+  printerIpAddress             String?
+  printerPortNumber            Int?
+  barcodeScannerType           String?
+  barcodeScannerEnabled        Boolean?
+  qrReaderEnabled              Boolean?
+  qrReaderCameraId             String?
+  cashDrawerEnabled            Boolean?
+  cashDrawerConnectedToPrinter Boolean?
+  touchscreenEnabled           Boolean?
 
   // Multi-currency (scalar fields; exchangeRates Map -> TenantExchangeRate; displayCurrencies -> native array)
-  multiCurrencyEnabled       Boolean  @default(false)
-  displayCurrencies          String[]
-  exchangeRateSource         String   @default("manual") // 'manual' | 'api'
-  exchangeRateApiKey         String?
-  exchangeRateLastUpdated    DateTime?
+  multiCurrencyEnabled    Boolean   @default(false)
+  displayCurrencies       String[]
+  exchangeRateSource      String    @default("manual") // 'manual' | 'api'
+  exchangeRateApiKey      String?
+  exchangeRateLastUpdated DateTime?
 
   // Notification templates (single nested object per channel, flattened)
   emailBookingConfirmationTemplate String?
@@ -559,14 +565,14 @@ model TenantSettings {
   smsLowStockAlertTemplate         String?
 
   // Advanced branding (customTheme.variables Map -> TenantThemeVariable)
-  fontFamily          String?
-  fontSource           String  @default("system") // 'google' | 'custom' | 'system'
-  googleFontUrl         String?
-  customFontUrl          String?
-  theme                    String  @default("light") // 'light' | 'dark' | 'auto' | 'custom'
-  customThemeCss             String?
-  borderRadius                 String  @default("md")
-  customBorderRadius             String?
+  fontFamily         String?
+  fontSource         String  @default("system") // 'google' | 'custom' | 'system'
+  googleFontUrl      String?
+  customFontUrl      String?
+  theme              String  @default("light") // 'light' | 'dark' | 'auto' | 'custom'
+  customThemeCss     String?
+  borderRadius       String  @default("md")
+  customBorderRadius String?
 
   // Business hours (businessHours.timezone kept here; schedule Map -> TenantBusinessHour)
   businessHoursTimezone String?
@@ -590,13 +596,13 @@ model TenantRolePermissionOverride {
 }
 
 model TenantPractitionerLicense {
-  id             String    @id
-  tenantId       String
-  name           String?
-  licenseType    String?
-  prcNumber      String?
-  ptrNumber      String?
-  licenseExpiry  DateTime?
+  id            String    @id
+  tenantId      String
+  name          String?
+  licenseType   String?
+  prcNumber     String?
+  ptrNumber     String?
+  licenseExpiry DateTime?
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -646,7 +652,7 @@ model TenantReceiptTemplate {
 model TenantBusinessHour {
   id        String  @id
   tenantId  String
-  dayOfWeek Int     // 0=Sun..6=Sat (Mongoose Map key)
+  dayOfWeek Int // 0=Sun..6=Sat (Mongoose Map key)
   enabled   Boolean @default(true)
   openTime  String?
   closeTime String?
@@ -659,10 +665,10 @@ model TenantBusinessHour {
 }
 
 model TenantBusinessHourBreak {
-  id               String @id
-  businessHourId   String
-  start            String
-  end              String
+  id             String @id
+  businessHourId String
+  start          String
+  end            String
 
   businessHour TenantBusinessHour @relation(fields: [businessHourId], references: [id], onDelete: Cascade)
 
@@ -671,10 +677,10 @@ model TenantBusinessHourBreak {
 }
 
 model TenantSpecialHours {
-  id        String   @id
+  id        String  @id
   tenantId  String
   date      String
-  enabled   Boolean  @default(true)
+  enabled   Boolean @default(true)
   openTime  String?
   closeTime String?
   note      String?
@@ -686,17 +692,17 @@ model TenantSpecialHours {
 }
 
 model TenantHoliday {
-  id                String   @id
-  tenantId          String
-  name              String
-  date              String
-  type              String   @default("single") // 'single' | 'recurring'
-  recurringPattern  String?  // 'yearly' | 'monthly' | 'weekly'
+  id                  String   @id
+  tenantId            String
+  name                String
+  date                String
+  type                String   @default("single") // 'single' | 'recurring'
+  recurringPattern    String? // 'yearly' | 'monthly' | 'weekly'
   recurringDayOfMonth Int?
   recurringDayOfWeek  Int?
   recurringMonth      Int?
-  isBusinessClosed Boolean  @default(true)
-  createdAt        DateTime @default(now())
+  isBusinessClosed    Boolean  @default(true)
+  createdAt           DateTime @default(now())
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -709,50 +715,52 @@ model TenantHoliday {
 // ----------------------------------------------------------------------------
 
 model User {
-  id         String    @id
-  email      String    @unique
-  password   String
-  name       String
-  role       UserRole  @default(cashier)
-  tenantId   String?
-  branchId   String?
-  isActive   Boolean   @default(true)
-  lastLogin  DateTime?
-  qrToken    String?   @unique
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  id        String    @id
+  email     String    @unique
+  password  String
+  name      String
+  role      UserRole  @default(cashier)
+  tenantId  String?
+  branchId  String?
+  isActive  Boolean   @default(true)
+  lastLogin DateTime?
+  qrToken   String?   @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   tenant Tenant? @relation(fields: [tenantId], references: [id])
   branch Branch? @relation(fields: [branchId], references: [id])
 
-  tenantsCreated             Tenant[]                    @relation("TenantCreatedBy")
-  addresses                  Address[]
-  branchesManaged            Branch[]                    @relation("BranchManager")
-  devicesRegistered          Device[]                    @relation("DeviceRegisteredBy")
-  customerBalancePayments    CustomerBalancePayment[]
-  campaigns                  Campaign[]
-  cashDrawerSessions         CashDrawerSession[]
-  expenses                   Expense[]
-  filesUploaded              File[]
-  loyaltyTransactionsCreated LoyaltyTransaction[]
-  offlineTransactions        OfflineTransaction[]
-  paymentsProcessed          Payment[]
-  prescriptionsCreated       Prescription[]
-  prescriptionItemsDispensed PrescriptionItem[]
-  savedCarts                 SavedCart[]
-  stockMovements             StockMovement[]
-  posTablesCurrentOrderUser  Transaction[]               @relation("TransactionUser")
-  zReadingsGenerated         ZReading[]
-  auditLogs                  AuditLog[]
-  archivedAuditLogs          ArchivedAuditLog[]
-  superAdminActions          SuperAdminAction[]
-  billingEventsRecorded      BillingEvent[]
-  attendances                Attendance[]
-  bookingsStaff              Booking[]                   @relation("BookingStaff")
-  recurringBookingTemplates  RecurringBookingTemplate[]  @relation("RecurringBookingStaff")
-  couponsCreated             Coupon[]
+  tenantsCreated              Tenant[]                   @relation("TenantCreatedBy")
+  addresses                   Address[]
+  branchesManaged             Branch[]                   @relation("BranchManager")
+  devicesRegistered           Device[]                   @relation("DeviceRegisteredBy")
+  customerBalancePayments     CustomerBalancePayment[]
+  campaigns                   Campaign[]
+  cashDrawerSessions          CashDrawerSession[]
+  expenses                    Expense[]
+  filesUploaded               File[]
+  loyaltyTransactionsCreated  LoyaltyTransaction[]
+  offlineTransactions         OfflineTransaction[]
+  paymentsProcessed           Payment[]
+  prescriptionsCreated        Prescription[]
+  prescriptionItemsDispensed  PrescriptionItem[]
+  savedCarts                  SavedCart[]
+  stockMovements              StockMovement[]
+  posTablesCurrentOrderUser   Transaction[]              @relation("TransactionUser")
+  zReadingsGenerated          ZReading[]
+  auditLogs                   AuditLog[]
+  archivedAuditLogs           ArchivedAuditLog[]
+  superAdminActions           SuperAdminAction[]
+  billingEventsRecorded       BillingEvent[]
+  attendances                 Attendance[]
+  bookingsStaff               Booking[]                  @relation("BookingStaff")
+  recurringBookingTemplates   RecurringBookingTemplate[] @relation("RecurringBookingStaff")
+  couponsCreated              Coupon[]
   featureFlagOverridesGranted FeatureFlagOverride[]
-  systemSettingsUpdated      SystemSettings[]
+  systemSettingsUpdated       SystemSettings[]
+
+  cashierSalesSummaries CashierSalesSummary[]
 
   @@index([tenantId, role, isActive])
   @@index([tenantId, branchId, isActive])
@@ -801,14 +809,20 @@ model Branch {
   tenant  Tenant @relation(fields: [tenantId], references: [id])
   manager User?  @relation("BranchManager", fields: [managerId], references: [id])
 
-  users                     User[]
-  devices                   Device[]
-  offlineTransactions       OfflineTransaction[]
-  posTables                 PosTable[]
-  stockMovements            StockMovement[]
-  zReadings                 ZReading[]
-  transactions              Transaction[]
+  users                        User[]
+  devices                      Device[]
+  offlineTransactions          OfflineTransaction[]
+  posTables                    PosTable[]
+  stockMovements               StockMovement[]
+  zReadings                    ZReading[]
+  transactions                 Transaction[]
   ecommerceIntegrationsDefault TenantEcommerceIntegration[]
+
+  dailySalesSummaries   DailySalesSummary[]
+  monthlySalesSummaries MonthlySalesSummary[]
+  productSalesSummaries ProductSalesSummary[]
+  branchSalesSummaries  BranchSalesSummary[]
+  cashierSalesSummaries CashierSalesSummary[]
 
   @@unique([tenantId, code])
   @@index([tenantId, isActive])
@@ -816,22 +830,22 @@ model Branch {
 }
 
 model Device {
-  id           String    @id
-  tenantId     String
-  branchId     String
-  label        String
-  serialNumber String
-  terminalId   String
-  ptuNumber    String?
-  ptuStatus    PtuStatus @default(pending)
-  isActive     Boolean   @default(true)
+  id             String    @id
+  tenantId       String
+  branchId       String
+  label          String
+  serialNumber   String
+  terminalId     String
+  ptuNumber      String?
+  ptuStatus      PtuStatus @default(pending)
+  isActive       Boolean   @default(true)
   registeredById String
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  tenant     Tenant @relation(fields: [tenantId], references: [id])
-  branch     Branch @relation(fields: [branchId], references: [id])
-  registeredBy User  @relation("DeviceRegisteredBy", fields: [registeredById], references: [id])
+  tenant       Tenant @relation(fields: [tenantId], references: [id])
+  branch       Branch @relation(fields: [branchId], references: [id])
+  registeredBy User   @relation("DeviceRegisteredBy", fields: [registeredById], references: [id])
 
   transactions Transaction[]
 
@@ -855,10 +869,10 @@ model Category {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  tenant   Tenant    @relation(fields: [tenantId], references: [id])
-  products Product[]
+  tenant         Tenant            @relation(fields: [tenantId], references: [id])
+  products       Product[]
   productBundles ProductBundle[]
-  taxRules TaxRuleCategory[]
+  taxRules       TaxRuleCategory[]
 
   @@unique([tenantId, name])
   @@map("categories")
@@ -873,7 +887,7 @@ model Product {
   stock                Int         @default(0)
   sku                  String?
   barcode              String?
-  category             String?     // legacy free-text category label kept alongside categoryId FK
+  category             String? // legacy free-text category label kept alongside categoryId FK
   categoryId           String?
   image                String?
   productType          ProductType @default(regular)
@@ -888,24 +902,25 @@ model Product {
   createdAt            DateTime    @default(now())
   updatedAt            DateTime    @updatedAt
 
-  tenant   Tenant    @relation(fields: [tenantId], references: [id])
+  tenant      Tenant    @relation(fields: [tenantId], references: [id])
   categoryRef Category? @relation(fields: [categoryId], references: [id])
 
-  variations       ProductVariation[]
-  branchStock      ProductBranchStock[]
-  modifiers        ProductModifier[]
-  restaurantDetails ProductRestaurantDetails?
-  laundryDetails    ProductLaundryDetails?
-  serviceDetails    ProductServiceDetails?
-  pharmacyDetails   ProductPharmacyDetails?
-  channelListings   ProductChannelListing[]
-  transactionItems  TransactionItem[]
+  variations              ProductVariation[]
+  branchStock             ProductBranchStock[]
+  modifiers               ProductModifier[]
+  restaurantDetails       ProductRestaurantDetails?
+  laundryDetails          ProductLaundryDetails?
+  serviceDetails          ProductServiceDetails?
+  pharmacyDetails         ProductPharmacyDetails?
+  channelListings         ProductChannelListing[]
+  transactionItems        TransactionItem[]
   offlineTransactionItems OfflineTransactionItem[]
-  savedCartItems    SavedCartItem[]
-  stockMovements    StockMovement[]
-  bundleItems       ProductBundleItem[]
-  prescriptionItems PrescriptionItem[]
-  taxRules          TaxRuleProduct[]
+  savedCartItems          SavedCartItem[]
+  stockMovements          StockMovement[]
+  bundleItems             ProductBundleItem[]
+  prescriptionItems       PrescriptionItem[]
+  taxRules                TaxRuleProduct[]
+  salesSummaries          ProductSalesSummary[]
 
   @@unique([tenantId, sku])
   @@unique([tenantId, barcode])
@@ -916,14 +931,14 @@ model Product {
 }
 
 model ProductVariation {
-  id       String  @id
+  id        String   @id
   productId String
-  size     String?
-  color    String?
-  type     String?
-  sku      String?
-  price    Decimal? @db.Decimal(18, 2)
-  stock    Int      @default(0)
+  size      String?
+  color     String?
+  type      String?
+  sku       String?
+  price     Decimal? @db.Decimal(18, 2)
+  stock     Int      @default(0)
 
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
@@ -934,10 +949,10 @@ model ProductVariation {
 }
 
 model ProductBranchStock {
-  id       String @id
+  id        String @id
   productId String
-  branchId String
-  stock    Int    @default(0)
+  branchId  String
+  stock     Int    @default(0)
 
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
@@ -946,10 +961,10 @@ model ProductBranchStock {
 }
 
 model ProductModifier {
-  id       String  @id
+  id        String  @id
   productId String
-  name     String
-  required Boolean @default(false)
+  name      String
+  required  Boolean @default(false)
 
   product Product                 @relation(fields: [productId], references: [id], onDelete: Cascade)
   options ProductModifierOption[]
@@ -971,12 +986,12 @@ model ProductModifierOption {
 }
 
 model ProductRestaurantDetails {
-  productId  String   @id
-  allergens  String[]
-  calories   Int?
-  protein    Decimal? @db.Decimal(8, 2)
-  carbs      Decimal? @db.Decimal(8, 2)
-  fat        Decimal? @db.Decimal(8, 2)
+  productId String   @id
+  allergens String[]
+  calories  Int?
+  protein   Decimal? @db.Decimal(8, 2)
+  carbs     Decimal? @db.Decimal(8, 2)
+  fat       Decimal? @db.Decimal(8, 2)
 
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
@@ -1041,8 +1056,8 @@ model ProductBundle {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  tenant   Tenant    @relation(fields: [tenantId], references: [id])
-  category Category? @relation(fields: [categoryId], references: [id])
+  tenant   Tenant              @relation(fields: [tenantId], references: [id])
+  category Category?           @relation(fields: [categoryId], references: [id])
   items    ProductBundleItem[]
 
   @@unique([tenantId, sku])
@@ -1051,14 +1066,14 @@ model ProductBundle {
 }
 
 model ProductBundleItem {
-  id              String  @id
-  bundleId        String
-  productId       String
-  productName     String
-  quantity        Int
-  variationSize   String?
-  variationColor  String?
-  variationType   String?
+  id             String  @id
+  bundleId       String
+  productId      String
+  productName    String
+  quantity       Int
+  variationSize  String?
+  variationColor String?
+  variationType  String?
 
   bundle  ProductBundle @relation(fields: [bundleId], references: [id], onDelete: Cascade)
   product Product       @relation(fields: [productId], references: [id])
@@ -1069,19 +1084,19 @@ model ProductBundleItem {
 }
 
 model ProductChannelListing {
-  id                 String            @id
-  tenantId           String
-  productId          String
-  provider           EcommerceProvider
-  externalProductId  String
-  externalVariantId  String
-  inventoryItemId    String?
-  sku                String?
-  variationSize      String?
-  variationColor     String?
-  variationType      String?
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
+  id                String            @id
+  tenantId          String
+  productId         String
+  provider          EcommerceProvider
+  externalProductId String
+  externalVariantId String
+  inventoryItemId   String?
+  sku               String?
+  variationSize     String?
+  variationColor    String?
+  variationType     String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 
   tenant  Tenant  @relation(fields: [tenantId], references: [id])
   product Product @relation(fields: [productId], references: [id])
@@ -1092,21 +1107,21 @@ model ProductChannelListing {
 }
 
 model TenantEcommerceIntegration {
-  id                      String            @id
-  tenantId                String
-  provider                EcommerceProvider
-  shopDomain              String?
-  siteUrl                 String?
-  credentialsEncrypted    String
-  webhookSecretEncrypted  String?
-  scopes                  String[]
-  shopifyLocationId       String?
-  isActive                Boolean           @default(true)
-  lastSyncAt              DateTime?
-  lastError               String?
-  defaultBranchId         String?
-  createdAt               DateTime          @default(now())
-  updatedAt               DateTime          @updatedAt
+  id                     String            @id
+  tenantId               String
+  provider               EcommerceProvider
+  shopDomain             String?
+  siteUrl                String?
+  credentialsEncrypted   String
+  webhookSecretEncrypted String?
+  scopes                 String[]
+  shopifyLocationId      String?
+  isActive               Boolean           @default(true)
+  lastSyncAt             DateTime?
+  lastError              String?
+  defaultBranchId        String?
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
 
   tenant        Tenant  @relation(fields: [tenantId], references: [id])
   defaultBranch Branch? @relation(fields: [defaultBranchId], references: [id])
@@ -1122,26 +1137,26 @@ model TenantEcommerceIntegration {
 // ----------------------------------------------------------------------------
 
 model Customer {
-  id                    String    @id
-  tenantId              String
-  firstName             String
-  lastName              String
-  email                 String?
-  phone                 String?
-  dateOfBirth           DateTime?
-  notes                 String?
-  tags                  String[]
-  totalSpent            Decimal   @default(0) @db.Decimal(18, 2)
-  lastPurchaseDate      DateTime?
-  loyaltyPointsBalance  Decimal   @default(0) @db.Decimal(18, 2)
-  accountBalance        Decimal   @default(0) @db.Decimal(18, 2)
-  creditLimit           Decimal?  @db.Decimal(18, 2)
-  shopifyCustomerId     String?
-  isActive              Boolean   @default(true)
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  id                   String    @id
+  tenantId             String
+  firstName            String
+  lastName             String
+  email                String?
+  phone                String?
+  dateOfBirth          DateTime?
+  notes                String?
+  tags                 String[]
+  totalSpent           Decimal   @default(0) @db.Decimal(18, 2)
+  lastPurchaseDate     DateTime?
+  loyaltyPointsBalance Decimal   @default(0) @db.Decimal(18, 2)
+  accountBalance       Decimal   @default(0) @db.Decimal(18, 2)
+  creditLimit          Decimal?  @db.Decimal(18, 2)
+  shopifyCustomerId    String?
+  isActive             Boolean   @default(true)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  tenant    Tenant             @relation(fields: [tenantId], references: [id])
+  tenant    Tenant            @relation(fields: [tenantId], references: [id])
   addresses CustomerAddress[]
 
   balancePayments     CustomerBalancePayment[]
@@ -1159,14 +1174,14 @@ model Customer {
 }
 
 model CustomerAddress {
-  id        String  @id
+  id         String  @id
   customerId String
-  street    String?
-  city      String?
-  state     String?
-  zipCode   String?
-  country   String?
-  isDefault Boolean @default(false)
+  street     String?
+  city       String?
+  state      String?
+  zipCode    String?
+  country    String?
+  isDefault  Boolean @default(false)
 
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
@@ -1194,23 +1209,23 @@ model CustomerOTP {
 }
 
 model CustomerBalancePayment {
-  id             String                         @id
+  id             String                       @id
   tenantId       String
   customerId     String
-  amount         Decimal                        @db.Decimal(18, 2)
+  amount         Decimal                      @db.Decimal(18, 2)
   method         CustomerBalancePaymentMethod
   notes          String?
   recordedById   String?
   idempotencyKey String?
-  createdAt      DateTime                       @default(now())
-  updatedAt      DateTime                       @updatedAt
+  createdAt      DateTime                     @default(now())
+  updatedAt      DateTime                     @updatedAt
 
-  tenant     Tenant    @relation(fields: [tenantId], references: [id])
-  customer   Customer  @relation(fields: [customerId], references: [id])
-  recordedBy User?     @relation(fields: [recordedById], references: [id])
+  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+  customer   Customer @relation(fields: [customerId], references: [id])
+  recordedBy User?    @relation(fields: [recordedById], references: [id])
 
-  @@index([tenantId, customerId, createdAt])
   @@unique([tenantId, idempotencyKey])
+  @@index([tenantId, customerId, createdAt])
   @@map("customer_balance_payments")
 }
 
@@ -1219,19 +1234,19 @@ model CustomerBalancePayment {
 // ----------------------------------------------------------------------------
 
 model Campaign {
-  id        String          @id
-  tenantId  String
-  name      String
-  channel   CampaignChannel
-  segment   CampaignSegment
-  subject   String?
-  body      String
-  status    CampaignStatus  @default(draft)
-  sentCount Int             @default(0)
-  sentAt    DateTime?
+  id          String          @id
+  tenantId    String
+  name        String
+  channel     CampaignChannel
+  segment     CampaignSegment
+  subject     String?
+  body        String
+  status      CampaignStatus  @default(draft)
+  sentCount   Int             @default(0)
+  sentAt      DateTime?
   createdById String?
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 
   tenant    Tenant @relation(fields: [tenantId], references: [id])
   createdBy User?  @relation(fields: [createdById], references: [id])
@@ -1241,22 +1256,22 @@ model Campaign {
 }
 
 model Coupon {
-  id            String           @id
-  code          String           @unique
+  id            String          @id
+  code          String          @unique
   description   String?
   discountType  DiscountType
-  discountValue Decimal          @db.Decimal(18, 2)
-  appliesTo     CouponAppliesTo  @default(all_plans)
+  discountValue Decimal         @db.Decimal(18, 2)
+  appliesTo     CouponAppliesTo @default(all_plans)
   maxUses       Int?
-  usedCount     Int              @default(0)
-  validFrom     DateTime         @default(now())
+  usedCount     Int             @default(0)
+  validFrom     DateTime        @default(now())
   validUntil    DateTime?
-  isActive      Boolean          @default(true)
+  isActive      Boolean         @default(true)
   createdById   String
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
 
-  createdBy User          @relation(fields: [createdById], references: [id])
+  createdBy User         @relation(fields: [createdById], references: [id])
   plans     CouponPlan[]
 
   @@index([isActive, validFrom, validUntil])
@@ -1276,41 +1291,41 @@ model CouponPlan {
 }
 
 model SubscriptionPlan {
-  id                      String            @id
-  name                    String
-  tier                    SubscriptionTier  @unique
-  description             String?
-  priceMonthly            Decimal           @db.Decimal(18, 2)
-  priceSetupFee           Decimal           @default(0) @db.Decimal(18, 2)
-  priceCurrency           String            @default("PHP")
-  reactivationFee         Decimal           @default(500) @db.Decimal(18, 2)
+  id              String           @id
+  name            String
+  tier            SubscriptionTier @unique
+  description     String?
+  priceMonthly    Decimal          @db.Decimal(18, 2)
+  priceSetupFee   Decimal          @default(0) @db.Decimal(18, 2)
+  priceCurrency   String           @default("PHP")
+  reactivationFee Decimal          @default(500) @db.Decimal(18, 2)
 
   // features (single fixed nested object -> flattened columns)
-  maxUsers                Int
-  maxBranches             Int
-  maxProducts             Int
-  maxTransactions         Int
-  enableInventory              Boolean @default(true)
-  enableCategories              Boolean @default(true)
-  enableDiscounts                Boolean @default(false)
-  enableLoyaltyProgram             Boolean @default(false)
-  enableCustomerManagement           Boolean @default(false)
-  enableBookingScheduling              Boolean @default(false)
-  enableTableManagement                  Boolean @default(false)
-  enableReports                            Boolean @default(true)
-  enableMultiBranch                          Boolean @default(false)
-  enableHardwareIntegration                    Boolean @default(false)
-  prioritySupport                                Boolean @default(false)
-  customIntegrations                               Boolean @default(false)
-  dedicatedAccountManager                            Boolean @default(false)
+  maxUsers                  Int
+  maxBranches               Int
+  maxProducts               Int
+  maxTransactions           Int
+  enableInventory           Boolean @default(true)
+  enableCategories          Boolean @default(true)
+  enableDiscounts           Boolean @default(false)
+  enableLoyaltyProgram      Boolean @default(false)
+  enableCustomerManagement  Boolean @default(false)
+  enableBookingScheduling   Boolean @default(false)
+  enableTableManagement     Boolean @default(false)
+  enableReports             Boolean @default(true)
+  enableMultiBranch         Boolean @default(false)
+  enableHardwareIntegration Boolean @default(false)
+  prioritySupport           Boolean @default(false)
+  customIntegrations        Boolean @default(false)
+  dedicatedAccountManager   Boolean @default(false)
 
   // birCompliance (flattened)
   birPtuAssistance     Boolean @default(false)
-  birReceiptFormatting  Boolean @default(false)
-  birDocumentation       Boolean @default(false)
-  birCasReporting          Boolean @default(false)
-  birAuditTrailSystem       Boolean @default(false)
-  birMonthlySupport           Boolean @default(false)
+  birReceiptFormatting Boolean @default(false)
+  birDocumentation     Boolean @default(false)
+  birCasReporting      Boolean @default(false)
+  birAuditTrailSystem  Boolean @default(false)
+  birMonthlySupport    Boolean @default(false)
 
   // pharmacyCompliance (flattened)
   pharmacyComplianceEnabled Boolean @default(false)
@@ -1333,44 +1348,44 @@ model SubscriptionPlan {
 }
 
 model Subscription {
-  id                         String              @id
-  tenantId                   String              @unique
-  planId                     String
-  status                     SubscriptionStatus  @default(trial)
-  billingCycle               BillingCycle        @default(monthly)
-  startDate                  DateTime            @default(now())
-  endDate                    DateTime?
-  trialEndDate                DateTime?
-  nextBillingDate               DateTime?
-  lastBillingDate                  DateTime?
-  cancelledAt                        DateTime?
-  cancellationReason                   String?
-  suspendedAt                            DateTime?
-  pausedAt                                 DateTime?
-  pauseReason                                String?
-  pauseEndsAt                                  DateTime?
-  gracePeriodEndDate                             DateTime?
-  trialConvertedAt                                 DateTime?
-  paymentOverdue                                     Boolean  @default(false)
-  outstandingBalance                                   Decimal  @default(0) @db.Decimal(18, 2)
-  lastInvoiceGeneratedAt                                 DateTime?
-  lateFeeAppliedAt                                         DateTime?
-  reactivationFeeAppliedAt                                   DateTime?
-  deactivatedAt                                                DateTime?
+  id                       String             @id
+  tenantId                 String             @unique
+  planId                   String
+  status                   SubscriptionStatus @default(trial)
+  billingCycle             BillingCycle       @default(monthly)
+  startDate                DateTime           @default(now())
+  endDate                  DateTime?
+  trialEndDate             DateTime?
+  nextBillingDate          DateTime?
+  lastBillingDate          DateTime?
+  cancelledAt              DateTime?
+  cancellationReason       String?
+  suspendedAt              DateTime?
+  pausedAt                 DateTime?
+  pauseReason              String?
+  pauseEndsAt              DateTime?
+  gracePeriodEndDate       DateTime?
+  trialConvertedAt         DateTime?
+  paymentOverdue           Boolean            @default(false)
+  outstandingBalance       Decimal            @default(0) @db.Decimal(18, 2)
+  lastInvoiceGeneratedAt   DateTime?
+  lateFeeAppliedAt         DateTime?
+  reactivationFeeAppliedAt DateTime?
+  deactivatedAt            DateTime?
 
   // paymentMethod (single nested object -> flattened)
   paymentType        SubscriptionPaymentType?
-  paymentLast4        String?
-  paymentExpiryMonth   Int?
-  paymentExpiryYear     Int?
-  paymentProvider         String?
+  paymentLast4       String?
+  paymentExpiryMonth Int?
+  paymentExpiryYear  Int?
+  paymentProvider    String?
 
   // usage (single nested object -> flattened)
   usageCurrentUsers        Int      @default(0)
-  usageCurrentBranches       Int      @default(1)
-  usageCurrentProducts          Int      @default(0)
-  usageCurrentTransactions         Int      @default(0)
-  usageLastResetDate                  DateTime @default(now())
+  usageCurrentBranches     Int      @default(1)
+  usageCurrentProducts     Int      @default(0)
+  usageCurrentTransactions Int      @default(0)
+  usageLastResetDate       DateTime @default(now())
 
   isTrial   Boolean  @default(true)
   autoRenew Boolean  @default(true)
@@ -1378,8 +1393,8 @@ model Subscription {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant  Tenant            @relation(fields: [tenantId], references: [id])
-  plan    SubscriptionPlan  @relation(fields: [planId], references: [id])
+  tenant Tenant           @relation(fields: [tenantId], references: [id])
+  plan   SubscriptionPlan @relation(fields: [planId], references: [id])
 
   billingHistory SubscriptionBillingHistory[]
   billingEvents  BillingEvent[]
@@ -1392,11 +1407,11 @@ model Subscription {
 }
 
 model SubscriptionBillingHistory {
-  id             String                @id
+  id             String               @id
   subscriptionId String
   date           DateTime
-  amount         Decimal               @db.Decimal(18, 2)
-  currency       String                @default("PHP")
+  amount         Decimal              @db.Decimal(18, 2)
+  currency       String               @default("PHP")
   status         BillingHistoryStatus
   transactionId  String?
   invoiceUrl     String?
@@ -1432,12 +1447,12 @@ model SuperAdminAction {
 }
 
 model BillingEvent {
-  id             String            @id
+  id             String           @id
   tenantId       String
   subscriptionId String
   type           BillingEventType
-  amount         Decimal           @db.Decimal(18, 2)
-  currency       String            @default("PHP")
+  amount         Decimal          @db.Decimal(18, 2)
+  currency       String           @default("PHP")
   description    String?
   notes          String?
   transactionId  String?
@@ -1445,15 +1460,15 @@ model BillingEvent {
   recordedById   String?
   /// Arbitrary per-event metadata blob — deliberate JSONB (see report).
   metadata       Json?
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
 
   tenant       Tenant       @relation(fields: [tenantId], references: [id])
   subscription Subscription @relation(fields: [subscriptionId], references: [id])
   recordedBy   User?        @relation(fields: [recordedById], references: [id])
 
-  @@index([tenantId, createdAt])
   @@unique([tenantId, transactionId])
+  @@index([tenantId, createdAt])
   @@map("billing_events")
 }
 
@@ -1479,11 +1494,11 @@ model FeatureFlagOverride {
 // Single-row table for platform-wide settings (maintenance mode, etc).
 // Always accessed by the fixed id below rather than a query filter.
 model SystemSettings {
-  id                  String    @id @default("singleton")
-  maintenanceMode     Boolean   @default(false)
-  maintenanceMessage  String?
-  updatedById         String?
-  updatedAt           DateTime  @updatedAt
+  id                 String   @id @default("singleton")
+  maintenanceMode    Boolean  @default(false)
+  maintenanceMessage String?
+  updatedById        String?
+  updatedAt          DateTime @updatedAt
 
   updatedBy User? @relation(fields: [updatedById], references: [id])
 
@@ -1497,22 +1512,22 @@ model SystemSettings {
 // ----------------------------------------------------------------------------
 
 model CashDrawerSession {
-  id              String            @id
-  tenantId        String
-  userId          String
-  openingAmount   Decimal           @db.Decimal(18, 2)
-  closingAmount   Decimal?          @db.Decimal(18, 2)
-  expectedAmount  Decimal?          @db.Decimal(18, 2)
-  shortage        Decimal?          @db.Decimal(18, 2)
-  overage         Decimal?          @db.Decimal(18, 2)
-  openingTime     DateTime          @default(now())
-  closingTime     DateTime?
-  status          CashDrawerStatus  @default(open)
-  notes           String?
-  totalVAT        Decimal           @default(0) @db.Decimal(18, 2)
-  totalDiscounts  Decimal           @default(0) @db.Decimal(18, 2)
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  id             String           @id
+  tenantId       String
+  userId         String
+  openingAmount  Decimal          @db.Decimal(18, 2)
+  closingAmount  Decimal?         @db.Decimal(18, 2)
+  expectedAmount Decimal?         @db.Decimal(18, 2)
+  shortage       Decimal?         @db.Decimal(18, 2)
+  overage        Decimal?         @db.Decimal(18, 2)
+  openingTime    DateTime         @default(now())
+  closingTime    DateTime?
+  status         CashDrawerStatus @default(open)
+  notes          String?
+  totalVAT       Decimal          @default(0) @db.Decimal(18, 2)
+  totalDiscounts Decimal          @default(0) @db.Decimal(18, 2)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
   user   User   @relation(fields: [userId], references: [id])
@@ -1525,24 +1540,24 @@ model CashDrawerSession {
 }
 
 model Discount {
-  id                     String            @id
+  id                     String           @id
   tenantId               String
   code                   String
   name                   String?
   description            String?
   type                   DiscountType
-  value                  Decimal           @db.Decimal(18, 2)
-  category               DiscountCategory  @default(general)
-  requiresIdVerification Boolean           @default(false)
-  minPurchaseAmount      Decimal?          @db.Decimal(18, 2)
-  maxDiscountAmount      Decimal?          @db.Decimal(18, 2)
+  value                  Decimal          @db.Decimal(18, 2)
+  category               DiscountCategory @default(general)
+  requiresIdVerification Boolean          @default(false)
+  minPurchaseAmount      Decimal?         @db.Decimal(18, 2)
+  maxDiscountAmount      Decimal?         @db.Decimal(18, 2)
   validFrom              DateTime
   validUntil             DateTime
   usageLimit             Int?
-  usageCount             Int               @default(0)
-  isActive               Boolean           @default(true)
-  createdAt              DateTime          @default(now())
-  updatedAt              DateTime          @updatedAt
+  usageCount             Int              @default(0)
+  isActive               Boolean          @default(true)
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
@@ -1552,19 +1567,19 @@ model Discount {
 }
 
 model Expense {
-  id            String                @id
+  id            String               @id
   tenantId      String
   name          String
   description   String
-  amount        Decimal               @db.Decimal(18, 2)
-  date          DateTime              @default(now())
+  amount        Decimal              @db.Decimal(18, 2)
+  date          DateTime             @default(now())
   paymentMethod ExpensePaymentMethod
   receipt       String?
   notes         String?
   userId        String
-  isActive      Boolean               @default(true)
-  createdAt     DateTime              @default(now())
-  updatedAt     DateTime              @updatedAt
+  isActive      Boolean              @default(true)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
   user   User   @relation(fields: [userId], references: [id])
@@ -1596,39 +1611,39 @@ model File {
 }
 
 model Invoice {
-  id              String        @id
-  tenantId        String
-  invoiceNumber   String
-  transactionId   String?
-  customerId      String?
+  id            String  @id
+  tenantId      String
+  invoiceNumber String
+  transactionId String?
+  customerId    String?
 
   // customerInfo (point-in-time snapshot, not a live relation -> flattened)
-  snapshotName        String?
-  snapshotEmail        String?
+  snapshotName           String?
+  snapshotEmail          String?
   snapshotPhone          String?
-  snapshotAddressStreet     String?
-  snapshotAddressCity        String?
-  snapshotAddressState         String?
-  snapshotAddressZipCode         String?
-  snapshotAddressCountry           String?
+  snapshotAddressStreet  String?
+  snapshotAddressCity    String?
+  snapshotAddressState   String?
+  snapshotAddressZipCode String?
+  snapshotAddressCountry String?
 
-  subtotal        Decimal       @db.Decimal(18, 2)
-  discountAmount  Decimal?      @db.Decimal(18, 2)
-  taxAmount       Decimal       @default(0) @db.Decimal(18, 2)
-  total           Decimal       @db.Decimal(18, 2)
-  dueDate         DateTime
-  paymentTerms    String?
-  status          InvoiceStatus @default(draft)
-  paidAt          DateTime?
-  paidAmount      Decimal?      @db.Decimal(18, 2)
-  notes           String?
-  isActive        Boolean       @default(true)
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  subtotal       Decimal       @db.Decimal(18, 2)
+  discountAmount Decimal?      @db.Decimal(18, 2)
+  taxAmount      Decimal       @default(0) @db.Decimal(18, 2)
+  total          Decimal       @db.Decimal(18, 2)
+  dueDate        DateTime
+  paymentTerms   String?
+  status         InvoiceStatus @default(draft)
+  paidAt         DateTime?
+  paidAmount     Decimal?      @db.Decimal(18, 2)
+  notes          String?
+  isActive       Boolean       @default(true)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
-  tenant      Tenant       @relation(fields: [tenantId], references: [id])
-  transaction Transaction? @relation(fields: [transactionId], references: [id])
-  customer    Customer?    @relation(fields: [customerId], references: [id])
+  tenant      Tenant        @relation(fields: [tenantId], references: [id])
+  transaction Transaction?  @relation(fields: [transactionId], references: [id])
+  customer    Customer?     @relation(fields: [customerId], references: [id])
   items       InvoiceItem[]
 
   @@unique([tenantId, invoiceNumber])
@@ -1655,11 +1670,11 @@ model InvoiceItem {
 }
 
 model LoyaltyConfig {
-  tenantId      String  @id
-  pointsPerPeso Decimal @default(1) @db.Decimal(10, 4)
-  pesoPerPoint  Decimal @default(0.10) @db.Decimal(10, 4)
-  minRedemption Int     @default(100)
-  isEnabled     Boolean @default(true)
+  tenantId      String   @id
+  pointsPerPeso Decimal  @default(1) @db.Decimal(10, 4)
+  pesoPerPoint  Decimal  @default(0.10) @db.Decimal(10, 4)
+  minRedemption Int      @default(100)
+  isEnabled     Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -1669,18 +1684,18 @@ model LoyaltyConfig {
 }
 
 model LoyaltyTransaction {
-  id             String                  @id
-  tenantId       String
-  customerId     String
-  transactionId  String?
-  type           LoyaltyTransactionType
-  points         Decimal                 @db.Decimal(18, 2)
-  balanceBefore  Decimal                 @db.Decimal(18, 2)
-  balanceAfter   Decimal                 @db.Decimal(18, 2)
-  description    String
-  createdById    String?
-  createdAt      DateTime                @default(now())
-  updatedAt      DateTime                @updatedAt
+  id            String                 @id
+  tenantId      String
+  customerId    String
+  transactionId String?
+  type          LoyaltyTransactionType
+  points        Decimal                @db.Decimal(18, 2)
+  balanceBefore Decimal                @db.Decimal(18, 2)
+  balanceAfter  Decimal                @db.Decimal(18, 2)
+  description   String
+  createdById   String?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
 
   tenant      Tenant       @relation(fields: [tenantId], references: [id])
   customer    Customer     @relation(fields: [customerId], references: [id])
@@ -1693,38 +1708,38 @@ model LoyaltyTransaction {
 }
 
 model OfflineTransaction {
-  id                    String            @id
-  tenantId              String
-  branchId              String?
-  deviceId              String            // opaque client-device identifier string, NOT a Device FK
-  subtotal              Decimal           @db.Decimal(18, 2)
-  discountCode          String?
-  discountCategory      DiscountCategory?
-  discountAmount        Decimal?          @db.Decimal(18, 2)
-  taxExemptAmount       Decimal           @default(0) @db.Decimal(18, 2)
-  taxAmount             Decimal           @default(0) @db.Decimal(18, 2)
-  total                 Decimal           @db.Decimal(18, 2)
-  paymentMethod         String            // 'cash' | 'card' | 'digital'
-  cashReceived          Decimal?          @db.Decimal(18, 2)
-  change                Decimal?          @db.Decimal(18, 2)
-  customerId            String?
-  userId                String?
-  notes                 String?
-  offlineCreatedAt      DateTime          @default(now())
-  syncStatus            OfflineSyncStatus @default(pending)
-  syncedTransactionId   String?
-  retryCount            Int               @default(0)
-  syncError             String?
-  isActive              Boolean           @default(true)
-  createdAt             DateTime          @default(now())
-  updatedAt             DateTime          @updatedAt
+  id                  String            @id
+  tenantId            String
+  branchId            String?
+  deviceId            String // opaque client-device identifier string, NOT a Device FK
+  subtotal            Decimal           @db.Decimal(18, 2)
+  discountCode        String?
+  discountCategory    DiscountCategory?
+  discountAmount      Decimal?          @db.Decimal(18, 2)
+  taxExemptAmount     Decimal           @default(0) @db.Decimal(18, 2)
+  taxAmount           Decimal           @default(0) @db.Decimal(18, 2)
+  total               Decimal           @db.Decimal(18, 2)
+  paymentMethod       String // 'cash' | 'card' | 'digital'
+  cashReceived        Decimal?          @db.Decimal(18, 2)
+  change              Decimal?          @db.Decimal(18, 2)
+  customerId          String?
+  userId              String?
+  notes               String?
+  offlineCreatedAt    DateTime          @default(now())
+  syncStatus          OfflineSyncStatus @default(pending)
+  syncedTransactionId String?
+  retryCount          Int               @default(0)
+  syncError           String?
+  isActive            Boolean           @default(true)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
 
-  tenant             Tenant       @relation(fields: [tenantId], references: [id])
-  branch             Branch?      @relation(fields: [branchId], references: [id])
-  customer           Customer?    @relation(fields: [customerId], references: [id])
-  user               User?        @relation(fields: [userId], references: [id])
-  syncedTransaction  Transaction? @relation(fields: [syncedTransactionId], references: [id])
-  items              OfflineTransactionItem[]
+  tenant            Tenant                   @relation(fields: [tenantId], references: [id])
+  branch            Branch?                  @relation(fields: [branchId], references: [id])
+  customer          Customer?                @relation(fields: [customerId], references: [id])
+  user              User?                    @relation(fields: [userId], references: [id])
+  syncedTransaction Transaction?             @relation(fields: [syncedTransactionId], references: [id])
+  items             OfflineTransactionItem[]
 
   @@index([tenantId, syncStatus])
   @@index([tenantId, deviceId, offlineCreatedAt])
@@ -1733,13 +1748,13 @@ model OfflineTransaction {
 }
 
 model OfflineTransactionItem {
-  id        String  @id
+  id                   String  @id
   offlineTransactionId String
-  productId String?
-  name      String
-  price     Decimal @db.Decimal(18, 2)
-  quantity  Int
-  subtotal  Decimal @db.Decimal(18, 2)
+  productId            String?
+  name                 String
+  price                Decimal @db.Decimal(18, 2)
+  quantity             Int
+  subtotal             Decimal @db.Decimal(18, 2)
 
   offlineTransaction OfflineTransaction @relation(fields: [offlineTransactionId], references: [id], onDelete: Cascade)
   product            Product?           @relation(fields: [productId], references: [id])
@@ -1749,31 +1764,31 @@ model OfflineTransactionItem {
 }
 
 model Payment {
-  id             String          @id
-  tenantId       String
-  transactionId  String
-  method         PaymentMethodSimple
-  amount         Decimal         @db.Decimal(18, 2)
-  status         PaymentStatus   @default(pending)
+  id            String              @id
+  tenantId      String
+  transactionId String
+  method        PaymentMethodSimple
+  amount        Decimal             @db.Decimal(18, 2)
+  status        PaymentStatus       @default(pending)
 
   // details (single nested object -> flattened)
-  detailsCardLast4       String?
-  detailsCardType          String?
-  detailsCardBrand           String?
-  detailsGatewayTxnId          String?
-  detailsProvider                 String?
-  detailsCashReceived               Decimal? @db.Decimal(18, 2)
-  detailsChange                       Decimal? @db.Decimal(18, 2)
-  detailsCheckNumber                    String?
-  detailsNotes                            String?
+  detailsCardLast4    String?
+  detailsCardType     String?
+  detailsCardBrand    String?
+  detailsGatewayTxnId String?
+  detailsProvider     String?
+  detailsCashReceived Decimal? @db.Decimal(18, 2)
+  detailsChange       Decimal? @db.Decimal(18, 2)
+  detailsCheckNumber  String?
+  detailsNotes        String?
 
-  processedById  String?
-  processedAt    DateTime?
-  refundedAt     DateTime?
-  refundReason   String?
-  isActive       Boolean         @default(true)
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  processedById String?
+  processedAt   DateTime?
+  refundedAt    DateTime?
+  refundReason  String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   tenant      Tenant      @relation(fields: [tenantId], references: [id])
   transaction Transaction @relation(fields: [transactionId], references: [id])
@@ -1789,27 +1804,27 @@ model Payment {
 }
 
 model Prescription {
-  id                  String              @id
-  tenantId            String
-  prescriptionNumber  String
-  patientName         String
-  patientAge          Int?
-  doctorName          String
-  doctorPRCNumber     String
-  doctorClinic        String?
-  issuedDate          DateTime
-  validUntil          DateTime
-  transactionId       String?
-  status              PrescriptionStatus  @default(pending)
-  notes               String?
-  scannedCopy         String?
-  createdById         String
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
+  id                 String             @id
+  tenantId           String
+  prescriptionNumber String
+  patientName        String
+  patientAge         Int?
+  doctorName         String
+  doctorPRCNumber    String
+  doctorClinic       String?
+  issuedDate         DateTime
+  validUntil         DateTime
+  transactionId      String?
+  status             PrescriptionStatus @default(pending)
+  notes              String?
+  scannedCopy        String?
+  createdById        String
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
 
-  tenant      Tenant        @relation(fields: [tenantId], references: [id])
-  transaction Transaction?  @relation(fields: [transactionId], references: [id])
-  createdBy   User          @relation(fields: [createdById], references: [id])
+  tenant      Tenant             @relation(fields: [tenantId], references: [id])
+  transaction Transaction?       @relation(fields: [transactionId], references: [id])
+  createdBy   User               @relation(fields: [createdById], references: [id])
   items       PrescriptionItem[]
 
   @@unique([tenantId, prescriptionNumber])
@@ -1821,23 +1836,23 @@ model Prescription {
 }
 
 model PrescriptionItem {
-  id                      String    @id
-  prescriptionId          String
-  productId               String?
-  drugName                String
-  quantity                Int
-  dosage                  String
-  frequency               String
-  instructions            String?
-  dispensed               Boolean   @default(false)
-  dispensedAt             DateTime?
-  dispensedById            String?
-  dispensedTransactionId   String?
+  id                     String    @id
+  prescriptionId         String
+  productId              String?
+  drugName               String
+  quantity               Int
+  dosage                 String
+  frequency              String
+  instructions           String?
+  dispensed              Boolean   @default(false)
+  dispensedAt            DateTime?
+  dispensedById          String?
+  dispensedTransactionId String?
 
-  prescription          Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
-  product                Product?     @relation(fields: [productId], references: [id])
-  dispensedBy            User?        @relation(fields: [dispensedById], references: [id])
-  dispensedTransaction   Transaction? @relation(fields: [dispensedTransactionId], references: [id])
+  prescription         Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  product              Product?     @relation(fields: [productId], references: [id])
+  dispensedBy          User?        @relation(fields: [dispensedById], references: [id])
+  dispensedTransaction Transaction? @relation(fields: [dispensedTransactionId], references: [id])
 
   @@index([prescriptionId])
   @@map("prescription_items")
@@ -1914,22 +1929,22 @@ model SavedCartItem {
 }
 
 model StockMovement {
-  id              String            @id
-  productId       String
-  tenantId        String
-  branchId        String?
-  variationSize   String?
-  variationColor  String?
-  variationType   String?
-  type            StockMovementType
-  quantity        Int
-  previousStock   Int
-  newStock        Int
-  reason          String?
-  transactionId   String?
-  userId          String?
-  notes           String?
-  createdAt       DateTime          @default(now())
+  id             String            @id
+  productId      String
+  tenantId       String
+  branchId       String?
+  variationSize  String?
+  variationColor String?
+  variationType  String?
+  type           StockMovementType
+  quantity       Int
+  previousStock  Int
+  newStock       Int
+  reason         String?
+  transactionId  String?
+  userId         String?
+  notes          String?
+  createdAt      DateTime          @default(now())
 
   product     Product      @relation(fields: [productId], references: [id])
   tenant      Tenant       @relation(fields: [tenantId], references: [id])
@@ -1971,27 +1986,27 @@ model Counter {
 /// `DELETE FROM pos_sessions WHERE expires_at < now()` since rows are not
 /// auto-purged here.
 model PosSession {
-  id              String    @id
-  sessionId       String    @unique
+  id            String   @id
+  sessionId     String   @unique
   /// NOT a Tenant.id FK — mirrors the Mongoose model exactly: the client
   /// passes the tenant *slug* from the `[tenant]` route segment here (see
   /// useCustomerDisplaySession.ts / app/[tenant]/[lang]/page.tsx), not the
   /// tenant's ObjectId/UUID, so this stays a plain indexed string column.
-  tenant          String
-  cart            Json      @default("[]")
-  subtotal        Decimal   @default(0) @db.Decimal(18, 2)
-  discount        Json?
-  taxAmount       Decimal?  @db.Decimal(18, 2)
-  taxRate         Decimal?  @db.Decimal(5, 2)
-  taxLabel        String?
-  tip             Decimal   @default(0) @db.Decimal(18, 2)
-  total           Decimal   @default(0) @db.Decimal(18, 2)
-  paymentMethod   String?
-  paymentStatus   String    @default("pending")
-  lastUpdate      DateTime  @default(now())
-  expiresAt       DateTime
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  tenant        String
+  cart          Json     @default("[]")
+  subtotal      Decimal  @default(0) @db.Decimal(18, 2)
+  discount      Json?
+  taxAmount     Decimal? @db.Decimal(18, 2)
+  taxRate       Decimal? @db.Decimal(5, 2)
+  taxLabel      String?
+  tip           Decimal  @default(0) @db.Decimal(18, 2)
+  total         Decimal  @default(0) @db.Decimal(18, 2)
+  paymentMethod String?
+  paymentStatus String   @default("pending")
+  lastUpdate    DateTime @default(now())
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([tenant])
   @@index([expiresAt])
@@ -2025,22 +2040,22 @@ model UserRevocation {
 }
 
 model TaxRule {
-  id           String        @id
-  tenantId     String
-  name         String
-  rate         Decimal       @db.Decimal(5, 2)
-  label        String        @default("Tax")
-  appliesTo    TaxAppliesTo  @default(all)
-  regionCountry String?
+  id             String       @id
+  tenantId       String
+  name           String
+  rate           Decimal      @db.Decimal(5, 2)
+  label          String       @default("Tax")
+  appliesTo      TaxAppliesTo @default(all)
+  regionCountry  String?
   regionState    String?
-  regionCity       String?
-  regionZipCodes     String[]
-  priority     Int           @default(0)
-  isActive     Boolean       @default(true)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  regionCity     String?
+  regionZipCodes String[]
+  priority       Int          @default(0)
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
-  tenant     Tenant             @relation(fields: [tenantId], references: [id])
+  tenant     Tenant            @relation(fields: [tenantId], references: [id])
   categories TaxRuleCategory[]
   products   TaxRuleProduct[]
 
@@ -2097,28 +2112,28 @@ model PosTable {
 }
 
 model ZReading {
-  id                  String   @id
-  tenantId            String
-  branchId            String?
-  businessDate        DateTime
-  beginningGT         Decimal  @db.Decimal(18, 2)
-  endingGT            Decimal  @db.Decimal(18, 2)
-  grossSales          Decimal  @db.Decimal(18, 2)
-  vatableSales        Decimal  @default(0) @db.Decimal(18, 2)
-  vatAmount           Decimal  @default(0) @db.Decimal(18, 2)
-  vatExemptSales      Decimal  @default(0) @db.Decimal(18, 2)
-  zeroRatedSales      Decimal  @default(0) @db.Decimal(18, 2)
-  discountTotal       Decimal  @default(0) @db.Decimal(18, 2)
-  transactionCount    Int      @default(0)
-  voidCount           Int      @default(0)
-  generatedById       String
-  generatedAt         DateTime @default(now())
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id               String   @id
+  tenantId         String
+  branchId         String?
+  businessDate     DateTime
+  beginningGT      Decimal  @db.Decimal(18, 2)
+  endingGT         Decimal  @db.Decimal(18, 2)
+  grossSales       Decimal  @db.Decimal(18, 2)
+  vatableSales     Decimal  @default(0) @db.Decimal(18, 2)
+  vatAmount        Decimal  @default(0) @db.Decimal(18, 2)
+  vatExemptSales   Decimal  @default(0) @db.Decimal(18, 2)
+  zeroRatedSales   Decimal  @default(0) @db.Decimal(18, 2)
+  discountTotal    Decimal  @default(0) @db.Decimal(18, 2)
+  transactionCount Int      @default(0)
+  voidCount        Int      @default(0)
+  generatedById    String
+  generatedAt      DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  tenant      Tenant @relation(fields: [tenantId], references: [id])
+  tenant      Tenant  @relation(fields: [tenantId], references: [id])
   branch      Branch? @relation(fields: [branchId], references: [id])
-  generatedBy User   @relation(fields: [generatedById], references: [id])
+  generatedBy User    @relation(fields: [generatedById], references: [id])
 
   @@unique([tenantId, branchId, businessDate])
   @@index([tenantId, businessDate])
@@ -2130,21 +2145,21 @@ model ZReading {
 // ----------------------------------------------------------------------------
 
 model Attendance {
-  id                String   @id
+  id                String    @id
   userId            String
   tenantId          String
   clockIn           DateTime
   clockOut          DateTime?
   breakStart        DateTime?
   breakEnd          DateTime?
-  totalHours        Decimal? @db.Decimal(6, 2)
+  totalHours        Decimal?  @db.Decimal(6, 2)
   notes             String?
-  locationLatitude  Decimal? @db.Decimal(9, 6)
-  locationLongitude Decimal? @db.Decimal(9, 6)
+  locationLatitude  Decimal?  @db.Decimal(9, 6)
+  locationLongitude Decimal?  @db.Decimal(9, 6)
   locationAddress   String?
-  isActive          Boolean  @default(true)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   user   User   @relation(fields: [userId], references: [id])
   tenant Tenant @relation(fields: [tenantId], references: [id])
@@ -2172,25 +2187,25 @@ model Attendance {
 /// zone`, and tstzrange's implicit tz-aware cast is not IMMUTABLE, which
 /// Postgres rejects in an exclusion-constraint expression.
 model Booking {
-  id                  String        @id
-  tenantId            String
-  customerName        String
-  customerEmail       String?
-  customerPhone       String?
-  serviceName         String
-  serviceDescription  String?
-  startTime           DateTime
-  endTime             DateTime
-  duration            Int
-  status              BookingStatus @default(pending)
-  staffId             String?
-  staffName           String?
-  notes               String?
-  reminderSent        Boolean       @default(false)
-  confirmationSent    Boolean       @default(false)
-  isActive            Boolean       @default(true)
-  createdAt           DateTime      @default(now())
-  updatedAt           DateTime      @updatedAt
+  id                 String        @id
+  tenantId           String
+  customerName       String
+  customerEmail      String?
+  customerPhone      String?
+  serviceName        String
+  serviceDescription String?
+  startTime          DateTime
+  endTime            DateTime
+  duration           Int
+  status             BookingStatus @default(pending)
+  staffId            String?
+  staffName          String?
+  notes              String?
+  reminderSent       Boolean       @default(false)
+  confirmationSent   Boolean       @default(false)
+  isActive           Boolean       @default(true)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
   staff  User?  @relation("BookingStaff", fields: [staffId], references: [id])
@@ -2207,47 +2222,47 @@ model Booking {
 // ----------------------------------------------------------------------------
 
 model Transaction {
-  id                   String              @id
-  tenantId             String
-  branchId             String?
+  id       String  @id
+  tenantId String
+  branchId String?
 
-  subtotal             Decimal             @db.Decimal(18, 2)
-  discountCode         String?
-  discountCategory     DiscountCategory?
-  discountAmount       Decimal?            @db.Decimal(18, 2)
-  scPwdName            String?
-  scPwdId              String?
-  taxExemptAmount      Decimal             @default(0) @db.Decimal(18, 2)
-  zeroRatedAmount      Decimal             @default(0) @db.Decimal(18, 2)
-  taxAmount            Decimal             @default(0) @db.Decimal(18, 2)
-  total                Decimal             @db.Decimal(18, 2)
+  subtotal         Decimal           @db.Decimal(18, 2)
+  discountCode     String?
+  discountCategory DiscountCategory?
+  discountAmount   Decimal?          @db.Decimal(18, 2)
+  scPwdName        String?
+  scPwdId          String?
+  taxExemptAmount  Decimal           @default(0) @db.Decimal(18, 2)
+  zeroRatedAmount  Decimal           @default(0) @db.Decimal(18, 2)
+  taxAmount        Decimal           @default(0) @db.Decimal(18, 2)
+  total            Decimal           @db.Decimal(18, 2)
 
-  paymentMethod        PaymentMethodType
-  paymentProvider      String?
-  paymentReference     String?
-  bnplInstallments     Int?
-  cashReceived         Decimal?            @db.Decimal(18, 2)
-  change               Decimal?            @db.Decimal(18, 2)
+  paymentMethod    PaymentMethodType
+  paymentProvider  String?
+  paymentReference String?
+  bnplInstallments Int?
+  cashReceived     Decimal?          @db.Decimal(18, 2)
+  change           Decimal?          @db.Decimal(18, 2)
 
-  status               TransactionStatus   @default(completed)
-  customerId           String?
-  loyaltyPointsEarned  Decimal?            @db.Decimal(18, 2)
-  loyaltyPointsRedeemed Decimal?           @db.Decimal(18, 2)
-  userId               String?
-  deviceId             String?
-  terminalId           String?
-  deviceSerialNumber   String?
-  receiptNumber        String?
-  idempotencyKey       String?
-  notes                String?
-  displayCurrency      String?
-  displayTotal         Decimal?            @db.Decimal(18, 2)
+  status                TransactionStatus @default(completed)
+  customerId            String?
+  loyaltyPointsEarned   Decimal?          @db.Decimal(18, 2)
+  loyaltyPointsRedeemed Decimal?          @db.Decimal(18, 2)
+  userId                String?
+  deviceId              String?
+  terminalId            String?
+  deviceSerialNumber    String?
+  receiptNumber         String?
+  idempotencyKey        String?
+  notes                 String?
+  displayCurrency       String?
+  displayTotal          Decimal?          @db.Decimal(18, 2)
 
-  orderType            OrderType?
-  tableNumber          String?
-  tableId              String?
+  orderType   OrderType?
+  tableNumber String?
+  tableId     String?
 
-  splitCount           Int?
+  splitCount Int?
 
   salesChannel         SalesChannel?
   externalOrderId      String?
@@ -2256,9 +2271,9 @@ model Transaction {
   shopifyFulfilledAt   DateTime?
   shopifyFulfillmentId String?
 
-  isActive             Boolean             @default(true)
-  createdAt            DateTime            @default(now())
-  updatedAt            DateTime            @updatedAt
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   tenant   Tenant    @relation(fields: [tenantId], references: [id])
   branch   Branch?   @relation(fields: [branchId], references: [id])
@@ -2267,19 +2282,17 @@ model Transaction {
   device   Device?   @relation(fields: [deviceId], references: [id])
   table    PosTable? @relation("TransactionTable", fields: [tableId], references: [id])
 
-  items                    TransactionItem[]
-  splitPayments            TransactionSplitPayment[]
-  payments                 Payment[]
-  invoices                 Invoice[]
-  loyaltyTransactions      LoyaltyTransaction[]
-  offlineTransactionsSynced OfflineTransaction[]
-  prescriptions             Prescription[]
+  items                      TransactionItem[]
+  splitPayments              TransactionSplitPayment[]
+  payments                   Payment[]
+  invoices                   Invoice[]
+  loyaltyTransactions        LoyaltyTransaction[]
+  offlineTransactionsSynced  OfflineTransaction[]
+  prescriptions              Prescription[]
   prescriptionItemsDispensed PrescriptionItem[]
   stockMovements             StockMovement[]
-  tablesCurrentOrder          PosTable[]        @relation("TableCurrentOrder")
+  tablesCurrentOrder         PosTable[]                @relation("TableCurrentOrder")
 
-  @@index([tenantId, createdAt])
-  @@index([tenantId, branchId, createdAt])
   @@unique([tenantId, receiptNumber])
   // idempotencyKey / channelSyncKey are legacy Mongo *partial* unique indexes
   // (only enforced when the field is a non-empty string). Prisma's `@@unique`
@@ -2291,9 +2304,134 @@ model Transaction {
   // "only when true" condition isn't NULL-based).
   @@unique([tenantId, idempotencyKey])
   @@unique([tenantId, channelSyncKey])
+  @@index([tenantId, createdAt])
+  @@index([tenantId, branchId, createdAt])
   @@index([tenantId, status])
   @@index([tenantId, isActive, createdAt])
   @@map("transactions")
+}
+
+// --- Reporting summary tables ---
+// Materialized rollups populated by the sales-reporting-aggregation automation
+// (lib/automations/sales-reporting-aggregation.ts). Reporting/dashboard reads
+// should query these instead of aggregating raw Transaction/TransactionItem
+// rows, to keep hot transactional tables free of heavy read contention.
+
+model DailySalesSummary {
+  id       String   @id
+  tenantId String
+  branchId String?
+  date     DateTime @db.Date
+
+  transactionCount Int     @default(0)
+  itemCount        Int     @default(0)
+  grossSales       Decimal @default(0) @db.Decimal(18, 2)
+  discountTotal    Decimal @default(0) @db.Decimal(18, 2)
+  taxTotal         Decimal @default(0) @db.Decimal(18, 2)
+  netSales         Decimal @default(0) @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant  @relation(fields: [tenantId], references: [id])
+  branch Branch? @relation(fields: [branchId], references: [id])
+
+  @@unique([tenantId, branchId, date])
+  @@index([tenantId, date])
+  @@map("daily_sales_summaries")
+}
+
+model MonthlySalesSummary {
+  id       String  @id
+  tenantId String
+  branchId String?
+  year     Int
+  month    Int
+
+  transactionCount Int     @default(0)
+  itemCount        Int     @default(0)
+  grossSales       Decimal @default(0) @db.Decimal(18, 2)
+  discountTotal    Decimal @default(0) @db.Decimal(18, 2)
+  taxTotal         Decimal @default(0) @db.Decimal(18, 2)
+  netSales         Decimal @default(0) @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant  @relation(fields: [tenantId], references: [id])
+  branch Branch? @relation(fields: [branchId], references: [id])
+
+  @@unique([tenantId, branchId, year, month])
+  @@index([tenantId, year, month])
+  @@map("monthly_sales_summaries")
+}
+
+model ProductSalesSummary {
+  id        String   @id
+  tenantId  String
+  branchId  String?
+  productId String
+  date      DateTime @db.Date
+
+  quantitySold Int     @default(0)
+  grossSales   Decimal @default(0) @db.Decimal(18, 2)
+  netSales     Decimal @default(0) @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id])
+  branch  Branch? @relation(fields: [branchId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([tenantId, branchId, productId, date])
+  @@index([tenantId, date])
+  @@index([tenantId, productId])
+  @@map("product_sales_summaries")
+}
+
+model BranchSalesSummary {
+  id       String   @id
+  tenantId String
+  branchId String
+  date     DateTime @db.Date
+
+  transactionCount Int     @default(0)
+  grossSales       Decimal @default(0) @db.Decimal(18, 2)
+  netSales         Decimal @default(0) @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  branch Branch @relation(fields: [branchId], references: [id])
+
+  @@unique([tenantId, branchId, date])
+  @@index([tenantId, date])
+  @@map("branch_sales_summaries")
+}
+
+model CashierSalesSummary {
+  id       String   @id
+  tenantId String
+  userId   String
+  branchId String?
+  date     DateTime @db.Date
+
+  transactionCount Int     @default(0)
+  grossSales       Decimal @default(0) @db.Decimal(18, 2)
+  netSales         Decimal @default(0) @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant  @relation(fields: [tenantId], references: [id])
+  user   User    @relation(fields: [userId], references: [id])
+  branch Branch? @relation(fields: [branchId], references: [id])
+
+  @@unique([tenantId, userId, branchId, date])
+  @@index([tenantId, date])
+  @@map("cashier_sales_summaries")
 }
 
 model TransactionItem {
@@ -2307,9 +2445,9 @@ model TransactionItem {
   subtotal       Decimal @db.Decimal(18, 2)
   prescriptionId String?
 
-  transaction  Transaction        @relation(fields: [transactionId], references: [id], onDelete: Cascade)
-  product      Product?           @relation(fields: [productId], references: [id])
-  variation    ProductVariation?  @relation("ItemVariation", fields: [variationId], references: [id])
+  transaction Transaction       @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  product     Product?          @relation(fields: [productId], references: [id])
+  variation   ProductVariation? @relation("ItemVariation", fields: [variationId], references: [id])
 
   modifiers TransactionItemModifier[]
 
@@ -2319,11 +2457,11 @@ model TransactionItem {
 }
 
 model TransactionItemModifier {
-  id                 String  @id
-  transactionItemId  String
-  name               String
-  chosenOption       String
-  price              Decimal @default(0) @db.Decimal(18, 2)
+  id                String  @id
+  transactionItemId String
+  name              String
+  chosenOption      String
+  price             Decimal @default(0) @db.Decimal(18, 2)
 
   transactionItem TransactionItem @relation(fields: [transactionItemId], references: [id], onDelete: Cascade)
 

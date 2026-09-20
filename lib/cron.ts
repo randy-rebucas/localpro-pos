@@ -37,6 +37,8 @@ import {
   detectSuspiciousActivity,
   analyzeSalesTrends,
   generateSalesSummaryExport,
+  aggregateDailySalesSummary,
+  aggregateMonthlySalesSummary,
 } from './automations';
 import { logger } from '@/lib/logger';
 import { setBypassContext } from '@/lib/tenant-context';
@@ -551,6 +553,34 @@ export function initializeCronJobs() {
     timezone: 'UTC',
   });
 
+  // 33. Daily Sales Reporting Aggregation — Daily at 12:30 AM (after prior day's data has settled)
+  const dailySalesAggregationJob = cron.schedule('30 0 * * *', async () => {
+    logger.info('📊 Running daily sales reporting aggregation...');
+    try {
+      setBypassContext();
+      const result = await aggregateDailySalesSummary();
+      logger.info('✅ Daily sales reporting aggregation:' + result.message);
+    } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+      logger.error('❌ Daily sales reporting aggregation error:' + error.message);
+    }
+  }, {
+    timezone: 'UTC',
+  });
+
+  // 34. Monthly Sales Reporting Aggregation — 1st of month at 1:30 AM (after the last daily rollup)
+  const monthlySalesAggregationJob = cron.schedule('30 1 1 * *', async () => {
+    logger.info('📊 Running monthly sales reporting aggregation...');
+    try {
+      setBypassContext();
+      const result = await aggregateMonthlySalesSummary();
+      logger.info('✅ Monthly sales reporting aggregation:' + result.message);
+    } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+      logger.error('❌ Monthly sales reporting aggregation error:' + error.message);
+    }
+  }, {
+    timezone: 'UTC',
+  });
+
   // Store jobs (name, cron schedule, task)
   cronJobs = [
     { name: 'Booking Reminders', schedule: '0 * * * *', task: bookingRemindersJob },
@@ -587,6 +617,8 @@ export function initializeCronJobs() {
     { name: 'Sales Trend Analysis (Monthly)', schedule: '0 11 1 * *', task: salesTrendMonthlyJob },
     { name: 'BIR Sales Summary Export (Daily)', schedule: '0 23 * * *', task: salesSummaryDailyJob },
     { name: 'BIR Sales Summary Export (Monthly)', schedule: '0 1 1 * *', task: salesSummaryMonthlyJob },
+    { name: 'Sales Reporting Aggregation (Daily)', schedule: '30 0 * * *', task: dailySalesAggregationJob },
+    { name: 'Sales Reporting Aggregation (Monthly)', schedule: '30 1 1 * *', task: monthlySalesAggregationJob },
   ];
 
   // Start all jobs if enabled

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
-export type ReportTab = 'sales' | 'products' | 'vat' | 'profit-loss' | 'cash-drawer' | 'sales-journal' | 'x-reading' | 'z-reading';
+export type ReportTab = 'sales' | 'trends' | 'products' | 'vat' | 'profit-loss' | 'cash-drawer' | 'sales-journal' | 'x-reading' | 'z-reading';
 export type ReportsStatus = 'loading' | 'ready' | 'error';
 
 export interface SalesReport {
@@ -23,6 +23,16 @@ export interface SalesReport {
     sales: number;
     transactions: number;
   }>;
+}
+
+export interface DailySalesSummaryRow {
+  date: string;
+  transactionCount: number;
+  itemCount: number;
+  grossSales: number;
+  discountTotal: number;
+  taxTotal: number;
+  netSales: number;
 }
 
 export interface ProductPerformance {
@@ -165,6 +175,7 @@ export function useReportsData({
   const [status, setStatus] = useState<ReportsStatus>('loading');
   const [error, setError] = useState<string | null>(null);
   const [salesReport, setSalesReport] = useState<SalesReport | null>(null);
+  const [salesTrend, setSalesTrend] = useState<DailySalesSummaryRow[]>([]);
   const [productPerformance, setProductPerformance] = useState<ProductPerformance[]>([]);
   const [vatReport, setVatReport] = useState<VATReport | null>(null);
   const [profitLoss, setProfitLoss] = useState<ProfitLossSummary | null>(null);
@@ -197,6 +208,18 @@ export function useReportsData({
           } else {
             setSalesReport(null);
             setError(data.error || 'Failed to load sales report');
+            setStatus('error');
+          }
+          break;
+        }
+        case 'trends': {
+          const data = await fetchJson(`/api/reports/sales-summary?${dateParams}`);
+          if (data.success) {
+            setSalesTrend((data.data as DailySalesSummaryRow[]) || []);
+            setStatus('ready');
+          } else {
+            setSalesTrend([]);
+            setError(data.error || 'Failed to load sales trend');
             setStatus('error');
           }
           break;
@@ -329,6 +352,7 @@ export function useReportsData({
     error,
     refetch,
     salesReport,
+    salesTrend,
     productPerformance,
     vatReport,
     profitLoss,

@@ -33,5 +33,6 @@ export * from './offline-sync';
 export * from './multi-branch-sync';
 export * from './suspicious-activity';
 export * from './sales-trend-analysis';
+export * from './sales-reporting-aggregation';
 export * from './loyalty-milestones';
 export * from './types';

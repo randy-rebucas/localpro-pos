@@ -21,6 +21,7 @@ import {
   useReportsData,
   type ReportTab,
   type SalesReport,
+  type DailySalesSummaryRow,
   type ProductPerformance,
   type VATReport,
   type ProfitLossSummary,
@@ -56,7 +57,7 @@ export default function ReportsPage() {
   const canViewReports = canAccess('reports.view');
   const canViewXReading = canAccess('reports.x_reading');
   const canViewZReading = canAccess('reports.z_reading');
-  const visibleTabs = (['sales', 'products', 'vat', 'profit-loss', 'cash-drawer', 'sales-journal', 'x-reading', 'z-reading'] as const).filter((tab) => {
+  const visibleTabs = (['sales', 'trends', 'products', 'vat', 'profit-loss', 'cash-drawer', 'sales-journal', 'x-reading', 'z-reading'] as const).filter((tab) => {
     if (tab === 'x-reading') return canViewXReading;
     if (tab === 'z-reading') return canViewZReading;
     return canViewReports;
@@ -72,6 +73,7 @@ export default function ReportsPage() {
     error,
     refetch,
     salesReport,
+    salesTrend,
     productPerformance,
     vatReport,
     profitLoss,
@@ -194,6 +196,12 @@ export default function ReportsPage() {
           <SalesReportView report={salesReport} dict={dict} primaryColor={primaryColor} colors={COLORS} />
         ) : (
           renderEmptyState(reportsDict.noData || 'No data available for the selected period')
+        );
+      case 'trends':
+        return salesTrend.length > 0 ? (
+          <TrendsView data={salesTrend} dict={dict} primaryColor={primaryColor} />
+        ) : (
+          renderEmptyState((reportsDict.noTrendData as string | undefined) || 'No trend data available yet — the nightly reporting job populates this the day after transactions occur')
         );
       case 'products':
         return productPerformance.length > 0 ? (
@@ -476,6 +484,91 @@ function SalesReportView({ report, dict, primaryColor, colors }: { report: Sales
             </PieChart>
           </ResponsiveContainer>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function TrendsView({ data, dict, primaryColor }: { data: DailySalesSummaryRow[]; dict: any; primaryColor: string }) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const totalGross = data.reduce((sum, d) => sum + d.grossSales, 0);
+  const totalNet = data.reduce((sum, d) => sum + d.netSales, 0);
+  const totalTransactions = data.reduce((sum, d) => sum + d.transactionCount, 0);
+
+  return (
+    <div className="space-y-6">
+      <p className="text-sm text-gray-500">
+        {dict.reports?.trendsDesc || 'Historical daily totals from the pre-aggregated reporting tables. Reflects data through the end of the previous day.'}
+      </p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
+        <div className="border p-5 sm:p-6" style={{ backgroundColor: `${primaryColor}10`, borderColor: `${primaryColor}40` }}>
+          <div className="font-semibold mb-2 uppercase tracking-wide text-xs sm:text-sm" style={{ color: primaryColor }}>
+            {dict.reports?.grossSales || 'Gross Sales'}
+          </div>
+          <div className="text-2xl sm:text-3xl font-bold" style={{ color: primaryColor }}>
+            <Currency amount={totalGross} />
+          </div>
+        </div>
+        <div className="bg-green-50 border border-green-300 p-5 sm:p-6">
+          <div className="text-xs sm:text-sm text-green-600 font-semibold mb-2 uppercase tracking-wide">
+            {dict.reports?.netSales || 'Net Sales'}
+          </div>
+          <div className="text-2xl sm:text-3xl font-bold text-green-900">
+            <Currency amount={totalNet} />
+          </div>
+        </div>
+        <div className="bg-purple-50 border border-purple-300 p-5 sm:p-6">
+          <div className="text-xs sm:text-sm text-purple-600 font-semibold mb-2 uppercase tracking-wide">
+            {dict.reports?.totalTransactions || 'Total Transactions'}
+          </div>
+          <div className="text-2xl sm:text-3xl font-bold text-purple-900">{totalTransactions}</div>
+        </div>
+      </div>
+
+      <div className="bg-white border border-gray-300 p-5 sm:p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-5">
+          {dict.reports?.salesByDay || 'Sales by Day'}
+        </h3>
+        <ResponsiveContainer width="100%" height={300}>
+          <LineChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+            <XAxis dataKey="date" stroke="#6b7280" style={{ fontSize: '12px' }} />
+            <YAxis stroke="#6b7280" style={{ fontSize: '12px' }} />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: '#fff',
+                border: '1px solid #e5e7eb',
+              }}
+            />
+            <Legend />
+            <Line type="monotone" dataKey="grossSales" stroke={primaryColor} strokeWidth={2} name={dict.reports?.grossSales || 'Gross Sales'} />
+            <Line type="monotone" dataKey="netSales" stroke="#10b981" strokeWidth={2} name={dict.reports?.netSales || 'Net Sales'} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className="bg-white border border-gray-300 overflow-hidden">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.reports?.date || 'Date'}</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.reports?.totalTransactions || 'Transactions'}</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.reports?.grossSales || 'Gross Sales'}</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.reports?.totalDiscounts || 'Discounts'}</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{dict.reports?.netSales || 'Net Sales'}</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {data.map((row) => (
+              <tr key={row.date}>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{row.date}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{row.transactionCount}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><Currency amount={row.grossSales} /></td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-orange-600">{row.discountTotal > 0 ? <Currency amount={row.discountTotal} /> : '-'}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900"><Currency amount={row.netSales} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
