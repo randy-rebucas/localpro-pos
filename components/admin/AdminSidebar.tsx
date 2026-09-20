@@ -11,7 +11,7 @@ import {
   Settings, Clock, Users2, GitBranch, Calculator, CreditCard, Monitor, Bell,
   Palette, ToggleLeft, ClipboardList, Database, ChevronDown, ChevronRight,
   LogOut, Store, ShoppingCart, Code2, Sparkles, Lock, Smartphone, ChefHat, BookOpen,
-  Contact, FileBox, ArrowRightLeft
+  Contact, FileBox, ArrowRightLeft, ReceiptText
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTenantSettings } from '@/contexts/TenantSettingsContext';
@@ -95,6 +95,7 @@ export default function AdminSidebar() {
         { label: 'Discounts', href: `${base}/admin/discounts`, icon: Percent, permission: 'discounts.manage' },
         { label: 'Cash Drawer', href: `${base}/admin/cash-drawer`, icon: DollarSign, permission: 'cash_drawer.manage' },
         { label: 'Expenses', href: `${base}/admin/expenses`, icon: TrendingDown, permission: 'expenses.manage', feature: 'expenses' },
+        { label: 'Invoices', href: `${base}/admin/invoices`, icon: ReceiptText, permission: 'invoices.manage' },
         { label: 'Ledger', href: `${base}/admin/ledger`, icon: BookOpen, permission: 'ledger.manage' },
       ],
     },
