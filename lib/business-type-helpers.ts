@@ -56,7 +56,7 @@ export function getBusinessType(settings?: ITenantSettings): BusinessType {
  */
 export function supportsFeature(
   settings: ITenantSettings | undefined,
-  feature: 'inventory' | 'categories' | 'discounts' | 'loyalty' | 'customers' | 'booking' | 'delivery' | 'workOrders' | 'laundryOrders' | 'kitchenDisplay' | 'accounting' | 'tableManagement'
+  feature: 'inventory' | 'categories' | 'discounts' | 'loyalty' | 'customers' | 'booking' | 'delivery' | 'workOrders' | 'laundryOrders' | 'kitchenDisplay' | 'accounting' | 'tableManagement' | 'suppliers' | 'expenses' | 'employees'
 ): boolean {
   if (!settings) return false;
 
@@ -88,6 +88,12 @@ export function supportsFeature(
       return settings.enableAccounting ?? config.defaultFeatures.enableAccounting;
     case 'tableManagement':
       return settings.enableTableManagement ?? config.defaultFeatures.enableTableManagement;
+    case 'suppliers':
+      return settings.enableSuppliers ?? config.defaultFeatures.enableSuppliers;
+    case 'expenses':
+      return settings.enableExpenses ?? config.defaultFeatures.enableExpenses;
+    case 'employees':
+      return settings.enableEmployees ?? config.defaultFeatures.enableEmployees;
     default:
       return false;
   }

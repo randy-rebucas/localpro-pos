@@ -95,6 +95,9 @@ export interface ITenantSettings {
   enableKitchenDisplay?: boolean;
   enableAccounting?: boolean;
   enableTableManagement?: boolean;
+  enableSuppliers?: boolean;
+  enableExpenses?: boolean;
+  enableEmployees?: boolean;
   /** When true, POS may sell on account (customer balance / pay later). */
   enableOnAccountSales?: boolean;
   /** When true, automatically pulse the cash drawer open when a shift (cash drawer session) starts. */

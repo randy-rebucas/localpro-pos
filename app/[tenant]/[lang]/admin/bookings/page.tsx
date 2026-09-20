@@ -72,8 +72,8 @@ export default function BookingsPage() {
   const handleCreateBooking = async (e: React.FormEvent) => {
     e.preventDefault();
     await submitForm(
-      async () => {
-        toast.success(dict?.common?.bookingCreatedSuccess || 'Booking created successfully');
+      async (message) => {
+        toast.success(message || dict?.common?.bookingCreatedSuccess || 'Booking created successfully');
         await fetchBookings();
         setShowCreateModal(false);
         resetForm();
@@ -555,6 +555,51 @@ export default function BookingsPage() {
                   rows={3}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white"
                 />
+              </div>
+              <div className="border-t border-gray-200 pt-4">
+                <div className="flex items-center gap-2">
+                  <input
+                    id="collectDeposit"
+                    type="checkbox"
+                    checked={formData.collectDeposit}
+                    onChange={(e) => setFormData({ ...formData, collectDeposit: e.target.checked })}
+                    className="h-4 w-4"
+                  />
+                  <label htmlFor="collectDeposit" className="text-sm font-medium text-gray-700">
+                    {dict?.admin?.collectDepositNow || 'Collect a deposit now'}
+                  </label>
+                </div>
+                {formData.collectDeposit && (
+                  <div className="grid grid-cols-2 gap-4 mt-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">{dict?.admin?.depositAmount || 'Deposit Amount'} *</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        required={formData.collectDeposit}
+                        value={formData.depositAmount}
+                        onChange={(e) => setFormData({ ...formData, depositAmount: e.target.value })}
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">{dict?.admin?.paymentMethod || 'Payment Method'}</label>
+                      <select
+                        value={formData.depositMethod}
+                        onChange={(e) => setFormData({ ...formData, depositMethod: e.target.value as typeof formData.depositMethod })}
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white"
+                      >
+                        <option value="cash">{dict?.admin?.cash || 'Cash'}</option>
+                        <option value="card">{dict?.admin?.card || 'Card'}</option>
+                        <option value="digital">{dict?.admin?.digital || 'Digital'}</option>
+                        <option value="check">{dict?.admin?.check || 'Check'}</option>
+                        <option value="on_account">{dict?.admin?.onAccount || 'On Account'}</option>
+                        <option value="other">{dict?.admin?.other || 'Other'}</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="flex gap-2 pt-4 border-t border-gray-200">
                 <button

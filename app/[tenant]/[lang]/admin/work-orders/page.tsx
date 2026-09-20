@@ -11,7 +11,9 @@ import { getBusinessType } from '@/lib/business-type-helpers';
 import { useWorkOrderList, type WorkOrder } from '@/hooks/useWorkOrderList';
 import { useWorkOrderForm } from '@/hooks/useWorkOrderForm';
 import { useTechnicianList } from '@/hooks/useTechnicianList';
+import { useWorkOrderTimeEntries } from '@/hooks/useWorkOrderTimeEntries';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   getStatusColor,
   formatWorkOrderDateTime,
@@ -34,6 +36,8 @@ export default function WorkOrdersPage() {
   const [filterAssignee, setFilterAssignee] = useState<string>('all');
   const { canAccess } = usePermissions();
   const canManage = canAccess('work_orders.manage');
+  const canTrackTime = canAccess('work_order_time.manage');
+  const { user } = useAuth();
 
   const { settings } = useTenantSettings();
   const workOrdersEnabled = supportsFeature(settings ?? undefined, 'workOrders');
@@ -45,6 +49,7 @@ export default function WorkOrdersPage() {
   });
   const { formData, setFormData, handleSubmit: submitForm, resetForm, addItem, removeItem, updateItem } = useWorkOrderForm(tenant);
   const { technicians, fetchTechnicians } = useTechnicianList(tenant);
+  const { timeEntries, fetchTimeEntries, startTimeEntry, stopTimeEntry } = useWorkOrderTimeEntries(tenant, selectedOrder?.id || '');
 
   useEffect(() => {
     getDictionaryClient(lang).then(setDict);
@@ -60,11 +65,18 @@ export default function WorkOrdersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (showModal && selectedOrder?.id) {
+      fetchTimeEntries((error) => toast.error(error));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showModal, selectedOrder?.id]);
+
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     await submitForm(
-      async () => {
-        toast.success(dict?.common?.workOrderCreatedSuccess || 'Work order created successfully');
+      async (message) => {
+        toast.success(message || dict?.common?.workOrderCreatedSuccess || 'Work order created successfully');
         await fetchWorkOrders();
         setShowCreateModal(false);
         resetForm();
@@ -301,6 +313,54 @@ export default function WorkOrdersPage() {
                   <p className="mt-1 text-sm text-gray-900">{selectedOrder.notes}</p>
                 </div>
               )}
+              {canTrackTime && (
+                <div className="border-t border-gray-200 pt-4">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-sm font-medium text-gray-700">{dict?.admin?.timeTracking || 'Time Tracking'}</label>
+                    {(() => {
+                      const myOpenEntry = timeEntries.find((e) => e.userId === user?._id && !e.endedAt);
+                      if (myOpenEntry) {
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => stopTimeEntry(myOpenEntry.id, () => toast.success(dict?.admin?.timerStopped || 'Timer stopped'), (error) => toast.error(error))}
+                            className="text-sm px-3 py-1 bg-red-600 text-white hover:bg-red-700 transition-colors border border-red-700"
+                          >
+                            {dict?.admin?.stopTimer || 'Stop Timer'}
+                          </button>
+                        );
+                      }
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => startTimeEntry(() => toast.success(dict?.admin?.timerStarted || 'Timer started'), (error) => toast.error(error))}
+                          className="text-sm px-3 py-1 bg-brand text-white hover:bg-brand-hover transition-colors border border-brand-hover"
+                        >
+                          {dict?.admin?.startTimer || 'Start Timer'}
+                        </button>
+                      );
+                    })()}
+                  </div>
+                  <div className="mt-2 border border-gray-200 divide-y divide-gray-200">
+                    {timeEntries.map((entry) => (
+                      <div key={entry.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                        <span className="text-gray-900">
+                          {entry.user?.name || 'Unknown'}
+                          <span className="text-gray-400"> — {new Date(entry.startedAt).toLocaleString()}</span>
+                        </span>
+                        <span className="text-gray-500">
+                          {entry.endedAt
+                            ? `${entry.durationMinutes ?? 0} min`
+                            : dict?.admin?.timerRunning || 'Running…'}
+                        </span>
+                      </div>
+                    ))}
+                    {timeEntries.length === 0 && (
+                      <p className="text-xs text-gray-400 px-3 py-2">{dict?.admin?.noTimeEntriesYet || 'No time logged yet.'}</p>
+                    )}
+                  </div>
+                </div>
+              )}
               {canManage && (
                 <div className="flex gap-2 pt-4 border-t border-gray-200">
                   <button
@@ -437,6 +497,51 @@ export default function WorkOrdersPage() {
                   rows={3}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white"
                 />
+              </div>
+              <div className="border-t border-gray-200 pt-4">
+                <div className="flex items-center gap-2">
+                  <input
+                    id="collectDeposit"
+                    type="checkbox"
+                    checked={formData.collectDeposit}
+                    onChange={(e) => setFormData({ ...formData, collectDeposit: e.target.checked })}
+                    className="h-4 w-4"
+                  />
+                  <label htmlFor="collectDeposit" className="text-sm font-medium text-gray-700">
+                    {dict?.admin?.collectDepositNow || 'Collect a deposit now'}
+                  </label>
+                </div>
+                {formData.collectDeposit && (
+                  <div className="grid grid-cols-2 gap-4 mt-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">{dict?.admin?.depositAmount || 'Deposit Amount'} *</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        required={formData.collectDeposit}
+                        value={formData.depositAmount}
+                        onChange={(e) => setFormData({ ...formData, depositAmount: e.target.value })}
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">{dict?.admin?.paymentMethod || 'Payment Method'}</label>
+                      <select
+                        value={formData.depositMethod}
+                        onChange={(e) => setFormData({ ...formData, depositMethod: e.target.value as typeof formData.depositMethod })}
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-brand focus:border-brand bg-white"
+                      >
+                        <option value="cash">{dict?.admin?.cash || 'Cash'}</option>
+                        <option value="card">{dict?.admin?.card || 'Card'}</option>
+                        <option value="digital">{dict?.admin?.digital || 'Digital'}</option>
+                        <option value="check">{dict?.admin?.check || 'Check'}</option>
+                        <option value="on_account">{dict?.admin?.onAccount || 'On Account'}</option>
+                        <option value="other">{dict?.admin?.other || 'Other'}</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="flex gap-2 pt-4 border-t border-gray-200">
                 <button

@@ -59,6 +59,9 @@ interface FormData {
   enableBookingScheduling: boolean;
   enableTableManagement: boolean;
   enableOnAccountSales: boolean;
+  enableSuppliers: boolean;
+  enableExpenses: boolean;
+  enableEmployees: boolean;
   autoOpenDrawerOnShiftStart: boolean;
   autoOpenDrawerOnShiftEnd: boolean;
   // Notifications
@@ -126,6 +129,7 @@ export default function AdminSettingsPage() {
     enableInventory: true, enableCategories: true, enableDiscounts: true,
     enableLoyaltyProgram: false, enableCustomerManagement: true,
     enableBookingScheduling: false, enableTableManagement: false, enableOnAccountSales: false,
+    enableSuppliers: true, enableExpenses: true, enableEmployees: true,
     autoOpenDrawerOnShiftStart: false, autoOpenDrawerOnShiftEnd: false,
     lowStockAlert: true, lowStockThreshold: 10,
     emailNotifications: false, smsNotifications: false,
@@ -178,6 +182,9 @@ export default function AdminSettingsPage() {
           enableBookingScheduling: s.enableBookingScheduling ?? false,
           enableTableManagement: s.enableTableManagement ?? false,
           enableOnAccountSales: s.enableOnAccountSales ?? false,
+          enableSuppliers: s.enableSuppliers ?? true,
+          enableExpenses: s.enableExpenses ?? true,
+          enableEmployees: s.enableEmployees ?? true,
           autoOpenDrawerOnShiftStart: s.autoOpenDrawerOnShiftStart ?? false,
           autoOpenDrawerOnShiftEnd: s.autoOpenDrawerOnShiftEnd ?? false,
           lowStockAlert: s.lowStockAlert ?? true,
@@ -206,7 +213,7 @@ export default function AdminSettingsPage() {
     branding: ['primaryColor', 'secondaryColor', 'logo'],
     contact: ['email', 'phone', 'website'],
     receipt: ['receiptHeader', 'receiptFooter', 'receiptShowLogo', 'receiptShowAddress', 'receiptShowPhone', 'receiptShowEmail', 'taxEnabled', 'taxRate', 'taxLabel'],
-    features: ['enableInventory', 'enableCategories', 'enableDiscounts', 'enableLoyaltyProgram', 'enableCustomerManagement', 'enableBookingScheduling', 'enableTableManagement', 'enableOnAccountSales', 'autoOpenDrawerOnShiftStart', 'autoOpenDrawerOnShiftEnd'],
+    features: ['enableInventory', 'enableCategories', 'enableDiscounts', 'enableLoyaltyProgram', 'enableCustomerManagement', 'enableBookingScheduling', 'enableTableManagement', 'enableOnAccountSales', 'enableSuppliers', 'enableExpenses', 'enableEmployees', 'autoOpenDrawerOnShiftStart', 'autoOpenDrawerOnShiftEnd'],
     notifications: ['lowStockAlert', 'lowStockThreshold', 'emailNotifications', 'smsNotifications'],
   };
 
@@ -610,6 +617,9 @@ export default function AdminSettingsPage() {
                   <Toggle label={dict?.settings?.bookingScheduling || 'Booking & Scheduling'} desc={dict?.settings?.bookingSchedulingDescShort || 'Accept service appointments and reservations'} checked={form.enableBookingScheduling} onChange={v => set('enableBookingScheduling', v)} />
                   <Toggle label={dict?.settings?.tableManagementLabel || 'Table Management'} desc={dict?.settings?.tableManagementDesc || 'Manage dining tables and floor layout'} checked={form.enableTableManagement} onChange={v => set('enableTableManagement', v)} />
                   <Toggle label={dict?.settings?.onAccountSalesLabel || 'On-Account Sales'} desc={dict?.settings?.onAccountSalesDescShort || 'Allow customers to purchase on credit / pay later'} checked={form.enableOnAccountSales} onChange={v => set('enableOnAccountSales', v)} />
+                  <Toggle label={dict?.settings?.suppliersLabel || 'Suppliers'} desc={dict?.settings?.suppliersDescShort || 'Manage suppliers and purchase orders'} checked={form.enableSuppliers} onChange={v => set('enableSuppliers', v)} />
+                  <Toggle label={dict?.settings?.expensesLabel || 'Expenses'} desc={dict?.settings?.expensesDescShort || 'Track business expenses'} checked={form.enableExpenses} onChange={v => set('enableExpenses', v)} />
+                  <Toggle label={dict?.settings?.employeesLabel || 'Employees'} desc={dict?.settings?.employeesDescShort || 'Manage staff accounts and roles'} checked={form.enableEmployees} onChange={v => set('enableEmployees', v)} />
                 </div>
               </div>
             )}

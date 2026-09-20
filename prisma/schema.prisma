@@ -147,6 +147,15 @@ enum WorkOrderStatus {
   cancelled
 }
 
+enum DepositStatus {
+  pending
+  paid
+  applied
+  refunded
+  forfeited
+  cancelled
+}
+
 enum CashDrawerStatus {
   open
   closed
@@ -450,6 +459,8 @@ model Tenant {
   counters                  Counter[]
   deliveryOrders            DeliveryOrder[]
   workOrders                WorkOrder[]
+  deposits                  Deposit[]
+  workOrderTimeEntries      WorkOrderTimeEntry[]
   laundryOrders             LaundryOrder[]
   suppliers                 Supplier[]
   purchaseOrders            PurchaseOrder[]
@@ -613,6 +624,9 @@ model TenantSettings {
   enableWorkOrders            Boolean?
   enableKitchenDisplay        Boolean?
   enableAccounting            Boolean?
+  enableSuppliers             Boolean?
+  enableExpenses              Boolean?
+  enableEmployees             Boolean?
 
   // Hardware config (single nested object)
   printerType                  String?
@@ -851,6 +865,8 @@ model User {
   recurringBookingTemplates   RecurringBookingTemplate[] @relation("RecurringBookingStaff")
   deliveryOrdersAsRider       DeliveryOrder[]            @relation("DeliveryRider")
   workOrdersAssigned          WorkOrder[]                @relation("WorkOrderTechnician")
+  depositsRecorded            Deposit[]                  @relation("DepositRecordedBy")
+  workOrderTimeEntries        WorkOrderTimeEntry[]       @relation("WorkOrderTimeEntryUser")
   purchaseOrdersCreated       PurchaseOrder[]            @relation("PurchaseOrderCreatedBy")
   stockTransfersCreated       StockTransfer[]            @relation("StockTransferCreatedBy")
   journalEntriesCreated       JournalEntry[]
@@ -1281,6 +1297,7 @@ model Customer {
   deliveryOrders      DeliveryOrder[]
   workOrders          WorkOrder[]
   laundryOrders       LaundryOrder[]
+  deposits            Deposit[]
   groups              CustomerGroupMember[]
 
   @@unique([tenantId, email])
@@ -1886,6 +1903,7 @@ model Invoice {
   transaction Transaction?  @relation(fields: [transactionId], references: [id])
   customer    Customer?     @relation(fields: [customerId], references: [id])
   items       InvoiceItem[]
+  deposits    Deposit[]
 
   @@unique([tenantId, invoiceNumber])
   @@index([tenantId, status, dueDate])
@@ -2451,6 +2469,8 @@ model Booking {
   tenant Tenant @relation(fields: [tenantId], references: [id])
   staff  User?  @relation("BookingStaff", fields: [staffId], references: [id])
 
+  deposits Deposit[]
+
   @@index([tenantId, startTime])
   @@index([tenantId, staffId, startTime])
   @@index([startTime, endTime])
@@ -2657,7 +2677,9 @@ model WorkOrder {
   customer    Customer?    @relation(fields: [customerId], references: [id])
   assignedTo  User?        @relation("WorkOrderTechnician", fields: [assignedToId], references: [id])
 
-  items WorkOrderItem[]
+  items       WorkOrderItem[]
+  deposits    Deposit[]
+  timeEntries WorkOrderTimeEntry[]
 
   @@index([tenantId, status])
   @@index([tenantId, assignedToId, status])
@@ -2680,6 +2702,77 @@ model WorkOrderItem {
 
   @@index([workOrderId])
   @@map("work_order_items")
+}
+
+// ----------------------------------------------------------------------------
+// Work order time tracking (Service Business Mode — per-job, per-technician
+// time logging; distinct from Attendance, which is whole-shift clock in/out)
+// ----------------------------------------------------------------------------
+
+model WorkOrderTimeEntry {
+  id          String @id
+  tenantId    String
+  workOrderId String
+  userId      String
+
+  startedAt       DateTime
+  endedAt         DateTime?
+  durationMinutes Int?
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id])
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  user      User      @relation("WorkOrderTimeEntryUser", fields: [userId], references: [id])
+
+  @@index([tenantId, workOrderId])
+  @@index([tenantId, userId, startedAt])
+  @@map("work_order_time_entries")
+}
+
+// ----------------------------------------------------------------------------
+// Deposits (Service Business Mode — booking/work-order upfront payments)
+// ----------------------------------------------------------------------------
+
+model Deposit {
+  id          String  @id
+  tenantId    String
+  bookingId   String?
+  workOrderId String?
+  customerId  String?
+  invoiceId   String?
+
+  amount         Decimal             @db.Decimal(18, 2)
+  method         PaymentMethodSimple
+  status         DepositStatus       @default(pending)
+  refundedAmount Decimal?            @db.Decimal(18, 2)
+  idempotencyKey String?
+  notes          String?
+  recordedById   String?
+
+  paidAt     DateTime?
+  appliedAt  DateTime?
+  refundedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant     Tenant     @relation(fields: [tenantId], references: [id])
+  booking    Booking?   @relation(fields: [bookingId], references: [id])
+  workOrder  WorkOrder? @relation(fields: [workOrderId], references: [id])
+  customer   Customer?  @relation(fields: [customerId], references: [id])
+  invoice    Invoice?   @relation(fields: [invoiceId], references: [id])
+  recordedBy User?      @relation("DepositRecordedBy", fields: [recordedById], references: [id])
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId, status])
+  @@index([tenantId, bookingId])
+  @@index([tenantId, workOrderId])
+  @@index([tenantId, customerId])
+  @@map("deposits")
 }
 
 // ----------------------------------------------------------------------------

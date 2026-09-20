@@ -156,6 +156,8 @@ const KNOWN_SCALAR_KEYS = new Set([
   'ecommerceWooCommerceEnabled', 'birTin', 'birPtuNumber', 'birPtuIssuedDate', 'birPtuExpiryDate',
   'birMinNumber', 'birBusinessStyle', 'birSystemProvider', 'birTerminalSN', 'birAccreditationNo',
   'birAccreditationDate', 'birAccreditationValidUntil', 'birEsalesPushUrl',
+  'enableDelivery', 'enableWorkOrders', 'enableKitchenDisplay', 'enableAccounting',
+  'enableSuppliers', 'enableExpenses', 'enableEmployees',
 ]);
 
 export function flattenSettingsForPrisma(settings: Record<string, unknown>): Record<string, unknown> {

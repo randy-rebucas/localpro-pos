@@ -18,6 +18,9 @@ export interface WorkOrderFormData {
   scheduledAt: string;
   notes: string;
   items: WorkOrderItemFormData[];
+  collectDeposit: boolean;
+  depositAmount: string;
+  depositMethod: 'cash' | 'card' | 'digital' | 'check' | 'other' | 'on_account';
 }
 
 const emptyForm: WorkOrderFormData = {
@@ -30,6 +33,9 @@ const emptyForm: WorkOrderFormData = {
   scheduledAt: '',
   notes: '',
   items: [],
+  collectDeposit: false,
+  depositAmount: '',
+  depositMethod: 'cash',
 };
 
 export const emptyWorkOrderItem: WorkOrderItemFormData = {
@@ -69,17 +75,20 @@ export function useWorkOrderForm(tenant: string) {
       const timeout = setTimeout(() => controller.abort(), 25000);
 
       try {
+        const { collectDeposit, depositAmount, depositMethod } = formData;
         const res = await globalThis.fetch(`/api/work-orders?tenant=${tenant}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
           body: JSON.stringify({
-            ...formData,
             branchId: formData.branchId || undefined,
             transactionId: formData.transactionId || undefined,
             customerId: formData.customerId || undefined,
+            title: formData.title,
+            description: formData.description,
             assignedToId: formData.assignedToId || undefined,
             scheduledAt: formData.scheduledAt || undefined,
+            notes: formData.notes,
             items: formData.items
               .filter((item) => item.name && item.price)
               .map((item) => ({
@@ -95,13 +104,41 @@ export function useWorkOrderForm(tenant: string) {
 
         const data = await res.json();
 
-        if (data.success) {
-          onSuccess?.(data.message || 'Work order created successfully');
-        } else {
+        if (!data.success) {
           const errorMsg = data.error || 'Failed to create work order';
           setError(errorMsg);
           onError?.(errorMsg);
+          return;
         }
+
+        let message = data.message || 'Work order created successfully';
+
+        // Collecting a deposit is best-effort: the work order itself already
+        // succeeded, so a deposit failure here is surfaced but doesn't undo it.
+        if (collectDeposit && depositAmount && Number(depositAmount) > 0 && data.data?.id) {
+          try {
+            const depositRes = await globalThis.fetch(`/api/deposits?tenant=${tenant}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({
+                workOrderId: data.data.id,
+                amount: Number(depositAmount),
+                method: depositMethod,
+                markPaid: true,
+              }),
+              signal: controller.signal,
+            });
+            const depositData = await depositRes.json();
+            if (!depositData.success) {
+              message += ` (deposit not recorded: ${depositData.error || 'unknown error'})`;
+            }
+          } catch {
+            message += ' (deposit not recorded: request failed)';
+          }
+        }
+
+        onSuccess?.(message);
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Failed to create work order';
         setError(errorMsg);

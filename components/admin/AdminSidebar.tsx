@@ -28,7 +28,7 @@ interface NavItem {
   /** Permission key (see lib/permissions.ts) gating this item. Owner/admin/super_admin always see everything regardless. Omit for items visible to any admin-panel user. */
   permission?: string;
   /** Business-type feature flag (see lib/business-type-helpers.ts supportsFeature) gating this item's visibility. Omit for items visible regardless of business type. */
-  feature?: 'delivery' | 'workOrders' | 'laundryOrders' | 'kitchenDisplay' | 'tableManagement';
+  feature?: 'delivery' | 'workOrders' | 'laundryOrders' | 'kitchenDisplay' | 'tableManagement' | 'suppliers' | 'expenses' | 'employees';
 }
 
 interface NavGroup {
@@ -81,7 +81,7 @@ export default function AdminSidebar() {
         { label: 'Bundles', href: `${base}/admin/bundles`, icon: Layers, permission: 'bundles.manage' },
         { label: 'Inventory', href: `${base}/admin/inventory`, icon: Boxes, permission: 'inventory.manage' },
         { label: 'Stock Movements', href: `${base}/admin/stock-movements`, icon: ArrowUpDown, permission: 'stock_movements.manage' },
-        { label: 'Suppliers', href: `${base}/admin/suppliers`, icon: Contact, permission: 'suppliers.manage' },
+        { label: 'Suppliers', href: `${base}/admin/suppliers`, icon: Contact, permission: 'suppliers.manage', feature: 'suppliers' },
         { label: 'Purchase Orders', href: `${base}/admin/purchase-orders`, icon: FileBox, permission: 'purchase_orders.manage' },
         { label: 'Stock Transfers', href: `${base}/admin/stock-transfers`, icon: ArrowRightLeft, permission: 'stock_transfers.manage' },
       ],
@@ -94,7 +94,7 @@ export default function AdminSidebar() {
         { label: 'Transactions', href: `${base}/admin/transactions`, icon: Receipt, permission: 'transactions.view' },
         { label: 'Discounts', href: `${base}/admin/discounts`, icon: Percent, permission: 'discounts.manage' },
         { label: 'Cash Drawer', href: `${base}/admin/cash-drawer`, icon: DollarSign, permission: 'cash_drawer.manage' },
-        { label: 'Expenses', href: `${base}/admin/expenses`, icon: TrendingDown, permission: 'expenses.manage' },
+        { label: 'Expenses', href: `${base}/admin/expenses`, icon: TrendingDown, permission: 'expenses.manage', feature: 'expenses' },
         { label: 'Ledger', href: `${base}/admin/ledger`, icon: BookOpen, permission: 'ledger.manage' },
       ],
     },
@@ -117,6 +117,7 @@ export default function AdminSidebar() {
         { label: 'Bookings', href: `${base}/admin/bookings`, icon: CalendarDays, permission: 'bookings.manage' },
         { label: 'Delivery', href: `${base}/admin/delivery`, icon: Truck, permission: 'delivery.manage', feature: 'delivery' },
         { label: 'Work Orders', href: `${base}/admin/work-orders`, icon: ClipboardList, permission: 'work_orders.manage', feature: 'workOrders' },
+        { label: 'Deposits', href: `${base}/admin/deposits`, icon: DollarSign, permission: 'deposits.manage' },
         { label: 'Laundry Orders', href: `${base}/admin/laundry`, icon: WashingMachine, permission: 'laundry_orders.manage', feature: 'laundryOrders' },
         { label: 'Kitchen Display', href: `${base}/admin/kitchen-display`, icon: ChefHat, permission: 'kitchen_display.manage', feature: 'kitchenDisplay' },
         { label: 'Tables', href: `${base}/admin/tables`, icon: LayoutGrid, permission: 'tables.manage', feature: 'tableManagement' },

@@ -24,6 +24,9 @@ export interface BusinessTypeConfig {
     enableKitchenDisplay: boolean;
     enableAccounting: boolean;
     enableTableManagement: boolean;
+    enableSuppliers: boolean;
+    enableExpenses: boolean;
+    enableEmployees: boolean;
   };
   productTypes: ('regular' | 'bundle' | 'service')[];
   requiredFields: string[];
@@ -49,6 +52,9 @@ export const BUSINESS_TYPE_CONFIGS: Record<BusinessType, BusinessTypeConfig> = {
       enableKitchenDisplay: false,
       enableAccounting: true,
       enableTableManagement: false,
+      enableSuppliers: true,
+      enableExpenses: true,
+      enableEmployees: true,
     },
     productTypes: ['regular', 'bundle'],
     requiredFields: ['name', 'price', 'sku'],
@@ -76,6 +82,9 @@ export const BUSINESS_TYPE_CONFIGS: Record<BusinessType, BusinessTypeConfig> = {
       enableKitchenDisplay: true,
       enableAccounting: true,
       enableTableManagement: true,
+      enableSuppliers: true,
+      enableExpenses: true,
+      enableEmployees: true,
     },
     productTypes: ['regular', 'bundle', 'service'],
     requiredFields: ['name', 'price'],
@@ -104,6 +113,9 @@ export const BUSINESS_TYPE_CONFIGS: Record<BusinessType, BusinessTypeConfig> = {
       enableKitchenDisplay: false,
       enableAccounting: true,
       enableTableManagement: false,
+      enableSuppliers: false,
+      enableExpenses: true,
+      enableEmployees: true,
     },
     productTypes: ['service'],
     requiredFields: ['name', 'price'],
@@ -132,6 +144,9 @@ export const BUSINESS_TYPE_CONFIGS: Record<BusinessType, BusinessTypeConfig> = {
       enableKitchenDisplay: false,
       enableAccounting: true,
       enableTableManagement: false,
+      enableSuppliers: false,
+      enableExpenses: true,
+      enableEmployees: true,
     },
     productTypes: ['service'],
     requiredFields: ['name', 'price'],
@@ -160,6 +175,9 @@ export const BUSINESS_TYPE_CONFIGS: Record<BusinessType, BusinessTypeConfig> = {
       enableKitchenDisplay: false,
       enableAccounting: true,
       enableTableManagement: true,
+      enableSuppliers: true,
+      enableExpenses: true,
+      enableEmployees: true,
     },
     productTypes: ['regular', 'bundle', 'service'],
     requiredFields: ['name', 'price'],
@@ -187,6 +205,9 @@ export const BUSINESS_TYPE_CONFIGS: Record<BusinessType, BusinessTypeConfig> = {
       enableKitchenDisplay: false,
       enableAccounting: true,
       enableTableManagement: false,
+      enableSuppliers: true,
+      enableExpenses: true,
+      enableEmployees: true,
     },
     productTypes: ['regular'],
     requiredFields: ['name', 'price', 'sku', 'prn', 'expiryDate', 'batchNumber'],
@@ -293,6 +314,9 @@ export function applyBusinessTypeDefaults(settings: any, businessType?: string):
     enableKitchenDisplay: settings.enableKitchenDisplay ?? config.defaultFeatures.enableKitchenDisplay,
     enableAccounting: settings.enableAccounting ?? config.defaultFeatures.enableAccounting,
     enableTableManagement: settings.enableTableManagement ?? config.defaultFeatures.enableTableManagement,
+    enableSuppliers: settings.enableSuppliers ?? config.defaultFeatures.enableSuppliers,
+    enableExpenses: settings.enableExpenses ?? config.defaultFeatures.enableExpenses,
+    enableEmployees: settings.enableEmployees ?? config.defaultFeatures.enableEmployees,
   };
 }
 
